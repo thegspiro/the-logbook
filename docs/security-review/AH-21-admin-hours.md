@@ -1,6 +1,224 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), pass 3 (this PR)
+
+## Pass 3 (2026-09-05)
+
+**Backend:** `app/api/v1/endpoints/admin_hours.py` (1,061 L, 27 endpoints),
+`app/services/admin_hours_service.py` (1,883 L), model `app/models/admin_hours.py`,
+schema `app/schemas/admin_hours.py`.
+**Frontend:** the 26-file `modules/admin-hours/` module (grown from pass 2's 21
+via three new UI-only files — see below) plus the same 6 outside consumers pass
+2 established: `components/member-profile/AdminHoursSection.tsx`,
+`pages/events-settings/HourTrackingSection.tsx`, `pages/Dashboard.tsx`,
+`pages/MemberProfilePage.tsx`, `pages/ComplianceRequirementsConfigPage.tsx`,
+`modules/membership/pages/CheckInStationPage.tsx`.
+**Migrations:** none since pass 1 — confirmed by content-grepping every
+migration file added since pass 2's merge for an `admin_hours`/`AdminHours`
+reference, not by filename.
+
+### Scope
+
+Read the current `admin_hours.py`, `admin_hours_service.py`, and
+`admin_hours.py` (model) directly rather than diffing pass 2's merge commit —
+this repo's git history is shallow beyond a certain point in this environment
+(`git fetch --unshallow` recovered full history, but the pass-2 PR's exact
+merge commit reference in this doc, `991c04d2`, does not correspond to a
+first-parent merge commit reachable from `main`'s current linear history,
+likely a squash), so the fixes below were re-verified against the file
+contents themselves — every claim is "read at its current line," not "diffed
+against a hash."
+
+**One backend commit landed since pass 2, and it is a correctness fix with no
+security dimension**, confirmed by reading its diff directly
+(`eb9c2f957`, 2026-08-31, "Stop requirement progress crashing for members who
+logged hours"): `get_user_hours_compliance`'s percentage calculation divided a
+MySQL `Decimal` (from `func.sum`) by a JSON-derived `float`
+(`required_hours`), raising `TypeError` for any member who had logged approved
+hours against the category — the empty-sum `or 0` fallback happened to
+produce an `int`, so the endpoint only worked for members it had nothing to
+report about. Fixed by using the `hours_from_minutes` helper the module's five
+other call sites already use, and grading against the un-rounded
+`total_minutes / 60.0` rather than the rounded display value. The AH-7
+org-scoping filter this calculation sits inside (`UserModel.organization_id ==
+organization_id` on the target-user fetch, confirmed still present at its
+current line) is untouched by this diff. No migration touches an admin-hours
+table since pass 1.
+
+**Frontend: extended scope to cover a change pass 2's own listed outside
+consumer went through outside this rotation, which a preliminary pass at this
+same iteration missed entirely.** Two PRs (#2233, #2236, both merged
+2026-09-04/05, both outside the security-review rotation) changed
+`Dashboard.tsx`'s admin-hours summary read — the exact file pass 2 named as
+one of the module's 6 outside consumers. Since a security-review pass's job is
+to re-verify everything that changed in its declared scope since the last
+pass, not only the module's own files, this pass reads both PRs' effect on the
+current code rather than treating them as pre-verified because a bot reviewed
+them on GitHub:
+
+- **PR #2233** removed a client-side `admin_hours.view` permission gate on the
+  dashboard's summary read. Verified this matches actual server behavior: the
+  `GET /admin-hours/summary` endpoint (`admin_hours.py:809`) depends only on
+  `get_current_user`, no `require_permission` — no default position or rank
+  grants `admin_hours.view`, so the removed gate was blocking a read the
+  backend has always allowed, leaving every ordinary member's card reading
+  "Unavailable." Confirmed no backend permission changed; this is a
+  client-side-only fix with no security dimension.
+- **PR #2236** (a same-day follow-up after Codex review caught two P1
+  consequences of #2233 going unconditional) fixed a genuine defect
+  #2233 introduced: `Dashboard.tsx` called `getSummary()` with no `userId`,
+  so a caller **holding** `admin_hours.manage` (an officer) got the whole
+  organization's total under a card headed "My Hours" — before #2233 this
+  only reached wildcard-permission holders (everyone else was gated out of
+  the request), so removing the gate widened a latent cross-member data
+  exposure to every officer. It also sent bare `YYYY-MM-DD` date bounds,
+  which `_parse_optional_date` parses as UTC midnight — the endpoint filters
+  `clock_in_at <= end_date`, so every entry logged "today" fell outside the
+  month, and the unconverted start cut at UTC midnight rather than the
+  department's, pulling in the previous month's tail for any department west
+  of UTC.
+
+  **Re-verified fixed at the current code** (`frontend/src/pages/Dashboard.tsx`
+  lines ~945–992): `getSummary` is now called with
+  `userId: currentUser?.id` explicitly, and both bounds go through
+  `startOfReportingDayUTC`/`endOfReportingDayUTC`
+  (`modules/admin-hours/utils/reportingRange.ts`, a new file this pass) rather
+  than bare date strings. Read `reportingRange.ts` in full: it converts a
+  local calendar day to a UTC instant via the existing `localToUTC` helper
+  with `useTimezone()`, and the end bound is computed as "midnight opening the
+  next day, minus one millisecond" so the whole selected day is covered
+  without spilling into the next — correct, and consistent with
+  `AdminHoursPage.tsx`'s own use of the same helpers (see below). No new
+  by-id query or FK write is involved; this is a request-shaping fix on an
+  already self-scoped read.
+
+**Three new files in the module itself, all client-side form UX, no new
+server surface:** `utils/entryTimes.ts` (pure date-math for the manual-entry
+and pending-review edit forms — `addHours`, `syncEndToStart`),
+`components/QuickDurationButtons.tsx` (1/2/4/8-hour preset buttons), and
+`utils/reportingRange.ts` (above), wired into `AdminHoursPage.tsx` and
+`PendingReviewTab.tsx`. Read all three in full. None issues a network call —
+they only pre-fill the `clock_in_at`/`clock_out_at` fields that flow into the
+existing, already-reviewed `create_manual_entry`/`edit_pending_entry` submit
+paths, whose server-side guards (AH-1's future-time rejection and 24h cap,
+AH-12's parity guards including the overlap re-check) apply identically
+regardless of how the client arrived at the value. Also verified
+`AdminHoursPage.tsx`'s own `fetchMySummary` calls (initial load, post-clock-out,
+post-manual-submit) all pass `userId: currentUserId` explicitly — the same
+scoping fix as `Dashboard.tsx`, applied independently in this file already
+before this pass, not introduced by it.
+
+Swept the full 26-file module plus all 6 outside consumers for the standing
+pitfalls: `window.confirm`/`alert`/`prompt` (0 hits), `dangerouslySetInnerHTML`
+(0 hits), banned `.toLocale*`/`date-fns`/`toISOString().slice` (0 hits), and
+direct `fetch(`/raw `axios` imports (0 hits outside comments and the guard
+tests themselves — `moduleFetchIntegrity.test.ts`'s two scans, from AH21-1/
+AH21-4, still pass against the module's larger file set).
+
+### Re-verification of pass-1/pass-2 fixes (AH-7 through AH-14, AH21-1 through AH21-4)
+
+Read the current `admin_hours_service.py`, `admin_hours.py` (endpoint), and
+the frontend files directly (not re-cited from prior passes):
+
+- **AH-7** — `get_user_hours_compliance`'s target-user fetch still filters
+  `UserModel.organization_id == organization_id` (line ~1751), alongside the
+  unrelated `eb9c2f957` percentage-calculation fix above.
+- **AH-8** — `clock_out` still filters `organization_id`.
+- **AH-9** — `update_category` still routes through
+  `apply_updates(category, kwargs, skip={"organization_id", "id"})`.
+- **AH-10** — `clock_in`'s `User`-row lock (`select(User.id)...with_for_update()`,
+  line 226) followed by the locking active-session read is unchanged.
+- **AH-11** — both `create_event_hour_mapping` and `update_event_hour_mapping`
+  still lock their percentage-sum queries (`with_for_update(of=EventHourMapping)`
+  and the complete-locked-set fix respectively, lines 1388/1462).
+- **AH-12** — `edit_pending_entry` still applies the future/24h/overlap guards.
+- **AH-13** — `_parse_optional_date` still guards all four date-accepting
+  endpoints (`list_my_entries`, `list_all_entries`, `export_entries`,
+  `get_summary`).
+- **AH-14** — `credit_event_attendance`'s stale-cleanup and idempotency
+  queries, and `delete_event_attendance_entries`, all still filter
+  `organization_id` (re-read in full at lines 1576–1713); the resync branch's
+  in-place `duration_minutes` update without re-running
+  `_determine_post_clockout_status` is unchanged — see "Confirmed still open"
+  below.
+- **AH21-1/AH21-4** — `adminHoursEntryService.exportCsv` still routes through
+  the shared `createApiClient()` with `responseType: 'blob'` and `timeout: 0`;
+  `moduleFetchIntegrity.test.ts`'s bare/`window`/`globalThis`/`self` `fetch(`
+  scan and its direct-`axios`-import scan both still pass.
+- **AH21-3** — `createApiClient.ts`'s blob-error-JSON-decoding fix is
+  unchanged (verified by re-reading the interceptor, not just re-running its
+  test).
+
+**Route inventory — re-enumerated from scratch** (AST-equivalent: every
+`@router.<verb>` decorator counted and its `Depends(...)` read): **27/27**,
+unchanged from pass 1/2. Every route carries either `Depends(get_current_user)`
+or `Depends(require_permission("admin_hours.manage"))` — no ungated route, no
+mix of `.view`/`.manage` permission strings to check for the XC-2 pattern (the
+module uses exactly one permission string for every gated route). Self-scoped
+routes (`GET /active`, `GET /entries/my`, `GET /summary`,
+`GET /compliance/{user_id}`) re-read directly: `get_summary` and
+`get_user_hours_compliance` both force `effective_user_id` to the caller's own
+id unless `current_user.positions`/`.permissions` includes
+`admin_hours.manage`/`compliance.view`/`*` — independent of the client-supplied
+`user_id` query param, matching pass 2's description exactly.
+
+Freshly re-swept every `select(...)` call site in the service (~65 sites) for
+a missing `organization_id` filter: none found. Line counts in this doc's
+per-pass headers are measured at different points and are not a reliable
+diff proxy on their own (the file's current 1,883 L vs. pass 2's stated
+1,780 L is a larger gap than the single `eb9c2f957` commit's own +17/-3 diff
+accounts for) — this pass verified scope by reading `git log --follow`'s full
+commit list for the file and confirming `eb9c2f957` is the only commit
+between pass 2's last real change and `HEAD`, not by reconciling line counts.
+The two
+by-id `User` fetches with no visible org filter (`force_clock_out`'s and
+`edit_pending_entry`'s `select(User).where(User.id == entry.user_id)`, used
+only to build a display name in the endpoint file) resolve `entry.user_id`
+from an already-org-scoped `AdminHoursEntry`/entry object fetched earlier in
+the same function — the checklist's named exception, not a gap.
+
+Checked `admin_hours.py` (model) and `admin_hours.py` (schema) for drift: both
+`ondelete="SET NULL"` foreign keys (`events.id`, `event_rsvps.id` on
+`AdminHoursEntry`) are `nullable=True`; no new column or table since pass 1.
+
+### Confirmed still open — unchanged from pass 1/2
+
+Re-read both items against the current code:
+
+- **Per-org SoD toggle (AH-4 refinement)** — the self-approval guard
+  (`assert_different_person` in `approve_or_reject`; the `skipped_self` skip
+  in `bulk_approve`) is still unconditional. Unchanged, still deliberate.
+- **`credit_event_attendance`'s resync path can grow an already-APPROVED
+  entry past its category's auto-approve threshold without re-review** —
+  re-read the resync branch (lines 1643–1657) directly: `duration_minutes` is
+  still updated in place with no call to `_determine_post_clockout_status`.
+  Unchanged, still deliberate per the method's own docstring. Both items
+  remain mirrored in `docs/KNOWN_LIMITATIONS.md` (added pass 2), re-read there
+  too — still accurate.
+
+**No new findings, no code changes this pass.**
+
+## Completion gate (pass 3)
+
+| Check                                                                                                                                     | Result                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                             | clean (0 violations)                     |
+| `black --check app/ tests/ alembic/`                                                                                                      | clean (1477 files unchanged)             |
+| `isort --check-only app/ tests/ alembic/`                                                                                                 | clean (isort 9.0.1, CI's pinned version) |
+| `python3 scripts/validate_migrations.py --strict`                                                                                         | PASSED — 422 revisions, single head      |
+| backend tests, scope (`-k "admin_hours"`)                                                                                                 | 72 passed, 1 pre-existing skip           |
+| backend tests, full suite                                                                                                                 | 10876 passed, 21 pre-existing skips      |
+| `npx tsc --noEmit` (frontend)                                                                                                             | 0 errors                                 |
+| `npx eslint .` (frontend)                                                                                                                 | 0 errors, 0 warnings                     |
+| `npx vitest run` (admin-hours module, 7 files)                                                                                            | 88 passed                                |
+| `npx vitest run` (adjacent consumers: Dashboard, MemberProfilePage, member-profile, ComplianceRequirementsConfigPage, CheckInStationPage) | 151 passed                               |
+
+No backend or frontend files were modified this pass — every change since
+pass 2 (the `eb9c2f957` correctness fix, and PRs #2233/#2236 on `Dashboard.tsx`)
+was independently verified to be already correct, not requiring a further fix
+from this rotation.
+
+---
 
 ## Pass 1 (2026-08-26/27)
 
