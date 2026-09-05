@@ -113,7 +113,7 @@ function formatCategory(category: string): string {
 const INBOX_PAGE_SIZE = 20;
 // The send log is one row per delivery, so a long-serving member's history
 // runs well past a single page. The backend's own default is 100; naming it
-// here keeps the Load more arithmetic honest about what was asked for.
+// here keeps the request explicit about what was asked for.
 const LOG_PAGE_SIZE = 50;
 
 const NotificationsPage: React.FC = () => {
@@ -141,7 +141,7 @@ const NotificationsPage: React.FC = () => {
   const [logs, setLogs] = useState<NotificationLogRecord[]>([]);
   const [summary, setSummary] = useState<NotificationsSummary | null>(null);
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
-  const [inboxTotal, setInboxTotal] = useState(0);
+  const [inboxNextCursor, setInboxNextCursor] = useState<string | null>(null);
   const markingReadIds = useRef(new Set<string>());
   // Only the newest send-log request may commit its result. A channel change
   // or a mark-all can leave an earlier fetch in flight, and letting it land
@@ -157,13 +157,20 @@ const NotificationsPage: React.FC = () => {
   const [loadingInbox, setLoadingInbox] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
-  const [logsTotal, setLogsTotal] = useState(0);
-  // Rows the server has handed over, which is not `logs.length`: a
-  // notification arriving mid-paging shifts a loaded row into the next page's
-  // range, and that duplicate is dropped on append. Deriving the next `skip`
-  // from the retained length would re-request the same row forever and leave
-  // Load more permanently on screen.
-  const [logsOffset, setLogsOffset] = useState(0);
+  // The cursor for the page after the ones loaded, or null at the end of the
+  // list. This is what the Load more control answers to: comparing loaded rows
+  // against `total` disagrees with the server the moment a notification
+  // arrives mid-paging, which is the case the cursor exists to handle.
+  //
+  // It is also why the button reads "Load more" with no count. `total` counts
+  // the whole filtered list, including rows *ahead* of the cursor that a
+  // continuation can never return, so `total - loaded` overstates the tail by
+  // however many notifications arrived since paging began — and it overstates
+  // it precisely during a fan-out, when the member is most likely to be
+  // paging. No count the client can compute is correct here; the honest tail
+  // length is a second keyset count on the server, which is not worth a query
+  // per page for a number on a button.
+  const [logsNextCursor, setLogsNextCursor] = useState<string | null>(null);
   // Kept apart from the page-wide `error`, which renders above every tab: the
   // send log is prefetched on mount for a tab the member may never open, and
   // its failure must not caption a working inbox with "Failed to load your
@@ -232,7 +239,7 @@ const NotificationsPage: React.FC = () => {
           limit: INBOX_PAGE_SIZE,
         });
         setMyNotifications(data.logs || []);
-        setInboxTotal(data.total);
+        setInboxNextCursor(data.next_cursor ?? null);
       } catch {
         // Inbox is always available to authenticated users
       } finally {
@@ -250,9 +257,8 @@ const NotificationsPage: React.FC = () => {
   // The channel filter is a query parameter, not a client-side pass over the
   // loaded prefix. Filtering what happened to be fetched made the panel state
   // "No email notifications sent to you" whenever the newest page held none,
-  // however many older ones the member had, and left `logsTotal` counting a
-  // different set than the list it sat above.
-  const loadLogPage = useCallback(async ({ append, skip }: { append: boolean; skip: number }) => {
+  // however many older ones the member had.
+  const loadLogPage = useCallback(async ({ append, cursor }: { append: boolean; cursor?: string }) => {
     // Read from the ref, not a closure. A write handler awaits its POST and
     // only then reloads; closing over the filter meant a channel changed
     // during that POST reloaded the *previous* channel — and, since the
@@ -266,18 +272,16 @@ const NotificationsPage: React.FC = () => {
       const data = await notificationsService.getLogs({
         scope: NotificationLogScope.MINE,
         ...(channel === 'all' ? {} : { channel }),
-        skip,
+        ...(cursor ? { cursor } : {}),
         limit: LOG_PAGE_SIZE,
       });
       if (requestId !== logsRequestRef.current) return;
       const page = data.logs || [];
-      setLogs((prev) => {
-        if (!append) return page;
-        const seen = new Set(prev.map((entry) => entry.id));
-        return [...prev, ...page.filter((entry) => !seen.has(entry.id))];
-      });
-      setLogsOffset((prev) => (append ? prev + page.length : page.length));
-      setLogsTotal(data.total);
+      // Appended without deduplication: a keyset page starts strictly after
+      // the previous page's last row, so it cannot re-serve one. Under the
+      // offset paging this replaced, it could.
+      setLogs((prev) => (append ? [...prev, ...page] : page));
+      setLogsNextCursor(data.next_cursor ?? null);
     } catch (err: unknown) {
       if (requestId !== logsRequestRef.current) return;
       setLogsError(
@@ -288,8 +292,7 @@ const NotificationsPage: React.FC = () => {
       // feeding that channel's pagination.
       if (!append) {
         setLogs([]);
-        setLogsOffset(0);
-        setLogsTotal(0);
+        setLogsNextCursor(null);
       }
     } finally {
       // The newest request clears *both* flags, not just the one it set. A
@@ -305,7 +308,7 @@ const NotificationsPage: React.FC = () => {
 
   useEffect(() => {
     logChannelFilterRef.current = logChannelFilter;
-    void loadLogPage({ append: false, skip: 0 });
+    void loadLogPage({ append: false });
   }, [logChannelFilter, loadLogPage]);
 
   // Fetch admin data on mount (only if user has permission)
@@ -415,25 +418,26 @@ const NotificationsPage: React.FC = () => {
    * The inbox is a *filtered* list, so "mark them all read" is not a
    * field update — under `showRead === false` the rows stop belonging to it.
    * Mapping them to `read: true` in place left the unread-only view showing
-   * read notifications, and `inboxTotal` is the count of that same filtered
-   * set, so the Load more control went on advertising rows that were no
-   * longer in it.
+   * read notifications, and the cursor still pointed into that same filtered
+   * set, so the Load more control went on offering rows that were no longer
+   * in it.
    *
    * With `showRead` on, the list is unfiltered: the map is right and the
-   * total still counts every row.
+   * cursor still names a row the list contains.
    */
   const reconcileInboxAllRead = () => {
     if (showRead) {
       setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } else {
       setMyNotifications([]);
-      setInboxTotal(0);
+      setInboxNextCursor(null);
     }
     clearGlobalUnread();
   };
 
   const handleLoadMoreLogs = async () => {
-    await loadLogPage({ append: true, skip: logsOffset });
+    if (!logsNextCursor) return;
+    await loadLogPage({ append: true, cursor: logsNextCursor });
   };
 
   const handleMarkAllRead = async () => {
@@ -445,7 +449,7 @@ const NotificationsPage: React.FC = () => {
       // request timing, which cannot tell a row the write marked from one
       // created after it — and would have shown that new notification as
       // already read.
-      await loadLogPage({ append: false, skip: 0 });
+      await loadLogPage({ append: false });
     } catch {
       setError('Failed to mark all as read');
     }
@@ -471,7 +475,7 @@ const NotificationsPage: React.FC = () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
       reconcileInboxAllRead();
-      await loadLogPage({ append: false, skip: 0 });
+      await loadLogPage({ append: false });
     } catch {
       setError('Failed to mark all as read');
     }
@@ -487,15 +491,18 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleLoadMore = async () => {
+    if (!inboxNextCursor) return;
     setLoadingMore(true);
     try {
       const data = await notificationsService.getMyNotifications({
         include_read: showRead,
-        skip: myNotifications.length,
+        cursor: inboxNextCursor,
         limit: INBOX_PAGE_SIZE,
       });
+      // No deduplication needed: a keyset page starts strictly after the last
+      // row of the previous one, so it cannot re-serve a row already held.
       setMyNotifications((prev) => [...prev, ...(data.logs || [])]);
-      setInboxTotal(data.total);
+      setInboxNextCursor(data.next_cursor ?? null);
     } catch {
       setError('Failed to load more notifications');
     } finally {
@@ -727,7 +734,7 @@ const NotificationsPage: React.FC = () => {
                       }}
                     />
                   ))}
-                {myNotifications.length < inboxTotal && (
+                {inboxNextCursor !== null && (
                   <div className="pt-2 text-center">
                     <button
                       onClick={() => {
@@ -742,7 +749,7 @@ const NotificationsPage: React.FC = () => {
                           Loading...
                         </>
                       ) : (
-                        `Load more (${inboxTotal - myNotifications.length} remaining)`
+                        'Load more'
                       )}
                     </button>
                   </div>
@@ -1020,7 +1027,7 @@ const NotificationsPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {!loadingLogs && logsOffset < logsTotal && (
+            {!loadingLogs && logsNextCursor !== null && (
               <div className="pt-4 text-center">
                 <button
                   onClick={() => {
@@ -1035,7 +1042,7 @@ const NotificationsPage: React.FC = () => {
                       Loading...
                     </>
                   ) : (
-                    `Load more (${logsTotal - logsOffset} remaining)`
+                    'Load more'
                   )}
                 </button>
               </div>

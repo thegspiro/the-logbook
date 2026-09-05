@@ -121,17 +121,57 @@ export interface SignupWindow {
   closesMinutesBefore: number;
   /** Minutes after start_time an officer may still seat somebody. */
   graceMinutes: number;
+  /**
+   * Hours past its start that a shift with no `end_time` still counts as
+   * running, for the roster lock. Resolved by the server from the department's
+   * check-in setting and reported on `/scheduling/settings`, rather than
+   * hardcoded here — a second copy of the number would disagree with the
+   * server for any department that changed it, in the direction that hides a
+   * control the API would have accepted.
+   */
+  openEndedCushionHours: number;
 }
 
 /**
- * What the rules assume before the department's settings have loaded.
+ * What the rules assume when the department has stated nothing.
  *
- * Deliberately the permissive end of the member rule: a board gating on
- * settings it has not fetched yet would disable a button the server would have
- * accepted, and the member cannot tell that apart from being genuinely too
- * late. The server is authoritative either way.
+ * These are the server's own built-in values, so they are the right answer for
+ * a department that has configured none of them — not a guess.
  */
-export const DEFAULT_SIGNUP_WINDOW: SignupWindow = { closesMinutesBefore: 0, graceMinutes: 60 };
+export const DEFAULT_SIGNUP_WINDOW: SignupWindow = {
+  closesMinutesBefore: 0,
+  graceMinutes: 60,
+  openEndedCushionHours: 12,
+};
+
+/** The server clamps a configured cushion into [12, 72] hours. */
+export const MAX_OPEN_ENDED_CUSHION_HOURS = 72;
+
+/**
+ * What the rules assume while the settings are still unknown.
+ *
+ * Deliberately the permissive end: a board gating on settings it has not
+ * fetched yet would disable a button the server would have accepted, and the
+ * member cannot tell that apart from being genuinely too late. The server is
+ * authoritative either way.
+ *
+ * The cushion is where "permissive" and "default" part company, which is why
+ * this is a second constant rather than the one above. Twelve hours is the
+ * server's *floor* — it raises the cushion to follow the department's
+ * `checkin_closes_hours_after`, up to seventy-two — so a department that
+ * widened check-in is guaranteed to disagree with it, and the roster deadline
+ * derived from it lands hours early. That hid claim actions the server still
+ * accepts, on exactly the open-ended shifts this file exists to bound. The
+ * ceiling cannot be too early for anyone.
+ *
+ * `closesMinutesBefore` and `graceMinutes` keep the built-in values: those are
+ * the server's real defaults rather than a floor, so they are already right
+ * for a department that has set nothing and close to right for one that has.
+ */
+export const UNRESOLVED_SIGNUP_WINDOW: SignupWindow = {
+  ...DEFAULT_SIGNUP_WINDOW,
+  openEndedCushionHours: MAX_OPEN_ENDED_CUSHION_HOURS,
+};
 
 /**
  * The shift's start as an epoch instant, or null when it cannot be read.
@@ -203,7 +243,9 @@ export const signupClosedReason = (
   const start = startInstant(shift);
   if (start === null) return null;
 
-  const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
+  const capped = effectiveLateSignupUntil(shift, window);
+  const override = capped ?? NaN;
+
   const offsetMinutes = viewer.canAssign ? window.graceMinutes : -window.closesMinutesBefore;
   let deadline = start + offsetMinutes * 60_000;
   if (!Number.isNaN(override) && override > deadline) deadline = override;
@@ -252,6 +294,55 @@ export const isShiftClaimable = (
 };
 
 /**
+ * The last instant this shift's roster may change, or null when it cannot be
+ * judged. Mirrors the backend's `_roster_deadline_from`.
+ *
+ * Two rules read it, which is why it is a value rather than a predicate:
+ * `rosterLocked`, and the cap `signupClosedReason` applies to a stored
+ * `late_signup_until`. Keeping them on one number is what stops the client
+ * drifting from the server the way it did when each computed its own.
+ *
+ * An open-ended shift is a real shift, not a malformed one — but "no end, no
+ * deadline" left it unbounded on both sides. The cushion is what keeps
+ * standing in the start from locking a live shift one grace period after it
+ * began, which is why the naive substitution was rejected on both sides.
+ */
+const rosterDeadline = (shift: ShiftRecord, window: SignupWindow): number | null => {
+  let end = endInstant(shift);
+  if (end === null) {
+    const start = startInstant(shift);
+    if (start === null) return null;
+    end = start + window.openEndedCushionHours * 60 * 60_000;
+  }
+  return end + window.graceMinutes * 60_000;
+};
+
+/**
+ * When late signup actually closes, or null when none is open.
+ *
+ * The stored `late_signup_until` is not that answer on its own. The server
+ * caps it at the roster deadline when it evaluates a signup, so a window
+ * written while reopening was still unbounded — one that can sit months past
+ * the deadline — is honoured only up to that point. Everything that gates on
+ * or displays the reopening reads this instead of the raw column, or it tells
+ * an officer members may claim until tomorrow while the API stops accepting
+ * them in half an hour.
+ *
+ * Advisory, like the rules built on it: the server remains authoritative.
+ */
+export const effectiveLateSignupUntil = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW
+): number | null => {
+  if (!shift.late_signup_until) return null;
+  const override = Date.parse(shift.late_signup_until);
+  if (Number.isNaN(override)) return null;
+
+  const roster = rosterDeadline(shift, window);
+  return roster !== null && override > roster ? roster : override;
+};
+
+/**
  * Whether this shift's roster has stopped being a plan and become a record.
  *
  * Signup closing and the roster locking are two different moments, and
@@ -268,10 +359,10 @@ export const isShiftClaimable = (
  * already sets for late signup, so an overnight crew keeps its controls
  * through the night and past the hand-over — the day-granular `isShiftOpen`
  * cannot be used here for exactly the reason it is only a fallback elsewhere.
- * A live `late_signup_until` holds the roster open too: an officer who has
- * legitimately reopened the shift needs to seat whoever answers. The server
- * now clamps that override to the same deadline, so it can only ever move the
- * answer for a row written before it did.
+ * A shift with no recorded end is bounded by `rosterDeadline`'s cushion rather
+ * than left open forever. A live `late_signup_until` does *not* extend the
+ * bound — see the body — because reopening signup lets somebody join a shift,
+ * it does not reopen the roster of one that is over.
  *
  * A scheduling admin is never locked out. That is the same three-actor split
  * the whole signup window uses — the admin path is records work, which happens
@@ -289,18 +380,15 @@ export const rosterLocked = (
 ): boolean => {
   if (viewer.canManage) return false;
 
-  // No end, no lock. `end_time` is optional on `ShiftRecord` for a reason —
-  // an open-ended shift is a real shift, not a malformed one — and standing in
-  // the start would lock its roster one grace period after it began, with the
-  // crew still working. A false lock on a live shift is worse than a missed
-  // one on a shift nothing can bound, which is also the permissive stance the
-  // rest of this file takes on data it cannot judge.
-  const end = endInstant(shift);
-  if (end === null) return false;
+  const deadline = rosterDeadline(shift, window);
+  if (deadline === null) return false;
 
-  let deadline = end + window.graceMinutes * 60_000;
-  const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
-  if (!Number.isNaN(override) && override > deadline) deadline = override;
+  // `late_signup_until` deliberately plays no part. The server's
+  // `_roster_locked_reason` reads the deadline alone, and letting a stored
+  // override extend it here made the client the more permissive of the two —
+  // it kept withdraw and the seat dropdown on screen past a lock the API
+  // enforces. Reopening signup lets somebody *join*; it does not reopen the
+  // roster of a shift that is over.
   return now.getTime() > deadline;
 };
 

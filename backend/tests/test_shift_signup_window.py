@@ -202,3 +202,53 @@ class TestMalformedSettingsDegrade:
         settings = _settings(late_signup_grace_minutes=10**9)
         assert _error(_shift(-1440), settings, SignupActor.ASSIGNER) is None
         assert _error(_shift(-1441), settings, SignupActor.ASSIGNER) is not None
+
+
+class TestMalformedChecklistSettingsDegrade:
+    """`or {}` only survives a *falsy* wrong type.
+
+    A legacy or hand-edited organization holding a truthy non-object at either
+    level reached ``.get`` on a string or a list and raised AttributeError.
+    That is not a degraded window but a 500, on an endpoint every member reads
+    and on the roster deadline itself.
+    """
+
+    @pytest.mark.parametrize(
+        "reports",
+        [
+            "legacy string",
+            ["checklist_timing"],
+            {"checklist_timing": "12"},
+            {"checklist_timing": ["checkin_closes_hours_after"]},
+            {"checklist_timing": {"checkin_closes_hours_after": "whenever"}},
+        ],
+    )
+    def test_the_cushion_falls_back_to_the_floor(self, reports):
+        from app.services.scheduling_service import (
+            OPEN_ENDED_SHIFT_CUSHION_HOURS,
+            open_ended_cushion_hours,
+        )
+
+        assert (
+            open_ended_cushion_hours({"shift_reports": reports})
+            == OPEN_ENDED_SHIFT_CUSHION_HOURS
+        )
+
+    def test_check_in_keeps_its_own_defaults(self):
+        # The same blob, the same defect, so the same fix — this reader
+        # predates the cushion and would have raised on the identical row.
+        from types import SimpleNamespace
+
+        from app.services.scheduling_service import SchedulingService
+
+        shift = SimpleNamespace(
+            start_time=datetime.now(timezone.utc) - timedelta(hours=1),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=11),
+        )
+
+        assert (
+            SchedulingService._checkin_window_error(
+                shift, {"shift_reports": "legacy string"}
+            )
+            is None
+        )

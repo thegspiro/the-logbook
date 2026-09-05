@@ -79,6 +79,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `administrationDiscovery.test.tsx` now renders the section for a
   scheduling-officer persona and a training-officer persona — the test exists
   because a gate is only reachable if every gate above it also opens.
+### Compliance Matrix: a grid you could read becomes a queue you can work (2026-09-05)
+
+**Changed**
+
+- **The member × requirement icon grid is replaced by a triage rail.** Every
+  cell said only "met" or "not met", so a coordinator could see who was short
+  without seeing by how much, and the screen offered nowhere to go next.
+  Members (or requirements, on the other axis) are now grouped by standing,
+  ordered worst-first, and stepped through one at a time, with the numbers
+  behind each status on the row — "6 of 24 hours", "Lapsed 41 days ago",
+  "Expires in 26 days".
+- **The dashboard's non-compliant link now lands filtered.** The Needs
+  Attention widget has been linking to `?status=noncompliant` all along and the
+  grid ignored it, dropping the coordinator into the full unfiltered roster.
+  Clearing the chip drops the parameter too, so a refresh does not silently
+  re-apply a filter that was just dismissed.
+- `GET /training/compliance-matrix` gains optional per-cell progress
+  (`progress_current` / `progress_required` / `progress_unit`, the pre-waiver
+  `base_required` and `waived_months`, and the evaluation window), per
+  requirement meta (type, frequency, target, unit), and a top-level `as_of`.
+  **Additive only** — the four original cell keys are unchanged, so the
+  printable report and any other consumer keep working.
+- `evaluate_member_requirement_detail()` returns the counts the evaluator
+  already computed and discarded. `evaluate_member_requirement()` stays a thin
+  wrapper over it returning the same `(status, completion, expiry)` triple, so
+  its callers and the existing suite are untouched; a parametrized test pins
+  the two in lockstep across every requirement type.
+- Actions are limited to ones with something behind them: Print, a CSV export
+  written through the formula-injection-safe `buildCsv`, and links to member
+  training records. The mock's Notify and Assign buttons have no endpoint, and
+  a control wired to nothing invites somebody to believe a message was sent.
+
+**Fixed**
+
+- **A member exempt from a requirement could never reach 100%.**
+  `completion_pct` divided by every active requirement while counting only the
+  ones applicable to the member, so anyone whose membership type excused them
+  from one was capped below full compliance no matter what they did. The
+  denominator is now the requirements actually asked of them, reported
+  alongside as `requirements_met` / `requirements_total`.
+- **A certification expiring soon read as a failure.** The tally counted only
+  the `met` tone, so a member holding a card valid for another 26 days rendered
+  under "Compliant" reading "1 of 2 met · 1 open item" — a contradiction on the
+  face of the screen. A cert valid today is met today; the tone is a renewal
+  warning, and the orange "Due soon" pill still marks the row.
+- The row's date printed twice — in the sub-line and again in its own column —
+  which on a phone was three wasted lines per row. Window labels also printed
+  the year twice ("Jan 1, 2026 – Dec 31, 2026") and now print it once when both
+  ends share it, keeping both when the window genuinely crosses a year.
+- The loading state nested a `role="status"` inside `SkeletonPage`'s own live
+  region, so a screen reader announced only the inner one, and the queue rail
+  had no accessible name.
+
+  The last three were found by running the app and looking at it. All 6,521
+  frontend tests passed while they were on screen.
+
+### Long notification lists could skip a notification while you paged (2026-09-05)
+
+**Fixed**
+
+- **"Load more" could step over a notification entirely.** Both the Send Log
+  and the notification inbox are newest-first and asked the server for "rows
+  50-99 of the current answer". A notification arriving between two page
+  requests shifts every later row down one, so the next page re-served a row
+  already on screen and skipped another — and nothing on the page said so.
+  Demonstrated against a real database: with one notification arriving
+  mid-paging, the old paging repeated one row and lost another; the new paging
+  loses none. Both lists now ask for "the rows after this one".
+
+- **A fan-out was the worst case, not an edge case.** `sent_at` is stored to
+  the second, so every message sent to the whole department shares one
+  timestamp. Paging keyed on the timestamp alone would mis-handle exactly the
+  group that produces the most rows at once, so the key is the timestamp
+  paired with the row id.
+
+**Changed**
+
+- **"Load more" now stops when the server says the list has ended**, rather
+  than when a running total says so. The two disagree while notifications are
+  arriving, which is when the count is least trustworthy.
+
+- **The button no longer claims how many notifications are left.** It counted
+  the whole list against the rows on screen, and the list includes newer
+  notifications that arrived after you started paging — ones "load more" can
+  never reach, because it continues from where you were. So the number was
+  wrong by however many had come in, and wrong precisely during a
+  department-wide send. It now reads "Load more".
+
+- **API:** `GET /notifications/logs` and `GET /notifications/my` accept a
+  `cursor` and return `next_cursor`, which is `null` — never omitted — at the
+  end of the list. `skip` continues to work for existing callers; a cursor
+  supersedes it. **Schema:** `notification_logs.sent_at` is
+  now `NOT NULL` (it always had a default, and a NULL would have been
+  unreachable by any cursor), with a new index behind the paged query.
+
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
@@ -130,6 +225,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it had not anticipated, and each time the check passed while the wrong comment
   stood. The wordings it has to survive are now pinned by tests, including
   several invented for the purpose that appear nowhere in the codebase.
+
+### A shift with no end time was exempt from the roster lock (2026-09-05)
+
+**Fixed**
+
+- **An open-ended shift could be reopened for signup at any age, and members
+  could add themselves to it.** The roster deadline is anchored to a shift's
+  `end_time`, and that column is genuinely optional — so for a shift without
+  one it returned no deadline at all, and the age bound that stops an officer
+  reopening last month's shift simply did not apply. Reopening then admitted
+  members, because the live override becomes the member's deadline and a
+  reopened shift deliberately suppresses the day-granular past-date fallback so
+  an overnight shift can still take people. Reproduced at ninety days: the
+  reopen was accepted and the self-signup seated, drawing hours for a shift
+  nobody worked.
+- **An open-ended shift is now treated as running for twelve hours after it
+  starts**, and the department's grace period is added to that as before —
+  twelve because it is already the cushion check-in allows a shift with no
+  recorded end, so the two rules agree on how long "still out" can plausibly
+  last. Substituting the start at _grace_ scale would have been the
+  overcorrection: an hour after it began, with the crew still working.
+- **A reopening window stored before the bound existed no longer outlives
+  it.** `open_late_signup` caps the window it writes, but a cap only covers
+  rows written after it shipped; one stored while reopening was still
+  unbounded stayed live for up to twelve hours, and the signup rule takes the
+  later of the deadline and the stored window. It is now capped where it is
+  read rather than only where it is written, which also covers shifts that do
+  record an end time.
+- **The cushion follows the department's `checkin_closes_hours_after`**,
+  floored at twelve. A department that widened check-in to seventy-two hours
+  was getting a roster that locked sixty hours before check-in did. It does not
+  follow the setting down: check-in closing early says nothing about a crew
+  still being out.
+- **The board and shift panel agree with the server.** `rosterLocked` returned
+  false for any shift without an end time and let a stored reopening window
+  extend it, so Reopen, withdraw and the seat dropdown stayed on screen for
+  shifts the API refuses. The resolved cushion is reported on
+  `/scheduling/settings` so the client reads the department's number instead of
+  hardcoding a second copy.
+- **This bounds editing the roster on those shifts too**, not only reopening —
+  confirm, decline, remove, withdraw and the seat dropdown — since both rules
+  read the same deadline. That is the intent: correcting a months-old roster is
+  records work, and `scheduling.manage` remains exempt from the lock.
 
 ### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
 
