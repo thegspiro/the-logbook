@@ -1815,10 +1815,40 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
-    async def _late_signup_deadline(
+    async def _roster_locked_error(
+        self, shift: Shift, organization_id: UUID, actor: SignupActor
+    ) -> Optional[str]:
+        """Why this shift's roster can no longer be changed by `actor`, or None.
+
+        The client withdraws confirm, decline, remove, withdraw and the seat
+        dropdown once a shift is this far past, but hiding a control is not
+        enforcing a rule: every one of those mutations is reachable by a direct
+        request, and withdraw deletes an assignment that hours have already
+        been recorded against. Same bound, same exemption, so the two agree.
+
+        Only ``scheduling.manage`` is exempt. An assigner and a member are
+        bounded alike here, unlike the signup window where an officer gets the
+        grace period to seat a late arrival: correcting a roster that is
+        already a record is the administrator's path.
+        """
+        if actor == SignupActor.MANAGER:
+            return None
+        deadline = await self._roster_deadline(shift, organization_id)
+        if deadline is None or datetime.now(timezone.utc) <= deadline:
+            return None
+        return (
+            "This shift ended too long ago to change its roster. "
+            "A scheduling administrator can still correct it."
+        )
+
+    async def _roster_deadline(
         self, shift: Shift, organization_id: UUID
     ) -> Optional[datetime]:
-        """The last instant signup on this shift may stand, or None if unbounded.
+        """The last instant this shift's roster may still change, or None.
+
+        Governs two rules, which is why it is a deadline rather than a
+        predicate: whether signup may be reopened, and whether the assignments
+        themselves may still be confirmed, edited or removed.
 
         Anchored to the shift's *end* rather than its start: the whole point of
         a reopening is to seat somebody while the crew is still out, and an
@@ -1892,7 +1922,7 @@ class SchedulingService:
             if shift.is_finalized:
                 return None, "Cannot reopen signup on a finalized shift"
 
-            deadline = await self._late_signup_deadline(shift, organization_id)
+            deadline = await self._roster_deadline(shift, organization_id)
             now = datetime.now(timezone.utc)
             if deadline is not None and now > deadline:
                 return None, (
@@ -3949,7 +3979,11 @@ class SchedulingService:
         return result.scalar_one_or_none()
 
     async def update_assignment(
-        self, assignment_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        assignment_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+        actor: SignupActor = SignupActor.MANAGER,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Update a shift assignment"""
         try:
@@ -3961,6 +3995,21 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return None, "Shift assignment not found"
+
+            # Actor first, so the exempt path costs no extra query: the
+            # default is MANAGER precisely so every existing caller — the
+            # standing-shift release among them, which only ever touches dates
+            # still ahead — behaves exactly as before and only the HTTP paths
+            # opt in.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(
+                    assignment.shift_id, organization_id
+                )
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return None, locked
 
             training_error = await self._validate_training_slot_fields(
                 update_data, organization_id
@@ -4047,7 +4096,10 @@ class SchedulingService:
             return None, str(e)
 
     async def delete_assignment(
-        self, assignment_id: UUID, organization_id: UUID
+        self,
+        assignment_id: UUID,
+        organization_id: UUID,
+        actor: SignupActor = SignupActor.MANAGER,
     ) -> Tuple[bool, Optional[str]]:
         """Delete a shift assignment"""
         try:
@@ -4059,6 +4111,21 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return False, "Shift assignment not found"
+
+            # Actor first, so the exempt path costs no extra query: the
+            # default is MANAGER precisely so every existing caller — the
+            # standing-shift release among them, which only ever touches dates
+            # still ahead — behaves exactly as before and only the HTTP paths
+            # opt in.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(
+                    assignment.shift_id, organization_id
+                )
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return False, locked
 
             # Capture info before deletion for notification
             shift_id = assignment.shift_id
@@ -4083,7 +4150,11 @@ class SchedulingService:
             return False, str(e)
 
     async def confirm_assignment(
-        self, assignment_id: UUID, user_id: UUID, organization_id: UUID
+        self,
+        assignment_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        actor: SignupActor = SignupActor.MANAGER,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Confirm a shift assignment (by the assigned user).
 
@@ -4101,6 +4172,21 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return None, "Shift assignment not found or not assigned to you"
+
+            # Actor first, so the exempt path costs no extra query: the
+            # default is MANAGER precisely so every existing caller — the
+            # standing-shift release among them, which only ever touches dates
+            # still ahead — behaves exactly as before and only the HTTP paths
+            # opt in.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(
+                    assignment.shift_id, organization_id
+                )
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return None, locked
 
             assignment.assignment_status = AssignmentStatus.CONFIRMED
             assignment.confirmed_at = datetime.now(timezone.utc)
