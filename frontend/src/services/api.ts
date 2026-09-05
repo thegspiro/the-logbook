@@ -159,6 +159,8 @@ export type {
   MainDashboardWidgets,
   WidgetPeriod,
   ComplianceMatrixMember,
+  ComplianceMatrixCell,
+  ComplianceMatrixRequirement,
   ComplianceMatrix,
   ExpiringCertification,
   ScheduledEmail,

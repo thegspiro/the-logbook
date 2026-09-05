@@ -16,7 +16,12 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
-import { memberSignupClosedReason, rosterLocked, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import {
+  effectiveLateSignupUntil,
+  memberSignupClosedReason,
+  rosterLocked,
+  signupClosedReason,
+} from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 import {
   X,
@@ -874,7 +879,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // the crew has gone out. Past it, `create_assignment` refuses them too, so
   // leaving the form enabled only makes them fill it in to earn an error.
   const canAssignNow = canAssign && viewerSignupClosed === null;
-  const lateSignupOpen = shift.late_signup_until != null && Date.parse(shift.late_signup_until) > Date.now();
+  // The capped value, not the stored one: a reopening written before the
+  // roster deadline existed can outlive it, and the server honours it only up
+  // to that point. Showing the raw timestamp promised officers that members
+  // could claim until tomorrow on a shift the API had already closed.
+  const lateSignupUntil = effectiveLateSignupUntil(shift, signupWindow);
+  const lateSignupOpen = lateSignupUntil !== null && lateSignupUntil > Date.now();
   // Past the shift's end plus the grace period the roster is a record, and its
   // live controls stop applying — see `rosterLocked`. Deliberately not
   // `isPast`: that is day-granular and true from midnight, which would take an
@@ -2321,7 +2331,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 {lateSignupOpen ? (
                   <>
                     <p className="text-theme-text-primary text-sm font-bold">
-                      Late signup is open until {formatTime(shift.late_signup_until ?? undefined, tz)}
+                      Late signup is open until{' '}
+                      {formatTime(lateSignupUntil === null ? undefined : new Date(lateSignupUntil).toISOString(), tz)}
                     </p>
                     <p className="text-theme-text-secondary mt-0.5 text-xs">
                       Members can claim a seat on this shift until then, and so can you.
