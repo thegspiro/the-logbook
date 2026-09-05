@@ -112,6 +112,10 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
   '/scheduling/admin/planning': { label: 'Shift Planning', permissions: ['scheduling.manage'] },
+  // A leaf, registered only for its label: the segment is "positions" and the
+  // page calls itself "Who Can Fill What", so the fallback would give the trail
+  // and the heading two different names for one screen.
+  '/scheduling/admin/positions': { label: 'Who Can Fill What', permissions: ['scheduling.manage'] },
   '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },
   '/scheduling/checkin': { label: 'Shift Check-In' },
   '/training/cohorts': { permissions: ['training.manage'] },

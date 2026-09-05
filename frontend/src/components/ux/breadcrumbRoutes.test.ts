@@ -23,6 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { routeGate, routeSources } from '../../test/routeGates';
 import { BREADCRUMB_ROUTES } from './breadcrumbRoutes';
+import { SCHEDULING_HUB_CARDS } from '../../pages/scheduling/admin/schedulingHubCards';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const sources = routeSources();
@@ -141,6 +142,25 @@ describe('breadcrumb route registry', () => {
     });
 
     expect(crossModule).toEqual(['/inventory/admin/store']);
+  });
+
+  it('names a page the same way its hub card does', () => {
+    // A crumb and a heading naming one screen differently is not cosmetic: the
+    // roster's segment is "positions" and the page calls itself "Who Can Fill
+    // What", so the fallback label invented a second name for it. The hub cards
+    // are where these pages are named for the officer, so where both registries
+    // describe the same path they have to agree.
+    const labelled = SCHEDULING_HUB_CARDS.filter((card) => BREADCRUMB_ROUTES[card.path]?.label !== undefined);
+
+    // Only a card whose path carries a crumb label is comparable, so pin that
+    // there is one — otherwise this passes by having nothing to check.
+    expect(labelled.length, 'no hub card path carries a crumb label to compare').toBeGreaterThan(0);
+
+    const disagreements = labelled
+      .filter((card) => BREADCRUMB_ROUTES[card.path]?.label !== card.label)
+      .map((card) => `${card.path}: card "${card.label}" vs crumb "${BREADCRUMB_ROUTES[card.path]?.label}"`);
+
+    expect(disagreements).toEqual([]);
   });
 
   it('labels every administration hub, so none falls back to “Admin”', () => {
