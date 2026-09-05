@@ -23,6 +23,7 @@ import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, InventoryItem } from '../types';
 import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { issuableQuantity } from '../utils/issuable';
+import { normalizeSizeKey, productBaseName, stockSizeValue } from '../utils/stockSize';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
@@ -57,6 +58,9 @@ const EquipmentRequestsPage: React.FC = () => {
   const [fulfillReturnAt, setFulfillReturnAt] = useState('');
   const [fulfillmentType, setFulfillmentType] = useState<'checkout' | 'assignment' | 'issuance'>('checkout');
   const [fulfillOverride, setFulfillOverride] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  /** Sequence of the newest fulfil-dialog item load; only it may preselect. */
+  const fulfillLoadSeq = useRef(0);
   const [substitutionOverride, setSubstitutionOverride] = useState(false);
   const [substitutionReason, setSubstitutionReason] = useState('');
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -180,9 +184,27 @@ const EquipmentRequestsPage: React.FC = () => {
 
   /** Does this catalog row carry the size the member asked for? */
   const matchesRequestedSize = (req: EquipmentRequestItem | null, item: InventoryItem): boolean => {
-    const wanted = req?.requested_size?.trim().toLowerCase();
+    const wanted = normalizeSizeKey(req?.requested_size);
     if (!wanted) return false;
-    return (item.standard_size ?? item.size ?? '').trim().toLowerCase() === wanted;
+    return normalizeSizeKey(stockSizeValue(item)) === wanted;
+  };
+
+  /**
+   * Is this row a variant of the product the member actually asked for?
+   *
+   * `isCompatible` falls back to the category when the request carries no
+   * item_id, which is exactly the unstocked-size case. A category is far too
+   * coarse to choose *for* somebody: an L shirt and L trousers both sit under
+   * Uniforms, and the backend waives the substitution justification when the
+   * category matches, so an automatic pick could issue the wrong garment with
+   * nothing flagging it. The request's `item_name` is the product name the
+   * member chose, and a variant row carries that name before its size, so the
+   * two can be compared without inventing a new identifier.
+   */
+  const matchesRequestedProduct = (req: EquipmentRequestItem | null, item: InventoryItem): boolean => {
+    const wanted = req?.item_name?.trim().toLowerCase();
+    if (!wanted) return false;
+    return productBaseName(item).toLowerCase() === wanted;
   };
 
   const openFulfill = (req: EquipmentRequestItem) => {
@@ -200,13 +222,30 @@ const EquipmentRequestsPage: React.FC = () => {
        quartermaster to find the right variant by eye among every compatible
        row. The size is on the request, so use it — but only once, as the modal
        opens: re-applying it later would fight a quartermaster who deliberately
-       chose a different size. */
+       chose a different size.
+
+       Choosing *for* somebody has to clear a higher bar than offering them a
+       list, so the automatic pick is deliberately narrow. It must be the same
+       product, in the requested size, with enough of it to cover the quantity
+       the dialog has pre-filled — anything less produces a form that submits
+       and fails. Everything outside that stays a manual choice. */
     const preselectRequestedSize = (available: InventoryItem[]) => {
       if (req.item_id || !req.requested_size) return;
+      const wantedQuantity = req.quantity || 1;
       const match = available.find(
-        (item) => isCompatible(req, item) && matchesRequestedSize(req, item) && availableQuantity(item) > 0
+        (item) =>
+          isCompatible(req, item) &&
+          matchesRequestedProduct(req, item) &&
+          matchesRequestedSize(req, item) &&
+          availableQuantity(item) >= wantedQuantity
       );
-      if (match) setFulfillItemId(match.id);
+      if (!match) return;
+      setFulfillItemId(match.id);
+      // Pool stock is rejected outright unless the method is `issuance`, so
+      // selecting the item without moving the method hands the quartermaster
+      // a form that can only fail — and the method is a separate field they
+      // have no reason to re-check after an automatic selection.
+      if (match.tracking_type === 'pool') setFulfillmentType('issuance');
     };
 
     if (items.length > 0) {
@@ -215,13 +254,24 @@ const EquipmentRequestsPage: React.FC = () => {
     }
     // Applied inside the load rather than after it: `items` is still empty at
     // this point, so matching against it here would always find nothing.
+    //
+    // Sequenced because the load is not cancelled when the dialog closes: a
+    // quartermaster who opens request A, closes it and opens B before A's
+    // query lands would otherwise have A's callback preselect A's item while
+    // B is on screen, and the backend accepts it as category-compatible.
+    const load = ++fulfillLoadSeq.current;
+    setItemsLoading(true);
     void inventoryService
       .getItems({ active_only: true, limit: 500 })
       .then((res) => {
         setItems(res.items);
+        if (load !== fulfillLoadSeq.current) return;
         preselectRequestedSize(res.items);
       })
-      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')));
+      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')))
+      .finally(() => {
+        if (load === fulfillLoadSeq.current) setItemsLoading(false);
+      });
   };
 
   const loadItems = () => {
@@ -650,6 +700,8 @@ const EquipmentRequestsPage: React.FC = () => {
               </div>
 
               {fulfillModal.request.requested_size &&
+                !itemsLoading &&
+                items.length > 0 &&
                 !items.some(
                   (it) =>
                     isCompatible(fulfillModal.request, it) &&
@@ -683,7 +735,7 @@ const EquipmentRequestsPage: React.FC = () => {
                     .filter((it) => substitutionOverride || isCompatible(fulfillModal.request, it))
                     .map((it) => {
                       const tag = it.serial_number || it.asset_tag || it.barcode;
-                      const size = it.standard_size ?? it.size;
+                      const size = stockSizeValue(it);
                       const wanted = matchesRequestedSize(fulfillModal.request, it);
                       return (
                         <option key={it.id} value={it.id}>
