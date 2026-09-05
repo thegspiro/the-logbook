@@ -23,6 +23,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   No response shape or ordering changed for any request within the
   documented row limits.
 
+### Shift planning is one screen instead of three places (2026-09-05)
+
+**Added**
+
+- **`/scheduling/admin/planning` — staffing gaps.** Every upcoming shift
+  carrying fewer people than it asks for, over a date range, with the assignment
+  on the row. Filling ten gaps was ten trips through the month grid, the day, the
+  shift drawer and back; it is ten selections now. The assignment goes through
+  the drawer's own call, surfaces the same EVOC and overtime advisories from the
+  same response fields, and opens the same driver-exception dialog on
+  `LB-SCHED-001` — a refusal with no route forward is where a safety control
+  turns into a workaround.
+- **Templates and patterns are sections of that screen**, not screens beside it:
+  the reason to open a template is a shift that keeps coming up short, and that
+  is one tab away. Each section is its own route, so it can still be linked to
+  and bookmarked.
+
+**Changed**
+
+- **`/scheduling/admin/templates` → `/scheduling/admin/planning/templates`** and
+  **`/scheduling/admin/patterns` → `/scheduling/admin/planning/patterns`**. Both
+  URLs were introduced in the previous change and have not shipped; nothing
+  outside this repository can be pointing at them.
+- **The planning settings are shown on the gaps view and edited in Scheduling
+  settings.** The officer working the gaps is who notices the default crew is
+  wrong, so the values belong on that screen — but General and Apparatus are
+  written by one footer Save that PUTs the whole settings object, and a second
+  screen writing them means whichever saved last silently reverts the other. Same
+  trap that moved checklist timing to a single home in Inventory.
+
+**Known, and deliberate**
+
+- **What counts as short is the board's rule, taken whole.** The list is built
+  from `shiftCapacity`, `shiftStatusInfo` and `buildSeats` in `shiftBoard.ts`, so
+  this screen cannot answer differently about a shift than the calendar does. One
+  consequence: a shift naming neither positions nor a `min_staffing` has never
+  said how big its crew is, reads as "crew size not set" on the board, and is not
+  listed here — while the hub's Short-staffed metric, which goes through the
+  server's `filter_shifts_with_open_positions` and its fallback to a minimum of
+  one, does count it while nobody is on it. The hub number can therefore exceed
+  the rows on this screen for a department that states no crew size anywhere; the
+  fix for that is to state one, and each side is right about the question it is
+  answering.
+- **Openness is judged differently from the board, on purpose.**
+  `shiftStatusInfo` zeroes a shift's open seats once the *member* signup window
+  closes, which is right for a board offering a claim button. An officer can
+  still seat somebody after that, so the gaps list uses `capacity - filled`
+  behind the lifecycle check instead — inheriting the member's answer would hide
+  the shifts most urgently in need of one, the ones starting today.
+
 ### Scheduling administration is one grant, and the review findings on it (2026-09-05)
 
 Follow-up to "Scheduling administration moved into the Administration section",
@@ -122,6 +172,31 @@ which merged before a review of it came back.
   every module in `MODULE_REGISTRY` does this; scheduling did not introduce it,
   and correcting only scheduling would make it the one module that disagrees with
   the rest. Worth its own change.
+
+### The Members roster invited members to add a member (2026-09-05)
+
+**Fixed**
+
+- **An empty roster told every member to "Get started by adding your first
+  member or importing from CSV."** The Add Member and Import CSV buttons were
+  already officer-only — including the empty card's own actions — so the copy
+  was an instruction with nothing behind it for anyone without `members.manage`.
+  The prompt is now shown only to someone who can act on it.
+
+- **The delete dialog outlived the permission that opened it.** It rendered on
+  its own open state, so losing `members.manage` with it open left a Deactivate
+  and a Permanently delete button on screen. It is now gated like the controls
+  that open it.
+
+**Changed**
+
+- **With an empty roster, a member now sees a blank list** rather than a card
+  whose copy and both actions are invitations to add or import. An empty result
+  that follows from a search or a status filter is still reported to everyone.
+
+- The status filter has an accessible name ("Filter by status"). It was the
+  only unlabelled control in the toolbar; the search box beside it already had
+  one.
 
 ### The Events page invited members to create an event (2026-09-05)
 

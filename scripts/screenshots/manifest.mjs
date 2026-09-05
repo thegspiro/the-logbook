@@ -2265,7 +2265,7 @@ export const SHOTS = [
     // Patterns rather than Templates: the guide already pictures Templates
     // 460 lines above, and the point here is the header the four sub-pages
     // share, not that particular page.
-    route: "/scheduling/admin/patterns",
+    route: "/scheduling/admin/planning/patterns",
     fullPage: false,
   },
   {
@@ -2447,7 +2447,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Crew Positions block with Officer and Driver/Operator",
     alt: "Template crew positions, each with a button reading Required or Optional",
-    route: "/scheduling/admin/templates",
+    route: "/scheduling/admin/planning/templates",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /New Template/i })
@@ -5268,7 +5268,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Shift Templates tab showing a list of templates with",
     alt: "Shift Templates tab listing templates with start and end times",
-    route: "/scheduling/admin/templates",
+    route: "/scheduling/admin/planning/templates",
   },
   {
     id: "03-13-shift-patterns",
@@ -5277,7 +5277,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the pattern creation form showing the pattern type selector (Daily,",
     alt: "The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action",
-    route: "/scheduling/admin/patterns",
+    route: "/scheduling/admin/planning/patterns",
     fullPage: true,
   },
   {

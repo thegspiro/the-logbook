@@ -632,8 +632,9 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | --------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
 | `/scheduling`                                       | SchedulingPage                | auth only                                                                 |
 | `/scheduling/admin`                                 | SchedulingAdminHub            | `scheduling.manage`                                                       |
-| `/scheduling/admin/templates`                       | SchedulingTemplatesPage       | `scheduling.manage`                                                       |
-| `/scheduling/admin/patterns`                        | SchedulingPatternsPage        | `scheduling.manage`                                                       |
+| `/scheduling/admin/planning`                        | SchedulingPlanningPage        | `scheduling.manage`                                                       |
+| `/scheduling/admin/planning/templates`              | SchedulingPlanningPage        | `scheduling.manage`                                                       |
+| `/scheduling/admin/planning/patterns`               | SchedulingPlanningPage        | `scheduling.manage`                                                       |
 | `/scheduling/admin/reports`                         | SchedulingAdminReportsPage    | `scheduling.manage`                                                       |
 | `/scheduling/admin/platoons`                        | SchedulingPlatoonsPage        | `scheduling.manage`                                                       |
 | `/scheduling/admin/positions`                       | PositionRosterPage            | `scheduling.manage`                                                       |
