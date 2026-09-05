@@ -340,6 +340,48 @@ class TestTheTargetRolesBackfill:
 
         assert _targets(engine, messages) == ["Member"]
 
+    def test_an_id_is_never_reinterpreted_as_another_positions_name(
+        self, engine, tables
+    ):
+        """A display name is free text, so one position may be *named* the id
+        of another. An entry that is already an id must win, or a message
+        correctly targeted at one position is silently redelivered to a
+        different one."""
+        positions, messages = tables
+        _insert(
+            engine,
+            positions,
+            id="real-target",
+            organization_id="org1",
+            name="Engineer",
+            slug="engineer",
+            permissions="[]",
+            is_system=False,
+        )
+        # A second position whose NAME is the first one's id.
+        _insert(
+            engine,
+            positions,
+            id="decoy",
+            organization_id="org1",
+            name="real-target",
+            slug="decoy",
+            permissions="[]",
+            is_system=False,
+        )
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["real-target"]),
+        )
+
+        _run(engine)
+
+        assert _targets(engine, messages) == ["real-target"]
+
     def test_an_already_converted_message_is_untouched(self, engine, tables):
         positions, messages = tables
         _insert(

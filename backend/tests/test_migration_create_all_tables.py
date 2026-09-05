@@ -904,15 +904,17 @@ def _false_claims(sources: dict[str, str]) -> list[str]:
             named = set(re.findall(r"[a-z_]{4,}", block)) & model_tables
             for table in sorted(named):
                 built_by = creators.get(table, set()) & forebears
-                # Citing the revision that creates the table is proof the block
-                # is not claiming the table is uncreated -- it is explaining
-                # where the table comes from. This exempts the concessive form
-                # ("`positions` looks create_all-only ... but 20260805_0008
-                # renames `roles` into it"), which is correct prose the shape
-                # pattern alone reads as a claim, while leaving a genuinely
-                # false claim reported: an author who believed no migration
-                # creates the table has no revision id to cite.
-                if built_by and not any(rev in block for rev in built_by):
+                # No citation exemption. An earlier version here exempted a
+                # block that merely mentioned the creating revision's id, to
+                # spare the concessive form ("`positions` looks create_all-only
+                # ... but 20260805_0008 renames `roles` into it"). A mention is
+                # not an assertion: "positions is a model-only table;
+                # 20260805_0008 only renames user_roles" would have been
+                # exempted while still making the false claim, which is a
+                # bypass anyone could reach by accident. The corpus is clean
+                # without it -- #2261 reworded the one concessive block to
+                # state the positive directly, which is the house style now.
+                if built_by:
                     offenders.append(
                         f"{name} says `{table}` is create_all-only, but "
                         f"{sorted(built_by)[0]} creates it and is an ancestor"
@@ -1012,30 +1014,23 @@ class TestTheClaimDetection:
         creation at all. A check that flags correct prose gets deleted."""
         assert not self._plant(innocuous), f"false positive on: {innocuous!r}"
 
-    def test_a_block_citing_the_creating_revision_is_not_a_claim(self):
-        """The concessive form, which is correct prose and must survive.
+    @pytest.mark.parametrize(
+        "cited",
+        [
+            "see 20260722_0001 for context",
+            # The creating revision itself. Mentioning it is not asserting it:
+            # this sentence still denies that a migration creates the table.
+            "20260805_0008 only renames user_roles",
+        ],
+    )
+    def test_naming_a_revision_does_not_excuse_a_false_claim(self, cited):
+        """A revision id in the block buys nothing.
 
-        ``d5f2b8c04a19`` explains that ``positions`` only *looks* create_all-only
-        and names ``20260805_0008`` as the revision that renames ``roles`` into
-        it. The shape pattern matches the negative clause inside it; citing the
-        creating revision is what distinguishes explaining a table's origin from
-        denying it has one.
+        Exempting on a mention was a bypass reachable by accident -- the second
+        case here states the falsehood and names the very revision that
+        disproves it.
         """
-        assert not self._plant(
-            "positions looks create_all-only -- no migration creates it under "
-            "that name -- but 20260805_0008 renames roles into it."
-        )
-
-    def test_citing_some_other_revision_does_not_buy_an_exemption(self):
-        """The other half: the exemption is not "mentions any revision id".
-
-        A false claim that happens to reference an unrelated revision is still
-        a false claim, or the exemption would be a hole big enough to drive
-        every future one through.
-        """
-        assert self._plant(
-            "positions is a model-only table; see 20260722_0001 for context."
-        )
+        assert self._plant(f"positions is a model-only table; {cited}.")
 
     def test_a_sibling_is_not_an_ancestor(self):
         """The bug this replaced: a linear walk gives siblings adjacent
@@ -1099,9 +1094,19 @@ _OP_TABLE_FIRST = re.compile(
 #: table -- the table is the second. Reading the first argument here records
 #: `ix_roles_slug` as the table and lets a genuine post-rename
 #: `op.create_index("ix_roles_slug", "roles", ...)` pass unnoticed.
+#: The table is the SECOND argument here, and either argument may be a
+#: constant rather than a literal -- ``op.create_index(_INDEX, _TABLE, ...)``
+#: is used in this corpus. ``create_unique_constraint`` and
+#: ``create_check_constraint`` belong in this group too; omitting them left
+#: a post-rename reference in either form invisible.
 _OP_TABLE_SECOND = re.compile(
-    r"op\.(?:create_index|drop_index|create_foreign_key|drop_constraint)\("
-    r"\s*[\"'][a-z0-9_]+[\"']\s*,\s*[\"']([a-z0-9_]+)[\"']"
+    r"op\.(?:create_index|drop_index|create_foreign_key|drop_constraint"
+    r"|create_unique_constraint|create_check_constraint)\("
+    r"\s*[^,]+,\s*(?:[\"']([a-z0-9_]+)[\"']|([A-Za-z_]\w*))"
+)
+#: ``op.drop_index("ix", table_name="roles")`` -- the keyword form.
+_OP_TABLE_KWARG = re.compile(
+    r"table_name\s*=\s*(?:[\"']([a-z0-9_]+)[\"']|([A-Za-z_]\w*))"
 )
 
 
@@ -1148,7 +1153,13 @@ def _tables_referenced(text: str) -> set[str]:
     body = _upgrade_body(text)
     bindings = _literal_bindings(text)
 
-    found = set(_OP_TABLE_FIRST.findall(body)) | set(_OP_TABLE_SECOND.findall(body))
+    found = set(_OP_TABLE_FIRST.findall(body))
+    for pattern in (_OP_TABLE_SECOND, _OP_TABLE_KWARG):
+        for literal, name in pattern.findall(body):
+            if literal:
+                found.add(literal)
+            elif name in bindings:
+                found.add(bindings[name])
     for name in _OP_TABLE_FIRST_VAR.findall(body):
         if name in bindings:
             found.add(bindings[name])
@@ -1440,6 +1451,37 @@ class TestTheChainNameDetection:
         offenders = _names_already_retired(planted)
 
         assert any("planted_ddl" in o and "roles" in o for o in offenders)
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            'op.create_index(_INDEX, _TABLE, ["slug"])',
+            'op.create_unique_constraint("uq_x", _TABLE, ["slug"])',
+            'op.create_check_constraint("ck_x", _TABLE, "slug <> \'\'")',
+            'op.drop_index("ix_x", table_name=_TABLE)',
+        ],
+    )
+    def test_a_second_argument_constant_is_resolved(self, call):
+        """``op.create_index(_INDEX, _TABLE, ...)`` is used in this corpus.
+
+        Requiring both arguments to be string literals -- and omitting the
+        unique/check constraint operations -- left a post-rename reference in
+        any of these forms contributing no table name at all.
+        """
+        planted = self._sources_with(
+            "planted_second.py",
+            'revision = "planted_second"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            '_INDEX = "ix_roles_slug"\n'
+            '_TABLE = "roles"\n'
+            "def upgrade() -> None:\n"
+            f"    {call}\n",
+        )
+
+        assert any(
+            "planted_second" in o and "roles" in o
+            for o in _names_already_retired(planted)
+        ), f"not seen: {call}"
 
     def test_a_retired_name_the_models_bring_back_is_not_an_offender(self):
         """The other direction, and a live case rather than a hypothetical.

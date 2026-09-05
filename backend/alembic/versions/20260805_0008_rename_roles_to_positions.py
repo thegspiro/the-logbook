@@ -127,9 +127,11 @@ def upgrade() -> None:
             ondelete="CASCADE",
         )
 
-    # 20260610_0002 adds settings to `roles`, which the rename above carries
-    # across. This stays as the belt-and-braces path for a database that
-    # stamped that revision while it still silently no-opped.
+    # positions.settings exists only in the model; the chain never added it.
+    # 20260610_0002 was meant to, but it names `positions` before the rename
+    # above gives the table that name, so its guard always fires and it is
+    # inert. This is therefore the ONLY chain operation that adds the column --
+    # not a belt-and-braces duplicate of that revision.
     if "settings" not in {c["name"] for c in sa.inspect(bind).get_columns("positions")}:
         op.add_column("positions", sa.Column("settings", sa.JSON(), nullable=True))
 

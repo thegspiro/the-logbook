@@ -25,10 +25,14 @@ def upgrade() -> None:
     # table this names does not exist yet and the guard below always fires:
     # on every upgrade path this revision is inert. The models were renamed
     # long before the database was, which is why it was written against the
-    # model name. The body stays as it ran (AGENTS.md: an already-deployed
-    # migration is not edited to change its behaviour); the repair it was
-    # meant to perform is carried by e8a1c04f6b27, which runs at head where
-    # the table really is called `positions`.
+    # model name. The body stays as it ran -- an already-deployed migration is
+    # not edited to change its behaviour (AGENTS.md).
+    #
+    # Nothing supersedes this one, and nothing needs to. `positions.settings`
+    # is added by 20260805_0008's own fallback on the chain path, and by
+    # `create_all` from the model everywhere else, so the column exists either
+    # way. Do not delete that fallback on the assumption this revision covers
+    # it: this revision covers nothing.
     from sqlalchemy import inspect
 
     if "positions" not in inspect(op.get_bind()).get_table_names():

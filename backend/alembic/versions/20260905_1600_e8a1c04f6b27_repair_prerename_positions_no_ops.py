@@ -82,6 +82,20 @@ _COVERING = ("*", "inventory.*", "equipment_check.*")
 # CLAUDE.md pitfall #26 records, and it cost a data-lossy guard on 20260826_1700.
 
 
+def _position_ids(bind) -> set:
+    """Every position id, so an already-targeted id is never re-resolved.
+
+    A position's display name is free text of 1-100 characters, so nothing
+    stops one position being *named* the literal id of another. A modern
+    message targeting that other position by id would then look like a legacy
+    name here and be rewritten to the wrong position -- delivering operational
+    content to the wrong people, and invisibly, since the result still looks
+    like a correctly id-targeted message. Contrived, and cheap to rule out:
+    an entry that is already an id is left alone before names are considered.
+    """
+    return {row.id for row in bind.execute(sa.text("SELECT id FROM positions"))}
+
+
 def _unambiguous_name_map(bind) -> dict:
     """``(organization_id, name) -> id``, for names that resolve to ONE position.
 
@@ -101,7 +115,7 @@ def _unambiguous_name_map(bind) -> dict:
     return {key: value for key, value in ids.items() if counts[key] == 1}
 
 
-def _backfill_target_roles(bind, name_to_id: dict) -> int:
+def _backfill_target_roles(bind, name_to_id: dict, known_ids: set) -> int:
     """Rewrite role-targeted messages from position names to position ids.
 
     Idempotent by construction: a stored id never matches a position *name*, so
@@ -127,7 +141,12 @@ def _backfill_target_roles(bind, name_to_id: dict) -> int:
             continue
 
         new_target = [
-            name_to_id.get((row.organization_id, entry), entry) for entry in target
+            (
+                entry
+                if entry in known_ids
+                else name_to_id.get((row.organization_id, entry), entry)
+            )
+            for entry in target
         ]
         if new_target != target:
             bind.execute(
@@ -216,7 +235,7 @@ def _grant_check_submit(bind) -> int:
 def upgrade() -> None:
     bind = op.get_bind()
     # Before the rename -- see "Order matters here" above.
-    _backfill_target_roles(bind, _unambiguous_name_map(bind))
+    _backfill_target_roles(bind, _unambiguous_name_map(bind), _position_ids(bind))
     _rename_coordinator(bind)
     _grant_check_submit(bind)
 
