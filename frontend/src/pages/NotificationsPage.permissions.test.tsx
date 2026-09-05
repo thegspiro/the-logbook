@@ -115,7 +115,11 @@ describe('NotificationsPage tab permissions', () => {
     renderAt('/notifications?tab=log');
 
     await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
-    expect(notificationsService.getLogs).toHaveBeenCalledWith({ scope: NotificationLogScope.MINE });
+    // The scope is what this pins; pagination params are another test's
+    // business, and matching them exactly coupled this to that.
+    expect(notificationsService.getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: NotificationLogScope.MINE })
+    );
   });
 
   it('loads the send log for a member, whose rules request would 403', async () => {

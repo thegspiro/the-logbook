@@ -101,7 +101,10 @@ describe('NotificationsPage send log', () => {
     renderLogTab();
 
     await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
-    expect(notificationsService.getLogs).toHaveBeenCalledWith({ scope: NotificationLogScope.MINE });
+    expect(notificationsService.getLogs).toHaveBeenCalledWith({
+      scope: NotificationLogScope.MINE,
+      limit: 50,
+    });
     expect(await screen.findByText('Drill on Thursday')).toBeInTheDocument();
   });
 
@@ -149,6 +152,72 @@ describe('NotificationsPage send log', () => {
     renderLogTab();
 
     expect(await screen.findByText('No Notifications Found')).toBeInTheDocument();
+  });
+
+  it('keeps a send-log failure out of the inbox it did not affect', async () => {
+    // The log is prefetched on mount for a tab the member may never open. Its
+    // failure used to write the page-wide `error`, which renders above every
+    // tab, so a working inbox was captioned with a send-log failure.
+    vi.mocked(notificationsService.getLogs).mockRejectedValue(new Error('log fetch exploded'));
+
+    render(
+      <MemoryRouter initialEntries={['/notifications']}>
+        <ConfirmProvider>
+          <NotificationsPage />
+        </ConfirmProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByRole('tab', { name: /my notifications/i });
+    await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
+    expect(screen.queryByText(/log fetch exploded/i)).toBeNull();
+  });
+
+  it('reports that failure on the Send Log itself', async () => {
+    vi.mocked(notificationsService.getLogs).mockRejectedValue(new Error('log fetch exploded'));
+
+    renderLogTab();
+
+    expect(await screen.findByText(/log fetch exploded/i)).toBeInTheDocument();
+  });
+
+  it('offers the rest of a history longer than one page', async () => {
+    // The fetch takes the newest page and the tab claims to show every
+    // notification sent to the member, so the remainder needs a way in.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog],
+      total: 3,
+      skip: 0,
+      limit: 50,
+    });
+
+    renderLogTab();
+
+    const more = await screen.findByRole('button', { name: /load more \(2 remaining\)/i });
+
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...emailLog, id: 'log-2', subject: 'Hydrant testing' }],
+      total: 3,
+      skip: 1,
+      limit: 50,
+    });
+    await userEvent.setup().click(more);
+
+    expect(await screen.findByText('Hydrant testing')).toBeInTheDocument();
+    // Appended, not replaced.
+    expect(screen.getByText('Drill on Thursday')).toBeInTheDocument();
+    expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
+      scope: NotificationLogScope.MINE,
+      skip: 1,
+      limit: 50,
+    });
+  });
+
+  it('does not offer Load more when the page is the whole history', async () => {
+    renderLogTab();
+
+    await screen.findByText('Drill on Thursday');
+    expect(screen.queryByRole('button', { name: /load more/i })).toBeNull();
   });
 
   it('does not show organization-wide statistics above a caller-scoped log', async () => {

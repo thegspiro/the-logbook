@@ -143,6 +143,28 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
     expect(screen.queryByRole('button', { name: /load more/i })).toBeNull();
   });
 
+  it('marks the log cache read too, so its button does not re-offer the work', async () => {
+    // The Send Log holds an independently fetched copy of these in-app rows.
+    // `/my/read-all` marked them in the database; leaving the cached copies
+    // unread left the Send Log offering "Mark all as read" for work already
+    // done.
+    const user = userEvent.setup();
+    vi.mocked(notificationsService.getLogs).mockResolvedValue({
+      logs: [{ ...unread, id: 'log-in-app', subject: 'Station meeting' }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    renderPage('/notifications');
+
+    await user.click(await screen.findByRole('button', { name: /mark all as read/i }));
+    await waitFor(() => expect(notificationsService.markAllMyNotificationsRead).toHaveBeenCalled());
+
+    await switchTo(user, /send log/i);
+    await screen.findByText('Station meeting');
+    expect(screen.queryByRole('button', { name: /mark all as read/i })).toBeNull();
+  });
+
   it('keeps the rows, marked read, when the inbox is showing read ones', async () => {
     const user = userEvent.setup();
     renderPage('/notifications');
