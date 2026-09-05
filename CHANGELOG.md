@@ -495,6 +495,23 @@ which merged before a review of it came back.
   written under per-incident tracking keeps the officer's own wording, which is
   never rewritten to match a type whose slug happens to look the same.
 
+**Fixed**
+
+- **A department that had named a type "unclassified" could not report on it,
+  or repair it.** `unclassified` is the bucket a call with _no_ type falls into
+  on a breakdown, so a configured type sharing that slug was indistinguishable
+  from the remainder: the call-volume report merged the department's calls with
+  the untyped ones and labelled the total "Not categorised", a figure that
+  reconciles to neither quantity, while the type's own name vanished from every
+  screen. The settings editor could not fix it either — the slug is refused on
+  write, so no payload it can produce even mentions the type. A migration
+  renames the slug, deriving the new one from the department's own label, and
+  moves the calls and the filed shift reports that point at it. Reports written
+  under per-incident tracking are left alone: the word is an officer's prose
+  there, not a slug. Calls whose type had already been deleted from settings
+  stay in the remainder — there is no label left to restore, and renaming them
+  would replace "Not categorised" with a raw slug.
+
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
 **Fixed**
