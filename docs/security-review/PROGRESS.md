@@ -17,10 +17,11 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 20 (Compliance), pass 3** — branch
-`claude/security-review-compliance`, PR TBD. 0 fixes, 0 flagged (one
-already-fixed-elsewhere Pitfall #19 instance re-verified, no new gap). See
-the log entry below and `docs/security-review/CMP-20-compliance.md` →
-**Pass 3** for detail.
+`claude/security-review-compliance`, PR
+[#2245](https://github.com/thegspiro/the-logbook/pull/2245). 0 fixes, 0
+flagged (one already-fixed-elsewhere Pitfall #19 instance re-verified, no
+new gap). See the log entry below and
+`docs/security-review/CMP-20-compliance.md` → **Pass 3** for detail.
 
 ---
 
