@@ -115,6 +115,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     requireEndOfShiftChecks,
     callTrackingMode,
     loadSettings,
+    settingsLoaded,
   } = useSchedulingStore();
   useEffect(() => {
     void loadSettings();
@@ -878,7 +879,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // live controls stop applying — see `rosterLocked`. Deliberately not
   // `isPast`: that is day-granular and true from midnight, which would take an
   // overnight crew's controls away mid-shift.
-  const isRosterLocked = rosterLocked(shift, signupWindow, { canAssign, canManage });
+  //
+  // Never locked on a grace period that has not been fetched. `useSignupWindow`
+  // returns the built-in 60 minutes until the department's settings land, and
+  // that default is chosen to be permissive for a *claim* button — for a lock
+  // it is the opposite, so a department running a four-hour grace would watch
+  // its controls vanish on a shift the server still accepts, and a failed
+  // settings fetch would leave them gone for the life of the panel. Unknown
+  // means unlocked, which is the stance the rest of the signup rules take, and
+  // the server refuses either way.
+  const isRosterLocked = settingsLoaded && rosterLocked(shift, signupWindow, { canAssign, canManage });
 
   /**
    * Has the shift begun? Nobody can be present for a shift eight days out, so
