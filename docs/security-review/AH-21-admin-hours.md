@@ -362,7 +362,93 @@ guard tests (`tests/test_admin_hours_service.py`'s new
 `TestAtRiskThresholdOverrideZero`, `TestQuarterlyComplianceRequestedYear`;
 `entryTimes.test.ts`'s new `DST fall-back fold` block).
 
-## Completion gate (pass 3, corrected)
+### Codex follow-up round — 2 more findings on the fix commit (`ef103f81c`)
+
+Codex reviewed the commit that closed the six findings above and posted two
+more, both against code that same commit had just changed. Both verified
+real against the current code (not taken on the bot's word) and both fixed.
+
+7. **MEDIUM — `bulk_approve` and `edit_pending_entry` still didn't share one
+   lock order (Pitfall #27), so they could still deadlock.** The finding-4
+   fix above sorted `bulk_approve`'s own batch of entry ids before locking
+   them, and had `edit_pending_entry` lock the owning member's `User` row
+   before the entry row — but `bulk_approve` never locked any `User` row at
+   all, only entry rows. That's two different lock orders, not one shared
+   one, and the two can still deadlock: `edit_pending_entry`'s locking
+   overlap check (`_check_overlap(..., for_update=True)`) locks _every_
+   overlapping entry for that member, not just the one being edited — so a
+   batch containing two entries for the same member can deadlock against a
+   concurrent edit on one of them:
+
+   ```
+   bulk_approve:        locks entry A (sorted-first) ... waits on entry B
+   edit_pending_entry:   locks User(M), locks entry B, overlap-check waits on entry A
+   ```
+
+   Each transaction holds what the other needs — InnoDB aborts one, surfaced
+   as a `500`. **Where:** `app/services/admin_hours_service.py:1051`
+   (`bulk_approve`). **Fix:** `bulk_approve` now looks up the distinct set
+   of members who own entries in the batch (an unlocked `SELECT ...
+DISTINCT user_id ... WHERE id IN (...)`) and locks each member's `User`
+   row, in sorted id order, _before_ locking any entry row — the same
+   "member rows first, then entry rows, both in a stable order" protocol
+   `edit_pending_entry` already followed on its own. Whichever transaction
+   reaches a shared member row first now serializes the other on that lock
+   directly; neither can end up holding one entry while waiting on another
+   that the other side holds. **Guard tests:**
+   `TestBulkApproveMemberRowLocking` (new) — asserts the owner lookup is
+   unlocked, both member-row locks precede both entry-row locks, member
+   locks are taken in sorted id order (not lookup order), and a batch with
+   duplicate owners locks that member's row only once; `TestBulkApproveLocking`'s
+   two existing tests updated for the new query sequence;
+   `TestBulkApproveSeparationOfDuties`'s two existing tests updated the
+   same way.
+
+8. **MEDIUM — the quarterly-compliance fix (finding 5, above) replaced a
+   wrong answer with a missing one.** Grading a quarterly requirement for a
+   non-current year has no meaning (there's no client-supplied quarter
+   number, so a past/future year has no "current quarter" to answer
+   against) — finding 5 fixed the mis-dated grading by `continue`-ing past
+   the requirement instead. That traded a wrong answer for a silently
+   incomplete one: a profile with both an annual and a quarterly
+   requirement, requested for a past year, now returns `200 OK` with only
+   the annual item — a caller has no way to distinguish that from "this
+   profile never had a quarterly requirement." **Where:**
+   `app/services/admin_hours_service.py:1894`
+   (`get_user_hours_compliance`). **Fix:** reject the request outright
+   instead of answering with an incomplete list. Before any per-requirement
+   query runs, the method now checks whether the applicable profile has a
+   quarterly requirement and the requested year isn't the current one; if
+   so it raises `ValueError` — this module's existing convention for a
+   business-rule rejection (`update_category` routes through
+   `apply_updates`, which raises `ValueError` for the same reason). The
+   endpoint (`app/api/v1/endpoints/admin_hours.py`) previously caught every
+   exception from this call as a bare `500`; it now catches `ValueError`
+   first and returns `400`, matching CLAUDE.md's documented `try: ...
+except ValueError: 400 / except Exception: 500` pattern already used
+   elsewhere in this same file — this endpoint was the one place in the
+   module that hadn't adopted it, since nothing had ever raised
+   `ValueError` from this call site before. No response-schema change: this
+   is a rejected-request shape (an error), not a new "not evaluated" field
+   on `AdminHoursComplianceItem` — adding such a field was considered and
+   rejected, since `status` is a free string the frontend renders through a
+   fixed switch (`AdminHoursPage.tsx`'s `complianceStatusStyle`) that falls
+   through any unrecognized value to a red "Behind" badge, which would have
+   been a worse, actively misleading outcome for a value meaning "we don't
+   know." The one shipped caller of this endpoint never passes an explicit
+   `year` (always the default, current-year request), so this changes no
+   in-app behavior — recorded in `CHANGELOG.md` anyway because the endpoint
+   is still public API surface. **Guard tests:**
+   `TestQuarterlyComplianceRequestedYear` extended with
+   `test_quarterly_requirement_for_a_past_year_is_rejected`,
+   `..._for_a_future_year_is_rejected`, and
+   `test_mixed_profile_past_year_rejects_rather_than_dropping_quarterly`
+   (the exact both-annual-and-quarterly scenario the finding names, which
+   also asserts only the user and compliance-config queries ran — proving
+   the rejection happens before any partial data is assembled, not merely
+   that the final list came back empty).
+
+## Completion gate (pass 3, corrected, updated for the Codex follow-up round)
 
 | Check                                                   | Result                                   |
 | ------------------------------------------------------- | ---------------------------------------- |
@@ -370,17 +456,22 @@ guard tests (`tests/test_admin_hours_service.py`'s new
 | `black --check app/ tests/ alembic/`                    | clean                                    |
 | `isort --check-only app/ tests/ alembic/`               | clean (isort 9.0.1, CI's pinned version) |
 | `python3 scripts/validate_migrations.py --strict`       | PASSED — 422 revisions, single head      |
-| backend tests, scope (`-k "admin_hours or compliance"`) | 387 passed, 1 pre-existing skip          |
-| backend tests, full suite                               | 10887 passed, 21 pre-existing skips      |
+| backend tests, scope (`-k "admin_hours or compliance"`) | 392 passed, 1 pre-existing skip          |
+| backend tests, full suite                               | 10892 passed, 21 pre-existing skips      |
 | `npx tsc --noEmit` (frontend)                           | 0 errors                                 |
 | `npx eslint .` (frontend)                               | 0 errors, 0 warnings                     |
 | `npx vitest run` — `entryTimes.test.ts`                 | 22 passed (11 new)                       |
 
-6 backend/frontend fixes landed this pass (findings 2-6 above are 5 distinct
-code changes; finding 1 is the methodology correction that surfaced them),
-plus this doc's own correction. The original "no code changes this pass" and
-"no new findings" lines above are wrong and are kept only for the record —
-see the correction notice at the top of this pass.
+6 backend/frontend fixes landed in the first fix commit of this pass
+(findings 2-6 above are 5 distinct code changes; finding 1 is the
+methodology correction that surfaced them), plus this doc's own correction.
+The original "no code changes this pass" and "no new findings" lines above
+are wrong and are kept only for the record — see the correction notice at
+the top of this pass. A second, follow-up commit fixed findings 7 and 8
+above, both raised by Codex against the first fix commit itself — bringing
+this pass's total to 8 findings, 8 fixed, across two commits. Backend test
+counts (392/10892) reflect that second commit; the frontend counts are
+unchanged since neither follow-up finding touched frontend code.
 
 ---
 

@@ -23,6 +23,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin Hours compliance for a quarterly requirement ignored a requested
   historical year and graded the live quarter instead; it is now skipped
   for any year other than the current one rather than silently mis-dated.
+  (Superseded the same day — see "lock-order and quarterly-compliance
+  follow-up fixes" below: skipping was itself replaced with an explicit
+  error.)
+
+### Admin Hours: lock-order and quarterly-compliance follow-up fixes (2026-09-05)
+
+**Fixed**
+
+- **API behavior change:** `GET /admin-hours/compliance/{user_id}?year=...`
+  now returns `400 Bad Request` when the requested year is not the current
+  year and the resolved compliance profile has a quarterly requirement,
+  instead of `200 OK` with the quarterly item silently missing from the
+  list. The endpoint's only shipped caller always uses the default (current)
+  year, so this is not expected to affect any in-app flow — but any external
+  caller passing an explicit `year` against a quarterly-graded profile will
+  now get an error instead of a response that looked complete while quietly
+  omitting an item. Passing the current year, or omitting `year` entirely,
+  is unaffected.
+- **Bulk-approving admin hours entries could still deadlock against a
+  concurrent single-entry edit.** The previous fix had `bulk_approve` lock
+  its own batch of entries in sorted order, and had `edit_pending_entry`
+  lock the owning member's `User` row before the entry row — but the two
+  methods didn't share one global lock order. A batch containing two
+  entries for the same member, racing an edit whose locking overlap check
+  reached into the other entry in that batch, could still deadlock (InnoDB
+  aborting one side as a `500`). `bulk_approve` now also locks every
+  affected member's `User` row, in sorted order, before locking any entry
+  row — the same "member rows first, then entry rows, both in a stable
+  order" protocol `edit_pending_entry` already followed.
 
 ### My Hours: a career total, and figures under their own headings (2026-09-05)
 

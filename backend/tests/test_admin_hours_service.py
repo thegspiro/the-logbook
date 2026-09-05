@@ -22,6 +22,12 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
+def _owner_lookup(user_ids):
+    """Mocks bulk_approve's unlocked `AdminHoursEntry.user_id` owner-lookup
+    query, whose result is consumed via `.all()`, not `scalar_one_or_none()`."""
+    return MagicMock(all=MagicMock(return_value=[(uid,) for uid in user_ids]))
+
+
 def _db(side_effect):
     db = MagicMock()
     db.execute = AsyncMock(side_effect=side_effect)
@@ -406,11 +412,21 @@ class TestBulkApproveSeparationOfDuties:
         approver = "officer-1"
         own = self._pending("e-own", approver)
         other = self._pending("e-other", "member-2")
-        # bulk_approve processes ids in sorted order (Pitfall #27 lock-order
-        # consistency, see TestBulkApproveLocking), not the client-supplied
-        # order — "e-other" sorts before "e-own" — so the mocked results are
-        # supplied in that same order.
-        db = _db([_one(other), _one(own)])
+        # bulk_approve first locks the batch's distinct member User rows
+        # (Pitfall #27, see TestBulkApproveLocking), then processes entry
+        # ids in sorted order, not the client-supplied order — "e-other"
+        # sorts before "e-own" — so the mocked results are supplied in that
+        # same sequence: owner lookup, one member-row lock per distinct
+        # member, then the entry fetches themselves.
+        db = _db(
+            [
+                _owner_lookup([approver, "member-2"]),
+                MagicMock(),  # member-2's User-row lock
+                MagicMock(),  # officer-1's User-row lock
+                _one(other),
+                _one(own),
+            ]
+        )
 
         count = await AdminHoursService(db).bulk_approve(
             entry_ids=["e-own", "e-other"],
@@ -430,7 +446,16 @@ class TestBulkApproveSeparationOfDuties:
         approver = "officer-1"
         own_a = self._pending("e-a", approver)
         own_b = self._pending("e-b", approver)
-        db = _db([_one(own_a), _one(own_b)])
+        # Both entries share one owner, so only one member-row lock is
+        # taken despite there being two entries.
+        db = _db(
+            [
+                _owner_lookup([approver]),
+                MagicMock(),  # officer-1's User-row lock
+                _one(own_a),
+                _one(own_b),
+            ]
+        )
 
         count = await AdminHoursService(db).bulk_approve(
             entry_ids=["e-a", "e-b"],
@@ -777,7 +802,16 @@ class TestBulkApproveLocking:
     in a fixed order — two concurrent bulk-approve calls over overlapping id
     sets that each locked rows in client-supplied order could lock in
     opposite sequences and deadlock, the same lock-order-inversion shape
-    AH-11 hit on event-hour-mapping percentage locking."""
+    AH-11 hit on event-hour-mapping percentage locking.
+
+    Follow-up Codex finding on that fix: sorting only this method's own
+    batch of entry ids isn't a *shared* lock order with `edit_pending_entry`,
+    which locks the owning member's User row before the entry row. A batch
+    containing two entries for the same member, racing a concurrent edit
+    whose locking overlap check reaches into the other entry in the batch,
+    could still deadlock. `TestLocksMemberRowsBeforeEntryRows` below covers
+    the fix: every affected member row is now locked, in sorted order,
+    before any entry row lock is taken."""
 
     async def test_entry_fetches_are_locking_reads(self):
         entry = TestBulkApproveSeparationOfDuties._pending("e-1", "member-2")
@@ -785,6 +819,10 @@ class TestBulkApproveLocking:
 
         async def execute(stmt, *_a, **_kw):
             captured.append(stmt)
+            if len(captured) == 1:
+                return _owner_lookup(["member-2"])  # unlocked owner lookup
+            if len(captured) == 2:
+                return MagicMock()  # member-2's User-row lock; discarded
             return _one(entry)
 
         db = MagicMock()
@@ -795,7 +833,12 @@ class TestBulkApproveLocking:
             entry_ids=["e-1"], organization_id="org-1", approver_id="officer-1"
         )
 
-        assert "FOR UPDATE" in str(captured[0])
+        assert len(captured) == 3
+        assert "FOR UPDATE" not in str(captured[0])
+        assert "FOR UPDATE" in str(captured[1])
+        assert "users" in str(captured[1]).lower()
+        assert "FOR UPDATE" in str(captured[-1])
+        assert "admin_hours_entries" in str(captured[-1]).lower()
 
     async def test_processes_ids_in_sorted_order_not_client_order(self):
         entries = {
@@ -806,6 +849,10 @@ class TestBulkApproveLocking:
 
         async def execute(stmt, *_a, **_kw):
             compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+            if "FOR UPDATE" not in compiled:
+                return _owner_lookup(["member-2", "member-3"])  # owner lookup
+            if "users" in compiled.lower():
+                return MagicMock()  # a member's User-row lock; discarded
             for entry_id, entry in entries.items():
                 if entry_id in compiled:
                     seen_ids.append(entry_id)
@@ -821,6 +868,113 @@ class TestBulkApproveLocking:
         )
 
         assert seen_ids == ["e-a", "e-b"]
+
+
+class TestBulkApproveMemberRowLocking:
+    """Follow-up Codex finding: bulk_approve locked only entry rows, sorted
+    among themselves — not a shared global lock order with
+    `edit_pending_entry`, which locks the owning member's User row before
+    the entry row. Two entries in one batch for the same member, racing an
+    `edit_pending_entry` whose locking overlap check reaches into the
+    other entry in that batch, could deadlock: bulk_approve holding entry A
+    and waiting on entry B, while the edit holds the member's User row and
+    entry B and waits on entry A. Locking every affected member row first,
+    in sorted order, closes this — both methods now agree on "member rows
+    first, then entry rows, both in a stable order.\" """
+
+    async def test_member_rows_are_locked_before_any_entry_row(self):
+        entry_a = TestBulkApproveSeparationOfDuties._pending("e-a", "member-a")
+        entry_b = TestBulkApproveSeparationOfDuties._pending("e-b", "member-b")
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                # The unlocked owner lookup — reports both members, out of
+                # sorted order, to prove the code (not the mock) sorts them.
+                return _owner_lookup(["member-b", "member-a"])
+            if len(captured) == 2:
+                return MagicMock()  # member-a's User-row lock; discarded
+            if len(captured) == 3:
+                return MagicMock()  # member-b's User-row lock; discarded
+            if len(captured) == 4:
+                return _one(entry_a)
+            return _one(entry_b)
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+
+        await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-b", "e-a"], organization_id="org-1", approver_id="officer-1"
+        )
+
+        assert len(captured) == 5
+        assert "FOR UPDATE" not in str(captured[0])
+        # Both member locks precede both entry locks.
+        assert "FOR UPDATE" in str(captured[1])
+        assert "users" in str(captured[1]).lower()
+        assert "FOR UPDATE" in str(captured[2])
+        assert "users" in str(captured[2]).lower()
+        assert "FOR UPDATE" in str(captured[3])
+        assert "admin_hours_entries" in str(captured[3]).lower()
+        assert "FOR UPDATE" in str(captured[4])
+        assert "admin_hours_entries" in str(captured[4]).lower()
+
+    async def test_member_locks_use_sorted_member_id_order_not_lookup_order(self):
+        entry = TestBulkApproveSeparationOfDuties._pending("e-1", "member-z")
+        seen_member_order = []
+
+        async def execute(stmt, *_a, **_kw):
+            compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+            if "FOR UPDATE" not in compiled:
+                # Reported in reverse of sorted order, on purpose.
+                return _owner_lookup(["member-z", "member-a"])
+            if "users" in compiled.lower():
+                for candidate in ("member-a", "member-z"):
+                    if candidate in compiled:
+                        seen_member_order.append(candidate)
+                        return MagicMock()
+                raise AssertionError(f"unexpected User lock query: {compiled}")
+            return _one(entry)
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+
+        await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-1"], organization_id="org-1", approver_id="officer-1"
+        )
+
+        assert seen_member_order == ["member-a", "member-z"]
+
+    async def test_duplicate_owners_lock_only_one_member_row(self):
+        entry_a = TestBulkApproveSeparationOfDuties._pending("e-a", "member-a")
+        entry_b = TestBulkApproveSeparationOfDuties._pending("e-b", "member-a")
+        member_lock_count = 0
+
+        async def execute(stmt, *_a, **_kw):
+            compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+            nonlocal member_lock_count
+            if "FOR UPDATE" not in compiled:
+                return _owner_lookup(["member-a", "member-a"])
+            if "users" in compiled.lower():
+                member_lock_count += 1
+                return MagicMock()
+            for entry_id, entry in (("e-a", entry_a), ("e-b", entry_b)):
+                if entry_id in compiled:
+                    return _one(entry)
+            raise AssertionError("unexpected query")
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+
+        await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-a", "e-b"], organization_id="org-1", approver_id="officer-1"
+        )
+
+        assert member_lock_count == 1
 
 
 class TestEventHourMappingPercentageLocking:
@@ -1042,14 +1196,28 @@ class TestQuarterlyComplianceRequestedYear:
     endpoint's `year` argument and built its bounds from
     `date.today().year`, so `?year=2024` silently graded the live quarter of
     today's real year while annual requirements in the same response were
-    correctly graded against 2024."""
+    correctly graded against 2024.
 
-    async def test_quarterly_requirement_for_a_past_year_is_skipped_not_misdated(self):
+    Follow-up Codex finding on that fix: the first fix replaced the
+    mis-dated grading with a silent `continue`, which traded a wrong answer
+    for a missing one. Omitting the quarterly item left a response that
+    *looks* complete (annual items present) with no way for the caller to
+    tell "this profile has no quarterly requirement" from "it has one, and
+    it was silently not graded for the year you asked about." Requesting a
+    quarterly-graded profile for any year but the current one is now
+    rejected outright with a `ValueError` (-> `HTTPException(400, ...)` at
+    the endpoint), before any per-requirement query runs, rather than
+    answering with an incomplete list."""
+
+    async def test_quarterly_requirement_for_a_past_year_is_rejected(self):
         past_year = date.today().year - 1
-        results = await _run_compliance(year=past_year, frequency="quarterly")
-        # No item at all, rather than one silently labeled with the wrong
-        # year's data — the bug this guards against.
-        assert results == []
+        with pytest.raises(ValueError, match="[Qq]uarterly"):
+            await _run_compliance(year=past_year, frequency="quarterly")
+
+    async def test_quarterly_requirement_for_a_future_year_is_rejected(self):
+        future_year = date.today().year + 1
+        with pytest.raises(ValueError, match="[Qq]uarterly"):
+            await _run_compliance(year=future_year, frequency="quarterly")
 
     async def test_quarterly_requirement_for_the_current_year_is_graded_as_before(self):
         current_year = date.today().year
@@ -1062,6 +1230,61 @@ class TestQuarterlyComplianceRequestedYear:
         results = await _run_compliance(year=past_year, frequency="annual")
         assert len(results) == 1
         assert results[0]["period_start"].startswith(str(past_year))
+
+    async def test_mixed_profile_past_year_rejects_rather_than_dropping_quarterly(self):
+        """The exact scenario the follow-up finding names: a profile with
+        BOTH an annual and a quarterly requirement, requested for a past
+        year. Silently omitting only the quarterly item would return a
+        response containing just the annual item — indistinguishable from a
+        profile that never had a quarterly requirement in the first place.
+        The whole request is rejected instead of a partial response."""
+        past_year = date.today().year - 1
+        config = SimpleNamespace(
+            organization_id="org-1",
+            at_risk_threshold=75,
+            profiles=[
+                SimpleNamespace(
+                    is_active=True,
+                    admin_hours_requirements=[
+                        {
+                            "category_id": "cat-1",
+                            "required_hours": 10,
+                            "frequency": "annual",
+                        },
+                        {
+                            "category_id": "cat-2",
+                            "required_hours": 5,
+                            "frequency": "quarterly",
+                        },
+                    ],
+                    membership_types=[],
+                    role_ids=[],
+                    priority=1,
+                    at_risk_threshold_override=None,
+                )
+            ],
+        )
+        user = _compliance_user()
+        calls = []
+
+        async def execute(stmt, *_a, **_kw):
+            calls.append(stmt)
+            if len(calls) == 1:
+                return _one(user)
+            return _config_result(config)
+
+        db = MagicMock()
+        db.execute = execute
+
+        with pytest.raises(ValueError, match="[Qq]uarterly"):
+            await AdminHoursService(db).get_user_hours_compliance(
+                organization_id="org-1", user_id="user-1", year=past_year
+            )
+        # The rejection happens up front: only the user fetch and the
+        # compliance-config fetch ran, before either requirement's
+        # category/hours-sum queries -- proving no partial data was ever
+        # assembled, not merely that the final response was empty.
+        assert len(calls) == 2
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -6,7 +6,7 @@ manual entry, and approval workflows.
 """
 
 import io
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -1042,6 +1042,36 @@ class AdminHoursService:
         approved_count = 0
         skipped_self = 0
 
+        # Lock the affected members' User rows *before* any entry row
+        # (Pitfall #27), in sorted member-id order — the same "member rows
+        # first, then entry rows, both in a stable order" protocol
+        # `create_manual_entry`/`edit_pending_entry` already follow. Sorting
+        # only this method's own batch of entry ids (below) is not enough on
+        # its own: `edit_pending_entry` locks the owning User row and then,
+        # via `_check_overlap(for_update=True)`, can lock *other* entries
+        # belonging to that same member — including one elsewhere in this
+        # batch. Without a User-row lock here too, this method and
+        # `edit_pending_entry` can still acquire the two tables' rows in
+        # opposite global orders (e.g. this method holds entry A and waits
+        # on entry B, while a concurrent edit holds member M's User row and
+        # entry B and waits on entry A) and deadlock. Locking every affected
+        # member row first closes that: whichever transaction gets there
+        # first serializes the other on the member lock itself, never on a
+        # cross-held entry pair.
+        owner_result = await self.db.execute(
+            select(AdminHoursEntry.user_id)
+            .where(
+                AdminHoursEntry.id.in_(entry_ids),
+                AdminHoursEntry.organization_id == organization_id,
+            )
+            .distinct()
+        )
+        member_ids = sorted({row[0] for row in owner_result.all()})
+        for member_id in member_ids:
+            await self.db.execute(
+                select(User.id).where(User.id == member_id).with_for_update()
+            )
+
         # Sorted, not client-supplied order: two concurrent bulk-approve
         # calls over overlapping id sets, each locking rows in the order the
         # caller happened to list them, could lock in opposite sequences and
@@ -1860,6 +1890,33 @@ class AdminHoursService:
         best_profile = applicable_profiles[0]
         requirements = best_profile.admin_hours_requirements or []
 
+        # A quarterly requirement only has a meaningful "current quarter" —
+        # there is no client-supplied quarter number, so a request for a
+        # year other than the current one has no quarter to grade against.
+        # An earlier version of this method built the bounds from
+        # `date.today().year` unconditionally, which didn't just fail to
+        # answer that request: it silently answered a *different* one,
+        # mixing the live quarter into a response whose annual requirements
+        # were correctly graded against the requested `year` (e.g.
+        # `?year=2024` while the real date is in 2026). A later fix changed
+        # that to a silent `continue`, which traded a wrong answer for a
+        # missing one — the caller could no longer tell "no quarterly
+        # requirement" from "quarterly requirement, not graded for this
+        # year" (Codex review). Reject the whole request up front instead:
+        # the caller gets an explicit error rather than a response that
+        # looks complete (annual items present) but silently drops the
+        # quarterly ones.
+        today = date.today()
+        if year != today.year and any(
+            req.get("frequency", "annual") == "quarterly" for req in requirements
+        ):
+            raise ValueError(
+                "Quarterly admin-hours requirements can only be evaluated "
+                "for the current year. Omit `year` or pass the current "
+                "year to view compliance for a profile with a quarterly "
+                "requirement."
+            )
+
         # Calculate date range for the year
         year_start = datetime(year, 1, 1, tzinfo=timezone.utc)
         year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
@@ -1877,21 +1934,7 @@ class AdminHoursService:
 
             # Determine period based on frequency
             if frequency == "quarterly":
-                # A quarterly requirement only has a meaningful "current
-                # quarter" — there is no client-supplied quarter number, so a
-                # request for a year other than the current one has no
-                # quarter to grade against. Building the bounds from
-                # `date.today().year` unconditionally (as this once did) does
-                # not just fail to answer that request: it silently answers
-                # a *different* one, mixing the live quarter into a response
-                # whose annual requirements are correctly graded against the
-                # requested `year` (e.g. `?year=2024` while the real date is
-                # in 2026). Skip the requirement instead of misreporting it.
-                from datetime import date
-
-                today = date.today()
-                if year != today.year:
-                    continue
+                # Guaranteed `year == today.year` by the upfront check above.
                 q_start_month = ((today.month - 1) // 3) * 3 + 1
                 period_start = datetime(year, q_start_month, 1, tzinfo=timezone.utc)
                 if q_start_month + 3 > 12:
