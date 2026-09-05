@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Members roster invited members to add a member (2026-09-05)
+
+**Fixed**
+
+- **An empty roster told every member to "Get started by adding your first
+  member or importing from CSV."** The Add Member and Import CSV buttons were
+  already officer-only — including the empty card's own actions — so the copy
+  was an instruction with nothing behind it for anyone without `members.manage`.
+  The prompt is now shown only to someone who can act on it.
+
+- **The delete dialog outlived the permission that opened it.** It rendered on
+  its own open state, so losing `members.manage` with it open left a Deactivate
+  and a Permanently delete button on screen. It is now gated like the controls
+  that open it.
+
+**Changed**
+
+- **With an empty roster, a member now sees a blank list** rather than a card
+  whose copy and both actions are invitations to add or import. An empty result
+  that follows from a search or a status filter is still reported to everyone.
+
+- The status filter has an accessible name ("Filter by status"). It was the
+  only unlabelled control in the toolbar; the search box beside it already had
+  one.
+
 ### The Events page invited members to create an event (2026-09-05)
 
 **Fixed**

@@ -187,6 +187,14 @@ const Members: React.FC = () => {
     return filteredMembers.slice(start, start + pageSize);
   }, [filteredMembers, currentPage, pageSize]);
 
+  // The empty card's default copy and both its actions are invitations to add
+  // or import a member, so a member looking at a genuinely empty directory gets
+  // a blank panel rather than a prompt to do something they cannot. An empty
+  // result that follows from a search or a status filter is still reported to
+  // everyone — that is feedback on what they asked for.
+  const listIsNarrowed = searchQuery !== '' || filterStatus !== 'all';
+  const showEmptyState = canManageMembers || listIsNarrowed;
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -362,7 +370,12 @@ const Members: React.FC = () => {
             {/* Filter */}
             <div className="flex items-center space-x-2">
               <Filter className="text-theme-text-muted h-5 w-5" />
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="form-input">
+              <select
+                aria-label="Filter by status"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="form-input"
+              >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -409,30 +422,36 @@ const Members: React.FC = () => {
         {loading ? (
           <SkeletonPage rows={8} showStats={false} />
         ) : filteredMembers.length === 0 ? (
-          <div className="card p-12">
-            <EmptyState
-              icon={Users}
-              title="No Members Found"
-              description={
-                searchQuery || filterStatus !== 'all'
-                  ? 'Try adjusting your search or filters'
-                  : 'Get started by adding your first member or importing from CSV'
-              }
-              actions={
-                canManageMembers && !(searchQuery || filterStatus !== 'all')
-                  ? [
-                      {
-                        label: 'Import CSV',
-                        onClick: () => void navigate('/members/import'),
-                        icon: Upload,
-                        variant: 'secondary',
-                      },
-                      { label: 'Add Member', onClick: () => void navigate('/members/add'), icon: UserPlus },
-                    ]
-                  : undefined
-              }
-            />
-          </div>
+          showEmptyState && (
+            <div className="card p-12">
+              <EmptyState
+                icon={Users}
+                title="No Members Found"
+                description={
+                  listIsNarrowed
+                    ? 'Try adjusting your search or filters'
+                    : // An instruction to add or import, so only for someone who
+                      // can do either.
+                      canManageMembers
+                      ? 'Get started by adding your first member or importing from CSV'
+                      : undefined
+                }
+                actions={
+                  canManageMembers && !listIsNarrowed
+                    ? [
+                        {
+                          label: 'Import CSV',
+                          onClick: () => void navigate('/members/import'),
+                          icon: Upload,
+                          variant: 'secondary',
+                        },
+                        { label: 'Add Member', onClick: () => void navigate('/members/add'), icon: UserPlus },
+                      ]
+                    : undefined
+                }
+              />
+            </div>
+          )
         ) : (
           <>
             {/* Mobile card view */}
@@ -749,7 +768,7 @@ const Members: React.FC = () => {
         )}
       </main>
 
-      {deleteModalMember && (
+      {canManageMembers && deleteModalMember && (
         <DeleteMemberModal
           isOpen={!!deleteModalMember}
           onClose={() => setDeleteModalMember(null)}
