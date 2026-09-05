@@ -1,0 +1,128 @@
+/**
+ * The Send Log tab, once it stopped being an organization-wide view.
+ *
+ * `GET /notifications/logs` used to filter on `organization_id` alone, so the
+ * tab listed the subject, body and recipient address of every notification the
+ * department had sent anyone. It now defaults to `scope=mine` and the tab asks
+ * for nothing else, which makes it the caller's own delivery history — email
+ * as well as in-app, with delivery status.
+ *
+ * "Mark all as read" moved with it: it writes `scope=mine`, and because the
+ * caller's own rows include their in-app notifications, it has to reconcile
+ * the inbox tab and the global unread badge in the same breath. Leaving those
+ * alone showed one notification read on this tab and unread on the next.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { render } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
+import NotificationsPage from './NotificationsPage';
+import { notificationsService } from '../services/api';
+import { NotificationLogScope } from '../constants/enums';
+
+vi.mock('../services/api', () => ({
+  notificationsService: {
+    getRules: vi.fn(),
+    getSummary: vi.fn(),
+    getLogs: vi.fn(),
+    markAllLogsRead: vi.fn(),
+    getMyNotifications: vi.fn(),
+  },
+}));
+
+const clearGlobalUnread = vi.fn();
+
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: () => ({ checkPermission: () => false }),
+}));
+
+vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+
+vi.mock('../hooks/useNotificationCount', () => ({
+  useNotificationCountStore: (selector: (state: unknown) => unknown) =>
+    selector({ unreadCount: 1, decrement: vi.fn(), clear: clearGlobalUnread }),
+}));
+
+vi.mock('../components/NotificationCard', () => ({ default: () => null }));
+
+const emailLog = {
+  id: 'log-1',
+  organization_id: 'org-1',
+  channel: 'email',
+  subject: 'Drill on Thursday',
+  message: 'Bring turnout gear.',
+  recipient_email: 'me@example.test',
+  recipient_name: 'Me',
+  delivered: true,
+  read: false,
+  pinned: false,
+  sent_at: '2026-09-01T12:00:00Z',
+  created_at: '2026-09-01T12:00:00Z',
+};
+
+const renderLogTab = () =>
+  render(
+    <MemoryRouter initialEntries={['/notifications?tab=log']}>
+      <ConfirmProvider>
+        <NotificationsPage />
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
+
+beforeEach(() => {
+  vi.mocked(notificationsService.getLogs).mockReset();
+  vi.mocked(notificationsService.getLogs).mockResolvedValue({
+    logs: [emailLog],
+    total: 1,
+    skip: 0,
+    limit: 50,
+  });
+  vi.mocked(notificationsService.markAllLogsRead).mockReset();
+  vi.mocked(notificationsService.markAllLogsRead).mockResolvedValue({ marked_read: 1 });
+  vi.mocked(notificationsService.getMyNotifications).mockReset();
+  vi.mocked(notificationsService.getMyNotifications).mockResolvedValue({
+    logs: [],
+    total: 0,
+    skip: 0,
+    limit: 20,
+  });
+  vi.mocked(notificationsService.getRules).mockReset();
+  vi.mocked(notificationsService.getSummary).mockReset();
+  clearGlobalUnread.mockReset();
+});
+
+describe('NotificationsPage send log', () => {
+  it('requests the caller-scoped log for a user holding no permission', async () => {
+    renderLogTab();
+
+    await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
+    expect(notificationsService.getLogs).toHaveBeenCalledWith({ scope: NotificationLogScope.MINE });
+    expect(await screen.findByText('Drill on Thursday')).toBeInTheDocument();
+  });
+
+  it('marks the caller-scoped logs read and reconciles the unread badge', async () => {
+    const user = userEvent.setup();
+    renderLogTab();
+
+    const button = await screen.findByRole('button', { name: /mark all as read/i });
+    await user.click(button);
+
+    await waitFor(() =>
+      expect(notificationsService.markAllLogsRead).toHaveBeenCalledWith({ scope: NotificationLogScope.MINE })
+    );
+    // Same rows, so the same read state has to land on the inbox tab's count.
+    await waitFor(() => expect(clearGlobalUnread).toHaveBeenCalled());
+  });
+
+  it('does not show organization-wide statistics above a caller-scoped log', async () => {
+    // `GET /notifications/summary` counts the whole department's sends. Above
+    // a log listing only the caller's, those numbers read as a tally of it.
+    renderLogTab();
+
+    await screen.findByText('Drill on Thursday');
+    expect(screen.queryByRole('region', { name: /notification statistics/i })).toBeNull();
+  });
+});
