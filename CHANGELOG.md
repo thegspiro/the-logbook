@@ -191,6 +191,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assignments and issuances into one figure; only its wording still described
   the split the page dropped. "Overdue" is unchanged.
 
+### Three data repairs silently did nothing for months (2026-09-05)
+
+**Fixed**
+
+- **Three repairs never ran on any department that upgraded.** Four migrations
+  named a table `positions` at a point in the chain where it was still called
+  `roles`. The models were renamed long before the database was, so each was
+  written against the model name; when that made a fresh install fail, a
+  table-existence guard was added, which turned the crash into a silent no-op.
+  The table was renamed six days later and the guards were never revisited. The
+  result: the **Membership Committee Chair** position was never renamed to
+  **Membership Coordinator**, role-targeted department messages were never
+  converted from position names to ids, and the default **Member** position
+  never received the equipment-check submit grant — so those members lost the
+  checklist on upgrade.
+- **A new migration performs all three repairs.** The four are left exactly as
+  they ran: an already-deployed migration is not rewritten, and a department
+  already past them would never execute a rewritten version anyway — which is
+  precisely the department carrying the un-repaired rows. The new migration runs
+  at the current head, where the table really is called `positions`, and is safe
+  to run against a department that already has some or all of the three.
+- **The coordinator rename is careful in three ways** that the original was not:
+  it skips any department that already has a Membership Coordinator (two rows
+  with one slug would be rejected by the database), it leaves alone a position a
+  department created for itself, and it converts message targeting **before**
+  renaming — otherwise a message addressed to "Membership Committee Chair" would
+  resolve to nothing and stay undeliverable.
+- **A message targeting a name two positions share is left as-is.** Departments
+  may have two positions with the same display name; replacing that name with
+  one position's id would silently drop the other's members from the audience.
+- **Two knock-on gaps are reported but not repaired here**, because each is a
+  separate decision about who holds which permission rather than a spelling
+  correction: a position still slugged `membership_committee_chair` was skipped
+  by three later grant migrations, and a member position that missed the grant
+  also failed a later exact-match check and so missed the storefront backfill.
+
+**Added**
+
+- A check that a migration cannot name a table before the chain creates it under
+  that name — the gap that let this survive. The two existing checks each pass
+  these four correctly on their own terms: one skips `positions` because a
+  migration _does_ create it, the other because the creating migration comes
+  _later_. Neither asked whether the name was right at that point in the chain.
+  Both directions are covered, including a migration still using a name a rename
+  has retired. The four known-inert migrations are a closed baseline that can
+  only shrink, so a newly written one still fails.
+
 ### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
 
 **Fixed**
