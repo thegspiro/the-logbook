@@ -6,7 +6,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetEquipmentRequests = vi.fn();
 const mockReviewEquipmentRequest = vi.fn();
 const mockFulfillEquipmentRequest = vi.fn();
-const mockGetItems = vi.fn();
+const mockGetFulfillmentOptions = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -15,7 +15,7 @@ vi.mock('../../../services/api', () => ({
     getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
     reviewEquipmentRequest: (...args: unknown[]) => mockReviewEquipmentRequest(...args) as unknown,
     fulfillEquipmentRequest: (...args: unknown[]) => mockFulfillEquipmentRequest(...args) as unknown,
-    getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
+    getFulfillmentOptions: (...args: unknown[]) => mockGetFulfillmentOptions(...args) as unknown,
   },
 }));
 
@@ -42,16 +42,49 @@ const makeRequest = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+/**
+ * One row of `GET /inventory/requests/{id}/fulfillment-options`.
+ *
+ * The judgements are fields here rather than something the test derives,
+ * because they are the backend's to make: `tests/
+ * test_inventory_fulfillment_options.py` pins the size aliasing, the qualifier
+ * comparison, the product-identity scoping and the issuable count against the
+ * service that enforces them at fulfilment. Re-checking those rules here would
+ * only assert that this mock returns what it was given.
+ */
+const option = (id: string, overrides: Record<string, unknown> = {}) => ({
+  item_id: id,
+  name: 'Polo',
+  identifier: null,
+  size: 'l',
+  size_label: 'L',
+  status: 'available',
+  tracking_type: 'pool',
+  available: 6,
+  compatible: true,
+  matches_requested_size: true,
+  ...overrides,
+});
+
+const fulfillmentOptions = (overrides: Record<string, unknown> = {}) => ({
+  request_id: 'req-1',
+  requested_size: 'l',
+  quantity: 1,
+  suggested_item_id: null,
+  requested_size_available: true,
+  can_fulfill_now: true,
+  truncated: false,
+  options: [],
+  ...overrides,
+});
+
 describe('EquipmentRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetEquipmentRequests.mockResolvedValue({ requests: [makeRequest()], total: 1, skip: 0, limit: 25 });
-    mockGetItems.mockResolvedValue({
-      items: [{ id: 'item-9', name: 'Radio XTS 5000', tracking_type: 'individual' }],
-      total: 1,
-      skip: 0,
-      limit: 500,
-    });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({ options: [option('item-9', { name: 'Radio XTS 5000', tracking_type: 'individual' })] })
+    );
   });
 
   it('renders page title and subtitle', async () => {
@@ -251,19 +284,6 @@ describe('EquipmentRequestsPage', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Request fulfilled');
   });
 
-  /** A pool variant row as `create_size_variants` names it: "base — Size". */
-  const variant = (id: string, size: string, overrides: Record<string, unknown> = {}) => ({
-    id,
-    name: `Polo — ${size.toUpperCase()}`,
-    category_id: 'cat-1',
-    tracking_type: 'pool',
-    quantity: 6,
-    status: 'available',
-    condition: 'good',
-    standard_size: size,
-    ...overrides,
-  });
-
   const poloRequest = (overrides: Record<string, unknown> = {}) =>
     makeRequest({
       item_name: 'Polo',
@@ -273,12 +293,17 @@ describe('EquipmentRequestsPage', () => {
       ...overrides,
     });
 
-  it('preselects the stocked variant matching the size the member asked for', async () => {
+  it('preselects the item the backend judged unambiguous', async () => {
     const user = userEvent.setup();
     // No item_id: the member asked for a size the catalog had nothing in when
-    // the request was filed, so the picker has to find the variant itself.
+    // the request was filed, so the picker has to be told which variant fits.
     mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
-    mockGetItems.mockResolvedValue({ items: [variant('polo-m', 'm'), variant('polo-l', 'l')], total: 2 });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({
+        suggested_item_id: 'polo-l',
+        options: [option('polo-m', { size: 'm', matches_requested_size: false }), option('polo-l')],
+      })
+    );
     renderWithRouter(<EquipmentRequestsPage />);
     expect(await screen.findByText('Polo')).toBeInTheDocument();
 
@@ -290,16 +315,15 @@ describe('EquipmentRequestsPage', () => {
     expect(screen.getByLabelText('Final fulfillment method')).toHaveValue('issuance');
   });
 
-  it('never preselects a different product that happens to share the size', async () => {
+  it('leaves the choice manual when the backend suggests nothing', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
-    // Same category, same size, different garment. Choosing this for the
-    // member would issue trousers against a shirt request, and the backend
-    // waives the substitution justification because the category matches.
-    mockGetItems.mockResolvedValue({
-      items: [variant('trousers-l', 'l', { name: 'Duty Trousers — L' })],
-      total: 1,
-    });
+    // Null covers every case the service refuses to decide: a different
+    // product in the right size, too few units for the pre-filled quantity, a
+    // size qualifier that does not match, two variant groups sharing a name.
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({ suggested_item_id: null, options: [option('trousers-l', { name: 'Duty Trousers' })] })
+    );
     renderWithRouter(<EquipmentRequestsPage />);
     expect(await screen.findByText('Polo')).toBeInTheDocument();
 
@@ -308,72 +332,33 @@ describe('EquipmentRequestsPage', () => {
     expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
   });
 
-  it('does not preselect a variant that cannot cover the requested quantity', async () => {
+  it('does not overwrite the item the member themselves named', async () => {
     const user = userEvent.setup();
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ quantity: 6 })] });
-    mockGetItems.mockResolvedValue({ items: [variant('polo-l', 'l', { quantity: 1 })], total: 1 });
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ item_id: 'polo-m' })] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({ suggested_item_id: 'polo-l', options: [option('polo-m', { size: 'm' }), option('polo-l')] })
+    );
     renderWithRouter(<EquipmentRequestsPage />);
     expect(await screen.findByText('Polo')).toBeInTheDocument();
 
     await user.click(screen.getByText('Fulfill'));
 
-    // The dialog pre-fills the full six, so selecting the single unit would
-    // submit a fulfilment that fails on insufficient stock.
-    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
-  });
-
-  it('matches a custom-sized row on its real size, not the sentinel', async () => {
-    const user = userEvent.setup();
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: '34W' })] });
-    mockGetItems.mockResolvedValue({
-      items: [variant('polo-34w', 'custom', { name: 'Polo — 34W', size: '34W' })],
-      total: 1,
-    });
-    renderWithRouter(<EquipmentRequestsPage />);
-    expect(await screen.findByText('Polo')).toBeInTheDocument();
-
-    await user.click(screen.getByText('Fulfill'));
-
-    // `standard_size: 'custom'` means "the real size is in `size`" — comparing
-    // the sentinel makes a legitimately sized row unmatchable.
-    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('polo-34w');
-  });
-
-  it('folds size spellings together when matching', async () => {
-    const user = userEvent.setup();
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: 'Large' })] });
-    mockGetItems.mockResolvedValue({ items: [variant('polo-l', 'l')], total: 1 });
-    renderWithRouter(<EquipmentRequestsPage />);
-    expect(await screen.findByText('Polo')).toBeInTheDocument();
-
-    await user.click(screen.getByText('Fulfill'));
-
-    // A member who recorded "Large" and stock filed as "l" are the same size.
-    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('polo-l');
+    // They picked a stocked variant; a suggestion is for the case where they
+    // could not, and must not quietly swap their choice for another size.
+    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('polo-m');
   });
 
   it('says so when nothing on hand is the requested size', async () => {
     const user = userEvent.setup();
-    mockGetEquipmentRequests.mockResolvedValue({
-      requests: [makeRequest({ status: 'approved', category_id: 'cat-1', requested_size: 'xxl' })],
-    });
-    mockGetItems.mockResolvedValue({
-      items: [
-        {
-          id: 'polo-m',
-          name: 'Polo',
-          category_id: 'cat-1',
-          tracking_type: 'pool',
-          quantity: 6,
-          status: 'available',
-          condition: 'good',
-          standard_size: 'm',
-        },
-      ],
-      total: 1,
-    });
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: 'xxl' })] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({
+        requested_size_available: false,
+        options: [option('polo-m', { size: 'm', matches_requested_size: false })],
+      })
+    );
     renderWithRouter(<EquipmentRequestsPage />);
-    expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
 
     await user.click(screen.getByText('Fulfill'));
 
@@ -382,55 +367,17 @@ describe('EquipmentRequestsPage', () => {
     expect(await screen.findByText(/Nothing on hand is size/)).toBeInTheDocument();
   });
 
-  it('never preselects a plain size for a request that carries a qualifier', async () => {
-    const user = userEvent.setup();
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: '10 (wide)' })] });
-    mockGetItems.mockResolvedValue({
-      items: [variant('boot-10', '10', { name: 'Polo — 10', standard_size: '', size: '10' })],
-      total: 1,
-    });
-    renderWithRouter(<EquipmentRequestsPage />);
-    expect(await screen.findByText('Polo')).toBeInTheDocument();
-
-    await user.click(screen.getByText('Fulfill'));
-
-    // A plain 10 is not a 10 wide. `_apply_member_size` refuses to suggest it
-    // to the member for that reason; picking it here would issue the exact row
-    // the member-facing flow rejected.
-    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
-  });
-
-  it('leaves the choice manual when two products share a name and size', async () => {
-    const user = userEvent.setup();
-    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
-    // Nothing stops two variant groups in one category sharing a display
-    // name, and the request preserves only the name.
-    mockGetItems.mockResolvedValue({
-      items: [
-        variant('polo-a-l', 'l', { variant_group_id: 'group-a' }),
-        variant('polo-b-l', 'l', { variant_group_id: 'group-b' }),
-      ],
-      total: 2,
-    });
-    renderWithRouter(<EquipmentRequestsPage />);
-    expect(await screen.findByText('Polo')).toBeInTheDocument();
-
-    await user.click(screen.getByText('Fulfill'));
-
-    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
-  });
-
   it('does not warn about the size before availability has been queried', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: 'xxl' })] });
-    let releaseItems: (value: unknown) => void = () => {};
+    let release: (value: unknown) => void = () => {};
     const pending = new Promise((resolve) => {
-      releaseItems = resolve;
+      release = resolve;
     });
-    mockGetItems.mockReset();
-    mockGetItems.mockImplementation(async () => {
+    mockGetFulfillmentOptions.mockReset();
+    mockGetFulfillmentOptions.mockImplementation(async () => {
       await pending;
-      return { items: [variant('polo-xxl', 'xxl')], total: 1 };
+      return fulfillmentOptions({ suggested_item_id: 'polo-xxl', options: [option('polo-xxl', { size: 'xxl' })] });
     });
     renderWithRouter(<EquipmentRequestsPage />);
     expect(await screen.findByText('Polo')).toBeInTheDocument();
@@ -441,12 +388,12 @@ describe('EquipmentRequestsPage', () => {
     // now can send a quartermaster off to order gear that already exists.
     expect(screen.queryByText(/Nothing on hand is size/)).not.toBeInTheDocument();
 
-    releaseItems(null);
+    release(null);
     expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('polo-xxl');
     expect(screen.queryByText(/Nothing on hand is size/)).not.toBeInTheDocument();
   });
 
-  it('ignores a stale item load from a dialog that has been closed', async () => {
+  it('ignores a stale options load from a dialog that has been closed', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({
       requests: [poloRequest({ id: 'req-a', requested_size: 'm' }), poloRequest({ id: 'req-b', requested_size: 'l' })],
@@ -455,19 +402,18 @@ describe('EquipmentRequestsPage', () => {
     const first = new Promise((resolve) => {
       releaseFirst = resolve;
     });
-    const catalog = { items: [variant('polo-m', 'm'), variant('polo-l', 'l')], total: 2 };
-    mockGetItems.mockReset();
-    mockGetItems
+    mockGetFulfillmentOptions.mockReset();
+    mockGetFulfillmentOptions
       .mockImplementationOnce(async () => {
         await first;
-        return catalog;
+        return fulfillmentOptions({ suggested_item_id: 'polo-m', options: [option('polo-m', { size: 'm' })] });
       })
-      .mockResolvedValue(catalog);
+      .mockResolvedValue(fulfillmentOptions({ suggested_item_id: 'polo-l', options: [option('polo-l')] }));
     renderWithRouter(<EquipmentRequestsPage />);
     expect(await screen.findAllByText('Polo')).toHaveLength(2);
 
     // Open request A (size M), close it, open request B (size L) — all before
-    // A's item query lands.
+    // A's options query lands.
     // A guard rather than `!`: an indexed lookup is `T | undefined` under
     // noUncheckedIndexedAccess, and a non-null assertion would turn a fixture
     // that stopped rendering two rows into a confusing null-deref instead of
@@ -492,25 +438,77 @@ describe('EquipmentRequestsPage', () => {
     expect(screen.getByLabelText('Item to fulfill with')).toHaveValue('polo-l');
   });
 
-  it('does not count quarantined stock as available to fulfil', async () => {
+  it('labels each option with its size, availability and role', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({
+        options: [
+          option('polo-l', { identifier: 'POLO-4417' }),
+          option('boot-l', { name: 'Station Boot', compatible: false, available: 2 }),
+        ],
+      })
+    );
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    expect(
+      await screen.findByRole('option', { name: 'Polo — POLO-4417 — size L — requested size — available; 6 available' })
+    ).toBeInTheDocument();
+    // Marked, because under the override the list carries rows the request
+    // does not cover and nothing else on screen distinguishes them.
+    expect(
+      screen.getByRole('option', {
+        name: 'Station Boot — size L — requested size — substitution — available; 2 available',
+      })
+    ).toBeInTheDocument();
+  });
+
+  it('says when the option list was capped rather than exhausted', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    mockGetFulfillmentOptions.mockResolvedValue(fulfillmentOptions({ truncated: true, options: [option('polo-l')] }));
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    // A picker that quietly stops at its cap reads as "that is all there is",
+    // which is the one thing it cannot promise.
+    expect(await screen.findByText(/more inventory matched than fits this list/)).toBeInTheDocument();
+  });
+
+  it('widens the browse when the substitution override is turned on', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    mockGetFulfillmentOptions.mockResolvedValue(fulfillmentOptions({ options: [option('polo-l')] }));
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+    await user.click(await screen.findByLabelText(/Override requested item\/category compatibility/));
+
+    // The wider catalog is fetched, not filtered out of a list the client
+    // already holds: on a department with more gear than one page, "everything
+    // else" is not something the browser has seen.
+    await waitFor(() => {
+      expect(mockGetFulfillmentOptions).toHaveBeenCalledWith('req-1', { include_incompatible: true });
+    });
+  });
+
+  it('does not offer to fulfil now when the backend says nothing is issuable', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({
       requests: [makeRequest({ status: 'pending', category_id: 'cat-1' })],
     });
-    mockGetItems.mockResolvedValue({
-      items: [
-        {
-          id: 'gloves',
-          name: 'Gloves',
-          category_id: 'cat-1',
-          tracking_type: 'pool',
-          quantity: 12,
-          status: 'in_maintenance',
-          condition: 'good',
-        },
-      ],
-      total: 1,
-    });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({
+        can_fulfill_now: false,
+        options: [option('gloves', { name: 'Gloves', status: 'in_maintenance', available: 0 })],
+      })
+    );
     renderWithRouter(<EquipmentRequestsPage />);
     expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
 
@@ -550,8 +548,8 @@ describe('EquipmentRequestsPage — opened from the attention queue', () => {
 
   beforeEach(() => {
     mockGetEquipmentRequests.mockReset();
-    mockGetItems.mockReset();
-    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetFulfillmentOptions.mockReset();
+    mockGetFulfillmentOptions.mockResolvedValue(fulfillmentOptions({ can_fulfill_now: false }));
     mockReviewEquipmentRequest.mockReset();
     mockReviewEquipmentRequest.mockResolvedValue({});
     mockToastError.mockReset();
