@@ -385,9 +385,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The screen only has two checkboxes per module, so an EMT position created
   through it never received four grants the EMT rank carries: seeing the
   department's own information, its locations and its meetings, and asking to
-  swap a shift. They are restored on a position still holding exactly what the
-  setup screen wrote — a department that has since edited its EMT position
-  keeps whatever it chose, including a grant it removed on purpose.
+  swap a shift. They are restored on a position holding none of the four, which
+  is the mark of one the screen built — no checkbox in any version of the screen
+  can produce them. A department that took some of the four off keeps that
+  choice: none are put back.
+
+  The first attempt recognized the position by its whole permission list
+  instead, and repaired only one written by the current build — every older one
+  was skipped without a word. That attempt had already shipped, so widening it
+  is a second, follow-up step rather than a correction to the first: an
+  installation that has run the earlier one would never see an edit to it.
+  Departments that never had an EMT position are unaffected throughout.
 
 - **Setting up a position now starts from the registry on either path.** The
   setup screen's save had two routes: updating a position the system had
