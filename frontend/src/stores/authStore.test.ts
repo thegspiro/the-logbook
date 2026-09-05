@@ -608,6 +608,24 @@ describe('authStore', () => {
     });
   });
 
+  describe('scheduling state at the sign-in boundary', () => {
+    it('resets the scheduling store when a member signs in', async () => {
+      // A session that expires and is replaced by another member signing in
+      // never calls logout(), so logout alone leaves the previous
+      // department's data readable in the same tab.
+      useSchedulingStore.setState({ settingsLoaded: true, membersLoaded: true });
+
+      mockLogin.mockResolvedValue({ token_type: 'bearer', expires_in: 1800 });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+      await act(async () => {
+        await getState().login({ username: 'testuser', password: 'password123' });
+      });
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().membersLoaded).toBe(false);
+    });
+  });
+
   describe('offline data at the account boundary', () => {
     /** Simulate the browser processing Set-Cookie headers from a login response. */
     function simulateLoginCookies(): void {

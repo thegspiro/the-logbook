@@ -1250,6 +1250,16 @@ class ShiftCompletionService:
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
 
+        # An officer editing the auto-populated list is typing readable names,
+        # not org slugs, so the provenance recorded at creation no longer
+        # describes what is stored. Cleared rather than reassigned: what they
+        # typed is their own wording, and leaving the `org_calls` marker would
+        # let a later rename rewrite it and let it lock a type from deletion.
+        if "call_types" in updates:
+            sources = copy.deepcopy(report.data_sources or {})
+            if sources.pop("call_types", None) is not None:
+                report.data_sources = sources or None
+
         # Training credit is earned only when an officer releases the report.
         # Pending review is still provisional and may be flagged or corrected.
         if not was_released and report.review_status == "approved":

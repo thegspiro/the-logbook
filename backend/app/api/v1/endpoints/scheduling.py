@@ -3488,18 +3488,24 @@ async def _reject_deleting_a_used_call_type(
     worse than refusing: it silently does something other than what they
     asked for.
 
-    Not atomic, and does not need to be. A call recorded between this check
-    and the commit keeps its type — the type is still in the list — so the
-    failure this rules out cannot happen in the gap.
+    Compared against the **raw** stored slugs rather than the reader's
+    normalized list. The reader truncates at the cap and drops duplicates and
+    the reserved slug, and a slug it hid is still the value its calls are
+    filed under — so a save built from the shortened list the editor was given
+    would drop it without this guard ever seeing it go.
     """
-    service = CallTrackingService(db)
+    eligibility = ShiftEligibilityService(db)
+    org = await eligibility._get_org(organization_id)
+    if org is None:
+        return
     kept = {t.slug for t in incoming.call_types}
-    stored = await service.get_settings(organization_id)
-    removed = {t["slug"] for t in stored.get("call_types", [])} - kept
+    removed = eligibility.raw_call_type_slugs(org) - kept
     if not removed:
         return
 
-    locked = await service.slugs_locked_by_history(organization_id)
+    service = CallTrackingService(db)
+
+    locked = await service.slugs_locked_by_history(organization_id, removed)
     blocked = sorted(removed & locked)
     if blocked:
         raise ValueError(
@@ -3541,8 +3547,20 @@ async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
         or user_has_permission(user, "scheduling.report")
     ):
         return []
+    eligibility = ShiftEligibilityService(db)
+    org = await eligibility._get_org(user.organization_id)
+    if org is None:
+        return []
+    # Bounded by what the org actually has configured — at most the cap. The
+    # answer can only ever contain those slugs, and asking unbounded made the
+    # settings screen's cost grow with the department's whole report history.
+    candidates = eligibility.raw_call_type_slugs(org)
+    if not candidates:
+        return []
     return sorted(
-        await CallTrackingService(db).slugs_locked_by_history(user.organization_id)
+        await CallTrackingService(db).slugs_locked_by_history(
+            user.organization_id, candidates
+        )
     )
 
 

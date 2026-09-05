@@ -1527,6 +1527,27 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
     and a direct API client never saw it. The write replaces the whole list,
     so the check has to exist on this side too."""
 
+    @staticmethod
+    def _guard(stored_slugs, locked):
+        """Patch the two reads the guard makes: the raw stored slugs and the
+        locked set. Raw, not the reader's normalized list — a slug the reader
+        hid is still what its calls are filed under."""
+        return (
+            patch.object(
+                ShiftEligibilityService, "_get_org", AsyncMock(return_value=object())
+            ),
+            patch.object(
+                ShiftEligibilityService,
+                "raw_call_type_slugs",
+                MagicMock(return_value=set(stored_slugs)),
+            ),
+            patch.object(
+                CallTrackingService,
+                "slugs_locked_by_history",
+                AsyncMock(return_value=set(locked)),
+            ),
+        )
+
     async def _save(self, incoming_slugs, stored_slugs, locked):
         from app.api.v1.endpoints.scheduling import (
             _reject_deleting_a_used_call_type,
@@ -1536,24 +1557,15 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": s, "label": s} for s in incoming_slugs],
         )
-        with patch.object(
-            CallTrackingService,
-            "get_settings",
-            AsyncMock(
-                return_value={
-                    "mode": CallTrackingMode.COUNT_ONLY,
-                    "call_types": [
-                        {"slug": s, "label": s, "active": True} for s in stored_slugs
-                    ],
-                }
-            ),
-        ):
-            with patch.object(
-                CallTrackingService,
-                "slugs_locked_by_history",
-                AsyncMock(return_value=set(locked)),
-            ):
-                await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+        a, b, c = self._guard(stored_slugs, locked)
+        with a, b, c:
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_a_slug_the_reader_truncated_away_is_still_guarded(self):
+        """The editor is handed the reader's shortened list, so a used type
+        past the cap is absent from the save and would vanish silently."""
+        with pytest.raises(ValueError, match="beyond_cap"):
+            await self._save(["ems"], ["ems", "beyond_cap"], {"beyond_cap"})
 
     async def test_dropping_a_used_type_is_refused(self):
         with pytest.raises(ValueError, match="fire"):
@@ -1573,22 +1585,9 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": "fire", "label": "Fire", "active": False}],
         )
-        with patch.object(
-            CallTrackingService,
-            "get_settings",
-            AsyncMock(
-                return_value={
-                    "mode": CallTrackingMode.COUNT_ONLY,
-                    "call_types": [{"slug": "fire", "label": "Fire", "active": True}],
-                }
-            ),
-        ):
-            with patch.object(
-                CallTrackingService,
-                "type_usage_counts",
-                AsyncMock(return_value={"fire": 9}),
-            ):
-                await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+        a, b, c = self._guard(["fire"], {"fire"})
+        with a, b, c:
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
     async def test_an_unchanged_list_costs_no_usage_query(self):
         """The guard runs on every settings save, including the ones that only
@@ -1601,20 +1600,11 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": "fire", "label": "Fire"}],
         )
-        usage = AsyncMock(return_value={})
-        with patch.object(
-            CallTrackingService,
-            "get_settings",
-            AsyncMock(
-                return_value={
-                    "mode": CallTrackingMode.COUNT_ONLY,
-                    "call_types": [{"slug": "fire", "label": "Fire", "active": True}],
-                }
-            ),
-        ):
-            with patch.object(CallTrackingService, "type_usage_counts", usage):
-                await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
-        usage.assert_not_called()
+        locked = AsyncMock(return_value=set())
+        a, b, _ = self._guard(["fire"], set())
+        with a, b, patch.object(CallTrackingService, "slugs_locked_by_history", locked):
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+        locked.assert_not_called()
 
 
 # ======================================================================
@@ -1758,3 +1748,133 @@ class TestLabelsMustBeDistinct:
         assert [t["slug"] for t in resolved] == ["fire", "structure"]
         assert resolved[1]["label"] == "Fire (structure)"
         assert CallTrackingSettings(call_types=resolved).call_types
+
+
+class TestLabelDisambiguationStaysValid:
+    """The reader's output is fed straight into CallTrackingSettings, so a
+    disambiguation that fails to disambiguate is a 500 on the one endpoint
+    that could fix the stored data."""
+
+    def _resolve(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc.get_call_tracking_settings(org)["call_types"]
+
+    def test_a_maximum_length_duplicate_still_becomes_unique(self):
+        """Appending the slug and slicing back to the cap is a no-op on a
+        label that already fills it, which left the duplicate in place."""
+        long_label = "x" * 100
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": long_label},
+                {"slug": "brush", "label": long_label},
+            ]
+        )
+        assert resolved[0]["label"] != resolved[1]["label"]
+        assert all(len(t["label"]) <= 100 for t in resolved)
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+    def test_a_label_that_already_looks_disambiguated_still_resolves(self):
+        """ "X (brush)" is a name somebody can legitimately have typed."""
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": "X (brush)"},
+                {"slug": "brush", "label": "X"},
+                {"slug": "grass", "label": "X"},
+            ]
+        )
+        labels = {t["label"] for t in resolved}
+        assert len(labels) == 3
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+
+class TestRawCallTypeSlugs:
+    """What the deletion guard compares against. The reader hides entries; the
+    calls filed under them do not care."""
+
+    def _svc(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc, org
+
+    def test_includes_entries_the_reader_would_truncate(self):
+        entries = [
+            {"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 3)
+        ]
+        svc, org = self._svc(entries)
+        raw = svc.raw_call_type_slugs(org)
+        assert len(raw) == MAX_CALL_TYPES + 3
+        assert f"t{MAX_CALL_TYPES + 2}" in raw
+        # The reader's list is what the editor is handed, and it is shorter.
+        assert len(svc.get_call_tracking_settings(org)["call_types"]) == MAX_CALL_TYPES
+
+    def test_includes_the_reserved_slug_the_reader_drops(self):
+        svc, org = self._svc([{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}])
+        assert svc.raw_call_type_slugs(org) == {UNCLASSIFIED_CALL_TYPE}
+
+    def test_empty_when_nothing_is_stored(self):
+        svc, org = self._svc([])
+        assert svc.raw_call_type_slugs(org) == set()
+        svc2 = ShiftEligibilityService(MagicMock())
+        assert svc2.raw_call_type_slugs(SimpleNamespace(settings=None)) == set()
+
+
+@pytest.mark.integration
+class TestMixedSourceKeysAreNotRelabelled:
+    async def test_a_key_both_sources_produced_keeps_its_stored_value(self, db_session):
+        """A count-only `mva` and an officer who typed "mva" are one bucket by
+        the time the map is built, so relabelling it rewrites the officer's
+        half along with the department's."""
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+        from app.services.reports_service import ReportsService
+
+        org = await _make_org(db_session)
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.DETAILED,
+                    "call_types": [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+                }
+            }
+        }
+        await db_session.flush()
+
+        member = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"m-{generate_uuid()[:8]}",
+            email=f"m-{generate_uuid()[:8]}@test.com",
+            first_name="A",
+            last_name="B",
+            password_hash="pw",
+        )
+        db_session.add(member)
+        await db_session.flush()
+
+        for source in (CALL_TYPES_FROM_ORG_CALLS, CALL_TYPES_FROM_SHIFT_CALLS):
+            db_session.add(
+                ShiftCompletionReport(
+                    id=generate_uuid(),
+                    organization_id=org.id,
+                    trainee_id=member.id,
+                    officer_id=member.id,
+                    shift_date=date(2026, 8, 4),
+                    hours_on_shift=12.0,
+                    calls_responded=1,
+                    call_types=["mva"],
+                    data_sources={"call_types": source},
+                )
+            )
+        await db_session.flush()
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["summary"]["by_type_totals"] == {"mva": 2}
+        assert "mva" not in report["call_type_labels"]

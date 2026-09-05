@@ -326,6 +326,64 @@ describe('schedulingStore', () => {
     });
   });
 
+  describe('resetSettings against an in-flight request', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('drops a response that started before the account changed', async () => {
+      // Nulling the shared promise neither cancels the request nor stops its
+      // closure running, so without a generation check the response lands
+      // after the reset and repopulates the previous department's values with
+      // `settingsLoaded` true — the leak the reset exists to close.
+      let release: (v: unknown) => void = () => {};
+      mockGetFeatureSettings.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        })
+      );
+
+      const inFlight = useSchedulingStore.getState().loadSettings();
+      useSchedulingStore.getState().resetSettings();
+
+      release({
+        platoons_enabled: true,
+        call_tracking: { mode: 'count_only', call_types: [{ slug: 'fire', label: 'Fire' }] },
+      });
+      await inFlight;
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+      expect(useSchedulingStore.getState().platoonsEnabled).toBe(false);
+    });
+
+    it('clears every organization-scoped value, not just the settings', () => {
+      // `loadInitialData` skips a fetch whose loaded flag is set, so a
+      // surviving roster is served to the next account.
+      useSchedulingStore.setState({
+        members: [{ id: 'u1' }] as never,
+        membersLoaded: true,
+        templates: [{ id: 't1' }] as never,
+        templatesLoaded: true,
+        apparatus: [{ id: 'a1' }] as never,
+        apparatusLoaded: true,
+        summary: { total: 1 } as never,
+      });
+
+      useSchedulingStore.getState().resetSettings();
+
+      const s = useSchedulingStore.getState();
+      expect(s.members).toEqual([]);
+      expect(s.membersLoaded).toBe(false);
+      expect(s.templates).toEqual([]);
+      expect(s.templatesLoaded).toBe(false);
+      expect(s.apparatus).toEqual([]);
+      expect(s.apparatusLoaded).toBe(false);
+      expect(s.summary).toBeNull();
+    });
+  });
+
   describe('loadSettings request sharing', () => {
     beforeEach(() => {
       mockGetFeatureSettings.mockReset();

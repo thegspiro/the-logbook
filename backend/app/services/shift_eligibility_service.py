@@ -100,6 +100,36 @@ DEFAULT_RANK_LABELS: Dict[str, str] = {
 # sanitizer so the two cannot drift into rejecting different things.
 _CALL_TYPE_SLUG = re.compile(r"[a-z0-9_]{1,50}")
 
+# Matches CallTypeOption.label's own ceiling.
+_CALL_TYPE_LABEL_MAX = 100
+
+
+def _label_key(label: str) -> str:
+    """How two call-type labels are compared for sameness on screen."""
+    return " ".join(label.split()).casefold()
+
+
+def _disambiguate_label(label: str, slug: str, taken: set) -> str:
+    """Make ``label`` unique among ``taken``, without exceeding the cap.
+
+    Naively appending the slug and slicing back to the cap is a no-op on a
+    label that already fills it, which leaves the duplicate in place and makes
+    the schema reject the very output this reader exists to keep valid — a 500
+    on the one endpoint that could fix the stored data.
+    """
+    if _label_key(label) not in taken:
+        return label
+    attempt = 0
+    while True:
+        suffix = f" ({slug})" if attempt == 0 else f" ({slug} {attempt + 1})"
+        base = label[: max(1, _CALL_TYPE_LABEL_MAX - len(suffix))]
+        candidate = f"{base}{suffix}"[:_CALL_TYPE_LABEL_MAX]
+        # Terminates: the slug is unique within the list, so at worst the
+        # counter walks to a spelling nothing else holds.
+        if _label_key(candidate) not in taken:
+            return candidate
+        attempt += 1
+
 
 class ShiftEligibilityService:
     def __init__(self, db: AsyncSession):
@@ -949,6 +979,28 @@ class ShiftEligibilityService:
             ),
         }
 
+    def raw_call_type_slugs(self, org: Organization) -> set:
+        """Every slug present in the stored JSON, before any normalization.
+
+        The defensive reader drops and truncates; this does not. The deletion
+        guard has to compare against what is *stored*, because a slug the
+        reader hid — beyond the cap, or a duplicate — is still the value its
+        calls are filed under, and a save built from the reader's shortened
+        list would drop it without the guard ever seeing it go.
+        """
+        sched = self._get_scheduling_settings(org)
+        raw = sched.get("call_tracking")
+        if not isinstance(raw, dict):
+            return set()
+        types = raw.get("call_types")
+        if not isinstance(types, list):
+            return set()
+        return {
+            str(entry.get("slug") or "").strip()
+            for entry in types
+            if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
+        }
+
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.
 
@@ -1006,10 +1058,8 @@ class ShiftEligibilityService:
                 # entry may be the only thing that can label a type with years
                 # of calls behind it, so losing it is worse than a clumsy
                 # name an admin can correct on the settings screen.
-                label_key = " ".join(label.split()).casefold()
-                if label_key in labels_seen:
-                    label = f"{label} ({slug})"[:100]
-                labels_seen.add(" ".join(label.split()).casefold())
+                label = _disambiguate_label(label, slug, labels_seen)
+                labels_seen.add(_label_key(label))
                 seen.add(slug)
                 # Missing means active: entries stored before retirement
                 # existed predate the key, and reading their absence as

@@ -92,6 +92,15 @@ interface SchedulingState {
  */
 let settingsRequest: Promise<void> | null = null;
 
+/**
+ * Bumped by every reset. A settings request started before the reset carries
+ * the generation it began in, and drops its response if that no longer
+ * matches — otherwise a request already in flight when the account changed
+ * would land afterwards, set `settingsLoaded` back to true and repopulate the
+ * previous department's values, which is the leak the reset exists to close.
+ */
+let settingsGeneration = 0;
+
 export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   // ─── Initial State ──────────────────────────────────────────────────────
   members: [],
@@ -121,7 +130,23 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   resetSettings: () => {
     settingsRequest = null;
+    settingsGeneration += 1;
     set({
+      // Every organization-scoped value in this store, not only the settings.
+      // `loadInitialData` skips a fetch whose `*Loaded` flag is set, so
+      // leaving these behind handed the next account the previous
+      // department's member names, templates and apparatus.
+      members: [],
+      membersLoaded: false,
+      membersLoading: false,
+      templates: [],
+      templatesLoaded: false,
+      templatesLoading: false,
+      apparatus: [],
+      apparatusLoaded: false,
+      summary: null,
+      summaryLoading: false,
+      summaryError: null,
       settingsLoaded: false,
       platoonsEnabled: false,
       requireEndOfShiftChecks: false,
@@ -143,9 +168,15 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     // `refreshPromise` in services/api.ts.
     if (settingsRequest) return settingsRequest;
 
+    const generation = settingsGeneration;
     settingsRequest = (async () => {
       try {
         const settings = await schedulingService.getFeatureSettings();
+        // Started before an account boundary, landed after it. Applying this
+        // would undo the reset and hand the new member the previous
+        // department's settings, with `settingsLoaded` true so nothing
+        // re-fetches.
+        if (generation !== settingsGeneration) return;
         set({
           platoonsEnabled: settings.platoons_enabled,
           requireEndOfShiftChecks: settings.require_end_of_shift_checks,
@@ -167,7 +198,9 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
         // until the tab is reloaded. Leaving it unloaded lets the next mount
         // retry; the shared promise above stops that becoming a storm.
       } finally {
-        settingsRequest = null;
+        // Only clear the slot if it is still ours: a reset already nulled it
+        // and a newer request may have taken it.
+        if (generation === settingsGeneration) settingsRequest = null;
       }
     })();
 

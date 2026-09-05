@@ -8,7 +8,7 @@
  * URL: /scheduling/shift-reports/print?id=<report_id>
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -34,6 +34,11 @@ const ShiftReportPrintPage: React.FC = () => {
   const callTypeLabel = useCallTypeLabels();
   const labelsReady = useCallTypeLabelsReady();
   const [report, setReport] = useState<ShiftCompletionReport | null>(null);
+  // Printing happens once per page. Without this, labels arriving after the
+  // fallback timer already printed re-run the effect and open a second
+  // dialog — behind the first one in browsers where print blocks the thread,
+  // so the member closes one and another is waiting.
+  const printedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -60,8 +65,15 @@ const ShiftReportPrintPage: React.FC = () => {
     // deliberately leaves `settingsLoaded` false when its request fails, so
     // waiting for the flag outright would mean a print view that never prints.
     // A slug on the page beats a blank stare at a dialog that never opens.
+    if (printedRef.current) return;
     const waitingOnLabels = callTypesAreOrgSlugs(report) && (report.call_types?.length ?? 0) > 0 && !labelsReady;
-    const timer = setTimeout(() => window.print(), waitingOnLabels ? LABEL_WAIT_MS : PRINT_DELAY_MS);
+    const timer = setTimeout(
+      () => {
+        printedRef.current = true;
+        window.print();
+      },
+      waitingOnLabels ? LABEL_WAIT_MS : PRINT_DELAY_MS
+    );
     return () => clearTimeout(timer);
   }, [report, labelsReady]);
 
