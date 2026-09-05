@@ -61,6 +61,7 @@ const TrainingProgramsPage: React.FC = () => {
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<TrainingRequirementEnhanced | null>(null);
   const importFileRef = React.useRef<HTMLInputElement>(null);
+  const requestIdRef = React.useRef(0);
 
   const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
     e.stopPropagation();
@@ -96,12 +97,20 @@ const TrainingProgramsPage: React.FC = () => {
   };
 
   const loadData = useCallback(async () => {
+    // A tab switch — or a permission change, which moves visibleTab — re-fires
+    // this while the previous request is still in flight. Without a generation
+    // check the older response can land last and leave, say, the template list
+    // rendered under the Programs view. Only the newest request may write.
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
+
     setLoading(true);
     try {
       if (visibleTab === 'programs' || visibleTab === 'templates') {
         const data = await trainingProgramService.getPrograms({
           is_template: visibleTab === 'templates',
         });
+        if (isStale()) return;
         setPrograms(data);
         if (visibleTab === 'templates') {
           // Built-in starter templates for the gallery; failure is non-fatal.
@@ -111,8 +120,11 @@ const TrainingProgramsPage: React.FC = () => {
             setSampleTemplates([]);
           } else {
             try {
-              setSampleTemplates(await trainingProgramService.getSampleTemplates());
+              const templates = await trainingProgramService.getSampleTemplates();
+              if (isStale()) return;
+              setSampleTemplates(templates);
             } catch {
+              if (isStale()) return;
               setSampleTemplates([]);
             }
           }
@@ -130,6 +142,7 @@ const TrainingProgramsPage: React.FC = () => {
             ? trainingService.getCategories(false).catch(() => [] as TrainingCategory[])
             : Promise.resolve<TrainingCategory[]>([]),
         ]);
+        if (isStale()) return;
         setRequirements(reqs);
         setRegistries(regs);
         setCategories(cats);
@@ -137,7 +150,8 @@ const TrainingProgramsPage: React.FC = () => {
     } catch (_error) {
       // Error silently handled - empty state shown
     } finally {
-      setLoading(false);
+      // A superseded request must not clear the spinner the newer one owns.
+      if (!isStale()) setLoading(false);
     }
   }, [visibleTab, canManage]);
 
@@ -645,7 +659,10 @@ const TrainingProgramsPage: React.FC = () => {
         )}
       </main>
 
-      {registryModal && (
+      {/* Both dialogs only ever perform training.manage actions, so losing the
+          permission with one open closes it rather than leaving Import or Save
+          on screen to fail with a 403. */}
+      {canManage && registryModal && (
         <RegistryImportModal
           registryKey={registryModal.key}
           registryName={registryModal.name}
@@ -656,7 +673,7 @@ const TrainingProgramsPage: React.FC = () => {
         />
       )}
 
-      {showRequirementModal && (
+      {canManage && showRequirementModal && (
         <RequirementModal
           requirement={editingRequirement}
           categories={categories}

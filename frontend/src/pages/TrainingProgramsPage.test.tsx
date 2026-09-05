@@ -437,6 +437,76 @@ describe('TrainingProgramsPage', () => {
     expect(screen.getByRole('tabpanel')).toBeInTheDocument();
   });
 
+  it('ignores a superseded tab response that resolves after a newer one', async () => {
+    mockHasPermission = true;
+    let releaseTemplates: (value: unknown) => void = () => {};
+    // Programs resolves immediately; the earlier Templates request is held open
+    // so it can land last, which is the ordering the generation check exists for.
+    mockGetPrograms.mockImplementation((params: unknown) => {
+      const isTemplate = (params as { is_template?: boolean } | undefined)?.is_template;
+      if (isTemplate) {
+        return new Promise((resolve) => {
+          releaseTemplates = resolve;
+        });
+      }
+      return Promise.resolve([
+        {
+          id: 'prog-1',
+          name: 'Probationary Firefighter',
+          structure_type: 'sequential',
+          active: true,
+          is_template: false,
+          version: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ]);
+    });
+
+    renderWithRouter(<TrainingProgramsPage />);
+    await screen.findByText('Probationary Firefighter');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Templates/i }));
+    await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: true }));
+
+    // Back to Programs while the Templates request is still in flight.
+    await userEvent.click(screen.getByRole('tab', { name: /Programs/i }));
+    await screen.findByText('Probationary Firefighter');
+
+    releaseTemplates([
+      {
+        id: 'tmpl-1',
+        name: 'Stale Template Result',
+        structure_type: 'phases',
+        active: true,
+        is_template: true,
+        version: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    // The superseded response must not overwrite the Programs view.
+    await waitFor(() => expect(screen.queryByText('Stale Template Result')).not.toBeInTheDocument());
+    expect(screen.getByText('Probationary Firefighter')).toBeInTheDocument();
+  });
+
+  it('closes an open management dialog if training.manage is revoked', async () => {
+    mockHasPermission = true;
+    const { rerender } = renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /New Requirement/i }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    // The dialog only performs training.manage actions, so it must not survive
+    // the permission going away and offer a Save that would 403.
+    mockHasPermission = false;
+    rerender(<TrainingProgramsPage />);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('offers the first-pipeline prompt to a training manager with no programs', async () => {
     mockHasPermission = true;
     mockGetPrograms.mockResolvedValue([]);
