@@ -48,10 +48,22 @@ class TestEndpointPermissions:
                         return dep_names
         return None
 
-    def test_list_shifts_requires_scheduling_view(self):
+    def test_list_shifts_admits_both_scheduling_grants(self):
+        """Either grant reads the list, and the assertion names both.
+
+        `permission_matches` is literal — an exact name, `scheduling.*`, or
+        `*` — so `scheduling.manage` does not imply `scheduling.view`. With
+        only `view` here, a position granted `scheduling.manage` alone was
+        admitted to every page in Scheduling Administration and then refused
+        the shifts those pages exist to list, so the close-out queue and the
+        staffing-gaps list could show nothing but their load-failure state.
+
+        Pinned exactly rather than as "some permission is required", because
+        the looser assertion this replaces would have passed throughout.
+        """
         deps = self._get_route_deps("/shifts", "GET")
         assert deps is not None, "Route /shifts GET not found"
-        assert any("require_permission" in d or "scheduling" in d for d in deps)
+        assert "PermissionChecker(scheduling.view,scheduling.manage)" in deps
 
     def test_create_shift_requires_scheduling_manage(self):
         deps = self._get_route_deps("/shifts", "POST")

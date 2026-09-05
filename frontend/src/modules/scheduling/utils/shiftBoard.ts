@@ -202,6 +202,27 @@ const endInstant = (shift: ShiftRecord): number | null => {
 };
 
 /**
+ * When the shift is over, or null when that cannot be read.
+ *
+ * A shift with no `end_time` is a real shift, not a malformed one — a crew goes
+ * out and comes back when the job is done — so "over" for one of those is its
+ * start plus the department's open-ended cushion, the same number the roster
+ * lock stands on. Reading it as "over the instant it started" is what put a
+ * crew still working into the close-out backlog.
+ *
+ * Exported because three answers depend on it and they must not diverge: when
+ * the roster locks, whether the shift is still running, and whether it is
+ * waiting to be closed out. The backend derives its close-out backlog the same
+ * way, from `end_time` else `start_time + open_ended_cushion_hours`.
+ */
+export const shiftEndInstant = (shift: ShiftRecord, window: SignupWindow = DEFAULT_SIGNUP_WINDOW): number | null => {
+  const end = endInstant(shift);
+  if (end !== null) return end;
+  const start = startInstant(shift);
+  return start === null ? null : start + window.openEndedCushionHours * 60 * 60_000;
+};
+
+/**
  * Who is looking at the shift, for the signup window.
  *
  * Mirrors the backend's three actors: a scheduling admin is never bounded, an
@@ -308,13 +329,8 @@ export const isShiftClaimable = (
  * began, which is why the naive substitution was rejected on both sides.
  */
 const rosterDeadline = (shift: ShiftRecord, window: SignupWindow): number | null => {
-  let end = endInstant(shift);
-  if (end === null) {
-    const start = startInstant(shift);
-    if (start === null) return null;
-    end = start + window.openEndedCushionHours * 60 * 60_000;
-  }
-  return end + window.graceMinutes * 60_000;
+  const end = shiftEndInstant(shift, window);
+  return end === null ? null : end + window.graceMinutes * 60_000;
 };
 
 /**

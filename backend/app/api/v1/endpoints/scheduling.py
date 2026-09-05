@@ -548,9 +548,23 @@ async def list_shifts(
     end_date: str | None = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # `scheduling.manage` alongside `scheduling.view`, because matching is
+    # literal: `permission_matches` accepts an exact name, `scheduling.*` or
+    # `*`, and nothing makes `manage` imply `view`. A position granted only
+    # `scheduling.manage` — which is what every page in Scheduling
+    # Administration requires — was admitted to those pages and then refused
+    # the shifts they are built to list, so the close-out queue and the
+    # staffing-gaps list could only ever show their load-failure state. Widened
+    # rather than narrowed: nobody who could read this before loses it, and it
+    # is the pairing `print_document_service` already uses for the same reason.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
-    """List shifts with optional date filtering"""
+    """List shifts with optional date filtering.
+
+    Readable with either scheduling grant; see the note on the dependency.
+    """
     service = SchedulingService(db)
 
     try:

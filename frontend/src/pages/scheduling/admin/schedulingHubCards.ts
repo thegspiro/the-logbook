@@ -48,6 +48,7 @@ import {
 export const SCHEDULING_HUB_SECTIONS = [
   'Before the shift',
   'On the shift',
+  'After the shift',
   'People & eligibility',
   'Reporting',
   'Department settings',
@@ -139,6 +140,22 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     tone: 'cyan',
     anyPermission: ['settings.manage', 'organization.update_settings'],
     requiresModule: 'inventory',
+  },
+
+  // ── After the shift ────────────────────────────────────────────────────
+  //
+  // Its own heading rather than a row under Reporting: closing a shift out is
+  // work waiting on somebody, and reporting is what you read afterwards.
+  {
+    id: 'closeout',
+    label: 'Shift Close-Out',
+    description: 'Shifts that have ended and were never closed, oldest first',
+    path: '/scheduling/admin/closeout',
+    icon: ClipboardCheck,
+    section: 'After the shift',
+    tone: 'amber',
+    permission: 'scheduling.manage',
+    requiresModule: 'scheduling',
   },
 
   // ── People & eligibility ───────────────────────────────────────────────
