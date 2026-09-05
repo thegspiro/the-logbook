@@ -17,8 +17,9 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 21 (Admin hours), pass 3** — branch
-`claude/security-review-admin-hours-pass3`, PR pending (0 fixes, 0 new
-flagged; see `docs/security-review/AH-21-admin-hours.md` → Pass 3).
+`claude/security-review-admin-hours-pass3`,
+[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247) (0 fixes, 0
+new flagged; see `docs/security-review/AH-21-admin-hours.md` → Pass 3).
 
 ---
 
