@@ -771,3 +771,126 @@ class TestTheDetectionItself:
         offenders = _find_offenders(sources, self.CREATE_ALL_ONLY)
 
         assert len(offenders) == 1, "the second argument is the table"
+
+
+# ---------------------------------------------------------------------------
+# The prose has to agree with the chain
+# ---------------------------------------------------------------------------
+#
+# Pitfall #26 is stated in migration comments far more often than it is
+# enforced, and the statement is what the next author copies. Nineteen
+# revisions ended up asserting that ``positions`` is create_all-only because
+# each was written from its predecessor; it is not, and CLAUDE.md records the
+# unnecessary — and data-lossy — guard that reasoning already produced once.
+#
+# A claim is only wrong when the table is created by an ANCESTOR of the
+# revision making it. Four of those nineteen run before
+# 20260805_0008 renames ``roles`` into ``positions``, so for them the table
+# genuinely is absent and the guard is load-bearing. Chain position decides it,
+# and chain position is nothing like filename order.
+
+_CLAIM = re.compile(r"no\s+migration\s+creates|model-only\s+table", re.S)
+
+
+def _chain_positions() -> dict[str, int]:
+    """Map revision id -> distance from base, using Alembic's own walker."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(VERSIONS_DIR.parent))
+    script = ScriptDirectory.from_config(cfg)
+    order = [
+        rev.revision for rev in script.walk_revisions("base", script.get_current_head())
+    ][::-1]
+    return {revision: index for index, revision in enumerate(order)}
+
+
+def _revision_of(text: str) -> str | None:
+    match = re.search(
+        r'^revision(?:\s*:\s*str)?\s*=\s*["\']([^"\']+)', text, re.MULTILINE
+    )
+    return match.group(1) if match else None
+
+
+def _claim_blocks(text: str) -> list[str]:
+    """The comment or docstring paragraph around each create_all-only claim."""
+    blocks = []
+    for match in _CLAIM.finditer(text):
+        start = text.rfind("\n\n", 0, match.start())
+        end = text.find("\n\n", match.end())
+        blocks.append(
+            text[0 if start == -1 else start : end if end != -1 else len(text)]
+        )
+    return blocks
+
+
+def _false_claims(sources: dict[str, str]) -> list[str]:
+    positions = _chain_positions()
+    model_tables = set(Base.metadata.tables)
+
+    created_at: dict[str, int] = {}
+    revision_at: dict[str, int] = {}
+    for name, text in sources.items():
+        revision = _revision_of(text)
+        if revision is None or revision not in positions:
+            continue
+        revision_at[name] = positions[revision]
+        for table in _tables_created_by_migrations({name: text}):
+            created_at[table] = min(created_at.get(table, 10**9), positions[revision])
+
+    offenders = []
+    for name, text in sources.items():
+        if name not in revision_at:
+            continue
+        for block in _claim_blocks(text):
+            named = {word for word in re.findall(r"[a-z_]{4,}", block)}
+            for table in sorted(named & model_tables):
+                birth = created_at.get(table)
+                if birth is not None and birth < revision_at[name]:
+                    offenders.append(
+                        f"{name} says `{table}` is create_all-only, but a "
+                        f"migration creates it earlier in the chain "
+                        f"(position {birth} < {revision_at[name]})"
+                    )
+    return offenders
+
+
+def test_no_migration_claims_a_table_is_create_all_only_when_it_is_not():
+    """The prose is the thing that propagates, so the prose is what to check.
+
+    Correcting a comment changes no behaviour, which is exactly why nothing
+    stopped the claim being copied nineteen times.
+    """
+    assert _false_claims(_migration_sources()) == []
+
+
+def test_the_claim_detection_actually_detects():
+    """Guard the guard, in the manner of the check above it.
+
+    The claim wraps across newlines in real files (``no migration\\ncreates``),
+    and a whitespace-blind pattern silently matches nothing — which reads as a
+    clean run. Pin both the wrapping and a genuine offender.
+    """
+    sources = _migration_sources()
+    assert any(_CLAIM.search(text) for text in sources.values()), (
+        "No migration mentions the create_all-only premise at all; the "
+        "pattern has probably stopped matching."
+    )
+    assert _CLAIM.search("one of the tables no migration\ncreates — it")
+
+    real = next(
+        name
+        for name, text in sources.items()
+        if "positions" in text and _revision_of(text) is not None
+    )
+    planted = {
+        real: "revision = 'zzzz_planted'\ndown_revision = None\n\n"
+        "# positions is a model-only table — no migration creates it.\n",
+        "20260805_0008_rename_roles_to_positions.py": sources[
+            "20260805_0008_rename_roles_to_positions.py"
+        ],
+    }
+    # The planted revision is not in the real chain, so it is skipped rather
+    # than flagged — assert that, so the skip cannot quietly swallow a real one.
+    assert _false_claims(planted) == []

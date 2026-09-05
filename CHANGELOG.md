@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
+
+**Fixed**
+
+- **Seventeen migrations justified a table-existence guard with a reason that
+  was not true.** They stated that `positions` (and in three cases
+  `security_alerts`, `shifts`, `skill_test_viewers`) is never created by a
+  migration and only appears when the application calls `create_all()` at
+  startup. Each of those tables is in fact created by an earlier migration —
+  `positions` by the one that renames `roles` into it — so the guard they were
+  explaining can never fire. Nothing behaved differently; the comments were
+  wrong, and comments are what the next author copies. This is the same
+  mistaken reasoning that once produced an unnecessary guard which had to be
+  reverted after testing against a real database.
+- **Four migrations that make the same statement were left alone**, because for
+  them it is effectively right: they run _before_ the rename, so the table
+  genuinely is absent and their guard is doing real work. Which case applies
+  depends on position in the migration chain, which is nothing like the order
+  the filenames suggest.
+
+**Added**
+
+- **A test that checks the claim against the chain**, so the next copy fails
+  rather than spreading. It reads each migration's prose, and fails when a
+  table called startup-built is created by a migration that runs earlier.
+
 ### `text-right` on a table header did nothing, everywhere (2026-09-05)
 
 **Fixed**
