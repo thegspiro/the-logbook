@@ -149,6 +149,19 @@ const startInstant = (shift: ShiftRecord): number | null => {
 };
 
 /**
+ * The shift's end as an epoch instant, or null when it cannot be read.
+ *
+ * Same contract as `startInstant`, and null for the same reason: `end_time` is
+ * optional on `ShiftRecord` and a bare "HH:MM" still reaches the client from
+ * some responses, and NaN would compare false in both directions.
+ */
+const endInstant = (shift: ShiftRecord): number | null => {
+  if (!shift.end_time || !shift.end_time.includes('T')) return null;
+  const parsed = Date.parse(shift.end_time);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+/**
  * Who is looking at the shift, for the signup window.
  *
  * Mirrors the backend's three actors: a scheduling admin is never bounded, an
@@ -236,6 +249,59 @@ export const isShiftClaimable = (
   // approved the claim left an officer's 00:30 reopening — exactly when a crew
   // is short — showing a live window with every button disabled.
   return startInstant(shift) !== null || isShiftOpen(shift, now);
+};
+
+/**
+ * Whether this shift's roster has stopped being a plan and become a record.
+ *
+ * Signup closing and the roster locking are two different moments, and
+ * conflating them was the bug: `signupClosedReason` bounds an officer at the
+ * shift's *start* plus the grace period, which is the right bound for "may I
+ * still seat somebody", but every roster control — confirm, decline, remove,
+ * and the reopen banner itself — went on being offered indefinitely after
+ * that. A shift three weeks gone was still showing "Reopen for 15 min" under
+ * copy that reads "if you are a body short and somebody can still get here",
+ * and a member who had already worked it and had twelve hours recorded was
+ * still being offered a button to decline the assignment those hours hang off.
+ *
+ * The bound is the shift's own *end* plus the same grace period the department
+ * already sets for late signup, so an overnight crew keeps its controls
+ * through the night and past the hand-over — the day-granular `isShiftOpen`
+ * cannot be used here for exactly the reason it is only a fallback elsewhere.
+ * A live `late_signup_until` holds the roster open too: an officer who has
+ * legitimately reopened the shift needs to seat whoever answers. The server
+ * now clamps that override to the same deadline, so it can only ever move the
+ * answer for a row written before it did.
+ *
+ * A scheduling admin is never locked out. That is the same three-actor split
+ * the whole signup window uses — the admin path is records work, which happens
+ * after the fact by definition, and it is where a genuine correction to a past
+ * roster belongs.
+ *
+ * Advisory, like `signupClosedReason`: the server refuses a reopen past this
+ * bound itself, and remains authoritative.
+ */
+export const rosterLocked = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
+  viewer: SignupViewer = MEMBER_VIEWER,
+  now: Date = new Date()
+): boolean => {
+  if (viewer.canManage) return false;
+
+  // No end, no lock. `end_time` is optional on `ShiftRecord` for a reason —
+  // an open-ended shift is a real shift, not a malformed one — and standing in
+  // the start would lock its roster one grace period after it began, with the
+  // crew still working. A false lock on a live shift is worse than a missed
+  // one on a shift nothing can bound, which is also the permissive stance the
+  // rest of this file takes on data it cannot judge.
+  const end = endInstant(shift);
+  if (end === null) return false;
+
+  let deadline = end + window.graceMinutes * 60_000;
+  const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
+  if (!Number.isNaN(override) && override > deadline) deadline = override;
+  return now.getTime() > deadline;
 };
 
 /**

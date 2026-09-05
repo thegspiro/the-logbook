@@ -78,6 +78,13 @@ runs ``alembic upgrade head`` against an empty database, so reflecting it
 unguarded would fail the whole upgrade rather than this one step (CLAUDE.md
 pitfall #26).
 
+**Superseded by ``f3b8d0c26a17``.** The fingerprint gate below rests on every
+unrepaired wizard row still carrying one of ``_HEURISTIC_MARKERS``, and it does
+not: the onboarding editor let an administrator untick those four modules while
+leaving Reports ticked. That revision revokes ``reports.view`` unconditionally
+and reaches installations that already stamped this one. This body is left as it
+ran (CLAUDE.md pitfall #20).
+
 Revision ID: c9a5e21f7b04
 Revises: bbdaca0844df
 Create Date: 2026-09-04 12:00:00.000000
