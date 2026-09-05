@@ -9,6 +9,13 @@
  * datetimes). Even without the crash, the hours would have been recorded
  * shifted by the org's UTC offset.
  *
+ * The end field's conversion goes through `resolveEndUtc`, not a bare
+ * `localToUTC`, since a DST fall-back review (`entryTimes.test.ts`) found a
+ * plain re-parse of the end string can silently lose up to an hour off a
+ * duration selected across the fold; `resolveEndUtc` falls back to ordinary
+ * `localToUTC` parsing itself whenever no fold-safe pin applies, so this
+ * still converts to UTC exactly once, just through a wrapper.
+ *
  * Asserted against the source (same approach as
  * CreateTrainingSessionPage.datetime.test.tsx): the bug is a missing wrapper
  * around a payload value, and a render test would need the full page with API
@@ -31,7 +38,7 @@ describe('AdminHoursPage manual entry submit', () => {
 
   it('converts both timestamps to UTC in the payload', () => {
     expect(submitCall).toContain('localToUTC(manualData.clock_in_at, tz)');
-    expect(submitCall).toContain('localToUTC(manualData.clock_out_at, tz)');
+    expect(submitCall).toContain('resolveEndUtc(manualData.clock_out_at, manualEndPin, tz)');
   });
 });
 
@@ -44,6 +51,6 @@ describe('PendingReviewTab edit save', () => {
 
   it('converts both timestamps to UTC in the payload', () => {
     expect(saveCall).toContain('localToUTC(editData.clock_in_at, tz)');
-    expect(saveCall).toContain('localToUTC(editData.clock_out_at, tz)');
+    expect(saveCall).toContain('resolveEndUtc(editData.clock_out_at, editEndPin, tz)');
   });
 });

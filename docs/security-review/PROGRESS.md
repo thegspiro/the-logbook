@@ -16,7 +16,62 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None currently open._
+**Feature 21 (Admin hours), pass 3** — branch
+`claude/security-review-admin-hours-pass3`,
+[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247). Originally
+opened claiming 0 fixes/0 flagged; a Codex review round on the PR disputed
+that on all 6 points raised, all 6 verified real and fixed (unlocked
+overlap/entry-mutation races, a falsy-zero threshold-override bug, a
+quarterly-compliance year bug, and a DST fold duration bug in the pass's own
+new `entryTimes.ts`) — see `docs/security-review/AH-21-admin-hours.md` →
+Pass 3's correction notice.
+
+---
+
+### 2026-09-05 — Feature 21 (Admin hours), pass 3 — 0 fixes, 0 flagged
+
+No security-review PR was open, so the rotation continued directly to
+feature 21 per the pass order. Scoped against the current code rather than a
+diff against pass 2's merge commit (this repo's git history required an
+unshallow fetch mid-pass; the doc records why a hash-based diff wasn't used).
+Of the four backend files, only `admin_hours_service.py` changed since pass
+2, and by exactly one commit (`eb9c2f957`, confirmed via `git log --follow`):
+an unrelated, already-correct fix for a `Decimal`/`float` `TypeError` in
+`get_user_hours_compliance`'s percentage calculation — the AH-7 org-scoping
+filter it sits inside is untouched, re-verified at its current line.
+
+**Extended scope to a change outside this rotation that this iteration's own
+declared scope required checking:** `Dashboard.tsx` (one of pass 2's 6 listed
+outside consumers) went through two merged PRs (#2233, #2236) since pass 2 —
+removing a client-side permission gate that didn't match the actual
+`admin_hours.manage`-only backend semantics, then a same-day Codex-reviewed
+follow-up fixing an unscoped summary read (an officer's card totaled the
+whole department) and bare-date bounds (today's entries fell outside the
+month). Both re-verified fixed and correct at the current code — no action
+needed, but recorded here because this exact gap (an outside consumer
+changing between passes) is precisely what a feature's declared scope exists
+to catch.
+
+Re-ran the route inventory from scratch: 27/27, unchanged, every route
+gated. Freshly swept every `select(...)` call site (~65) for a missing
+`organization_id` filter: none found. All 8 pass-1 fixes (AH-7–AH-14) and all
+4 pass-2 fixes (AH21-1–AH21-4) re-verified intact by reading the current
+code. Three new frontend files this pass (`utils/entryTimes.ts`,
+`components/QuickDurationButtons.tsx`, `utils/reportingRange.ts`) are pure
+client-side form/date-math helpers with no network call, swept clean for the
+standing pitfalls. Both open product-decision items (per-org SoD toggle;
+`credit_event_attendance`'s resync-can-grow-a-decided-entry gap) re-read
+against the current code — unchanged, still deliberate, still mirrored in
+`docs/KNOWN_LIMITATIONS.md`.
+
+Full local completion gate green: flake8/black/isort clean (isort 9.0.1,
+CI's pinned version), `validate_migrations.py --strict` 422 revisions/single
+head, 72/72 admin_hours-scoped and 10876/10876 full backend suite pass,
+`tsc --noEmit` 0 errors, `eslint .` 0 errors/0 warnings, `vitest run` 88/88
+(admin-hours module) + 151/151 (adjacent consumers). No code changes this
+pass — everything that changed since pass 2 was independently verified
+already correct. Findings doc: `docs/security-review/AH-21-admin-hours.md` →
+Pass 3. Next: 22 Grants & fundraising, once this PR merges.
 
 ---
 
@@ -8639,7 +8694,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | 🔄     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
