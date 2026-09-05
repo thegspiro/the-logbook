@@ -97,7 +97,7 @@ class TestGetLogsRecipientFilter:
         await _log(db_session, org, colleague, subject="Theirs")
 
         service = NotificationsService(db_session)
-        logs, total = await service.get_logs(org.id, recipient_id=me.id)
+        logs, total, _next = await service.get_logs(org.id, recipient_id=me.id)
 
         assert total == 1
         assert [entry.subject for entry in logs] == ["Mine"]
@@ -112,7 +112,7 @@ class TestGetLogsRecipientFilter:
         await _log(db_session, org, colleague, subject="Theirs")
 
         service = NotificationsService(db_session)
-        logs, total = await service.get_logs(org.id)
+        logs, total, _next = await service.get_logs(org.id)
 
         assert total == 2
         assert {entry.subject for entry in logs} == {"Mine", "Theirs"}
@@ -127,7 +127,7 @@ class TestGetLogsRecipientFilter:
         await _log(db_session, org, colleague, channel="email", subject="Theirs")
 
         service = NotificationsService(db_session)
-        logs, total = await service.get_logs(
+        logs, total, _next = await service.get_logs(
             org.id, channel="email", recipient_id=me.id
         )
 
@@ -143,7 +143,7 @@ class TestGetLogsRecipientFilter:
         await _log(db_session, org, me, subject="Mine")
 
         service = NotificationsService(db_session)
-        _, total = await service.get_logs(other_org.id, recipient_id=me.id)
+        _, total, _next = await service.get_logs(other_org.id, recipient_id=me.id)
 
         assert total == 0
 
@@ -246,9 +246,13 @@ class TestEndpointDefaults:
             id=me.id, organization_id=org.id, rank=None, positions=[]
         )
 
+        # cursor=None explicitly: calling the handler directly bypasses
+        # FastAPI's parameter resolution, so an omitted argument arrives as the
+        # `Query(None)` marker object rather than None.
         result = await list_logs(
             channel=None,
             scope=NotificationLogScope.MINE,
+            cursor=None,
             pagination=_Pagination(),
             db=db_session,
             current_user=caller,
