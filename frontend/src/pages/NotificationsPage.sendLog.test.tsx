@@ -63,6 +63,8 @@ const emailLog = {
   created_at: '2026-09-01T12:00:00Z',
 };
 
+const emptyPage = { logs: [] as (typeof emailLog)[], total: 0, skip: 0, limit: 50 };
+
 const renderLogTab = () =>
   render(
     <MemoryRouter initialEntries={['/notifications?tab=log']}>
@@ -115,6 +117,38 @@ describe('NotificationsPage send log', () => {
     );
     // Same rows, so the same read state has to land on the inbox tab's count.
     await waitFor(() => expect(clearGlobalUnread).toHaveBeenCalled());
+  });
+
+  it('holds a loading state rather than claiming the log is empty', async () => {
+    // The page-level skeleton is unreachable here: for a member without
+    // notifications.view the permission effect sets `loading` false
+    // synchronously, so the page renders while this request is still in
+    // flight. Without a flag of its own the tab announced "No Notifications
+    // Found" about a log it had not fetched yet.
+    let release!: (value: { logs: typeof emptyPage.logs; total: number; skip: number; limit: number }) => void;
+    vi.mocked(notificationsService.getLogs).mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      })
+    );
+
+    renderLogTab();
+
+    // The tab is on screen — this is not a page still behind its skeleton.
+    await screen.findByRole('tab', { name: /send log/i });
+    expect(screen.queryByText('No Notifications Found')).toBeNull();
+
+    release({ logs: [emailLog], total: 1, skip: 0, limit: 50 });
+
+    expect(await screen.findByText('Drill on Thursday')).toBeInTheDocument();
+  });
+
+  it('shows the empty state once an empty log has actually arrived', async () => {
+    vi.mocked(notificationsService.getLogs).mockResolvedValue(emptyPage);
+
+    renderLogTab();
+
+    expect(await screen.findByText('No Notifications Found')).toBeInTheDocument();
   });
 
   it('does not show organization-wide statistics above a caller-scoped log', async () => {

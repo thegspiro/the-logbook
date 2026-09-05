@@ -827,7 +827,19 @@ const NotificationsPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                {filteredLogs.length === 0 ? (
+                {/* The page-level skeleton cannot cover this tab: for a member
+                without notifications.view the permission effect sets `loading`
+                false synchronously, so the page renders while the log request
+                is still in flight and "No Notifications Found" claims an empty
+                log before one has been fetched. The inbox tab carries its own
+                flag for the same reason. */}
+                {loadingLogs ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="bg-theme-surface-hover h-16 animate-pulse rounded-lg" />
+                    ))}
+                  </div>
+                ) : filteredLogs.length === 0 ? (
                   <div className="card p-12 text-center">
                     <Clock className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                     <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
