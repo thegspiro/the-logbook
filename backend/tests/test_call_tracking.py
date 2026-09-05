@@ -1878,3 +1878,91 @@ class TestMixedSourceKeysAreNotRelabelled:
         )
         assert report["summary"]["by_type_totals"] == {"mva": 2}
         assert "mva" not in report["call_type_labels"]
+
+
+@pytest.mark.integration
+class TestProvenanceBackfillNeedsPositiveEvidence:
+    """`a3d7e2f18c45` repoints pre-existing count-only reports. "No incident
+    rows" is not evidence of count-only tracking — `DELETE /scheduling/calls`
+    lets an officer remove them after the fact — so the migration requires the
+    org-call responses only count-only tracking writes."""
+
+    async def _report(self, db_session, org, shift_id, source):
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+
+        member = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"m-{generate_uuid()[:8]}",
+            email=f"m-{generate_uuid()[:8]}@test.com",
+            first_name="A",
+            last_name="B",
+            password_hash="pw",
+        )
+        db_session.add(member)
+        await db_session.flush()
+        row = ShiftCompletionReport(
+            id=generate_uuid(),
+            organization_id=org.id,
+            trainee_id=member.id,
+            officer_id=member.id,
+            shift_id=shift_id,
+            shift_date=date(2026, 8, 18),
+            hours_on_shift=12.0,
+            calls_responded=1,
+            call_types=["mva"],
+            data_sources={"call_types": source},
+        )
+        db_session.add(row)
+        await db_session.flush()
+        return row
+
+    async def test_a_shift_with_no_evidence_either_way_is_left_alone(self, db_session):
+        """A detailed report whose incident rows were deleted afterwards looks
+        identical to a count-only one under a bare NOT EXISTS test. Rewriting
+        it would hand the officer's own wording to readers as org slugs."""
+        org = await _make_org(db_session)
+        shift = await _make_shift(db_session, org, "e1")
+        report = await self._report(
+            db_session, org, shift.id, CALL_TYPES_FROM_SHIFT_CALLS
+        )
+
+        # No org_call_responses for this shift: nothing positively says the
+        # types came from a tally, so the marker stands.
+        from sqlalchemy import func, select
+
+        from app.models.call_tracking import OrgCallResponse
+
+        rows = (
+            await db_session.execute(
+                select(func.count(OrgCallResponse.id)).where(
+                    OrgCallResponse.shift_id == str(shift.id)
+                )
+            )
+        ).scalar_one()
+        assert rows == 0
+        assert report.data_sources["call_types"] == CALL_TYPES_FROM_SHIFT_CALLS
+
+    async def test_a_counted_shift_has_the_evidence_the_migration_requires(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        shift = await _make_shift(db_session, org, "e1")
+        await CallTrackingService(db_session).record_shift_calls(
+            shift, org.id, total_calls=1, type_counts={"mva": 1}
+        )
+
+        from sqlalchemy import func, select
+
+        from app.models.call_tracking import OrgCallResponse
+
+        rows = (
+            await db_session.execute(
+                select(func.count(OrgCallResponse.id)).where(
+                    OrgCallResponse.shift_id == str(shift.id)
+                )
+            )
+        ).scalar_one()
+        assert rows == 1

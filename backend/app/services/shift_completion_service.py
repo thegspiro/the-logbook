@@ -1246,6 +1246,10 @@ class ShiftCompletionService:
         if new_status == "draft" and not was_draft:
             raise ValueError("Cannot revert to draft after submission")
 
+        # Captured before the write: the marker turns on whether the stored
+        # values are still the ones the marker describes.
+        previous_call_types = list(getattr(report, "call_types", None) or [])
+
         for field, value in updates.items():
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
@@ -1255,7 +1259,14 @@ class ShiftCompletionService:
         # describes what is stored. Cleared rather than reassigned: what they
         # typed is their own wording, and leaving the `org_calls` marker would
         # let a later rename rewrite it and let it lock a type from deletion.
-        if "call_types" in updates:
+        #
+        # Only on a real change. The report form resubmits `call_types`
+        # whatever was edited, so clearing on presence alone dropped the
+        # marker when an officer saved a narrative tweak — and those values
+        # are still the slugs the marker describes.
+        if "call_types" in updates and list(updates["call_types"] or []) != (
+            previous_call_types
+        ):
             sources = copy.deepcopy(report.data_sources or {})
             if sources.pop("call_types", None) is not None:
                 report.data_sources = sources or None

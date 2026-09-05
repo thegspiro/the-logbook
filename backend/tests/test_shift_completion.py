@@ -1316,6 +1316,38 @@ class TestCallCountAutoPopulation:
         # Untouched provenance for other fields survives.
         assert (updated.data_sources or {}).get("calls_responded") == "shift_calls"
 
+    async def test_resubmitting_the_same_types_keeps_their_provenance(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The report form resubmits `call_types` whatever was edited, so
+        clearing on presence alone dropped the marker when an officer saved a
+        narrative tweak — and those values are still the slugs it describes."""
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+        await db_session.flush()
+        original = list(report.call_types)
+
+        updated = await svc.update_report(
+            report_id=report.id,
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=str(d["officer_id"]),
+            updates={"call_types": original, "officer_narrative": "Quiet tour."},
+        )
+
+        assert updated is not None
+        assert (updated.data_sources or {}).get("call_types") == "shift_calls"
+
     async def test_keeps_the_count_the_officer_typed(
         self, db_session, setup_shift_with_crew
     ):
