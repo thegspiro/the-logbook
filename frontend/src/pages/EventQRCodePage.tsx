@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
+import { QrCode } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { QRCheckInData } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -225,16 +226,25 @@ const EventQRCodePage: React.FC = () => {
               )}
             </div>
 
-            {/* Still show the QR code (greyed out) so the page is ready when the window opens */}
-            {checkInUrl && (
-              <div className="mb-4 flex justify-center">
-                <div className="qr-container opacity-40">
-                  <QRCodeSVG value={checkInUrl} size={250} level="H" includeMargin={true} />
-                </div>
+            {/*
+              The QR code is withheld until the window opens. A greyed-out code
+              was still a scannable code: a phone camera reads it through the
+              opacity, so members photographed it early and hit a check-in that
+              refuses them, with nothing on screen explaining why. The
+              placeholder keeps the same footprint so the layout does not jump
+              when the window opens and the real code takes its place.
+            */}
+            <div className="mb-4 flex justify-center">
+              <div
+                className="border-theme-surface-border text-theme-text-muted flex h-[250px] w-[250px] flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center"
+                data-testid="qr-code-placeholder"
+              >
+                <QrCode className="h-12 w-12" aria-hidden="true" />
+                <span className="text-sm font-medium">QR code hidden until check-in opens</span>
               </div>
-            )}
+            </div>
             <p className="text-theme-text-muted text-sm">
-              The QR code will become active when the check-in window opens. This page refreshes automatically.
+              The QR code will appear here when the check-in window opens. This page refreshes automatically.
             </p>
           </div>
         )}
