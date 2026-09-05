@@ -1464,6 +1464,57 @@ class EquipmentRequestCreate(BaseModel):
     requested_duration: RequestedDurationLiteral
     priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[FreeText] = None
+    requested_size: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description=(
+            "Size the member asked for. Set independently of item_id: a size "
+            "the department does not stock has no catalog row to point at, "
+            "and the request is how the quartermaster learns it is needed."
+        ),
+    )
+
+
+class RequestableVariant(BaseModel):
+    """One size/colour/style of a requestable product."""
+
+    item_id: Optional[str] = None
+    size: Optional[str] = None
+    size_label: Optional[str] = None
+    color: Optional[str] = None
+    style: Optional[str] = None
+    available: int = 0
+
+
+class RequestableProduct(BaseModel):
+    """A product a member can request, with its sizes collapsed into one entry."""
+
+    key: str
+    name: str
+    description: Optional[str] = None
+    category_id: Optional[str] = None
+    category_name: Optional[str] = None
+    tracking_type: str
+    has_sizes: bool = False
+    size_field: Optional[str] = None
+    member_size: Optional[str] = None
+    suggested_size: Optional[str] = None
+    total_available: int = 0
+    variants: List[RequestableVariant] = Field(default_factory=list)
+
+
+class RequestableCategory(BaseModel):
+    """A category filter offered on the request form."""
+
+    id: str
+    name: str
+
+
+class RequestableCatalogResponse(BaseModel):
+    """Products a member may request, plus the categories to browse them by."""
+
+    products: List[RequestableProduct] = Field(default_factory=list)
+    categories: List[RequestableCategory] = Field(default_factory=list)
 
 
 class EquipmentRequestReview(BaseModel):

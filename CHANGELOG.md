@@ -28,6 +28,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   focus trap, body scroll lock and `role="dialog"` it never had. Escape still
   cancels an open inline notes editor before it closes anything.
 
+### The Events page invited members to create an event (2026-09-05)
+
+**Fixed**
+
+- **An empty Events list told every member to "Get started by creating a new
+  event."** The Create Event button beside it was already officer-only, so the
+  copy was an instruction nobody without `events.manage` could follow, and
+  `/events/new` bounces them to the access-denied page. The prompt is now shown
+  only to someone who can act on it.
+
+**Changed**
+
+- **With no events at all, a member now sees a blank list** rather than an
+  empty-state card whose default copy and only action are both invitations to
+  create. An empty result that follows from a search, a type filter, the Past
+  toggle or My Events is still reported to everyone — that is feedback on what
+  they asked for.
+
+### Requesting gear no longer requires knowing the department's name for it (2026-09-05)
+
+**Changed**
+
+- **The request form now browses.** It loads the department's gear the moment
+  it opens and offers the real category names as filters, so a member who does
+  not know what to type is no longer looking at an empty box. Search matches
+  the category and product-group names as well as the item's own — typing
+  "shirt" now finds a garment the catalog files as "Long Sleeve", which
+  previously returned nothing.
+- **One row per product, not one per stocked size.** A shirt kept in seven
+  sizes and two colours was fourteen near-identical lines to scroll; it is now
+  one line, with the sizes asked for as their own step after the product is
+  chosen. Serialized gear collapses the same way: ten radios read as "Portable
+  Radio — 7 on hand" rather than ten indistinguishable rows.
+- **The size step starts from the sizes you have on file.** A member with a
+  shirt size recorded has that size preselected, matched through the same alias
+  table the impact planner uses — so "Large" on file selects the row the
+  quartermaster stored as "L" — and any other size the department stocks is one
+  tap away.
+
+**Added**
+
+- **You can ask for gear that is out of stock, or not carried at all.** The
+  form was pinned to items marked available, so the one need a quartermaster
+  has no other way to learn about — a size or an item the department does not
+  hold — could not be recorded. Out-of-stock sizes now stay selectable and are
+  labelled as such, a member's own size is offered even when nothing is stocked
+  in it, and a free-text line covers gear that is not in the catalog. Requests
+  carry the size asked for as its own field, so a request with no matching
+  catalog row still tells the quartermaster exactly what was wanted; the review
+  screen says so explicitly.
+
+**Fixed**
+
+- **Rank- and position-restricted gear is filtered by the server**, not by the
+  browser after the fact. The old form listed restricted items and let the
+  member submit a request the API then refused, and the item's existence was
+  disclosed to everyone regardless.
+
 ### Scheduling administration moved into the Administration section (2026-09-05)
 
 **Changed**

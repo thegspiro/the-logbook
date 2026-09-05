@@ -21,7 +21,7 @@ import {
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, InventoryItem } from '../types';
-import { REQUEST_STATUS_BADGES } from '../types';
+import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { onHandQuantity } from '../utils/onHand';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -347,6 +347,11 @@ const EquipmentRequestsPage: React.FC = () => {
                       <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
                         {req.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'}
                       </span>
+                      {req.requested_size && (
+                        <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
+                          Size {sizeLabel(req.requested_size)}
+                        </span>
+                      )}
                     </div>
                     <p className="text-theme-text-muted text-xs">
                       Requested by {req.requester_name ?? 'Unknown'} on {fmtDate(req.created_at)}
@@ -481,6 +486,15 @@ const EquipmentRequestsPage: React.FC = () => {
                 <p>
                   <strong>Quantity:</strong> {reviewModal.request.quantity}
                 </p>
+                {reviewModal.request.requested_size && (
+                  <p>
+                    {/* Called out separately from the item name because a size
+                        the department does not stock has no catalog row behind
+                        it — this line is the only place the need shows up. */}
+                    <strong>Size requested:</strong> {sizeLabel(reviewModal.request.requested_size)}
+                    {reviewModal.request.item_id ? '' : ' — nothing in the catalog matches this size'}
+                  </p>
+                )}
                 <p>
                   <strong>Tracking:</strong>{' '}
                   {reviewModal.request.requested_item?.tracking_type ?? 'Determined when fulfilled'}

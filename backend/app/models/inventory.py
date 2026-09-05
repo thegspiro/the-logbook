@@ -1446,6 +1446,11 @@ class EquipmentRequest(Base):
     # The member's intent is deliberately separate from the transaction the
     # quartermaster ultimately chooses to satisfy the request.
     requested_duration = Column(String(20), nullable=False, default="temporary")
+    # The size the member asked for, kept apart from ``item_id`` on purpose: a
+    # member may need a size the department does not stock, and the request is
+    # how the quartermaster learns that. ``item_id`` is NULL in exactly that
+    # case, so this column is the only record of what was actually wanted.
+    requested_size = Column(String(50), nullable=True)
     priority = Column(
         Enum(RequestPriority, values_callable=_enum_values),
         nullable=False,
