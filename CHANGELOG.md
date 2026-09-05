@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A shift with no end time was exempt from the roster lock (2026-09-05)
+
+**Fixed**
+
+- **An open-ended shift could be reopened for signup at any age, and members
+  could add themselves to it.** The roster deadline is anchored to a shift's
+  `end_time`, and that column is genuinely optional — so for a shift without
+  one it returned no deadline at all, and the age bound that stops an officer
+  reopening last month's shift simply did not apply. Reopening then admitted
+  members, because the live override becomes the member's deadline and a
+  reopened shift deliberately suppresses the day-granular past-date fallback so
+  an overnight shift can still take people. Reproduced at ninety days: the
+  reopen was accepted and the self-signup seated, drawing hours for a shift
+  nobody worked.
+- **An open-ended shift is now treated as running for twelve hours after it
+  starts**, and the department's grace period is added to that as before —
+  twelve because it is already the cushion check-in allows a shift with no
+  recorded end, so the two rules agree on how long "still out" can plausibly
+  last. Substituting the start at _grace_ scale would have been the
+  overcorrection: an hour after it began, with the crew still working.
+- **This bounds editing the roster on those shifts too**, not only reopening —
+  confirm, decline, remove, withdraw and the seat dropdown — since both rules
+  read the same deadline. That is the intent: correcting a months-old roster is
+  records work, and `scheduling.manage` remains exempt from the lock.
+
 ### `text-right` on a table header did nothing, everywhere (2026-09-05)
 
 **Fixed**

@@ -153,6 +153,20 @@ def _minutes_phrase(total: int) -> str:
     return f"{total} minute{'s' if total != 1 else ''}"
 
 
+# How long after its start an open-ended shift is still treated as running.
+#
+# `end_time` is nullable, so "when did this shift finish" has no answer for
+# some rows, and the roster deadline needs one or it cannot bound them at all.
+# Twelve hours because that is already the cushion `_checkin_window_error`
+# allows a shift with no recorded end, so the two rules agree on how long
+# "still out" can plausibly last rather than each guessing separately.
+#
+# Deliberately generous. Getting this wrong in the tight direction locks a
+# crew out of its own roster mid-shift; getting it wrong in the loose
+# direction leaves a stale shift editable for an extra few hours, which the
+# grace period on top already tolerates.
+OPEN_ENDED_SHIFT_CUSHION_HOURS = 12
+
 # The widest span a member-facing shift listing will scan. Matches
 # MAX_OPEN_SHIFTS_DAYS on /shifts/open, which bounds the same kind of read for
 # the same reason: eligibility is not expressible in SQL, so the rows have to
@@ -1858,16 +1872,29 @@ class SchedulingService:
 
         ``end_time`` is genuinely optional — nullable on the model, ``None`` by
         default on ``ShiftCreate``, and handled explicitly by the overlap query
-        — so a shift without one is open-ended, not malformed, and is left
-        unbounded. Substituting the start was wrong at this scale: it would
-        have locked an open-ended shift one grace period after it began, with
-        the crew still working. ``_checkin_window_error`` does make that
-        substitution, but against a twelve-*hour* cushion rather than a
-        sixty-minute one.
+        — so a shift without one is open-ended, not malformed. It is *not*
+        left unbounded, though: returning None here meant an officer could
+        reopen signup on an open-ended shift of any age, and a member could
+        then self-signup onto it, because ``_signup_window_error`` takes the
+        live override as the member's deadline and ``window_checked=True``
+        suppresses the day-granular ``reject_past`` fallback. Reproduced at
+        ninety days.
+
+        Substituting the start is right; substituting it at *grace scale* was
+        the mistake — a sixty-minute cushion would lock an open-ended shift an
+        hour after it began with the crew still working. Hence a twelve-hour
+        cushion first, matching what ``_checkin_window_error`` already allows
+        a shift with no recorded end, and only then the grace period.
+
+        A shift with no readable start stays unbounded: a row this rule cannot
+        judge is not one it should lock.
         """
         end = _as_utc(getattr(shift, "end_time", None))
         if end is None:
-            return None
+            start = _as_utc(getattr(shift, "start_time", None))
+            if start is None:
+                return None
+            end = start + timedelta(hours=OPEN_ENDED_SHIFT_CUSHION_HOURS)
 
         org = (
             await self.db.execute(

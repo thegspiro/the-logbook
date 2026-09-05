@@ -812,3 +812,153 @@ class TestOvernightShiftsAndTheLegacyDateGuard:
         )
 
         assert error == "Cannot sign up for a past shift"
+
+
+async def _open_ended_shift(svc, org_id, creator_id, *, minutes_from_now: float):
+    """A shift with no ``end_time`` — nullable on the model, optional on create."""
+    start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        minutes=minutes_from_now
+    )
+    shift, err = await svc.create_shift(
+        uuid.UUID(org_id),
+        {"shift_date": start.date(), "start_time": start},
+        uuid.UUID(creator_id),
+    )
+    assert err is None, err
+    return shift
+
+
+class TestAnOpenEndedShiftIsStillBounded:
+    """A missing ``end_time`` used to mean "no deadline at all".
+
+    ``_roster_deadline`` returned None for such a shift, so the age bound the
+    class above enforces simply did not apply to it: an officer could reopen an
+    open-ended shift from any point in the past and a member could self-signup
+    onto it, drawing hours for a shift they never worked. Reproduced at ninety
+    days before this was fixed — the same hole the age bound closed, surviving
+    for the rows that happened to have no end recorded.
+
+    The cushion is what keeps the fix from overcorrecting: an open-ended shift
+    is genuinely still running for a while, and locking it a grace period after
+    it began would take the roster away from a crew that is still out.
+    """
+
+    async def test_a_long_past_open_ended_shift_cannot_be_reopened(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(90 * 24 * 60)
+        )
+
+        result, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=60
+        )
+
+        assert result is None
+        assert "ended too long ago" in (err or "")
+
+    async def test_and_so_a_member_stays_off_its_roster(
+        self, db_session, org_and_members
+    ):
+        # The half that matters: the refusal above is only worth having because
+        # a successful reopen is what let a member onto the shift.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(90 * 24 * 60)
+        )
+        await svc.open_late_signup(uuid.UUID(shift.id), uuid.UUID(org_id), minutes=60)
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err is not None
+
+    async def test_one_that_started_hours_ago_is_still_reopenable(
+        self, db_session, org_and_members
+    ):
+        # The case the cushion exists for. A crew is still out; taking the
+        # roster off them because nobody recorded an end time would be the
+        # fix overcorrecting into a worse bug than the one it closed.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+        assert err is None
+        assert assignment is not None
+
+    async def test_the_boundary_sits_at_the_cushion_plus_the_grace(
+        self, db_session, org_and_members
+    ):
+        # Twelve hours, then the department's grace period on top — the same
+        # number the officer's own signup deadline uses, so the two cannot
+        # drift apart.
+        from app.services.scheduling_service import OPEN_ENDED_SHIFT_CUSHION_HOURS
+
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        cushion = OPEN_ENDED_SHIFT_CUSHION_HOURS * 60 + 60  # grace defaults to 60
+
+        inside = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(cushion - 30)
+        )
+        _, err = await svc.open_late_signup(
+            uuid.UUID(inside.id), uuid.UUID(org_id), minutes=15
+        )
+        assert err is None
+
+        outside = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(cushion + 30)
+        )
+        result, err = await svc.open_late_signup(
+            uuid.UUID(outside.id), uuid.UUID(org_id), minutes=15
+        )
+        assert result is None
+        assert err is not None
+
+    async def test_a_shift_with_no_readable_start_stays_unbounded(
+        self, db_session, org_and_members
+    ):
+        # A row the rule cannot judge is not one it should lock. `start_time`
+        # is NOT NULL in the schema, so this is reachable only through a
+        # detached object, which is exactly what the guard is defending.
+        from types import SimpleNamespace
+
+        org_id, _, _ = org_and_members
+        svc = SchedulingService(db_session)
+        unreadable = SimpleNamespace(start_time=None, end_time=None)
+
+        assert await svc._roster_deadline(unreadable, uuid.UUID(org_id)) is None
+
+    async def test_a_manager_can_still_correct_an_open_ended_roster(
+        self, db_session, org_and_members
+    ):
+        # The bound now reaches `_roster_locked_reason` for these shifts too,
+        # which is the point — but records work keeps its path.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(90 * 24 * 60)
+        )
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, officer_id, actor=SignupActor.MANAGER
+        )
+
+        assert err is None
+        assert assignment is not None
