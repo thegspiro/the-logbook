@@ -20,10 +20,8 @@ import {
 } from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
-import type { EquipmentRequestItem, InventoryItem } from '../types';
+import type { EquipmentRequestItem, FulfillmentOptionsResponse } from '../types';
 import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
-import { issuableQuantity } from '../utils/issuable';
-import { normalizeSizeKey, productBaseName, sizeQualifier, stockSizeValue } from '../utils/stockSize';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
@@ -59,12 +57,20 @@ const EquipmentRequestsPage: React.FC = () => {
   const [fulfillReturnAt, setFulfillReturnAt] = useState('');
   const [fulfillmentType, setFulfillmentType] = useState<'checkout' | 'assignment' | 'issuance'>('checkout');
   const [fulfillOverride, setFulfillOverride] = useState(false);
-  const [itemsLoading, setItemsLoading] = useState(false);
-  /** Sequence of the newest fulfil-dialog item load; only it may preselect. */
-  const fulfillLoadSeq = useRef(0);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  /** Sequence of the newest options load; only the newest may act on itself. */
+  const optionsLoadSeq = useRef(0);
   const [substitutionOverride, setSubstitutionOverride] = useState(false);
   const [substitutionReason, setSubstitutionReason] = useState('');
-  const [items, setItems] = useState<InventoryItem[]>([]);
+  /**
+   * What the backend says this one request may be fulfilled with.
+   *
+   * Held per request rather than as a shared catalog: the verdicts inside it
+   * (`suggested_item_id`, `requested_size_available`, `can_fulfill_now`)
+   * answer a question about *this* request, so a list left over from another
+   * dialog would answer the wrong one.
+   */
+  const [fulfillOptions, setFulfillOptions] = useState<FulfillmentOptionsResponse | null>(null);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -184,38 +190,46 @@ const EquipmentRequestsPage: React.FC = () => {
   };
 
   /**
-   * Does this catalog row carry the size the member asked for?
+   * Fetch what this request may be fulfilled with, and apply the verdicts.
    *
-   * The qualifier is compared as well as the size, because
-   * `normalizeSizeKey` drops it: without that second check a request for boot
-   * "10 (wide)" matches a plain "10", and the picker would automatically
-   * select the very row `_apply_member_size` refused to suggest to the member
-   * for not being the right fit.
+   * Sequenced because a load is not cancelled when the dialog closes: a
+   * quartermaster who opens request A, closes it and opens B before A's query
+   * lands would otherwise see A's options while B is on screen, and the
+   * backend accepts a category-compatible substitute without complaint.
    */
-  const matchesRequestedSize = (req: EquipmentRequestItem | null, item: InventoryItem): boolean => {
-    const wanted = normalizeSizeKey(req?.requested_size);
-    if (!wanted) return false;
-    const stocked = stockSizeValue(item);
-    if (normalizeSizeKey(stocked) !== wanted) return false;
-    return sizeQualifier(stocked) === sizeQualifier(req?.requested_size);
-  };
-
-  /**
-   * Is this row a variant of the product the member actually asked for?
-   *
-   * `isCompatible` falls back to the category when the request carries no
-   * item_id, which is exactly the unstocked-size case. A category is far too
-   * coarse to choose *for* somebody: an L shirt and L trousers both sit under
-   * Uniforms, and the backend waives the substitution justification when the
-   * category matches, so an automatic pick could issue the wrong garment with
-   * nothing flagging it. The request's `item_name` is the product name the
-   * member chose, and a variant row carries that name before its size, so the
-   * two can be compared without inventing a new identifier.
-   */
-  const matchesRequestedProduct = (req: EquipmentRequestItem | null, item: InventoryItem): boolean => {
-    const wanted = req?.item_name?.trim().toLowerCase();
-    if (!wanted) return false;
-    return productBaseName(item).toLowerCase() === wanted;
+  const loadFulfillOptions = (
+    request: EquipmentRequestItem,
+    { includeIncompatible = false, preselect = false }: { includeIncompatible?: boolean; preselect?: boolean } = {}
+  ) => {
+    const load = ++optionsLoadSeq.current;
+    setOptionsLoading(true);
+    void inventoryService
+      .getFulfillmentOptions(request.id, { include_incompatible: includeIncompatible })
+      .then((response) => {
+        if (load !== optionsLoadSeq.current) return;
+        setFulfillOptions(response);
+        if (!preselect) return;
+        /* A request filed against a size the catalog did not stock carries no
+           item_id, so the picker would open on "Select an item…" and leave the
+           quartermaster to find the right variant by eye. The backend decides
+           whether there is an unambiguous answer — same product, requested
+           size, enough of it for the pre-filled quantity — and returns null
+           when there is not, because choosing *for* somebody has to clear a
+           higher bar than offering them a list. */
+        const suggested = response.suggested_item_id;
+        if (!suggested) return;
+        setFulfillItemId(suggested);
+        // Pool stock is rejected outright unless the method is `issuance`, so
+        // selecting the item without moving the method hands the quartermaster
+        // a form that can only fail — and the method is a separate field they
+        // have no reason to re-check after an automatic selection.
+        const chosen = response.options.find((option) => option.item_id === suggested);
+        if (chosen?.tracking_type === 'pool') setFulfillmentType('issuance');
+      })
+      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')))
+      .finally(() => {
+        if (load === optionsLoadSeq.current) setOptionsLoading(false);
+      });
   };
 
   const openFulfill = (req: EquipmentRequestItem) => {
@@ -226,100 +240,12 @@ const EquipmentRequestsPage: React.FC = () => {
     setFulfillOverride(false);
     setSubstitutionOverride(false);
     setSubstitutionReason('');
+    setFulfillOptions(null);
     setFulfillModal({ open: true, request: req });
-
-    /* A request filed against a size the catalog did not stock carries no
-       item_id, so the picker would open on "Select an item…" and leave the
-       quartermaster to find the right variant by eye among every compatible
-       row. The size is on the request, so use it — but only once, as the modal
-       opens: re-applying it later would fight a quartermaster who deliberately
-       chose a different size.
-
-       Choosing *for* somebody has to clear a higher bar than offering them a
-       list, so the automatic pick is deliberately narrow. It must be the same
-       product, in the requested size, with enough of it to cover the quantity
-       the dialog has pre-filled — anything less produces a form that submits
-       and fails. Everything outside that stays a manual choice. */
-    const preselectRequestedSize = (available: InventoryItem[]) => {
-      if (req.item_id || !req.requested_size) return;
-      const wantedQuantity = req.quantity || 1;
-      const candidates = available.filter(
-        (item) =>
-          isCompatible(req, item) &&
-          matchesRequestedProduct(req, item) &&
-          matchesRequestedSize(req, item) &&
-          availableQuantity(item) >= wantedQuantity
-      );
-      // Nothing stops two variant groups in one category carrying the same
-      // display name, and the name is all the request preserves — so when the
-      // candidates span more than one product identity there is no way to tell
-      // which the member meant. Ambiguity goes back to the quartermaster
-      // rather than being resolved by list order; the backend would accept the
-      // wrong group without asking for a substitution reason.
-      const identities = new Set(candidates.map((item) => item.variant_group_id ?? `item:${item.id}`));
-      if (identities.size !== 1) return;
-      const match = candidates[0];
-      if (!match) return;
-      setFulfillItemId(match.id);
-      // Pool stock is rejected outright unless the method is `issuance`, so
-      // selecting the item without moving the method hands the quartermaster
-      // a form that can only fail — and the method is a separate field they
-      // have no reason to re-check after an automatic selection.
-      if (match.tracking_type === 'pool') setFulfillmentType('issuance');
-    };
-
-    // Advanced on every launch, cached path included: a load still in flight
-    // from a *review* dialog can populate `items` on its own, so a cached
-    // fast-path return that skipped the increment would leave an older
-    // fulfil load's callback still passing the sequence check — and
-    // overwriting this dialog's selection.
-    const load = ++fulfillLoadSeq.current;
-
-    if (items.length > 0) {
-      preselectRequestedSize(items);
-      return;
-    }
-    // Applied inside the load rather than after it: `items` is still empty at
-    // this point, so matching against it here would always find nothing.
-    //
-    // Sequenced because the load is not cancelled when the dialog closes: a
-    // quartermaster who opens request A, closes it and opens B before A's
-    // query lands would otherwise have A's callback preselect A's item while
-    // B is on screen, and the backend accepts it as category-compatible.
-    setItemsLoading(true);
-    void inventoryService
-      .getItems({ active_only: true, limit: 500 })
-      .then((res) => {
-        setItems(res.items);
-        if (load !== fulfillLoadSeq.current) return;
-        preselectRequestedSize(res.items);
-      })
-      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')))
-      .finally(() => {
-        if (load === fulfillLoadSeq.current) setItemsLoading(false);
-      });
+    // Preselection is offered only where the member could not name an item:
+    // when they did, `item_id` above is already their choice.
+    loadFulfillOptions(req, { preselect: !req.item_id && Boolean(req.requested_size) });
   };
-
-  const loadItems = () => {
-    if (items.length > 0) return;
-    void inventoryService
-      .getItems({ active_only: true, limit: 500 })
-      .then((res) => setItems(res.items))
-      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')));
-  };
-
-  const isCompatible = (req: EquipmentRequestItem | null, item: InventoryItem) =>
-    req
-      ? req.item_id
-        ? item.id === req.item_id
-        : req.category_id
-          ? item.category_id === req.category_id
-          : true
-      : false;
-
-  // Not `onHandQuantity`: a unit can be on the shelf and still be one the
-  // issuance path refuses, and this figure gates "Approve & fulfill now".
-  const availableQuantity = (item: InventoryItem) => issuableQuantity(item);
 
   const handleApproveAndFulfill = async () => {
     if (!reviewModal.request) return;
@@ -481,7 +407,8 @@ const EquipmentRequestsPage: React.FC = () => {
                       onClick={() => {
                         setReviewModal({ open: true, request: req });
                         setReviewNotes('');
-                        loadItems();
+                        setFulfillOptions(null);
+                        loadFulfillOptions(req);
                       }}
                       className="btn-info shrink-0 px-3 py-1.5 text-xs"
                     >
@@ -674,14 +601,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => void handleApproveAndFulfill()}
-                  disabled={
-                    submitting ||
-                    !items.some(
-                      (item) =>
-                        isCompatible(reviewModal.request, item) &&
-                        availableQuantity(item) >= (reviewModal.request?.quantity ?? 1)
-                    )
-                  }
+                  disabled={submitting || optionsLoading || !fulfillOptions?.can_fulfill_now}
                   className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                   title="Available only when catalog stock is immediately available"
                 >
@@ -728,14 +648,9 @@ const EquipmentRequestsPage: React.FC = () => {
               </div>
 
               {fulfillModal.request.requested_size &&
-                !itemsLoading &&
-                items.length > 0 &&
-                !items.some(
-                  (it) =>
-                    isCompatible(fulfillModal.request, it) &&
-                    matchesRequestedSize(fulfillModal.request, it) &&
-                    availableQuantity(it) > 0
-                ) && (
+                !optionsLoading &&
+                fulfillOptions !== null &&
+                !fulfillOptions.requested_size_available && (
                   /* The member asked for a size the shelf cannot answer. Said
                      plainly here because every option below is a different
                      size, and issuing one silently changes what they receive —
@@ -758,27 +673,29 @@ const EquipmentRequestsPage: React.FC = () => {
                   onChange={(e) => setFulfillItemId(e.target.value)}
                   className="form-input w-full"
                 >
-                  <option value="">Select an item…</option>
-                  {items
-                    .filter((it) => substitutionOverride || isCompatible(fulfillModal.request, it))
-                    .map((it) => {
-                      const tag = it.serial_number || it.asset_tag || it.barcode;
-                      const size = stockSizeValue(it);
-                      const wanted = matchesRequestedSize(fulfillModal.request, it);
-                      return (
-                        <option key={it.id} value={it.id}>
-                          {it.name}
-                          {tag ? ` — ${tag}` : ''}
-                          {size ? ` — size ${sizeLabel(size)}` : ''}
-                          {wanted ? ' — requested size' : ''}
-                          {` — ${it.status}; ${availableQuantity(it)} available`}
-                        </option>
-                      );
-                    })}
+                  <option value="">{optionsLoading ? 'Loading items…' : 'Select an item…'}</option>
+                  {(fulfillOptions?.options ?? []).map((option) => (
+                    <option key={option.item_id} value={option.item_id}>
+                      {option.name}
+                      {option.identifier ? ` — ${option.identifier}` : ''}
+                      {option.size ? ` — size ${sizeLabel(option.size)}` : ''}
+                      {option.matches_requested_size ? ' — requested size' : ''}
+                      {option.compatible ? '' : ' — substitution'}
+                      {` — ${option.status ?? 'unknown'}; ${option.available} available`}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-theme-text-muted mt-1 text-xs">
                   The selected item must support the final fulfillment method above.
                 </p>
+                {fulfillOptions?.truncated && (
+                  /* Said out loud rather than left as a short list: a picker
+                     that quietly stops at its cap reads as "that is all there
+                     is", which is the one thing it cannot promise. */
+                  <p className="text-theme-text-muted mt-1 text-xs">
+                    Showing the closest matches only — more inventory matched than fits this list.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -829,6 +746,9 @@ const EquipmentRequestsPage: React.FC = () => {
                     onChange={(e) => {
                       setSubstitutionOverride(e.target.checked);
                       setFulfillItemId('');
+                      if (fulfillModal.request) {
+                        loadFulfillOptions(fulfillModal.request, { includeIncompatible: e.target.checked });
+                      }
                     }}
                     className="form-checkbox"
                   />
