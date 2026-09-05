@@ -93,6 +93,18 @@ class CallTrackingMode:
 # an untyped call has ``call_type`` NULL.
 UNCLASSIFIED_CALL_TYPE = "unclassified"
 
+# What ``ShiftCompletionReport.data_sources["call_types"]`` records about the
+# shape of that report's stored call types. The two sources put different
+# things in the column and only one of them may be resolved through the
+# department's label list.
+#   - detailed tracking: the incident text an officer typed, shown verbatim
+#   - count-only tracking: this org's type slugs, resolved to labels
+# A report written before this was recorded carries neither and is treated as
+# verbatim, which is what it rendered as before labels existed.
+CALL_TYPES_FROM_SHIFT_CALLS = "shift_calls"
+CALL_TYPES_FROM_ORG_CALLS = "org_calls"
+
+
 # Ceiling on a department's configured type list. It lands in an unvalidated
 # JSON column that every close-out and settings read deserializes, and no
 # department needs a hundred of them.

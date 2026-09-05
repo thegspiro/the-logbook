@@ -31,6 +31,7 @@ const report = {
   hours_on_shift: 12,
   calls_responded: 2,
   call_types: ['mutual_aid'],
+  data_sources: { call_types: 'org_calls' },
 };
 
 beforeEach(() => {
@@ -78,6 +79,16 @@ describe('ShiftReportPrintPage print timing', () => {
     await waitFor(() => expect(mockGetReport).toHaveBeenCalledWith('r1'));
 
     await vi.advanceTimersByTimeAsync(3100);
+    expect(window.print).toHaveBeenCalled();
+  });
+
+  it('does not wait on a report holding an officer’s own wording', async () => {
+    // Nothing to resolve, so nothing to wait for.
+    mockGetReport.mockResolvedValue({ ...report, data_sources: { call_types: 'shift_calls' } });
+    render(<ShiftReportPrintPage />);
+    await waitFor(() => expect(mockGetReport).toHaveBeenCalledWith('r1'));
+
+    await vi.advanceTimersByTimeAsync(700);
     expect(window.print).toHaveBeenCalled();
   });
 

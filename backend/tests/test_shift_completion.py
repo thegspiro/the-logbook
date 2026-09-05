@@ -1225,6 +1225,61 @@ class TestCallCountAutoPopulation:
         assert report.calls_responded == 2
         assert sorted(report.call_types) == ["EMS", "Structure Fire"]
         assert report.data_sources["calls_responded"] == "shift_calls"
+        # Provenance decides whether anything may relabel these later. This
+        # shift logged per-incident rows, so the strings are the officer's own
+        # wording and must be shown as written.
+        assert report.data_sources["call_types"] == "shift_calls"
+
+    async def test_count_only_types_are_marked_as_org_slugs(
+        self, db_session, setup_shift_with_crew
+    ):
+        """No ShiftCall rows, so the types come from the shift's own tally and
+        are this org's slugs — the one shape that resolves to labels."""
+        from app.core.utils import generate_uuid
+        from app.models.call_tracking import OrgCall, OrgCallResponse
+
+        d = setup_shift_with_crew
+        call_id = generate_uuid()
+        db_session.add(
+            OrgCall(
+                id=call_id,
+                organization_id=d["org_id"],
+                call_date=d["shift_date"],
+                call_type="mutual_aid",
+            )
+        )
+        db_session.add(
+            OrgCallResponse(
+                id=generate_uuid(),
+                organization_id=d["org_id"],
+                call_id=call_id,
+                shift_id=d["shift_id"],
+            )
+        )
+        # The officer's per-member credit, which is where a count-only
+        # department's member figure comes from.
+        await db_session.execute(
+            text(
+                "INSERT INTO shift_attendance "
+                "(id, shift_id, user_id, duration_minutes, call_count) "
+                "VALUES (:id, :sid, :uid, 720, 1)"
+            ),
+            {"id": generate_uuid(), "sid": d["shift_id"], "uid": d["crew_1"]},
+        )
+        await db_session.flush()
+
+        report = await ShiftCompletionService(db_session).create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+
+        assert report.call_types == ["mutual_aid"]
+        assert report.data_sources["call_types"] == "org_calls"
 
     async def test_keeps_the_count_the_officer_typed(
         self, db_session, setup_shift_with_crew

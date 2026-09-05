@@ -19,6 +19,7 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
 )
 from app.models.call_tracking import (
+    CALL_TYPES_FROM_ORG_CALLS,
     UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
     OrgCall,
@@ -1285,6 +1286,11 @@ class ReportsService:
         daily_data: Dict[str, Dict[str, Any]] = {}
         total_calls = 0
         type_totals: Dict[str, int] = {}
+        # Only values this report knows came from count-only tracking may be
+        # resolved through the department's label list. The rest is the
+        # incident text an officer typed, and relabelling it would rewrite
+        # their words the day a type whose slug matches gets renamed.
+        slug_keys: set = set()
 
         for sr in shift_reports:
             day = str(sr.shift_date)
@@ -1299,11 +1305,17 @@ class ReportsService:
             daily_data[day]["total_calls"] += calls
             total_calls += calls
 
+            from_org_calls = (sr.data_sources or {}).get(
+                "call_types"
+            ) == CALL_TYPES_FROM_ORG_CALLS
+
             for ct in sr.call_types or []:
                 daily_data[day]["by_type"][ct] = (
                     daily_data[day]["by_type"].get(ct, 0) + 1
                 )
                 type_totals[ct] = type_totals.get(ct, 0) + 1
+                if from_org_calls:
+                    slug_keys.add(ct)
 
         report_entries = sorted(daily_data.values(), key=lambda e: e["date"])
 
@@ -1328,11 +1340,18 @@ class ReportsService:
                 "busiest_day_count": (busiest["total_calls"] if busiest else 0),
                 "by_type_totals": type_totals,
             },
-            # Keyed by the same values as the breakdowns above. Served on this
-            # branch too because an org that ran count-only tracking in the
-            # past has slugs in its older reports, and a period spanning the
-            # switch mixes both shapes in one table.
-            "call_type_labels": await call_service.type_labels(str(organization_id)),
+            # Served on this branch too, because an org that ran count-only
+            # tracking in the past has slugs in its older reports and a period
+            # spanning the switch mixes both shapes in one table — but only
+            # for the keys those reports recorded as slugs. A detailed-mode
+            # value that merely looks like a slug keeps the officer's wording.
+            "call_type_labels": {
+                slug: label
+                for slug, label in (
+                    await call_service.type_labels(str(organization_id))
+                ).items()
+                if slug in slug_keys
+            },
             "entries": report_entries,
         }
 

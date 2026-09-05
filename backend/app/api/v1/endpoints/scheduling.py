@@ -3503,12 +3503,12 @@ async def _reject_deleting_a_used_call_type(
     if not removed:
         return
 
-    usage = await service.type_usage_counts(organization_id)
-    blocked = sorted(s for s in removed if usage.get(s))
+    locked = await service.slugs_locked_by_history(organization_id)
+    blocked = sorted(removed & locked)
     if blocked:
         raise ValueError(
-            "Cannot delete a call type that calls are recorded under: "
-            + ", ".join(f"{s} ({usage[s]} call(s))" for s in blocked)
+            "Cannot delete a call type that history still refers to: "
+            + ", ".join(blocked)
             + ". Turn it off instead to stop offering it."
         )
 
@@ -3531,6 +3531,23 @@ async def _call_type_usage_for(db: AsyncSession, user: User) -> dict[str, int]:
     ):
         return {}
     return await CallTrackingService(db).type_usage_counts(user.organization_id)
+
+
+async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
+    """Types the editor must not offer to delete, for the same audience.
+
+    Broader than a call count: a filed shift report can outlive the calls it
+    was built from. Sent so the editor can disable delete up front rather than
+    letting the save come back refused with nothing on screen having warned.
+    """
+    if not (
+        user_has_permission(user, "scheduling.manage")
+        or user_has_permission(user, "scheduling.report")
+    ):
+        return []
+    return sorted(
+        await CallTrackingService(db).slugs_locked_by_history(user.organization_id)
+    )
 
 
 @router.get("/settings", response_model=SchedulingFeatureSettings)
@@ -3566,6 +3583,7 @@ async def get_scheduling_feature_settings(
         enforce_evoc=service.get_evoc_enforcement(org),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
         call_type_usage=await _call_type_usage_for(db, current_user),
+        call_type_locked=await _call_type_locked_for(db, current_user),
     )
 
 
@@ -3678,6 +3696,7 @@ async def update_scheduling_feature_settings(
             **service.get_call_tracking_settings(saved_org)
         ),
         call_type_usage=await _call_type_usage_for(db, current_user),
+        call_type_locked=await _call_type_locked_for(db, current_user),
     )
 
 

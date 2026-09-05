@@ -17,6 +17,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.call_tracking import (
+    CALL_TYPES_FROM_ORG_CALLS,
+    CALL_TYPES_FROM_SHIFT_CALLS,
     DEFAULT_CALL_TYPES,
     MAX_CALL_TYPES,
     MAX_CALLS_PER_SHIFT,
@@ -1391,9 +1393,44 @@ class TestCallVolumeReportLabels:
         assert report["summary"]["by_type_totals"] == {"unclassified": 3}
         assert report["call_type_labels"]["unclassified"] == "Not categorised"
 
-    async def test_the_detailed_branch_carries_the_map_too(self, db_session):
+    async def _detailed_report(self, db_session, org, call_types, source):
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+
+        trainee = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"t-{generate_uuid()[:8]}",
+            email=f"t-{generate_uuid()[:8]}@test.com",
+            first_name="Test",
+            last_name="Trainee",
+            password_hash="pw",
+        )
+        db_session.add(trainee)
+        await db_session.flush()
+
+        row = ShiftCompletionReport(
+            id=generate_uuid(),
+            organization_id=org.id,
+            trainee_id=trainee.id,
+            officer_id=trainee.id,
+            shift_date=date(2026, 8, 4),
+            hours_on_shift=12.0,
+            calls_responded=len(call_types),
+            call_types=call_types,
+            data_sources={"call_types": source} if source else None,
+        )
+        db_session.add(row)
+        await db_session.flush()
+        return row
+
+    async def test_the_detailed_branch_labels_only_what_it_knows_are_slugs(
+        self, db_session
+    ):
         """An org that ran count-only in the past has slugs in its older shift
-        reports, and a period spanning the switch mixes both shapes."""
+        reports, and a period spanning the switch mixes both shapes — so the
+        map is served here, keyed by what those reports recorded as slugs."""
         from app.services.reports_service import ReportsService
 
         org = await self._org(
@@ -1401,10 +1438,52 @@ class TestCallVolumeReportLabels:
             [{"slug": "mva", "label": "Motor Vehicle Accident"}],
             mode=CallTrackingMode.DETAILED,
         )
+        await self._detailed_report(db_session, org, ["mva"], CALL_TYPES_FROM_ORG_CALLS)
+
         report = await ReportsService(db_session)._generate_call_volume(
             org.id, date(2026, 8, 1), date(2026, 8, 31)
         )
         assert report["call_type_labels"]["mva"] == "Motor Vehicle Accident"
+
+    async def test_an_officer_s_own_wording_is_never_relabelled(self, db_session):
+        """The officer typed "mva" as incident text. Renaming the type whose
+        slug happens to match must not rewrite what they wrote."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(
+            db_session,
+            [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+            mode=CallTrackingMode.DETAILED,
+        )
+        await self._detailed_report(
+            db_session, org, ["mva"], CALL_TYPES_FROM_SHIFT_CALLS
+        )
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["summary"]["by_type_totals"] == {"mva": 1}
+        assert "mva" not in report["call_type_labels"]
+
+    async def test_a_report_with_no_recorded_provenance_is_left_verbatim(
+        self, db_session
+    ):
+        """Written before provenance was recorded, so its shape is unknown.
+        Verbatim is what it rendered as before labels existed — the safe
+        direction, since the alternative rewrites an officer's words."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(
+            db_session,
+            [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+            mode=CallTrackingMode.DETAILED,
+        )
+        await self._detailed_report(db_session, org, ["mva"], None)
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert "mva" not in report["call_type_labels"]
 
 
 # ======================================================================
@@ -1448,7 +1527,7 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
     and a direct API client never saw it. The write replaces the whole list,
     so the check has to exist on this side too."""
 
-    async def _save(self, incoming_slugs, stored_slugs, usage):
+    async def _save(self, incoming_slugs, stored_slugs, locked):
         from app.api.v1.endpoints.scheduling import (
             _reject_deleting_a_used_call_type,
         )
@@ -1470,16 +1549,18 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             ),
         ):
             with patch.object(
-                CallTrackingService, "type_usage_counts", AsyncMock(return_value=usage)
+                CallTrackingService,
+                "slugs_locked_by_history",
+                AsyncMock(return_value=set(locked)),
             ):
                 await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
     async def test_dropping_a_used_type_is_refused(self):
         with pytest.raises(ValueError, match="fire"):
-            await self._save(["ems"], ["fire", "ems"], {"fire": 3})
+            await self._save(["ems"], ["fire", "ems"], {"fire"})
 
     async def test_dropping_an_unused_type_is_allowed(self):
-        await self._save(["ems"], ["fire", "ems"], {"ems": 3})
+        await self._save(["ems"], ["fire", "ems"], {"ems"})
 
     async def test_retiring_a_used_type_is_allowed(self):
         """Retirement keeps the slug in the list, which is the whole point —
@@ -1534,3 +1615,146 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             with patch.object(CallTrackingService, "type_usage_counts", usage):
                 await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
         usage.assert_not_called()
+
+
+# ======================================================================
+# Deletion safety against report snapshots, and label uniqueness
+# ======================================================================
+
+
+@pytest.mark.integration
+class TestSlugsLockedByHistory:
+    """A report snapshot outlives the calls it was built from, so the call
+    count alone does not answer "is anything still pointing at this type?"."""
+
+    async def _report(self, db_session, org, call_types, source):
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+
+        member = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"m-{generate_uuid()[:8]}",
+            email=f"m-{generate_uuid()[:8]}@test.com",
+            first_name="A",
+            last_name="B",
+            password_hash="pw",
+        )
+        db_session.add(member)
+        await db_session.flush()
+        db_session.add(
+            ShiftCompletionReport(
+                id=generate_uuid(),
+                organization_id=org.id,
+                trainee_id=member.id,
+                officer_id=member.id,
+                shift_date=date(2026, 8, 4),
+                hours_on_shift=12.0,
+                calls_responded=len(call_types),
+                call_types=call_types,
+                data_sources={"call_types": source} if source else None,
+            )
+        )
+        await db_session.flush()
+
+    async def test_a_slug_only_a_report_still_names_is_locked(self, db_session):
+        """The shift was reopened and corrected until no OrgCall carries the
+        slug. The report filed from it still lists it, and deleting the type
+        would leave that report showing a raw slug."""
+        org = await _make_org(db_session)
+        await self._report(db_session, org, ["brush"], CALL_TYPES_FROM_ORG_CALLS)
+
+        svc = CallTrackingService(db_session)
+        assert await svc.type_usage_counts(org.id) == {}
+        assert "brush" in await svc.slugs_locked_by_history(org.id)
+
+    async def test_an_officer_s_typed_text_locks_nothing(self, db_session):
+        """Detailed tracking stores what the officer wrote. It is nobody's
+        slug, and must not lock a configured type that happens to match."""
+        org = await _make_org(db_session)
+        await self._report(db_session, org, ["brush"], CALL_TYPES_FROM_SHIFT_CALLS)
+
+        assert "brush" not in await CallTrackingService(
+            db_session
+        ).slugs_locked_by_history(org.id)
+
+    async def test_calls_still_lock_on_their_own(self, db_session):
+        org = await _make_org(db_session)
+        await CallTrackingService(db_session).record_shift_calls(
+            await _make_shift(db_session, org, "e1"),
+            org.id,
+            total_calls=1,
+            type_counts={"fire": 1},
+        )
+        assert "fire" in await CallTrackingService(db_session).slugs_locked_by_history(
+            org.id
+        )
+
+    async def test_another_org_s_report_does_not_lock_ours(self, db_session):
+        mine = await _make_org(db_session)
+        theirs = await _make_org(db_session, name="Other Dept")
+        await self._report(db_session, theirs, ["brush"], CALL_TYPES_FROM_ORG_CALLS)
+
+        assert (
+            await CallTrackingService(db_session).slugs_locked_by_history(mine.id)
+            == set()
+        )
+
+
+class TestLabelsMustBeDistinct:
+    """Close-out renders the label and not the slug, so two types sharing one
+    name are two indistinguishable fields writing to different keys."""
+
+    def test_schema_rejects_two_types_with_one_name(self):
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[
+                    {"slug": "fire", "label": "Fire"},
+                    {"slug": "structure", "label": "Fire"},
+                ]
+            )
+
+    def test_case_and_spacing_do_not_make_a_name_distinct(self):
+        """ "EMS" and "ems " are the same word on screen."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[
+                    {"slug": "ems", "label": "EMS"},
+                    {"slug": "medical", "label": "ems "},
+                ]
+            )
+
+    def test_a_retired_type_still_counts(self):
+        """Its label goes on appearing in reports, where the ambiguity reads
+        as one type counted twice."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[
+                    {"slug": "fire", "label": "Fire"},
+                    {"slug": "old_fire", "label": "Fire", "active": False},
+                ]
+            )
+
+    def test_a_stored_duplicate_is_disambiguated_not_fatal(self):
+        """This column predates the rule. Failing the read would take out the
+        one endpoint that could fix the names."""
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={
+                "scheduling": {
+                    "call_tracking": {
+                        "call_types": [
+                            {"slug": "fire", "label": "Fire"},
+                            {"slug": "structure", "label": "Fire"},
+                        ]
+                    }
+                }
+            }
+        )
+        resolved = svc.get_call_tracking_settings(org)["call_types"]
+        # Kept, not dropped: the entry may be the only thing that can label a
+        # type with years of calls behind it.
+        assert [t["slug"] for t in resolved] == ["fire", "structure"]
+        assert resolved[1]["label"] == "Fire (structure)"
+        assert CallTrackingSettings(call_types=resolved).call_types
