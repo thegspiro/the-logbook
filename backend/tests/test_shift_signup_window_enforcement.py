@@ -77,6 +77,23 @@ async def _set_scheduling_settings(db_session: AsyncSession, org_id: str, **valu
     await db_session.flush()
 
 
+async def _set_checklist_timing(db_session: AsyncSession, org_id: str, **values):
+    """Merge keys into org.settings['shift_reports']['checklist_timing']."""
+    row = await db_session.execute(
+        text("SELECT settings FROM organizations WHERE id = :id"), {"id": org_id}
+    )
+    raw = row.scalar_one()
+    settings = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    settings.setdefault("shift_reports", {}).setdefault("checklist_timing", {}).update(
+        values
+    )
+    await db_session.execute(
+        text("UPDATE organizations SET settings = :s WHERE id = :id"),
+        {"s": json.dumps(settings), "id": org_id},
+    )
+    await db_session.flush()
+
+
 async def _shift_starting(svc, org_id, creator_id, *, minutes_from_now: float):
     """A twelve-hour shift whose start is this many minutes from now."""
     start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
@@ -812,3 +829,342 @@ class TestOvernightShiftsAndTheLegacyDateGuard:
         )
 
         assert error == "Cannot sign up for a past shift"
+
+
+async def _open_ended_shift(svc, org_id, creator_id, *, minutes_from_now: float):
+    """A shift with no ``end_time`` — nullable on the model, optional on create."""
+    start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
+        minutes=minutes_from_now
+    )
+    shift, err = await svc.create_shift(
+        uuid.UUID(org_id),
+        {"shift_date": start.date(), "start_time": start},
+        uuid.UUID(creator_id),
+    )
+    assert err is None, err
+    return shift
+
+
+class TestAnOpenEndedShiftIsStillBounded:
+    """A missing ``end_time`` used to mean "no deadline at all".
+
+    ``_roster_deadline`` returned None for such a shift, so the age bound the
+    class above enforces simply did not apply to it: an officer could reopen an
+    open-ended shift from any point in the past and a member could self-signup
+    onto it, drawing hours for a shift they never worked. Reproduced at ninety
+    days before this was fixed — the same hole the age bound closed, surviving
+    for the rows that happened to have no end recorded.
+
+    The cushion is what keeps the fix from overcorrecting: an open-ended shift
+    is genuinely still running for a while, and locking it a grace period after
+    it began would take the roster away from a crew that is still out.
+    """
+
+    async def test_a_long_past_open_ended_shift_cannot_be_reopened(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(90 * 24 * 60)
+        )
+
+        result, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=60
+        )
+
+        assert result is None
+        assert "ended too long ago" in (err or "")
+
+    async def test_and_so_a_member_stays_off_its_roster(
+        self, db_session, org_and_members
+    ):
+        # The half that matters: the refusal above is only worth having because
+        # a successful reopen is what let a member onto the shift.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(90 * 24 * 60)
+        )
+        await svc.open_late_signup(uuid.UUID(shift.id), uuid.UUID(org_id), minutes=60)
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err is not None
+
+    async def test_one_that_started_hours_ago_is_still_reopenable(
+        self, db_session, org_and_members
+    ):
+        # The case the cushion exists for. A crew is still out; taking the
+        # roster off them because nobody recorded an end time would be the
+        # fix overcorrecting into a worse bug than the one it closed.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+        assert err is None
+        assert assignment is not None
+
+    async def test_the_boundary_sits_at_the_cushion_plus_the_grace(
+        self, db_session, org_and_members
+    ):
+        # Twelve hours, then the department's grace period on top — the same
+        # number the officer's own signup deadline uses, so the two cannot
+        # drift apart.
+        from app.services.scheduling_service import OPEN_ENDED_SHIFT_CUSHION_HOURS
+
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        cushion = OPEN_ENDED_SHIFT_CUSHION_HOURS * 60 + 60  # grace defaults to 60
+
+        inside = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(cushion - 30)
+        )
+        _, err = await svc.open_late_signup(
+            uuid.UUID(inside.id), uuid.UUID(org_id), minutes=15
+        )
+        assert err is None
+
+        outside = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(cushion + 30)
+        )
+        result, err = await svc.open_late_signup(
+            uuid.UUID(outside.id), uuid.UUID(org_id), minutes=15
+        )
+        assert result is None
+        assert err is not None
+
+    async def test_a_shift_with_no_readable_start_stays_unbounded(
+        self, db_session, org_and_members
+    ):
+        # A row the rule cannot judge is not one it should lock. `start_time`
+        # is NOT NULL in the schema, so this is reachable only through a
+        # detached object, which is exactly what the guard is defending.
+        from types import SimpleNamespace
+
+        org_id, _, _ = org_and_members
+        svc = SchedulingService(db_session)
+        unreadable = SimpleNamespace(start_time=None, end_time=None)
+
+        assert await svc._roster_deadline(unreadable, uuid.UUID(org_id)) is None
+
+    async def test_a_manager_can_still_correct_an_open_ended_roster(
+        self, db_session, org_and_members
+    ):
+        # The bound now reaches `_roster_locked_reason` for these shifts too,
+        # which is the point — but records work keeps its path.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(90 * 24 * 60)
+        )
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, officer_id, actor=SignupActor.MANAGER
+        )
+
+        assert err is None
+        assert assignment is not None
+
+
+class TestAStaleOverrideCannotOutliveTheDeadline:
+    """`open_late_signup` clamps on write; a clamp only covers what came after.
+
+    An override stored while reopening was still unbounded stays live for up to
+    twelve hours after this ships, and `_signup_window_error` takes the later of
+    the deadline and the override as authoritative — so a member could keep
+    joining a months-old shift until it expired, and `open_late_signup` could
+    not normalize it because it now refuses the old shift before writing.
+    Capping at evaluation covers those rows, and any future writer that forgets.
+    """
+
+    async def _with_live_override(
+        self, svc, db_session, org_id, officer_id, *, days_ago, with_end
+    ):
+        day = date.today() - timedelta(days=days_ago)
+        start = datetime.combine(day, datetime.min.time()) + timedelta(hours=8)
+        data = {"shift_date": day, "start_time": start}
+        if with_end:
+            data["end_time"] = start + timedelta(hours=12)
+        shift, err = await svc.create_shift(
+            uuid.UUID(org_id), data, uuid.UUID(officer_id)
+        )
+        assert err is None, err
+        live = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        live.late_signup_until = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) + timedelta(minutes=60)
+        await db_session.flush()
+        return shift
+
+    async def test_an_open_ended_shift_is_still_refused(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await self._with_live_override(
+            svc, db_session, org_id, officer_id, days_ago=90, with_end=False
+        )
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err is not None
+
+    async def test_a_shift_with_an_end_is_refused_too(
+        self, db_session, org_and_members
+    ):
+        # Not specific to open-ended shifts: any row written before the
+        # write-time clamp shipped carries the same stale window.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await self._with_live_override(
+            svc, db_session, org_id, officer_id, days_ago=60, with_end=True
+        )
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err is not None
+
+    async def test_an_override_inside_the_deadline_still_admits(
+        self, db_session, org_and_members
+    ):
+        # The cap only ever trims an override back to the deadline; a window an
+        # officer opened on a shift that is genuinely still live is untouched.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _shift_starting(svc, org_id, officer_id, minutes_from_now=-90)
+        await svc.open_late_signup(uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30)
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert err is None
+        assert assignment is not None
+
+
+class TestTheCushionFollowsTheDepartmentsCheckInSetting:
+    """One number, so the two operational windows cannot disagree.
+
+    With `checkin_closes_hours_after` at seventy-two, check-in accepts an
+    arrival at hour twenty while a fixed twelve-hour cushion had already
+    refused every non-admin roster operation at hour twelve.
+    """
+
+    async def test_a_widened_check_in_widens_the_cushion(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(20 * 60)
+        )
+
+        result, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+        assert result is None, "20h past start is outside the default cushion"
+
+        await _set_checklist_timing(db_session, org_id, checkin_closes_hours_after=72)
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+    async def test_a_tightened_check_in_does_not_narrow_it(
+        self, db_session, org_and_members
+    ):
+        # The floor. Check-in closing early says nothing about a crew still
+        # being out, and locking a live shift's roster strands people mid-shift.
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        await _set_checklist_timing(db_session, org_id, checkin_closes_hours_after=0)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+    async def test_a_hand_edited_value_degrades_to_the_floor(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        await _set_checklist_timing(
+            db_session, org_id, checkin_closes_hours_after="whenever"
+        )
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+
+class TestMalformedChecklistSettingsDegrade:
+    """`or {}` only survives a *falsy* wrong type.
+
+    A legacy or hand-edited organization holding a truthy non-object at either
+    level reached `.get` on a string or a list and raised AttributeError. That
+    is not a degraded window but a 500, on an endpoint every member reads and
+    on the roster deadline itself.
+    """
+
+    async def test_the_roster_deadline_still_resolves(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        await _set_scheduling_settings(db_session, org_id)
+        row = await db_session.execute(
+            text("SELECT settings FROM organizations WHERE id = :id"), {"id": org_id}
+        )
+        raw = row.scalar_one()
+        settings = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        settings["shift_reports"] = "legacy string"
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {"s": json.dumps(settings), "id": org_id},
+        )
+        await db_session.flush()
+
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+
+        assert err is None
+        assert reopened.late_signup_until is not None

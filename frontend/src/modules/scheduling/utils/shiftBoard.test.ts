@@ -13,6 +13,8 @@ import {
   monthMatrix,
   shiftCapacity,
   DEFAULT_SIGNUP_WINDOW,
+  UNRESOLVED_SIGNUP_WINDOW,
+  effectiveLateSignupUntil,
   isShiftClaimable,
   memberSignupClosedReason,
   rosterLocked,
@@ -697,30 +699,160 @@ describe('rosterLocked', () => {
     expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, ADMIN)).toBe(false);
   });
 
-  it('stays open while a late-signup window an officer opened is live', () => {
+  it('is not held open by a live late-signup window', () => {
+    // The server's `_roster_locked_reason` reads the deadline alone, so this
+    // used to be the more permissive of the two and kept withdraw and the seat
+    // dropdown on screen past a lock the API enforces. Reopening signup lets
+    // somebody *join*; it does not reopen the roster of a shift that is over.
     const reopened = { ...ran, late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString() };
-    expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
   });
 
-  it('leaves an open-ended shift unlocked however long ago it began', () => {
-    // `end_time` is optional on a shift, and an open-ended one is real rather
-    // than malformed. Standing the start in for the missing end would lock it
-    // one grace period after it began, with the crew still working — a false
-    // lock on a live shift, which is worse than no lock on one nothing can
-    // bound.
+  it('locks an open-ended shift once its cushion has passed', () => {
+    // "No end, no lock" left these unbounded on both sides, so a member could
+    // be seated on a shift months gone. The server now stands the start in plus
+    // a cushion; leaving this permissive kept Reopen on screen for exactly the
+    // shifts the API had begun refusing.
     const openEnded = { ...ran, end_time: undefined };
-    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
-    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(true);
   });
 
-  it('leaves an end it cannot read unlocked', () => {
-    // A bare "HH:MM" end still reaches the client from some responses. It is
-    // the same unjudgeable case, and takes the same permissive answer.
+  it('leaves an open-ended shift alone while it is still inside the cushion', () => {
+    // The half the cushion exists for: a crew still out, with nobody having
+    // recorded an end time, must keep its own roster.
+    const running = {
+      ...ran,
+      end_time: undefined,
+      start_time: new Date(Date.now() - 8 * 60 * 60_000).toISOString(),
+    };
+    expect(rosterLocked(running, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(running, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+  });
+
+  it('follows the department cushion the server resolved', () => {
+    // A department that widened check-in to 72 hours gets a roster window that
+    // agrees with it, rather than a second number hardcoded here.
+    const openEnded = {
+      ...ran,
+      end_time: undefined,
+      start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
+    };
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+    expect(rosterLocked(openEnded, { ...DEFAULT_SIGNUP_WINDOW, openEndedCushionHours: 72 }, OFFICER)).toBe(false);
+  });
+
+  it('falls back to the start when the end cannot be read', () => {
+    // A bare "HH:MM" end still reaches the client from some responses. The
+    // start is readable, so this is the open-ended case rather than an
+    // unjudgeable one, and takes the same cushion.
     const unreadable = { ...ran, end_time: '19:00' };
-    expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+  });
+
+  it('stays unlocked when neither end nor start can be read', () => {
+    // Genuinely unjudgeable, and the permissive stance the rest of this file
+    // takes on data it cannot read.
+    const unjudgeable = { ...ran, end_time: '19:00', start_time: '07:00' };
+    expect(rosterLocked(unjudgeable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
   });
 
   it('defaults to the member view when no viewer is given', () => {
     expect(rosterLocked(ran)).toBe(true);
+  });
+});
+
+describe('a stale late-signup window', () => {
+  // A window stored while reopening was still unbounded can sit months past
+  // the roster deadline. The server caps it at evaluation; taking it as
+  // authoritative here kept claim buttons on the board, the dashboard and the
+  // open-shifts list for shifts every attempt is rejected on.
+  const longPast = (overrides: Partial<ShiftRecord> = {}) =>
+    shift({
+      shift_date: toDateKey(new Date(Date.now() - 90 * 24 * 60 * 60_000)),
+      start_time: new Date(Date.now() - 90 * 24 * 60 * 60_000).toISOString(),
+      end_time: new Date(Date.now() - 90 * 24 * 60 * 60_000 + 12 * 60 * 60_000).toISOString(),
+      ...overrides,
+    });
+
+  const live = new Date(Date.now() + 60 * 60_000).toISOString();
+
+  it('does not reopen a months-old shift for a member', () => {
+    expect(memberSignupClosedReason(longPast({ late_signup_until: live }))).not.toBeNull();
+  });
+
+  it('reports the capped instant, which is what the detail panel displays', () => {
+    // The panel gates and prints the reopening from this rather than from the
+    // stored column, so a window that outruns the deadline cannot promise an
+    // officer that members may claim until tomorrow.
+    const shiftRow = longPast({ late_signup_until: live });
+    const deadline = Date.parse(shiftRow.end_time as string) + DEFAULT_SIGNUP_WINDOW.graceMinutes * 60_000;
+
+    expect(effectiveLateSignupUntil(shiftRow)).toBe(deadline);
+    expect(effectiveLateSignupUntil(shiftRow)).toBeLessThan(Date.parse(live));
+  });
+
+  it('leaves a window inside the deadline exactly as stored', () => {
+    const stillLive = shift({
+      shift_date: toDateKey(new Date()),
+      start_time: new Date(Date.now() - 30 * 60_000).toISOString(),
+      end_time: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
+      late_signup_until: live,
+    });
+
+    expect(effectiveLateSignupUntil(stillLive)).toBe(Date.parse(live));
+  });
+
+  it('is null when no reopening is stored', () => {
+    expect(effectiveLateSignupUntil(longPast())).toBeNull();
+  });
+
+  it('does not cap a live window on an open-ended shift while settings are unknown', () => {
+    // A department configured at seventy-two hours, on a shift that started
+    // twenty hours ago with a legitimately live reopening. Against the built-in
+    // twelve-hour floor the deadline has long passed and the claim action
+    // disappears, though the server still accepts it. The unresolved window
+    // uses the ceiling for exactly this reason.
+    const openEnded = shift({
+      shift_date: toDateKey(new Date(Date.now() - 20 * 60 * 60_000)),
+      start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
+      end_time: null,
+      late_signup_until: live,
+    });
+
+    expect(effectiveLateSignupUntil(openEnded, UNRESOLVED_SIGNUP_WINDOW)).toBe(Date.parse(live));
+    expect(memberSignupClosedReason(openEnded, UNRESOLVED_SIGNUP_WINDOW)).toBeNull();
+  });
+
+  it('does not reopen it for an officer either', () => {
+    const closed = signupClosedReason(longPast({ late_signup_until: live }), DEFAULT_SIGNUP_WINDOW, {
+      canAssign: true,
+      canManage: false,
+    });
+    expect(closed).not.toBeNull();
+  });
+
+  it('leaves a scheduling admin unbounded', () => {
+    const closed = signupClosedReason(longPast({ late_signup_until: live }), DEFAULT_SIGNUP_WINDOW, {
+      canAssign: false,
+      canManage: true,
+    });
+    expect(closed).toBeNull();
+  });
+
+  it('still honours a window inside the deadline', () => {
+    // The cap only trims; a reopening on a shift that is genuinely still live
+    // is untouched.
+    const running = shift({
+      start_time: new Date(Date.now() - 90 * 60_000).toISOString(),
+      end_time: new Date(Date.now() + 10 * 60 * 60_000).toISOString(),
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    });
+    expect(memberSignupClosedReason(running)).toBeNull();
+  });
+
+  it('caps an open-ended shift against its cushion too', () => {
+    const openEnded = longPast({ end_time: undefined, late_signup_until: live });
+    expect(memberSignupClosedReason(openEnded)).not.toBeNull();
   });
 });

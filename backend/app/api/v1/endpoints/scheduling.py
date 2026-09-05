@@ -120,7 +120,11 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.scheduling_module_config_service import (
     apparatus_type_defaults_for_org,
 )
-from app.services.scheduling_service import SchedulingService, SignupActor
+from app.services.scheduling_service import (
+    SchedulingService,
+    SignupActor,
+    open_ended_cushion_hours,
+)
 from app.services.scheduling_widget_service import (
     MAX_WIDGET_WINDOW_DAYS,
     SchedulingWidgetService,
@@ -3501,6 +3505,7 @@ async def get_scheduling_feature_settings(
         ),
         signup_closes_minutes_before=window["signup_closes_minutes_before"],
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
+        open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
         enforce_evoc=service.get_evoc_enforcement(org),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
         call_type_usage=await CallTrackingService(db).type_usage_counts(
@@ -3606,6 +3611,9 @@ async def update_scheduling_feature_settings(
         ),
         signup_closes_minutes_before=window["signup_closes_minutes_before"],
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
+        open_ended_shift_cushion_hours=open_ended_cushion_hours(
+            saved_org.settings or {}
+        ),
         enforce_evoc=bool(result.get("enforce_evoc", True)),
         call_tracking=CallTrackingSettings(
             **service.get_call_tracking_settings(saved_org)
