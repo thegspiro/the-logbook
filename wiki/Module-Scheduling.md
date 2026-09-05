@@ -613,12 +613,20 @@ schedule to find the settings.
 
 | Page                    | URL                                    | Permission          |
 | ----------------------- | -------------------------------------- | ------------------- |
-| Shift Templates         | `/scheduling/admin/templates`          | `scheduling.manage` |
-| Shift Patterns          | `/scheduling/admin/patterns`           | `scheduling.manage` |
+| Shift Planning          | `/scheduling/admin/planning`           | `scheduling.manage` |
+| Shift Templates         | `/scheduling/admin/planning/templates` | `scheduling.manage` |
+| Shift Patterns          | `/scheduling/admin/planning/patterns`  | `scheduling.manage` |
 | Scheduling Reports      | `/scheduling/admin/reports`            | `scheduling.manage` |
 | Platoons                | `/scheduling/admin/platoons`           | `scheduling.manage` |
 | Who Can Fill What       | `/scheduling/admin/positions`          | `scheduling.manage` |
 | Settings (six sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage` |
+
+**Shift Planning** _(2026-09-05)_ is one screen with three routed sections —
+staffing gaps, templates, patterns — in the order the work happens. The gaps view
+lists every short shift over a date range with the assignment on the row. What
+counts as short comes from `shiftBoard.ts`, so it cannot disagree with the
+calendar; openness alone is judged for an officer rather than a member, because
+an officer can still seat somebody after member signup closes.
 
 Settings sections: `general`, `apparatus`, `platoons`, `eligibility`,
 `notifications`, `shift-reports` — each its own route, so a section can be

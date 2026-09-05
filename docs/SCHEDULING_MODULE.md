@@ -608,8 +608,9 @@ out of the route source and fails if the two drift.
 
 | Card                 | Route                                      | Permission                                               |
 | -------------------- | ------------------------------------------ | -------------------------------------------------------- |
-| Shift Templates      | `/scheduling/admin/templates`              | `scheduling.manage`                                      |
-| Shift Patterns       | `/scheduling/admin/patterns`               | `scheduling.manage`                                      |
+| Shift Planning       | `/scheduling/admin/planning`               | `scheduling.manage`                                      |
+| Shift Templates      | `/scheduling/admin/planning/templates`     | `scheduling.manage`                                      |
+| Shift Patterns       | `/scheduling/admin/planning/patterns`      | `scheduling.manage`                                      |
 | Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                 |
 | Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings` |
 | Who Can Fill What    | `/scheduling/admin/positions`              | `scheduling.manage`                                      |
@@ -644,6 +645,44 @@ grants `scheduling.manage` does not imply.
 **The Equipment settings section is gone.** Nothing on it was ever edited there;
 it held two links into Inventory, behind a settings tab, which is not where
 anyone looks for a link. They are the two Inventory cards above.
+
+### Shift Planning _(2026-09-05)_
+
+`/scheduling/admin/planning` — three routed sections in the order the work
+happens: **Staffing gaps**, then **Templates** and **Patterns**, which it
+absorbed rather than links to. The reason to open a template is a shift that
+keeps coming up short, and that is one tab away.
+
+**Staffing gaps** lists every short shift over a date range (today to +14 by
+default) with the assignment on the row, so filling ten gaps is ten selections
+rather than ten trips through the month grid and the shift drawer. It reuses the
+drawer's own assignment call and surfaces the same EVOC and overtime advisories
+from the same response fields, and opens the same `DriverBlockedDialog` on
+`LB-SCHED-001` — a refusal with no route forward is where a safety control turns
+into a workaround.
+
+**What counts as short is `modules/scheduling/utils/staffingGaps.ts`**, which
+reads `shiftCapacity`, `shiftStatusInfo` and `buildSeats` from `shiftBoard.ts`.
+The month grid, the day panel and the phone sheet already agree about what a
+shift needs, and a second answer here is exactly how three screens come to
+disagree about one shift.
+
+**One rule is deliberately different: openness.** `shiftStatusInfo` zeroes a
+shift's open seats once the *member* signup window closes — right for a board
+offering a claim button, since nothing a member browsing can do about those
+chairs. An officer can still seat somebody, so a planning screen inheriting the
+member's answer would hide the shifts most urgently in need of one.
+
+**The planning settings are shown, not edited.** General and Apparatus are
+written by one footer Save that PUTs the whole `ShiftSettings` object; a second
+screen writing them means whichever saved last silently reverts the other.
+
+**The metric and this screen now use the same capacity rule.** The `scheduling`
+ModuleSpec read `min_staffing` alone, which reported a three-seat brush truck
+carrying one person as fully staffed. It reads the seat list first, as
+`shiftCapacity` does — with a `JSON_TYPE` guard, because SQLAlchemy persists a
+Python `None` as the JSON literal `null` and `JSON_LENGTH('null')` is 1, so a
+shift that named no seats read as a one-seat crew.
 
 **Headline metrics and the attention queue** come from the `scheduling`
 `ModuleSpec` in `backend/app/services/admin_hub_service.py`: shifts still to
