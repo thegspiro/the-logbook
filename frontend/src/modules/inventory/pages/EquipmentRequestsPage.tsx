@@ -671,6 +671,11 @@ const EquipmentRequestsPage: React.FC = () => {
                   className="form-input w-full"
                 >
                   <option value="">{optionsLoading ? 'Loading items…' : 'Select an item…'}</option>
+                  {/* "issuable", not "available": the count is what `issue_from_pool`
+                      would accept, which is deliberately lower than the shelf figure for
+                      stock in maintenance or poor condition — and the status beside it is
+                      already the word "available" on a healthy row, so reusing it read as
+                      "available; 5 available". */}
                   {(fulfillOptions?.options ?? []).map((option) => (
                     <option key={option.item_id} value={option.item_id}>
                       {option.name}
@@ -678,7 +683,7 @@ const EquipmentRequestsPage: React.FC = () => {
                       {option.size ? ` — size ${sizeLabel(option.size)}` : ''}
                       {option.matches_requested_size ? ' — requested size' : ''}
                       {option.compatible ? '' : ' — substitution'}
-                      {` — ${option.status ?? 'unknown'}; ${option.available} available`}
+                      {` — ${option.status ?? 'unknown'} — ${option.available} issuable`}
                     </option>
                   ))}
                 </select>
