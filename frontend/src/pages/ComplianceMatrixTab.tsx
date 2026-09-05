@@ -700,9 +700,11 @@ const ComplianceMatrixTab: React.FC = () => {
                 <div className="border-theme-surface-border overflow-hidden rounded-lg border">
                   {detailRows.length === 0 ? (
                     <p className="text-theme-text-muted p-5 text-center text-sm">
-                      {activeRollup && activeRollup.total === 0
-                        ? 'Nobody is graded against this requirement, so there is nothing to report.'
-                        : 'Every member meets this requirement.'}
+                      {activeMember
+                        ? 'No requirements apply to this member.'
+                        : activeRollup && activeRollup.total === 0
+                          ? 'Nobody is graded against this requirement, so there is nothing to report.'
+                          : 'Every member meets this requirement.'}
                     </p>
                   ) : (
                     detailRows.map((row, index) => (

@@ -250,6 +250,8 @@ export interface ComplianceMatrixCell {
   waived_months?: number;
   window_start?: string | null;
   window_end?: string | null;
+  /** The date this cell was judged against; overrides the matrix-level as_of. */
+  as_of?: string | null;
 }
 
 export interface ComplianceMatrixMember {

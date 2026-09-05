@@ -665,12 +665,17 @@ def _find_matching_profile(
     if no profile matches.
     """
     member_type = getattr(member, "membership_type", None)
+    # A profile's "role_ids" hold *position* ids: User.roles is a synonym for
+    # User.positions, and PUT /users/{id}/roles writes position ids under that
+    # name. Position has no `role_id` column, so reading one collected nothing
+    # and every profile carrying role_ids failed to match anybody — silently,
+    # since an unmatched profile just falls back to the org-wide settings.
     member_role_ids: List[str] = []
     if hasattr(member, "positions") and member.positions:
         for pos in member.positions:
-            role_id = getattr(pos, "role_id", None)
-            if role_id:
-                member_role_ids.append(str(role_id))
+            position_id = getattr(pos, "id", None)
+            if position_id:
+                member_role_ids.append(str(position_id))
 
     for profile in profiles:
         if not profile.is_active:
