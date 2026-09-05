@@ -39,22 +39,38 @@ which merged before a review of it came back.
   sat in "To close out" from the moment it began and nothing could clear it until
   somebody finalized a shift they were still on. It now uses the department's own
   `open_ended_cushion_hours` — the same number the roster lock reads, so the two
-  cannot say different things about one shift.
-- **A missing Driver could be hidden by a headcount.** Short-staffed counted
-  against `min_staffing` alone, so a three-seat brush truck carrying one person —
-  which states its crew in `positions` and may set no minimum at all — was
-  reported as fully staffed. It reads the seat list first, as the board and the
-  coverage report do. The `JSON_TYPE` guard on that query is load-bearing:
-  SQLAlchemy stores a Python `None` as the JSON literal `null`, and
-  `JSON_LENGTH('null')` is **1**, so a shift that named no seats read as a
-  one-seat crew.
+  cannot say different things about one shift. Its **age** is measured from the end of
+  that cushion too: dated from the shift's start, a department running a
+  seventy-two hour cushion saw a shift announced as three days overdue the moment
+  it first appeared in the backlog.
+- **Short-staffing counted bodies rather than filled seats.** It compared a
+  headcount against `min_staffing`, so a three-seat brush truck carrying one
+  person read as fully staffed — and, worse, a two-seat Officer/Driver shift
+  carrying two firefighters read as covered while both named seats sat empty.
+  The seat that matters is always the empty one. It now reads through
+  `SchedulingService.filter_shifts_with_open_positions`, the method already
+  behind the open-shifts list and the staffing report, which matches each
+  **required** slot against a held position and consumes it — so it also stops
+  counting slots the department marked optional, and understands the legacy
+  list-of-strings form of the column.
+
+  One consequence worth stating: that method falls back to a minimum of one, so
+  a shift stating neither seats nor a minimum now counts while nobody is on it,
+  and stops the moment somebody is. The shift board presents such a shift as
+  "crew size not set" and shows no shortage; that difference is the board's and
+  predates this change.
+
 - **"Hours this month" counted next month.** The query had only a lower bound, so
   attendance recorded against a later-dated shift inflated it — a figure that
   went up when somebody planned ahead. Bounded at both ends, as the canonical
   scheduling summary is.
 - **A time-off alert opened the swaps view.** The Requests tab opens on swaps, so
   clicking a time-off warning landed on "No swap requests" whenever there were
-  none. The alert names the view, and the tab honours it.
+  none. The alert names the view, and the tab honours it — as `requestView`,
+  not `view`, which the scheduling page owns for the calendar's month/week mode
+  and rewrites on mount. Named `view`, it was read correctly once and then
+  overwritten in the URL, which reads as working right up until somebody
+  refreshes or shares the link.
 - **The documentation screenshot workflow was capturing the home page.**
   `scripts/screenshots/manifest.mjs` still visited the moved scheduling routes;
   they hit the catch-all redirect to the dashboard, which fails silently because

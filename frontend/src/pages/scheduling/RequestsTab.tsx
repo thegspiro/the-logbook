@@ -29,9 +29,14 @@ export const RequestsTab: React.FC = () => {
   // or an administration alert about a *time-off* request landed on the swaps
   // view — and on "No swap requests" whenever there were none, leaving the
   // officer to discover the other view themselves.
+  //
+  // `requestView`, not `view`: SchedulingPage owns `view` for the calendar's
+  // month/week mode and rewrites it on mount and on every change, so `view` was
+  // read correctly here once and then immediately overwritten in the URL —
+  // which reads as working until somebody refreshes or shares the link.
   const [searchParams] = useSearchParams();
   const [activeView, setActiveView] = useState<'swaps' | 'timeoff'>(
-    searchParams.get('view') === 'timeoff' ? 'timeoff' : 'swaps'
+    searchParams.get('requestView') === 'timeoff' ? 'timeoff' : 'swaps'
   );
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);

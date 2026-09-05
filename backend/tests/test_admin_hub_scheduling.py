@@ -141,6 +141,7 @@ async def _seat(
     shift,
     user,
     *,
+    position: ShiftPosition = ShiftPosition.FIREFIGHTER,
     assignment_status: AssignmentStatus = AssignmentStatus.CONFIRMED,
 ) -> ShiftAssignment:
     assignment = ShiftAssignment(
@@ -148,7 +149,7 @@ async def _seat(
         organization_id=org.id,
         shift_id=shift.id,
         user_id=user.id,
-        position=ShiftPosition.FIREFIGHTER,
+        position=position,
         assignment_status=assignment_status,
     )
     db_session.add(assignment)
@@ -256,6 +257,31 @@ class TestCloseoutBacklog:
 
         assert value == "0"
 
+    # The age has to be measured from the instant that made the shift eligible,
+    # not from its start. With a seventy-two hour cushion, dating an open-ended
+    # shift from its start announced it as three days overdue the moment it
+    # first appeared in the backlog.
+    async def test_dates_an_open_ended_shift_from_the_end_of_its_cushion(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        org.settings = {
+            **(org.settings or {}),
+            "shift_reports": {"checklist_timing": {"checkin_closes_hours_after": 72}},
+        }
+        await db_session.flush()
+        admin = await _admin(db_session, org)
+        # Started four days ago, so it cleared the seventy-two hour cushion a
+        # day ago: one day overdue, not four.
+        await _shift(db_session, org, start=NOW - timedelta(days=4), end=None)
+
+        value, context = await _metric(
+            db_session, org, admin, "shifts_needing_closeout"
+        )
+
+        assert value == "1"
+        assert "waiting 1 day" in context
+
     async def test_ignores_a_finalized_shift(self, db_session):
         org = await _org(db_session)
         admin = await _admin(db_session, org)
@@ -357,15 +383,16 @@ class TestShortStaffed:
 
         assert value == "0"
 
-    # "Crew size not set" is the absence of a staffing level, not one of them.
-    # Treating a missing minimum as short-staffed would open the page on a wall
-    # of red for a department that has configured nothing.
-    async def test_ignores_a_shift_that_stated_neither_seats_nor_a_minimum(
+    # A shift that states neither seats nor a minimum still needs somebody on
+    # it. `filter_shifts_with_open_positions` falls back to one, which is the
+    # answer the open-shifts list and the staffing report already give — so an
+    # empty shift counts, and stops counting the moment anyone is on it.
+    async def test_an_empty_shift_that_stated_nothing_still_needs_somebody(
         self, db_session
     ):
         org = await _org(db_session)
         admin = await _admin(db_session, org)
-        await _shift(
+        shift = await _shift(
             db_session,
             org,
             start=NOW + timedelta(days=1),
@@ -375,7 +402,11 @@ class TestShortStaffed:
         )
 
         value, _ = await _metric(db_session, org, admin, "understaffed_shifts")
+        assert value == "1"
 
+        await _seat(db_session, org, shift, await _member(db_session, org))
+
+        value, _ = await _metric(db_session, org, admin, "understaffed_shifts")
         assert value == "0"
 
     async def test_a_declined_assignment_does_not_hold_a_seat(self, db_session):
@@ -426,7 +457,8 @@ class TestShortStaffed:
         assert value == "1"
 
     # The seat list wins over min_staffing where both exist, so a shift that
-    # names three seats is not judged against a department-wide default of six.
+    # names two seats is not judged against a department-wide default of six —
+    # but only once the people on it hold *those* seats.
     async def test_the_seat_list_outranks_the_department_minimum(self, db_session):
         org = await _org(db_session)
         admin = await _admin(db_session, org)
@@ -441,8 +473,72 @@ class TestShortStaffed:
                 {"position": "driver", "required": True},
             ],
         )
+        await _seat(
+            db_session,
+            org,
+            shift,
+            await _member(db_session, org),
+            position=ShiftPosition.OFFICER,
+        )
+        await _seat(
+            db_session,
+            org,
+            shift,
+            await _member(db_session, org),
+            position=ShiftPosition.DRIVER,
+        )
+
+        value, _ = await _metric(db_session, org, admin, "understaffed_shifts")
+
+        assert value == "0"
+
+    # A headcount says this shift is covered; it is not. Two firefighters on an
+    # Officer/Driver shift leave both named seats empty, and the seat that
+    # matters is always the empty one. Counting bodies hid that, which is why
+    # this reads through the same matcher the open-shifts list uses.
+    async def test_the_right_number_of_people_in_the_wrong_seats_is_short(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        shift = await _shift(
+            db_session,
+            org,
+            start=NOW + timedelta(days=1),
+            end=NOW + timedelta(days=1, hours=12),
+            positions=[
+                {"position": "officer", "required": True},
+                {"position": "driver", "required": True},
+            ],
+        )
         await _seat(db_session, org, shift, await _member(db_session, org))
         await _seat(db_session, org, shift, await _member(db_session, org))
+
+        value, _ = await _metric(db_session, org, admin, "understaffed_shifts")
+
+        assert value == "1"
+
+    # A slot the department marked optional is not a shortage.
+    async def test_an_optional_seat_is_not_a_shortage(self, db_session):
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        shift = await _shift(
+            db_session,
+            org,
+            start=NOW + timedelta(days=1),
+            end=NOW + timedelta(days=1, hours=12),
+            positions=[
+                {"position": "officer", "required": True},
+                {"position": "driver", "required": False},
+            ],
+        )
+        await _seat(
+            db_session,
+            org,
+            shift,
+            await _member(db_session, org),
+            position=ShiftPosition.OFFICER,
+        )
 
         value, _ = await _metric(db_session, org, admin, "understaffed_shifts")
 
@@ -450,6 +546,7 @@ class TestShortStaffed:
 
     # An empty list is not a crew of nobody — it is a shift that named no seats,
     # which falls through to the minimum exactly as a null does.
+    #
     async def test_an_empty_seat_list_falls_through_to_the_minimum(self, db_session):
         org = await _org(db_session)
         admin = await _admin(db_session, org)
@@ -666,7 +763,7 @@ class TestAttentionQueue:
         assert item.severity == "warning"
         assert item.count == 1
         assert item.oldest_age_days == 3
-        assert item.href == "/scheduling?tab=requests&view=swaps"
+        assert item.href == "/scheduling?tab=requests&requestView=swaps"
 
     async def test_raises_a_time_off_request_awaiting_review(self, db_session):
         org = await _org(db_session)
@@ -692,8 +789,9 @@ class TestAttentionQueue:
         assert item.oldest_age_days == 1
         # Names the view, not just the tab: RequestsTab opens on swaps, so this
         # landed an officer on "No swap requests" after clicking a time-off
-        # warning.
-        assert item.href == "/scheduling?tab=requests&view=timeoff"
+        # warning. `requestView`, because SchedulingPage owns `view` for the
+        # calendar mode and rewrites it out from under this one.
+        assert item.href == "/scheduling?tab=requests&requestView=timeoff"
 
     async def test_ignores_a_decided_request(self, db_session):
         org = await _org(db_session)

@@ -649,10 +649,23 @@ anyone looks for a link. They are the two Inventory cards above.
 `ModuleSpec` in `backend/app/services/admin_hub_service.py`: shifts still to
 close out, short-staffed shifts, hours this month, shifts ahead, and requests
 waiting. The queue raises short-staffed shifts inside 48 hours, pending swaps
-and pending time-off. Short-staffing counts only shifts that state a
-`min_staffing` — a shift naming neither positions nor a minimum has never said
-how big its crew is, and the board treats that as "crew size not set" rather
-than as a staffing level.
+and pending time-off.
+
+**Short-staffing is not a headcount.** It reads through
+`SchedulingService.filter_shifts_with_open_positions`, the same method behind
+the open-shifts list and the staffing report, which matches each _required_
+slot against a held position and consumes it. A headcount would call a two-seat
+Officer/Driver shift carrying two firefighters covered — the seat that matters
+is the empty one. That method also drops slots marked `required: false`,
+normalizes the legacy list-of-strings form of the column, and falls back to
+`min_staffing`, then the apparatus default, then one. The window is a week at
+most, so the rows are loaded and matched in Python rather than reduced to two
+counts in SQL.
+
+> Note the fallback of **one**: a shift stating neither seats nor a minimum
+> still needs somebody, so an empty one counts and stops counting the moment
+> anyone is on it. The board presents such a shift as "crew size not set" and
+> shows no shortage; that difference is the board's, and predates this.
 
 ### The Shift Board _(2026-08-23)_
 
