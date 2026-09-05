@@ -99,6 +99,64 @@ which merged before a review of it came back.
   every module in `MODULE_REGISTRY` does this; scheduling did not introduce it,
   and correcting only scheduling would make it the one module that disagrees with
   the rest. Worth its own change.
+### The Events page invited members to create an event (2026-09-05)
+
+**Fixed**
+
+- **An empty Events list told every member to "Get started by creating a new
+  event."** The Create Event button beside it was already officer-only, so the
+  copy was an instruction nobody without `events.manage` could follow, and
+  `/events/new` bounces them to the access-denied page. The prompt is now shown
+  only to someone who can act on it.
+
+**Changed**
+
+- **With no events at all, a member now sees a blank list** rather than an
+  empty-state card whose default copy and only action are both invitations to
+  create. An empty result that follows from a search, a type filter, the Past
+  toggle or My Events is still reported to everyone — that is feedback on what
+  they asked for.
+
+### Requesting gear no longer requires knowing the department's name for it (2026-09-05)
+
+**Changed**
+
+- **The request form now browses.** It loads the department's gear the moment
+  it opens and offers the real category names as filters, so a member who does
+  not know what to type is no longer looking at an empty box. Search matches
+  the category and product-group names as well as the item's own — typing
+  "shirt" now finds a garment the catalog files as "Long Sleeve", which
+  previously returned nothing.
+- **One row per product, not one per stocked size.** A shirt kept in seven
+  sizes and two colours was fourteen near-identical lines to scroll; it is now
+  one line, with the sizes asked for as their own step after the product is
+  chosen. Serialized gear collapses the same way: ten radios read as "Portable
+  Radio — 7 on hand" rather than ten indistinguishable rows.
+- **The size step starts from the sizes you have on file.** A member with a
+  shirt size recorded has that size preselected, matched through the same alias
+  table the impact planner uses — so "Large" on file selects the row the
+  quartermaster stored as "L" — and any other size the department stocks is one
+  tap away.
+
+**Added**
+
+- **You can ask for gear that is out of stock, or not carried at all.** The
+  form was pinned to items marked available, so the one need a quartermaster
+  has no other way to learn about — a size or an item the department does not
+  hold — could not be recorded. Out-of-stock sizes now stay selectable and are
+  labelled as such, a member's own size is offered even when nothing is stocked
+  in it, and a free-text line covers gear that is not in the catalog. Requests
+  carry the size asked for as its own field, so a request with no matching
+  catalog row still tells the quartermaster exactly what was wanted; the review
+  screen says so explicitly.
+
+**Fixed**
+
+- **Rank- and position-restricted gear is filtered by the server**, not by the
+  browser after the fact. The old form listed restricted items and let the
+  member submit a request the API then refused, and the item's existence was
+  disclosed to everyone regardless.
+
 
 ### Scheduling administration moved into the Administration section (2026-09-05)
 
@@ -296,6 +354,32 @@ which merged before a review of it came back.
   supersedes it. **Schema:** `notification_logs.sent_at` is
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
+
+### Departments can name their own call types (2026-09-05)
+
+**Added**
+
+- **The nine call types on the shift close-out screen are now editable.** They
+  have been per-department data since call tracking shipped, stored in the
+  organization's settings and writable through the API — but nothing in the UI
+  could reach them, so a department that does not run EMS, or one that calls
+  them "Alarm Activation" rather than "Alarm / Good Intent", had no way to say
+  so. **Administration → Scheduling Admin → General → Call types** renames, reorders,
+  adds, retires and deletes them.
+- **Retiring, rather than deleting.** The stored value on every call ever filed
+  is the type's permanent slug, so deleting a type in use would leave that
+  history pointing at something nothing can label. A type with calls or a filed
+  shift report behind it can only be turned off — which takes it off the
+  close-out screen and leaves every report that names it intact. Delete stays
+  available for a type nothing refers to. Retiring every type is how a
+  department asks close-out for a bare total with no breakdown.
+- **Reports and the end-of-shift email now use the department's own names.**
+  The call-volume report, its CSV export, the shift-report call-type badges,
+  the printable report and the summary email all showed the stored slug —
+  `mutual_aid`, or `alarm` for a type the department had renamed. Retired types
+  are named too, so a report covering last year still reads properly. A report
+  written under per-incident tracking keeps the officer's own wording, which is
+  never rewritten to match a type whose slug happens to look the same.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 

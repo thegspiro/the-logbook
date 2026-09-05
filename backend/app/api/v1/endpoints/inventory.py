@@ -158,6 +158,7 @@ from app.schemas.inventory import (
     ReorderRequestResponse,
     ReorderRequestUpdate,
     ReorderTransitionRequest,
+    RequestableCatalogResponse,
     ResolveClearanceItemRequest,
     ReturnRequestCreate,
     ReturnRequestResponse,
@@ -3565,6 +3566,38 @@ async def complete_departure_clearance(
 # ============================================
 
 
+@router.get("/requestable-catalog", response_model=RequestableCatalogResponse)
+async def get_requestable_catalog(
+    search: str | None = Query(None, description="Free-text search across the catalog"),
+    category_id: UUID | None = Query(None, description="Limit to one category"),
+    limit: int = Query(60, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    The gear a member can request, grouped into products with their sizes.
+
+    Distinct from ``GET /items``, which is the quartermaster's flat catalog.
+    A member picking gear needs one row per product with the sizes behind it,
+    a search that also matches the category and variant-group names, and
+    out-of-stock variants left in so an unmet need can be recorded.
+
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    products = await service.get_requestable_catalog(
+        organization_id=current_user.organization_id,
+        user=current_user,
+        search=search,
+        category_id=category_id,
+        limit=limit,
+    )
+    categories = await service.get_requestable_categories(
+        current_user.organization_id, current_user
+    )
+    return RequestableCatalogResponse(products=products, categories=categories)
+
+
 @router.post("/requests", status_code=status.HTTP_201_CREATED)
 async def create_equipment_request(
     request_data: EquipmentRequestCreate,
@@ -3656,6 +3689,7 @@ async def create_equipment_request(
             "checkout" if request_data.requested_duration == "temporary" else "issuance"
         ),
         requested_duration=request_data.requested_duration,
+        requested_size=(request_data.requested_size or "").strip() or None,
         priority=request_data.priority,
         reason=request_data.reason,
     )
@@ -3672,6 +3706,7 @@ async def create_equipment_request(
             "request_id": str(req.id),
             "item_name": req.item_name,
             "requested_duration": request_data.requested_duration,
+            "requested_size": req.requested_size,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3787,6 +3822,7 @@ async def list_equipment_requests(
                     else r.request_type.value
                 ),
                 "requested_duration": r.requested_duration,
+                "requested_size": r.requested_size,
                 "priority": (
                     r.priority if isinstance(r.priority, str) else r.priority.value
                 ),

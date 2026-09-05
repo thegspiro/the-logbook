@@ -24,6 +24,7 @@ vi.mock('../../../services/api', () => ({
 
 import { useSchedulingStore } from './schedulingStore';
 import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
+import { UserStatus } from '../../../constants/enums';
 
 describe('schedulingStore', () => {
   beforeEach(() => {
@@ -291,6 +292,119 @@ describe('schedulingStore', () => {
     it('is empty rather than absent when the server sends no types', async () => {
       await useSchedulingStore.getState().loadSettings();
       expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+    });
+  });
+
+  describe('resetSettings', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('lets the next sign-in re-fetch rather than reusing the cache', async () => {
+      // On a shared station computer the tab outlives the member. Without the
+      // reset, `settingsLoaded` short-circuits the fetch and the next member
+      // reads the previous department's settings.
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: true,
+        call_tracking: { mode: 'count_only', call_types: [{ slug: 'fire', label: 'Fire' }] },
+      });
+      await useSchedulingStore.getState().loadSettings();
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
+
+      useSchedulingStore.getState().resetSettings();
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+      expect(useSchedulingStore.getState().platoonsEnabled).toBe(false);
+      expect(useSchedulingStore.getState().callTrackingMode).toBe('detailed');
+
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        call_tracking: { mode: 'count_only', call_types: [{ slug: 'brush', label: 'Brush' }] },
+      });
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({ brush: 'Brush' });
+    });
+  });
+
+  describe('resetSettings against an in-flight request', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('drops a response that started before the account changed', async () => {
+      // Nulling the shared promise neither cancels the request nor stops its
+      // closure running, so without a generation check the response lands
+      // after the reset and repopulates the previous department's values with
+      // `settingsLoaded` true — the leak the reset exists to close.
+      let release: (v: unknown) => void = () => {};
+      mockGetFeatureSettings.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        })
+      );
+
+      const inFlight = useSchedulingStore.getState().loadSettings();
+      useSchedulingStore.getState().resetSettings();
+
+      release({
+        platoons_enabled: true,
+        call_tracking: { mode: 'count_only', call_types: [{ slug: 'fire', label: 'Fire' }] },
+      });
+      await inFlight;
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+      expect(useSchedulingStore.getState().platoonsEnabled).toBe(false);
+    });
+
+    it('drops an in-flight roster that started under the previous account', async () => {
+      // Clearing the state does nothing to a request already awaiting a
+      // response: it lands afterwards and writes the previous department's
+      // roster back in, with its loaded flag set so nothing refetches.
+      let release: (v: unknown) => void = () => {};
+      mockGetUsers.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        })
+      );
+
+      const inFlight = useSchedulingStore.getState().loadMembers();
+      useSchedulingStore.getState().resetSettings();
+
+      release([{ id: 'u1', first_name: 'Prior', last_name: 'Member', status: UserStatus.ACTIVE }]);
+      await inFlight;
+
+      expect(useSchedulingStore.getState().members).toEqual([]);
+      expect(useSchedulingStore.getState().membersLoaded).toBe(false);
+    });
+
+    it('clears every organization-scoped value, not just the settings', () => {
+      // `loadInitialData` skips a fetch whose loaded flag is set, so a
+      // surviving roster is served to the next account.
+      useSchedulingStore.setState({
+        members: [{ id: 'u1' }] as never,
+        membersLoaded: true,
+        templates: [{ id: 't1' }] as never,
+        templatesLoaded: true,
+        apparatus: [{ id: 'a1' }] as never,
+        apparatusLoaded: true,
+        summary: { total: 1 } as never,
+      });
+
+      useSchedulingStore.getState().resetSettings();
+
+      const s = useSchedulingStore.getState();
+      expect(s.members).toEqual([]);
+      expect(s.membersLoaded).toBe(false);
+      expect(s.templates).toEqual([]);
+      expect(s.templatesLoaded).toBe(false);
+      expect(s.apparatus).toEqual([]);
+      expect(s.apparatusLoaded).toBe(false);
+      expect(s.summary).toBeNull();
     });
   });
 

@@ -428,6 +428,11 @@ class InventoryService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Per-request memo for the requestable catalog's eligibility check.
+        # The service is constructed per request, so this cannot outlive the
+        # caller whose rank/positions it holds.
+        self._rank_order_cache: Optional[Tuple[str, Optional[int]]] = None
+        self._position_slug_cache: Optional[Tuple[str, Set[str]]] = None
 
     async def _next_barcode_in_series(
         self,
@@ -7646,6 +7651,489 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Error issuing kit: {e}")
             return None, str(e)
+
+    # ============================================
+    # Requestable Catalog
+    # ============================================
+
+    # Keywords that decide which stored member size a product should default
+    # from. Checked against the product name and its category name, most
+    # specific domain first, so a "Turnout Coat" filed under "Structural PPE"
+    # defaults from the jacket size rather than falling through to shirt.
+    _SIZE_FIELD_KEYWORDS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+        ("boot", ("boot", "shoe", "footwear", "sneaker")),
+        ("glove", ("glove", "gauntlet", "mitt")),
+        ("hat", ("hat", "cap", "helmet", "beanie", "headwear")),
+        ("jacket", ("jacket", "coat", "parka", "vest", "hoodie", "sweatshirt")),
+        # Shirts are matched before trousers, and the order is load-bearing:
+        # "short" is a substring of "Short Sleeve", so with pants first the
+        # commonest summer uniform shirt in the catalog was classified as
+        # trousers and offered the member's waist and inseam. Nothing in the
+        # shirt list is a substring of a trouser name ("Shorts" contains
+        # neither "shirt" nor "sleeve"), so shorts still reach the pant rule.
+        ("shirt", ("shirt", "polo", "tee", "t-shirt", "sleeve", "blouse")),
+        ("pant", ("pant", "trouser", "short")),
+    )
+
+    # Canonical display order for alpha sizes. Numeric sizes sort numerically
+    # and anything unrecognised sorts last, alphabetically.
+    _ALPHA_SIZE_ORDER = {
+        code: index
+        for index, code in enumerate(
+            ("xxs", "xs", "s", "m", "l", "xl", "xxl", "xxxl", "xxxxl")
+        )
+    }
+
+    # Upper bound on the rows the catalog groups in one call. Grouping happens
+    # in Python, so the query cannot be the thing that bounds it -- a LIMIT
+    # would cut a product's sizes in half rather than drop whole products. A
+    # department's gear catalog is orders of magnitude under this; the cap is
+    # here so a runaway import cannot turn one member's request modal into an
+    # unbounded read.
+    _REQUESTABLE_ROW_CAP = 2000
+
+    @classmethod
+    def _variant_sort_key(cls, size: Optional[str]) -> Tuple[int, float, str]:
+        """Order variants the way a size chart reads, not alphabetically."""
+        key = cls._normalize_size_key(size)
+        if not key or key == "one_size":
+            return (0, 0.0, "")
+        if key in cls._ALPHA_SIZE_ORDER:
+            return (1, float(cls._ALPHA_SIZE_ORDER[key]), "")
+        try:
+            return (2, float(key), "")
+        except ValueError:
+            return (3, 0.0, key)
+
+    @classmethod
+    def _infer_size_field(
+        cls, name: str, category_name: Optional[str]
+    ) -> Optional[str]:
+        """Which stored member size a product should default from, if any."""
+        haystack = f"{name} {category_name or ''}".lower()
+        for field, keywords in cls._SIZE_FIELD_KEYWORDS:
+            if any(keyword in haystack for keyword in keywords):
+                return field
+        return None
+
+    @staticmethod
+    def _product_base_name(item: InventoryItem) -> str:
+        """The product name behind a variant row's decorated item name.
+
+        ``create_size_variants`` names its output ``base — Size — Colour —
+        Style`` with an em dash, so the segment before the first separator is
+        the product. The split is only applied to a row that actually carries
+        a variant axis: an item legitimately named "Halligan — 30 inch" has no
+        size, colour or style and keeps its whole name.
+        """
+        name = (item.name or "").strip()
+        carries_variant_axis = bool(
+            item.size or item.standard_size or item.color or item.style
+        )
+        if carries_variant_axis and " — " in name:
+            return name.split(" — ")[0].strip() or name
+        return name
+
+    @classmethod
+    def _requestable_available(cls, item: InventoryItem) -> int:
+        """Units of *item* a member could actually be handed today.
+
+        Gated on the same status and condition sets ``issue_from_pool``
+        enforces, not merely on the row being active. A pool item in
+        maintenance, lost, stolen or in an unserviceable condition still
+        carries its ledger quantity, so counting that quantity advertises stock
+        the issuance path then refuses — a false "12 on hand" that a member
+        requests against and a quartermaster cannot fill.
+
+        Pool stock otherwise reads from whichever ledger is live for the item
+        (see ``_attach_lot_stock``); a serialized unit is one unit, and only
+        while nobody else holds it.
+        """
+        if item.status in _UNISSUABLE_STATUSES or item.condition in (
+            _UNISSUABLE_CONDITIONS
+        ):
+            return 0
+        if getattr(item, "is_lot_stocked", False):
+            return int(getattr(item, "lot_stock", 0) or 0)
+        if cls._enum_value(item.tracking_type) == TrackingType.POOL.value:
+            return max(int(item.quantity or 0), 0)
+        return 1 if cls._enum_value(item.status) == ItemStatus.AVAILABLE.value else 0
+
+    async def get_requestable_catalog(
+        self,
+        organization_id: UUID,
+        user: User,
+        search: Optional[str] = None,
+        category_id: Optional[UUID] = None,
+        limit: int = 60,
+    ) -> List[Dict[str, Any]]:
+        """The gear a member can ask for, grouped into products with sizes.
+
+        The flat item list is the wrong shape for a member: a shirt stocked in
+        seven sizes and two colours is fourteen rows of near-identical text,
+        and a member who does not know the department's name for a thing gets
+        nothing back at all. This returns one entry per product -- variants
+        collapsed by size/colour/style, on-hand counts summed -- and matches a
+        search against the category and variant-group names as well as the
+        item's own, so "shirt" finds a product the catalog calls "Long Sleeve".
+
+        Out-of-stock variants are included deliberately. A request for
+        something the department does not currently hold is how the
+        quartermaster learns the need exists; hiding it is how the need stays
+        invisible.
+        """
+        query = (
+            select(InventoryItem)
+            .outerjoin(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .outerjoin(
+                ItemVariantGroup,
+                ItemVariantGroup.id == InventoryItem.variant_group_id,
+            )
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.active.is_(True),
+                InventoryItem.status != ItemStatus.RETIRED,
+                # Gear and uniforms only -- medical stock is requested through
+                # its own page, as everywhere else in this module.
+                self._outside_domains(organization_id, MEDICAL_ITEM_TYPES),
+            )
+            .options(
+                selectinload(InventoryItem.category),
+                selectinload(InventoryItem.variant_group),
+            )
+        )
+
+        if category_id:
+            query = query.where(InventoryItem.category_id == str(category_id))
+
+        if search and search.strip():
+            term = like_pattern(search.strip())
+            query = query.where(
+                or_(
+                    InventoryItem.name.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.description.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.manufacturer.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.model_number.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.color.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    # The two joins are the point of this endpoint: a member
+                    # searches for the kind of thing they need ("uniform",
+                    # "polo"), which is the category or the variant group's
+                    # name, not the decorated per-size item name.
+                    InventoryCategory.name.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    ItemVariantGroup.name.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                )
+            )
+
+        query = query.order_by(InventoryItem.name.asc(), InventoryItem.id.asc())
+        query = query.limit(self._REQUESTABLE_ROW_CAP)
+
+        items = list((await self.db.execute(query)).scalars().unique().all())
+        await self._attach_lot_stock(str(organization_id), items)
+
+        eligible = [
+            item
+            for item in items
+            if await self._member_may_request(item, organization_id, user)
+        ]
+
+        products = self._group_requestable(eligible)
+        prefs = await self.get_member_size_preferences(
+            UUID(str(user.id)), organization_id
+        )
+        for product in products:
+            self._apply_member_size(product, prefs)
+
+        products.sort(key=lambda product: product["name"].casefold())
+        return products[:limit]
+
+    async def get_requestable_categories(
+        self, organization_id: UUID, user: User
+    ) -> List[Dict[str, str]]:
+        """Categories that actually hold requestable gear.
+
+        Browsing is the point of the request form, so the chips have to be the
+        department's own words for its stock. Categories with nothing in them
+        are dropped: an empty chip reads as a broken filter.
+        """
+        rows = (
+            await self.db.execute(
+                select(
+                    InventoryCategory.id,
+                    InventoryCategory.name,
+                    InventoryItem.min_rank_order,
+                    InventoryItem.restricted_to_positions,
+                )
+                .join(InventoryItem, InventoryItem.category_id == InventoryCategory.id)
+                .where(
+                    InventoryCategory.organization_id == str(organization_id),
+                    InventoryCategory.item_type.notin_(list(MEDICAL_ITEM_TYPES)),
+                    InventoryItem.organization_id == str(organization_id),
+                    InventoryItem.active.is_(True),
+                    InventoryItem.status != ItemStatus.RETIRED,
+                )
+                .order_by(InventoryCategory.name.asc())
+            )
+        ).all()
+
+        # Eligibility-filtered, for the same reason the product list is: a
+        # category holding nothing but rank- or position-restricted gear would
+        # otherwise appear as a chip that discloses the restricted stock exists
+        # and then filters to an empty list. The restriction columns are
+        # carried on the row so the check runs without a second query.
+        offered: Dict[str, str] = {}
+        for category_id, name, min_rank_order, restricted_positions in rows:
+            if category_id in offered:
+                continue
+            if await self._passes_restrictions(
+                min_rank_order, restricted_positions, organization_id, user
+            ):
+                offered[category_id] = name
+        return [{"id": cid, "name": name} for cid, name in offered.items()]
+
+    async def _member_may_request(
+        self, item: InventoryItem, organization_id: UUID, user: User
+    ) -> bool:
+        """Whether *user* clears an item's rank/position restriction.
+
+        Mirrors the check ``POST /inventory/requests`` enforces -- either
+        qualifier grants access. Applying it here as well is not belt and
+        braces: without it the modal lists gear the member is then refused at
+        submit, and the restricted item's existence leaks to everyone.
+        """
+        return await self._passes_restrictions(
+            item.min_rank_order, item.restricted_to_positions, organization_id, user
+        )
+
+    async def _passes_restrictions(
+        self,
+        min_rank_order: Optional[int],
+        restricted_positions: Optional[List[str]],
+        organization_id: UUID,
+        user: User,
+    ) -> bool:
+        """The restriction rule itself, over the two columns that carry it.
+
+        Taken as loose values rather than an item so the category chips can
+        apply exactly the same rule from a projected row -- one implementation,
+        because two would drift and the disclosure this closes is the kind that
+        reopens silently.
+        """
+        positions = restricted_positions or []
+        if min_rank_order is None and not positions:
+            return True
+
+        if min_rank_order is not None:
+            rank_order = await self._member_rank_order(organization_id, user)
+            if rank_order is not None and rank_order <= min_rank_order:
+                return True
+
+        if positions:
+            slugs = await self._member_position_slugs(organization_id, user)
+            if slugs & set(positions):
+                return True
+
+        return False
+
+    async def _member_rank_order(
+        self, organization_id: UUID, user: User
+    ) -> Optional[int]:
+        """The caller's rank sort order, resolved once per request."""
+        cached = self._rank_order_cache
+        if cached is not None and cached[0] == str(user.id):
+            return cached[1]
+        order = None
+        if user.rank:
+            order = (
+                await self.db.execute(
+                    select(OperationalRank.sort_order).where(
+                        OperationalRank.organization_id == str(organization_id),
+                        OperationalRank.rank_code == user.rank,
+                    )
+                )
+            ).scalar_one_or_none()
+        self._rank_order_cache = (str(user.id), order)
+        return order
+
+    async def _member_position_slugs(
+        self, organization_id: UUID, user: User
+    ) -> Set[str]:
+        """The caller's position slugs, resolved once per request."""
+        cached = self._position_slug_cache
+        if cached is not None and cached[0] == str(user.id):
+            return cached[1]
+        slugs = set(
+            (
+                await self.db.execute(
+                    select(Position.slug)
+                    .join(user_positions, Position.id == user_positions.c.position_id)
+                    .where(
+                        user_positions.c.user_id == str(user.id),
+                        Position.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        self._position_slug_cache = (str(user.id), slugs)
+        return slugs
+
+    @classmethod
+    def _group_requestable(cls, items: List[InventoryItem]) -> List[Dict[str, Any]]:
+        """Collapse catalog rows into products, and rows into size variants.
+
+        Two levels of collapsing, and both matter. Products group rows that are
+        the same thing in different sizes; variants then group the rows *within*
+        a product that share a size/colour/style, which is what turns ten
+        serialized radios into "Portable Radio -- 7 available" instead of ten
+        indistinguishable lines.
+        """
+        products: Dict[str, Dict[str, Any]] = {}
+
+        for item in items:
+            base_name = cls._product_base_name(item)
+            if item.variant_group_id and item.variant_group is not None:
+                product_key = f"vg:{item.variant_group_id}"
+                product_name = item.variant_group.name or base_name
+            else:
+                product_key = f"nm:{item.category_id or ''}:{base_name.casefold()}"
+                product_name = base_name
+
+            product = products.get(product_key)
+            if product is None:
+                product = {
+                    "key": product_key,
+                    "name": product_name,
+                    "description": item.description,
+                    "category_id": item.category_id,
+                    "category_name": item.category.name if item.category else None,
+                    "tracking_type": cls._enum_value(item.tracking_type),
+                    "size_field": cls._infer_size_field(
+                        product_name, item.category.name if item.category else None
+                    ),
+                    "member_size": None,
+                    "suggested_size": None,
+                    "total_available": 0,
+                    "variants": [],
+                    "_variants": {},
+                }
+                products[product_key] = product
+
+            # A product holding any pool row is quantity-requestable; the
+            # quantity field on the form keys off this.
+            if cls._enum_value(item.tracking_type) == TrackingType.POOL.value:
+                product["tracking_type"] = TrackingType.POOL.value
+
+            size_value = cls._item_stock_size_value(item)
+            variant_key = (
+                cls._normalize_size_key(size_value),
+                (item.color or "").casefold(),
+                cls._enum_value(item.style) or "",
+            )
+            available = cls._requestable_available(item)
+
+            variant = product["_variants"].get(variant_key)
+            if variant is None:
+                variant = {
+                    "item_id": item.id,
+                    "size": size_value,
+                    "size_label": _size_label(size_value) if size_value else None,
+                    "color": item.color,
+                    "style": cls._enum_value(item.style),
+                    "available": 0,
+                }
+                product["_variants"][variant_key] = variant
+            elif available > 0 and variant["available"] == 0:
+                # Point the variant at a row that can actually be handed over.
+                # Which row represents a serialized variant is otherwise
+                # arbitrary, and an out-of-service unit would be the one the
+                # quartermaster is offered at fulfillment.
+                variant["item_id"] = item.id
+
+            variant["available"] += available
+            product["total_available"] += available
+
+        ordered: List[Dict[str, Any]] = []
+        for product in products.values():
+            variants = sorted(
+                product.pop("_variants").values(),
+                key=lambda variant: (
+                    cls._variant_sort_key(variant["size"]),
+                    (variant["color"] or ""),
+                    (variant["style"] or ""),
+                ),
+            )
+            product["variants"] = variants
+            product["has_sizes"] = any(variant["size"] for variant in variants)
+            ordered.append(product)
+        return ordered
+
+    @staticmethod
+    def _size_qualifier(value: Optional[str]) -> str:
+        """The parenthetical part of a size, normalised — "" when there is none.
+
+        Separate from :meth:`_normalize_size_key`, which deliberately discards
+        it: matching demand to stock wants "10 (wide)" and "10" in the same
+        bucket, while *suggesting* one to a member must not treat them as the
+        same thing.
+        """
+        if not value or "(" not in value:
+            return ""
+        return " ".join(value.split("(", 1)[1].split(")", 1)[0].lower().split())
+
+    @classmethod
+    def _member_size_label(cls, value: str) -> str:
+        """A member's stored size, written the way the rest of the app writes it.
+
+        Preferences hold "l"/"xl" while every other screen shows "L"/"XL", so
+        the raw value shows a member a size the application does not otherwise
+        use. Only a value that resolves to a known alpha code is rewritten:
+        `_size_label` alone would uppercase a member who typed "Large" into
+        "LARGE", and a compound value ("34 x 32", "10 (wide)") carries detail
+        that normalising would drop.
+        """
+        key = cls._normalize_size_key(value)
+        if key in cls._ALPHA_SIZE_ORDER:
+            return _size_label(key)
+        return value
+
+    @classmethod
+    def _apply_member_size(
+        cls, product: Dict[str, Any], prefs: Optional[MemberSizePreferences]
+    ) -> None:
+        """Fill in the member's own size and the variant it should preselect.
+
+        ``member_size`` is reported even when nothing matches: a member whose
+        boot size is 10.5 in a catalog stocked to 10 needs to see that, and the
+        quartermaster needs the request to say it.
+        """
+        if not product["has_sizes"]:
+            return
+        member_size = cls._format_needed_size(prefs, product["size_field"])
+        if not member_size:
+            return
+        product["member_size"] = cls._member_size_label(member_size)
+        # A qualifier the member carries and the stock does not is a real
+        # difference, not noise. `_normalize_size_key` drops the parenthetical
+        # so demand can be bucketed against stock, which is right for the
+        # planner and wrong here: boot "10 (wide)" would match a plain "10",
+        # preselect it, suppress the unstocked option, and submit a request
+        # that has silently lost the width — the one thing the quartermaster
+        # cannot reconstruct.
+        wanted = cls._normalize_size_key(member_size)
+        member_qualifier = cls._size_qualifier(member_size)
+        for variant in product["variants"]:
+            if not variant["size"]:
+                continue
+            if cls._normalize_size_key(variant["size"]) != wanted:
+                continue
+            if cls._size_qualifier(variant["size"]) != member_qualifier:
+                continue
+            product["suggested_size"] = variant["size"]
+            return
 
     # ============================================
     # Equipment Request Fulfillment
