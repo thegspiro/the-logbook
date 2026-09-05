@@ -904,10 +904,19 @@ def _false_claims(sources: dict[str, str]) -> list[str]:
             named = set(re.findall(r"[a-z_]{4,}", block)) & model_tables
             for table in sorted(named):
                 built_by = creators.get(table, set()) & forebears
-                if built_by:
+                # A block that names the creating revision is refuting the
+                # claim, not making it -- pitfall #26's own worked example is
+                # prose that states the create_all-only reading in order to
+                # reject it, and the shape-based pattern cannot tell a
+                # refutation from an assertion. Citing the revision is the
+                # signal, because it is exactly the fact this check exists to
+                # establish: an author who names it has done the lookup, and
+                # the only way to silence the check is to be right.
+                unacknowledged = {rev for rev in built_by if rev not in block}
+                if unacknowledged:
                     offenders.append(
                         f"{name} says `{table}` is create_all-only, but "
-                        f"{sorted(built_by)[0]} creates it and is an ancestor"
+                        f"{sorted(unacknowledged)[0]} creates it and is an ancestor"
                     )
     return offenders
 
@@ -1003,6 +1012,31 @@ class TestTheClaimDetection:
         start reporting sentences that assert the opposite, or say nothing about
         creation at all. A check that flags correct prose gets deleted."""
         assert not self._plant(innocuous), f"false positive on: {innocuous!r}"
+
+    def test_a_refutation_that_names_the_creating_revision_is_allowed(self):
+        """The case that took `main` red on 2026-09-05.
+
+        `d5f2b8c04a19` documents pitfall #26's own trap: it states the
+        create_all-only reading of `positions` in order to reject it, and cites
+        `20260805_0008`, the rename that builds the table. Shape-based
+        recognition cannot tell that from an assertion -- both are a negation
+        near "migration" near a creation verb -- so the check reported prose
+        that is not merely correct but is the worked example the pitfall exists
+        to teach.
+        """
+        assert not self._plant(
+            "positions looks create_all-only -- no migration creates it under "
+            "that name -- but 20260805_0008 renames roles into it."
+        )
+
+    def test_naming_an_unrelated_revision_does_not_excuse_the_claim(self):
+        """The escape hatch is narrow on purpose: it opens only for the
+        revision that actually creates the table, so it cannot be worked around
+        by citing some other revision, and an author who opens it has by
+        definition done the lookup the check asks for."""
+        assert self._plant(
+            "positions is a model-only table; see 20260809_0001 for context."
+        )
 
     def test_a_sibling_is_not_an_ancestor(self):
         """The bug this replaced: a linear walk gives siblings adjacent
