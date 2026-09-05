@@ -6233,8 +6233,8 @@ class SchedulingService:
         self,
         user_id: UUID | str,
         organization_id: UUID | str,
-        start_date: date,
-        end_date: date,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> Dict[Tuple[int, int], Dict[str, Any]]:
         """One member's worked hours and call credit, bucketed by month.
 
@@ -6242,6 +6242,12 @@ class SchedulingService:
         span a year boundary in one query: "last month" in January is
         December of the previous year, and a member checking the month that
         just ended should not have to change a year selector to find it.
+
+        Either bound may be omitted for an open-ended span. Both omitted is
+        the member's whole career, which the database still returns as one
+        aggregated row per month worked — that is what backs the all-time
+        figure without a second, differently-shaped query that could round
+        its hours to a total disagreeing with the months beside it.
 
         **Credited and pending are separate figures, never summed.** Hours
         become credit when an officer finalizes the shift — the same rule
@@ -6256,7 +6262,7 @@ class SchedulingService:
         year_col = func.year(Shift.shift_date)
         month_col = func.month(Shift.shift_date)
 
-        result = await self.db.execute(
+        query = (
             select(
                 year_col.label("year"),
                 month_col.label("month"),
@@ -6270,9 +6276,14 @@ class SchedulingService:
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
             .where(ShiftAttendance.user_id == str(user_id))
             .where(Shift.organization_id == str(organization_id))
-            .where(Shift.shift_date >= start_date)
-            .where(Shift.shift_date <= end_date)
-            .group_by(year_col, month_col, Shift.is_finalized)
+        )
+        if start_date is not None:
+            query = query.where(Shift.shift_date >= start_date)
+        if end_date is not None:
+            query = query.where(Shift.shift_date <= end_date)
+
+        result = await self.db.execute(
+            query.group_by(year_col, month_col, Shift.is_finalized)
         )
 
         buckets: Dict[Tuple[int, int], Dict[str, Any]] = {}
@@ -6288,24 +6299,6 @@ class SchedulingService:
                 entry["pending_hours"] = hours_from_minutes(row.minutes or 0)
         return buckets
 
-    async def get_member_first_attendance_year(
-        self, user_id: UUID | str, organization_id: UUID | str
-    ) -> Optional[int]:
-        """The earliest year this member has any attendance in, if any.
-
-        Bounds the year picker to years the member could have worked, rather
-        than offering an arbitrary run of empty ones.
-        """
-        result = await self.db.execute(
-            select(func.min(Shift.shift_date))
-            .select_from(ShiftAttendance)
-            .join(Shift, ShiftAttendance.shift_id == Shift.id)
-            .where(ShiftAttendance.user_id == str(user_id))
-            .where(Shift.organization_id == str(organization_id))
-        )
-        earliest = result.scalar()
-        return earliest.year if earliest else None
-
     async def get_my_hours_history(
         self,
         user_id: UUID | str,
@@ -6318,17 +6311,22 @@ class SchedulingService:
         department's local date, and are reported whatever year is being
         viewed: in January the month that just ended is in the previous year,
         and it is still the figure the member came to check.
+
+        One unbounded bucket query answers all of it. Every figure here — the
+        selected year, the month that just ended, the earliest year the picker
+        offers, the all-time totals — is a slice of the same per-month
+        aggregate, so a narrower query per figure would cost more round trips
+        and risk the slices disagreeing over rounding.
+
+        ``previous_month`` is no longer read by the member's own screen. It
+        stays in the response because removing it is a breaking change to the
+        endpoint contract with nothing gained.
         """
         tz = await resolve_scheduling_timezone(self.db, organization_id)
         today = datetime.now(tz).date()
         selected_year = int(year) if year else today.year
 
-        months_by_key = await self.get_member_month_totals(
-            user_id,
-            organization_id,
-            date(selected_year, 1, 1),
-            date(selected_year, 12, 31),
-        )
+        months_by_key = await self.get_member_month_totals(user_id, organization_id)
 
         months = [
             months_by_key.get((selected_year, m))
@@ -6341,36 +6339,40 @@ class SchedulingService:
         previous_end = first_of_month - timedelta(days=1)
         previous_key = (previous_end.year, previous_end.month)
 
-        # Only query again for a month the selected year did not already
-        # cover — the common case (viewing the current year) is one query.
-        extra_keys = [k for k in (current_key, previous_key) if k[0] != selected_year]
-        if extra_keys:
-            span_start = date(min(k[0] for k in extra_keys), 1, 1)
-            span_end = date(max(k[0] for k in extra_keys), 12, 31)
-            extra = await self.get_member_month_totals(
-                user_id, organization_id, span_start, span_end
-            )
-            months_by_key = {**extra, **months_by_key}
-
         def _bucket(key: Tuple[int, int]) -> Dict[str, Any]:
             return months_by_key.get(key) or self._empty_month_totals(*key)
 
-        totals = {
-            "shifts": sum(m["shifts"] for m in months),
-            "hours": sum_hours_to_quarter([m["hours"] for m in months]),
-            "calls": sum(m["calls"] for m in months),
-            "pending_shifts": sum(m["pending_shifts"] for m in months),
-            "pending_hours": sum_hours_to_quarter([m["pending_hours"] for m in months]),
-        }
+        def _fold(buckets: List[Dict[str, Any]]) -> Dict[str, Any]:
+            """Total a set of months the way the screen displays them.
+
+            Hours fold through :func:`sum_hours_to_quarter` over the already
+            rounded monthly figures, never over raw minutes: a total rounded
+            from the raw sum can differ from the parts printed beside it by an
+            increment, and the all-time card sits next to the year total that
+            is one of its own parts.
+            """
+            return {
+                "shifts": sum(b["shifts"] for b in buckets),
+                "hours": sum_hours_to_quarter([b["hours"] for b in buckets]),
+                "calls": sum(b["calls"] for b in buckets),
+                "pending_shifts": sum(b["pending_shifts"] for b in buckets),
+                "pending_hours": sum_hours_to_quarter(
+                    [b["pending_hours"] for b in buckets]
+                ),
+            }
+
+        # Any attendance at all, credited or not — the picker offers a year the
+        # member worked even while every shift in it is still awaiting
+        # close-out.
+        earliest_year = min((k[0] for k in months_by_key), default=None)
 
         return {
             "year": selected_year,
-            "earliest_year": await self.get_member_first_attendance_year(
-                user_id, organization_id
-            ),
+            "earliest_year": earliest_year,
             "timezone": str(tz),
             "months": months,
-            "totals": totals,
+            "totals": _fold(months),
+            "all_time": _fold(list(months_by_key.values())),
             "current_month": _bucket(current_key),
             "previous_month": _bucket(previous_key),
         }

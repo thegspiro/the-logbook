@@ -578,7 +578,7 @@ class MemberHoursMonth(BaseModel):
 
 
 class MemberHoursTotals(BaseModel):
-    """Year totals for :class:`MemberHoursMonth`, on the same terms."""
+    """Totals over a run of :class:`MemberHoursMonth`, on the same terms."""
 
     shifts: int = 0
     hours: float = 0.0
@@ -602,8 +602,13 @@ class MemberHoursHistoryResponse(BaseModel):
     earliest_year: Optional[int] = None
     timezone: str
     months: List[MemberHoursMonth]
+    #: The selected year only. ``all_time`` is every year on record.
     totals: MemberHoursTotals
+    all_time: MemberHoursTotals
     current_month: MemberHoursMonth
+    # Kept for the endpoint contract. The member's own screen stopped
+    # rendering it when the summary cards moved to this month / this year /
+    # all time; dropping the field would break any other caller for nothing.
     previous_month: MemberHoursMonth
 
 
