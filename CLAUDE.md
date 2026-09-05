@@ -1458,6 +1458,50 @@ object. Because a viewport set this way is an implementation and #28 applies to
 it, give the block an explicit default so a per-test override cannot leak
 forward.
 
+### 29. A Screen Reports What the Backend Decided; It Does Not Re-Derive It _(2026-09-05)_
+
+Two screens describing the same member must not compute that description
+independently. The compliance matrix redesign re-derived, in the frontend or in
+its own endpoint, four things the backend already defined — and drifted from
+every one of them. Thirteen review findings on that one change, nine of them
+this single mistake wearing different clothes:
+
+| Re-derived                              | Already defined by                                          | What the department saw                                                                                            |
+| --------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Which requirements grade a member       | `_find_matching_profile` + `required_requirement_ids`       | Profile-scoped orgs graded against every requirement, contradicting the dashboard percentage the screen links from |
+| The compliant / at-risk thresholds      | `ComplianceConfig`, per-profile overrides                   | A member "at risk" here, "non-compliant" there                                                                     |
+| When a requirement is at risk           | `requirements_at_risk` — _any_ applicable member unmet      | 9 of 10 met read green here and at-risk on the dashboard, concealing the tenth member                              |
+| Who the "non-compliant" deep link means | the intervention list — a non-empty unmet set, no threshold | Under a sub-100% threshold, the link hid the very member it was sent to find                                       |
+
+The failure mode is quiet. None of these raised, none failed a test, and each
+produced a number that looked entirely plausible on its own. They are only
+visible by opening two screens and noticing they disagree — which is what a
+chief does, not what CI does.
+
+**Rule:** when a screen shows a status, a percentage, a threshold or a
+population that some other endpoint also computes, call that computation or
+consume its result. Do not re-implement the rule, and do not "simplify" it into
+a local constant — `REQUIREMENT_HOLDING_PCT = 85` was invented on this screen
+for a question `requirements_at_risk` had already answered. Where a rule must
+exist on both sides of the wire, extract it (`classify_standing` in
+`app/services/training_compliance.py`) so there is one definition and the
+duplicate is a projection of it, and say so in a comment naming the other
+caller.
+
+**Corollary — a derived date is a value, not an assumption.** Compliance is
+evaluated through a cut-off (`as_of`), not through the viewer's clock, and each
+requirement can move its own via `include_current_month`. Measuring expiry from
+`new Date()` turned a certificate the backend had accepted into a lapsed cell,
+which put an open item on a member the same response called compliant. The
+backend now reports `as_of` per cell for exactly this reason: when a decision
+depends on a date the server chose, send that date rather than letting the
+client guess it.
+
+**Corollary — an empty set is not a passing set.** `total === 0` reporting
+100%, and a member with no applicable requirements reading "every member meets
+this requirement", are the same bug: a denominator of nothing rendered as
+success. Say "not applicable" and mean it.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

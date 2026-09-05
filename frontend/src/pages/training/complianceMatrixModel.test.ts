@@ -418,6 +418,28 @@ describe('the evaluation cutoff', () => {
   });
 });
 
+describe('a cell with its own cutoff', () => {
+  it('measures its renewal warning from its own date, not the matrix-wide one', () => {
+    // Requirements each override include_current_month, so the matrix-level
+    // as_of is the earliest across all of them. A certificate on a
+    // requirement that counts the current month sits 61 days out from that
+    // earliest date but 30 from its own — measuring from the earliest read it
+    // as comfortably valid when it is inside the renewal window.
+    const own = cell({
+      status: 'completed',
+      expiry_date: '2026-10-05',
+      as_of: '2026-09-05',
+    });
+    expect(evaluateCell(own, requirement(), '2026-07-31').tone).toBe(CellTone.SOON);
+  });
+
+  it('falls back to the matrix cutoff when the cell carries none', () => {
+    const shared = cell({ status: 'completed', expiry_date: '2026-10-05' });
+    expect(evaluateCell(shared, requirement(), '2026-09-05').tone).toBe(CellTone.SOON);
+    expect(evaluateCell(shared, requirement(), '2026-01-01').tone).toBe(CellTone.MET);
+  });
+});
+
 describe('a requirement nobody is graded against', () => {
   it('reports no percentage rather than 100%', () => {
     // An empty denominator is not success. A probationary-only requirement in
