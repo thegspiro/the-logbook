@@ -21,13 +21,16 @@ equal it. This is the third time a whole-row snapshot has proved pinned to the
 build that produced it (CLAUDE.md pitfall #23), and it is why the gate below
 matches the shape such a row has *at head* rather than any historical one.
 
-The match is exact and was measured, not reasoned: staging a database before
-``20260801_0010``, seeding an affected and an unaffected department, and
-running to head leaves the two differing by exactly the two storefront grants.
-``_MEMBER_UNREPAIRED`` is that observed shape. Matching it repairs precisely the
-rows ``20260825_1500`` would have repaired but for the no-op, and nothing else:
-a department whose member row differs for any other reason was already outside
-that migration's scope and stays outside this one's.
+The shapes matched were measured, not reasoned: staging a database before
+``20260801_0010``, seeding departments through each onboarding path, and
+running to head produces exactly two unrepaired member shapes, listed in
+``_MEMBER_SHAPES``. One is missing both storefront grants; the other -- written
+by an onboarding wizard run with no heuristic markers ticked -- holds
+``storefront.view`` and is missing only ``storefront.order``, which is the
+population that could browse the store and fail at checkout. Matching those two
+repairs precisely the rows ``20260825_1500`` would have repaired but for the
+no-op, and nothing else: a department whose member row differs for any other
+reason was already outside that migration's scope and stays outside this one's.
 
 **2. The Membership Coordinator's slug-targeted grants.** A row still slugged
 ``membership_committee_chair`` was never *selected* by ``20260825_1400``
@@ -36,21 +39,28 @@ which both query by the ``membership_coordinator`` slug. ``e8a1c04f6b27``
 renamed the slug, but renaming does not retroactively grant what those
 revisions skipped when they ran.
 
-No whole-set gate is possible here, and that asymmetry is the point: because
-every slug-targeted migration skipped these rows, each is frozen at whatever
-registry state its department onboarded with, so there is no single shape to
-match. Only per-permission absence gating is available, and absence cannot
-distinguish "never received it" from "an administrator removed it since".
+No whole-set gate is possible here -- because every slug-targeted migration
+skipped these rows, each is frozen at whatever registry state its department
+onboarded with, so there is no single shape to match. But absence gating is not
+the only alternative, and it is the wrong one: absence cannot distinguish "never
+received it" from "an administrator removed it since", so it would quietly
+overturn a deliberate removal.
 
-The direction is deliberate, per pitfall #23. ``20260825_1400`` grants
-``training.configure`` to this exact slug *unconditionally*, on the stated
-grounds that it was a new capability rather than a rename of an old one, so no
-prior removal could express an intent about it -- there was nothing to remove.
-That reasoning transfers to the rows it could not see. Being wrong means a
-department that removed one of these since August gets it back and an
-administrator removes it again on the positions screen; withholding them leaves
-a coordinator unable to configure training or reach the store on every
-department that upgraded through the chain.
+The gate is instead that the row holds **none** of the three, which is positive
+evidence rather than absence (pitfall #23, the ``c7a4e91d3b68`` pattern). The
+two migrations ran a day apart and each grants all of what it grants at once:
+``20260825_1400`` gives ``training.configure`` to this slug *unconditionally*,
+and ``20260826_0345`` gives both storefront permissions together. So a row that
+carried the ``membership_coordinator`` slug while they ran holds all three, and
+a row still slugged ``membership_committee_chair`` holds none. Holding *some* of
+them is a state no build could have produced: it means the row was reached and
+has since been edited, and that department keeps what it chose.
+
+What being wrong costs, in the one direction still open: a department that
+removed all three since August gets them back, and an administrator removes them
+again on the positions screen. Withholding instead leaves a coordinator unable
+to configure training or reach the store on every department that upgraded
+through the chain.
 
 Both repairs skip a row whose stored permissions already cover the grant
 through a wildcard, and both are scoped to ``is_system``: a position a
