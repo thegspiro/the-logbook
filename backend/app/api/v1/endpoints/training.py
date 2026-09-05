@@ -39,6 +39,7 @@ from app.core.utils import safe_error_detail
 from app.models.event import Event, EventRSVP
 from app.models.training import (
     DueDateType,
+    RequirementType,
     SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
@@ -78,7 +79,9 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
     _load_compliance_config,
+    classify_standing,
     evaluate_member_requirement,
+    evaluate_member_requirement_detail,
     get_org_include_current_month,
     get_requirement_date_window,
 )
@@ -2521,11 +2524,31 @@ async def confirm_historical_import(
 
 
 class RequirementStatusItem(BaseModel):
+    """One cell of the compliance matrix.
+
+    Everything below ``expiry_date`` was added for the triage view and is
+    optional: a certification has no count to report, and a caller written
+    against the original four fields keeps working unchanged.
+    """
+
     requirement_id: str
     requirement_name: str
     status: str  # "completed", "in_progress", "expired", "not_started"
     completion_date: str | None = None
     expiry_date: str | None = None
+    # Countable requirement types (hours, shifts, calls, courses) report how
+    # far along the member is; certifications and pass/fail types report None.
+    progress_current: float | None = None
+    progress_required: float | None = None
+    progress_unit: str | None = None
+    # base_required is the target before waiver proration. It differs from
+    # progress_required only when waived_months > 0, which is what lets the UI
+    # say "target reduced 24 -> 16 for 2 waived months" instead of showing a
+    # number nobody can account for.
+    base_required: float | None = None
+    waived_months: int = 0
+    window_start: str | None = None
+    window_end: str | None = None
 
 
 class MemberComplianceRow(BaseModel):
@@ -2533,6 +2556,61 @@ class MemberComplianceRow(BaseModel):
     member_name: str
     requirements: list[RequirementStatusItem]
     completion_pct: float
+    membership_type: str | None = None
+    # Counts of *applicable* requirements — a requirement restricted to another
+    # membership type is not in this member's denominator.
+    requirements_met: int = 0
+    requirements_total: int = 0
+    # "compliant" | "at_risk" | "non_compliant", using the org's configured
+    # thresholds so the matrix agrees with the dashboard.
+    standing: str = "compliant"
+
+
+class MatrixRequirementItem(BaseModel):
+    id: str
+    name: str
+    requirement_type: str | None = None
+    frequency: str | None = None
+    target: float | None = None
+    target_unit: str | None = None
+
+
+def _enum_value(value) -> str | None:
+    """Unwrap a SQLAlchemy Enum column to its string value."""
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
+
+
+# Which "required_*" column carries the target, per requirement type. Types not
+# listed here (certification, skills_evaluation, checklist, ...) are pass/fail
+# and have no number to count toward.
+_TARGET_BY_TYPE = {
+    RequirementType.HOURS.value: ("required_hours", "hours"),
+    RequirementType.SHIFTS.value: ("required_shifts", "shifts"),
+    RequirementType.CALLS.value: ("required_calls", "calls"),
+}
+
+
+def _requirement_target(req) -> float | None:
+    """The countable target for a requirement, or None if it is pass/fail."""
+    req_type = _enum_value(req.requirement_type)
+    if req_type == RequirementType.COURSES.value:
+        return float(len(req.required_courses or [])) or None
+    field = _TARGET_BY_TYPE.get(req_type or "")
+    if not field:
+        return None
+    value = getattr(req, field[0], None)
+    return float(value) if value else None
+
+
+def _requirement_target_unit(req) -> str | None:
+    """The unit its target is counted in ("hours", "shifts", ...)."""
+    req_type = _enum_value(req.requirement_type)
+    if req_type == RequirementType.COURSES.value:
+        return "courses"
+    field = _TARGET_BY_TYPE.get(req_type or "")
+    return field[1] if field else None
 
 
 # Aliases for the shared compliance utilities (kept for local references)
@@ -2713,7 +2791,19 @@ async def get_compliance_matrix(
 
     today = date.today()
     org_include_current = await get_org_include_current_month(db, str(org_id))
+
+    # Thresholds decide the standing label. Loaded once for the whole matrix
+    # rather than per member — _load_compliance_config issues a query.
+    config = await _load_compliance_config(db, str(org_id))
+    compliant_threshold = config.compliant_threshold if config else 100.0
+    at_risk_threshold = config.at_risk_threshold if config else 75.0
+    threshold_type = (config.threshold_type if config else None) or "percentage"
+
     matrix = []
+    # The evaluation cut-off can differ per requirement (each may override
+    # include_current_month), so report the earliest one reached: that is the
+    # date through which *every* cell in the matrix is settled.
+    as_of: str | None = None
 
     for member in members:
         member_records = records_by_user.get(member.id, [])
@@ -2728,7 +2818,7 @@ async def get_compliance_matrix(
                 if member_membership_type not in req.required_membership_types:
                     continue
 
-            req_status, comp_date, exp_date = _evaluate_member_requirement(
+            ev = evaluate_member_requirement_detail(
                 req,
                 member_records,
                 today,
@@ -2736,20 +2826,41 @@ async def get_compliance_matrix(
                 org_include_current_month=org_include_current,
             )
 
-            if req_status == TrainingStatus.COMPLETED.value:
+            if ev.as_of and (as_of is None or ev.as_of < as_of):
+                as_of = ev.as_of
+
+            if ev.status == TrainingStatus.COMPLETED.value:
                 completed_count += 1
 
             req_statuses.append(
                 RequirementStatusItem(
                     requirement_id=req.id,
                     requirement_name=req.name,
-                    status=req_status,
-                    completion_date=comp_date,
-                    expiry_date=exp_date,
+                    status=ev.status,
+                    completion_date=ev.completion_date,
+                    expiry_date=ev.expiry_date,
+                    progress_current=ev.progress_current,
+                    progress_required=ev.progress_required,
+                    progress_unit=ev.progress_unit,
+                    base_required=ev.base_required,
+                    waived_months=ev.waived_months,
+                    window_start=ev.window_start,
+                    window_end=ev.window_end,
                 )
             )
 
-        pct = (completed_count / len(requirements) * 100) if requirements else 0
+        # Denominator is the member's *applicable* requirements, not every
+        # active requirement in the org. Dividing by the latter understated a
+        # member whose membership type exempts them from some of them — they
+        # could meet everything asked of them and still read below 100%.
+        applicable_total = len(req_statuses)
+        standing, pct = classify_standing(
+            completed_count,
+            applicable_total,
+            compliant_threshold,
+            at_risk_threshold,
+            threshold_type,
+        )
         member_name = (
             f"{member.last_name}, {member.first_name}"
             if member.last_name
@@ -2760,13 +2871,29 @@ async def get_compliance_matrix(
                 user_id=member.id,
                 member_name=member_name,
                 requirements=req_statuses,
-                completion_pct=round(pct, 1),
+                completion_pct=pct,
+                membership_type=member.membership_type,
+                requirements_met=completed_count,
+                requirements_total=applicable_total,
+                standing=standing,
             )
         )
 
     return {
         "members": [m.model_dump() for m in matrix],
-        "requirements": [{"id": r.id, "name": r.name} for r in requirements],
+        "requirements": [
+            MatrixRequirementItem(
+                id=r.id,
+                name=r.name,
+                requirement_type=_enum_value(r.requirement_type),
+                frequency=_enum_value(r.frequency),
+                target=_requirement_target(r),
+                target_unit=_requirement_target_unit(r),
+            ).model_dump()
+            for r in requirements
+        ],
+        "as_of": as_of or today.isoformat(),
+        "threshold_type": threshold_type,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
