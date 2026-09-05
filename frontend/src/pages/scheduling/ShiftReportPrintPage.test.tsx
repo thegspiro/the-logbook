@@ -92,6 +92,23 @@ describe('ShiftReportPrintPage print timing', () => {
     expect(window.print).toHaveBeenCalled();
   });
 
+  it('prints once, even when the labels land after the fallback fired', async () => {
+    // In browsers where the print dialog blocks the thread, a second
+    // scheduled print is waiting behind the first one the member just closed.
+    const { rerender } = render(<ShiftReportPrintPage />);
+    await waitFor(() => expect(mockGetReport).toHaveBeenCalledWith('r1'));
+
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(window.print).toHaveBeenCalledTimes(1);
+
+    storeState.settingsLoaded = true;
+    storeState.callTypeLabels = { mutual_aid: 'Mutual Aid' };
+    rerender(<ShiftReportPrintPage />);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(window.print).toHaveBeenCalledTimes(1);
+  });
+
   it('does not wait when the report has no call types to label', async () => {
     mockGetReport.mockResolvedValue({ ...report, call_types: [] });
     render(<ShiftReportPrintPage />);

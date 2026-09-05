@@ -1291,6 +1291,12 @@ class ReportsService:
         # incident text an officer typed, and relabelling it would rewrite
         # their words the day a type whose slug matches gets renamed.
         slug_keys: set = set()
+        # A key both sources produced — a count-only `mva` and an officer who
+        # typed "mva" — is already one bucket by the time it gets here, so
+        # relabelling it would rewrite the officer's half along with the
+        # department's. Ambiguous keys are left as stored rather than split,
+        # because the counts have already been added together.
+        text_keys: set = set()
 
         for sr in shift_reports:
             day = str(sr.shift_date)
@@ -1314,8 +1320,7 @@ class ReportsService:
                     daily_data[day]["by_type"].get(ct, 0) + 1
                 )
                 type_totals[ct] = type_totals.get(ct, 0) + 1
-                if from_org_calls:
-                    slug_keys.add(ct)
+                (slug_keys if from_org_calls else text_keys).add(ct)
 
         report_entries = sorted(daily_data.values(), key=lambda e: e["date"])
 
@@ -1350,7 +1355,7 @@ class ReportsService:
                 for slug, label in (
                     await call_service.type_labels(str(organization_id))
                 ).items()
-                if slug in slug_keys
+                if slug in slug_keys - text_keys
             },
             "entries": report_entries,
         }

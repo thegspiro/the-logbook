@@ -185,6 +185,15 @@ const claimDeviceForMember = async (userId: string | undefined): Promise<void> =
   if (previous !== userId && (fresh || previous !== null)) {
     await purgeLocalMemberData();
   }
+  // SEC: every sign-in runs through here — password, MFA, registration and
+  // the OAuth callback — which is the only place that covers the boundary
+  // logout misses. A session that expires and is replaced by another member
+  // signing in never calls logout(), so without this the scheduling store
+  // keeps `settingsLoaded` true and the new member reads the previous
+  // department's call types, signup window, roster and templates. Costs a
+  // refetch when the member is unchanged, which is what a page load does
+  // anyway.
+  useSchedulingStore.getState().resetSettings();
   writeDeviceMember(userId);
 };
 
@@ -442,11 +451,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       clearInFlight();
       invalidateRanksCache();
       clearQueuedReports();
-      // SEC: the scheduling settings are a once-per-session cache holding
-      // department-wide values (call types, signup window, feature toggles).
-      // Like the caches above they are keyed by nothing user-specific, so on
-      // a shared terminal the next member — possibly from another department
-      // — read the previous one's until the tab was reloaded.
+      // SEC: the scheduling store holds department-wide values (call types,
+      // signup window, feature toggles, roster, templates, apparatus) behind
+      // once-per-session loaded flags. Like the caches above it is keyed by
+      // nothing user-specific, so on a shared terminal the next member —
+      // possibly from another department — read the previous one's until the
+      // tab was reloaded. `claimDeviceForMember` covers the sign-in side.
       useSchedulingStore.getState().resetSettings();
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');

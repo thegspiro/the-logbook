@@ -24,7 +24,7 @@ module, behind its own consent and access-control story.
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -39,6 +39,7 @@ from app.models.call_tracking import (
 )
 from app.models.training import Shift, ShiftCompletionReport
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class CallTrackingService:
@@ -86,7 +87,9 @@ class CallTrackingService:
         settings = await self.get_settings(str(organization_id))
         return {t["slug"]: t["label"] for t in settings.get("call_types", [])}
 
-    async def slugs_locked_by_history(self, organization_id: str) -> set:
+    async def slugs_locked_by_history(
+        self, organization_id: str, candidates: Optional[set] = None
+    ) -> set:
         """Slugs that cannot be deleted without orphaning something.
 
         The union of what ``org_calls`` holds and what persisted shift reports
@@ -100,18 +103,46 @@ class CallTrackingService:
         Only reports that recorded their types as org slugs are considered.
         The rest hold the incident text an officer typed, which is nobody's
         slug and must not lock a type of the same name.
+
+        ``candidates`` narrows the report scan to the slugs the caller
+        actually needs an answer about, which is how the deletion guard asks.
+        Without it every settings read would materialize the JSON of every
+        shift report the department has ever filed, so the cost of opening the
+        settings screen grew with the org's whole history for an answer that
+        can only ever contain configured slugs. The database does the matching
+        and stops at the first hit per slug.
         """
         locked = set(await self.type_usage_counts(organization_id))
+        if candidates is not None:
+            candidates = {s for s in candidates if s not in locked}
+            if not candidates:
+                return locked
+
+        conditions = [
+            ShiftCompletionReport.organization_id == str(organization_id),
+            ShiftCompletionReport.call_types.isnot(None),
+            # Only a count-only report stores slugs; the rest hold the
+            # officer's own wording, which must not lock anything.
+            ShiftCompletionReport.data_sources.isnot(None),
+        ]
+        if candidates is not None:
+            conditions.append(
+                or_(
+                    *[
+                        ShiftCompletionReport.call_types.like(
+                            like_pattern(slug), escape=LIKE_ESCAPE_CHAR
+                        )
+                        for slug in sorted(candidates)
+                    ]
+                )
+            )
 
         rows = (
             await self.db.execute(
                 select(
                     ShiftCompletionReport.call_types,
                     ShiftCompletionReport.data_sources,
-                ).where(
-                    ShiftCompletionReport.organization_id == str(organization_id),
-                    ShiftCompletionReport.call_types.isnot(None),
-                )
+                ).where(*conditions)
             )
         ).all()
         for call_types, data_sources in rows:
