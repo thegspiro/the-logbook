@@ -1151,8 +1151,15 @@ administrator added, so decide by direction rather than by guessing provenance:
 
 Do not try to recognize an unedited row by matching its whole permission list:
 `20260901_1320_f7b3c8d2e569` did, and every later migration that touched those
-rows moved them out of the match. Say in the migration's docstring which
-direction you chose and what it costs when it is wrong.
+rows moved them out of the match. A snapshot of a whole row is pinned to the
+build that produced it, so it also misses every row written by any _other_
+build — silently, while reading as though it covered them. `b4d1c8e37f52` was
+written that way and rewritten: gate instead on a signal no build could have
+produced, which for an addition is usually the **absence of the very grants
+being added** when nothing in the editor can emit them. That answer cannot
+drift, because adding a module to the registry cannot move a row across it.
+Say in the migration's docstring which direction you chose and what it costs
+when it is wrong.
 
 ### 24. Do Not Reuse a Branch Name After Its Pull Request Merges _(2026-08-24)_
 

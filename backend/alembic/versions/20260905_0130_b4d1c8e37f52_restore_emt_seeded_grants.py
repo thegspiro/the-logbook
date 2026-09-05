@@ -25,29 +25,45 @@ took it.
 
 **Gated, because an addition always is.** CLAUDE.md pitfall #23: a revocation of
 a disclosing grant runs unconditionally, an addition needs positive evidence the
-row is an unrepaired seed. An earlier draft of this migration argued the
-evidence was categorical — no seeding path could produce an ``is_system`` EMT row
-before the registry entry, so every one came from the create branch — and that
-argument is wrong in the way this whole line of work has been about: knowing
-where a row *came from* says nothing about whether it has since been *edited*.
-``RoleService.update_role`` edits a system position's permissions in place and
-leaves the flag set, so a department may have removed one of these four on
-purpose.
+row is an unrepaired seed. An earlier draft argued the evidence was categorical —
+no seeding path could produce an ``is_system`` EMT row before the registry entry,
+so every one came from the create branch — and that is wrong in the way this
+whole line of work has been about: knowing where a row *came from* says nothing
+about whether it has since been *edited*. ``RoleService.update_role`` edits a
+system position's permissions in place and leaves the flag set, so a department
+may have removed one of these four on purpose.
 
-So the row must still look exactly like an untouched wizard row at this point in
-the chain: ``_UNEDITED_SHAPE`` is the editor's output for the EMT checkboxes,
-less everything ``f3b8d0c26a17`` and ``a2e9f6b04c71`` take off it. A row that
-differs by so much as one permission has been edited since, and is left alone.
+**The signal is the absence of all four, not the shape of the whole row.** A
+second draft compared the row against a frozen snapshot of the editor's entire
+EMT output. That is the strategy pitfall #23 names outright — the same one
+``20260901_1320_f7b3c8d2e569`` used — and it fails the same way: the snapshot is
+pinned to one build's module list, so a row written by any other build differs by
+a permission or two and is skipped, silently, while the code reads as though it
+covers the population.
 
-**What that costs, stated plainly.** A row written by an older build of the
-editor — whose module list differed — will not match, and keeps missing these
-four. That is the conservative direction for an addition and the one pitfall #23
-asks for: a missing benign grant discloses nothing and is visible to the member
-who tries to use it, whereas re-granting over an administrator's deliberate
-removal is silent. It is also why the revocations above are *not* gated this way:
-there, missing a row leaves a disclosure open.
+What cannot drift is that **no checkbox in any build emits these four.** The
+editor produces ``{module}.view``, ``{module}.manage``, ``{module}.*`` and the
+one entry in ``_VIEW_IMPLIED_PERMISSIONS``; none of those is
+``organization.view`` or ``scheduling.swap``, whatever modules the registry held
+that day. So a row holding *none* of the four never reached a merge or a seed —
+and a row holding *any* of them did, or was curated, and is left alone. Adding a
+module to the registry cannot move a row across that line.
 
-Appends only what a matching row is missing, after which it equals
+**What that costs, stated plainly.** A department that deliberately removed all
+four at once gets them back. That is the one case this overrides, against a
+missing benign grant that discloses nothing and is visible to the member who
+tries to use it; removing some of the four, the likelier edit, is respected.
+It is also why the revocations above are *not* gated at all: there, skipping a
+row leaves a disclosure open.
+
+**Expected to repair nothing today.** No installation is known to have completed
+the old setup wizard, so there should be no create-branch EMT row anywhere. It is
+kept because the cost of that being wrong is an EMT who cannot see their own
+department or ask to swap a shift, and because the gate above is cheap and safe
+on a row that does not need it.
+
+Appends the four, preserving the order of what was already stored. A row that
+the two revocations above have finished with then equals
 ``DEFAULT_POSITIONS["emt"]``.
 
 Guarded on the table existing: ``positions`` is one of the tables no migration
@@ -82,28 +98,6 @@ _RESTORE = (
     "scheduling.swap",
 )
 
-# What an untouched wizard EMT row holds by the time this runs: the editor's
-# output for the EMT checkboxes, less everything ``f3b8d0c26a17`` and
-# ``a2e9f6b04c71`` revoke from this slug. Only a row matching this exactly is
-# taken as unedited, and so as safe to add to. Frozen, and asserted against both
-# sources in the accompanying test.
-_UNEDITED_SHAPE = frozenset(
-    {
-        "apparatus.view",
-        "documents.view",
-        "elections.view",
-        "events.view",
-        "forms.view",
-        "inventory.view",
-        "members.view",
-        "minutes.view",
-        "scheduling.view",
-        "storefront.order",
-        "storefront.view",
-        "training.view",
-    }
-)
-
 
 def _load_permissions(raw):
     """Normalize JSON values returned by different database drivers."""
@@ -113,20 +107,23 @@ def _load_permissions(raw):
 
 
 def restore(permissions):
-    """Return the row with the missing grants appended, or None to leave it.
+    """Return the row with the four grants appended, or None to leave it.
 
-    None for a row that is already complete, and for one that no longer looks
-    like the editor's untouched output — see the docstring on why an addition
-    has to be that careful when a revocation does not.
+    None for a row holding any of them — it reached a merge or a seed, or an
+    administrator curated it, and either way it is not the untouched
+    create-branch row this repairs. None too for an empty list, which is a
+    position somebody stripped rather than one the wizard built.
+
+    Deliberately *not* a comparison against the whole stored list: see the
+    module docstring on why that snapshot cannot survive a registry change.
     """
     original = list(permissions)
     held = set(original)
-    if held != _UNEDITED_SHAPE:
+    if not held:
         return None
-    missing = [item for item in _RESTORE if item not in held]
-    if not missing:
+    if held & set(_RESTORE):
         return None
-    return original + missing
+    return original + list(_RESTORE)
 
 
 def upgrade() -> None:

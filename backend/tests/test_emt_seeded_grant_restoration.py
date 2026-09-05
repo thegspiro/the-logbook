@@ -139,50 +139,78 @@ def _restore_row(engine, slug, permissions, is_system=True):
     return json.loads(raw)
 
 
-class TestTheUneditedShape:
-    """The gate: only a row that still looks like the editor's output is added to.
+class TestTheGate:
+    """Recognized by what the row is *missing*, not by its whole shape.
 
-    An addition needs positive evidence the row is an unrepaired seed
-    (CLAUDE.md pitfall #23). Knowing a row *came from* the create branch is not
-    that evidence — ``RoleService.update_role`` edits a system position in place
-    — so the row must still match what an untouched one holds at this point in
-    the chain.
+    An addition needs positive evidence the row is an unrepaired seed (CLAUDE.md
+    pitfall #23), and that pitfall bans the obvious way of getting it: matching
+    the entire stored list, which a later migration or a different build moves
+    the row out of. What survives both is that no checkbox in any build can emit
+    the four — so holding none of them is evidence no merge or seed ever reached
+    the row, and holding any of them is evidence one did.
     """
 
-    def test_it_is_the_editor_output_less_what_the_revocations_take(self):
-        prior = _load(
-            _VERSIONS
-            / "20260904_2050_f3b8d0c26a17_revoke_wizard_over_grants_unconditionally.py",
-            "_f3b8",
-        )
-        window = _load(
-            _VERSIONS
-            / "20260905_0110_a2e9f6b04c71_revoke_emt_heuristic_over_grants.py",
-            "_a2e9",
-        )
-        revoked = set(prior._REVOKE["emt"]) | set(window._REVOKE)
+    def test_a_row_holding_none_of_them_is_repaired(self, positions_table):
+        stored = sorted(_editor_output())
 
-        assert _migration()._UNEDITED_SHAPE == _editor_output() - revoked
+        result = _restore_row(positions_table, "emt", stored)
 
-    def test_the_shape_plus_the_restored_set_is_the_registry(self):
-        module = _migration()
+        assert set(result) == set(stored) | set(_migration()._RESTORE)
 
-        assert set(module._UNEDITED_SHAPE) | set(module._RESTORE) == set(
-            DEFAULT_POSITIONS["emt"]["permissions"]
-        )
-
-    @pytest.mark.parametrize("edit", ["added", "removed"])
-    def test_an_edited_row_is_left_alone(self, positions_table, edit):
-        """A department may have removed one of these four on purpose, and the
-        row cannot say which. Missing a benign grant discloses nothing; putting
-        one back over a deliberate removal is silent."""
-        stored = sorted(_migration()._UNEDITED_SHAPE)
-        if edit == "added":
-            stored = stored + ["compliance.view"]
-        else:
-            stored = stored[:-1]
+    @pytest.mark.parametrize("kept", list(_migration()._RESTORE))
+    def test_a_row_holding_any_one_of_them_is_left_alone(self, positions_table, kept):
+        """The likely edit: an administrator took some of the four off. The row
+        cannot say which were deliberate, so none are put back."""
+        stored = sorted(_editor_output()) + [kept]
 
         assert _restore_row(positions_table, "emt", stored) == stored
+
+    def test_an_emptied_row_is_left_alone(self, positions_table):
+        """A position stripped to nothing is not a row the wizard built, and
+        furnishing it with four grants would be inventing a decision."""
+        assert _restore_row(positions_table, "emt", []) == []
+
+    def test_an_unrelated_edit_does_not_block_the_repair(self, positions_table):
+        """The deliberate loosening. Under the whole-list gate this row was
+        skipped; the grant an administrator added says nothing about whether the
+        four ever arrived, and they still have not."""
+        stored = sorted(_editor_output()) + ["compliance.view"]
+
+        result = _restore_row(positions_table, "emt", stored)
+
+        assert set(result) == set(stored) | set(_migration()._RESTORE)
+
+
+class TestItSurvivesADifferentModuleList:
+    """The finding this gate exists to answer.
+
+    ``moduleRegistry.ts`` did not exist before 2026-08-31, and the module set
+    moves as the product grows. A gate keyed on the editor's whole output is
+    therefore pinned to one build: a row written by any other one differs by a
+    permission or two and is skipped silently, while the code reads as though it
+    covers the population. These rows are what that gate missed.
+    """
+
+    def test_a_row_from_a_build_with_fewer_modules(self, positions_table):
+        stored = sorted(_editor_output())[2:]
+
+        result = _restore_row(positions_table, "emt", stored)
+
+        assert set(result) == set(stored) | set(_migration()._RESTORE)
+
+    def test_a_row_from_a_build_with_a_module_since_renamed(self, positions_table):
+        stored = sorted(set(_editor_output()) - {"inventory.view"} | {"gear.view"})
+
+        result = _restore_row(positions_table, "emt", stored)
+
+        assert set(result) == set(stored) | set(_migration()._RESTORE)
+
+    def test_a_row_carrying_a_manage_box_somebody_ticked(self, positions_table):
+        stored = sorted(_editor_output()) + ["events.manage", "events.*"]
+
+        result = _restore_row(positions_table, "emt", stored)
+
+        assert set(result) == set(stored) | set(_migration()._RESTORE)
 
 
 class TestTheRestoredSet:
