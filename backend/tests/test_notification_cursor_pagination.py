@@ -13,6 +13,7 @@ value — the case that produces the most rows at once is exactly the case a
 single-column cursor mishandles.
 """
 
+import base64
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -71,6 +72,17 @@ async def _log(db, org, user, *, subject, sent_at, channel="in_app"):
 BASE = datetime(2026, 9, 5, 12, 0, 0)
 
 
+def _encode_raw(timestamp: str, row_id: str) -> str:
+    """Build a well-formed cursor around a timestamp ``encode_cursor`` cannot.
+
+    A hostile cursor is not reachable through ``encode_cursor``: it takes a
+    ``datetime``, so a value that only exists as text has to be assembled the
+    way a client would.
+    """
+    payload = f"1|{timestamp}|{row_id}".encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
 class _Pagination:
     def __init__(self, skip=0, limit=100):
         self.skip = skip
@@ -104,6 +116,21 @@ class TestCursorCodec:
         # nine, and nothing in the response would say so.
         with pytest.raises(InvalidCursor):
             decode_cursor(bad)
+
+    @pytest.mark.parametrize(
+        "timestamp",
+        ["0001-01-01T00:00:00+23:59", "9999-12-31T23:59:59-23:59"],
+        ids=["underflows below year 1", "overflows past year 9999"],
+    )
+    def test_a_timestamp_that_cannot_be_shifted_to_utc_is_rejected(self, timestamp):
+        # Parsing is not the last thing that can fail. Either end of the
+        # representable range paired with an extreme offset parses cleanly and
+        # then overflows on the shift to UTC, and OverflowError is not a
+        # ValueError — so before this was caught it went straight past the
+        # endpoints' InvalidCursor handler and answered 500 for input this
+        # module already treats as malformed.
+        with pytest.raises(InvalidCursor):
+            decode_cursor(_encode_raw(timestamp, "row-1"))
 
 
 class TestTiesWithinOneSecond:
@@ -451,6 +478,48 @@ class TestEndpointCursorHandling:
                 include_expired=False,
                 include_read=True,
                 cursor="not-a-real-cursor!!",
+                pagination=_Pagination(),
+                db=db_session,
+                current_user=caller,
+            )
+
+        assert excinfo.value.status_code == 400
+
+    async def test_an_out_of_range_timestamp_is_a_400_not_a_500(self, db_session):
+        # The codec-level test above proves the exception type. This proves the
+        # consequence that made it worth fixing: the endpoint only catches
+        # InvalidCursor, so an OverflowError escaping the handler is a 500 on a
+        # client-supplied value.
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        caller = _Caller(user.id, org.id)
+        hostile = _encode_raw("0001-01-01T00:00:00+23:59", "row-1")
+
+        with pytest.raises(HTTPException) as excinfo:
+            await list_logs(
+                channel=None,
+                scope=NotificationLogScope.MINE,
+                cursor=hostile,
+                pagination=_Pagination(),
+                db=db_session,
+                current_user=caller,
+            )
+
+        assert excinfo.value.status_code == 400
+
+    async def test_the_inbox_rejects_an_out_of_range_timestamp_the_same_way(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        caller = _Caller(user.id, org.id)
+        hostile = _encode_raw("9999-12-31T23:59:59-23:59", "row-1")
+
+        with pytest.raises(HTTPException) as excinfo:
+            await get_my_notifications(
+                include_expired=False,
+                include_read=True,
+                cursor=hostile,
                 pagination=_Pagination(),
                 db=db_session,
                 current_user=caller,

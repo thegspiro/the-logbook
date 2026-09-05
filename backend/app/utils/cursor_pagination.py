@@ -96,7 +96,18 @@ def decode_cursor(cursor: str) -> Tuple[datetime, str]:
     except ValueError as exc:
         raise InvalidCursor("Cursor timestamp is not a valid datetime") from exc
 
-    return _as_naive_utc(parsed), row_id
+    # Parsing is not the last thing that can fail. An extreme UTC offset at
+    # either end of the representable range — "0001-01-01T00:00:00+23:59" —
+    # parses cleanly and then overflows when shifted to UTC. The value is
+    # client-supplied, so that has to leave here as InvalidCursor: OverflowError
+    # is not a ValueError, so it would sail past the endpoints' handler and
+    # answer 500 for input the module already considers malformed.
+    try:
+        normalized = _as_naive_utc(parsed)
+    except OverflowError as exc:
+        raise InvalidCursor("Cursor timestamp is out of range") from exc
+
+    return normalized, row_id
 
 
 def keyset_before(timestamp_column: Any, id_column: Any, cursor: str) -> Any:
