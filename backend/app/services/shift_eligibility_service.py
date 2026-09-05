@@ -959,6 +959,11 @@ class ShiftEligibilityService:
         ``call_types`` degrades to the built-in list rather than raising: this
         is unvalidated JSON an admin can edit, and an exception here would take
         out shift close-out for the whole department over one malformed entry.
+
+        Every entry is returned, retired ones included, with ``active`` saying
+        which are still offered at close-out. Filtering here instead would
+        leave a caller that needs to *label* a historical call unable to
+        resolve the slug it was filed under.
         """
         sched = self._get_scheduling_settings(org)
         raw = sched.get("call_tracking")
@@ -987,9 +992,17 @@ class ShiftEligibilityService:
                     continue
                 label = str(entry.get("label") or "").strip()[:100] or slug
                 seen.add(slug)
-                clean_types.append({"slug": slug, "label": label})
+                # Missing means active: entries stored before retirement
+                # existed predate the key, and reading their absence as
+                # "retired" would empty every department's close-out list on
+                # upgrade (pitfall #19). Only an explicit false retires one.
+                active = entry.get("active", True) is not False
+                clean_types.append({"slug": slug, "label": label, "active": active})
         if not clean_types:
-            clean_types = [dict(t) for t in DEFAULT_CALL_TYPES]
+            clean_types = [
+                {"slug": t["slug"], "label": t["label"], "active": True}
+                for t in DEFAULT_CALL_TYPES
+            ]
 
         return {"mode": mode, "call_types": clean_types}
 

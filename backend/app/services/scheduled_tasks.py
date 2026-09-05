@@ -2677,12 +2677,17 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     # member "Calls responded: 0" for a shift whose own record
                     # says five, and the number they were actually credited
                     # with never reaches the person it belongs to.
-                    shift_call_types = await CallTrackingService(db).shift_type_counts(
-                        str(shift.id)
-                    )
+                    call_svc = CallTrackingService(db)
+                    shift_call_types = await call_svc.shift_type_counts(str(shift.id))
+                    # A slug is a storage key. The detailed branch above puts
+                    # readable incident text in this list, so resolving here
+                    # is also what keeps one notification field from carrying
+                    # two shapes depending on the department's mode.
+                    type_labels = await call_svc.type_labels(str(shift.organization_id))
                     flat_types: list[str] = []
                     for slug in sorted(shift_call_types):
-                        flat_types.extend([slug] * shift_call_types[slug])
+                        label = type_labels.get(slug, slug)
+                        flat_types.extend([label] * shift_call_types[slug])
                     for att in attendance_records:
                         credited = int(att.call_count or 0)
                         if credited <= 0:

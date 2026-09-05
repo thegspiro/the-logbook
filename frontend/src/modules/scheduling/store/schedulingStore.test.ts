@@ -43,6 +43,7 @@ describe('schedulingStore', () => {
       settingsLoaded: false,
       signupClosesMinutesBefore: 0,
       lateSignupGraceMinutes: 60,
+      callTypeLabels: {},
     });
     // `vi.clearAllMocks` resets calls but not implementations, so this block
     // installs its own default rather than running on a neighbour's (pitfall
@@ -253,6 +254,41 @@ describe('schedulingStore', () => {
 
       expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(0);
       expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(60);
+    });
+  });
+
+  describe('loadSettings call type labels', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('indexes the department labels by slug', async () => {
+      // Every screen that shows a stored call type resolves it through here;
+      // the slug is what is stored precisely so the label can change.
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        call_tracking: {
+          mode: 'count_only',
+          call_types: [
+            { slug: 'mutual_aid', label: 'Mutual Aid', active: true },
+            { slug: 'brush', label: 'Brush', active: false },
+          ],
+        },
+      });
+
+      await useSchedulingStore.getState().loadSettings();
+
+      // The retired one is in the map too — its history still has to render.
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({
+        mutual_aid: 'Mutual Aid',
+        brush: 'Brush',
+      });
+    });
+
+    it('is empty rather than absent when the server sends no types', async () => {
+      await useSchedulingStore.getState().loadSettings();
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
     });
   });
 

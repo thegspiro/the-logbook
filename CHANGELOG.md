@@ -46,6 +46,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
 
+### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
+
+**Fixed**
+
+- **7 on the rail, 4 on the page, for one locker.** The dashboard's gear widget
+  counted a pool issuance once per _unit_ while `/inventory/my-equipment`
+  counted it once per _row_, so a member holding two assignments plus three
+  pairs of gloves and two shirts saw two different totals for the same gear.
+  The widget now counts entries, matching the page's tile and the `(N)` on its
+  section header — three figures that finally agree. The units are still on the
+  row itself as `Qty: 3`.
+- **The widget's labels now match the page**: "Assigned items" → **Issued to
+  me**, "Checked out" → **Temporary loans**. The widget already merged
+  assignments and issuances into one figure; only its wording still described
+  the split the page dropped. "Overdue" is unchanged.
+
+### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
+
+**Fixed**
+
+- **Twenty migrations justified a table-existence guard with a reason that was
+  not true.** They stated that `positions` (and in a handful of cases
+  `security_alerts`, `shifts`, `shift_templates`, `basic_apparatus`,
+  `skill_test_viewers`) is never created by a migration and only appears when
+  the application calls `create_all()` at startup. Each of those tables is in
+  fact created by an earlier migration — `positions` by the one that renames
+  `roles` into it — so the guard they were explaining can never fire. Nothing
+  behaved differently; the comments were wrong, and comments are what the next
+  author copies. This is the same mistaken reasoning that once produced an
+  unnecessary guard which had to be reverted after testing against a real
+  database.
+- **Four migrations that make the same statement were left alone**, because for
+  them it is effectively right: they run _before_ the rename, so the table
+  genuinely is absent and their guard is doing real work. Which case applies
+  depends on position in the migration chain, which is nothing like the order
+  the filenames suggest.
+
+**Added**
+
+- **A test that checks the claim against the chain**, so the next copy fails
+  rather than spreading. It reads each migration's prose, and fails when a
+  table called startup-built is created by a migration the claiming one
+  descends from.
+
+  It recognizes the claim by its shape — a negation, near the word "migration",
+  near a creation verb — rather than from a list of known phrasings. A list was
+  tried first and does not converge: two successive reviews each found a wording
+  it had not anticipated, and each time the check passed while the wrong comment
+  stood. The wordings it has to survive are now pinned by tests, including
+  several invented for the purpose that appear nowhere in the codebase.
+
+### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
+
+**Changed**
+
+- **"Permanent Assignments" and "Issued Items" are now one section.** The split
+  was the stockroom's, not the member's: an assignment is one serialized unit
+  out of `item_assignments`, an issuance is N units drawn from bulk stock in
+  `item_issuances`, and a member holds both open-endedly with nothing to do
+  differently about either. Both now render in one **Issued to Me** list,
+  sorted by when the gear was received, with each row still showing what its
+  record type actually carries — serial, asset tag and condition for an
+  assignment; quantity and size for an issuance. The four quick-stat tiles
+  collapse to three to match.
+- **Active Temporary Loans stays its own section**, because a due date is the
+  one distinction a member has to act on, and folding it in would have buried
+  the overdue badge.
+- Nothing changed on the wire. The two record types remain separate tables with
+  separate return endpoints, and a row's "Notify quartermaster of return" still
+  posts `return_type: assignment` or `issuance` against the right reference id
+  — pinned by a test per row type, since one merged list makes flattening them
+  onto a single shape an easy mistake to make later. The return buttons also
+  gained per-item accessible names; one list of identically-labelled buttons
+  gave a screen reader nothing to tell the rows apart with.
+- The quartermaster's member view (`/inventory/admin/members`) and the
+  dashboard gear widget are untouched.
+
 ### Apparatus: the fleet record becomes officer-only (2026-09-05)
 
 **Changed**

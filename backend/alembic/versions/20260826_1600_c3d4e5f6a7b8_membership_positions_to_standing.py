@@ -76,9 +76,13 @@ def _has_table(table: str) -> bool:
 
 
 def upgrade() -> None:
-    # `positions` and `user_positions` are among the tables no migration
-    # creates — create_all() builds them on first boot (pitfall #26). A fresh
-    # database has nothing to recover.
+    # Defensive only. All three ARE created by the migration chain — the
+    # initial schema builds `users` and `roles`, and 20260805_0008 renames the
+    # latter into `positions`/`user_positions`, which makes both required
+    # ancestors of this revision. An earlier version of this comment claimed
+    # they were create_all-only, which is the false positive CLAUDE.md pitfall
+    # #26 records being reverted. The guard costs three reflections and cannot
+    # be wrong, but it is not load-bearing here.
     for table in ("users", "positions", "user_positions"):
         if not _has_table(table):
             return

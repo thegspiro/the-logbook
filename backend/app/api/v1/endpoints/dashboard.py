@@ -232,9 +232,24 @@ async def get_asset_widgets(
     # 2026-09-05, but the gate stands on what the widgets aggregate rather than
     # on who happens to hold the view grant — a department can put it back on
     # its Member position at any time.  Mirrors the inventory gate above.
-    if "apparatus" in enabled and (
-        user_has_permission(current_user, "apparatus.manage")
-        or user_has_permission(current_user, "settings.manage")
+    #
+    # Two separate questions, and both have to hold. Authority for the tallies
+    # is `apparatus.manage` or `settings.manage`, as above. But every widget
+    # below links to `/apparatus`, which the route and the endpoints behind it
+    # gate on `apparatus.view` OR `apparatus.manage` — so a delegated
+    # `settings.manage` role holding neither is handed a tile whose only action
+    # is Access Denied. The baseline `apparatus.view` masked that until
+    # 2026-09-05; it no longer does.
+    _may_open_apparatus = user_has_permission(
+        current_user, "apparatus.view"
+    ) or user_has_permission(current_user, "apparatus.manage")
+    if (
+        "apparatus" in enabled
+        and _may_open_apparatus
+        and (
+            user_has_permission(current_user, "apparatus.manage")
+            or user_has_permission(current_user, "settings.manage")
+        )
     ):
         fleet = await ApparatusService(db).get_fleet_summary(org_id)
         defects = await db.scalar(

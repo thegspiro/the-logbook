@@ -2454,6 +2454,45 @@ describe('Dashboard', () => {
       expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });
 
+    // The rail and /inventory/my-equipment carry the same "Issued to me"
+    // label, so they have to reach the same number. That page's tile and its
+    // section header both count list entries; summing `quantity_issued` here
+    // put 7 beside the page's 4 for one locker.
+    it('counts an issuance once however many units it covers', async () => {
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [
+          { item_id: 'coat', quantity: 1 },
+          { item_id: 'helmet', quantity: 1 },
+        ],
+        active_checkouts: [],
+        issued_items: [
+          { item_id: 'gloves', quantity_issued: 3 },
+          { item_id: 'shirt', quantity_issued: 2 },
+        ],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
+      expect(within(equipment).getByText('Issued to me')).toBeInTheDocument();
+      expect(within(equipment).getByText('4')).toBeInTheDocument();
+      expect(within(equipment).queryByText('7')).not.toBeInTheDocument();
+    });
+
+    it('names the loan row as the gear page does', async () => {
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [],
+        active_checkouts: [{ checkout_id: 'co-1', item_id: 'camera', is_overdue: false }],
+        issued_items: [],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
+      expect(within(equipment).getByText('Temporary loans')).toBeInTheDocument();
+      expect(within(equipment).queryByText('Checked out')).not.toBeInTheDocument();
+    });
+
     // Every permission here is granted to DEFAULT_POSITIONS["member"], so gating
     // the tab on any of them put department-wide reporting in front of every
     // firefighter in the department.
