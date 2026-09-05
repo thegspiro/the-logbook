@@ -181,12 +181,27 @@ const titleCase = (segment: string): string =>
  */
 const DENY_ALL = (): boolean => false;
 
-function generateBreadcrumbs(pathname: string, checkPermission?: (permission: string) => boolean): BreadcrumbItem[] {
+interface GeneratedTrail {
+  crumbs: BreadcrumbItem[];
+  /**
+   * Whether the last crumb is the page being viewed.
+   *
+   * False when the URL ends in a record id, because that id is skipped for
+   * display and the crumb before it is the collection the record belongs to —
+   * `Applications` on `/grants/applications/:id`, not the grant. Treating it as
+   * the current page took away a working link to the list and announced a page
+   * the viewer is not on.
+   */
+  endsAtCurrentPage: boolean;
+}
+
+function generateBreadcrumbs(pathname: string, checkPermission?: (permission: string) => boolean): GeneratedTrail {
   const segments = pathname.split('/').filter(Boolean);
   const crumbs: BreadcrumbItem[] = [];
   const canCheck = checkPermission ?? DENY_ALL;
 
   let currentPath = '';
+  let endsAtCurrentPage = false;
   for (const segment of segments) {
     currentPath += '/' + segment;
 
@@ -195,8 +210,10 @@ function generateBreadcrumbs(pathname: string, checkPermission?: (permission: st
     const isId = /^[0-9a-f]{8}-|^\d+$/.test(segment);
     if (isId) {
       // Add an "ID" breadcrumb or skip it
+      endsAtCurrentPage = false;
       continue;
     }
+    endsAtCurrentPage = true;
 
     const route = BREADCRUMB_ROUTES[currentPath];
 
@@ -206,25 +223,36 @@ function generateBreadcrumbs(pathname: string, checkPermission?: (permission: st
     });
   }
 
-  // The trail ends at the page you are on, whatever the URL ends with. Deriving
-  // this from `i === segments.length - 1` inside the loop was wrong whenever the
-  // final segment was an id: the id is skipped, so no crumb was ever marked
-  // current and the crumb before it kept a link — `/members/admin/edit/:userId`
-  // ended in a link to `/members/admin/edit`, which is not a route.
-  const last = crumbs[crumbs.length - 1];
-  if (last) last.path = undefined;
+  // Only strip the link when the URL's final segment is what produced this
+  // crumb. Deriving "current" from `i === segments.length - 1` inside the loop
+  // was wrong on `/members/admin/edit/:userId`, where the id is skipped and no
+  // crumb was marked at all; stripping it unconditionally is wrong in the other
+  // direction, on `/grants/applications/:id`, where the last crumb is the list
+  // the record came from and its link is the only way back to it.
+  if (endsAtCurrentPage) {
+    const last = crumbs[crumbs.length - 1];
+    if (last) last.path = undefined;
+  }
 
-  return crumbs;
+  return { crumbs, endsAtCurrentPage };
 }
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '', omitCurrentPage = false }) => {
   const location = useLocation();
   const checkPermission = useAuthStore((state) => state.checkPermission);
-  const generated = items || generateBreadcrumbs(location.pathname, checkPermission);
+  const generated = generateBreadcrumbs(location.pathname, checkPermission);
 
   // Trimmed only when the trail was generated — see the prop.
   const trimmed = omitCurrentPage && !items;
-  const crumbs = trimmed ? generated.slice(0, -1) : generated;
+  const base = items ?? generated.crumbs;
+  const crumbs = trimmed ? base.slice(0, -1) : base;
+
+  // Which crumb, if any, is the page being viewed. Explicit items keep the old
+  // contract — the caller's last crumb is the page. A generated trail has one
+  // only when the URL's final segment named it, and a trimmed trail has dropped
+  // it on purpose. Nothing claims aria-current in the other two cases, because
+  // in both the last crumb is an ancestor the viewer can still travel to.
+  const currentIndex = items ? crumbs.length - 1 : trimmed || !generated.endsAtCurrentPage ? -1 : crumbs.length - 1;
 
   if (crumbs.length === 0) return null;
   // A single AUTO-generated crumb is suppressed: on a top-level route like
@@ -268,19 +296,16 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '',
               >
                 {crumb.label}
               </button>
-            ) : !trimmed && index === crumbs.length - 1 ? (
-              // The page you are on, identified by POSITION rather than by
-              // having no link. A middle crumb can also lack one — its path is
-              // not a route, or not one this viewer may open — and treating
-              // "no link" as "you are here" announced two ends to the trail.
+            ) : index === currentIndex ? (
+              // The page you are on, resolved above rather than inferred from
+              // "this crumb has no link". A middle crumb can lack one too — its
+              // path is not a route, or not one this viewer may open — and
+              // treating that as "you are here" announced two ends to the trail.
               //
               // Ordered after onClick so a handler a caller attached still
               // fires, whichever crumb carries it. Documents builds its folder
               // trail that way and gives the open folder no handler, so in
               // practice the current crumb reaches this branch.
-              //
-              // Skipped entirely on a trimmed trail: the last crumb there is
-              // the parent, so it stays a link and nothing claims aria-current.
               <span className="text-theme-text-primary font-semibold" aria-current="page">
                 {crumb.label}
               </span>

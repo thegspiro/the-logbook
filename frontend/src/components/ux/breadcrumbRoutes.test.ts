@@ -110,6 +110,39 @@ describe('breadcrumb route registry', () => {
     );
   });
 
+  it('finds only the one route whose module differs from its URL prefix', () => {
+    // A generated crumb carries no module check, on the reasoning that every
+    // ancestor belongs to the module the viewer is already inside. That holds
+    // only while a route's module matches its first URL segment. The Department
+    // Store breaks it deliberately — storefront module, Inventory URL space —
+    // and handles it by passing AdminHubFrame an empty trail. A second such
+    // route would silently offer crumbs its module gate refuses, so it has to
+    // fail here and make that choice consciously.
+    const impliedModule: Record<string, string> = {
+      inventory: 'inventory',
+      scheduling: 'scheduling',
+      training: 'training',
+      facilities: 'facilities',
+      apparatus: 'apparatus',
+      elections: 'elections',
+      minutes: 'minutes',
+      grants: 'grants',
+      finance: 'finance',
+      store: 'storefront',
+      'medical-supplies': 'medical_supplies',
+      'prospective-members': 'prospective_members',
+    };
+
+    const crossModule = declaredRoutes.filter((route) => {
+      const gate = routeGate(sources, route);
+      if (!gate.module) return false;
+      const implied = impliedModule[route.split('/').filter(Boolean)[0] ?? ''];
+      return implied !== undefined && implied !== gate.module;
+    });
+
+    expect(crossModule).toEqual(['/inventory/admin/store']);
+  });
+
   it('labels every administration hub, so none falls back to “Admin”', () => {
     for (const crumbPath of Object.keys(HUB_TITLE_SOURCES)) {
       expect(BREADCRUMB_ROUTES[crumbPath]?.label, `${crumbPath} has no label`).toMatch(/\S/);

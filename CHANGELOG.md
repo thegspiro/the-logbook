@@ -30,9 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not its parent `/inventory`. Both used to render as working links, landing on
   the dashboard and on Access Denied respectively. Such a crumb is now plain
   text.
-- **The trail marks the page you are on when the URL ends in a record id.**
-  Member edit and audit history showed no current crumb at all and ended in a
-  link to `/members/admin/edit`, which is not a route.
+- **A detail page keeps its link back to the list.** Where a URL ends in a
+  record id the id is not shown, so the crumb before it names the collection the
+  record came from — `Applications` on a grant application — not the record. It
+  stays a link, and nothing in the trail claims to be a page the viewer is not
+  on. Member edit and audit history separately used to end in a link to
+  `/members/admin/edit`, which is not a route.
 - **Equipment Checklists is no longer a dead end.** It carried no back link of
   its own, and is reached from Scheduling Administration as well as Inventory
   Administration.

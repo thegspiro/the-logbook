@@ -66,16 +66,27 @@ describe('Breadcrumbs', () => {
     expect(currentCrumbs()[0]).toHaveTextContent('Templates');
   });
 
-  it('marks the page you are on when the URL ends in a record id', () => {
-    // The id is skipped for display, so the crumb before it is the page. Deriving
-    // "current" from the loop index left this trail with no current crumb at all
-    // and a link to /members/admin/edit, which is not a route.
+  it('claims no current crumb when the URL ends in a record id', () => {
+    // The id is skipped for display, so no crumb names the record and none may
+    // claim to be it. /members/admin/edit is not a route either, so "Edit"
+    // renders as plain text — it must not become a link to the dashboard.
     grant('members.manage');
     renderAt('/members/admin/edit/8f14e45f-ceea-467a-9f6b-1a2b3c4d5e6f');
 
-    expect(currentCrumbs()).toHaveLength(1);
-    expect(currentCrumbs()[0]).toHaveTextContent('Edit');
+    expect(currentCrumbs()).toHaveLength(0);
+    expect(within(trail()).getByText('Edit')).not.toHaveAttribute('href');
     expect(crumbLinks()).not.toContain('/members/admin/edit');
+  });
+
+  it('keeps the list link on a detail route that ends in a record id', () => {
+    // The crumb before a skipped id is the collection the record came from, not
+    // the record. Stripping its link to mark it "current" took away the only
+    // route back to the list and announced a page the viewer is not on.
+    grant('fundraising.view');
+    renderAt('/grants/applications/8f14e45f-ceea-467a-9f6b-1a2b3c4d5e6f');
+
+    expect(currentCrumbs()).toHaveLength(0);
+    expect(within(trail()).getByRole('link', { name: 'Applications' })).toHaveAttribute('href', '/grants/applications');
   });
 
   it('does not link a path no route declares', () => {

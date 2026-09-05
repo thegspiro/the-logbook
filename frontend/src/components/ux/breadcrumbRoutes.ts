@@ -31,11 +31,20 @@
  * route's real gate out of the route source and fails on any drift, and derives
  * the ancestor set from the same source so an entry cannot go missing either.
  *
- * The module gate deliberately has no counterpart here. Every entry is a prefix
- * of the URL the viewer is already on, so it belongs to the module they are
- * already inside — the route they arrived through has proved the module is
- * enabled, and re-checking it would only cost `useEnabledModules` a request per
- * page.
+ * The module gate has no counterpart here, and that holds for every route but
+ * one. An entry is a prefix of the URL the viewer is on, so it almost always
+ * belongs to the module they are already inside — the route they arrived
+ * through has proved that module is enabled, and re-checking would cost
+ * `useEnabledModules` a request on every page that draws a trail.
+ *
+ * `/inventory/admin/store` is the exception: it is the Department Store hub,
+ * gated on the `storefront` module, sitting in Inventory's URL space because
+ * that is where an officer looks for it. A department can run the store with
+ * Inventory switched off, and then both of its ancestors are refused. That page
+ * passes `AdminHubFrame` an empty trail rather than a broken one — see the
+ * comment there. It is the only route in the app whose module differs from its
+ * URL prefix; a second one would have to make the same choice, or this file
+ * would have to learn about modules.
  */
 
 export interface BreadcrumbRoute {
