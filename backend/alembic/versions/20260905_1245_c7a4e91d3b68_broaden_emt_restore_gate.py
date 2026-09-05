@@ -48,9 +48,15 @@ the old setup wizard, so there should be no create-branch EMT row anywhere. It
 is kept because the cost of that being wrong is an EMT who cannot see their own
 department or ask to swap a shift.
 
-Guarded on the table existing: ``positions`` is one of the tables no migration
-creates — it appears when ``main.py`` calls ``create_all()``, and CI runs
-``alembic upgrade head`` against an empty database (CLAUDE.md pitfall #26).
+Guarded on the table existing, defensively rather than out of necessity:
+``positions`` IS created by the migration chain — the initial schema builds
+``roles`` and 20260805_0008 renames it, which makes that a required ancestor of
+this revision, so the table is present by the time this runs. An earlier
+version of this paragraph claimed the opposite, which is the false positive
+CLAUDE.md pitfall #26 records being reverted after an empirical ``alembic
+upgrade head`` against an empty database. The guard is kept because it costs
+one reflection and cannot be wrong, but it is not load-bearing, and it is not
+the pattern to copy for a genuinely create_all-only table.
 
 Revision ID: c7a4e91d3b68
 Revises: b4d1c8e37f52

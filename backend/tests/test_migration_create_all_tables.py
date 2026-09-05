@@ -43,6 +43,8 @@ import re
 import tokenize
 from pathlib import Path
 
+import pytest
+
 import app.models  # noqa: F401 - importing registers every model on the metadata
 from app.core.database import Base
 
@@ -771,3 +773,204 @@ class TestTheDetectionItself:
         offenders = _find_offenders(sources, self.CREATE_ALL_ONLY)
 
         assert len(offenders) == 1, "the second argument is the table"
+
+
+# ---------------------------------------------------------------------------
+# The prose has to agree with the chain
+# ---------------------------------------------------------------------------
+#
+# Pitfall #26 is stated in migration comments far more often than it is
+# enforced, and the statement is what the next author copies. Eighteen
+# revisions ended up asserting that ``positions`` is create_all-only because
+# each was written from its predecessor; it is not, and CLAUDE.md records the
+# unnecessary -- and data-lossy -- guard that reasoning already produced once.
+#
+# A claim is only wrong when the table is created by an ANCESTOR of the
+# revision making it. Several ``positions`` claims run on branches that never
+# descend from 20260805_0008, which renames ``roles`` into ``positions``, so
+# for them the table genuinely is absent and the guard is load-bearing.
+#
+# Ancestry, not chain position, is what decides that. This chain is not linear:
+# it has fork points and 23 merge revisions, so two siblings get adjacent
+# positions from a linear walk while neither descends from the other. An
+# earlier version of this check compared walk positions and would have called
+# a sibling's correct claim an offender -- which is how you end up deleting a
+# guard that is doing real work.
+
+#: Every phrasing the repository actually uses to assert create_all-only, so
+#: copying an existing comment cannot evade the check. Whitespace-tolerant: the
+#: claim wraps across a newline in real files, and a pattern that misses that
+#: silently matches nothing, which reads exactly like a clean run.
+#: ``[\s#]`` rather than ``\s`` between words: the claim wraps mid-sentence, and
+#: in a comment block the next line starts with a ``#``, which plain whitespace
+#: will not cross.
+_GAP = r"[\s#]+"
+_CLAIM_FORMS = (
+    rf"no{_GAP}migration{_GAP}creates",
+    r"model-only\s+table",
+    rf"nothing{_GAP}in{_GAP}the{_GAP}migration{_GAP}chain{_GAP}creates",
+    rf"no{_GAP}migration{_GAP}in{_GAP}this{_GAP}chain",
+    rf"not{_GAP}created{_GAP}by{_GAP}any{_GAP}migration",
+    rf"never{_GAP}created{_GAP}by{_GAP}a{_GAP}migration",
+)
+_CLAIM = re.compile("|".join(_CLAIM_FORMS), re.S)
+
+
+def _revision_of(text: str) -> str | None:
+    match = re.search(
+        r'^revision(?:\s*:\s*str)?\s*=\s*["\']([^"\']+)', text, re.MULTILINE
+    )
+    return match.group(1) if match else None
+
+
+def _parents_of(text: str) -> tuple[str, ...]:
+    """Every immediate parent, including both sides of a merge revision."""
+    match = re.search(r"^down_revision(?:\s*:[^=]*)?\s*=\s*(.+?)$", text, re.MULTILINE)
+    if not match:
+        return ()
+    return tuple(re.findall(r'["\']([^"\']+)["\']', match.group(1)))
+
+
+def _ancestor_sets(sources: dict[str, str]) -> dict[str, set[str]]:
+    """Strict ancestors of every revision, following merges up both sides."""
+    parents: dict[str, tuple[str, ...]] = {}
+    for text in sources.values():
+        revision = _revision_of(text)
+        if revision is not None:
+            parents[revision] = _parents_of(text)
+
+    resolved: dict[str, set[str]] = {}
+
+    def ancestors(revision: str) -> set[str]:
+        if revision in resolved:
+            return resolved[revision]
+        resolved[revision] = set()  # cycles cannot happen, but do not hang if they do
+        found: set[str] = set()
+        for parent in parents.get(revision, ()):
+            found.add(parent)
+            found |= ancestors(parent)
+        resolved[revision] = found
+        return found
+
+    return {revision: ancestors(revision) for revision in parents}
+
+
+def _claim_blocks(text: str) -> list[str]:
+    """The comment or docstring paragraph around each create_all-only claim."""
+    blocks = []
+    for match in _CLAIM.finditer(text):
+        start = text.rfind("\n\n", 0, match.start())
+        end = text.find("\n\n", match.end())
+        blocks.append(
+            text[0 if start == -1 else start : end if end != -1 else len(text)]
+        )
+    return blocks
+
+
+def _false_claims(sources: dict[str, str]) -> list[str]:
+    model_tables = set(Base.metadata.tables)
+    ancestors = _ancestor_sets(sources)
+
+    creators: dict[str, set[str]] = {}
+    revisions: dict[str, str] = {}
+    for name, text in sources.items():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        revisions[name] = revision
+        for table in _tables_created_by_migrations({name: text}):
+            creators.setdefault(table, set()).add(revision)
+
+    offenders = []
+    for name, text in sources.items():
+        revision = revisions.get(name)
+        if revision is None:
+            continue
+        forebears = ancestors.get(revision, set())
+        for block in _claim_blocks(text):
+            named = set(re.findall(r"[a-z_]{4,}", block)) & model_tables
+            for table in sorted(named):
+                built_by = creators.get(table, set()) & forebears
+                if built_by:
+                    offenders.append(
+                        f"{name} says `{table}` is create_all-only, but "
+                        f"{sorted(built_by)[0]} creates it and is an ancestor"
+                    )
+    return offenders
+
+
+def test_no_migration_claims_a_table_is_create_all_only_when_it_is_not():
+    """The prose is the thing that propagates, so the prose is what to check.
+
+    Correcting a comment changes no behaviour, which is exactly why nothing
+    stopped the claim being copied eighteen times.
+    """
+    assert _false_claims(_migration_sources()) == []
+
+
+class TestTheClaimDetection:
+    """Guard the guard.
+
+    A ratchet that cannot fail is worse than none: it reads as enforcement
+    while enforcing nothing. Every assertion here is a positive one -- a
+    planted offender that MUST be reported -- because the real corpus is
+    expected to be clean, so asserting cleanliness proves only that
+    ``_false_claims`` returns something falsy.
+    """
+
+    def _plant(self, claim: str) -> list[str]:
+        """Put *claim* on a real in-chain revision that descends from the rename."""
+        sources = _migration_sources()
+        planted = dict(sources)
+        target = "20260905_0130_b4d1c8e37f52_restore_emt_seeded_grants.py"
+        planted[target] = sources[target] + f"\n\n# {claim}\n"
+        return _false_claims(planted)
+
+    def test_a_planted_claim_on_a_descendant_is_reported(self):
+        offenders = self._plant("positions is a model-only table.")
+
+        assert any("b4d1c8e37f52" in o and "positions" in o for o in offenders), (
+            "The detector did not report a false claim planted on a revision "
+            "that descends from the one creating the table."
+        )
+
+    @pytest.mark.parametrize(
+        "claim",
+        [
+            "positions -- no migration creates it.",
+            "positions is a model-only table.",
+            "nothing in the migration chain creates positions.",
+            "no migration in this chain builds positions.",
+            "positions is not created by any migration.",
+            "positions is never created by a migration.",
+        ],
+    )
+    def test_every_recognized_form_is_caught(self, claim):
+        """Each phrasing the repo uses, pinned by an offender rather than by
+        its presence in the pattern -- so widening the alternation cannot
+        quietly stop matching one of them."""
+        assert self._plant(claim), f"not recognized as a claim: {claim!r}"
+
+    def test_the_claim_survives_wrapping_across_a_newline(self):
+        assert self._plant("positions -- no migration\n# creates it.")
+
+    def test_a_sibling_is_not_an_ancestor(self):
+        """The bug this replaced: a linear walk gives siblings adjacent
+        positions, so comparing positions calls a sibling's correct claim an
+        offender and invites deleting a load-bearing guard.
+
+        20260809_0002 and 20260810_0001 both hang off 20260809_0001 and neither
+        descends from the other.
+        """
+        ancestors = _ancestor_sets(_migration_sources())
+
+        assert "20260809_0002" not in ancestors["20260810_0001"]
+        assert "20260810_0001" not in ancestors["20260809_0002"]
+        assert "20260809_0001" in ancestors["20260810_0001"]
+
+    def test_a_merge_revision_inherits_both_sides(self):
+        """Ancestry has to follow both parents of a merge or a claim on the
+        far side looks unreachable and goes unchecked."""
+        ancestors = _ancestor_sets(_migration_sources())
+
+        assert {"20260814_0003", "20260813_0020"} <= ancestors["20260814_0004"]
