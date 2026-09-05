@@ -144,9 +144,10 @@ describe('InventoryAdminHub', () => {
 
   it('renders the page title and subtitle', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    // By role, not by text: the frame's breadcrumb trail ends at this page, so
-    // its last crumb carries the same string as the <h1>. The heading is what
-    // these assertions mean by "the page rendered".
+    // By role, not by text: "the page rendered" means its heading is there, and
+    // the frame's breadcrumb trail also carries this module's name. The trail
+    // now stops at the parent so the two no longer collide, but a role query
+    // says what these assertions mean regardless of what the chrome renders.
     expect(screen.getByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
     expect(
       screen.getByText('Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today')

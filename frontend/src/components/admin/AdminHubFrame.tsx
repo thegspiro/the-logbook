@@ -166,8 +166,15 @@ export function AdminHubFrame<K extends string>({
         {/* 0 — Trail. Above the eyebrow, because it says where the page sits
             rather than what kind of page it is. Rendered by the frame so all
             six hubs carry one without each remembering to; `mb-0` because the
-            frame's own flex gap already spaces it. */}
-        <Breadcrumbs items={breadcrumbs} className="mb-0" />
+            frame's own flex gap already spaces it.
+
+            It ends at the PARENT. This header already names the page twice —
+            eyebrow "Administration", then an <h1> of "Inventory
+            Administration" — and a crumb repeating the <h1> verbatim
+            immediately above it is a third near-identical line to a reader and
+            a name announced twice to a screen reader. What the trail is here
+            for is the step up, which nothing else on a hub offers. */}
+        <Breadcrumbs items={breadcrumbs} className="mb-0" omitCurrentPage />
 
         {/* 1 — Header. Icon actions and a single red primary; never two reds. */}
         <div className="flex flex-wrap items-start justify-between gap-3">

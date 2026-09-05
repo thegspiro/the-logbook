@@ -29,6 +29,10 @@ const renderAt = (pathname: string, ui = <Breadcrumbs />) => {
 };
 
 const trail = () => screen.getByRole('navigation', { name: /breadcrumb/i });
+
+/** Crumbs announced as the page you are on. Exactly one, or none on a trimmed trail. */
+const currentCrumbs = () =>
+  within(trail()).queryAllByText((_content, node) => node?.getAttribute('aria-current') === 'page');
 const crumbLinks = () =>
   within(trail())
     .queryAllByRole('link')
@@ -58,9 +62,8 @@ describe('Breadcrumbs', () => {
     grant('scheduling.manage');
     renderAt('/scheduling/admin/templates');
 
-    const current = within(trail()).getAllByText((_, node) => node?.getAttribute('aria-current') === 'page');
-    expect(current).toHaveLength(1);
-    expect(current[0]).toHaveTextContent('Templates');
+    expect(currentCrumbs()).toHaveLength(1);
+    expect(currentCrumbs()[0]).toHaveTextContent('Templates');
   });
 
   it('marks the page you are on when the URL ends in a record id', () => {
@@ -70,9 +73,8 @@ describe('Breadcrumbs', () => {
     grant('members.manage');
     renderAt('/members/admin/edit/8f14e45f-ceea-467a-9f6b-1a2b3c4d5e6f');
 
-    const current = within(trail()).getAllByText((_, node) => node?.getAttribute('aria-current') === 'page');
-    expect(current).toHaveLength(1);
-    expect(current[0]).toHaveTextContent('Edit');
+    expect(currentCrumbs()).toHaveLength(1);
+    expect(currentCrumbs()[0]).toHaveTextContent('Edit');
     expect(crumbLinks()).not.toContain('/members/admin/edit');
   });
 
@@ -121,5 +123,51 @@ describe('Breadcrumbs', () => {
     renderAt('/members');
 
     expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).not.toBeInTheDocument();
+  });
+
+  describe('omitCurrentPage', () => {
+    it('ends the trail at the parent', () => {
+      grant('inventory.manage');
+      renderAt('/inventory/admin/store', <Breadcrumbs omitCurrentPage />);
+
+      expect(within(trail()).queryByText('Department Store')).not.toBeInTheDocument();
+      expect(crumbLinks()).toEqual(['/inventory', '/inventory/admin']);
+    });
+
+    it('claims no crumb as the current page, and keeps the last one a link', () => {
+      // The last crumb is now the parent, so marking it aria-current would tell
+      // a screen reader the viewer is on a page they are not on — and making it
+      // a plain span would cost them the step up the trail exists to offer.
+      grant('inventory.manage');
+      renderAt('/inventory/admin/store', <Breadcrumbs omitCurrentPage />);
+
+      expect(currentCrumbs()).toHaveLength(0);
+      expect(within(trail()).getByRole('link', { name: 'Inventory Administration' })).toHaveAttribute(
+        'href',
+        '/inventory/admin'
+      );
+    });
+
+    it('still renders when trimming leaves a single parent crumb', () => {
+      // The one-crumb suppression exists so a top-level page does not restate
+      // its own <h1>. A trimmed crumb is the parent, not a restatement, and
+      // suppressing it would leave a hub with no route up at all.
+      grant('inventory.manage');
+      renderAt('/inventory/admin', <Breadcrumbs omitCurrentPage />);
+
+      expect(crumbLinks()).toEqual(['/inventory']);
+      expect(within(trail()).queryByText('Inventory Administration')).not.toBeInTheDocument();
+    });
+
+    it('leaves an explicit trail whole', () => {
+      // A caller passing items wrote the crumbs it wants shown; deleting the
+      // last of them is a different operation from trimming a derived trail.
+      renderAt(
+        '/training/programs',
+        <Breadcrumbs omitCurrentPage items={[{ label: 'Training', path: '/training' }, { label: 'Programs' }]} />
+      );
+
+      expect(within(trail()).getByText('Programs')).toHaveAttribute('aria-current', 'page');
+    });
   });
 });

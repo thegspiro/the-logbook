@@ -34,6 +34,21 @@ interface BreadcrumbsProps {
    */
   items?: BreadcrumbItem[] | undefined;
   className?: string;
+  /**
+   * End the generated trail at the parent, dropping the crumb for the page you
+   * are on.
+   *
+   * For a page whose own heading already names it in larger type directly
+   * below. `AdminHubFrame` is the case: its header reads eyebrow
+   * "Administration", then an `<h1>` of "Inventory Administration" — a crumb
+   * saying "Inventory Administration" immediately above that is a third
+   * near-identical line, and a screen reader announces the name twice.
+   *
+   * Generated trails only. A caller passing `items` has written the crumbs it
+   * wants shown, and silently deleting the last of them would be a different
+   * thing entirely.
+   */
+  omitCurrentPage?: boolean;
 }
 
 const PATH_LABELS: Record<string, string> = {
@@ -202,10 +217,14 @@ function generateBreadcrumbs(pathname: string, checkPermission?: (permission: st
   return crumbs;
 }
 
-export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' }) => {
+export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '', omitCurrentPage = false }) => {
   const location = useLocation();
   const checkPermission = useAuthStore((state) => state.checkPermission);
-  const crumbs = items || generateBreadcrumbs(location.pathname, checkPermission);
+  const generated = items || generateBreadcrumbs(location.pathname, checkPermission);
+
+  // Trimmed only when the trail was generated — see the prop.
+  const trimmed = omitCurrentPage && !items;
+  const crumbs = trimmed ? generated.slice(0, -1) : generated;
 
   if (crumbs.length === 0) return null;
   // A single AUTO-generated crumb is suppressed: on a top-level route like
@@ -214,7 +233,11 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
   // items has decided this page needs a visible path back up, and dropping it
   // silently is what left the member inbox with no route home but the
   // dashboard.
-  if (!items && crumbs.length === 1) return null;
+  //
+  // A TRIMMED trail is exempt: its one remaining crumb is the parent, not a
+  // restatement of the page. Suppressing it would leave an administration hub
+  // with no route up at all, which is the gap this trail was added to close.
+  if (!items && !trimmed && crumbs.length === 1) return null;
 
   // Crumb links grow to the 44px touch minimum below md — a bare text link is
   // ~20px tall and the Home icon 16px square, both under it. Grown with
@@ -245,7 +268,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
               >
                 {crumb.label}
               </button>
-            ) : index === crumbs.length - 1 ? (
+            ) : !trimmed && index === crumbs.length - 1 ? (
               // The page you are on, identified by POSITION rather than by
               // having no link. A middle crumb can also lack one — its path is
               // not a route, or not one this viewer may open — and treating
@@ -255,6 +278,9 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
               // fires, whichever crumb carries it. Documents builds its folder
               // trail that way and gives the open folder no handler, so in
               // practice the current crumb reaches this branch.
+              //
+              // Skipped entirely on a trimmed trail: the last crumb there is
+              // the parent, so it stays a link and nothing claims aria-current.
               <span className="text-theme-text-primary font-semibold" aria-current="page">
                 {crumb.label}
               </span>
