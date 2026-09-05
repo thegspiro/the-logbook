@@ -66,6 +66,20 @@ fundraising"` and the full backend suite green, `tsc --noEmit` 0 errors,
 this is a documentation-only conflict between two branches recording the
 same PR, not a code or CI problem.
 
+2026-09-05 tend (round 4, watchdog): `main` picked up PR #2270 (and others)
+since round 3, reintroducing the same `CHANGELOG.md` `[Unreleased]`
+conflict (this PR's grants/fundraising pagination entry against an
+unrelated equipment-request-catalog entry newly merged to `main`). No new
+review comments; all 3 Codex threads from earlier rounds remain resolved.
+Merged `origin/main` into the PR branch, kept both `[Unreleased]` blocks,
+and re-ran the completion gate scoped to the touched backend files plus
+`validate_migrations.py --strict` (428 revisions, single head — the merge
+pulled in `main`'s new `a1c7e93b2d54` equipment-request-size migration),
+`pytest -k "grant or fundraising"` (563 passed, 1 pre-existing skip), and
+`tsc --noEmit` (0 errors) — all clean — and pushed. Still awaiting owner
+merge; no code or CI problem, just `main`'s pace outrunning `mergeable_state`
+recomputation between tend passes.
+
 ---
 
 ### 2026-09-05 — Feature 22 (Grants & fundraising), pass 3 — 1 fixed, 0 flagged
