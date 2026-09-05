@@ -37,6 +37,17 @@ fundraising"` — 537 passed, migration `create_all` guard test — 33 passed,
 `tsc --noEmit`, `eslint .`) — all clean — and pushed. No review comments or
 CI failures outstanding.
 
+2026-09-05 tend (round 2): `main` had advanced another 16 commits past the
+prior tend's merge point (PRs #2257–#2261 and others). Merged `origin/main`
+into the PR branch again; the only conflict was, once more, two
+independently-added `[Unreleased]` blocks in `CHANGELOG.md`, resolved by
+keeping both. Re-ran the full completion gate post-merge:
+flake8/black/isort clean, `validate_migrations.py --strict` (425 revisions,
+single head), `pytest -k "grant or fundraising"` — 556 passed, full backend
+suite — 11100 passed/21 pre-existing skips/0 failed, `tsc --noEmit` 0
+errors, `eslint .` 0 errors/0 warnings — and pushed. All 17 CI checks green
+on the new head; no review comments outstanding.
+
 ---
 
 ### 2026-09-05 — Feature 22 (Grants & fundraising), pass 3 — 1 fixed, 0 flagged
