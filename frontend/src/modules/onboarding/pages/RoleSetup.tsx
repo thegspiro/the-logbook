@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
@@ -154,6 +154,21 @@ const PositionSetup: React.FC = () => {
   const savedPositionsConfig = useOnboardingStore((state) => state.positionsConfig);
   const setPositionsConfig = useOnboardingStore((state) => state.setPositionsConfig);
   const organizationType = useOnboardingStore((state) => state.organizationType);
+  const reconciledSeededSlugs = useOnboardingStore((state) => state.reconciledSeededSlugs);
+  const markSeededSlugsReconciled = useOnboardingStore((state) => state.markSeededSlugsReconciled);
+
+  // Which stale slugs this mount reconciles: present in the saved config and
+  // not recorded as done. Latched on first render rather than recomputed,
+  // because the effect below adds to `reconciledSeededSlugs` — recomputing
+  // would decide a slug was already handled while this mount is still using
+  // the answer it started with.
+  const slugsToReconcileRef = useRef<string[] | null>(null);
+  if (slugsToReconcileRef.current === null) {
+    slugsToReconcileRef.current = Object.keys(savedPositionsConfig ?? {}).filter(
+      (posId) => STALE_SEEDED_SLUGS.has(posId) && !reconciledSeededSlugs.includes(posId)
+    );
+  }
+  const slugsToReconcile = slugsToReconcileRef.current;
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
@@ -218,13 +233,18 @@ const PositionSetup: React.FC = () => {
         //    writes the submitted value over the seeded one, so a stale 10
         //    would put EMT back on the baseline Member position's rung.
         //
-        //    Named slugs, not every seeded position. Replacing the saved map
-        //    wholesale would also discard the edits an administrator made on
-        //    this screen earlier in the same session — they customize a
-        //    built-in position, walk to the modules step, come back, and find
-        //    the boxes reset. Only a slug whose seeded grants actually moved
-        //    needs this, and a later change adds its own.
-        const stale = template && STALE_SEEDED_SLUGS.has(posId);
+        //    Named slugs, not every seeded position, and **once** rather than
+        //    on every mount. Either alone is not enough: replacing the saved
+        //    map wholesale would discard edits to any built-in position, and
+        //    doing it repeatedly would discard them for this slug — an
+        //    administrator customizes EMT, walks to the modules step, comes
+        //    back, and finds the boxes reset, with the persistence effect then
+        //    writing the defaults back over their work. `reconciledSeededSlugs`
+        //    records that the upgrade has happened, so a session created by
+        //    this build reconciles a no-op on first mount and is then left
+        //    alone. Only a slug whose seeded grants actually moved needs this,
+        //    and a later change adds its own.
+        const stale = template && slugsToReconcile.includes(posId);
         restored[posId] = {
           ...saved,
           ...(template ? { name: template.name } : {}),
@@ -252,6 +272,14 @@ const PositionSetup: React.FC = () => {
     });
     return initial;
   });
+
+  // Record the reconciliation once the initializer above has used it, so the
+  // next mount leaves these slugs alone and an administrator's edits survive.
+  useEffect(() => {
+    if (slugsToReconcile.length > 0) {
+      markSeededSlugsReconciled(slugsToReconcile);
+    }
+  }, [slugsToReconcile, markSeededSlugsReconciled]);
 
   // Expanded categories
   const [expandedCategories, setExpandedCategories] = useState<string[]>([

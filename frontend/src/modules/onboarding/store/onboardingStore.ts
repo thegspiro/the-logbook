@@ -113,6 +113,20 @@ export interface OnboardingState {
     }
   > | null;
 
+  /**
+   * Seeded position slugs whose stored grants have already been reconciled
+   * against the current templates.
+   *
+   * `positionsConfig` is persisted, so it can predate the grants a later build
+   * seeds — an EMT saved before the registry gained its entry carries the ticks
+   * a role-type heuristic chose. RoleSetup takes the template's answer for such
+   * a slug on restore, and records it here so it does that **once**. Without
+   * the record it would run on every mount, and an administrator who edits a
+   * built-in position, steps to the modules page and comes back would find
+   * their edits replaced by the defaults.
+   */
+  reconciledSeededSlugs: string[];
+
   // Module Selection
   selectedModules: string[];
   moduleStatuses: Record<string, 'enabled' | 'skipped' | 'ignored'>;
@@ -170,6 +184,7 @@ export interface OnboardingActions {
 
   // Position Actions
   setPositionsConfig: (positions: OnboardingState['positionsConfig']) => void;
+  markSeededSlugsReconciled: (slugs: string[]) => void;
   // Module Actions
   setSelectedModules: (modules: string[]) => void;
   toggleModule: (moduleId: string) => void;
@@ -218,6 +233,7 @@ const initialState: OnboardingState = {
   stations: [],
   apparatus: [],
   positionsConfig: null,
+  reconciledSeededSlugs: [],
   selectedModules: [],
   moduleStatuses: {},
   modulePermissionConfigs: {},
@@ -355,6 +371,16 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       setPositionsConfig: (positions) => {
         set({ positionsConfig: positions });
         get().triggerAutoSave();
+      },
+
+      markSeededSlugsReconciled: (slugs) => {
+        // No auto-save: this records that a one-time reconciliation has run,
+        // which is local bookkeeping rather than a change to the draft the
+        // department is filling in.
+        const already = get().reconciledSeededSlugs;
+        const added = slugs.filter((slug) => !already.includes(slug));
+        if (added.length === 0) return;
+        set({ reconciledSeededSlugs: [...already, ...added] });
       },
 
       // Module Actions
@@ -507,6 +533,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         stations: state.stations,
         apparatus: state.apparatus,
         positionsConfig: state.positionsConfig,
+        reconciledSeededSlugs: state.reconciledSeededSlugs,
         selectedModules: state.selectedModules,
         moduleStatuses: state.moduleStatuses,
         modulePermissionConfigs: state.modulePermissionConfigs,
