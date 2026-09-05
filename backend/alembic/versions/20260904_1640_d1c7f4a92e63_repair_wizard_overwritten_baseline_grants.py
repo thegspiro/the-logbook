@@ -25,10 +25,13 @@ row whatever else it holds (``compliance.view``, ``facilities.view``,
 ``c9a5e21f7b04``). This settles the rest, for the three slugs the heuristic
 reached: ``member``, ``firefighter`` and ``engineer``.
 
-``emt`` is deliberately absent. ``DEFAULT_POSITIONS`` has no ``emt`` entry — the
-rank exists but no position mirrors it — so onboarding writes no ``is_system``
-row under that slug for the wizard to have overwritten. ``e4f5a6b7c8d9`` listed
-it defensively; there is nothing for it to match.
+``emt`` is absent here, and **that was a mistake** — corrected in
+``f3b8d0c26a17``, which covers it. The reasoning was: ``DEFAULT_POSITIONS`` has
+no ``emt`` entry, so onboarding writes no ``is_system`` row under that slug. But
+the wizard keeps its own roster: ``emt`` is one of its discipline positions, and
+because no seeded row exists to update, ``save_session_roles`` takes its *create*
+branch and stores the heuristic's output verbatim with ``is_system=True``.
+``e4f5a6b7c8d9`` listed ``emt`` for exactly that reason, not defensively.
 
 Every change here is gated on the row being recognizably unrepaired wizard
 output — it carries one of ``_HEURISTIC_MARKERS``, four grants the registry
@@ -79,6 +82,13 @@ Guarded on the table existing: ``positions`` is one of the tables no migration
 creates — it appears when ``main.py`` calls ``create_all()``, and CI runs
 ``alembic upgrade head`` against an empty database, so reflecting it unguarded
 would fail the whole upgrade rather than this one step (CLAUDE.md pitfall #26).
+
+**Partly superseded by ``f3b8d0c26a17``.** The fingerprint gate below misses a
+wizard row whose four marker modules were unticked at onboarding, so that
+revision repeats every revocation here unconditionally. Only the restorations —
+``storefront.order`` and ``inventory.check_submit`` — remain this migration's
+alone: adding is the direction where an unconditional write would override a
+department's deliberate removal. This body is left as it ran (pitfall #20).
 
 Revision ID: d1c7f4a92e63
 Revises: c9a5e21f7b04
