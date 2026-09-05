@@ -62,7 +62,7 @@ Not repaired here: the nine-permission set ``20260901_1320`` restores to
 grant than these three and deserves its own decision -- see the follow-up issue.
 
 Revision ID: d4f81a02c6e7
-Revises: a1c7e93b2d54
+Revises: a3d7e2f18c45
 Create Date: 2026-09-05 18:00:00.000000
 """
 
@@ -73,7 +73,7 @@ from alembic import op
 
 # revision identifiers
 revision = "d4f81a02c6e7"
-down_revision = "a1c7e93b2d54"
+down_revision = "a3d7e2f18c45"
 branch_labels = None
 depends_on = None
 
