@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
+
+**Changed**
+
+- **"Permanent Assignments" and "Issued Items" are now one section.** The split
+  was the stockroom's, not the member's: an assignment is one serialized unit
+  out of `item_assignments`, an issuance is N units drawn from bulk stock in
+  `item_issuances`, and a member holds both open-endedly with nothing to do
+  differently about either. Both now render in one **Issued to Me** list,
+  sorted by when the gear was received, with each row still showing what its
+  record type actually carries — serial, asset tag and condition for an
+  assignment; quantity and size for an issuance. The four quick-stat tiles
+  collapse to three to match.
+- **Active Temporary Loans stays its own section**, because a due date is the
+  one distinction a member has to act on, and folding it in would have buried
+  the overdue badge.
+- Nothing changed on the wire. The two record types remain separate tables with
+  separate return endpoints, and a row's "Notify quartermaster of return" still
+  posts `return_type: assignment` or `issuance` against the right reference id
+  — pinned by a test per row type, since one merged list makes flattening them
+  onto a single shape an easy mistake to make later. The return buttons also
+  gained per-item accessible names; one list of identically-labelled buttons
+  gave a screen reader nothing to tell the rows apart with.
+- The quartermaster's member view (`/inventory/admin/members`) and the
+  dashboard gear widget are untouched.
+
+### Apparatus: the fleet record becomes officer-only (2026-09-05)
+
+**Changed**
+
+- **Regular members no longer see the Apparatus pages.** `apparatus.view` was
+  seeded to every rank-and-file position, so any member could open the fleet
+  maintenance and compliance record — inspection expirations, out-of-service
+  status, deficiency flags and driver qualifications. The grant is removed from
+  the `member` position and from the shared line-member list behind the
+  Firefighter and EMT ranks and positions. Migration `b6e4a0d17c93` takes it off
+  the rows already stored, including the `apparatus.manage` and `apparatus.*`
+  forms the setup screen's Manage checkbox could have written.
+- Officers, chiefs, administrators and the **Engineer** rank keep it —
+  Engineer is the driver/operator and holds `apparatus.maintenance` beside it.
+  A department that wants members to see the fleet can re-add the grant to its
+  Member position on the positions screen.
+- The Apparatus navigation entry is now gated on the same permissions as the
+  route, so it disappears rather than leading to Access Denied. The lightweight
+  `/apparatus-basic` page, shown when the Apparatus module is off, is
+  unaffected and stays open to everyone.
+
+**Fixed**
+
+- The crew-level **Apparatus Inventory** page (`/inventory/checklists/apparatus-inventory`)
+  filled its apparatus picker from the Apparatus module's roster, which the
+  same members are no longer permitted to read. It now reads the
+  authentication-only scheduling endpoint that already backs the shift board,
+  so recording a used item keeps working.
+
 ### `text-right` on a table header did nothing, everywhere (2026-09-05)
 
 **Fixed**

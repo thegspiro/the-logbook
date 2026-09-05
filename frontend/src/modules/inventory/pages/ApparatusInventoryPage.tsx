@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import { apparatusService } from '../../../modules/apparatus/services/api';
+import { schedulingService } from '../../../modules/scheduling/services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import type {
   ApparatusInventory,
@@ -44,7 +44,6 @@ import type {
   ItemDeployedLots,
   ReadyLot,
 } from '../../../modules/inventory/types/equipmentCheck';
-import type { ApparatusListItem } from '../../../modules/apparatus/types';
 import { PromptDialog } from '../../../components/ux';
 import LotsAboardPanel from '../../../modules/inventory/components/LotsAboardPanel';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -52,8 +51,12 @@ import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormattin
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 
-/** The list endpoint's ceiling; asking for more is rejected outright. */
-const FLEET_PAGE_SIZE = 100;
+/** One entry in the apparatus picker. */
+interface FleetOption {
+  id: string;
+  unitNumber: string;
+  name: string;
+}
 
 interface ApparatusInventoryPageProps {
   /**
@@ -75,7 +78,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const embedded = apparatusId !== undefined;
   const selectedId = apparatusId ?? searchParams.get('apparatus') ?? '';
 
-  const [fleet, setFleet] = useState<ApparatusListItem[]>([]);
+  const [fleet, setFleet] = useState<FleetOption[]>([]);
   const [inventory, setInventory] = useState<ApparatusInventory | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -91,21 +94,31 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const [lotsBusy, setLotsBusy] = useState(false);
 
   useEffect(() => {
-    // The fleet list exists only to fill the picker, and walking it costs one
-    // request per hundred apparatus. Embedded there is no picker, so skip it.
+    // The fleet list exists only to fill the picker. Embedded there is no
+    // picker, so skip it.
     if (embedded) return;
     void (async () => {
       try {
-        // The endpoint caps page_size at 100 and 422s above it, so a fleet
-        // larger than one page has to be walked rather than asked for at once
-        // — asking for 200 returned nothing at all and left the picker empty.
-        const first = await apparatusService.getApparatusList({ pageSize: FLEET_PAGE_SIZE });
-        const all = [...first.items];
-        for (let page = 2; page <= first.totalPages; page += 1) {
-          const next = await apparatusService.getApparatusList({ pageSize: FLEET_PAGE_SIZE, page });
-          all.push(...next.items);
-        }
-        setFleet(all);
+        // `/scheduling/apparatus-options` rather than the apparatus module's
+        // own roster: this page is crew-level by both its route gate and its
+        // backend gate, and regular members do not hold `apparatus.view`, so
+        // reading `GET /apparatus` here 403'd them into an empty picker. This
+        // endpoint is gated on authentication alone and already backs the
+        // shift board's picker.
+        //
+        // Narrowed to `source === 'apparatus'` because the endpoint falls back
+        // to BasicApparatus records and then to hardcoded defaults, neither of
+        // which `/equipment-checks/apparatus/{id}/inventory` knows anything
+        // about — that filtered set is also exactly what `GET /apparatus`
+        // returned before.
+        const { options } = await schedulingService.getApparatusOptions();
+        setFleet(
+          options.flatMap((option) =>
+            option.source === 'apparatus' && option.id
+              ? [{ id: option.id, unitNumber: option.unit_number || option.name, name: option.name }]
+              : []
+          )
+        );
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load apparatus'));
       }
@@ -482,7 +495,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
               {fleet.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.unitNumber}
-                  {a.name ? ` — ${a.name}` : ''}
+                  {a.name && a.name !== a.unitNumber ? ` — ${a.name}` : ''}
                 </option>
               ))}
             </select>

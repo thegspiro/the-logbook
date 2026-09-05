@@ -37,8 +37,24 @@ _SEEDED_GRANTS_TS = (
 )
 
 
+#: Modules whose EMT checkbox was ticked when ``b4d1c8e37f52`` ran, and which a
+#: LATER revision has since taken off the seeded set. ``b6e4a0d17c93`` revoked
+#: ``apparatus`` from the rank-and-file slugs on 2026-09-05.
+#:
+#: They are added back below rather than trimmed out of the migration's frozen
+#: ``_UNEDITED_SHAPE``, and the direction matters: the shape is matched against
+#: real stored rows, and a row untouched since the create branch wrote it still
+#: holds these. Trimming the shape to a registry that moved on afterwards is
+#: what would stop it matching and turn the restore into a silent no-op —
+#: precisely the failure its fingerprint gate exists to avoid (pitfall #20).
+_REVOKED_SINCE_MODULES = ("apparatus",)
+
+#: The same revocations expressed as the permissions a pristine row held.
+_REVOKED_SINCE_PERMISSIONS = ("apparatus.view",)
+
+
 def _emt_modules():
-    """The modules EMT actually gets a checkbox for.
+    """The modules EMT had a checkbox for when this migration ran.
 
     Read from the generated map as text, in the manner of
     ``test_onboarding_position_template_parity.py``, rather than derived from
@@ -46,11 +62,27 @@ def _emt_modules():
     point: the editor only knows the modules in its own registry, so
     ``locations``, ``meetings`` and ``organization`` have no box to tick even
     though the rank grants a view on each.
+
+    Modules revoked by a later revision are added back — see
+    ``_REVOKED_SINCE_MODULES``.
     """
     source = _SEEDED_GRANTS_TS.read_text()
     block = re.search(r"\n  emt: \{\s*view: \[(.*?)\],", source, re.S)
     assert block, f"no emt entry in {_SEEDED_GRANTS_TS.name}"
-    return sorted(re.findall(r"'([^']+)'", block.group(1)))
+    modules = set(re.findall(r"'([^']+)'", block.group(1)))
+    return sorted(modules | set(_REVOKED_SINCE_MODULES))
+
+
+def _registry_at_this_point():
+    """``DEFAULT_POSITIONS["emt"]`` as it stood when this migration ran.
+
+    The migration brings a row up to the registry *of its own moment*, not to
+    today's. A later revocation leaves today's registry one grant shorter than
+    the row this one legitimately produces.
+    """
+    return set(DEFAULT_POSITIONS["emt"]["permissions"]) | set(
+        _REVOKED_SINCE_PERMISSIONS
+    )
 
 
 def _editor_output():
@@ -167,8 +199,8 @@ class TestTheUneditedShape:
     def test_the_shape_plus_the_restored_set_is_the_registry(self):
         module = _migration()
 
-        assert set(module._UNEDITED_SHAPE) | set(module._RESTORE) == set(
-            DEFAULT_POSITIONS["emt"]["permissions"]
+        assert set(module._UNEDITED_SHAPE) | set(module._RESTORE) == (
+            _registry_at_this_point()
         )
 
     @pytest.mark.parametrize("edit", ["added", "removed"])
@@ -216,7 +248,7 @@ class TestARowFromTheCreateBranch:
 
         result = _restore_row(positions_table, "emt", wizard)
 
-        assert sorted(result) == sorted(DEFAULT_POSITIONS["emt"]["permissions"])
+        assert sorted(result) == sorted(_registry_at_this_point())
 
     def test_what_was_already_there_keeps_its_order(self, positions_table):
         wizard = sorted(_editor_output())
@@ -226,7 +258,7 @@ class TestARowFromTheCreateBranch:
         assert result[: len(wizard)] == wizard
 
     def test_a_complete_row_is_byte_identical(self, positions_table):
-        seeded = list(DEFAULT_POSITIONS["emt"]["permissions"])
+        seeded = sorted(_registry_at_this_point())
 
         assert _restore_row(positions_table, "emt", seeded) == seeded
 

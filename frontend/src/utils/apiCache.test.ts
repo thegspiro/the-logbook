@@ -519,7 +519,39 @@ describe('apiCache', () => {
     });
 
     it('returns false for /admin-hours/ endpoints', () => {
-      expect(isCacheable('/admin-hours/report')).toBe(false);
+      // Every GET path the admin-hours client issues -- all eleven, so that
+      // narrowing the prefix to the paths named here cannot leave one of them
+      // cacheable while this block still passes. This previously asserted only
+      // '/admin-hours/report', which is not a route anywhere in the app: it
+      // proved the prefix blocks *a* path without covering one that carries
+      // hours.
+      //
+      // /summary is the one the dashboard's "My Hours" card reads, and it is
+      // scoped to a single member (userId) over a date range, so a cached
+      // body is one member's hours sitting in memory for the next caller.
+      expect(isCacheable('/admin-hours/summary')).toBe(false);
+      // With the query string the dashboard actually sends: isCacheable runs
+      // on the raw URL, so a prefix that only matched the bare path would let
+      // every real request through.
+      expect(
+        isCacheable(
+          '/admin-hours/summary?user_id=u1&start_date=2026-09-01T04:00:00.000Z&end_date=2026-09-05T03:59:59.999Z'
+        )
+      ).toBe(false);
+      expect(isCacheable('/admin-hours/entries/my')).toBe(false);
+      expect(isCacheable('/admin-hours/entries')).toBe(false);
+      expect(isCacheable('/admin-hours/entries/export')).toBe(false);
+      expect(isCacheable('/admin-hours/active')).toBe(false);
+      expect(isCacheable('/admin-hours/active-sessions')).toBe(false);
+      expect(isCacheable('/admin-hours/pending-count')).toBe(false);
+      expect(isCacheable('/admin-hours/compliance/u1')).toBe(false);
+      expect(isCacheable('/admin-hours/categories')).toBe(false);
+      // The clock-in QR payload for a category, and the event->category hour
+      // mappings. Both are GETs the client issues and neither is reachable
+      // from the paths above, so pinning only those would leave a narrowed
+      // prefix passing this block while these two turned cacheable.
+      expect(isCacheable('/admin-hours/categories/c1/qr-data')).toBe(false);
+      expect(isCacheable('/admin-hours/event-mappings')).toBe(false);
     });
 
     it('returns false for /errors/ endpoints', () => {

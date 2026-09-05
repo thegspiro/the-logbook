@@ -1,8 +1,10 @@
 """Endpoint-level tests for backend/app/api/v1/endpoints/labels.py.
 
 LBL-1: ``POST /labels/print`` is reachable by anyone holding just a module's
-view permission (apparatus.view, facilities.view, members.view are all
-baseline grants — see ``MODULE_LABELS`` in ``label_service.py``). Unlike the
+view permission (apparatus.view, facilities.view, members.view — see
+``MODULE_LABELS`` in ``label_service.py``; of the three only members.view is
+still a baseline grant, the other two having been revoked from the
+rank-and-file positions in 2026-08 and 2026-09). Unlike the
 printer-config routes above it (test/status/probe, gated on
 settings.manage), a viewer here has no business learning the printer's
 configured host/IP/port — the same class of leak the station-document print

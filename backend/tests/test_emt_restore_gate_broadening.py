@@ -41,19 +41,49 @@ _SEEDED_GRANTS_TS = (
 )
 
 
+#: Modules EMT had a checkbox ticked for when these two revisions ran, and which
+#: a LATER revision has since taken off the seeded set — ``b6e4a0d17c93`` revoked
+#: ``apparatus`` from the rank-and-file slugs on 2026-09-05.
+#:
+#: Added back rather than trimmed out of ``b4d1c8e37f52``'s frozen
+#: ``_UNEDITED_SHAPE``, and the direction is the point: that snapshot is matched
+#: against real stored rows, and a row untouched since the create branch wrote it
+#: still holds these. Trimming it to a registry that moved on afterwards would
+#: stop it matching — which is the very failure this revision exists to fix, and
+#: would make ``TestComposedWithItsPredecessor`` assert the predecessor is broken
+#: rather than that the two compose (pitfall #20).
+_REVOKED_SINCE_MODULES = ("apparatus",)
+
+
 def _emt_modules():
-    """The modules EMT actually gets a checkbox for.
+    """The modules EMT had a checkbox for when these revisions ran.
 
     Read from the generated map as text rather than derived from the registry's
     permissions: the two differ, and the difference is the point — the editor
     only knows the modules in its own registry, so ``locations``, ``meetings``
     and ``organization`` have no box to tick even though the rank grants a view
     on each.
+
+    Modules revoked by a later revision are added back — see
+    ``_REVOKED_SINCE_MODULES``.
     """
     source = _SEEDED_GRANTS_TS.read_text()
     block = re.search(r"\n  emt: \{\s*view: \[(.*?)\],", source, re.S)
     assert block, f"no emt entry in {_SEEDED_GRANTS_TS.name}"
-    return sorted(re.findall(r"'([^']+)'", block.group(1)))
+    modules = set(re.findall(r"'([^']+)'", block.group(1)))
+    return sorted(modules | set(_REVOKED_SINCE_MODULES))
+
+
+def _registry_at_this_point():
+    """``DEFAULT_POSITIONS["emt"]`` as it stood when these revisions ran.
+
+    They bring a row up to the registry *of their own moment*, not to today's.
+    ``b6e4a0d17c93`` later revoked ``apparatus.view``, which leaves today's
+    registry one grant shorter than the row this pair legitimately produces.
+    """
+    return set(DEFAULT_POSITIONS["emt"]["permissions"]) | {
+        f"{module}.view" for module in _REVOKED_SINCE_MODULES
+    }
 
 
 def _editor_output():
@@ -234,9 +264,7 @@ class TestComposedWithItsPredecessor:
         _run_upgrade(positions_table, _load(_PREDECESSOR, "_restore_emt_first"))
         _run_upgrade(positions_table)
 
-        assert sorted(_read(positions_table)) == sorted(
-            DEFAULT_POSITIONS["emt"]["permissions"]
-        )
+        assert sorted(_read(positions_table)) == sorted(_registry_at_this_point())
 
 
 class TestTheRestoredSet:
