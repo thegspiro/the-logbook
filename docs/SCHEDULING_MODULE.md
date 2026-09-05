@@ -289,7 +289,7 @@ Time-off request for date ranges.
 ### Shifts
 
 ```
-GET    /api/v1/scheduling/shifts                    # List shifts (with date filters)
+GET    /api/v1/scheduling/shifts                    # List shifts (scheduling.view or scheduling.manage)
 POST   /api/v1/scheduling/shifts                    # Create shift (scheduling.manage)
 GET    /api/v1/scheduling/shifts/{id}               # Get shift by ID
 PATCH  /api/v1/scheduling/shifts/{id}               # Update shift (scheduling.manage)

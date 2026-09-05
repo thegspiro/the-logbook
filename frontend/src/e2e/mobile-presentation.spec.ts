@@ -84,7 +84,15 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling/admin', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling/admin/closeout', maxSmallTargets: 0, maxTinyText: 0 },
+  // Without this the fixture holds only the base grants and the loop measures
+  // ProtectedRoute's Access Denied screen, which passes every budget while
+  // testing nothing about the page.
+  {
+    path: '/scheduling/admin/closeout',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['scheduling.manage', 'scheduling.view'],
+  },
   { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },

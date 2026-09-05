@@ -86,6 +86,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, so the old link landed on a page where the number shown does not appear.
   It is a link only for a viewer who can open that screen, and plain text
   otherwise.
+- **A scheduling manager can list shifts.** `GET /scheduling/shifts` accepted
+  only `scheduling.view`, and permission matching is literal — an exact name,
+  `scheduling.*` or `*` — so nothing makes `manage` imply `view`. A position
+  granted `scheduling.manage` alone was admitted to every page in Scheduling
+  Administration and then refused the shifts those pages exist to list, so the
+  close-out queue and the staffing-gaps list could only ever show their
+  load-failure state. The endpoint now accepts either grant: a widening, so
+  nobody who could read it before loses it.
+- **A shift that ended earlier today can be closed out today.** The shift
+  panel's close-out button stood on a day-granular `isPast`, while the server's
+  own rule is that the shift's end has passed — so a shift finishing at 06:00
+  offered no button until the following day, and the new close-out queue, which
+  judges the same instant the server does, listed it with nowhere to act. The
+  button now matches the server; every other control on that panel is unchanged.
+- **The mobile ratchet measures the close-out page.** Its route entry declared
+  no permissions, so the fixture held only the base grants and the check
+  measured `ProtectedRoute`'s Access Denied screen — which passes every budget
+  while testing nothing.
 - **The page is department-wide and requires `scheduling.manage`**, like every
   page in Scheduling Administration. **A shift officer loses nothing:** the shift
   panel grants the named officer authority over their own shift's crew,

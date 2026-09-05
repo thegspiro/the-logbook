@@ -109,6 +109,41 @@ describe('ShiftDetailPanel close-out equipment checks', () => {
 });
 
 /**
+ * Closing out a shift that ended earlier today.
+ *
+ * `isPast` is day-granular — `shift_date < today` — while the server's
+ * `finalize_shift` accepts anything whose end has passed. A shift that ended at
+ * 06:00 this morning therefore had no close-out button until tomorrow, and the
+ * close-out queue, which judges the same instant the server does, lists it
+ * today: a queue row whose destination offers no way to do the job.
+ */
+describe('ShiftDetailPanel close-out on a shift that ended today', () => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const endedHoursAgo = (hours: number) => ({
+    ...shift,
+    shift_date: today,
+    start_time: new Date(Date.now() - (hours + 8) * 60 * 60_000).toISOString(),
+    end_time: new Date(Date.now() - hours * 60 * 60_000).toISOString(),
+  });
+
+  it('offers close-out once the shift has ended, not once the day has', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={endedHoursAgo(3) as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: 'Close out shift' })).toBeInTheDocument();
+  });
+
+  it('still withholds it while the crew is out', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={endedHoursAgo(-2) as never} onClose={vi.fn()} />);
+
+    // Something has rendered, so the absence below is the gate and not a
+    // panel that simply has not painted yet.
+    await screen.findByRole('button', { name: 'Close panel' });
+    expect(screen.queryByRole('button', { name: 'Close out shift' })).not.toBeInTheDocument();
+  });
+});
+
+/**
  * The crew board offers a seat only when the member can actually take it.
  *
  * Before this, every open seat carried a "Sign myself up" button and the

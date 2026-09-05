@@ -21,6 +21,7 @@ import {
   memberSignupClosedReason,
   rosterLocked,
   signupClosedReason,
+  shiftEndInstant,
 } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 import {
@@ -883,6 +884,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // roster deadline existed can outlive it, and the server honours it only up
   // to that point. Showing the raw timestamp promised officers that members
   // could claim until tomorrow on a shift the API had already closed.
+  // Whether the shift is over, by the server's rule rather than the calendar's.
+  // `finalize_shift` accepts anything whose end has passed; `isPast` is
+  // day-granular, so a shift that ended at 06:00 this morning could not be
+  // closed out until tomorrow — and the close-out queue, which uses this same
+  // instant, lists it today. A queue row whose destination offers no button is
+  // a dead end.
+  const hasEnded = (() => {
+    const end = shiftEndInstant(shift, signupWindow);
+    return end !== null && end <= Date.now();
+  })();
   const lateSignupUntil = effectiveLateSignupUntil(shift, signupWindow);
   const lateSignupOpen = lateSignupUntil !== null && lateSignupUntil > Date.now();
   // Past the shift's end plus the grace period the roster is a record, and its
@@ -1197,16 +1208,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               {/* Hidden while the checklist is open: this button and the one at
                   the foot of that panel both finalise the shift, and showing
                   both at once read as two different commitments. */}
-              {canManageShift && isPast && !shift.is_finalized && !isCancelled && !showFinalizeChecklist && (
-                <button
-                  onClick={() => setShowFinalizeChecklist(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
-                  aria-label="Close out shift"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Close out shift
-                </button>
-              )}
+              {canManageShift &&
+                (isPast || hasEnded) &&
+                !shift.is_finalized &&
+                !isCancelled &&
+                !showFinalizeChecklist && (
+                  <button
+                    onClick={() => setShowFinalizeChecklist(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
+                    aria-label="Close out shift"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Close out shift
+                  </button>
+                )}
               <button
                 onClick={onClose}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors"
