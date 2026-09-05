@@ -15,6 +15,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.apparatus import Apparatus, EquipmentCheckTemplate
+from app.models.call_tracking import (
+    CALL_TYPES_FROM_ORG_CALLS,
+    CALL_TYPES_FROM_SHIFT_CALLS,
+)
 from app.models.notification import (
     NotificationCategory,
     NotificationChannel,
@@ -149,6 +153,22 @@ class ShiftCompletionService:
             return await self._get_trainee_call_data_from_counts(shift_id, trainee_id)
 
         return calls_responded, call_types
+
+    async def _shift_has_incident_rows(self, shift_id: str) -> bool:
+        """Whether this shift logged per-incident calls.
+
+        Decides which of the two shapes ``call_types`` holds. Asked rather
+        than inferred from the org's current tracking mode: the mode can be
+        switched, and a report written under the old one keeps the shape it
+        was written with.
+        """
+        return bool(
+            (
+                await self.db.execute(
+                    select(ShiftCall.id).where(ShiftCall.shift_id == shift_id).limit(1)
+                )
+            ).scalar_one_or_none()
+        )
 
     async def _get_trainee_call_data_from_counts(
         self,
@@ -326,7 +346,18 @@ class ShiftCompletionService:
                 data_sources["calls_responded"] = "shift_calls"
             if call_types is None and actual_types:
                 call_types = actual_types
-                data_sources["call_types"] = "shift_calls"
+                # Provenance, not decoration. The two sources put different
+                # things in this column: detailed tracking stores the incident
+                # text an officer typed, count-only stores the org's own type
+                # slugs. Only the latter may be resolved through the
+                # department's label list — doing it to the former silently
+                # rewrites a historical report the day somebody renames a type
+                # whose slug happens to match what an officer wrote.
+                data_sources["call_types"] = (
+                    CALL_TYPES_FROM_SHIFT_CALLS
+                    if await self._shift_has_incident_rows(shift_id)
+                    else CALL_TYPES_FROM_ORG_CALLS
+                )
 
             actual_hours = await self._get_trainee_hours_from_shift(
                 shift_id, trainee_id
@@ -1215,9 +1246,30 @@ class ShiftCompletionService:
         if new_status == "draft" and not was_draft:
             raise ValueError("Cannot revert to draft after submission")
 
+        # Captured before the write: the marker turns on whether the stored
+        # values are still the ones the marker describes.
+        previous_call_types = list(getattr(report, "call_types", None) or [])
+
         for field, value in updates.items():
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
+
+        # An officer editing the auto-populated list is typing readable names,
+        # not org slugs, so the provenance recorded at creation no longer
+        # describes what is stored. Cleared rather than reassigned: what they
+        # typed is their own wording, and leaving the `org_calls` marker would
+        # let a later rename rewrite it and let it lock a type from deletion.
+        #
+        # Only on a real change. The report form resubmits `call_types`
+        # whatever was edited, so clearing on presence alone dropped the
+        # marker when an officer saved a narrative tweak — and those values
+        # are still the slugs the marker describes.
+        if "call_types" in updates and list(updates["call_types"] or []) != (
+            previous_call_types
+        ):
+            sources = copy.deepcopy(report.data_sources or {})
+            if sources.pop("call_types", None) is not None:
+                report.data_sources = sources or None
 
         # Training credit is earned only when an officer releases the report.
         # Pending review is still provisional and may be flagged or corrected.

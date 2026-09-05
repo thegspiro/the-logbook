@@ -35,6 +35,7 @@ vi.mock('../services/apiClient', () => ({
 
 // ---- Import store AFTER mocks are in place ----
 import { markSignInPending, useAuthStore } from './authStore';
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 // ---- Helpers ----
 
@@ -583,6 +584,47 @@ describe('authStore', () => {
   });
 
   // ---- device ownership boundary ----
+
+  describe('department settings at the account boundary', () => {
+    it('drops the cached scheduling settings on logout', async () => {
+      // The scheduling store caches department-wide settings once per session
+      // and short-circuits on `settingsLoaded`. On a shared station computer
+      // the session outlives the member, so without this the next person —
+      // possibly from another department — read the previous one's call
+      // types and signup window until the tab was reloaded.
+      useSchedulingStore.setState({
+        settingsLoaded: true,
+        callTypeLabels: { fire: 'Structure Fire' },
+        platoonsEnabled: true,
+      });
+
+      await act(async () => {
+        await getState().logout();
+      });
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+      expect(useSchedulingStore.getState().platoonsEnabled).toBe(false);
+    });
+  });
+
+  describe('scheduling state at the sign-in boundary', () => {
+    it('resets the scheduling store when a member signs in', async () => {
+      // A session that expires and is replaced by another member signing in
+      // never calls logout(), so logout alone leaves the previous
+      // department's data readable in the same tab.
+      useSchedulingStore.setState({ settingsLoaded: true, membersLoaded: true });
+
+      mockLogin.mockResolvedValue({ token_type: 'bearer', expires_in: 1800 });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+      await act(async () => {
+        await getState().login({ username: 'testuser', password: 'password123' });
+      });
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().membersLoaded).toBe(false);
+    });
+  });
 
   describe('offline data at the account boundary', () => {
     /** Simulate the browser processing Set-Cookie headers from a login response. */

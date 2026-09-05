@@ -13,6 +13,14 @@ YELLOW := \033[0;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
 
+# The production stack is both files, always. docker-compose.yml ALONE is the
+# development configuration: it runs uvicorn with --reload, publishes the
+# backend port, leaves the API docs on and skips the startup security gate.
+# docs/DEPLOYMENT.md expects COMPOSE_FILE to pin this pair in .env, but a
+# deploy must not depend on an .env line being present — getting it wrong
+# ships the dev config to production, and nothing about the output says so.
+COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
+
 ## help: Display this help message
 help:
 	@echo "${BLUE}Intranet Platform - Available Commands${NC}"
@@ -156,26 +164,36 @@ update-deps:
 	@cd backend && pip install --upgrade -r requirements.txt
 	@echo "${GREEN}✓ Dependencies updated${NC}"
 
-## generate-keys: Generate encryption keys
+## generate-keys: Print fresh secrets for .env (writes nothing)
 generate-keys:
-	@echo "${BLUE}Generating encryption keys...${NC}"
-	@./scripts/setup/generate-keys.sh
-	@echo "${GREEN}✓ Keys generated${NC}"
+	@echo "${BLUE}Generating secrets...${NC}"
+	@echo ""
+	@python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(64))"
+	@python3 -c "import secrets; print('ENCRYPTION_KEY=' + secrets.token_hex(32))"
+	@python3 -c "import secrets; print('ENCRYPTION_SALT=' + secrets.token_hex(16))"
+	@echo ""
+	@echo "${YELLOW}Copy these into .env yourself. Nothing was written — rotating${NC}"
+	@echo "${YELLOW}ENCRYPTION_KEY on a live install makes existing encrypted${NC}"
+	@echo "${YELLOW}fields unreadable, so this must never edit .env for you.${NC}"
 
 ## backup: Backup database
 backup:
 	@echo "${BLUE}Creating database backup...${NC}"
-	@./scripts/deployment/backup.sh
+	@./scripts/backup.sh
 	@echo "${GREEN}✓ Backup complete${NC}"
 
-## deploy: Deploy to production
+## deploy: Build and start the production stack from the current checkout
 deploy:
 	@echo "${BLUE}Deploying to production...${NC}"
-	@./scripts/deployment/deploy.sh
+	@echo "${YELLOW}Deploying the checked-out revision. Run 'git pull' first to${NC}"
+	@echo "${YELLOW}take the latest, per docs/DEPLOYMENT.md.${NC}"
+	@$(COMPOSE_PROD) build
+	@$(COMPOSE_PROD) up -d
 	@echo "${GREEN}✓ Deployment complete${NC}"
+	@echo "${YELLOW}The backend runs 'alembic upgrade head' on startup, so no${NC}"
+	@echo "${YELLOW}separate migrate step is needed. Watch it with 'make docker-logs'.${NC}"
 
-## verify-integrity: Verify audit log integrity
+## verify-integrity: Verify the audit log hash chain (read-only)
 verify-integrity:
 	@echo "${BLUE}Verifying audit log integrity...${NC}"
-	@./scripts/maintenance/verify-integrity.sh
-	@echo "${GREEN}✓ Integrity verification complete${NC}"
+	@cd backend && python scripts/verify_audit_integrity.py

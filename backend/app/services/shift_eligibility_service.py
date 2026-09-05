@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.models.apparatus import Apparatus, ApparatusOperator
 from app.models.call_tracking import (
     DEFAULT_CALL_TYPES,
+    UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
 from app.models.operational_rank import OperationalRank
@@ -97,6 +98,36 @@ DEFAULT_RANK_LABELS: Dict[str, str] = {
 # Mirrors the pattern and length bound on CallTypeOption. Kept beside the
 # sanitizer so the two cannot drift into rejecting different things.
 _CALL_TYPE_SLUG = re.compile(r"[a-z0-9_]{1,50}")
+
+# Matches CallTypeOption.label's own ceiling.
+_CALL_TYPE_LABEL_MAX = 100
+
+
+def _label_key(label: str) -> str:
+    """How two call-type labels are compared for sameness on screen."""
+    return " ".join(label.split()).casefold()
+
+
+def _disambiguate_label(label: str, slug: str, taken: set) -> str:
+    """Make ``label`` unique among ``taken``, without exceeding the cap.
+
+    Naively appending the slug and slicing back to the cap is a no-op on a
+    label that already fills it, which leaves the duplicate in place and makes
+    the schema reject the very output this reader exists to keep valid — a 500
+    on the one endpoint that could fix the stored data.
+    """
+    if _label_key(label) not in taken:
+        return label
+    attempt = 0
+    while True:
+        suffix = f" ({slug})" if attempt == 0 else f" ({slug} {attempt + 1})"
+        base = label[: max(1, _CALL_TYPE_LABEL_MAX - len(suffix))]
+        candidate = f"{base}{suffix}"[:_CALL_TYPE_LABEL_MAX]
+        # Terminates: the slug is unique within the list, so at worst the
+        # counter walks to a spelling nothing else holds.
+        if _label_key(candidate) not in taken:
+            return candidate
+        attempt += 1
 
 
 class ShiftEligibilityService:
@@ -947,6 +978,36 @@ class ShiftEligibilityService:
             ),
         }
 
+    def effective_call_type_slugs(self, org: Organization) -> set:
+        """Every slug currently in force, before any normalization.
+
+        Two things the defensive reader does not give a caller that needs to
+        know what a save would drop:
+
+        * It drops and truncates. A slug it hid is still the value its calls
+          are filed under, so the deletion guard compares against what is
+          *stored*, not against the shortened list the editor was handed.
+        * An organization that has never materialized a list is not running
+          without call types — it is running on the built-in nine, and its
+          calls are filed under those slugs. Returning an empty set for it
+          made the guard skip its check entirely and the editor offer to
+          delete a default type with a decade of calls behind it, which is
+          the normal state of every existing installation.
+        """
+        sched = self._get_scheduling_settings(org)
+        raw = sched.get("call_tracking")
+        types = raw.get("call_types") if isinstance(raw, dict) else None
+        stored = (
+            {
+                str(entry.get("slug") or "").strip()
+                for entry in types
+                if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
+            }
+            if isinstance(types, list)
+            else set()
+        )
+        return stored or {t["slug"] for t in DEFAULT_CALL_TYPES}
+
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.
 
@@ -977,6 +1038,7 @@ class ShiftEligibilityService:
         types = raw.get("call_types")
         clean_types = []
         seen = set()
+        labels_seen = set()
         if isinstance(types, list):
             for entry in types:
                 if not isinstance(entry, dict):
@@ -988,9 +1050,23 @@ class ShiftEligibilityService:
                 # failed schema construction — turning the promised safe
                 # degradation into a 500 for the whole organization, on both
                 # the settings endpoint and every close-out.
-                if not _CALL_TYPE_SLUG.fullmatch(slug) or slug in seen:
+                # The reserved bucket slug is dropped for the same reason the
+                # schema refuses it: kept, it would fail the schema
+                # construction this function exists to make safe.
+                if (
+                    not _CALL_TYPE_SLUG.fullmatch(slug)
+                    or slug in seen
+                    or slug == UNCLASSIFIED_CALL_TYPE
+                ):
                     continue
                 label = str(entry.get("label") or "").strip()[:100] or slug
+                # The schema now requires labels to be distinct, and this
+                # column predates that. Disambiguated rather than dropped: the
+                # entry may be the only thing that can label a type with years
+                # of calls behind it, so losing it is worse than a clumsy
+                # name an admin can correct on the settings screen.
+                label = _disambiguate_label(label, slug, labels_seen)
+                labels_seen.add(_label_key(label))
                 seen.add(slug)
                 # Missing means active: entries stored before retirement
                 # existed predate the key, and reading their absence as
@@ -1003,6 +1079,11 @@ class ShiftEligibilityService:
                 {"slug": t["slug"], "label": t["label"], "active": True}
                 for t in DEFAULT_CALL_TYPES
             ]
+        # Deliberately not truncated. The cap is enforced on writes, where it
+        # belongs; hiding stored entries here made a used type past the cap
+        # unrepresentable in any payload the editor could produce, and the
+        # deletion guard then rejected every one of those payloads — leaving
+        # the organization unable to edit its call types at all.
 
         return {"mode": mode, "call_types": clean_types}
 

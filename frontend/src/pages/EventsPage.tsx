@@ -568,6 +568,15 @@ export const EventsPage: React.FC = () => {
   // the trigger would open an empty panel.
   const hasMoreActions = canManage || sortedEvents.length > 0;
 
+  // The empty card's default copy and its only action are both invitations to
+  // create an event, so a member looking at a genuinely empty Upcoming list
+  // gets a blank panel rather than a prompt to do something they cannot. An
+  // empty result that follows from a search, a filter or the Past toggle is
+  // still reported to everyone — that is feedback on what they asked for, not
+  // an invitation.
+  const listIsNarrowed = searchQuery !== '' || typeFilter !== 'all' || showPastEvents || showMyEventsOnly;
+  const showEmptyState = canManage || listIsNarrowed;
+
   const handleDuplicate = useCallback(
     async (eventId: string) => {
       try {
@@ -1123,33 +1132,40 @@ export const EventsPage: React.FC = () => {
         {viewMode === 'calendar' ? (
           <CalendarView events={sortedEvents} timezone={tz} />
         ) : paginatedEvents.length === 0 ? (
-          <EmptyState
-            icon={Calendar}
-            title="No events found"
-            description={
-              searchQuery
-                ? `No events matching "${searchQuery}".`
-                : typeFilter === 'all'
-                  ? showPastEvents
-                    ? 'No past events found.'
-                    : 'Get started by creating a new event.'
-                  : typeFilter.startsWith('cat:')
-                    ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
-                    : `No ${getEventTypeLabel(typeFilter).toLowerCase()} events found.`
-            }
-            actions={
-              canManage && !showPastEvents
-                ? [
-                    {
-                      label: 'Create Event',
-                      onClick: () => void navigate('/events/admin?tab=create'),
-                      icon: Plus,
-                    },
-                  ]
-                : undefined
-            }
-            className="bg-theme-surface-secondary rounded-lg"
-          />
+          showEmptyState && (
+            <EmptyState
+              icon={Calendar}
+              title="No events found"
+              description={
+                searchQuery
+                  ? `No events matching "${searchQuery}".`
+                  : typeFilter === 'all'
+                    ? showPastEvents
+                      ? 'No past events found.'
+                      : // An instruction to create, so only for someone who can.
+                        // Reachable by a member with "my events only" on, which
+                        // narrows the list without changing this branch.
+                        canManage
+                        ? 'Get started by creating a new event.'
+                        : undefined
+                    : typeFilter.startsWith('cat:')
+                      ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
+                      : `No ${getEventTypeLabel(typeFilter).toLowerCase()} events found.`
+              }
+              actions={
+                canManage && !showPastEvents
+                  ? [
+                      {
+                        label: 'Create Event',
+                        onClick: () => void navigate('/events/admin?tab=create'),
+                        icon: Plus,
+                      },
+                    ]
+                  : undefined
+              }
+              className="bg-theme-surface-secondary rounded-lg"
+            />
+          )
         ) : (
           <>
             <div

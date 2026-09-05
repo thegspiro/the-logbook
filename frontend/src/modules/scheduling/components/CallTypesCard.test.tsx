@@ -18,6 +18,7 @@ const renderCard = (over: Partial<React.ComponentProps<typeof CallTypesCard>> = 
     <CallTypesCard
       types={TYPES.map((t) => ({ ...t }))}
       usage={{ fire: 12 }}
+      locked={['fire']}
       mode="count_only"
       saving={false}
       onSave={onSave}
@@ -164,6 +165,19 @@ describe('CallTypesCard retiring', () => {
     expect(del).toHaveAttribute('title', expect.stringContaining('Turn it off to retire it instead'));
   });
 
+  it('will not delete a type only a filed report still names', () => {
+    // No calls carry the slug any more — the shift was reopened and
+    // corrected — but the report filed from it still lists it. Gating on the
+    // call count alone let the save come back refused with nothing having
+    // warned, so the server's list is what drives the button.
+    renderCard({ usage: {}, locked: ['brush'] });
+
+    const del = screen.getByRole('button', { name: 'Delete Brush' });
+    expect(del).toBeDisabled();
+    expect(del).toHaveAttribute('title', expect.stringContaining('filed shift report'));
+    expect(screen.getByText(/named by a filed shift report/)).toBeInTheDocument();
+  });
+
   it('deletes an unused type once confirmed', async () => {
     const user = userEvent.setup();
     renderCard();
@@ -190,7 +204,7 @@ describe('CallTypesCard retiring', () => {
 
   it('refuses to save an empty list, because the backend would reseed the defaults', async () => {
     const user = userEvent.setup();
-    renderCard({ types: [{ slug: 'brush', label: 'Brush', active: true }], usage: {} });
+    renderCard({ types: [{ slug: 'brush', label: 'Brush', active: true }], usage: {}, locked: [] });
 
     await user.click(screen.getByRole('button', { name: 'Delete Brush' }));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
@@ -231,6 +245,35 @@ describe('CallTypesCard adding', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(screen.getByText('fire_2')).toBeInTheDocument();
+  });
+
+  it('will not mint the reserved bucket slug', async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    // `unclassified` is the synthetic bucket for calls with no type. The
+    // backend refuses it, so minting it here would fail the save with nothing
+    // on screen explaining why.
+    await user.type(screen.getByLabelText('Add a call type'), 'Unclassified');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(screen.getByText('unclassified_2')).toBeInTheDocument();
+    expect(screen.queryByText('unclassified')).not.toBeInTheDocument();
+  });
+
+  it('refuses two types with the same name', async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    // Close-out shows the name and not the slug, so this would be two
+    // indistinguishable count fields writing to different keys.
+    const input = screen.getByLabelText('Name for ems');
+    await user.clear(input);
+    await user.type(input, 'fire');
+    await user.click(screen.getByRole('button', { name: 'Save call types' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('has to be unique');
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('rejects a name with nothing sluggable in it', async () => {
@@ -296,6 +339,7 @@ describe('CallTypesCard draft survival', () => {
       <CallTypesCard
         types={TYPES.map((t) => ({ ...t }))}
         usage={{ fire: 12 }}
+        locked={['fire']}
         mode="count_only"
         saving={false}
         onSave={onSave}
@@ -312,6 +356,7 @@ describe('CallTypesCard draft survival', () => {
       <CallTypesCard
         types={[{ slug: 'fire', label: 'Structure Fire', active: true }]}
         usage={{ fire: 12 }}
+        locked={['fire']}
         mode="count_only"
         saving={false}
         onSave={onSave}
@@ -338,6 +383,7 @@ describe('CallTypesCard while saving', () => {
       <CallTypesCard
         types={TYPES.map((t) => ({ ...t }))}
         usage={{ fire: 12 }}
+        locked={['fire']}
         mode="count_only"
         saving
         onSave={onSave}
@@ -347,5 +393,28 @@ describe('CallTypesCard while saving', () => {
     const save = screen.getByRole('button', { name: /Saving/ });
     expect(save).toBeDisabled();
     expect(within(save).queryByText('Save call types')).not.toBeInTheDocument();
+  });
+
+  it('freezes every control, not just Save', async () => {
+    // An edit made after Save is clicked is silently discarded: the response
+    // changes `serverKey` and the reseeding effect replaces the newer draft
+    // with the snapshot that was submitted.
+    const { rerender } = renderCard();
+    rerender(
+      <CallTypesCard
+        types={TYPES.map((t) => ({ ...t }))}
+        usage={{ fire: 12 }}
+        locked={['fire']}
+        mode="count_only"
+        saving
+        onSave={onSave}
+      />
+    );
+
+    expect(screen.getByLabelText('Name for fire')).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Offer Fire at close-out' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move EMS up' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete Brush' })).toBeDisabled();
+    expect(screen.getByLabelText('Add a call type')).toBeDisabled();
   });
 });

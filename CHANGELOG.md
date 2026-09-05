@@ -42,6 +42,24 @@ still missing the larger set of member-management permissions a third migration
 restores. That is a bigger change to who can do what, so it is being decided
 separately.
 
+### The Events page invited members to create an event (2026-09-05)
+
+**Fixed**
+
+- **An empty Events list told every member to "Get started by creating a new
+  event."** The Create Event button beside it was already officer-only, so the
+  copy was an instruction nobody without `events.manage` could follow, and
+  `/events/new` bounces them to the access-denied page. The prompt is now shown
+  only to someone who can act on it.
+
+**Changed**
+
+- **With no events at all, a member now sees a blank list** rather than an
+  empty-state card whose default copy and only action are both invitations to
+  create. An empty result that follows from a search, a type filter, the Past
+  toggle or My Events is still reported to everyone — that is feedback on what
+  they asked for.
+
 ### Requesting gear no longer requires knowing the department's name for it (2026-09-05)
 
 **Changed**
@@ -278,6 +296,32 @@ separately.
   supersedes it. **Schema:** `notification_logs.sent_at` is
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
+
+### Departments can name their own call types (2026-09-05)
+
+**Added**
+
+- **The nine call types on the shift close-out screen are now editable.** They
+  have been per-department data since call tracking shipped, stored in the
+  organization's settings and writable through the API — but nothing in the UI
+  could reach them, so a department that does not run EMS, or one that calls
+  them "Alarm Activation" rather than "Alarm / Good Intent", had no way to say
+  so. **Shift Scheduling → Settings → General → Call types** renames, reorders,
+  adds, retires and deletes them.
+- **Retiring, rather than deleting.** The stored value on every call ever filed
+  is the type's permanent slug, so deleting a type in use would leave that
+  history pointing at something nothing can label. A type with calls or a filed
+  shift report behind it can only be turned off — which takes it off the
+  close-out screen and leaves every report that names it intact. Delete stays
+  available for a type nothing refers to. Retiring every type is how a
+  department asks close-out for a bare total with no breakdown.
+- **Reports and the end-of-shift email now use the department's own names.**
+  The call-volume report, its CSV export, the shift-report call-type badges,
+  the printable report and the summary email all showed the stored slug —
+  `mutual_aid`, or `alarm` for a type the department had renamed. Retired types
+  are named too, so a report covering last year still reads properly. A report
+  written under per-incident tracking keeps the officer's own wording, which is
+  never rewritten to match a type whose slug happens to look the same.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
