@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
+
+**Changed**
+
+- **"Permanent Assignments" and "Issued Items" are now one section.** The split
+  was the stockroom's, not the member's: an assignment is one serialized unit
+  out of `item_assignments`, an issuance is N units drawn from bulk stock in
+  `item_issuances`, and a member holds both open-endedly with nothing to do
+  differently about either. Both now render in one **Issued to Me** list,
+  sorted by when the gear was received, with each row still showing what its
+  record type actually carries — serial, asset tag and condition for an
+  assignment; quantity and size for an issuance. The four quick-stat tiles
+  collapse to three to match.
+- **Active Temporary Loans stays its own section**, because a due date is the
+  one distinction a member has to act on, and folding it in would have buried
+  the overdue badge.
+- Nothing changed on the wire. The two record types remain separate tables with
+  separate return endpoints, and a row's "Notify quartermaster of return" still
+  posts `return_type: assignment` or `issuance` against the right reference id
+  — pinned by a test per row type, since one merged list makes flattening them
+  onto a single shape an easy mistake to make later. The return buttons also
+  gained per-item accessible names; one list of identically-labelled buttons
+  gave a screen reader nothing to tell the rows apart with.
+- The quartermaster's member view (`/inventory/admin/members`) and the
+  dashboard gear widget are untouched.
+
 ### The event check-in QR code was scannable before its window opened (2026-09-05)
 
 **Fixed**

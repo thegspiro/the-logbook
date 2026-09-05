@@ -1636,8 +1636,12 @@ tracked only in that findings doc.
 
 An item assignment carries an `assignment_type` of `permanent` or `temporary`,
 `assign_item_to_user` accepts both along with an `expected_return_date`, and the
-member-facing equipment lists render a "Permanent Assignments" group and a
-"Due:" date — so the concept is visible throughout. No screen can create one:
+quartermaster's member view (`/inventory/admin/members`) renders a "Permanent
+Assignments" group while the member's own gear page shows a "Due:" date on a
+loan — so the concept is visible throughout. (A member's own page stopped
+splitting assignments from pool issuances on 2026-09-05; the quartermaster
+view still does, because the two are separate custody records with separate
+return endpoints.) No screen can create one:
 
 - `ItemDetailPage` is the only UI caller of `inventoryService.assignItem`, and
   it passes no options, so the API default (`permanent`) always applies.
