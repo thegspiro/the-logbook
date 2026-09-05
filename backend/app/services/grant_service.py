@@ -107,7 +107,13 @@ class GrantService:
                 | (GrantOpportunity.agency.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
                 | (GrantOpportunity.description.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
-        query = query.order_by(*nulls_last_asc(GrantOpportunity.deadline_date))
+        # Tie-broken by id: deadline_date is frequently NULL or shared across
+        # opportunities, and an unbroken ORDER BY over a paginated query has
+        # no guaranteed tie order in MySQL — different pages of the same
+        # query can then return duplicate or missing rows across ties.
+        query = query.order_by(
+            *nulls_last_asc(GrantOpportunity.deadline_date), GrantOpportunity.id.asc()
+        )
         # GF-35: apply skip/limit in SQL rather than fetching the whole
         # org-wide table and slicing in Python (Pitfall/Checklist #6 — an
         # unbounded list endpoint). Ordering already happens above, so this
@@ -199,7 +205,13 @@ class GrantService:
             query = query.where(GrantApplication.priority == priority)
         if assigned_to:
             query = query.where(GrantApplication.assigned_to == assigned_to)
-        query = query.order_by(GrantApplication.created_at.desc())
+        # Tie-broken by id: created_at can collide (bulk-created applications,
+        # low timestamp resolution), and an unbroken ORDER BY over a
+        # paginated query has no guaranteed tie order in MySQL — different
+        # pages of the same query can then return duplicate or missing rows.
+        query = query.order_by(
+            GrantApplication.created_at.desc(), GrantApplication.id.asc()
+        )
         # GF-35: same offset/limit fix as list_opportunities. selectinload
         # issues its own follow-up query for the page's rows (not a JOIN), so
         # LIMIT/OFFSET on this query cannot fan out or under-count the page.
@@ -225,6 +237,27 @@ class GrantService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def _application_in_org(
+        self, application_id: Any, organization_id: str
+    ) -> bool:
+        """Lightweight org-scoped existence check for a grant application.
+
+        Used by `list_budget_items`/`list_expenditures`/`list_notes`, which
+        only need to confirm the parent application belongs to the caller's
+        org before running their own already-paginated child query. Calling
+        `get_application()` for that check would eager-load every budget
+        item, expenditure, compliance task and note on the application
+        regardless of the page size requested — defeating GF-35's pagination
+        fix for exactly these three routes.
+        """
+        result = await self.db.execute(
+            select(GrantApplication.id).where(
+                GrantApplication.id == application_id,
+                GrantApplication.organization_id == organization_id,
+            )
+        )
+        return result.scalar_one_or_none() is not None
 
     async def _opportunity_in_org(
         self, opportunity_id: Any, organization_id: str
@@ -538,14 +571,14 @@ class GrantService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[GrantBudgetItem]:
-        # Verify application belongs to org
-        app = await self.get_application(application_id, organization_id)
-        if not app:
+        # Verify application belongs to org (lightweight — see
+        # _application_in_org for why this must not be get_application()).
+        if not await self._application_in_org(application_id, organization_id):
             raise ValueError("Application not found")
         result = await self.db.execute(
             select(GrantBudgetItem)
             .where(GrantBudgetItem.application_id == application_id)
-            .order_by(GrantBudgetItem.sort_order.asc())
+            .order_by(GrantBudgetItem.sort_order.asc(), GrantBudgetItem.id.asc())
             .offset(skip)
             .limit(limit)
         )
@@ -623,15 +656,18 @@ class GrantService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[GrantExpenditure]:
-        app = await self.get_application(application_id, organization_id)
-        if not app:
+        # Lightweight — see _application_in_org for why this must not be
+        # get_application().
+        if not await self._application_in_org(application_id, organization_id):
             raise ValueError("Application not found")
         query = select(GrantExpenditure).where(
             GrantExpenditure.application_id == application_id
         )
         if budget_item_id:
             query = query.where(GrantExpenditure.budget_item_id == budget_item_id)
-        query = query.order_by(GrantExpenditure.expenditure_date.desc())
+        query = query.order_by(
+            GrantExpenditure.expenditure_date.desc(), GrantExpenditure.id.asc()
+        )
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -856,7 +892,12 @@ class GrantService:
             query = query.where(GrantComplianceTask.status == status)
         if due_before:
             query = query.where(GrantComplianceTask.due_date <= due_before)
-        query = query.order_by(GrantComplianceTask.due_date.asc())
+        # Tie-broken by id: due_date is nullable and often shared across
+        # tasks generated in the same batch — see list_opportunities for why
+        # an unbroken ORDER BY breaks pagination.
+        query = query.order_by(
+            GrantComplianceTask.due_date.asc(), GrantComplianceTask.id.asc()
+        )
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -981,14 +1022,14 @@ class GrantService:
         limit: int = 100,
     ) -> List[GrantNote]:
         # Scope through the parent application so notes from another org's
-        # application can't be read by guessing its id.
-        app = await self.get_application(application_id, organization_id)
-        if not app:
+        # application can't be read by guessing its id. Lightweight — see
+        # _application_in_org for why this must not be get_application().
+        if not await self._application_in_org(application_id, organization_id):
             raise ValueError("Application not found")
         result = await self.db.execute(
             select(GrantNote)
             .where(GrantNote.application_id == application_id)
-            .order_by(GrantNote.created_at.desc())
+            .order_by(GrantNote.created_at.desc(), GrantNote.id.asc())
             .offset(skip)
             .limit(limit)
         )

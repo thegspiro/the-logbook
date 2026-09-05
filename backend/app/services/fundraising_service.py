@@ -73,7 +73,13 @@ class FundraisingService:
             query = query.where(FundraisingCampaign.status == status)
         if campaign_type:
             query = query.where(FundraisingCampaign.campaign_type == campaign_type)
-        query = query.order_by(FundraisingCampaign.created_at.desc())
+        # Tie-broken by id: created_at can collide, and an unbroken ORDER BY
+        # over a paginated query has no guaranteed tie order in MySQL —
+        # different pages of the same query can then return duplicate or
+        # missing rows across ties.
+        query = query.order_by(
+            FundraisingCampaign.created_at.desc(), FundraisingCampaign.id.asc()
+        )
         # GF-35: apply skip/limit in SQL rather than fetching the whole
         # org-wide table and slicing in Python (Checklist #6 — an unbounded
         # list endpoint). Ordering already happens above, so this is a
@@ -169,7 +175,12 @@ class FundraisingService:
                 | (Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
                 | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
-        query = query.order_by(Donor.last_name.asc(), Donor.first_name.asc())
+        # Tie-broken by id: identical name pairs are common (family
+        # donations, common names) — see list_campaigns for why an unbroken
+        # ORDER BY breaks pagination.
+        query = query.order_by(
+            Donor.last_name.asc(), Donor.first_name.asc(), Donor.id.asc()
+        )
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -238,7 +249,10 @@ class FundraisingService:
                 Donation.donation_date
                 <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
             )
-        query = query.order_by(Donation.donation_date.desc())
+        # Tie-broken by id: date-only donations recorded on the same day
+        # collide on donation_date — see list_campaigns for why an unbroken
+        # ORDER BY breaks pagination.
+        query = query.order_by(Donation.donation_date.desc(), Donation.id.asc())
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -495,7 +509,9 @@ class FundraisingService:
             query = query.where(Pledge.status == status)
         if campaign_id:
             query = query.where(Pledge.campaign_id == campaign_id)
-        query = query.order_by(*nulls_last_asc(Pledge.due_date))
+        # Tie-broken by id: due_date is nullable and often shared — see
+        # list_campaigns for why an unbroken ORDER BY breaks pagination.
+        query = query.order_by(*nulls_last_asc(Pledge.due_date), Pledge.id.asc())
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -567,7 +583,12 @@ class FundraisingService:
             query = query.where(FundraisingEvent.campaign_id == campaign_id)
         if status:
             query = query.where(FundraisingEvent.status == status)
-        query = query.order_by(FundraisingEvent.event_date.desc())
+        # Tie-broken by id: default sort positions and same-day events
+        # collide on event_date — see list_campaigns for why an unbroken
+        # ORDER BY breaks pagination.
+        query = query.order_by(
+            FundraisingEvent.event_date.desc(), FundraisingEvent.id.asc()
+        )
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())

@@ -267,11 +267,23 @@ class TestSubresourceOrgScoping:
         assert "organization_id" in sql
 
     async def test_list_notes_rejects_foreign_application(self):
-        # get_application resolves nothing for this org -> reject, don't leak.
+        # _application_in_org resolves nothing for this org -> reject, don't leak.
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(None))
         with pytest.raises(ValueError, match="Application not found"):
             await GrantService(db).list_notes("app-x", "org-A")
+
+    async def test_list_budget_items_rejects_foreign_application(self):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(None))
+        with pytest.raises(ValueError, match="Application not found"):
+            await GrantService(db).list_budget_items("app-x", "org-A")
+
+    async def test_list_expenditures_rejects_foreign_application(self):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(None))
+        with pytest.raises(ValueError, match="Application not found"):
+            await GrantService(db).list_expenditures("app-x", "org-A")
 
     async def test_create_note_rejects_foreign_application(self):
         db = MagicMock()
@@ -424,15 +436,14 @@ class TestListPagination:
         assert "limit 0, 100" in sql
 
     async def test_list_budget_items_applies_skip_and_limit(self):
-        app = SimpleNamespace(id="app-1", organization_id="org-1")
-
         async def execute(stmt, *_a, **_kw):
             if not hasattr(execute, "calls"):
                 execute.calls = 0
             execute.calls += 1
             if execute.calls == 1:
-                # get_application, resolving the parent application in-org.
-                return _one(app)
+                # Lightweight existence check, resolving the parent
+                # application id in-org.
+                return _one("app-1")
             execute.captured = stmt
             return self._scalars([])
 
@@ -447,6 +458,188 @@ class TestListPagination:
             )
         ).lower()
         assert "limit 2, 4" in sql
+
+    # --- Codex finding 1 (GF-35 follow-up): every ORDER BY above must end
+    # with the model's id as a tie-breaker, or two executions of the same
+    # paginated query can order tied rows differently and a page can
+    # duplicate or drop rows. ---
+
+    @staticmethod
+    def _order_by_clause(sql: str) -> str:
+        return sql.split("order by", 1)[1].split("limit", 1)[0].strip()
+
+    async def test_list_opportunities_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_opportunities("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("grant_opportunities.id asc")
+
+    async def test_list_applications_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_applications("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("grant_applications.id asc")
+
+    async def test_list_compliance_tasks_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_compliance_tasks("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("grant_compliance_tasks.id asc")
+
+    async def test_list_budget_items_orders_by_id_last(self):
+        async def execute(stmt, *_a, **_kw):
+            if not hasattr(execute, "calls"):
+                execute.calls = 0
+            execute.calls += 1
+            if execute.calls == 1:
+                return _one("app-1")
+            execute.captured = stmt
+            return self._scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        await GrantService(db).list_budget_items("app-1", "org-1")
+        from sqlalchemy.dialects import mysql
+
+        sql = str(
+            execute.captured.compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        assert self._order_by_clause(sql).endswith("grant_budget_items.id asc")
+
+    async def test_list_expenditures_orders_by_id_last(self):
+        async def execute(stmt, *_a, **_kw):
+            if not hasattr(execute, "calls"):
+                execute.calls = 0
+            execute.calls += 1
+            if execute.calls == 1:
+                return _one("app-1")
+            execute.captured = stmt
+            return self._scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        await GrantService(db).list_expenditures("app-1", "org-1")
+        from sqlalchemy.dialects import mysql
+
+        sql = str(
+            execute.captured.compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        assert self._order_by_clause(sql).endswith("grant_expenditures.id asc")
+
+    async def test_list_notes_orders_by_id_last(self):
+        async def execute(stmt, *_a, **_kw):
+            if not hasattr(execute, "calls"):
+                execute.calls = 0
+            execute.calls += 1
+            if execute.calls == 1:
+                return _one("app-1")
+            execute.captured = stmt
+            return self._scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        await GrantService(db).list_notes("app-1", "org-1")
+        from sqlalchemy.dialects import mysql
+
+        sql = str(
+            execute.captured.compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        assert self._order_by_clause(sql).endswith("grant_notes.id asc")
+
+
+class TestListDoesNotEagerLoadParent:
+    """Codex finding 2 (GF-35 follow-up): list_budget_items/list_expenditures/
+    list_notes must not resolve their parent application via
+    get_application(), whose loader options eager-load every budget item,
+    expenditure, compliance task and note on the application regardless of
+    the page size requested — defeating the pagination fix for exactly
+    these three routes. A lightweight existence-only check
+    (_application_in_org) replaces it."""
+
+    @staticmethod
+    def _exists_then_empty_page():
+        async def execute(stmt, *_a, **_kw):
+            if not hasattr(execute, "calls"):
+                execute.calls = 0
+            execute.calls += 1
+            if execute.calls == 1:
+                return _one("app-1")
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = []
+            return r
+
+        return execute
+
+    async def test_list_budget_items_does_not_call_get_application(self):
+        db = MagicMock()
+        db.execute = self._exists_then_empty_page()
+        svc = GrantService(db)
+        svc.get_application = AsyncMock(
+            side_effect=AssertionError("get_application should not be called")
+        )
+        await svc.list_budget_items("app-1", "org-1")
+        svc.get_application.assert_not_called()
+
+    async def test_list_expenditures_does_not_call_get_application(self):
+        db = MagicMock()
+        db.execute = self._exists_then_empty_page()
+        svc = GrantService(db)
+        svc.get_application = AsyncMock(
+            side_effect=AssertionError("get_application should not be called")
+        )
+        await svc.list_expenditures("app-1", "org-1")
+        svc.get_application.assert_not_called()
+
+    async def test_list_notes_does_not_call_get_application(self):
+        db = MagicMock()
+        db.execute = self._exists_then_empty_page()
+        svc = GrantService(db)
+        svc.get_application = AsyncMock(
+            side_effect=AssertionError("get_application should not be called")
+        )
+        await svc.list_notes("app-1", "org-1")
+        svc.get_application.assert_not_called()
+
+    async def test_list_budget_items_existence_check_has_no_child_eager_load(self):
+        # The parent-check query must be a bare id/org lookup on
+        # grant_applications, not a query that joins or otherwise pulls in
+        # any of the application's child collections.
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one("app-1")
+            r = MagicMock()
+            r.scalars.return_value.all.return_value = []
+            return r
+
+        db = MagicMock()
+        db.execute = execute
+        await GrantService(db).list_budget_items("app-1", "org-1")
+
+        from sqlalchemy.dialects import mysql
+
+        sql = str(
+            captured[0].compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        assert "grant_applications.id" in sql
+        assert "organization_id" in sql
+        for child_table in (
+            "grant_budget_items",
+            "grant_expenditures",
+            "grant_compliance_tasks",
+            "grant_notes",
+        ):
+            assert child_table not in sql
 
 
 if __name__ == "__main__":  # pragma: no cover

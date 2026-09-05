@@ -456,6 +456,45 @@ class TestListPagination:
         )
         assert "limit 0, 100" in sql
 
+    # --- Codex finding 1 (GF-35 follow-up): every ORDER BY above must end
+    # with the model's id as a tie-breaker, or two executions of the same
+    # paginated query can order tied rows differently and a page can
+    # duplicate or drop rows. ---
+
+    @staticmethod
+    def _order_by_clause(sql: str) -> str:
+        return sql.split("order by", 1)[1].split("limit", 1)[0].strip()
+
+    async def test_list_campaigns_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_campaigns("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("fundraising_campaigns.id asc")
+
+    async def test_list_donors_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_donors("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("donors.id asc")
+
+    async def test_list_donations_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_donations("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("donations.id asc")
+
+    async def test_list_pledges_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_pledges("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("pledges.id asc")
+
+    async def test_list_fundraising_events_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_fundraising_events("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("fundraising_events.id asc")
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
