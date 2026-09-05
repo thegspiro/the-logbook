@@ -59,6 +59,46 @@ describe('RequestsTab', () => {
     mockCheckPermission.mockReturnValue(false);
     mockGetSwapRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
     mockGetTimeOffRequests.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
+    window.history.replaceState({}, '', '/scheduling?tab=requests');
+  });
+
+  /**
+   * A link can name the view. The administration hub's time-off alert does, and
+   * without this it landed on the swaps view — on "No swap requests" whenever
+   * there were none, leaving the officer to find the other view themselves.
+   *
+   * The parameter is `requestView` rather than `view` because SchedulingPage
+   * owns `view` for the calendar's month/week mode and rewrites it on mount:
+   * `view=timeoff` was read correctly here once and then overwritten in the
+   * URL, which reads as working until somebody refreshes or shares the link.
+   */
+  it('opens on the view a link names', async () => {
+    window.history.replaceState({}, '', '/scheduling?tab=requests&requestView=timeoff');
+
+    renderWithRouter(<RequestsTab />);
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Time Off/ })).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByRole('tab', { name: /Swap Requests/ })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('opens on swaps when no view is named', async () => {
+    renderWithRouter(<RequestsTab />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Swap Requests/ })).toHaveAttribute('aria-selected', 'true')
+    );
+  });
+
+  // The calendar's own parameter must not select a request view — it is set on
+  // every visit to the schedule tab and means something else entirely.
+  it('ignores the calendar’s view parameter', async () => {
+    window.history.replaceState({}, '', '/scheduling?tab=requests&view=timeoff');
+
+    renderWithRouter(<RequestsTab />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Swap Requests/ })).toHaveAttribute('aria-selected', 'true')
+    );
   });
 
   it('should render swap and time-off view toggles', async () => {

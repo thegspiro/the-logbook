@@ -606,36 +606,40 @@ Inventory Admin. Cards are declared in
 route it targets; `schedulingHubCards.test.ts` resolves that route's real gate
 out of the route source and fails if the two drift.
 
-| Card                 | Route                                      | Permission                                                         |
-| -------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| Shift Templates      | `/scheduling/admin/templates`              | `scheduling.manage`                                                |
-| Shift Patterns       | `/scheduling/admin/patterns`               | `scheduling.manage`                                                |
-| Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                           |
-| Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings`           |
-| Who Can Fill What    | `/scheduling/admin/positions`              | any of `scheduling.manage`, `training.view_all`, `training.manage` |
-| Platoons             | `/scheduling/admin/platoons`               | `scheduling.manage`                                                |
-| Eligibility Rules    | `/scheduling/admin/settings/eligibility`   | `scheduling.manage`                                                |
-| Scheduling Reports   | `/scheduling/admin/reports`                | `scheduling.manage`                                                |
-| Shift Report Options | `/scheduling/admin/settings/shift-reports` | `scheduling.manage`                                                |
-| General              | `/scheduling/admin/settings/general`       | `scheduling.manage`                                                |
-| Apparatus Defaults   | `/scheduling/admin/settings/apparatus`     | `scheduling.manage`                                                |
-| Notifications        | `/scheduling/admin/settings/notifications` | `scheduling.manage`                                                |
+| Card                 | Route                                      | Permission                                               |
+| -------------------- | ------------------------------------------ | -------------------------------------------------------- |
+| Shift Templates      | `/scheduling/admin/templates`              | `scheduling.manage`                                      |
+| Shift Patterns       | `/scheduling/admin/patterns`               | `scheduling.manage`                                      |
+| Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                 |
+| Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings` |
+| Who Can Fill What    | `/scheduling/admin/positions`              | `scheduling.manage`                                      |
+| Platoons             | `/scheduling/admin/platoons`               | `scheduling.manage`                                      |
+| Eligibility Rules    | `/scheduling/admin/settings/eligibility`   | `scheduling.manage`                                      |
+| Scheduling Reports   | `/scheduling/admin/reports`                | `scheduling.manage`                                      |
+| Shift Report Options | `/scheduling/admin/settings/shift-reports` | `scheduling.manage`                                      |
+| General              | `/scheduling/admin/settings/general`       | `scheduling.manage`                                      |
+| Apparatus Defaults   | `/scheduling/admin/settings/apparatus`     | `scheduling.manage`                                      |
+| Notifications        | `/scheduling/admin/settings/notifications` | `scheduling.manage`                                      |
 
-**The hub admits two different administrators.** Its route accepts
-`training.view_all` / `training.manage` because the position roster inside it
-does, and the roster has always been open to a training officer holding no
-scheduling grant. The frame's summary request is therefore made only for
-`scheduling.manage` — `/admin-hub/scheduling/summary` resolves the module to
-that grant, so for anyone else it is a guaranteed 404 the frame would report as
-a failed summary with a Retry that repeats it. The body shows each viewer only
-the cards their own permissions open, and says so plainly when that is none.
+**One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on this
+route, on every page behind it, and on the nav rows that offer it. The hub and
+the position roster briefly accepted `training.view_all` / `training.manage`,
+because the roster reads as a training-compliance view — but nothing has ever
+linked a training officer to it, so the wider gate bought a page reachable only
+by typing its URL while forcing every gate above it, `ADMIN_NAVIGATION_PERMISSIONS`
+included, to widen to match. A hub gate wider than every card behind it only
+opens an empty page.
 
-**The nav row stays on `scheduling.manage`.** A row labelled "Scheduling Admin"
-offered to someone who can open one card in it is a worse offer than no row; a
-training officer reaches the roster from Training, or from the hub directly.
-Both `scheduling.manage` and `training.view_all` are in
-`ADMIN_NAVIGATION_PERMISSIONS` — a child gate cannot admit anyone its parent has
-already turned away.
+The frame's summary request is still made under a `canManage` guard rather than
+unconditionally. `/admin-hub/scheduling/summary` resolves the module to
+`scheduling.manage`, which this route now also requires, so the guard is
+redundant today — and kept, because the frame's own docstring is that a hub
+admitting more than one kind of administrator must not make the request for the
+others, and a guard dropped because the current gate makes it redundant is one
+that has to be rediscovered when the gate next moves.
+
+Cards still resolve their own gates: two of them point into Inventory, whose
+grants `scheduling.manage` does not imply.
 
 **The Equipment settings section is gone.** Nothing on it was ever edited there;
 it held two links into Inventory, behind a settings tab, which is not where
@@ -645,10 +649,23 @@ anyone looks for a link. They are the two Inventory cards above.
 `ModuleSpec` in `backend/app/services/admin_hub_service.py`: shifts still to
 close out, short-staffed shifts, hours this month, shifts ahead, and requests
 waiting. The queue raises short-staffed shifts inside 48 hours, pending swaps
-and pending time-off. Short-staffing counts only shifts that state a
-`min_staffing` — a shift naming neither positions nor a minimum has never said
-how big its crew is, and the board treats that as "crew size not set" rather
-than as a staffing level.
+and pending time-off.
+
+**Short-staffing is not a headcount.** It reads through
+`SchedulingService.filter_shifts_with_open_positions`, the same method behind
+the open-shifts list and the staffing report, which matches each _required_
+slot against a held position and consumes it. A headcount would call a two-seat
+Officer/Driver shift carrying two firefighters covered — the seat that matters
+is the empty one. That method also drops slots marked `required: false`,
+normalizes the legacy list-of-strings form of the column, and falls back to
+`min_staffing`, then the apparatus default, then one. The window is a week at
+most, so the rows are loaded and matched in Python rather than reduced to two
+counts in SQL.
+
+> Note the fallback of **one**: a shift stating neither seats nor a minimum
+> still needs somebody, so an empty one counts and stops counting the moment
+> anyone is on it. The board presents such a shift as "crew size not set" and
+> shows no shortage; that difference is the board's, and predates this.
 
 ### The Shift Board _(2026-08-23)_
 
@@ -2292,7 +2309,9 @@ not resurrect the ladder — the same trade-off `OperationalRankService` makes.
 GET /api/v1/scheduling/eligibility/roster?position=driver
 ```
 
-Requires `scheduling.view` or `scheduling.manage`. Returns every active member
+Requires `scheduling.manage` _(narrowed 2026-09-05; it accepted `training.view_all`
+and `training.manage` while the page did, and the documentation here said
+`scheduling.view`, which it never accepted)_. Returns every active member
 eligible for the position with the _sources_ of that eligibility (rank,
 completed training, or the org's open-position list), their highest current EVOC
 level, and the apparatus they hold an operator record on. Surfaced at
