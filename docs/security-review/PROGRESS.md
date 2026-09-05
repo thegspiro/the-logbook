@@ -22,7 +22,20 @@ feature. The rotation cannot outrun its own review queue.
 against pass 2's merge (`d7a0c456`, verified reachable after an unshallow
 fetch): zero code drift. One new finding — GF-35 (LOW-MED, fixed): all 11
 `list_*` methods across both services fetched an org's entire table before
-slicing `skip`/`limit` in Python; now paginated in SQL.
+slicing `skip`/`limit` in Python; now paginated in SQL. All three Codex
+review threads addressed and resolved (eager-load-before-limit on the
+budget-item/expenditure/note parent check, missing id tie-breaker on
+paginated `ORDER BY`, and remaining child eager-loads on `list_applications`
+itself). All CI checks green.
+
+2026-09-05 tend: `main` had advanced past this PR's base since pass 2
+(PR #2255 and others merged in). Merged `origin/main` into the PR branch;
+the only conflict was two independently-added `[Unreleased]` blocks in
+`CHANGELOG.md`, resolved by keeping both. Re-ran the full completion gate
+post-merge (flake8/black/isort, migration validation, `pytest -k "grant or
+fundraising"` — 537 passed, migration `create_all` guard test — 33 passed,
+`tsc --noEmit`, `eslint .`) — all clean — and pushed. No review comments or
+CI failures outstanding.
 
 ---
 
