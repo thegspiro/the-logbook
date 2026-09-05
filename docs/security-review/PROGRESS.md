@@ -16,12 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 20 (Compliance), pass 3** — branch
-`claude/security-review-compliance`, PR
-[#2245](https://github.com/thegspiro/the-logbook/pull/2245). 0 fixes, 0
-flagged (one already-fixed-elsewhere Pitfall #19 instance re-verified, no
-new gap). See the log entry below and
-`docs/security-review/CMP-20-compliance.md` → **Pass 3** for detail.
+_None currently open._
+
+---
+
+### 2026-09-05 — Feature 20 (Compliance) ✅ closed — PR #2245 merged
+
+**PR #2245 merged cleanly.** Pass 3 found 0 fixes, 0 flagged — the only
+compliance-adjacent file that had changed since pass 2
+(`ComplianceRequirementsConfigPage.tsx`'s `grace_period_days` field) was
+already correctly fixed outside this rotation, re-verified rather than
+re-fixed (see the pass 3 entry immediately below). CI green on the merged
+head (one stale-commit "CI Success" failure was confirmed to be for a
+push superseded seconds later, not the merged head, and needed no action);
+Codex's review completed with no findings. Rotation row 20 → ✅. Next: 21
+Admin hours.
 
 ---
 
@@ -8632,8 +8641,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | 🔄     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
