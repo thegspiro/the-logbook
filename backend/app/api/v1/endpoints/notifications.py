@@ -207,8 +207,8 @@ async def list_logs(
         None,
         description=(
             "Opaque cursor from a previous response's next_cursor. Supersedes "
-            "skip; pass back exactly what was returned. Absent next_cursor "
-            "means the end of the list."
+            "skip; pass back exactly what was returned. A null next_cursor "
+            "means the end of the list — the key is always present."
         ),
     ),
     pagination: PaginationParams = Depends(),
@@ -309,8 +309,8 @@ async def get_my_notifications(
         None,
         description=(
             "Opaque cursor from a previous response's next_cursor. Supersedes "
-            "skip; pass back exactly what was returned. Absent next_cursor "
-            "means the end of the list."
+            "skip; pass back exactly what was returned. A null next_cursor "
+            "means the end of the list — the key is always present."
         ),
     ),
     pagination: PaginationParams = Depends(),

@@ -143,11 +143,13 @@ GET    /api/v1/notifications/summary                     # Rule and send statist
 
 Both notification lists page by cursor. Pass `cursor` from a response's
 `next_cursor` to get the page after it; the value is opaque, so hand back
-exactly what was returned. An absent `next_cursor` means the end of the list and
-is the signal to stop — more reliable than comparing loaded rows against
-`total`, which disagrees with the server whenever a notification arrives
-between two page requests. `skip` still works for existing callers, and a
-`cursor` supersedes it.
+exactly what was returned. **`next_cursor` is `null` at the end of the list** —
+the key is always present in the response, never omitted — and that null is the
+signal to stop. It is more reliable than comparing loaded rows against `total`,
+which counts the whole filtered list including rows _ahead_ of your cursor that
+a continuation can never return; the two disagree whenever a notification
+arrives between two page requests. `skip` still works for existing callers, and
+a `cursor` supersedes it.
 
 ```
 

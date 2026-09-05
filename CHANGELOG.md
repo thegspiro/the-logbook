@@ -32,9 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than when a running total says so. The two disagree while notifications are
   arriving, which is when the count is least trustworthy.
 
+- **The button no longer claims how many notifications are left.** It counted
+  the whole list against the rows on screen, and the list includes newer
+  notifications that arrived after you started paging — ones "load more" can
+  never reach, because it continues from where you were. So the number was
+  wrong by however many had come in, and wrong precisely during a
+  department-wide send. It now reads "Load more".
+
 - **API:** `GET /notifications/logs` and `GET /notifications/my` accept a
-  `cursor` and return `next_cursor`. `skip` continues to work for existing
-  callers; a cursor supersedes it. **Schema:** `notification_logs.sent_at` is
+  `cursor` and return `next_cursor`, which is `null` — never omitted — at the
+  end of the list. `skip` continues to work for existing callers; a cursor
+  supersedes it. **Schema:** `notification_logs.sent_at` is
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
 

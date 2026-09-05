@@ -183,6 +183,28 @@ describe('NotificationsPage send log', () => {
     expect(await screen.findByText(/log fetch exploded/i)).toBeInTheDocument();
   });
 
+  it('does not put a remaining count on the button', async () => {
+    // `total` counts the whole filtered list, including rows ahead of the
+    // cursor that a continuation can never return. Here the server reports 9
+    // rows behind a page of one, and any arithmetic against `total` would
+    // print a tail length the cursor cannot deliver — so the label carries no
+    // number at all rather than a number that is wrong exactly when a fan-out
+    // is arriving.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog],
+      total: 10,
+      skip: 0,
+      limit: 50,
+      next_cursor: 'cursor-page-2',
+    });
+
+    renderLogTab();
+
+    const more = await screen.findByRole('button', { name: /load more/i });
+    expect(more).toHaveAccessibleName('Load more');
+    expect(more.textContent).not.toMatch(/remaining|\d/);
+  });
+
   it('offers the rest of a history longer than one page', async () => {
     // The fetch takes the newest page and the tab claims to show every
     // notification sent to the member, so the remainder needs a way in.
@@ -196,7 +218,7 @@ describe('NotificationsPage send log', () => {
 
     renderLogTab();
 
-    const more = await screen.findByRole('button', { name: /load more \(2 remaining\)/i });
+    const more = await screen.findByRole('button', { name: /load more/i });
 
     vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
       logs: [{ ...emailLog, id: 'log-2', subject: 'Hydrant testing' }],

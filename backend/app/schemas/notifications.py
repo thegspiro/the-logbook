@@ -182,14 +182,22 @@ class NotificationLogScope(str, Enum):
 class NotificationLogsListResponse(BaseModel):
     """Schema for paginated notification logs list.
 
-    ``next_cursor`` is the authoritative "there is more" signal — absent means
-    the end of the list. A client comparing ``len(logs)`` against ``total``
-    instead can disagree with the server whenever a notification arrives
-    mid-paging, which is the case cursor pagination exists to handle.
+    ``next_cursor`` is the authoritative "there is more" signal, and it is
+    ``null`` — not omitted — at the end of the list. Both routes return a plain
+    dict that always carries the key, and neither enables
+    ``response_model_exclude_none``, so a client testing for the key's
+    *presence* would never detect the end and would re-request page one
+    forever. The sentinel is the null value; say so wherever this field is
+    documented.
+
+    A client comparing ``len(logs)`` against ``total`` instead can disagree
+    with the server whenever a notification arrives mid-paging, which is the
+    case cursor pagination exists to handle.
 
     ``skip`` and ``total`` remain for the offset callers that predate the
-    cursor, and ``total`` still describes the whole filtered list rather than
-    the tail after the cursor.
+    cursor. ``total`` describes the whole filtered list, which includes rows
+    *ahead* of a cursor that a continuation can never return — so it is not a
+    remaining-count for the tail and must not be presented as one.
     """
 
     logs: List[NotificationLogResponse]

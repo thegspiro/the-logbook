@@ -527,6 +527,39 @@ class TestEndpointCursorHandling:
 
         assert excinfo.value.status_code == 400
 
+    async def test_the_end_of_the_list_is_a_null_cursor_not_a_missing_key(
+        self, db_session
+    ):
+        # The documented sentinel is the null *value*, so the key has to be
+        # there to carry it. If a later change omitted the field instead — via
+        # response_model_exclude_none, say — a client testing for the key's
+        # presence would never see the end and would ask for page one forever.
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        caller = _Caller(user.id, org.id)
+        await _log(db_session, org, user, subject="only", sent_at=BASE)
+
+        for response in (
+            await list_logs(
+                channel=None,
+                scope=NotificationLogScope.MINE,
+                cursor=None,
+                pagination=_Pagination(),
+                db=db_session,
+                current_user=caller,
+            ),
+            await get_my_notifications(
+                include_expired=False,
+                include_read=True,
+                cursor=None,
+                pagination=_Pagination(),
+                db=db_session,
+                current_user=caller,
+            ),
+        ):
+            assert "next_cursor" in response
+            assert response["next_cursor"] is None
+
     async def test_the_response_carries_the_next_cursor(self, db_session):
         org = await _make_org(db_session)
         user = await _make_user(db_session, org)
