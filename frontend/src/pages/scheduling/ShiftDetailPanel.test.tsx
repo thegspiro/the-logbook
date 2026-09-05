@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
@@ -449,6 +449,21 @@ describe('ShiftDetailPanel dialog shell', () => {
     await user.keyboard('{Escape}');
 
     expect(screen.queryByRole('textbox', { name: 'Assignment notes' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when a selection drag starts inside the panel and ends on the backdrop', async () => {
+    // The browser resolves such a click to the common ancestor — the backdrop
+    // container — so `target === currentTarget` is true and the click alone
+    // cannot tell it from a deliberate backdrop click. Losing the dialog here
+    // would discard a half-typed cancellation reason or close-out hours.
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    fireEvent.mouseDown(screen.getByRole('heading', { name: 'Shift Details' }));
+    fireEvent.click(dialog);
+
     expect(onClose).not.toHaveBeenCalled();
   });
 

@@ -866,10 +866,28 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     else onClose();
   }, [editingNotesId, onClose]);
 
-  /** Only the container itself is the backdrop; a click inside the panel is not. */
+  /**
+   * Close only on a press that both began and ended on the backdrop.
+   *
+   * A click resolves to the common ancestor of its mousedown and mouseup, so a
+   * text selection dragged from inside the panel and released over the backdrop
+   * arrives here with `target === currentTarget` — indistinguishable, on the
+   * click alone, from a deliberate backdrop click. Closing on it discards a
+   * half-typed cancellation reason or a screen of close-out hours with no undo,
+   * and selecting a member's notes to copy is an ordinary thing to do on this
+   * panel.
+   */
+  const backdropPressRef = useRef(false);
+
+  const handleBackdropMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    backdropPressRef.current = event.target === event.currentTarget;
+  }, []);
+
   const handleBackdropClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (event.target === event.currentTarget) onClose();
+      const fromBackdrop = backdropPressRef.current;
+      backdropPressRef.current = false;
+      if (fromBackdrop && event.target === event.currentTarget) onClose();
     },
     [onClose]
   );
@@ -1141,6 +1159,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           role="dialog"
           aria-modal="true"
           aria-labelledby="shift-detail-title"
+          onMouseDown={handleBackdropMouseDown}
           onClick={handleBackdropClick}
         >
           {/* Scrim as an empty sibling of the panel, so it carries no z-index
@@ -1159,8 +1178,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           >
             {/* Header */}
             <div className="modal-header-sticky p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 pr-2">
+              <div className="flex flex-wrap items-start gap-x-2 gap-y-3 sm:items-center">
+                <div className="order-1 min-w-0 flex-1 sm:order-none">
                   <h2 id="shift-detail-title" className="text-theme-text-primary text-lg font-bold sm:text-xl">
                     Shift Details
                   </h2>
@@ -1177,11 +1196,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     </span>
                   )}
                 </div>
-                {/* Four bare glyphs, two of them destructive, on a panel that is
-                mostly used on a phone — where there is no hover to reveal a
-                title. Each action that changes the shift says what it does; the
-                close ✕ is the one glyph that needs no gloss. */}
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                {/* Close stays on the title's line at every width; the other
+                    actions drop to a row of their own below 640px.
+
+                    The dialog is inset 1rem, so a 390px phone leaves 343px of
+                    header — and on a future shift a manager sees four labelled
+                    actions here (Close out shift needs `isPast`, so it never
+                    joins Edit/Delete/Cancel). Sharing one line with them
+                    squeezed the title until "Shift Details" wrapped mid-phrase.
+                    Giving the actions their own row costs ~40px of sticky
+                    header and keeps every label readable, which the
+                    `action-bar` utility's sr-only trick would not: two of these
+                    actions are destructive, and a phone has no hover to recover
+                    a title attribute from a bare glyph. */}
+                <div className="order-3 flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto sm:justify-end">
                   {canManage && !isPast && !shift.is_finalized && !isCancelled && (
                     <>
                       <button
@@ -1247,14 +1275,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       Close out shift
                     </button>
                   )}
-                  <button
-                    onClick={onClose}
-                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors"
-                    aria-label="Close panel"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
                 </div>
+                {/* Last in the DOM so that above 640px, where the header is one
+                    row, tab order follows the visual left-to-right order. Below
+                    that `order-2` lifts it onto the title's line. */}
+                <button
+                  onClick={onClose}
+                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover order-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2 transition-colors sm:order-none"
+                  aria-label="Close panel"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
             </div>
 
