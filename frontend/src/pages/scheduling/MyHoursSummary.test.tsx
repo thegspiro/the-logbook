@@ -51,6 +51,9 @@ const history = (over: Partial<MemberHoursHistory> = {}): MemberHoursHistory => 
     month(12),
   ],
   totals: { shifts: 3, hours: 36, calls: 9, pending_shifts: 0, pending_hours: 0 },
+  // Deliberately larger than `totals`: it spans years the table never shows,
+  // so a card reading it off the wrong field is visible in the assertions.
+  all_time: { shifts: 8, hours: 96, calls: 20, pending_shifts: 0, pending_hours: 0 },
   current_month: month(2, { shifts: 1, hours: 12, calls: 3 }),
   previous_month: month(1, { shifts: 2, hours: 24, calls: 6 }),
   ...over,
@@ -81,20 +84,42 @@ describe('MyHoursSummary', () => {
     expect(mockGetMyHoursHistory).toHaveBeenCalledWith(undefined);
   });
 
-  it('shows last month, this month and the year total', async () => {
+  it('shows this month, this year and all time', async () => {
     render(<MyHoursSummary />);
 
-    const lastCard = await screen.findByRole('group', { name: 'Last month' });
-    expect(within(lastCard).getByText('January 2026')).toBeInTheDocument();
-    expect(within(lastCard).getByText('24')).toBeInTheDocument();
-    expect(within(lastCard).getByText('2 shifts · 6 calls')).toBeInTheDocument();
+    const monthCard = await screen.findByRole('group', { name: 'This month' });
+    expect(within(monthCard).getByText('February 2026')).toBeInTheDocument();
+    expect(within(monthCard).getByText('12')).toBeInTheDocument();
+    expect(within(monthCard).getByText('1 shift · 3 calls')).toBeInTheDocument();
 
-    const thisCard = screen.getByRole('group', { name: 'This month' });
-    expect(within(thisCard).getByText('February 2026')).toBeInTheDocument();
-    expect(within(thisCard).getByText('1 shift · 3 calls')).toBeInTheDocument();
+    const yearCard = screen.getByRole('group', { name: 'This year' });
+    expect(within(yearCard).getByText('Year to date')).toBeInTheDocument();
+    expect(within(yearCard).getByText('36')).toBeInTheDocument();
+    expect(within(yearCard).getByText('3 shifts · 9 calls')).toBeInTheDocument();
 
-    const totalCard = screen.getByRole('group', { name: '2026 total' });
-    expect(within(totalCard).getByText('36')).toBeInTheDocument();
+    const allTimeCard = screen.getByRole('group', { name: 'All time' });
+    expect(within(allTimeCard).getByText('Since 2024')).toBeInTheDocument();
+    expect(within(allTimeCard).getByText('96')).toBeInTheDocument();
+    expect(within(allTimeCard).getByText('8 shifts · 20 calls')).toBeInTheDocument();
+
+    expect(screen.queryByRole('group', { name: 'Last month' })).not.toBeInTheDocument();
+  });
+
+  it('says so when the member has never worked a shift', async () => {
+    const zero = { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 };
+    useDefaultHistory(history({ earliest_year: null, totals: zero, all_time: zero }));
+
+    render(<MyHoursSummary />);
+
+    const allTimeCard = await screen.findByRole('group', { name: 'All time' });
+    expect(within(allTimeCard).getByText('No shifts yet')).toBeInTheDocument();
+  });
+
+  it('labels the bar column instead of leaving it to be guessed at', async () => {
+    render(<MyHoursSummary />);
+
+    await screen.findByText('My Hours');
+    expect(screen.getByRole('columnheader', { name: 'vs. busiest month' })).toBeInTheDocument();
   });
 
   it('lists every month of the year, including the quiet ones', async () => {
@@ -134,7 +159,10 @@ describe('MyHoursSummary', () => {
 
       await screen.findByText('My Hours');
       expect(screen.queryByRole('columnheader', { name: 'Calls' })).not.toBeInTheDocument();
-      expect(screen.getByText('2 shifts')).toBeInTheDocument();
+      const yearCard = screen.getByRole('group', { name: 'This year' });
+      expect(within(yearCard).getByText('3 shifts')).toBeInTheDocument();
+      const allTimeCard = screen.getByRole('group', { name: 'All time' });
+      expect(within(allTimeCard).getByText('8 shifts')).toBeInTheDocument();
     });
   });
 
@@ -163,7 +191,17 @@ describe('MyHoursSummary', () => {
       await waitFor(() => {
         expect(mockGetMyHoursHistory).toHaveBeenCalledWith(2025);
       });
-      expect(await screen.findByText('2025 total')).toBeInTheDocument();
+
+      // The middle card follows the picker, so it can never claim "this year"
+      // over a table showing a different one.
+      const yearCard = await screen.findByRole('group', { name: '2025' });
+      expect(within(yearCard).getByText('Full year')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'This year' })).not.toBeInTheDocument();
+
+      // A career total is not a view of the selected year.
+      const allTimeCard = screen.getByRole('group', { name: 'All time' });
+      expect(within(allTimeCard).getByText('96')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'This month' })).toBeInTheDocument();
     });
 
     it('still offers the current year while viewing an earlier one', async () => {

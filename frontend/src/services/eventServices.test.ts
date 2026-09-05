@@ -245,6 +245,23 @@ describe('eventService', () => {
     });
   });
 
+  // --- getQRCheckInData ---
+  describe('getQRCheckInData', () => {
+    it('should bypass the GET cache so a window that opened is seen on the next poll', async () => {
+      // Both callers poll this endpoint to notice the check-in window opening.
+      // The shared client would answer from cache for 30s and answer stale for
+      // a further 60s while revalidating behind the caller's back, so without
+      // _skipCache the reveal could lag the server by up to 90 seconds.
+      const qrData = { event_id: 'e1', is_valid: false, can_check_in: false };
+      mockGet.mockResolvedValueOnce({ data: qrData });
+
+      const result = await eventService.getQRCheckInData('e1');
+
+      expect(mockGet).toHaveBeenCalledWith('/events/e1/qr-check-in-data', { _skipCache: true });
+      expect(result).toEqual(qrData);
+    });
+  });
+
   // --- getCheckInMonitoring ---
   describe('getCheckInMonitoring', () => {
     it('should GET /events/:id/check-in-monitoring', async () => {

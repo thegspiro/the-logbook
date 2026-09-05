@@ -277,7 +277,10 @@ export interface MemberHoursHistory {
   timezone: string;
   /** Always twelve entries, January first, so quiet months read as quiet. */
   months: MemberHoursMonth[];
+  /** The selected year only. */
   totals: MemberHoursTotals;
+  /** Every year on record, so the year picker does not move it. */
+  all_time: MemberHoursTotals;
   /** Carry their own year: every January, last month was last year. */
   current_month: MemberHoursMonth;
   previous_month: MemberHoursMonth;

@@ -24,6 +24,7 @@ const initialState = {
   backupPhone: '',
   secondaryAdminEmail: '',
   positionsConfig: null,
+  reconciledSeededSlugs: [],
   selectedModules: [],
   moduleStatuses: {},
   modulePermissionConfigs: {},
@@ -561,6 +562,47 @@ describe('onboardingStore', () => {
       });
       getState().setPositionsConfig(null);
       expect(getState().positionsConfig).toBeNull();
+    });
+  });
+
+  // ---- Seeded-grant reconciliation ----
+
+  describe('markSeededSlugsReconciled', () => {
+    // RoleSetup takes the current template's grants for a slug whose seeded
+    // set moved under a persisted config. This record is what makes that a
+    // one-time upgrade rather than something that happens on every mount and
+    // wipes an administrator's edits along with the stale values.
+
+    it('starts empty', () => {
+      expect(getState().reconciledSeededSlugs).toEqual([]);
+    });
+
+    it('records a slug as reconciled', () => {
+      getState().markSeededSlugsReconciled(['emt']);
+
+      expect(getState().reconciledSeededSlugs).toEqual(['emt']);
+    });
+
+    it('does not record the same slug twice', () => {
+      getState().markSeededSlugsReconciled(['emt']);
+      getState().markSeededSlugsReconciled(['emt']);
+
+      expect(getState().reconciledSeededSlugs).toEqual(['emt']);
+    });
+
+    it('keeps what is already recorded when adding another', () => {
+      getState().markSeededSlugsReconciled(['emt']);
+      getState().markSeededSlugsReconciled(['emt', 'firefighter']);
+
+      expect(getState().reconciledSeededSlugs).toEqual(['emt', 'firefighter']);
+    });
+
+    it('is a no-op for an empty list', () => {
+      const before = getState().reconciledSeededSlugs;
+
+      getState().markSeededSlugsReconciled([]);
+
+      expect(getState().reconciledSeededSlugs).toBe(before);
     });
   });
 });

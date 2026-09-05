@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
@@ -192,6 +192,29 @@ describe('ShiftDetailPanel signup window', () => {
     mockOpen.mockResolvedValue({} as never);
     mockClose.mockReset();
     mockClose.mockResolvedValue({} as never);
+    // An officer, deliberately without scheduling.manage. The blanket-true
+    // default makes the viewer a manager, and a manager is never bounded by
+    // the window, so the reopen banner is not offered to them at all — these
+    // cases would have been exercising the one actor the feature is not for.
+    grantedPermissions.current = ['scheduling.assign'];
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  it('does not offer a scheduling admin a window to reopen', async () => {
+    // `rosterLocked` exempts a manager and `signupClosedReason` returns null
+    // for one, so the banner's own conditions cannot withhold it — leaving
+    // `memberSignupClosed` to render it, and the bounded endpoint to refuse
+    // the click. `!canManage` has to be its own gate, as the endpoint's
+    // contract ("not offered to scheduling.manage") already said.
+    grantedPermissions.current = ['scheduling.assign', 'scheduling.manage'];
+    renderWithRouter(<ShiftDetailPanel shift={startedShift() as never} onClose={vi.fn()} />);
+
+    await screen.findByText('Crew Roster');
+    expect(screen.queryByText('Signup is closed for this shift')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reopen for/ })).not.toBeInTheDocument();
   });
 
   it('offers leadership a way to reopen a shift that has started', async () => {
@@ -278,5 +301,58 @@ describe('ShiftDetailPanel assign controls past the grace', () => {
 
     await screen.findByText('Signup is closed for this shift');
     expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShiftDetailPanel once the roster locks', () => {
+  const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
+  const mockAssignments = vi.mocked(schedulingService.getShiftAssignments);
+
+  beforeEach(() => {
+    mockEligibility.mockReset();
+    mockEligibility.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    mockAssignments.mockResolvedValue([
+      { id: 'a-1', user_id: 'user-1', user_name: 'A Member', position: 'officer', status: 'assigned' },
+    ] as never);
+    // The shift's own officer, deliberately without scheduling.manage: a
+    // manager is exempt from the lock, so they would keep every control below.
+    grantedPermissions.current = ['scheduling.assign'];
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+    mockAssignments.mockResolvedValue([]);
+  });
+
+  // Ended this many hours ago, and still today. `isPast` stays false until
+  // midnight, which is exactly why each of these controls survived its own
+  // gate and had to be found one at a time.
+  const endedHoursAgo = (hours: number) => ({
+    ...shift,
+    shift_date: new Date().toISOString().slice(0, 10),
+    start_time: new Date(Date.now() - (hours + 12) * 60 * 60_000).toISOString(),
+    end_time: new Date(Date.now() - hours * 60 * 60_000).toISOString(),
+  });
+
+  it('withdraws every live control but leaves the record readable', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={endedHoursAgo(3) as never} onClose={vi.fn()} />);
+
+    // The roster itself stays — what it says is still the answer to who was
+    // on this shift. It is only the buttons that stopped meaning anything.
+    expect(await screen.findByText('You are assigned to this shift')).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', { name: /Withdraw from this shift/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Confirm assignment/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Decline assignment/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Remove assignment/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Signup is closed for this shift')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reopen for/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps them while the crew is still out', async () => {
+    // The same shift an hour before it ends: nothing here is a record yet.
+    renderWithRouter(<ShiftDetailPanel shift={endedHoursAgo(-1) as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Withdraw from this shift/ })).toBeInTheDocument();
   });
 });

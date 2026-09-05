@@ -5,6 +5,7 @@ Request and response schemas for notification management endpoints.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, List, Optional
 from uuid import UUID
 
@@ -161,6 +162,21 @@ class NotificationLogResponse(UTCResponseBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class NotificationLogScope(str, Enum):
+    """Whose notification logs a log-tab request addresses.
+
+    ``mine`` is the default on every log route because ``NotificationLog``
+    stores ``subject``, ``message`` and ``recipient_email`` — an org-wide
+    default served every recipient's notification bodies to anybody who could
+    reach the endpoint. ``organization`` is the deliverability-audit view and
+    is gated on ``notifications.manage``, matching the org-wide write it sits
+    beside.
+    """
+
+    MINE = "mine"
+    ORGANIZATION = "organization"
 
 
 class NotificationLogsListResponse(BaseModel):

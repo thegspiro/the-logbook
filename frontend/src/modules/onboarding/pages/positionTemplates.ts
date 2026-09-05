@@ -236,7 +236,12 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         name: 'EMT',
         description: 'Emergency Medical Technician providing patient care on EMS calls',
         icon: HeartPulse,
-        priority: 10,
+        // Matches DEFAULT_POSITIONS['emt']. save_session_roles writes this
+        // value over the seeded one, so a mismatch would make the stored
+        // ordering depend on whether the box was ticked — and 10 would tie EMT
+        // with the baseline Member position. Engineer and Firefighter are
+        // aligned the same way.
+        priority: 12,
         permissions: generateRolePermissions(modules, 'member'),
       },
     ],

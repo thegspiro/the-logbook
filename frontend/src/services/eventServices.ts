@@ -298,7 +298,16 @@ export const eventService = {
    * Get QR code check-in data for an event
    */
   async getQRCheckInData(eventId: string): Promise<import('../types/event').QRCheckInData> {
-    const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`);
+    // `_skipCache`: this payload reports whether the check-in window is open
+    // *right now*, and both callers poll it to react to that flipping. The
+    // shared client would serve it from cache for 30s and serve it stale for a
+    // further 60s while revalidating in the background, so a window that opened
+    // could go unnoticed for up to 90 seconds — the QR page would keep showing
+    // its placeholder and the self-check-in page would keep withholding its
+    // button while the backend was already accepting scans.
+    const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`, {
+      _skipCache: true,
+    });
     return response.data;
   },
 

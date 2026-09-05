@@ -31,6 +31,7 @@ import { notificationsService } from '../services/api';
 import type { NotificationRuleRecord, NotificationLogRecord, NotificationsSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
+import { NotificationLogScope } from '../constants/enums';
 import NotificationCard from '../components/NotificationCard';
 
 // Maps trigger enum values to display-friendly icons and colors
@@ -110,6 +111,10 @@ function formatCategory(category: string): string {
 }
 
 const INBOX_PAGE_SIZE = 20;
+// The send log is one row per delivery, so a long-serving member's history
+// runs well past a single page. The backend's own default is 100; naming it
+// here keeps the Load more arithmetic honest about what was asked for.
+const LOG_PAGE_SIZE = 50;
 
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -142,6 +147,14 @@ const NotificationsPage: React.FC = () => {
   // UI states
   const [loading, setLoading] = useState(true);
   const [loadingInbox, setLoadingInbox] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
+  const [logsTotal, setLogsTotal] = useState(0);
+  // Kept apart from the page-wide `error`, which renders above every tab: the
+  // send log is prefetched on mount for a tab the member may never open, and
+  // its failure must not caption a working inbox with "Failed to load your
+  // send log".
+  const [logsError, setLogsError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showRead, setShowRead] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -159,17 +172,29 @@ const NotificationsPage: React.FC = () => {
   // still renders Rules. Deriving removes the state that could fall out of step
   // at all.
   //
-  // Each tab carries its own gate rather than sharing one, because Email
-  // Templates answers to `settings.manage` while Rules and the Send Log answer
-  // to `notifications.view`. A tab nobody can open must not be restorable from
-  // the URL either — the deep link is the same door as the button.
+  // Each tab carries its own gate rather than sharing one: Email Templates
+  // answers to `settings.manage`, Rules to `notifications.view`, and the Send
+  // Log to nothing beyond being signed in. A tab nobody can open must not be
+  // restorable from the URL either — the deep link is the same door as the
+  // button.
+  //
+  // The Send Log is ungated because it is no longer an org-wide view
+  // _(2026-09-04)_: `GET /notifications/logs` defaults to `scope=mine`, so
+  // the tab shows the caller their own delivery history — email as well as
+  // in-app, with delivered/failed status — which is their own data on the
+  // same footing as the inbox. The organization-wide view still exists behind
+  // `scope=organization` + `notifications.manage`, for auditing deliverability.
   const requestedTab = searchParams.get('tab');
   const tabIsAvailable: Record<'inbox' | 'rules' | 'templates' | 'log', boolean> = {
     inbox: true,
     rules: canView,
     templates: canManageTemplates,
-    log: canView,
+    log: true,
   };
+  // The buttons below render off this same map rather than repeating the
+  // permission expressions, so the button and the deep link cannot disagree
+  // about a tab — which is how the Send Log came to be restorable from the URL
+  // for a member before its button was.
   const isTabName = (value: string | null): value is keyof typeof tabIsAvailable =>
     value === 'inbox' || value === 'rules' || value === 'templates' || value === 'log';
   const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
@@ -203,6 +228,31 @@ const NotificationsPage: React.FC = () => {
     void fetchInbox();
   }, [showRead]);
 
+  // Fetch the send log on mount. Scoped to the caller, so it needs no
+  // permission — but kept separate from the rules/summary fetch below, which
+  // does, so a member's log is not lost to a 403 on a request they never
+  // needed to make.
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoadingLogs(true);
+      setLogsError(null);
+      try {
+        const logsRes = await notificationsService.getLogs({
+          scope: NotificationLogScope.MINE,
+          limit: LOG_PAGE_SIZE,
+        });
+        setLogs(logsRes.logs);
+        setLogsTotal(logsRes.total);
+      } catch (err: unknown) {
+        setLogsError(getErrorMessage(err, 'Failed to load your send log'));
+      } finally {
+        setLoadingLogs(false);
+      }
+    };
+
+    void fetchLogs();
+  }, []);
+
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {
     if (!canView) {
@@ -213,14 +263,12 @@ const NotificationsPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [rulesRes, summaryRes, logsRes] = await Promise.all([
+        const [rulesRes, summaryRes] = await Promise.all([
           notificationsService.getRules(),
           notificationsService.getSummary(),
-          notificationsService.getLogs(),
         ]);
         setRules(rulesRes.rules);
         setSummary(summaryRes);
-        setLogs(logsRes.logs);
       } catch (err: unknown) {
         const message = getErrorMessage(err, 'Failed to load notification data');
         setError(message);
@@ -300,10 +348,63 @@ const NotificationsPage: React.FC = () => {
   );
 
   // Batch management: mark all as read (#76)
+  // Clears the caller's own logs across every channel, which is exactly the
+  // set the Send Log tab lists. That set includes their in-app notifications,
+  // so the inbox and the global unread badge are reconciled here too — leaving
+  // them alone showed the same notification read on one tab and unread on the
+  // next.
+  /**
+   * Reconcile the inbox tab after every one of the caller's notifications has
+   * been marked read.
+   *
+   * The inbox is a *filtered* list, so "mark them all read" is not a
+   * field update — under `showRead === false` the rows stop belonging to it.
+   * Mapping them to `read: true` in place left the unread-only view showing
+   * read notifications, and `inboxTotal` is the count of that same filtered
+   * set, so the Load more control went on advertising rows that were no
+   * longer in it.
+   *
+   * With `showRead` on, the list is unfiltered: the map is right and the
+   * total still counts every row.
+   */
+  const reconcileInboxAllRead = () => {
+    if (showRead) {
+      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } else {
+      setMyNotifications([]);
+      setInboxTotal(0);
+    }
+    // The Send Log holds its own independently fetched copy of these rows.
+    // `/my/read-all` is in-app only, so email rows keep whatever they had —
+    // but leaving the in-app ones unread here left the Send Log offering
+    // "Mark all as read" for rows the database had already marked.
+    setLogs((prev) => prev.map((l) => (l.channel === 'in_app' ? { ...l, read: true } : l)));
+    clearGlobalUnread();
+  };
+
+  const handleLoadMoreLogs = async () => {
+    setLoadingMoreLogs(true);
+    setLogsError(null);
+    try {
+      const data = await notificationsService.getLogs({
+        scope: NotificationLogScope.MINE,
+        skip: logs.length,
+        limit: LOG_PAGE_SIZE,
+      });
+      setLogs((prev) => [...prev, ...(data.logs || [])]);
+      setLogsTotal(data.total);
+    } catch (err: unknown) {
+      setLogsError(getErrorMessage(err, 'Failed to load more of your send log'));
+    } finally {
+      setLoadingMoreLogs(false);
+    }
+  };
+
   const handleMarkAllRead = async () => {
     try {
-      await notificationsService.markAllLogsRead();
+      await notificationsService.markAllLogsRead({ scope: NotificationLogScope.MINE });
       setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
+      reconcileInboxAllRead();
     } catch {
       setError('Failed to mark all as read');
     }
@@ -328,8 +429,7 @@ const NotificationsPage: React.FC = () => {
   const handleMarkAllInboxRead = async () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
-      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      clearGlobalUnread();
+      reconcileInboxAllRead();
     } catch {
       setError('Failed to mark all as read');
     }
@@ -365,7 +465,7 @@ const NotificationsPage: React.FC = () => {
     setSearchParams({ tab });
   };
 
-  if (loading && loadingInbox) {
+  if (loading && loadingInbox && loadingLogs) {
     return (
       <div className="min-h-screen">
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -392,7 +492,9 @@ const NotificationsPage: React.FC = () => {
               <p className="text-theme-text-muted text-sm">
                 {activeTab === 'inbox'
                   ? 'View and manage your notifications'
-                  : 'Manage automated notification rules and review send history across all channels'}
+                  : activeTab === 'log'
+                    ? 'Every notification sent to you, across all channels, with delivery status'
+                    : 'Manage automated notification rules and email templates'}
               </p>
             </div>
           </div>
@@ -423,8 +525,10 @@ const NotificationsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Stats - only show for admin tabs */}
-        {canView && activeTab !== 'inbox' && (
+        {/* Stats — organization-wide counts, so only on the organization-wide
+        tab. The Send Log below is scoped to the caller, and these numbers
+        sitting above it read as a tally of it. */}
+        {canView && activeTab === 'rules' && (
           <div
             className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3"
             role="region"
@@ -474,7 +578,7 @@ const NotificationsPage: React.FC = () => {
               </span>
             )}
           </button>
-          {canView && (
+          {tabIsAvailable.rules && (
             <button
               onClick={() => handleTabChange('rules')}
               role="tab"
@@ -488,7 +592,7 @@ const NotificationsPage: React.FC = () => {
               Notification Rules
             </button>
           )}
-          {canManageTemplates && (
+          {tabIsAvailable.templates && (
             <button
               onClick={() => handleTabChange('templates')}
               role="tab"
@@ -502,7 +606,7 @@ const NotificationsPage: React.FC = () => {
               Email Templates
             </button>
           )}
-          {canView && (
+          {tabIsAvailable.log && (
             <button
               onClick={() => handleTabChange('log')}
               role="tab"
@@ -749,7 +853,13 @@ const NotificationsPage: React.FC = () => {
           (() => {
             const filteredLogs = logChannelFilter === 'all' ? logs : logs.filter((l) => l.channel === logChannelFilter);
             return (
-              <>
+              <div role="tabpanel">
+                {logsError && (
+                  <div className="mb-4 flex items-start space-x-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+                    <p className="flex-1 text-sm text-red-700 dark:text-red-300">{logsError}</p>
+                  </div>
+                )}
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
                     {(
@@ -784,14 +894,26 @@ const NotificationsPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                {filteredLogs.length === 0 ? (
+                {/* The page-level skeleton cannot cover this tab: for a member
+                without notifications.view the permission effect sets `loading`
+                false synchronously, so the page renders while the log request
+                is still in flight and "No Notifications Found" claims an empty
+                log before one has been fetched. The inbox tab carries its own
+                flag for the same reason. */}
+                {loadingLogs ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="bg-theme-surface-hover h-16 animate-pulse rounded-lg" />
+                    ))}
+                  </div>
+                ) : filteredLogs.length === 0 ? (
                   <div className="card p-12 text-center">
                     <Clock className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                     <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
                     <p className="text-theme-text-secondary mb-6">
                       {logChannelFilter === 'all'
-                        ? 'The send log will show all sent notifications with delivery status and timestamps.'
-                        : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications found.`}
+                        ? 'Your send log will show every notification sent to you, with delivery status and timestamps.'
+                        : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
                     </p>
                   </div>
                 ) : (
@@ -857,7 +979,27 @@ const NotificationsPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </>
+                {!loadingLogs && logs.length < logsTotal && (
+                  <div className="pt-4 text-center">
+                    <button
+                      onClick={() => {
+                        void handleLoadMoreLogs();
+                      }}
+                      disabled={loadingMoreLogs}
+                      className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50 max-md:min-h-[44px]"
+                    >
+                      {loadingMoreLogs ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load more (${logsTotal - logs.length} remaining)`
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })()}
 

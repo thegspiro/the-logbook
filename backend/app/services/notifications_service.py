@@ -195,13 +195,24 @@ class NotificationsService:
         self,
         organization_id: UUID,
         channel: Optional[str] = None,
+        recipient_id: Optional[UUID] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[NotificationLog], int]:
-        """Get notification logs with pagination"""
+        """Get notification logs with pagination.
+
+        ``recipient_id`` narrows the result to one member's own deliveries.
+        Every writer on this path sets ``recipient_id`` (``recipient_email``
+        is only ever a copy of that user's address), so the id alone is the
+        complete filter — matching on the email as well would widen the query
+        without reaching a row the id misses.
+        """
         query = select(NotificationLog).where(
             NotificationLog.organization_id == str(organization_id)
         )
+
+        if recipient_id is not None:
+            query = query.where(NotificationLog.recipient_id == str(recipient_id))
 
         if channel:
             try:
@@ -377,17 +388,31 @@ class NotificationsService:
         await self.db.commit()
         return len(logs)
 
-    async def mark_all_logs_read(self, organization_id: UUID) -> int:
-        """Mark all unread notification logs as read for an organization.
+    async def mark_all_logs_read(
+        self, organization_id: UUID, recipient_id: Optional[UUID] = None
+    ) -> int:
+        """Mark unread notification logs as read.
+
+        ``recipient_id`` restricts the write to that member's own logs, which
+        is what the Send Log's "Mark all as read" does — it must clear exactly
+        the rows the tab showed. Omitting it keeps the org-wide sweep, gated
+        on ``notifications.manage``.
+
+        Unlike :meth:`mark_all_user_notifications_read` this covers every
+        channel, not just in-app: an email row carries a ``read`` flag too and
+        would otherwise stay unread behind a button that claimed to clear it.
 
         Returns the number of logs marked as read.
         """
         now = datetime.now(timezone.utc)
-        result = await self.db.execute(
+        query = (
             select(NotificationLog)
             .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.read.is_(False))
         )
+        if recipient_id is not None:
+            query = query.where(NotificationLog.recipient_id == str(recipient_id))
+        result = await self.db.execute(query)
         logs = list(result.scalars().all())
         for log in logs:
             log.read = True

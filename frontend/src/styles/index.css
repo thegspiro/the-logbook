@@ -2051,6 +2051,28 @@ table {
 thead th {
   @apply text-theme-text-muted text-left text-xs font-semibold tracking-wider uppercase;
 }
+/*
+ * Opt-in: a header over a right-aligned column of figures.
+ *
+ * The rule above is UNLAYERED, and unlayered CSS outranks every cascade
+ * layer. Tailwind emits `.text-right` inside `@layer utilities`, so writing
+ * `text-right` on a <th> does nothing at all — the header stays hard left
+ * while the numbers under it sit at the far right edge of the column, which
+ * on a wide table puts a figure a hundred pixels from its own label. This
+ * override sits in the same unlayered tier, where specificity decides:
+ * `thead th.th-numeric` (0,1,2) beats `thead th` (0,0,2).
+ *
+ * It cannot be an `@utility` — that would place it back in
+ * `@layer utilities` and lose to the rule above, which is the whole problem.
+ *
+ * Deliberately opt-in rather than a fix to the `text-align` above: ~56 <th>
+ * elements across the app are silently overridden the same way, and moving
+ * these base table rules into `@layer base` would shift every one of those
+ * headers at once. That correction is its own reviewable change.
+ */
+thead th.th-numeric {
+  text-align: right;
+}
 tbody tr {
   @apply border-theme-surface-border border-b transition-colors duration-100;
 }

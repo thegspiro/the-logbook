@@ -26,7 +26,6 @@ import {
   ClipboardList,
   ChevronDown,
   ChevronRight,
-  Clock,
   GraduationCap,
   AlertTriangle,
   CheckCircle2,
@@ -57,10 +56,11 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { requirementTarget } from '../utils/pipelineProgress';
-import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
+import { formatHours } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
@@ -926,11 +926,11 @@ const Dashboard: React.FC = () => {
 
   const loadHours = async (isRetry = false) => {
     if (!isRetry) setLoadingHours(true);
-    // The header chip reads hoursError directly and does not consult
-    // loadingHours, so clearing the flag up front on a retry puts the stale
-    // partial sum back on screen as an exact "N hrs in Month" -- and leaves it
-    // there for as long as the retry takes. `sourceFailed` sets the flag from
-    // the settled result either way, so the retry path simply waits.
+    // The card's `totalUnverified` reads hoursError directly, and a retry does
+    // not raise loadingHours, so clearing the flag up front puts the stale
+    // partial sum back on screen as an exact total -- and leaves it there for
+    // as long as the retry takes. `sourceFailed` sets the flag from the
+    // settled result either way, so the retry path simply waits.
     if (!isRetry) setHoursError(false);
     if (!isRetry) setCertificationsError(false);
     try {
@@ -942,10 +942,16 @@ const Dashboard: React.FC = () => {
 
       const canLoadScheduling = isModuleOn('scheduling') && checkPermission('scheduling.view');
       const canLoadTraining = isModuleOn('training') && checkPermission('training.view');
-      // Admin Hours currently has no ModuleSettings flag. Its established
-      // member-facing gate is admin_hours.view; manage is only for reviewing
-      // the whole department's entries.
-      const canLoadAdminHours = checkPermission('admin_hours.view');
+      // Admin Hours has no ModuleSettings flag and no member-facing permission
+      // gate: /admin-hours, the sidebar entry that opens it and
+      // GET /admin-hours/summary are all open to any authenticated member.
+      // Gating this read on admin_hours.view -- a permission no default
+      // position or rank grants -- therefore left every ordinary member's
+      // Administrative row reading "Unavailable" forever, beside a row that
+      // navigates to a page they can open, while their own figure was one
+      // ungated request away. The only condition left is having an id to scope
+      // it to, because an unscoped summary is not this member's hours.
+      const canLoadAdminHours = Boolean(currentUser?.id);
 
       // Only a source that was actually attempted can fail. A member without
       // training.view is not looking at a broken card, so a gated-off source
@@ -970,11 +976,26 @@ const Dashboard: React.FC = () => {
             })
           : Promise.resolve(null),
         canLoadAdminHours
-          ? adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
-              console.error('Failed to load admin hours summary:', err);
-              adminHoursFailed = true;
-              return null;
-            })
+          ? adminHoursEntryService
+              .getSummary({
+                // Explicitly the member's own id. The endpoint only falls back
+                // to the caller for someone *without* admin_hours.manage; a
+                // manage holder who omits it gets the whole department's
+                // totals, which this card would then head "My Hours".
+                userId: currentUser?.id,
+                // As UTC instants, not bare dates: the endpoint parses a bare
+                // "YYYY-MM-DD" as midnight and filters `clock_in_at <= end`,
+                // so an unconverted end date drops every entry logged today,
+                // and an unconverted start date cuts the month at UTC midnight
+                // rather than the department's.
+                startDate: startOfReportingDayUTC(monthStart, tz),
+                endDate: endOfReportingDayUTC(monthEnd, tz),
+              })
+              .catch((err) => {
+                console.error('Failed to load admin hours summary:', err);
+                adminHoursFailed = true;
+                return null;
+              })
           : Promise.resolve(null),
       ]);
       // Assigned from the settled result rather than only ever set to true:
@@ -1074,7 +1095,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const totalHours = sumHoursToQuarter([hours.training, hours.standby, hours.administrative]);
   const monthLabel = formatDateCustom(new Date(), { month: 'long' }, tz);
 
   // ── The thirty-day list ───────────────────────────────────────────────────
@@ -1400,9 +1420,10 @@ const Dashboard: React.FC = () => {
   refreshImpl.current = async () => {
     // `true` throughout: a pull-to-refresh runs with the page already on
     // screen, so it is a refresh rather than a first load. Clearing the error
-    // flags up front here would do what it did on the inline Retry -- the
-    // header ignores loadingHours, so "Hours unavailable" would revert to an
-    // exact stale partial total for the duration of a slow refresh.
+    // flags up front here would do what it did on the inline Retry -- a
+    // refresh never raises loadingHours, so the hours card's "Total
+    // unavailable" would revert to an exact stale partial total for the
+    // duration of a slow refresh.
     // Through runRetry, not around it: the gesture is not blocked while a
     // section Retry is in flight, so calling the loaders directly would start a
     // second request for the same source. If the newer one settles first the
@@ -1641,7 +1662,10 @@ const Dashboard: React.FC = () => {
           : 'Dashboard content loaded.'}
       </div>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
-        {/* Header — who, when, and the one number a member checks daily */}
+        {/* Header — who and when. The month's hours are stated once, by the
+            hours card, which carries the same total plus the split behind it
+            and its own failure state; a second copy up here restated the
+            figure with no way to see what it was made of. */}
         <div className="mb-5 sm:mb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -1683,19 +1707,6 @@ const Dashboard: React.FC = () => {
                 ))}
               </div>
             )}
-            <span className="border-theme-surface-border bg-theme-surface text-theme-text-secondary inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-4 text-[13px]">
-              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>
-                {hoursError ? (
-                  <span className="text-theme-text-primary font-bold">Hours unavailable for {monthLabel}</span>
-                ) : (
-                  <>
-                    <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span>{' '}
-                    hrs in {monthLabel}
-                  </>
-                )}
-              </span>
-            </span>
           </div>
         </div>
 

@@ -65,6 +65,7 @@ describe('MyShiftsTab', () => {
         pending_hours: 0,
       })),
       totals: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+      all_time: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
       current_month: { year: 2026, month: 2, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
       previous_month: { year: 2026, month: 1, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
     });

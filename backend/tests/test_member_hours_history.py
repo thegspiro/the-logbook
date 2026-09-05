@@ -207,6 +207,25 @@ class TestMemberMonthTotals:
         assert buckets[(2025, 12)]["hours"] == 4.0
 
     @pytest.mark.asyncio
+    async def test_omitted_bounds_span_every_year(self, db_session, org_and_member):
+        """No bounds is the member's whole career — what all-time reads."""
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2019, 3, 4), 600, finalized=True, calls=2
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2026, 8, 9), 240, finalized=True, calls=1
+        )
+
+        buckets = await svc.get_member_month_totals(user_id, org_id)
+
+        assert set(buckets) == {(2019, 3), (2026, 8)}
+        assert buckets[(2019, 3)]["hours"] == 10.0
+        assert buckets[(2026, 8)]["hours"] == 4.0
+
+    @pytest.mark.asyncio
     async def test_other_orgs_shifts_are_not_counted(self, db_session, org_and_member):
         """``shift_attendance`` has no org column; the shift is what scopes it."""
         org_id, user_id = org_and_member
@@ -236,6 +255,11 @@ class TestMemberMonthTotals:
         assert june["shifts"] == 1
         assert june["hours"] == 10.0
         assert june["calls"] == 1
+
+        # The unbounded span drops the date filters, not the org filter.
+        lifetime = await svc.get_member_month_totals(user_id, org_id)
+        assert set(lifetime) == {(2025, 6)}
+        assert lifetime[(2025, 6)]["calls"] == 1
 
 
 class TestMyHoursHistory:
@@ -337,14 +361,17 @@ class TestMyHoursHistory:
 
         history = await svc.get_my_hours_history(user_id, org_id, 2025)
 
-        assert history["earliest_year"] is None
-        assert history["totals"] == {
+        zero = {
             "shifts": 0,
             "hours": 0.0,
             "calls": 0,
             "pending_shifts": 0,
             "pending_hours": 0.0,
         }
+
+        assert history["earliest_year"] is None
+        assert history["totals"] == zero
+        assert history["all_time"] == zero
         assert history["previous_month"]["hours"] == 0.0
 
     @pytest.mark.asyncio
@@ -370,3 +397,155 @@ class TestMyHoursHistory:
 
         assert result["totals"]["hours"] == 8.0
         assert result["totals"]["calls"] == 2
+        assert result["all_time"]["hours"] == 8.0
+        assert result["all_time"]["calls"] == 2
+
+
+class TestAllTimeTotals:
+    """The all-time card sits beside the year total and must agree with it."""
+
+    @pytest.mark.asyncio
+    async def test_spans_years_the_selected_year_excludes(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2024, 5, 6), 600, finalized=True, calls=3
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2026, 2, 3), 240, finalized=True, calls=1
+        )
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        assert history["totals"]["hours"] == 4.0
+        assert history["totals"]["shifts"] == 1
+        assert history["totals"]["calls"] == 1
+
+        assert history["all_time"]["hours"] == 14.0
+        assert history["all_time"]["shifts"] == 2
+        assert history["all_time"]["calls"] == 4
+
+    @pytest.mark.asyncio
+    async def test_selected_year_does_not_change_the_all_time_figure(
+        self, db_session, org_and_member
+    ):
+        """The year picker moves the table; the career total is not a view."""
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2024, 5, 6), 600, finalized=True, calls=3
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2026, 2, 3), 240, finalized=True, calls=1
+        )
+
+        viewing_2024 = await svc.get_my_hours_history(user_id, org_id, 2024)
+        viewing_2026 = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        assert viewing_2024["totals"]["hours"] == 10.0
+        assert viewing_2026["totals"]["hours"] == 4.0
+        assert viewing_2024["all_time"] == viewing_2026["all_time"]
+
+    @pytest.mark.asyncio
+    async def test_hours_fold_on_the_quarter_across_years(
+        self, db_session, org_and_member
+    ):
+        """Two 10-minute shifts read 0.25 each, so all time reads 0.5.
+
+        Summing the raw minutes instead gives 20 minutes -> 0.25, and the
+        all-time card would then be less than the year total printed beside
+        it. Same invariant the year total is held to, one level up.
+        """
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2025, 3, 4), 10, finalized=True, calls=0
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2026, 3, 4), 10, finalized=True, calls=0
+        )
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        assert history["totals"]["hours"] == 0.25
+        assert history["all_time"]["hours"] == 0.5
+
+    @pytest.mark.asyncio
+    async def test_pending_stays_out_of_the_credited_figure(
+        self, db_session, org_and_member
+    ):
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2024, 7, 1), 600, finalized=True, calls=2
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2026, 7, 1), 300, finalized=False
+        )
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        assert history["all_time"]["hours"] == 10.0
+        assert history["all_time"]["shifts"] == 1
+        assert history["all_time"]["pending_hours"] == 5.0
+        assert history["all_time"]["pending_shifts"] == 1
+
+    @pytest.mark.asyncio
+    async def test_other_orgs_are_not_counted(self, db_session, org_and_member):
+        org_id, user_id = org_and_member
+        other_org_id = await _add_org(db_session)
+        await db_session.flush()
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2025, 6, 3), 600, finalized=True, calls=1
+        )
+        await _worked(
+            db_session,
+            other_org_id,
+            user_id,
+            date(2019, 6, 4),
+            600,
+            finalized=True,
+            calls=9,
+        )
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2025)
+
+        assert history["all_time"]["hours"] == 10.0
+        assert history["all_time"]["calls"] == 1
+        # The other org's earlier shift must not stretch the year picker
+        # back to a year this department never saw the member work.
+        assert history["earliest_year"] == 2025
+
+    @pytest.mark.asyncio
+    async def test_earliest_year_counts_a_pending_only_year(
+        self, db_session, org_and_member
+    ):
+        """The picker offers a year whose shifts are all awaiting close-out.
+
+        ``earliest_year`` now comes from the same buckets everything else
+        does, and those buckets hold pending months too — which is the
+        behaviour it had when it was its own ``MIN(shift_date)`` query.
+        """
+        org_id, user_id = org_and_member
+        svc = SchedulingService(db_session)
+
+        await _worked(
+            db_session, org_id, user_id, date(2023, 9, 8), 300, finalized=False
+        )
+        await _worked(
+            db_session, org_id, user_id, date(2026, 1, 9), 600, finalized=True, calls=1
+        )
+
+        history = await svc.get_my_hours_history(user_id, org_id, 2026)
+
+        assert history["earliest_year"] == 2023
+        assert history["all_time"]["hours"] == 10.0
+        assert history["all_time"]["pending_hours"] == 5.0

@@ -61,20 +61,24 @@ NOTIFICATIONS_REVOKED_SOURCES = BASELINE_SOURCES + (
 
 
 def test_notifications_view_is_not_a_baseline_grant():
-    """The Send Log it opens is scoped to the org, not to the recipient.
+    """It opens the department's notification rules, which are not a member's.
 
-    ``notifications.view`` gates ``GET /notifications/logs``, and
-    ``NotificationsService.get_logs`` filters on ``organization_id`` alone —
-    there is no recipient scoping anywhere on that path. ``NotificationLog``
-    stores ``recipient_email``, ``subject`` and ``message``, so a grant seeded
-    to the whole department let any member read the body of every notification
-    sent to every other member.
+    The grant was revoked for a sharper reason: it gated ``GET
+    /notifications/logs``, which filtered on ``organization_id`` alone.
+    ``NotificationLog`` stores ``recipient_email``, ``subject`` and
+    ``message``, so a grant seeded to the whole department let any member read
+    the body of every notification sent to every other member. The endpoint
+    now defaults to ``scope=mine`` and gates the org-wide view on
+    ``notifications.manage`` (``tests/test_notification_log_scope.py``), so
+    that leak is closed at the endpoint as well as at the grant.
 
-    Withholding it costs a member nothing they can act on: their own inbox is
-    ``GET /notifications/my``, which depends on ``get_current_user`` and no
-    permission at all. What they lose is three admin tabs, one of which
-    (Email Templates) was already a dead end — its only control navigates to a
-    route requiring ``settings.manage``.
+    Withholding it still costs a member nothing they can act on: their own
+    inbox is ``GET /notifications/my`` and their own send log is the default
+    scope of ``GET /notifications/logs``, both of which depend on
+    ``get_current_user`` and no permission at all. What they lose is the
+    department's notification rules and Email Templates, the latter already a
+    dead end — its only control navigates to a route requiring
+    ``settings.manage``.
 
     Revoked from the seeded rows by migration ``a1f7c34e9b02``; per the
     ``compliance.view`` precedent, the registry edit alone would have left the
