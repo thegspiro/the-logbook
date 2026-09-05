@@ -70,9 +70,31 @@ vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
 
+// vi.clearAllMocks() clears call history only. An unconsumed *Once value stays
+// queued through it, and a later mockResolvedValue replaces just the fallback,
+// so the queued one is still handed out first (CLAUDE.md pitfall #28). These
+// are reset before each default is installed so the default actually holds —
+// and so the four configured per-test below cannot carry an implementation
+// into the next test. The authStore and toast mocks are deliberately absent:
+// their implementations come from the vi.mock factories and must survive.
+const serviceMocks = [
+  mockGetPrograms,
+  mockGetRequirementsEnhanced,
+  mockGetRegistries,
+  mockGetSampleTemplates,
+  mockInstantiateSampleTemplate,
+  mockImportRegistry,
+  mockPreviewRegistry,
+  mockGetCategories,
+  mockGetCourses,
+  mockUpdateRequirement,
+  mockCreateRequirement,
+];
+
 describe('TrainingProgramsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    serviceMocks.forEach((mock) => mock.mockReset());
     mockHasPermission = false;
     mockGetPrograms.mockResolvedValue([
       {
@@ -341,8 +363,10 @@ describe('TrainingProgramsPage', () => {
   });
 
   describe('without training.manage', () => {
-    // The outer beforeEach already resets every mock's implementation and
-    // clears the permission flag; this block only narrows what each case needs.
+    // The outer beforeEach resets each service mock and then installs its
+    // default, so these cases start from a known state rather than from
+    // whatever a predecessor configured. This block only restates the
+    // permission the whole block turns on.
     beforeEach(() => {
       mockHasPermission = false;
     });
