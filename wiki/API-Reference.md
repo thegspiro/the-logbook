@@ -131,14 +131,28 @@ GET    /api/v1/notifications/rules/{id}                  # Get rule
 PATCH  /api/v1/notifications/rules/{id}                  # Update rule
 DELETE /api/v1/notifications/rules/{id}                  # Delete rule
 POST   /api/v1/notifications/rules/{id}/toggle           # Toggle rule enabled/disabled
-GET    /api/v1/notifications/logs                        # Send log; ?scope=mine (default) or organization
+GET    /api/v1/notifications/logs                        # Send log; ?scope=mine (default) or organization; ?cursor
 POST   /api/v1/notifications/logs/read-all               # Mark send log read; same ?scope
 POST   /api/v1/notifications/logs/{id}/read              # Mark log as read
-GET    /api/v1/notifications/my                          # User's in-app notifications
+GET    /api/v1/notifications/my                          # User's in-app notifications; ?cursor
 GET    /api/v1/notifications/my/unread-count             # User's unread count
 POST   /api/v1/notifications/my/read-all                 # Bulk mark all as read
 POST   /api/v1/notifications/my/{log_id}/read            # Mark own notification as read
 GET    /api/v1/notifications/summary                     # Rule and send statistics
+```
+
+Both notification lists page by cursor. Pass `cursor` from a response's
+`next_cursor` to get the page after it; the value is opaque, so hand back
+exactly what was returned. **`next_cursor` is `null` at the end of the list** —
+the key is always present in the response, never omitted — and that null is the
+signal to stop. It is more reliable than comparing loaded rows against `total`,
+which counts the whole filtered list including rows _ahead_ of your cursor that
+a continuation can never return; the two disagree whenever a notification
+arrives between two page requests. `skip` still works for existing callers, and
+a `cursor` supersedes it.
+
+```
+
 ```
 
 ## Equipment Check Endpoints _(2026-03-19)_
