@@ -50,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than spreading. It reads each migration's prose, and fails when a
   table called startup-built is created by a migration the claiming one
   descends from.
+- **It no longer reports a comment that states the claim in order to reject
+  it.** Recognizing the claim by shape rather than by wording also matches a
+  migration explaining why the reasoning is wrong — including the one that
+  documents this exact trap — and that combination took the default branch red
+  once both halves were on it. A comment naming the revision that creates the
+  table is now taken as the refutation it is, since that is the fact the check
+  exists to establish; naming any other revision still fails.
 
   It recognizes the claim by its shape — a negation, near the word "migration",
   near a creation verb — rather than from a list of known phrasings. A list was
