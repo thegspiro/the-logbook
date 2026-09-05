@@ -736,3 +736,42 @@ export const NotificationLogScope = {
   ORGANIZATION: 'organization',
 } as const;
 export type NotificationLogScope = (typeof NotificationLogScope)[keyof typeof NotificationLogScope];
+
+// ============================================
+// Training compliance
+// ============================================
+
+/**
+ * How one member × requirement cell of the compliance matrix reads.
+ *
+ * Presentational, but shared vocabulary: the tone decides the pill, the bar
+ * colour and — via `isMetTone` — whether the cell counts toward a member's
+ * met tally, so a second definition elsewhere would let two screens disagree
+ * about whether the same certificate is met.
+ *
+ * `soon` is a certification still valid at the evaluation cutoff but expiring
+ * within the renewal window; it counts as met, because it is.
+ */
+export const CellTone = {
+  MET: 'met',
+  SHORT: 'short',
+  SOON: 'soon',
+  LAPSED: 'lapsed',
+  MISSING: 'missing',
+} as const;
+export type CellTone = (typeof CellTone)[keyof typeof CellTone];
+
+/**
+ * A member's overall compliance standing.
+ *
+ * Mirrors the backend's `classify_standing()` values exactly — the matrix
+ * reports whatever the server decided rather than re-deriving it, because the
+ * thresholds are per-organization and per-compliance-profile. Keep the string
+ * values in step with `app/services/training_compliance.py`.
+ */
+export const Standing = {
+  COMPLIANT: 'compliant',
+  AT_RISK: 'at_risk',
+  NON_COMPLIANT: 'non_compliant',
+} as const;
+export type Standing = (typeof Standing)[keyof typeof Standing];

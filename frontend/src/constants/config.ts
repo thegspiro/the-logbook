@@ -74,3 +74,17 @@ export const EVENT_RSVP_DEADLINE_SOON_MS = 48 * 60 * 60 * 1000; // 48 hours
 export const EVENT_MISSED_LOOKBACK_DAYS = 30;
 /** Rows the "Needs You" band shows before collapsing the rest into a link. */
 export const NEEDS_YOU_MAX_ROWS = 5;
+
+// ============================================
+// Training compliance
+// ============================================
+
+/**
+ * A certification still valid but expiring inside this window reads as "Due
+ * soon" rather than "Met" on the compliance matrix.
+ *
+ * Sixty days is a renewal lead time, not a display preference: it is roughly
+ * how long a member needs to book a class and get the paperwork filed, so a
+ * cert flagged here is still recoverable without a lapse in coverage.
+ */
+export const COMPLIANCE_EXPIRING_SOON_DAYS = 60;
