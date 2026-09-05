@@ -7,6 +7,7 @@ import type { NotificationLogScope } from '../constants/enums';
 import type {
   NotificationRuleRecord,
   NotificationLogRecord,
+  NotificationLogPage,
   NotificationsSummary,
   DepartmentMessageRecord,
   InboxMessage,
@@ -66,17 +67,19 @@ export const notificationsService = {
    * stores the subject, body and recipient address of every notification the
    * department has sent, so the org-wide view is an explicit request and
    * requires `notifications.manage`.
+   *
+   * Pass `cursor` from a previous response's `next_cursor` to get the page
+   * after it. The value is opaque — hand back exactly what was returned and do
+   * not parse it. A cursor supersedes `skip`, so send one or the other.
    */
   async getLogs(params?: {
     channel?: string;
     scope?: NotificationLogScope;
+    cursor?: string;
     skip?: number;
     limit?: number;
-  }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>(
-      '/notifications/logs',
-      { params }
-    );
+  }): Promise<NotificationLogPage> {
+    const response = await api.get<NotificationLogPage>('/notifications/logs', { params });
     return response.data;
   },
 
@@ -95,17 +98,16 @@ export const notificationsService = {
     return response.data;
   },
 
-  // User-facing notification inbox
+  // User-facing notification inbox. Paginates by cursor on the same terms as
+  // getLogs above — the inbox grows at the front for the same reason.
   async getMyNotifications(params?: {
     include_expired?: boolean;
     include_read?: boolean;
+    cursor?: string;
     skip?: number;
     limit?: number;
-  }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>(
-      '/notifications/my',
-      { params }
-    );
+  }): Promise<NotificationLogPage> {
+    const response = await api.get<NotificationLogPage>('/notifications/my', { params });
     return response.data;
   },
 

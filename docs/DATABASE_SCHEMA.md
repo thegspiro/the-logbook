@@ -6294,7 +6294,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `subject` | VARCHAR(500) | yes |  |  |  |
 | `message` | TEXT | yes |  |  |  |
 | `category` | VARCHAR(50) | yes | IDX |  |  |
-| `sent_at` | DATETIME | yes |  | `now()` |  |
+| `sent_at` | DATETIME | no |  | `now()` |  |
 | `delivered` | BOOL | yes |  | `_delivered_default()` |  |
 | `read` | BOOL | yes |  | `False` |  |
 | `read_at` | DATETIME | yes |  |  |  |
@@ -6309,6 +6309,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_notif_logs_org_sent` (`organization_id`, `sent_at`)
 - `idx_notif_logs_recipient` (`recipient_id`)
+- `idx_notif_logs_recipient_sent` (`organization_id`, `recipient_id`, `sent_at`, `id`)
 - `ix_notification_logs_category` (`category`)
 - `ix_notification_logs_expires_at` (`expires_at`)
 - `ix_notification_logs_rule_id` (`rule_id`)

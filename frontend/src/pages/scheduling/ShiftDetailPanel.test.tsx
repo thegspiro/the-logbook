@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { formatTime } from '../../utils/dateFormatting';
 
 const shift = {
   id: 'shift-1',
@@ -249,6 +250,28 @@ describe('ShiftDetailPanel signup window', () => {
     await user.click(await screen.findByRole('button', { name: 'Reopen for 30 min' }));
 
     expect(await screen.findByText(/Late signup is open until/)).toBeInTheDocument();
+  });
+
+  it('shows the capped deadline, not a stale window that outruns it', async () => {
+    // A reopening stored before the roster deadline existed can sit far past
+    // it. The server honours it only up to the deadline, so displaying the raw
+    // column told the officer members could claim until tomorrow while the API
+    // stopped accepting them in an hour. The roster deadline has NOT passed
+    // here — that is the case the banner still renders, and the only thing
+    // that distinguishes the two is the time it prints.
+    const stale = {
+      ...startedShift(),
+      late_signup_until: new Date(Date.now() + 30 * 60 * 60_000).toISOString(),
+    };
+    // end_time is +11h and the default grace is 60 minutes.
+    const capped = formatTime(new Date(Date.now() + 12 * 60 * 60_000).toISOString(), 'UTC');
+    const raw = formatTime(stale.late_signup_until, 'UTC');
+    expect(capped).not.toBe(raw);
+
+    renderWithRouter(<ShiftDetailPanel shift={stale as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByText(new RegExp(`Late signup is open until\\s*${capped}`))).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(raw))).not.toBeInTheDocument();
   });
 
   it('shows the live window and closes it on request', async () => {

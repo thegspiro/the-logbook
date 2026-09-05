@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSchedulingStore } from '../../scheduling/store/schedulingStore';
 import { renderWithRouter } from '../../../test/utils';
 
 const getSettings = vi.fn();
@@ -168,5 +169,47 @@ describe('what the save touches', () => {
     // #19) — a department that never opened this screen keeps being prompted.
     expect(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /End-of-shift checklists/i })).toBeChecked();
+  });
+});
+
+describe('the scheduling cushion this setting feeds', () => {
+  /**
+   * `checkin_closes_hours_after` is not only a check-in bound: scheduling
+   * reads it to decide how long a shift with no recorded `end_time` still
+   * counts as running, which is what its roster lock gates on. That store is a
+   * once-per-session cache, so without invalidation an administrator who
+   * widened check-in here would return to scheduling in the same tab and find
+   * the roster still locking on the old number — hiding controls the server
+   * now accepts.
+   */
+  beforeEach(() => {
+    useSchedulingStore.setState({ settingsLoaded: true });
+  });
+
+  it('invalidates the cached scheduling settings on save', async () => {
+    const user = userEvent.setup();
+    mountPage();
+    await opensField();
+
+    await user.click(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i }));
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+
+    // Invalidated rather than recomputed: the server resolves the cushion (a
+    // floor and a ceiling) and reports it, so clamping a second copy here is
+    // how the two would come to disagree.
+    await waitFor(() => expect(useSchedulingStore.getState().settingsLoaded).toBe(false));
+  });
+
+  it('leaves the cache alone when the save fails', async () => {
+    const user = userEvent.setup();
+    updateSettings.mockRejectedValueOnce(new Error('network'));
+    mountPage();
+    await opensField();
+
+    await user.click(screen.getByRole('checkbox', { name: /Start-of-shift checklists/i }));
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+
+    // Nothing was stored, so nothing the store holds went stale.
+    expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
   });
 });
