@@ -165,6 +165,44 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
     expect(screen.queryByRole('button', { name: /mark all as read/i })).toBeNull();
   });
 
+  it('does not let a log page in flight across a read-all append stale rows', async () => {
+    // The page was queried before the read-all POST, so it comes back with
+    // the old read state. Appending it verbatim put unread rows back and the
+    // Send Log offered "Mark all as read" for work the database had done.
+    const user = userEvent.setup();
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...unread, id: 'log-1', subject: 'Station meeting' }],
+      total: 2,
+      skip: 0,
+      limit: 50,
+    });
+    renderPage('/notifications?tab=log');
+
+    // Start the next page and hold it open.
+    let releasePage!: (value: { logs: (typeof unread)[]; total: number; skip: number; limit: number }) => void;
+    vi.mocked(notificationsService.getLogs).mockReturnValueOnce(
+      new Promise((resolve) => {
+        releasePage = resolve;
+      })
+    );
+    await user.click(await screen.findByRole('button', { name: /load more/i }));
+
+    // Mark everything read while that page is still in flight.
+    await user.click(screen.getByRole('button', { name: /mark all as read/i }));
+    await waitFor(() => expect(notificationsService.markAllLogsRead).toHaveBeenCalled());
+
+    releasePage({
+      logs: [{ ...unread, id: 'log-2', subject: 'Hose testing', read: false }],
+      total: 2,
+      skip: 1,
+      limit: 50,
+    });
+
+    expect(await screen.findByText('Hose testing')).toBeInTheDocument();
+    // The late row arrives already reconciled, so nothing is left to mark.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /mark all as read/i })).toBeNull());
+  });
+
   it('keeps the rows, marked read, when the inbox is showing read ones', async () => {
     const user = userEvent.setup();
     renderPage('/notifications');

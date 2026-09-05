@@ -213,6 +213,56 @@ describe('NotificationsPage send log', () => {
     });
   });
 
+  it('asks the server for the selected channel rather than filtering a page', async () => {
+    // Filtering the loaded prefix made the panel claim "No email
+    // notifications sent to you" whenever the newest page held none, however
+    // many older ones existed, and left the total counting a different set
+    // than the list above it.
+    const user = userEvent.setup();
+    renderLogTab();
+    await screen.findByText('Drill on Thursday');
+
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...emailLog, id: 'log-9', subject: 'Roster posted', channel: 'in_app' }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    await user.click(screen.getByRole('button', { name: 'In-App' }));
+
+    expect(await screen.findByText('Roster posted')).toBeInTheDocument();
+    expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
+      scope: NotificationLogScope.MINE,
+      channel: 'in_app',
+      limit: 50,
+    });
+  });
+
+  it('does not re-render a row a newer notification shifted into the next page', async () => {
+    // The list is newest-first and `skip` is an offset, so a notification
+    // arriving between the two requests pushes a loaded row into the next
+    // page's range and it comes back a second time.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog],
+      total: 3,
+      skip: 0,
+      limit: 50,
+    });
+    renderLogTab();
+
+    const more = await screen.findByRole('button', { name: /load more/i });
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog, { ...emailLog, id: 'log-3', subject: 'Hydrant testing' }],
+      total: 3,
+      skip: 1,
+      limit: 50,
+    });
+    await userEvent.setup().click(more);
+
+    await screen.findByText('Hydrant testing');
+    expect(screen.getAllByText('Drill on Thursday')).toHaveLength(1);
+  });
+
   it('does not offer Load more when the page is the whole history', async () => {
     renderLogTab();
 
