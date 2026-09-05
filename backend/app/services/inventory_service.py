@@ -8022,6 +8022,22 @@ class InventoryService:
         return ordered
 
     @classmethod
+    def _member_size_label(cls, value: str) -> str:
+        """A member's stored size, written the way the rest of the app writes it.
+
+        Preferences hold "l"/"xl" while every other screen shows "L"/"XL", so
+        the raw value shows a member a size the application does not otherwise
+        use. Only a value that resolves to a known alpha code is rewritten:
+        `_size_label` alone would uppercase a member who typed "Large" into
+        "LARGE", and a compound value ("34 x 32", "10 (wide)") carries detail
+        that normalising would drop.
+        """
+        key = cls._normalize_size_key(value)
+        if key in cls._ALPHA_SIZE_ORDER:
+            return _size_label(key)
+        return value
+
+    @classmethod
     def _apply_member_size(
         cls, product: Dict[str, Any], prefs: Optional[MemberSizePreferences]
     ) -> None:
@@ -8036,7 +8052,7 @@ class InventoryService:
         member_size = cls._format_needed_size(prefs, product["size_field"])
         if not member_size:
             return
-        product["member_size"] = member_size
+        product["member_size"] = cls._member_size_label(member_size)
         wanted = cls._normalize_size_key(member_size)
         for variant in product["variants"]:
             if variant["size"] and cls._normalize_size_key(variant["size"]) == wanted:

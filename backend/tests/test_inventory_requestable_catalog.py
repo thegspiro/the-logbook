@@ -205,10 +205,32 @@ class TestRequestableCatalogSizeDefaults:
         )
 
         # "Large" and the stored code "l" are the same size; the alias table is
-        # what lets a member's own spelling reach the department's stock.
+        # what lets a member's own spelling reach the department's stock, and
+        # what reads back is the canonical "L" either of them means.
         assert products[0]["size_field"] == "shirt"
-        assert products[0]["member_size"] == "Large"
+        assert products[0]["member_size"] == "L"
         assert products[0]["suggested_size"] == "l"
+
+    @pytest.mark.asyncio
+    async def test_member_size_is_reported_the_way_the_app_writes_it(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        await _uniform_variants(svc, org_id, str(user.id), quantities={"l": 1})
+        await svc.upsert_member_size_preferences(
+            user_id=uuid.UUID(user.id),
+            organization_id=uuid.UUID(org_id),
+            data={"shirt_size": "l"},
+        )
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        # Preferences store "l"; every other screen writes "L". Printing the
+        # stored code showed a member a size the rest of the app does not use.
+        assert products[0]["member_size"] == "L"
 
     @pytest.mark.asyncio
     async def test_unstocked_member_size_is_still_reported(
@@ -227,8 +249,44 @@ class TestRequestableCatalogSizeDefaults:
             organization_id=uuid.UUID(org_id), user=user
         )
 
-        assert products[0]["member_size"] == "xxxl"
+        assert products[0]["member_size"] == "3XL"
         assert products[0]["suggested_size"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_compound_size_is_reported_verbatim(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Boots", "item_type": "ppe"},
+            created_by=uuid.UUID(user.id),
+        )
+        await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user.id),
+            base_name="Structural Boot",
+            sizes=["10", "11"],
+            create_variant_group=True,
+            category_id=cat.id,
+            tracking_type="pool",
+            quantity_per_variant=2,
+        )
+        await svc.upsert_member_size_preferences(
+            user_id=uuid.UUID(user.id),
+            organization_id=uuid.UUID(org_id),
+            data={"boot_size": "10", "boot_width": "wide"},
+        )
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        # The width is the half of this a quartermaster cannot guess, so the
+        # label rule must leave a compound value alone rather than canonicalise
+        # it down to the bare number.
+        assert products[0]["member_size"] == "10 (wide)"
 
 
 class TestRequestableCatalogRestrictions:

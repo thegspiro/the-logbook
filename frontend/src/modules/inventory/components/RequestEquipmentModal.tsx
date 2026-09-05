@@ -220,7 +220,31 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
     }`;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Request Equipment" size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Request Equipment"
+      size="lg"
+      // The actions go in Modal's own footer rather than inside the body: the
+      // size chips make this panel taller than a landscape phone, and an
+      // action row that scrolls with the content is one a member has to go
+      // looking for.
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={submitting || (!selected && !freeText.trim())}
+            className="btn-info btn-md disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? 'Submitting…' : 'Submit Request'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+        </>
+      }
+    >
       {selected === null ? (
         <div className="space-y-4">
           <div>
@@ -422,20 +446,6 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
           </div>
         </div>
       )}
-
-      <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-4 sm:flex-row sm:items-center">
-        <button type="button" onClick={onClose} className="btn-secondary btn-md">
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleSubmit()}
-          disabled={submitting || (!selected && !freeText.trim())}
-          className="btn-info btn-md disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {submitting ? 'Submitting…' : 'Submit Request'}
-        </button>
-      </div>
     </Modal>
   );
 };
