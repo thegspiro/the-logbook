@@ -469,6 +469,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
             <CallTypesCard
               types={feature.call_tracking?.call_types ?? []}
               usage={feature.call_type_usage ?? {}}
+              locked={feature.call_type_locked ?? []}
               mode={feature.call_tracking?.mode ?? 'detailed'}
               saving={savingFeature}
               onSave={(call_types) =>

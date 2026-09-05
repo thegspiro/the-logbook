@@ -11,14 +11,18 @@ fails loudly — which is why they are asserted here rather than left to review.
 
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
 from app.models.call_tracking import (
+    CALL_TYPES_FROM_ORG_CALLS,
+    CALL_TYPES_FROM_SHIFT_CALLS,
     DEFAULT_CALL_TYPES,
+    MAX_CALL_TYPES,
     MAX_CALLS_PER_SHIFT,
+    UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
 from app.schemas.scheduling import (
@@ -639,12 +643,17 @@ class TestCallTypeRetirement:
         )
         assert [t.active for t in s.call_types] == [True, False]
 
-    def test_schema_bounds_the_list(self):
-        """It lands in an unvalidated JSON column every close-out reads."""
-        with pytest.raises(ValidationError):
-            CallTrackingSettings(
-                call_types=[{"slug": f"t{i}", "label": f"T{i}"} for i in range(51)]
-            )
+    def test_schema_does_not_bound_the_list(self):
+        """The cap is enforced on the write path, not on this class — it is
+        built on the read path too, from a hand-editable column, and a length
+        limit here turns an over-long stored list into a 500 on the one
+        endpoint that could shorten it."""
+        s = CallTrackingSettings(
+            call_types=[
+                {"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 1)
+            ]
+        )
+        assert len(s.call_types) == MAX_CALL_TYPES + 1
 
     async def test_submitting_a_retired_slug_is_still_accepted(self):
         """Retirement stops a type being *offered*; it is not grounds to
@@ -659,6 +668,58 @@ class TestCallTypeRetirement:
             }
         )
         assert await svc._valid_type_slugs("org-1") == {"brush"}
+
+
+# ======================================================================
+# The reserved bucket slug, and the cap that must not break a read
+# ======================================================================
+
+
+class TestReservedAndBoundedTypeList:
+    def _resolve(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc.get_call_tracking_settings(org)["call_types"]
+
+    def test_schema_refuses_the_unclassified_slug(self):
+        """It is the synthetic bucket for calls with no type. A configured
+        type sharing it merges real calls with the remainder, and the report's
+        label map overwrites whatever the department named it."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[{"slug": UNCLASSIFIED_CALL_TYPE, "label": "Unclassified"}]
+            )
+
+    def test_a_stored_reserved_slug_is_dropped_rather_than_fatal(self):
+        """Hand-edited JSON can already hold one. Returning it would fail the
+        schema construction this reader exists to make safe."""
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": "Fire"},
+                {"slug": UNCLASSIFIED_CALL_TYPE, "label": "Unclassified"},
+            ]
+        )
+        assert [t["slug"] for t in resolved] == ["fire"]
+
+    def test_an_oversized_legacy_list_is_served_whole(self):
+        """Not truncated: hiding a stored entry made a used type past the cap
+        unrepresentable in any payload the editor could produce, and the
+        deletion guard then rejected every one of them."""
+        resolved = self._resolve(
+            [{"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 5)]
+        )
+        assert len(resolved) == MAX_CALL_TYPES + 5
+        # The whole point: this is what the settings endpoint then builds.
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+    def test_everything_it_returns_still_satisfies_the_schema(self):
+        resolved = self._resolve(
+            [{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}]
+            + [{"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 2)]
+        )
+        assert CallTrackingSettings(call_types=resolved).call_types
 
 
 # ======================================================================
@@ -1337,9 +1398,44 @@ class TestCallVolumeReportLabels:
         assert report["summary"]["by_type_totals"] == {"unclassified": 3}
         assert report["call_type_labels"]["unclassified"] == "Not categorised"
 
-    async def test_the_detailed_branch_carries_the_map_too(self, db_session):
+    async def _detailed_report(self, db_session, org, call_types, source):
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+
+        trainee = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"t-{generate_uuid()[:8]}",
+            email=f"t-{generate_uuid()[:8]}@test.com",
+            first_name="Test",
+            last_name="Trainee",
+            password_hash="pw",
+        )
+        db_session.add(trainee)
+        await db_session.flush()
+
+        row = ShiftCompletionReport(
+            id=generate_uuid(),
+            organization_id=org.id,
+            trainee_id=trainee.id,
+            officer_id=trainee.id,
+            shift_date=date(2026, 8, 4),
+            hours_on_shift=12.0,
+            calls_responded=len(call_types),
+            call_types=call_types,
+            data_sources={"call_types": source} if source else None,
+        )
+        db_session.add(row)
+        await db_session.flush()
+        return row
+
+    async def test_the_detailed_branch_labels_only_what_it_knows_are_slugs(
+        self, db_session
+    ):
         """An org that ran count-only in the past has slugs in its older shift
-        reports, and a period spanning the switch mixes both shapes."""
+        reports, and a period spanning the switch mixes both shapes — so the
+        map is served here, keyed by what those reports recorded as slugs."""
         from app.services.reports_service import ReportsService
 
         org = await self._org(
@@ -1347,7 +1443,629 @@ class TestCallVolumeReportLabels:
             [{"slug": "mva", "label": "Motor Vehicle Accident"}],
             mode=CallTrackingMode.DETAILED,
         )
+        await self._detailed_report(db_session, org, ["mva"], CALL_TYPES_FROM_ORG_CALLS)
+
         report = await ReportsService(db_session)._generate_call_volume(
             org.id, date(2026, 8, 1), date(2026, 8, 31)
         )
         assert report["call_type_labels"]["mva"] == "Motor Vehicle Accident"
+
+    async def test_an_officer_s_own_wording_is_never_relabelled(self, db_session):
+        """The officer typed "mva" as incident text. Renaming the type whose
+        slug happens to match must not rewrite what they wrote."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(
+            db_session,
+            [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+            mode=CallTrackingMode.DETAILED,
+        )
+        await self._detailed_report(
+            db_session, org, ["mva"], CALL_TYPES_FROM_SHIFT_CALLS
+        )
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["summary"]["by_type_totals"] == {"mva": 1}
+        assert "mva" not in report["call_type_labels"]
+
+    async def test_a_report_with_no_recorded_provenance_is_left_verbatim(
+        self, db_session
+    ):
+        """Written before provenance was recorded, so its shape is unknown.
+        Verbatim is what it rendered as before labels existed — the safe
+        direction, since the alternative rewrites an officer's words."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(
+            db_session,
+            [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+            mode=CallTrackingMode.DETAILED,
+        )
+        await self._detailed_report(db_session, org, ["mva"], None)
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert "mva" not in report["call_type_labels"]
+
+
+# ======================================================================
+# Endpoint guards — what the settings screen can and cannot do
+# ======================================================================
+
+
+class TestCallTypeUsageIsGated:
+    """All-time call totals by type are the same operational picture
+    ``/scheduling/reports/call-volume`` gates behind ``scheduling.report``.
+    The settings endpoint is readable by every member so the UI can gate
+    platoon features, so the field has to carry its own check or it becomes a
+    coarse call-volume report with no permission on it."""
+
+    async def _usage_for(self, permissions):
+        from app.api.v1.endpoints.scheduling import _call_type_usage_for
+
+        user = SimpleNamespace(id="u1", organization_id="org-1")
+        with patch(
+            "app.api.v1.endpoints.scheduling.user_has_permission",
+            lambda _u, perm: perm in permissions,
+        ):
+            with patch.object(
+                CallTrackingService,
+                "type_usage_counts",
+                AsyncMock(return_value={"fire": 12}),
+            ):
+                return await _call_type_usage_for(MagicMock(), user)
+
+    async def test_a_plain_member_gets_nothing(self):
+        assert await self._usage_for(set()) == {}
+
+    @pytest.mark.parametrize("perm", ["scheduling.manage", "scheduling.report"])
+    async def test_a_manager_or_reporter_gets_the_counts(self, perm):
+        assert await self._usage_for({perm}) == {"fire": 12}
+
+
+class TestDeletingAUsedTypeIsRefusedServerSide:
+    """The editor hides delete for a type with calls on record, but it decides
+    that against a settings snapshot the browser may have held for an hour —
+    and a direct API client never saw it. The write replaces the whole list,
+    so the check has to exist on this side too."""
+
+    @staticmethod
+    def _guard(stored_slugs, locked):
+        """Patch the two reads the guard makes: the raw stored slugs and the
+        locked set. Raw, not the reader's normalized list — a slug the reader
+        hid is still what its calls are filed under."""
+        return (
+            patch.object(
+                ShiftEligibilityService, "_get_org", AsyncMock(return_value=object())
+            ),
+            patch.object(
+                ShiftEligibilityService,
+                "effective_call_type_slugs",
+                MagicMock(return_value=set(stored_slugs)),
+            ),
+            patch.object(
+                CallTrackingService,
+                "slugs_locked_by_history",
+                AsyncMock(return_value=set(locked)),
+            ),
+        )
+
+    async def _save(self, incoming_slugs, stored_slugs, locked):
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": s, "label": s} for s in incoming_slugs],
+        )
+        a, b, c = self._guard(stored_slugs, locked)
+        with a, b, c:
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_the_reserved_slug_does_not_deadlock_the_settings_screen(self):
+        """An org that had configured `unclassified` cannot send it back — the
+        reader hides it and the schema refuses it — so counting its
+        disappearance as a deletion left every representable save rejected,
+        with no way to repair the organization at all."""
+        await self._save(["ems"], ["ems", UNCLASSIFIED_CALL_TYPE], {"ems"})
+
+    async def test_a_slug_the_reader_truncated_away_is_still_guarded(self):
+        """The editor is handed the reader's shortened list, so a used type
+        past the cap is absent from the save and would vanish silently."""
+        with pytest.raises(ValueError, match="beyond_cap"):
+            await self._save(["ems"], ["ems", "beyond_cap"], {"beyond_cap"})
+
+    async def test_dropping_a_used_type_is_refused(self):
+        with pytest.raises(ValueError, match="fire"):
+            await self._save(["ems"], ["fire", "ems"], {"fire"})
+
+    async def test_dropping_an_unused_type_is_allowed(self):
+        await self._save(["ems"], ["fire", "ems"], {"ems"})
+
+    async def test_retiring_a_used_type_is_allowed(self):
+        """Retirement keeps the slug in the list, which is the whole point —
+        the guard is about deletion, and must not block the sanctioned path."""
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": "fire", "label": "Fire", "active": False}],
+        )
+        a, b, c = self._guard(["fire"], {"fire"})
+        with a, b, c:
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_an_unchanged_list_costs_no_usage_query(self):
+        """The guard runs on every settings save, including the ones that only
+        flip an unrelated toggle."""
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": "fire", "label": "Fire"}],
+        )
+        locked = AsyncMock(return_value=set())
+        a, b, _ = self._guard(["fire"], set())
+        with a, b, patch.object(CallTrackingService, "slugs_locked_by_history", locked):
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+        locked.assert_not_called()
+
+
+# ======================================================================
+# Deletion safety against report snapshots, and label uniqueness
+# ======================================================================
+
+
+@pytest.mark.integration
+class TestSlugsLockedByHistory:
+    """A report snapshot outlives the calls it was built from, so the call
+    count alone does not answer "is anything still pointing at this type?"."""
+
+    async def _report(self, db_session, org, call_types, source):
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+
+        member = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"m-{generate_uuid()[:8]}",
+            email=f"m-{generate_uuid()[:8]}@test.com",
+            first_name="A",
+            last_name="B",
+            password_hash="pw",
+        )
+        db_session.add(member)
+        await db_session.flush()
+        db_session.add(
+            ShiftCompletionReport(
+                id=generate_uuid(),
+                organization_id=org.id,
+                trainee_id=member.id,
+                officer_id=member.id,
+                shift_date=date(2026, 8, 4),
+                hours_on_shift=12.0,
+                calls_responded=len(call_types),
+                call_types=call_types,
+                data_sources={"call_types": source} if source else None,
+            )
+        )
+        await db_session.flush()
+
+    async def test_a_slug_only_a_report_still_names_is_locked(self, db_session):
+        """The shift was reopened and corrected until no OrgCall carries the
+        slug. The report filed from it still lists it, and deleting the type
+        would leave that report showing a raw slug."""
+        org = await _make_org(db_session)
+        await self._report(db_session, org, ["brush"], CALL_TYPES_FROM_ORG_CALLS)
+
+        svc = CallTrackingService(db_session)
+        assert await svc.type_usage_counts(org.id) == {}
+        assert "brush" in await svc.slugs_locked_by_history(org.id)
+
+    async def test_an_officer_s_typed_text_locks_nothing(self, db_session):
+        """Detailed tracking stores what the officer wrote. It is nobody's
+        slug, and must not lock a configured type that happens to match."""
+        org = await _make_org(db_session)
+        await self._report(db_session, org, ["brush"], CALL_TYPES_FROM_SHIFT_CALLS)
+
+        assert "brush" not in await CallTrackingService(
+            db_session
+        ).slugs_locked_by_history(org.id)
+
+    async def test_calls_still_lock_on_their_own(self, db_session):
+        org = await _make_org(db_session)
+        await CallTrackingService(db_session).record_shift_calls(
+            await _make_shift(db_session, org, "e1"),
+            org.id,
+            total_calls=1,
+            type_counts={"fire": 1},
+        )
+        assert "fire" in await CallTrackingService(db_session).slugs_locked_by_history(
+            org.id
+        )
+
+    async def test_another_org_s_report_does_not_lock_ours(self, db_session):
+        mine = await _make_org(db_session)
+        theirs = await _make_org(db_session, name="Other Dept")
+        await self._report(db_session, theirs, ["brush"], CALL_TYPES_FROM_ORG_CALLS)
+
+        assert (
+            await CallTrackingService(db_session).slugs_locked_by_history(mine.id)
+            == set()
+        )
+
+
+class TestLabelsMustBeDistinct:
+    """Close-out renders the label and not the slug, so two types sharing one
+    name are two indistinguishable fields writing to different keys."""
+
+    def test_schema_rejects_two_types_with_one_name(self):
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[
+                    {"slug": "fire", "label": "Fire"},
+                    {"slug": "structure", "label": "Fire"},
+                ]
+            )
+
+    def test_case_and_spacing_do_not_make_a_name_distinct(self):
+        """ "EMS" and "ems " are the same word on screen."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[
+                    {"slug": "ems", "label": "EMS"},
+                    {"slug": "medical", "label": "ems "},
+                ]
+            )
+
+    def test_a_retired_type_still_counts(self):
+        """Its label goes on appearing in reports, where the ambiguity reads
+        as one type counted twice."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[
+                    {"slug": "fire", "label": "Fire"},
+                    {"slug": "old_fire", "label": "Fire", "active": False},
+                ]
+            )
+
+    def test_a_stored_duplicate_is_disambiguated_not_fatal(self):
+        """This column predates the rule. Failing the read would take out the
+        one endpoint that could fix the names."""
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={
+                "scheduling": {
+                    "call_tracking": {
+                        "call_types": [
+                            {"slug": "fire", "label": "Fire"},
+                            {"slug": "structure", "label": "Fire"},
+                        ]
+                    }
+                }
+            }
+        )
+        resolved = svc.get_call_tracking_settings(org)["call_types"]
+        # Kept, not dropped: the entry may be the only thing that can label a
+        # type with years of calls behind it.
+        assert [t["slug"] for t in resolved] == ["fire", "structure"]
+        assert resolved[1]["label"] == "Fire (structure)"
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+
+class TestLabelDisambiguationStaysValid:
+    """The reader's output is fed straight into CallTrackingSettings, so a
+    disambiguation that fails to disambiguate is a 500 on the one endpoint
+    that could fix the stored data."""
+
+    def _resolve(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc.get_call_tracking_settings(org)["call_types"]
+
+    def test_a_maximum_length_duplicate_still_becomes_unique(self):
+        """Appending the slug and slicing back to the cap is a no-op on a
+        label that already fills it, which left the duplicate in place."""
+        long_label = "x" * 100
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": long_label},
+                {"slug": "brush", "label": long_label},
+            ]
+        )
+        assert resolved[0]["label"] != resolved[1]["label"]
+        assert all(len(t["label"]) <= 100 for t in resolved)
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+    def test_a_label_that_already_looks_disambiguated_still_resolves(self):
+        """ "X (brush)" is a name somebody can legitimately have typed."""
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": "X (brush)"},
+                {"slug": "brush", "label": "X"},
+                {"slug": "grass", "label": "X"},
+            ]
+        )
+        labels = {t["label"] for t in resolved}
+        assert len(labels) == 3
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+
+class TestEffectiveCallTypeSlugs:
+    """What the deletion guard compares against: everything actually in force,
+    including entries the reader normalizes away and the built-in defaults an
+    organization has never materialized."""
+
+    def _svc(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc, org
+
+    def test_includes_every_stored_entry(self):
+        entries = [
+            {"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 3)
+        ]
+        svc, org = self._svc(entries)
+        raw = svc.effective_call_type_slugs(org)
+        assert len(raw) == MAX_CALL_TYPES + 3
+        assert f"t{MAX_CALL_TYPES + 2}" in raw
+
+    def test_includes_the_reserved_slug_the_reader_drops(self):
+        svc, org = self._svc([{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}])
+        assert svc.effective_call_type_slugs(org) == {UNCLASSIFIED_CALL_TYPE}
+
+    def test_falls_back_to_the_defaults_in_force(self):
+        """An org that never materialized a list is not running without call
+        types — it is running on the built-in nine, and its calls are filed
+        under those slugs. Returning an empty set made the deletion guard skip
+        its check and the editor offer to delete a default with history."""
+        expected = {t["slug"] for t in DEFAULT_CALL_TYPES}
+        svc, org = self._svc([])
+        assert svc.effective_call_type_slugs(org) == expected
+        svc2 = ShiftEligibilityService(MagicMock())
+        assert (
+            svc2.effective_call_type_slugs(SimpleNamespace(settings=None)) == expected
+        )
+
+
+@pytest.mark.integration
+class TestMixedSourceKeysAreNotRelabelled:
+    async def test_a_key_both_sources_produced_keeps_its_stored_value(self, db_session):
+        """A count-only `mva` and an officer who typed "mva" are one bucket by
+        the time the map is built, so relabelling it rewrites the officer's
+        half along with the department's."""
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+        from app.services.reports_service import ReportsService
+
+        org = await _make_org(db_session)
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.DETAILED,
+                    "call_types": [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+                }
+            }
+        }
+        await db_session.flush()
+
+        member = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"m-{generate_uuid()[:8]}",
+            email=f"m-{generate_uuid()[:8]}@test.com",
+            first_name="A",
+            last_name="B",
+            password_hash="pw",
+        )
+        db_session.add(member)
+        await db_session.flush()
+
+        for source in (CALL_TYPES_FROM_ORG_CALLS, CALL_TYPES_FROM_SHIFT_CALLS):
+            db_session.add(
+                ShiftCompletionReport(
+                    id=generate_uuid(),
+                    organization_id=org.id,
+                    trainee_id=member.id,
+                    officer_id=member.id,
+                    shift_date=date(2026, 8, 4),
+                    hours_on_shift=12.0,
+                    calls_responded=1,
+                    call_types=["mva"],
+                    data_sources={"call_types": source},
+                )
+            )
+        await db_session.flush()
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["summary"]["by_type_totals"] == {"mva": 2}
+        assert "mva" not in report["call_type_labels"]
+
+
+@pytest.mark.integration
+class TestProvenanceBackfillNeedsPositiveEvidence:
+    """`a3d7e2f18c45` repoints pre-existing count-only reports. "No incident
+    rows" is not evidence of count-only tracking — `DELETE /scheduling/calls`
+    lets an officer remove them after the fact — so the migration requires the
+    org-call responses only count-only tracking writes."""
+
+    async def _report(self, db_session, org, shift_id, source):
+        from app.core.utils import generate_uuid
+        from app.models.training import ShiftCompletionReport
+        from app.models.user import User
+
+        member = User(
+            id=generate_uuid(),
+            organization_id=org.id,
+            username=f"m-{generate_uuid()[:8]}",
+            email=f"m-{generate_uuid()[:8]}@test.com",
+            first_name="A",
+            last_name="B",
+            password_hash="pw",
+        )
+        db_session.add(member)
+        await db_session.flush()
+        row = ShiftCompletionReport(
+            id=generate_uuid(),
+            organization_id=org.id,
+            trainee_id=member.id,
+            officer_id=member.id,
+            shift_id=shift_id,
+            shift_date=date(2026, 8, 18),
+            hours_on_shift=12.0,
+            calls_responded=1,
+            call_types=["mva"],
+            data_sources={"call_types": source},
+        )
+        db_session.add(row)
+        await db_session.flush()
+        return row
+
+    async def test_a_shift_with_no_evidence_either_way_is_left_alone(self, db_session):
+        """A detailed report whose incident rows were deleted afterwards looks
+        identical to a count-only one under a bare NOT EXISTS test. Rewriting
+        it would hand the officer's own wording to readers as org slugs."""
+        org = await _make_org(db_session)
+        shift = await _make_shift(db_session, org, "e1")
+        report = await self._report(
+            db_session, org, shift.id, CALL_TYPES_FROM_SHIFT_CALLS
+        )
+
+        # No org_call_responses for this shift: nothing positively says the
+        # types came from a tally, so the marker stands.
+        from sqlalchemy import func, select
+
+        from app.models.call_tracking import OrgCallResponse
+
+        rows = (
+            await db_session.execute(
+                select(func.count(OrgCallResponse.id)).where(
+                    OrgCallResponse.shift_id == str(shift.id)
+                )
+            )
+        ).scalar_one()
+        assert rows == 0
+        assert report.data_sources["call_types"] == CALL_TYPES_FROM_SHIFT_CALLS
+
+    async def test_a_counted_shift_has_the_evidence_the_migration_requires(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        shift = await _make_shift(db_session, org, "e1")
+        await CallTrackingService(db_session).record_shift_calls(
+            shift, org.id, total_calls=1, type_counts={"mva": 1}
+        )
+
+        from sqlalchemy import func, select
+
+        from app.models.call_tracking import OrgCallResponse
+
+        rows = (
+            await db_session.execute(
+                select(func.count(OrgCallResponse.id)).where(
+                    OrgCallResponse.shift_id == str(shift.id)
+                )
+            )
+        ).scalar_one()
+        assert rows == 1
+
+
+class TestTheEditorCannotDeleteADefaultWithHistory:
+    """The normal state of every existing installation: no stored list, calls
+    filed under the built-in slugs. An empty "stored" set made the guard skip
+    its check entirely, and the editor gates delete on the server's answer."""
+
+    async def _save(self, incoming_slugs, stored_settings, locked):
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": s, "label": s} for s in incoming_slugs],
+        )
+        org = SimpleNamespace(settings=stored_settings)
+        with patch.object(
+            ShiftEligibilityService, "_get_org", AsyncMock(return_value=org)
+        ), patch.object(
+            CallTrackingService,
+            "slugs_locked_by_history",
+            AsyncMock(return_value=set(locked)),
+        ):
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_deleting_a_used_default_is_refused(self):
+        kept = [t["slug"] for t in DEFAULT_CALL_TYPES if t["slug"] != "ems"]
+        with pytest.raises(ValueError, match="ems"):
+            await self._save(kept, {}, {"ems"})
+
+    async def test_deleting_an_unused_default_is_allowed(self):
+        kept = [t["slug"] for t in DEFAULT_CALL_TYPES if t["slug"] != "ems"]
+        await self._save(kept, {}, {"fire"})
+
+
+class TestTheCapIsARatchet:
+    """A hand-edited configuration already over the cap must still be able to
+    save a list that does not grow, or the only way to shorten it is barred."""
+
+    async def _save(self, incoming_count, stored_count):
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[
+                {"slug": f"t{i}", "label": f"T{i}"} for i in range(incoming_count)
+            ],
+        )
+        org = SimpleNamespace(
+            settings={
+                "scheduling": {
+                    "call_tracking": {
+                        "call_types": [
+                            {"slug": f"t{i}", "label": f"T{i}"}
+                            for i in range(stored_count)
+                        ]
+                    }
+                }
+            }
+        )
+        with patch.object(
+            ShiftEligibilityService, "_get_org", AsyncMock(return_value=org)
+        ), patch.object(
+            CallTrackingService,
+            "slugs_locked_by_history",
+            AsyncMock(return_value=set()),
+        ):
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_a_new_list_may_not_exceed_the_cap(self):
+        with pytest.raises(ValueError, match="at most"):
+            await self._save(MAX_CALL_TYPES + 1, 3)
+
+    async def test_an_over_cap_org_may_save_without_growing(self):
+        await self._save(MAX_CALL_TYPES + 5, MAX_CALL_TYPES + 5)
+
+    async def test_an_over_cap_org_may_shorten(self):
+        await self._save(MAX_CALL_TYPES + 2, MAX_CALL_TYPES + 5)
+
+    async def test_an_over_cap_org_may_not_grow_further(self):
+        with pytest.raises(ValueError, match="at most"):
+            await self._save(MAX_CALL_TYPES + 6, MAX_CALL_TYPES + 5)
