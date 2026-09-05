@@ -405,6 +405,30 @@ describe('ShiftDetailPanel once the roster locks', () => {
  * lacked) onto the shared dialog stack via `DialogPanel`. Each is asserted
  * here because none of them is visible in the markup of the sections above.
  */
+const VIEWPORT_WIDTHS = { phone: 390, laptop: 1440 } as const;
+
+/**
+ * `src/test/setup.ts` answers every media query `false` — phone — before any
+ * test runs, so a case asserting the wide-header arrangement has to say so
+ * (pitfall #28a). Resolved against a real pixel width rather than one
+ * hard-coded query, so it keeps working if the header gains another breakpoint.
+ */
+const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
+  vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+    matches: (() => {
+      const minWidth = /min-width:\s*(\d+)px/.exec(query);
+      return minWidth ? VIEWPORT_WIDTHS[width] >= Number(minWidth[1]) : false;
+    })(),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+};
+
 describe('ShiftDetailPanel dialog shell', () => {
   const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
   const mockAssignments = vi.mocked(schedulingService.getShiftAssignments);
@@ -437,6 +461,7 @@ describe('ShiftDetailPanel dialog shell', () => {
     // test calls signup next (pitfall #28).
     mockSignup.mockReset();
     mockSignup.mockResolvedValue({} as never);
+    mockViewport('phone');
   });
 
   afterEach(() => {
@@ -535,6 +560,45 @@ describe('ShiftDetailPanel dialog shell', () => {
     await user.click(await screen.findByRole('button', { name: 'Sign myself up as Driver/Operator' }));
 
     await waitFor(() => expect(dialog).toHaveAttribute('inert'));
+  });
+
+  /**
+   * DOM order is focus order, and the header reads differently at each width:
+   * below 640px the close sits above the action row, above it the close comes
+   * last. Reordering with CSS would move it visually and leave it where it was
+   * in the tab sequence, which is what these pin.
+   */
+  /** Accessible names of every button, in the DOM order the Tab key follows. */
+  const buttonOrder = () =>
+    screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? (b.textContent ?? '').trim());
+
+  it('focuses the close before the actions on a phone, matching how they read', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+
+    const order = buttonOrder();
+    expect(order).toContain('Close panel');
+    expect(order.indexOf('Close panel')).toBeLessThan(order.indexOf('Edit'));
+  });
+
+  it('focuses the close last on a laptop, where the header is one row', async () => {
+    mockViewport('laptop');
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+
+    const order = buttonOrder();
+    expect(order).toContain('Close panel');
+    expect(order.indexOf('Close panel')).toBeGreaterThan(order.indexOf('Cancel shift'));
+  });
+
+  it('renders exactly one close control at either width', async () => {
+    // A `hidden`-variant duplicate would put two in the accessibility tree, and
+    // jsdom applies no stylesheet to hide either.
+    mockViewport('laptop');
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+
+    expect(screen.getAllByRole('button', { name: 'Close panel' })).toHaveLength(1);
   });
 
   it('closes on a backdrop click but not on a click inside the panel', async () => {

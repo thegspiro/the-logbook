@@ -16,6 +16,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router';
 import { DialogPortal } from '../../components/DialogPortal';
 import { DialogPanel } from '../../components/ux/DialogPanel';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import {
   effectiveLateSignupUntil,
@@ -103,6 +104,17 @@ interface ShiftDetailPanelProps {
 const LATE_SIGNUP_MINUTES = [15, 30, 60] as const;
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initialShift, onClose, onRefresh }) => {
+  /**
+   * Which side of the header layout we are on — see the close button below.
+   *
+   * A media query rather than a Tailwind variant because this decides *where in
+   * the DOM* the close button goes, and DOM order is focus order. `hidden`
+   * variants cannot do it: rendering the button twice puts two "Close panel"
+   * controls in the accessibility tree, which is the trade `useMediaQuery`
+   * exists to avoid.
+   */
+  const isWideHeader = useMediaQuery('(min-width: 640px)');
+
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
@@ -1158,6 +1170,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     );
   };
 
+  /**
+   * Bound once and rendered in one of two places, never both: a second copy
+   * would put a second "Close panel" control in the accessibility tree.
+   */
+  const closeButton = (
+    <button
+      onClick={onClose}
+      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2 transition-colors"
+      aria-label="Close panel"
+    >
+      <X className="h-5 w-5" />
+    </button>
+  );
+
   return (
     <>
       {/* Portalled to the body: a `fixed` shell is only positioned against the
@@ -1210,7 +1236,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             {/* Header */}
             <div className="modal-header-sticky p-4 sm:p-6">
               <div className="flex flex-wrap items-start gap-x-2 gap-y-3 sm:items-center">
-                <div className="order-1 min-w-0 flex-1 sm:order-none">
+                <div className="min-w-0 flex-1">
                   <h2 id="shift-detail-title" className="text-theme-text-primary text-lg font-bold sm:text-xl">
                     Shift Details
                   </h2>
@@ -1227,7 +1253,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     </span>
                   )}
                 </div>
-                {/* Close stays on the title's line at every width; the other
+                {/* Close sits on the title's line at every width; the other
                     actions drop to a row of their own below 640px.
 
                     The dialog is inset 1rem, so a 390px phone leaves 343px of
@@ -1239,8 +1265,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     header and keeps every label readable, which the
                     `action-bar` utility's sr-only trick would not: two of these
                     actions are destructive, and a phone has no hover to recover
-                    a title attribute from a bare glyph. */}
-                <div className="order-3 flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto sm:justify-end">
+                    a title attribute from a bare glyph.
+
+                    The close button is placed by `isWideHeader` rather than by
+                    CSS `order`, because reordering moves the button visually
+                    and leaves it where it was in the tab sequence. Below 640px
+                    it reads above the action row and must be focused before it;
+                    above, it reads after and must be focused last. */}
+                {!isWideHeader && closeButton}
+                <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:justify-end">
                   {canManage && !isPast && !shift.is_finalized && !isCancelled && (
                     <>
                       <button
@@ -1308,16 +1341,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     </button>
                   )}
                 </div>
-                {/* Last in the DOM so that above 640px, where the header is one
-                    row, tab order follows the visual left-to-right order. Below
-                    that `order-2` lifts it onto the title's line. */}
-                <button
-                  onClick={onClose}
-                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover order-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2 transition-colors sm:order-none"
-                  aria-label="Close panel"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                {isWideHeader && closeButton}
               </div>
             </div>
 
