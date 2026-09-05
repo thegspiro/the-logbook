@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Events page invited members to create an event (2026-09-05)
+
+**Fixed**
+
+- **An empty Events list told every member to "Get started by creating a new
+  event."** The Create Event button beside it was already officer-only, so the
+  copy was an instruction nobody without `events.manage` could follow, and
+  `/events/new` bounces them to the access-denied page. The prompt is now shown
+  only to someone who can act on it.
+
+**Changed**
+
+- **With no events at all, a member now sees a blank list** rather than an
+  empty-state card whose default copy and only action are both invitations to
+  create. An empty result that follows from a search, a type filter, the Past
+  toggle or My Events is still reported to everyone — that is feedback on what
+  they asked for.
+
 ### Requesting gear no longer requires knowing the department's name for it (2026-09-05)
 
 **Changed**
