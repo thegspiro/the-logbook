@@ -662,6 +662,38 @@ class TestCallTypeRetirement:
 
 
 # ======================================================================
+# Labelling — a slug is a storage key, never something a reader sees
+# ======================================================================
+
+
+class TestTypeLabels:
+    def _svc(self, call_types):
+        svc = CallTrackingService(MagicMock())
+        svc.get_settings = AsyncMock(
+            return_value={
+                "mode": CallTrackingMode.COUNT_ONLY,
+                "call_types": call_types,
+            }
+        )
+        return svc
+
+    async def test_maps_slug_to_the_department_s_label(self):
+        svc = self._svc([{"slug": "mutual_aid", "label": "Mutual Aid", "active": True}])
+        assert await svc.type_labels("org-1") == {"mutual_aid": "Mutual Aid"}
+
+    async def test_includes_retired_types(self):
+        """The whole reason to keep a retired type is that its history still
+        has to render. Filtering here would put the slug back on the page."""
+        svc = self._svc(
+            [
+                {"slug": "fire", "label": "Fire", "active": True},
+                {"slug": "brush", "label": "Brush", "active": False},
+            ]
+        )
+        assert await svc.type_labels("org-1") == {"fire": "Fire", "brush": "Brush"}
+
+
+# ======================================================================
 # Resumable close-out — schema contract
 # ======================================================================
 
@@ -1217,3 +1249,105 @@ class TestRetiredTypesAtCloseout:
             other.id, org.id
         )
         assert [t["slug"] for t in state["call_types"]] == ["fire"]
+
+
+# ======================================================================
+# The call-volume report labels what it breaks down
+# ======================================================================
+
+
+@pytest.mark.integration
+class TestCallVolumeReportLabels:
+    """The report's `by_type` keys are storage slugs. Before this the renderer
+    stripped underscores off them and called it a name, so a department that
+    had renamed "Alarm / Good Intent" saw "alarm" on its own report."""
+
+    async def _org(self, db_session, call_types, mode=CallTrackingMode.COUNT_ONLY):
+        org = await _make_org(db_session)
+        org.settings = {
+            "scheduling": {"call_tracking": {"mode": mode, "call_types": call_types}}
+        }
+        await db_session.flush()
+        return org
+
+    async def test_labels_travel_with_the_breakdown(self, db_session):
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(
+            db_session, [{"slug": "mutual_aid", "label": "Mutual Aid"}]
+        )
+        await CallTrackingService(db_session).record_shift_calls(
+            await _make_shift(db_session, org, "e1"),
+            org.id,
+            total_calls=2,
+            type_counts={"mutual_aid": 2},
+        )
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["summary"]["by_type_totals"] == {"mutual_aid": 2}
+        assert report["call_type_labels"]["mutual_aid"] == "Mutual Aid"
+
+    async def test_a_retired_type_is_still_labelled(self, db_session):
+        """A report covering last year names a type the department has since
+        stopped offering — that is what a historical report is for."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(db_session, [{"slug": "brush", "label": "Brush"}])
+        await CallTrackingService(db_session).record_shift_calls(
+            await _make_shift(db_session, org, "e1"),
+            org.id,
+            total_calls=1,
+            type_counts={"brush": 1},
+        )
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [
+                        {"slug": "brush", "label": "Brush", "active": False}
+                    ],
+                }
+            }
+        }
+        await db_session.flush()
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["call_type_labels"]["brush"] == "Brush"
+
+    async def test_the_untyped_remainder_is_named_as_the_wizard_names_it(
+        self, db_session
+    ):
+        """Same quantity, same words. The close-out calls it "Not
+        categorised", so a report calling it "unclassified" invites somebody
+        to reconcile two numbers that were always one."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(db_session, [{"slug": "fire", "label": "Fire"}])
+        await CallTrackingService(db_session).record_shift_calls(
+            await _make_shift(db_session, org, "e1"), org.id, total_calls=3
+        )
+
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["summary"]["by_type_totals"] == {"unclassified": 3}
+        assert report["call_type_labels"]["unclassified"] == "Not categorised"
+
+    async def test_the_detailed_branch_carries_the_map_too(self, db_session):
+        """An org that ran count-only in the past has slugs in its older shift
+        reports, and a period spanning the switch mixes both shapes."""
+        from app.services.reports_service import ReportsService
+
+        org = await self._org(
+            db_session,
+            [{"slug": "mva", "label": "Motor Vehicle Accident"}],
+            mode=CallTrackingMode.DETAILED,
+        )
+        report = await ReportsService(db_session)._generate_call_volume(
+            org.id, date(2026, 8, 1), date(2026, 8, 31)
+        )
+        assert report["call_type_labels"]["mva"] == "Motor Vehicle Accident"

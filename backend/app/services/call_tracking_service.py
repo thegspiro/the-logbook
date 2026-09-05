@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.utils import generate_uuid
 from app.models.call_tracking import (
     MAX_CALLS_PER_SHIFT,
+    UNCLASSIFIED_CALL_TYPE,
     CallSource,
     CallTrackingMode,
     OrgCall,
@@ -70,6 +71,19 @@ class CallTrackingService:
         """
         settings = await self.get_settings(str(organization_id))
         return {t["slug"] for t in settings.get("call_types", [])}
+
+    async def type_labels(self, organization_id: str) -> Dict[str, str]:
+        """Slug to display label, for anything rendering a stored call type.
+
+        Retired types are included, and that is the point: a slug is the value
+        every call was filed under, so a report covering last year has to be
+        able to label a type the department has since stopped offering.
+        Callers fall back to the slug for anything absent here — a type
+        deleted outright, or a value written while the org was on detailed
+        tracking, where the stored text is already human-readable.
+        """
+        settings = await self.get_settings(str(organization_id))
+        return {t["slug"]: t["label"] for t in settings.get("call_types", [])}
 
     async def type_usage_counts(self, organization_id: str) -> Dict[str, int]:
         """Calls on record per type slug, across all dates.
@@ -446,7 +460,7 @@ class CallTrackingService:
                 .group_by(OrgCall.call_type)
             )
         ).all()
-        return {(slug or "unclassified"): int(n) for slug, n in rows}
+        return {(slug or UNCLASSIFIED_CALL_TYPE): int(n) for slug, n in rows}
 
     async def apparatus_run_counts(
         self, organization_id: str, start: date, end: date

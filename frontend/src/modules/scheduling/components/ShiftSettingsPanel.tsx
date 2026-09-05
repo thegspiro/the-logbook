@@ -110,6 +110,10 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         platoonsEnabled: updated.platoons_enabled,
         requireEndOfShiftChecks: updated.require_end_of_shift_checks,
         callTrackingMode: updated.call_tracking?.mode || 'detailed',
+        // Without this a rename shows the old label everywhere else in the
+        // session — loadSettings is a once-per-session cache and will not
+        // fetch again.
+        callTypeLabels: Object.fromEntries((updated.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
         // `??`, not `||`: 0 means "closes exactly at the start", which `||`
         // would silently replace with the default.
         signupClosesMinutesBefore: updated.signup_closes_minutes_before ?? 0,
