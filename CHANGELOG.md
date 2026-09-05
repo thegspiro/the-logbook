@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The notification Send Log is your own send log (2026-09-05)
+
+**Fixed**
+
+- **The Send Log listed every notification the department had sent anyone.**
+  `GET /notifications/logs` filtered on the organization and nothing else, so
+  the tab showed the subject, body and recipient address of every colleague's
+  notifications to anyone who could open it — a grant that was seeded to the
+  whole department until it was revoked in August. The endpoint now defaults
+  to the caller's own deliveries, and the tab asks for nothing else.
+
+**Changed**
+
+- **The Send Log is offered to every member.** What it shows is now their own
+  delivery history — email as well as in-app, with delivered/failed status —
+  which is their own data on the same footing as their inbox, so it no longer
+  sits behind `notifications.view`.
+
+- **The organization-wide view survives for auditing deliverability**, as an
+  explicit `scope=organization` request on `GET /notifications/logs` and
+  `POST /notifications/logs/read-all`. It requires `notifications.manage`,
+  matching the org-wide "mark all read" it sits beside rather than the
+  read-only permission that let the leak happen. **API note:** `read-all`
+  previously always swept the whole organization and now defaults to the
+  caller; pass `scope=organization` for the old behaviour.
+
+- **"Mark all as read" clears exactly the rows the tab showed**, across both
+  channels, and reconciles the inbox tab and the unread badge with it — the
+  same notification no longer reads as read on one tab and unread on the next.
+
 ### A regular member could open Administration → Reports (2026-09-04)
 
 **Fixed**
