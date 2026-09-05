@@ -3592,7 +3592,9 @@ async def get_requestable_catalog(
         category_id=category_id,
         limit=limit,
     )
-    categories = await service.get_requestable_categories(current_user.organization_id)
+    categories = await service.get_requestable_categories(
+        current_user.organization_id, current_user
+    )
     return RequestableCatalogResponse(products=products, categories=categories)
 
 

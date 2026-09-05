@@ -7665,11 +7665,14 @@ class InventoryService:
         ("glove", ("glove", "gauntlet", "mitt")),
         ("hat", ("hat", "cap", "helmet", "beanie", "headwear")),
         ("jacket", ("jacket", "coat", "parka", "vest", "hoodie", "sweatshirt")),
-        ("pant", ("pant", "trouser", "short")),
-        # "sleeve" is here because the variant generator names a garment from
-        # its style ("Long Sleeve — L — Navy"), so the word "shirt" never
-        # appears in the name a member sees.
+        # Shirts are matched before trousers, and the order is load-bearing:
+        # "short" is a substring of "Short Sleeve", so with pants first the
+        # commonest summer uniform shirt in the catalog was classified as
+        # trousers and offered the member's waist and inseam. Nothing in the
+        # shirt list is a substring of a trouser name ("Shorts" contains
+        # neither "shirt" nor "sleeve"), so shorts still reach the pant rule.
         ("shirt", ("shirt", "polo", "tee", "t-shirt", "sleeve", "blouse")),
+        ("pant", ("pant", "trouser", "short")),
     )
 
     # Canonical display order for alpha sizes. Numeric sizes sort numerically
@@ -7735,10 +7738,21 @@ class InventoryService:
     def _requestable_available(cls, item: InventoryItem) -> int:
         """Units of *item* a member could actually be handed today.
 
-        Pool stock reads from whichever ledger is live for the item (see
-        ``_attach_lot_stock``); a serialized unit is one unit and only while
-        nobody else holds it.
+        Gated on the same status and condition sets ``issue_from_pool``
+        enforces, not merely on the row being active. A pool item in
+        maintenance, lost, stolen or in an unserviceable condition still
+        carries its ledger quantity, so counting that quantity advertises stock
+        the issuance path then refuses — a false "12 on hand" that a member
+        requests against and a quartermaster cannot fill.
+
+        Pool stock otherwise reads from whichever ledger is live for the item
+        (see ``_attach_lot_stock``); a serialized unit is one unit, and only
+        while nobody else holds it.
         """
+        if item.status in _UNISSUABLE_STATUSES or item.condition in (
+            _UNISSUABLE_CONDITIONS
+        ):
+            return 0
         if getattr(item, "is_lot_stocked", False):
             return int(getattr(item, "lot_stock", 0) or 0)
         if cls._enum_value(item.tracking_type) == TrackingType.POOL.value:
@@ -7836,7 +7850,7 @@ class InventoryService:
         return products[:limit]
 
     async def get_requestable_categories(
-        self, organization_id: UUID
+        self, organization_id: UUID, user: User
     ) -> List[Dict[str, str]]:
         """Categories that actually hold requestable gear.
 
@@ -7846,7 +7860,12 @@ class InventoryService:
         """
         rows = (
             await self.db.execute(
-                select(InventoryCategory.id, InventoryCategory.name)
+                select(
+                    InventoryCategory.id,
+                    InventoryCategory.name,
+                    InventoryItem.min_rank_order,
+                    InventoryItem.restricted_to_positions,
+                )
                 .join(InventoryItem, InventoryItem.category_id == InventoryCategory.id)
                 .where(
                     InventoryCategory.organization_id == str(organization_id),
@@ -7855,11 +7874,24 @@ class InventoryService:
                     InventoryItem.active.is_(True),
                     InventoryItem.status != ItemStatus.RETIRED,
                 )
-                .group_by(InventoryCategory.id, InventoryCategory.name)
                 .order_by(InventoryCategory.name.asc())
             )
         ).all()
-        return [{"id": row[0], "name": row[1]} for row in rows]
+
+        # Eligibility-filtered, for the same reason the product list is: a
+        # category holding nothing but rank- or position-restricted gear would
+        # otherwise appear as a chip that discloses the restricted stock exists
+        # and then filters to an empty list. The restriction columns are
+        # carried on the row so the check runs without a second query.
+        offered: Dict[str, str] = {}
+        for category_id, name, min_rank_order, restricted_positions in rows:
+            if category_id in offered:
+                continue
+            if await self._passes_restrictions(
+                min_rank_order, restricted_positions, organization_id, user
+            ):
+                offered[category_id] = name
+        return [{"id": cid, "name": name} for cid, name in offered.items()]
 
     async def _member_may_request(
         self, item: InventoryItem, organization_id: UUID, user: User
@@ -7871,18 +7903,36 @@ class InventoryService:
         braces: without it the modal lists gear the member is then refused at
         submit, and the restricted item's existence leaks to everyone.
         """
-        restricted_positions = item.restricted_to_positions or []
-        if item.min_rank_order is None and not restricted_positions:
+        return await self._passes_restrictions(
+            item.min_rank_order, item.restricted_to_positions, organization_id, user
+        )
+
+    async def _passes_restrictions(
+        self,
+        min_rank_order: Optional[int],
+        restricted_positions: Optional[List[str]],
+        organization_id: UUID,
+        user: User,
+    ) -> bool:
+        """The restriction rule itself, over the two columns that carry it.
+
+        Taken as loose values rather than an item so the category chips can
+        apply exactly the same rule from a projected row -- one implementation,
+        because two would drift and the disclosure this closes is the kind that
+        reopens silently.
+        """
+        positions = restricted_positions or []
+        if min_rank_order is None and not positions:
             return True
 
-        if item.min_rank_order is not None:
+        if min_rank_order is not None:
             rank_order = await self._member_rank_order(organization_id, user)
-            if rank_order is not None and rank_order <= item.min_rank_order:
+            if rank_order is not None and rank_order <= min_rank_order:
                 return True
 
-        if restricted_positions:
+        if positions:
             slugs = await self._member_position_slugs(organization_id, user)
-            if slugs & set(restricted_positions):
+            if slugs & set(positions):
                 return True
 
         return False
@@ -8021,6 +8071,19 @@ class InventoryService:
             ordered.append(product)
         return ordered
 
+    @staticmethod
+    def _size_qualifier(value: Optional[str]) -> str:
+        """The parenthetical part of a size, normalised — "" when there is none.
+
+        Separate from :meth:`_normalize_size_key`, which deliberately discards
+        it: matching demand to stock wants "10 (wide)" and "10" in the same
+        bucket, while *suggesting* one to a member must not treat them as the
+        same thing.
+        """
+        if not value or "(" not in value:
+            return ""
+        return " ".join(value.split("(", 1)[1].split(")", 1)[0].lower().split())
+
     @classmethod
     def _member_size_label(cls, value: str) -> str:
         """A member's stored size, written the way the rest of the app writes it.
@@ -8053,11 +8116,24 @@ class InventoryService:
         if not member_size:
             return
         product["member_size"] = cls._member_size_label(member_size)
+        # A qualifier the member carries and the stock does not is a real
+        # difference, not noise. `_normalize_size_key` drops the parenthetical
+        # so demand can be bucketed against stock, which is right for the
+        # planner and wrong here: boot "10 (wide)" would match a plain "10",
+        # preselect it, suppress the unstocked option, and submit a request
+        # that has silently lost the width — the one thing the quartermaster
+        # cannot reconstruct.
         wanted = cls._normalize_size_key(member_size)
+        member_qualifier = cls._size_qualifier(member_size)
         for variant in product["variants"]:
-            if variant["size"] and cls._normalize_size_key(variant["size"]) == wanted:
-                product["suggested_size"] = variant["size"]
-                return
+            if not variant["size"]:
+                continue
+            if cls._normalize_size_key(variant["size"]) != wanted:
+                continue
+            if cls._size_qualifier(variant["size"]) != member_qualifier:
+                continue
+            product["suggested_size"] = variant["size"]
+            return
 
     # ============================================
     # Equipment Request Fulfillment
