@@ -697,27 +697,62 @@ describe('rosterLocked', () => {
     expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, ADMIN)).toBe(false);
   });
 
-  it('stays open while a late-signup window an officer opened is live', () => {
+  it('is not held open by a live late-signup window', () => {
+    // The server's `_roster_locked_reason` reads the deadline alone, so this
+    // used to be the more permissive of the two and kept withdraw and the seat
+    // dropdown on screen past a lock the API enforces. Reopening signup lets
+    // somebody *join*; it does not reopen the roster of a shift that is over.
     const reopened = { ...ran, late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString() };
-    expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
   });
 
-  it('leaves an open-ended shift unlocked however long ago it began', () => {
-    // `end_time` is optional on a shift, and an open-ended one is real rather
-    // than malformed. Standing the start in for the missing end would lock it
-    // one grace period after it began, with the crew still working — a false
-    // lock on a live shift, which is worse than no lock on one nothing can
-    // bound.
+  it('locks an open-ended shift once its cushion has passed', () => {
+    // "No end, no lock" left these unbounded on both sides, so a member could
+    // be seated on a shift months gone. The server now stands the start in plus
+    // a cushion; leaving this permissive kept Reopen on screen for exactly the
+    // shifts the API had begun refusing.
     const openEnded = { ...ran, end_time: undefined };
-    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
-    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(true);
   });
 
-  it('leaves an end it cannot read unlocked', () => {
-    // A bare "HH:MM" end still reaches the client from some responses. It is
-    // the same unjudgeable case, and takes the same permissive answer.
+  it('leaves an open-ended shift alone while it is still inside the cushion', () => {
+    // The half the cushion exists for: a crew still out, with nobody having
+    // recorded an end time, must keep its own roster.
+    const running = {
+      ...ran,
+      end_time: undefined,
+      start_time: new Date(Date.now() - 8 * 60 * 60_000).toISOString(),
+    };
+    expect(rosterLocked(running, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(running, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+  });
+
+  it('follows the department cushion the server resolved', () => {
+    // A department that widened check-in to 72 hours gets a roster window that
+    // agrees with it, rather than a second number hardcoded here.
+    const openEnded = {
+      ...ran,
+      end_time: undefined,
+      start_time: new Date(Date.now() - 20 * 60 * 60_000).toISOString(),
+    };
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+    expect(rosterLocked(openEnded, { ...DEFAULT_SIGNUP_WINDOW, openEndedCushionHours: 72 }, OFFICER)).toBe(false);
+  });
+
+  it('falls back to the start when the end cannot be read', () => {
+    // A bare "HH:MM" end still reaches the client from some responses. The
+    // start is readable, so this is the open-ended case rather than an
+    // unjudgeable one, and takes the same cushion.
     const unreadable = { ...ran, end_time: '19:00' };
-    expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+  });
+
+  it('stays unlocked when neither end nor start can be read', () => {
+    // Genuinely unjudgeable, and the permissive stance the rest of this file
+    // takes on data it cannot read.
+    const unjudgeable = { ...ran, end_time: '19:00', start_time: '07:00' };
+    expect(rosterLocked(unjudgeable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
   });
 
   it('defaults to the member view when no viewer is given', () => {

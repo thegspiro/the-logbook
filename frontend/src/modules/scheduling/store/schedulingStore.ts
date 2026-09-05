@@ -53,6 +53,7 @@ interface SchedulingState {
    */
   signupClosesMinutesBefore: number;
   lateSignupGraceMinutes: number;
+  openEndedCushionHours: number;
   settingsLoaded: boolean;
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   callTrackingMode: 'detailed',
   signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
   lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
+  openEndedCushionHours: DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,
   settingsLoaded: false,
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -124,6 +126,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
           // with the default.
           signupClosesMinutesBefore: settings.signup_closes_minutes_before ?? DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
           lateSignupGraceMinutes: settings.late_signup_grace_minutes ?? DEFAULT_SIGNUP_WINDOW.graceMinutes,
+          openEndedCushionHours: settings.open_ended_shift_cushion_hours ?? DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,
           settingsLoaded: true,
         });
       } catch {

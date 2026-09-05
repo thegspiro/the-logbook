@@ -27,6 +27,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded end, so the two rules agree on how long "still out" can plausibly
   last. Substituting the start at _grace_ scale would have been the
   overcorrection: an hour after it began, with the crew still working.
+- **A reopening window stored before the bound existed no longer outlives
+  it.** `open_late_signup` caps the window it writes, but a cap only covers
+  rows written after it shipped; one stored while reopening was still
+  unbounded stayed live for up to twelve hours, and the signup rule takes the
+  later of the deadline and the stored window. It is now capped where it is
+  read rather than only where it is written, which also covers shifts that do
+  record an end time.
+- **The cushion follows the department's `checkin_closes_hours_after`**,
+  floored at twelve. A department that widened check-in to seventy-two hours
+  was getting a roster that locked sixty hours before check-in did. It does not
+  follow the setting down: check-in closing early says nothing about a crew
+  still being out.
+- **The board and shift panel agree with the server.** `rosterLocked` returned
+  false for any shift without an end time and let a stored reopening window
+  extend it, so Reopen, withdraw and the seat dropdown stayed on screen for
+  shifts the API refuses. The resolved cushion is reported on
+  `/scheduling/settings` so the client reads the department's number instead of
+  hardcoding a second copy.
 - **This bounds editing the roster on those shifts too**, not only reopening —
   confirm, decline, remove, withdraw and the seat dropdown — since both rules
   read the same deadline. That is the intent: correcting a months-old roster is

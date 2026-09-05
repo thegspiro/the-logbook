@@ -1351,6 +1351,12 @@ class SchedulingFeatureSettings(BaseModel):
     # is never bounded, and an officer can reopen an individual shift for
     # longer, so this is the routine case rather than the only way in.
     late_signup_grace_minutes: int = Field(default=60, ge=0, le=1440)
+    # How long past its start a shift with no recorded `end_time` still counts
+    # as running, for the roster lock. Resolved server-side from the
+    # department's check-in setting and reported so the client's own lock
+    # agrees rather than hardcoding a second number; read-only, and ignored on
+    # a PUT.
+    open_ended_shift_cushion_hours: int = Field(default=12, ge=0, le=72)
     # Driver qualification. Defaults on: a member without the EVOC level an
     # apparatus requires cannot be seated as its driver. Inert until an admin
     # sets required_evoc_level_id on an apparatus, so switching it on for

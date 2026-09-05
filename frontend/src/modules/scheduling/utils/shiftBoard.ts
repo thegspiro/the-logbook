@@ -121,6 +121,15 @@ export interface SignupWindow {
   closesMinutesBefore: number;
   /** Minutes after start_time an officer may still seat somebody. */
   graceMinutes: number;
+  /**
+   * Hours past its start that a shift with no `end_time` still counts as
+   * running, for the roster lock. Resolved by the server from the department's
+   * check-in setting and reported on `/scheduling/settings`, rather than
+   * hardcoded here — a second copy of the number would disagree with the
+   * server for any department that changed it, in the direction that hides a
+   * control the API would have accepted.
+   */
+  openEndedCushionHours: number;
 }
 
 /**
@@ -131,7 +140,11 @@ export interface SignupWindow {
  * accepted, and the member cannot tell that apart from being genuinely too
  * late. The server is authoritative either way.
  */
-export const DEFAULT_SIGNUP_WINDOW: SignupWindow = { closesMinutesBefore: 0, graceMinutes: 60 };
+export const DEFAULT_SIGNUP_WINDOW: SignupWindow = {
+  closesMinutesBefore: 0,
+  graceMinutes: 60,
+  openEndedCushionHours: 12,
+};
 
 /**
  * The shift's start as an epoch instant, or null when it cannot be read.
@@ -289,19 +302,28 @@ export const rosterLocked = (
 ): boolean => {
   if (viewer.canManage) return false;
 
-  // No end, no lock. `end_time` is optional on `ShiftRecord` for a reason —
-  // an open-ended shift is a real shift, not a malformed one — and standing in
-  // the start would lock its roster one grace period after it began, with the
-  // crew still working. A false lock on a live shift is worse than a missed
-  // one on a shift nothing can bound, which is also the permissive stance the
-  // rest of this file takes on data it cannot judge.
-  const end = endInstant(shift);
-  if (end === null) return false;
+  // An open-ended shift is a real shift, not a malformed one — but "no end, no
+  // lock" left it unbounded, and the server no longer agrees: it stands in the
+  // start plus a cushion, so leaving this permissive kept Reopen and the roster
+  // controls on screen for exactly the shifts the API had begun refusing.
+  //
+  // The cushion is what keeps standing in the start from locking a live shift
+  // one grace period after it began, which is why the naive substitution was
+  // rejected on both sides.
+  let end = endInstant(shift);
+  if (end === null) {
+    const start = startInstant(shift);
+    if (start === null) return false;
+    end = start + window.openEndedCushionHours * 60 * 60_000;
+  }
 
-  let deadline = end + window.graceMinutes * 60_000;
-  const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
-  if (!Number.isNaN(override) && override > deadline) deadline = override;
-  return now.getTime() > deadline;
+  // `late_signup_until` deliberately plays no part. The server's
+  // `_roster_locked_reason` reads the deadline alone, and letting a stored
+  // override extend it here made the client the more permissive of the two —
+  // it kept withdraw and the seat dropdown on screen past a lock the API
+  // enforces. Reopening signup lets somebody *join*; it does not reopen the
+  // roster of a shift that is over.
+  return now.getTime() > end + window.graceMinutes * 60_000;
 };
 
 /**

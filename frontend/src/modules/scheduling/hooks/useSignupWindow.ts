@@ -63,6 +63,7 @@ export const useSignupWindow = (): SignupWindow => {
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
   const closesMinutesBefore = useSchedulingStore((s) => s.signupClosesMinutesBefore);
   const graceMinutes = useSchedulingStore((s) => s.lateSignupGraceMinutes);
+  const openEndedCushionHours = useSchedulingStore((s) => s.openEndedCushionHours);
 
   // Re-render the consumer as the clock advances so its signup rules are
   // re-evaluated. The window value itself is unchanged; what goes stale is the
@@ -79,8 +80,8 @@ export const useSignupWindow = (): SignupWindow => {
   }, [loadSettings]);
 
   return useMemo(
-    () => (settingsLoaded ? { closesMinutesBefore, graceMinutes } : DEFAULT_SIGNUP_WINDOW),
-    [settingsLoaded, closesMinutesBefore, graceMinutes]
+    () => (settingsLoaded ? { closesMinutesBefore, graceMinutes, openEndedCushionHours } : DEFAULT_SIGNUP_WINDOW),
+    [settingsLoaded, closesMinutesBefore, graceMinutes, openEndedCushionHours]
   );
 };
 

@@ -153,19 +153,66 @@ def _minutes_phrase(total: int) -> str:
     return f"{total} minute{'s' if total != 1 else ''}"
 
 
-# How long after its start an open-ended shift is still treated as running.
+# The least time after its start an open-ended shift is treated as running.
 #
 # `end_time` is nullable, so "when did this shift finish" has no answer for
 # some rows, and the roster deadline needs one or it cannot bound them at all.
-# Twelve hours because that is already the cushion `_checkin_window_error`
-# allows a shift with no recorded end, so the two rules agree on how long
-# "still out" can plausibly last rather than each guessing separately.
+# Twelve hours because it is `checkin_closes_hours_after`'s own default, which
+# is the department's existing statement about how long after a shift people
+# may still be dealing with it.
 #
-# Deliberately generous. Getting this wrong in the tight direction locks a
-# crew out of its own roster mid-shift; getting it wrong in the loose
-# direction leaves a stale shift editable for an extra few hours, which the
-# grace period on top already tolerates.
+# A *floor*, not the value: `open_ended_cushion_hours` takes the department's
+# configured setting when it is larger, so a department that widened check-in
+# to seventy-two hours does not get a roster that locks sixty hours before
+# check-in does. It does not follow the setting *down*, because check-in
+# closing early says nothing about a crew still being out, and locking a live
+# shift's roster is the failure that actually strands people mid-shift.
 OPEN_ENDED_SHIFT_CUSHION_HOURS = 12
+
+
+def open_ended_cushion_hours(settings: Dict[str, Any]) -> int:
+    """How long past its start an open-ended shift still counts as running.
+
+    Reads the department's ``checkin_closes_hours_after`` so the two windows
+    agree: with it at seventy-two, check-in accepts an arrival at hour twenty
+    while a fixed twelve-hour cushion had already refused every non-admin
+    roster operation at hour twelve — two conflicting statements about the same
+    shift. Floored at the built-in default so tightening check-in cannot lock a
+    crew out of a roster they are still working.
+
+    Unvalidated JSON an admin can hand-edit, so a bad value degrades to the
+    floor rather than raising (pitfall #19).
+    """
+    timing = (settings.get("shift_reports") or {}).get("checklist_timing") or {}
+    try:
+        configured = int(timing.get("checkin_closes_hours_after", 0))
+    except (TypeError, ValueError):
+        configured = 0
+    return max(OPEN_ENDED_SHIFT_CUSHION_HOURS, min(configured, 72))
+
+
+def _roster_deadline_from(shift: Any, settings: Dict[str, Any]) -> Optional[datetime]:
+    """The last instant this shift's roster may change, from data alone.
+
+    Pure, because two callers need it and only one of them can reach the
+    database: ``_roster_deadline`` loads the organization and delegates here,
+    while ``_signup_window_error`` is a static rule that already receives the
+    settings and must cap a stored override against the same bound.
+
+    None when the shift states neither an end nor a readable start — a row this
+    rule cannot judge is not one it should lock.
+    """
+    end = _as_utc(getattr(shift, "end_time", None))
+    if end is None:
+        start = _as_utc(getattr(shift, "start_time", None))
+        if start is None:
+            return None
+        end = start + timedelta(hours=open_ended_cushion_hours(settings))
+    grace = _scheduling_minutes(
+        settings, "late_signup_grace_minutes", DEFAULT_LATE_SIGNUP_GRACE_MINUTES, 1440
+    )
+    return end + timedelta(minutes=grace)
+
 
 # The widest span a member-facing shift listing will scan. Matches
 # MAX_OPEN_SHIFTS_DAYS on /shifts/open, which bounds the same kind of read for
@@ -1889,25 +1936,12 @@ class SchedulingService:
         A shift with no readable start stays unbounded: a row this rule cannot
         judge is not one it should lock.
         """
-        end = _as_utc(getattr(shift, "end_time", None))
-        if end is None:
-            start = _as_utc(getattr(shift, "start_time", None))
-            if start is None:
-                return None
-            end = start + timedelta(hours=OPEN_ENDED_SHIFT_CUSHION_HOURS)
-
         org = (
             await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
-        grace = _scheduling_minutes(
-            (org.settings or {}) if org else {},
-            "late_signup_grace_minutes",
-            DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
-            1440,
-        )
-        return end + timedelta(minutes=grace)
+        return _roster_deadline_from(shift, (org.settings or {}) if org else {})
 
     async def open_late_signup(
         self,
@@ -2274,6 +2308,21 @@ class SchedulingService:
 
         now = now or datetime.now(timezone.utc)
         override = _as_utc(getattr(shift, "late_signup_until", None))
+        # Capped here, not only where it is written. `open_late_signup` clamps
+        # on the way in, but a clamp is only as good as the rows written after
+        # it shipped: an override stored while reopening was still unbounded
+        # stays live for up to twelve hours, and this rule takes the later of
+        # the two as authoritative — so a member could keep joining a shift
+        # months past. Capping at evaluation covers those rows, and any future
+        # writer that forgets. Verified against both shapes, with and without
+        # an `end_time`.
+        roster_deadline = _roster_deadline_from(shift, settings)
+        if (
+            override is not None
+            and roster_deadline is not None
+            and override > roster_deadline
+        ):
+            override = roster_deadline
 
         if actor == SignupActor.MEMBER:
             lead = minutes(

@@ -77,6 +77,23 @@ async def _set_scheduling_settings(db_session: AsyncSession, org_id: str, **valu
     await db_session.flush()
 
 
+async def _set_checklist_timing(db_session: AsyncSession, org_id: str, **values):
+    """Merge keys into org.settings['shift_reports']['checklist_timing']."""
+    row = await db_session.execute(
+        text("SELECT settings FROM organizations WHERE id = :id"), {"id": org_id}
+    )
+    raw = row.scalar_one()
+    settings = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    settings.setdefault("shift_reports", {}).setdefault("checklist_timing", {}).update(
+        values
+    )
+    await db_session.execute(
+        text("UPDATE organizations SET settings = :s WHERE id = :id"),
+        {"s": json.dumps(settings), "id": org_id},
+    )
+    await db_session.flush()
+
+
 async def _shift_starting(svc, org_id, creator_id, *, minutes_from_now: float):
     """A twelve-hour shift whose start is this many minutes from now."""
     start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(
@@ -962,3 +979,153 @@ class TestAnOpenEndedShiftIsStillBounded:
 
         assert err is None
         assert assignment is not None
+
+
+class TestAStaleOverrideCannotOutliveTheDeadline:
+    """`open_late_signup` clamps on write; a clamp only covers what came after.
+
+    An override stored while reopening was still unbounded stays live for up to
+    twelve hours after this ships, and `_signup_window_error` takes the later of
+    the deadline and the override as authoritative — so a member could keep
+    joining a months-old shift until it expired, and `open_late_signup` could
+    not normalize it because it now refuses the old shift before writing.
+    Capping at evaluation covers those rows, and any future writer that forgets.
+    """
+
+    async def _with_live_override(
+        self, svc, db_session, org_id, officer_id, *, days_ago, with_end
+    ):
+        day = date.today() - timedelta(days=days_ago)
+        start = datetime.combine(day, datetime.min.time()) + timedelta(hours=8)
+        data = {"shift_date": day, "start_time": start}
+        if with_end:
+            data["end_time"] = start + timedelta(hours=12)
+        shift, err = await svc.create_shift(
+            uuid.UUID(org_id), data, uuid.UUID(officer_id)
+        )
+        assert err is None, err
+        live = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        live.late_signup_until = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) + timedelta(minutes=60)
+        await db_session.flush()
+        return shift
+
+    async def test_an_open_ended_shift_is_still_refused(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await self._with_live_override(
+            svc, db_session, org_id, officer_id, days_ago=90, with_end=False
+        )
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err is not None
+
+    async def test_a_shift_with_an_end_is_refused_too(
+        self, db_session, org_and_members
+    ):
+        # Not specific to open-ended shifts: any row written before the
+        # write-time clamp shipped carries the same stale window.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await self._with_live_override(
+            svc, db_session, org_id, officer_id, days_ago=60, with_end=True
+        )
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err is not None
+
+    async def test_an_override_inside_the_deadline_still_admits(
+        self, db_session, org_and_members
+    ):
+        # The cap only ever trims an override back to the deadline; a window an
+        # officer opened on a shift that is genuinely still live is untouched.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _shift_starting(svc, org_id, officer_id, minutes_from_now=-90)
+        await svc.open_late_signup(uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30)
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert err is None
+        assert assignment is not None
+
+
+class TestTheCushionFollowsTheDepartmentsCheckInSetting:
+    """One number, so the two operational windows cannot disagree.
+
+    With `checkin_closes_hours_after` at seventy-two, check-in accepts an
+    arrival at hour twenty while a fixed twelve-hour cushion had already
+    refused every non-admin roster operation at hour twelve.
+    """
+
+    async def test_a_widened_check_in_widens_the_cushion(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(20 * 60)
+        )
+
+        result, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+        assert result is None, "20h past start is outside the default cushion"
+
+        await _set_checklist_timing(db_session, org_id, checkin_closes_hours_after=72)
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+    async def test_a_tightened_check_in_does_not_narrow_it(
+        self, db_session, org_and_members
+    ):
+        # The floor. Check-in closing early says nothing about a crew still
+        # being out, and locking a live shift's roster strands people mid-shift.
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        await _set_checklist_timing(db_session, org_id, checkin_closes_hours_after=0)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+    async def test_a_hand_edited_value_degrades_to_the_floor(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        await _set_checklist_timing(
+            db_session, org_id, checkin_closes_hours_after="whenever"
+        )
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+
+        assert err is None
+        assert reopened.late_signup_until is not None
