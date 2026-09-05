@@ -133,17 +133,44 @@ export interface SignupWindow {
 }
 
 /**
- * What the rules assume before the department's settings have loaded.
+ * What the rules assume when the department has stated nothing.
  *
- * Deliberately the permissive end of the member rule: a board gating on
- * settings it has not fetched yet would disable a button the server would have
- * accepted, and the member cannot tell that apart from being genuinely too
- * late. The server is authoritative either way.
+ * These are the server's own built-in values, so they are the right answer for
+ * a department that has configured none of them — not a guess.
  */
 export const DEFAULT_SIGNUP_WINDOW: SignupWindow = {
   closesMinutesBefore: 0,
   graceMinutes: 60,
   openEndedCushionHours: 12,
+};
+
+/** The server clamps a configured cushion into [12, 72] hours. */
+export const MAX_OPEN_ENDED_CUSHION_HOURS = 72;
+
+/**
+ * What the rules assume while the settings are still unknown.
+ *
+ * Deliberately the permissive end: a board gating on settings it has not
+ * fetched yet would disable a button the server would have accepted, and the
+ * member cannot tell that apart from being genuinely too late. The server is
+ * authoritative either way.
+ *
+ * The cushion is where "permissive" and "default" part company, which is why
+ * this is a second constant rather than the one above. Twelve hours is the
+ * server's *floor* — it raises the cushion to follow the department's
+ * `checkin_closes_hours_after`, up to seventy-two — so a department that
+ * widened check-in is guaranteed to disagree with it, and the roster deadline
+ * derived from it lands hours early. That hid claim actions the server still
+ * accepts, on exactly the open-ended shifts this file exists to bound. The
+ * ceiling cannot be too early for anyone.
+ *
+ * `closesMinutesBefore` and `graceMinutes` keep the built-in values: those are
+ * the server's real defaults rather than a floor, so they are already right
+ * for a department that has set nothing and close to right for one that has.
+ */
+export const UNRESOLVED_SIGNUP_WINDOW: SignupWindow = {
+  ...DEFAULT_SIGNUP_WINDOW,
+  openEndedCushionHours: MAX_OPEN_ENDED_CUSHION_HOURS,
 };
 
 /**
