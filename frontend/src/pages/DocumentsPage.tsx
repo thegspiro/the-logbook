@@ -815,7 +815,12 @@ const DocumentsPage: React.FC = () => {
               <div className="card p-12 text-center">
                 <FolderOpen className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Documents in This Folder</h3>
-                <p className="text-theme-text-secondary mb-6">Upload documents to this folder to get started.</p>
+                {/* The member opened this folder deliberately, so it still
+                    reports back as empty — only the instruction to upload,
+                    which they cannot follow, is withheld. */}
+                {canManage && (
+                  <p className="text-theme-text-secondary mb-6">Upload documents to this folder to get started.</p>
+                )}
                 {canManage && (
                   <button
                     onClick={handleOpenUploadModal}
@@ -849,27 +854,35 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Empty State - No folder selected and no folders exist */}
-        {!showAllDocuments && !currentFolder && !foldersLoading && !foldersError && folders.length === 0 && (
-          <div className="card p-12 text-center">
-            <FolderOpen className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-            <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Documents Yet</h3>
-            <p className="text-theme-text-secondary mb-6">
-              Start building your document library by uploading SOPs, policies, and department files.
-            </p>
-            {canManage && (
-              <button
-                onClick={handleOpenUploadModal}
-                className="inline-flex items-center space-x-2 rounded-lg bg-amber-600 px-6 py-3 text-white transition-colors hover:bg-amber-700"
-              >
-                <Upload className="h-5 w-5" />
-                <span>Upload First Document</span>
-              </button>
-            )}
-          </div>
-        )}
+        {/* Both the copy and the action here are invitations to start uploading,
+            so a member with an empty library gets a blank panel rather than a
+            prompt to do something they cannot. */}
+        {canManage &&
+          !showAllDocuments &&
+          !currentFolder &&
+          !foldersLoading &&
+          !foldersError &&
+          folders.length === 0 && (
+            <div className="card p-12 text-center">
+              <FolderOpen className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+              <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Documents Yet</h3>
+              <p className="text-theme-text-secondary mb-6">
+                Start building your document library by uploading SOPs, policies, and department files.
+              </p>
+              {canManage && (
+                <button
+                  onClick={handleOpenUploadModal}
+                  className="inline-flex items-center space-x-2 rounded-lg bg-amber-600 px-6 py-3 text-white transition-colors hover:bg-amber-700"
+                >
+                  <Upload className="h-5 w-5" />
+                  <span>Upload First Document</span>
+                </button>
+              )}
+            </div>
+          )}
 
         {/* Upload Modal */}
-        {showUploadModal && (
+        {canManage && showUploadModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setShowUploadModal(false)} aria-hidden="true" />
@@ -990,7 +1003,7 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Create Folder Modal */}
-        {showCreateFolder && (
+        {canManage && showCreateFolder && (
           <div
             className="fixed inset-0 z-50 overflow-y-auto"
             role="dialog"
@@ -1081,7 +1094,7 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Delete Confirmation Modal */}
-        {deleteConfirm && (
+        {canManage && deleteConfirm && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setDeleteConfirm(null)} aria-hidden="true" />

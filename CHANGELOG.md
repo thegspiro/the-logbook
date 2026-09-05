@@ -23,6 +23,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   No response shape or ordering changed for any request within the
   documented row limits.
 
+### The Documents page invited members to upload files (2026-09-05)
+
+**Fixed**
+
+- **Both empty states told every member to upload.** "Start building your
+  document library by uploading SOPs, policies, and department files" and
+  "Upload documents to this folder to get started" rendered for everyone, while
+  the Upload buttons beside them were already gated on `documents.manage`. The
+  copy was an instruction with nothing behind it.
+
+- **The upload, new-folder and delete dialogs outlived the permission that
+  opened them.** Each rendered on its own open state, so losing
+  `documents.manage` with one open left its action on screen. All three are now
+  gated like the controls that open them.
+
+**Changed**
+
+- **With no folders and no documents, a member now sees a blank page** rather
+  than a card whose copy and action are both invitations to start uploading. An
+  empty folder they opened is still reported as empty — that is feedback on
+  their own navigation — with only the upload instruction withheld.
+
 ### Shift planning is one screen instead of three places (2026-09-05)
 
 **Added**
@@ -67,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix for that is to state one, and each side is right about the question it is
   answering.
 - **Openness is judged differently from the board, on purpose.**
-  `shiftStatusInfo` zeroes a shift's open seats once the *member* signup window
+  `shiftStatusInfo` zeroes a shift's open seats once the _member_ signup window
   closes, which is right for a board offering a claim button. An officer can
   still seat somebody after that, so the gaps list uses `capacity - filled`
   behind the lifecycle check instead — inheriting the member's answer would hide
@@ -255,6 +277,16 @@ which merged before a review of it came back.
   browser after the fact. The old form listed restricted items and let the
   member submit a request the API then refused, and the item's existence was
   disclosed to everyone regardless.
+- **"Nothing on hand is size L" now means it.** The warning was suppressed by
+  any item in the requested size, so a rack of size-L trousers silenced the
+  notice on a request for a size-L shirt — and the prompt to order the shirt
+  was lost. It is scoped to the product the member actually asked for.
+- **The fulfil picker no longer answers from one page of the catalog.** It
+  judged availability from the first 500 rows it had loaded, so on a larger
+  catalog "nothing on hand is that size" could mean "not on this page". The
+  eligible rows, their issuable counts and the size verdicts are now decided by
+  the server, which can see all of them; when the list is capped for display it
+  says so instead of reading as the whole shelf.
 
 ### Scheduling administration moved into the Administration section (2026-09-05)
 
@@ -478,6 +510,23 @@ which merged before a review of it came back.
   are named too, so a report covering last year still reads properly. A report
   written under per-incident tracking keeps the officer's own wording, which is
   never rewritten to match a type whose slug happens to look the same.
+
+**Fixed**
+
+- **A department that had named a type "unclassified" could not report on it,
+  or repair it.** `unclassified` is the bucket a call with _no_ type falls into
+  on a breakdown, so a configured type sharing that slug was indistinguishable
+  from the remainder: the call-volume report merged the department's calls with
+  the untyped ones and labelled the total "Not categorised", a figure that
+  reconciles to neither quantity, while the type's own name vanished from every
+  screen. The settings editor could not fix it either — the slug is refused on
+  write, so no payload it can produce even mentions the type. A migration
+  renames the slug, deriving the new one from the department's own label, and
+  moves the calls and the filed shift reports that point at it. Reports written
+  under per-incident tracking are left alone: the word is an officer's prose
+  there, not a slug. Calls whose type had already been deleted from settings
+  stay in the remainder — there is no label left to restore, and renaming them
+  would replace "Not categorised" with a raw slug.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 

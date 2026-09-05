@@ -1517,6 +1517,39 @@ class RequestableCatalogResponse(BaseModel):
     categories: List[RequestableCategory] = Field(default_factory=list)
 
 
+class FulfillmentOption(BaseModel):
+    """One catalog row offered in the fulfil picker, already judged."""
+
+    item_id: str
+    name: str
+    identifier: Optional[str] = None
+    size: Optional[str] = None
+    size_label: Optional[str] = None
+    status: Optional[str] = None
+    tracking_type: Optional[str] = None
+    available: int = 0
+    compatible: bool = True
+    matches_requested_size: bool = False
+
+
+class FulfillmentOptionsResponse(BaseModel):
+    """What the quartermaster may fulfil one request with.
+
+    The judgements travel with the rows rather than being re-derived in the
+    browser, because a client copy of the size-alias table and the unissuable
+    status/condition sets drifted from the service twice.
+    """
+
+    request_id: str
+    requested_size: Optional[str] = None
+    quantity: int = 1
+    suggested_item_id: Optional[str] = None
+    requested_size_available: bool = False
+    can_fulfill_now: bool = False
+    truncated: bool = False
+    options: List[FulfillmentOption] = Field(default_factory=list)
+
+
 class EquipmentRequestReview(BaseModel):
     """Schema for reviewing an equipment request"""
 

@@ -26,6 +26,8 @@ export type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
+  FulfillmentOption,
+  FulfillmentOptionsResponse,
   RequestableCatalogResponse,
   RequestableCategory,
   RequestableProduct,
