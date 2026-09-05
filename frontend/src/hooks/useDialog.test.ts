@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderHook, fireEvent } from '@testing-library/react';
-import { useDialog, useOpenDialogDepth } from './useDialog';
+import { useDialog } from './useDialog';
 
 afterEach(() => {
   document.body.style.overflow = '';
@@ -106,46 +106,5 @@ describe('useDialog', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-});
-
-/**
- * The depth is what lets a dialog carrying its own `aria-modal` surface go
- * `inert` while another dialog sits on top of it. Both portal to the body, so
- * they are siblings rather than nested, and two live aria-modal surfaces leave
- * assistive technology to guess which one is current.
- *
- * Keyed on the stack rather than on any one flag because the dialog on top is
- * often opened by a component that keeps its open state private —
- * PrintDocumentButton's receipt-printer dialog is opened from inside the Shift
- * Details header and reports nothing upwards.
- */
-describe('useOpenDialogDepth', () => {
-  it('counts nothing while no dialog is open', () => {
-    const { result } = renderHook(() => useOpenDialogDepth());
-    expect(result.current).toBe(0);
-  });
-
-  it('rises as dialogs stack and falls as they close', () => {
-    const { result } = renderHook(() => useOpenDialogDepth());
-
-    const outer = renderHook(() => useDialog({ onClose: vi.fn() }));
-    expect(result.current).toBe(1);
-
-    const inner = renderHook(() => useDialog({ onClose: vi.fn() }));
-    expect(result.current).toBe(2);
-
-    inner.unmount();
-    expect(result.current).toBe(1);
-
-    outer.unmount();
-    expect(result.current).toBe(0);
-  });
-
-  it('does not count a dialog that is closed', () => {
-    const { result } = renderHook(() => useOpenDialogDepth());
-    renderHook(() => useDialog({ isOpen: false, onClose: vi.fn() }));
-
-    expect(result.current).toBe(0);
   });
 });

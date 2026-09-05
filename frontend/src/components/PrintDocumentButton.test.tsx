@@ -61,8 +61,15 @@ const PREVIEW = {
   ],
 };
 
-const renderButton = () =>
-  render(<PrintDocumentButton document="shift_roster" recordId="shift-1" label="Print roster" />);
+const renderButton = (onOpenChange?: (open: boolean) => void) =>
+  render(
+    <PrintDocumentButton
+      document="shift_roster"
+      recordId="shift-1"
+      label="Print roster"
+      {...(onOpenChange ? { onOpenChange } : {})}
+    />
+  );
 
 describe('PrintDocumentButton', () => {
   beforeEach(() => {
@@ -169,5 +176,35 @@ describe('PrintDocumentButton', () => {
 
     await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
     expect(mockPrint).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A caller that is itself an aria-modal dialog has to go inert while this
+   * one is up — two body-portalled siblings both claiming modality otherwise —
+   * and cannot see this component's private open state without being told.
+   */
+  it('reports its dialog opening and closing to the caller', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderButton(onOpenChange);
+
+    await user.click(await screen.findByRole('button', { name: /Print roster/ }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+
+    await user.click(await screen.findByRole('button', { name: 'Close modal' }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('reports the close when the document could not be built', async () => {
+    // The dialog opens and then closes itself on the failure; a caller left
+    // inert by the open would stay that way.
+    mockPreview.mockRejectedValue(new Error('nope'));
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    renderButton(onOpenChange);
+
+    await user.click(await screen.findByRole('button', { name: /Print roster/ }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenLastCalledWith(false));
   });
 });

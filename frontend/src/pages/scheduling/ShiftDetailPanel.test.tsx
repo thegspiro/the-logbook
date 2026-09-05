@@ -408,6 +408,7 @@ describe('ShiftDetailPanel once the roster locks', () => {
 describe('ShiftDetailPanel dialog shell', () => {
   const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
   const mockAssignments = vi.mocked(schedulingService.getShiftAssignments);
+  const mockSignup = vi.mocked(schedulingService.signupForShift);
 
   // Not past: the notes control, and every other live affordance, is withdrawn
   // once the roster locks.
@@ -431,6 +432,11 @@ describe('ShiftDetailPanel dialog shell', () => {
     mockEligibility.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
     mockAssignments.mockReset();
     mockAssignments.mockResolvedValue([]);
+    // Reset too: one case below queues a mockRejectedValueOnce, and an
+    // unconsumed one-shot survives vi.clearAllMocks() to be handed to whichever
+    // test calls signup next (pitfall #28).
+    mockSignup.mockReset();
+    mockSignup.mockResolvedValue({} as never);
   });
 
   afterEach(() => {
@@ -511,7 +517,7 @@ describe('ShiftDetailPanel dialog shell', () => {
     // Both dialogs portal to the body, so they are siblings rather than nested:
     // two aria-modal surfaces at once leave assistive technology to guess which
     // one is live.
-    vi.mocked(schedulingService.signupForShift).mockRejectedValueOnce({
+    mockSignup.mockRejectedValueOnce({
       response: {
         status: 409,
         statusText: 'Conflict',

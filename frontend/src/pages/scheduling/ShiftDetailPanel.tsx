@@ -16,7 +16,6 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router';
 import { DialogPortal } from '../../components/DialogPortal';
 import { DialogPanel } from '../../components/ux/DialogPanel';
-import { useOpenDialogDepth } from '../../hooks/useDialog';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import {
   effectiveLateSignupUntil,
@@ -104,10 +103,6 @@ interface ShiftDetailPanelProps {
 const LATE_SIGNUP_MINUTES = [15, 30, 60] as const;
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initialShift, onClose, onRefresh }) => {
-  // Our own DialogPanel accounts for one of these, so anything beyond it is a
-  // dialog stacked on top of this one — see the `inert` note on the container.
-  const nestedDialogOpen = useOpenDialogDepth() > 1;
-
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
@@ -439,6 +434,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // A driver refused for want of an EVOC certification is a dead end unless we
   // say who can authorize the exception. Keyed off the support code, not the
   // message text, which would break the moment the wording changed.
+  /** Whether PrintDocumentButton's dialog is up; see the container's `inert`. */
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+
   const [driverBlock, setDriverBlock] = useState<{
     userId: string;
     userName: string;
@@ -1166,28 +1164,31 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           viewport while no ancestor establishes a containing block, and the
           app's `card` utility carries backdrop-blur, which does. */}
       <DialogPortal>
-        {/* `inert` whenever another dialog is stacked on this one.
+        {/* `inert` while a dialog this panel opened sits on top of it.
 
-            Both the driver-qualification dialog and the receipt-printer dialog
-            behind "Print roster" render through <Modal>, which portals to the
-            body — so each is a DOM *sibling* of this container rather than a
-            descendant, and two sibling surfaces both asserting aria-modal each
-            claim everything outside themselves is inert. Assistive technology
-            is then left to guess which is live.
+            Both of them — the driver-qualification dialog and the
+            receipt-printer dialog behind "Print roster" — render through
+            <Modal>, which portals to the body, so each is a DOM *sibling* of
+            this container rather than a descendant. Two sibling surfaces both
+            asserting aria-modal each claim everything outside themselves is
+            inert, and assistive technology is left to guess which is live.
 
-            Keyed on the shared dialog stack rather than on any one flag: the
-            print dialog owns its open state inside PrintDocumentButton and
-            cannot report it upwards, and a third nested dialog added later
-            would be covered without touching this line. `inert` drops the
-            subtree from the accessibility tree and from focus for exactly as
-            long as something sits above it; the outer focus trap goes quiet on
-            its own, since nothing it can reach stays focusable. */}
+            Named flags rather than the depth of the shared dialog stack: depth
+            cannot tell a dialog stacked above this one from a dialog that was
+            already open beneath it when this panel mounted. That happens here —
+            SchedulingPage's Create Shift dialog registers on the same page, and
+            a `?shift=` deep link can resolve while it is open — and keying on
+            depth made the panel on top inert, so it painted but took no input.
+
+            `inert` drops this subtree from the accessibility tree and from
+            focus; the outer focus trap goes quiet on its own, since nothing it
+            can reach stays focusable. */}
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="shift-detail-title"
-          inert={nestedDialogOpen}
+          inert={driverBlock !== null || printDialogOpen}
           onMouseDown={handleBackdropMouseDown}
           onMouseUp={handleBackdropMouseUp}
           onClick={handleBackdropClick}
@@ -1282,6 +1283,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     document={StationDocument.SHIFT_ROSTER}
                     recordId={shift.id}
                     label="Print roster"
+                    onOpenChange={setPrintDialogOpen}
                   />
                   {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
                     <button
