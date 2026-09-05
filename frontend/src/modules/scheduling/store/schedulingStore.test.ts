@@ -23,6 +23,7 @@ vi.mock('../../../services/api', () => ({
 }));
 
 import { useSchedulingStore } from './schedulingStore';
+import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
 
 describe('schedulingStore', () => {
   beforeEach(() => {
@@ -43,6 +44,7 @@ describe('schedulingStore', () => {
       settingsLoaded: false,
       signupClosesMinutesBefore: 0,
       lateSignupGraceMinutes: 60,
+      openEndedCushionHours: DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,
       callTypeLabels: {},
     });
     // `vi.clearAllMocks` resets calls but not implementations, so this block
@@ -335,6 +337,60 @@ describe('schedulingStore', () => {
 
       expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
       expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(45);
+    });
+  });
+
+  describe('invalidateSettings', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('discards a response that was already in flight when it was called', async () => {
+      // An administrator leaves scheduling while the GET is pending, saves the
+      // checklist timing on another module's page, and the older response
+      // lands afterwards. Applying it would write the pre-save cushion back
+      // and mark it loaded, so nothing refetches for the rest of the session.
+      let resolve: ((v: unknown) => void) | undefined;
+      mockGetFeatureSettings.mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        })
+      );
+
+      const inFlight = useSchedulingStore.getState().loadSettings();
+      useSchedulingStore.getState().invalidateSettings();
+      resolve?.({ platoons_enabled: false, open_ended_shift_cushion_hours: 12 });
+      await inFlight;
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().openEndedCushionHours).toBe(DEFAULT_SIGNUP_WINDOW.openEndedCushionHours);
+    });
+
+    it('lets the next caller issue a fresh request rather than joining the stale one', async () => {
+      // Clearing the flag alone leaves `settingsRequest` set, so the next
+      // mount attaches to the superseded request and never asks again.
+      let resolve: ((v: unknown) => void) | undefined;
+      mockGetFeatureSettings.mockReturnValueOnce(
+        new Promise((r) => {
+          resolve = r;
+        })
+      );
+
+      const inFlight = useSchedulingStore.getState().loadSettings();
+      useSchedulingStore.getState().invalidateSettings();
+
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        open_ended_shift_cushion_hours: 72,
+      });
+      await useSchedulingStore.getState().loadSettings();
+      resolve?.({ platoons_enabled: false, open_ended_shift_cushion_hours: 12 });
+      await inFlight;
+
+      expect(mockGetFeatureSettings).toHaveBeenCalledTimes(2);
+      expect(useSchedulingStore.getState().openEndedCushionHours).toBe(72);
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
     });
   });
 });

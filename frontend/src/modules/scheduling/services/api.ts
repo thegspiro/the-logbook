@@ -186,6 +186,12 @@ export interface SchedulingFeatureSettings {
   signup_closes_minutes_before: number;
   /** Minutes after start_time an officer may still seat somebody. */
   late_signup_grace_minutes: number;
+  /**
+   * Hours past its start that a shift with no `end_time` still counts as
+   * running, for the roster lock. Resolved by the server from the
+   * department's check-in setting; read-only, ignored on a save.
+   */
+  open_ended_shift_cushion_hours?: number;
   /** Block seating a driver who lacks the apparatus's required EVOC level. */
   enforce_evoc: boolean;
   /**

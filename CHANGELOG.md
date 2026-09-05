@@ -97,6 +97,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stood. The wordings it has to survive are now pinned by tests, including
   several invented for the purpose that appear nowhere in the codebase.
 
+### A shift with no end time was exempt from the roster lock (2026-09-05)
+
+**Fixed**
+
+- **An open-ended shift could be reopened for signup at any age, and members
+  could add themselves to it.** The roster deadline is anchored to a shift's
+  `end_time`, and that column is genuinely optional — so for a shift without
+  one it returned no deadline at all, and the age bound that stops an officer
+  reopening last month's shift simply did not apply. Reopening then admitted
+  members, because the live override becomes the member's deadline and a
+  reopened shift deliberately suppresses the day-granular past-date fallback so
+  an overnight shift can still take people. Reproduced at ninety days: the
+  reopen was accepted and the self-signup seated, drawing hours for a shift
+  nobody worked.
+- **An open-ended shift is now treated as running for twelve hours after it
+  starts**, and the department's grace period is added to that as before —
+  twelve because it is already the cushion check-in allows a shift with no
+  recorded end, so the two rules agree on how long "still out" can plausibly
+  last. Substituting the start at _grace_ scale would have been the
+  overcorrection: an hour after it began, with the crew still working.
+- **A reopening window stored before the bound existed no longer outlives
+  it.** `open_late_signup` caps the window it writes, but a cap only covers
+  rows written after it shipped; one stored while reopening was still
+  unbounded stayed live for up to twelve hours, and the signup rule takes the
+  later of the deadline and the stored window. It is now capped where it is
+  read rather than only where it is written, which also covers shifts that do
+  record an end time.
+- **The cushion follows the department's `checkin_closes_hours_after`**,
+  floored at twelve. A department that widened check-in to seventy-two hours
+  was getting a roster that locked sixty hours before check-in did. It does not
+  follow the setting down: check-in closing early says nothing about a crew
+  still being out.
+- **The board and shift panel agree with the server.** `rosterLocked` returned
+  false for any shift without an end time and let a stored reopening window
+  extend it, so Reopen, withdraw and the seat dropdown stayed on screen for
+  shifts the API refuses. The resolved cushion is reported on
+  `/scheduling/settings` so the client reads the department's number instead of
+  hardcoding a second copy.
+- **This bounds editing the roster on those shifts too**, not only reopening —
+  confirm, decline, remove, withdraw and the seat dropdown — since both rules
+  read the same deadline. That is the intent: correcting a months-old roster is
+  records work, and `scheduling.manage` remains exempt from the lock.
+
 ### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
 
 **Changed**
