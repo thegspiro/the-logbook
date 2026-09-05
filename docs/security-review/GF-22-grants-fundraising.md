@@ -1399,24 +1399,56 @@ serviced that fetch once it arrived.
 **Fix:** every one of the 11 `list_*` service methods now accepts
 `skip: int = 0, limit: int = 100` (matching `PaginationParams`' own
 defaults) and applies `.offset(skip).limit(limit)` in SQL, after the
-existing `ORDER BY` (ordering was already correct and unchanged — this is a
-behavior-preserving optimization for any request within the row count, not a
-semantic change to what is returned). The 11 corresponding endpoints in
-`grants.py` now pass `skip=pagination.skip, limit=pagination.limit` straight
-through and return the service result directly, with the Python slice
-removed. Verified safe for `list_applications`' `selectinload` options:
-`selectinload` issues its own follow-up query for the _already-limited_
-page's rows (unlike `joinedload`, it is not a `JOIN` that could fan out
-against a `LIMIT`), so pagination and eager-loading compose correctly.
-Verified no other backend caller of any of the 11 methods exists (only
-`grants.py`'s own endpoints call them; two test files call `list_notes`/
-`list_donations` with fewer than the default `limit=100` rows, so the new
-default does not change their outcome).
+existing `ORDER BY`. The 11 corresponding endpoints in `grants.py` now pass
+`skip=pagination.skip, limit=pagination.limit` straight through and return
+the service result directly, with the Python slice removed. Verified no
+other backend caller of any of the 11 methods exists (only `grants.py`'s
+own endpoints call them; two test files call `list_notes`/`list_donations`
+with fewer than the default `limit=100` rows, so the new default does not
+change their outcome).
+
+Codex review on this PR raised three follow-up findings against the first
+cut of this fix, all confirmed and fixed in the same PR before merge:
+
+1. **Non-deterministic pagination.** None of the 11 `ORDER BY` clauses had a
+   unique tie-breaker, so tied rows (null deadlines, identical donor names,
+   same-day expenditures) could be ordered differently between two
+   `LIMIT`/`OFFSET` executions of the same query, duplicating or dropping
+   rows across pages. Every one of the 11 `ORDER BY` clauses now ends with
+   the model's own `id.asc()` as the final term, added after the existing
+   sort key(s) — the existing ordering is otherwise unchanged.
+2. **`list_budget_items`/`list_expenditures`/`list_notes` still eager-loaded
+   their parent's full child history.** These three resolved their parent
+   application by calling `get_application()` purely as an existence/org-scope
+   check, but `get_application()`'s loader options (`selectinload` on
+   budget_items, expenditures, compliance_tasks, grant_notes, opportunity)
+   materialize every child row on the application regardless of the page
+   size requested — defeating the pagination fix for exactly these three
+   routes. Replaced with a new `_application_in_org()` helper that runs a
+   bare `select(GrantApplication.id).where(id ==, organization_id ==)` with
+   no loader options, raising the same `ValueError("Application not
+   found")` as before when it finds nothing. `get_application()` itself is
+   unchanged and still used by callers that need the full eager-loaded
+   object (`update_application`, `delete_application`, `create_budget_item`,
+   etc.).
+3. **`list_applications` itself still carried `selectinload` for
+   `budget_items`/`compliance_tasks`.** Distinct from #2 above — this is the
+   list query's own eager loaders, not a parent-existence check. Those
+   loaders issue their own follow-up query fetching every child row for
+   every application on the page, unbounded by the page's `LIMIT`, and
+   `GrantApplicationListResponse` (this route's response model) serializes
+   neither collection. Both `selectinload` options were removed from
+   `list_applications()`'s query; `get_application()`'s eager loads (used by
+   the single-record fetch, whose response model does serialize both
+   collections) are untouched.
 
 **Guard tests added:** `TestListPagination` in both `test_grant_service.py`
-(6 cases: `list_opportunities` ×2 — explicit skip/limit and the bounded
-default — `list_applications`, `list_compliance_tasks`, `list_budget_items`)
-and `test_fundraising_service.py` (6 cases: all five `list_*` methods plus
+(11 cases: skip/limit application for `list_opportunities`,
+`list_applications`, `list_compliance_tasks`, `list_budget_items`; the
+bounded-default case for `list_opportunities`; and an id-tie-breaker
+ordering assertion for all 6 of that file's `list_*` methods) and
+`test_fundraising_service.py` (11 cases: skip/limit application and the
+id-tie-breaker assertion for all 5 of that file's `list_*` methods, plus
 the bounded-default case for `list_campaigns`). Each captures the compiled
 statement (mocked session, `mysql.dialect()`, `literal_binds=True`) and
 asserts the exact `LIMIT <offset>, <count>` clause MySQL's dialect renders
@@ -1428,6 +1460,19 @@ by temporarily reverting the `.offset(skip).limit(limit)` line in
 un-limited compiled SQL shown in the assertion diff, confirming the guard
 actually exercises the fix rather than passing vacuously; re-applied
 immediately after confirming.
+
+Follow-up findings #2 and #3 above have their own guard tests:
+`TestListDoesNotEagerLoadParent` (4 cases — `list_budget_items`,
+`list_expenditures` and `list_notes` each asserting `get_application` is
+never called, plus one compiling `_application_in_org()`'s query and
+asserting none of the four child table names appear in it) and
+`TestListApplicationsDoesNotEagerLoadChildren` (1 case, asserting neither
+`budget_items` nor `compliance_tasks` appears in `list_applications()`'s
+compiled loader options) in `test_grant_service.py`. Two more
+foreign-application-rejection cases (`list_budget_items`,
+`list_expenditures`) were added alongside the existing `list_notes` one to
+confirm the org-scoping guarantee (Pitfall #14) survived the swap from
+`get_application()` to `_application_in_org()`.
 
 ### Re-confirmed still open (unchanged, per every prior pass)
 
@@ -1457,8 +1502,12 @@ immediately after confirming.
 
 ### Guard tests added
 
-`TestListPagination` (11 new cases total — 5 in `test_grant_service.py`, 6 in
-`test_fundraising_service.py`) — GF-35, described above.
+29 new/changed cases total, GF-35 (described above): `TestListPagination`
+(11 in `test_grant_service.py`, 11 in `test_fundraising_service.py`),
+`TestListDoesNotEagerLoadParent` (4) and
+`TestListApplicationsDoesNotEagerLoadChildren` (1) in
+`test_grant_service.py`, plus 2 new foreign-application-rejection cases in
+`test_grant_service.py`.
 
 ### Completion gate (pass 3)
 
