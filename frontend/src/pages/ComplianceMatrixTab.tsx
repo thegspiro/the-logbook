@@ -339,7 +339,9 @@ const ComplianceMatrixTab: React.FC = () => {
     ? activeMember.cells.map((c) => ({
         key: c.cell.requirement_id,
         title: c.cell.requirement_name,
-        sub: [requirementMeta(c.requirement), c.dateLabel].filter(Boolean).join(' · '),
+        // The date is the row's last column here, so it must not repeat in
+        // the sub-line — it printed twice and wrapped the title onto 3 lines.
+        sub: requirementMeta(c.requirement),
         cell: c,
       }))
     : (activeRollup?.behind ?? []).flatMap((m) => {
@@ -681,7 +683,7 @@ const ComplianceMatrixTab: React.FC = () => {
                   ) : (
                     detailRows.map((row, index) => (
                       <div key={row.key} className={`p-3 ${index > 0 ? 'border-theme-surface-border border-t' : ''}`}>
-                        <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[minmax(0,1.25fr)_11rem_8rem_7rem]">
+                        <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[minmax(0,1.4fr)_10rem_7.5rem_minmax(0,0.85fr)]">
                           <div className="min-w-0">
                             <p className="text-theme-text-primary text-sm font-semibold">{row.title}</p>
                             <p className="text-theme-text-muted mt-0.5 text-xs">{row.sub}</p>

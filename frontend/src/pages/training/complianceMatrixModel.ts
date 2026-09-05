@@ -76,6 +76,20 @@ export interface RequirementRollup {
 
 const MET_STATUSES = new Set(['completed', 'verified']);
 
+/**
+ * Does this tone count toward "requirements met"?
+ *
+ * `soon` does. A certification valid for another 26 days is met *today* — the
+ * tone is a renewal warning, not a failure. Counting it as unmet made the
+ * member's own tally contradict the standing beside it: the screen showed
+ * "Compliant · 1 of 2 met · 1 open item", which reads as a bug in the app
+ * rather than a cert coming up for renewal.
+ *
+ * This also keeps the tally equal to the backend's completed-requirement
+ * count, since `soon` is only ever reached from a completed record.
+ */
+export const isMetTone = (tone: CellTone): boolean => tone === CellTone.MET || tone === CellTone.SOON;
+
 /** A number the UI can print: 18, not 18.0; 7.5 stays 7.5. */
 const num = (value: number): string => (Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10));
 
@@ -142,7 +156,14 @@ const dateLabelOf = (cell: ComplianceMatrixCell, tone: CellTone): string => {
     return tone === CellTone.LAPSED ? `Lapsed ${formatted}` : `Expires ${formatted}`;
   }
   if (cell.window_start && cell.window_end) {
-    return `Window ${formatCalendarDate(cell.window_start)} – ${formatCalendarDate(cell.window_end)}`;
+    // Print the year once when both ends share it. "Jan 1, 2026 - Dec 31,
+    // 2026" wrapped onto three lines in the row's date column for what is one
+    // ordinary calendar year.
+    const sameYear = cell.window_start.slice(0, 4) === cell.window_end.slice(0, 4);
+    const start = sameYear
+      ? formatCalendarDate(cell.window_start, { month: 'short', day: 'numeric' })
+      : formatCalendarDate(cell.window_start);
+    return `Window ${start} – ${formatCalendarDate(cell.window_end)}`;
   }
   if (cell.completion_date) {
     return `Completed ${formatCalendarDate(cell.completion_date)}`;
@@ -201,7 +222,7 @@ export const evaluateMember = (
   const cells = (member.requirements ?? []).map((cell) =>
     evaluateCell(cell, requirementsById.get(cell.requirement_id), timezone)
   );
-  const met = cells.filter((c) => c.tone === CellTone.MET).length;
+  const met = cells.filter((c) => isMetTone(c.tone)).length;
   const total = cells.length;
   return {
     member,
@@ -241,14 +262,14 @@ export const rollUpRequirements = (
     const applicable = members
       .map((m) => ({ member: m, cell: m.cells.find((c) => c.cell.requirement_id === requirement.id) }))
       .filter((entry): entry is { member: EvaluatedMember; cell: EvaluatedCell } => !!entry.cell);
-    const met = applicable.filter((e) => e.cell.tone === CellTone.MET).length;
+    const met = applicable.filter((e) => isMetTone(e.cell.tone)).length;
     const total = applicable.length;
     return {
       requirement,
       met,
       total,
       pct: total === 0 ? 100 : Math.round((met / total) * 100),
-      behind: applicable.filter((e) => e.cell.tone !== CellTone.MET).map((e) => e.member),
+      behind: applicable.filter((e) => !isMetTone(e.cell.tone)).map((e) => e.member),
       waived: applicable.filter((e) => (e.cell.cell.waived_months ?? 0) > 0).length,
     };
   });

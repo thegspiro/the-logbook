@@ -6,6 +6,7 @@ import {
   daysUntilExpiry,
   evaluateCell,
   evaluateMember,
+  isMetTone,
   rankMembers,
   requirementMeta,
   rollUpRequirements,
@@ -160,7 +161,17 @@ describe('evaluateCell', () => {
       TZ
     );
     expect(expiring.dateLabel).toBe('Expires Nov 12, 2026');
-    expect(windowed.dateLabel).toBe('Window Jan 1, 2026 – Dec 31, 2026');
+    // The year prints once when both ends share it.
+    expect(windowed.dateLabel).toBe('Window Jan 1 – Dec 31, 2026');
+  });
+
+  it('keeps both years on a window that crosses one', () => {
+    const crossing = evaluateCell(
+      cell({ status: 'not_started', window_start: '2026-11-01', window_end: '2027-01-31' }),
+      requirement(),
+      TZ
+    );
+    expect(crossing.dateLabel).toBe('Window Nov 1, 2026 – Jan 31, 2027');
   });
 
   it('survives a payload with none of the added fields', () => {
@@ -217,6 +228,85 @@ describe('evaluateMember', () => {
 
     const clear = evaluateMember(member({ requirements: [cell()] }), reqs, TZ);
     expect(clear.standing).toBe(Standing.COMPLIANT);
+  });
+});
+
+describe('a certification expiring soon', () => {
+  const reqs = new Map([['r1', requirement()]]);
+
+  it('still counts as met, so the tally cannot contradict the standing', () => {
+    // Found on screen, not in a test: a member sat under "Compliant" reading
+    // "1 of 2 met · 1 open item". A cert valid for another 26 days is met
+    // today; the tone is a renewal warning, not a failure.
+    const result = evaluateMember(
+      member({
+        standing: 'compliant',
+        completion_pct: 100,
+        requirements: [
+          cell({ requirement_id: 'r1', status: 'completed' }),
+          cell({ requirement_id: 'r2', status: 'completed', expiry_date: dateOffset(26) }),
+        ],
+      }),
+      reqs,
+      TZ
+    );
+
+    expect(result.met).toBe(2);
+    expect(result.open).toBe(0);
+    expect(result.pct).toBe(100);
+    expect(result.standing).toBe(Standing.COMPLIANT);
+    // The warning survives where it belongs — on the row.
+    expect(result.cells[1]?.tone).toBe(CellTone.SOON);
+  });
+
+  it('agrees with the backend tally for a partially compliant member', () => {
+    const result = evaluateMember(
+      member({
+        standing: 'non_compliant',
+        completion_pct: 50,
+        requirements: [
+          cell({ requirement_id: 'r1', status: 'in_progress', progress_current: 18, progress_required: 24 }),
+          cell({ requirement_id: 'r2', status: 'completed', expiry_date: dateOffset(30) }),
+        ],
+      }),
+      reqs,
+      TZ
+    );
+    expect(result.met).toBe(1);
+    expect(result.open).toBe(1);
+  });
+
+  it('does not count a lapsed certification, however it was reported', () => {
+    const result = evaluateMember(
+      member({
+        requirements: [cell({ status: 'completed', expiry_date: dateOffset(-5) })],
+      }),
+      reqs,
+      TZ
+    );
+    expect(result.met).toBe(0);
+    expect(result.open).toBe(1);
+  });
+
+  it('leaves a member with an expiring cert off the requirement behind-list', () => {
+    const soon = evaluateMember(
+      member({ requirements: [cell({ status: 'completed', expiry_date: dateOffset(26) })] }),
+      reqs,
+      TZ
+    );
+    const [rollup] = rollUpRequirements([soon], [requirement()]);
+    expect(rollup?.met).toBe(1);
+    expect(rollup?.behind).toEqual([]);
+  });
+});
+
+describe('isMetTone', () => {
+  it('accepts met and due-soon, rejects the rest', () => {
+    expect(isMetTone(CellTone.MET)).toBe(true);
+    expect(isMetTone(CellTone.SOON)).toBe(true);
+    expect(isMetTone(CellTone.SHORT)).toBe(false);
+    expect(isMetTone(CellTone.LAPSED)).toBe(false);
+    expect(isMetTone(CellTone.MISSING)).toBe(false);
   });
 });
 
