@@ -70,9 +70,31 @@ vi.mock('react-hot-toast', () => ({
   default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
 
+// vi.clearAllMocks() clears call history only. An unconsumed *Once value stays
+// queued through it, and a later mockResolvedValue replaces just the fallback,
+// so the queued one is still handed out first (CLAUDE.md pitfall #28). These
+// are reset before each default is installed so the default actually holds —
+// and so the four configured per-test below cannot carry an implementation
+// into the next test. The authStore and toast mocks are deliberately absent:
+// their implementations come from the vi.mock factories and must survive.
+const serviceMocks = [
+  mockGetPrograms,
+  mockGetRequirementsEnhanced,
+  mockGetRegistries,
+  mockGetSampleTemplates,
+  mockInstantiateSampleTemplate,
+  mockImportRegistry,
+  mockPreviewRegistry,
+  mockGetCategories,
+  mockGetCourses,
+  mockUpdateRequirement,
+  mockCreateRequirement,
+];
+
 describe('TrainingProgramsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    serviceMocks.forEach((mock) => mock.mockReset());
     mockHasPermission = false;
     mockGetPrograms.mockResolvedValue([
       {
@@ -155,6 +177,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('shows the sample-template gallery on the Templates tab', async () => {
+    mockHasPermission = true;
     mockGetPrograms.mockResolvedValue([]);
     renderWithRouter(<TrainingProgramsPage />);
 
@@ -167,6 +190,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('instantiates a sample template and navigates to the new program', async () => {
+    mockHasPermission = true;
     mockGetPrograms.mockResolvedValue([]);
     renderWithRouter(<TrainingProgramsPage />);
 
@@ -180,6 +204,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('opens a picker and imports only the selected requirements', async () => {
+    mockHasPermission = true;
     mockGetRegistries.mockResolvedValue([{ key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 3 }]);
     mockPreviewRegistry.mockResolvedValue([
       {
@@ -231,6 +256,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('edits a department requirement from the Requirements tab', async () => {
+    mockHasPermission = true;
     mockGetRequirementsEnhanced.mockResolvedValue([
       {
         id: 'req-1',
@@ -280,6 +306,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('offers no edit control for a locked registry requirement', async () => {
+    mockHasPermission = true;
     mockGetRequirementsEnhanced.mockResolvedValue([
       {
         id: 'req-2',
@@ -305,6 +332,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('surfaces the error when a registry import reports one', async () => {
+    mockHasPermission = true;
     mockGetRegistries.mockResolvedValue([
       { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 5 },
     ]);
@@ -332,5 +360,160 @@ describe('TrainingProgramsPage', () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)));
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  describe('without training.manage', () => {
+    // The outer beforeEach resets each service mock and then installs its
+    // default, so these cases start from a known state rather than from
+    // whatever a predecessor configured. This block only restates the
+    // permission the whole block turns on.
+    beforeEach(() => {
+      mockHasPermission = false;
+    });
+
+    it('offers no way to create or import a pipeline', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      // The list itself is readable — it is only the management affordances
+      // that are withheld.
+      expect(await screen.findByText('Probationary Firefighter')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /New Pipeline/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Import$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Export Probationary Firefighter/i })).not.toBeInTheDocument();
+    });
+
+    it('leaves the programs tab blank when there are no programs', async () => {
+      mockGetPrograms.mockResolvedValue([]);
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: false }));
+      expect(screen.queryByText('No programs yet')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Create Your First Pipeline/i })).not.toBeInTheDocument();
+    });
+
+    it('still reports a search that matched nothing', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await screen.findByText('Probationary Firefighter');
+      await userEvent.type(screen.getByLabelText(/Search programs/i), 'ladder');
+
+      expect(await screen.findByText('No programs found')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Create Your First Pipeline/i })).not.toBeInTheDocument();
+    });
+
+    it('hides the Requirements and Templates tabs entirely', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await screen.findByText('Probationary Firefighter');
+      // The whole strip goes, not just the manager-only entries — with one
+      // reachable view there is nothing left to switch between.
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      // An orphaned tabpanel has no tab to own it, so the role goes too.
+      expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
+    });
+
+    it('never requests the data behind the manager-only tabs', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: false }));
+      // getRegistries and getSampleTemplates both require training.manage. The
+      // former's 403 used to reject the Requirements tab's whole Promise.all.
+      expect(mockGetRegistries).not.toHaveBeenCalled();
+      expect(mockGetSampleTemplates).not.toHaveBeenCalled();
+      expect(mockGetRequirementsEnhanced).not.toHaveBeenCalled();
+      expect(screen.queryByText('Import from Registry')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /New Requirement/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('Start from a sample template')).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps all three tabs for a training manager', async () => {
+    mockHasPermission = true;
+    renderWithRouter(<TrainingProgramsPage />);
+
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Programs', 'Requirements', 'Templates']);
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument();
+  });
+
+  it('ignores a superseded tab response that resolves after a newer one', async () => {
+    mockHasPermission = true;
+    let releaseTemplates: (value: unknown) => void = () => {};
+    // Programs resolves immediately; the earlier Templates request is held open
+    // so it can land last, which is the ordering the generation check exists for.
+    mockGetPrograms.mockImplementation((params: unknown) => {
+      const isTemplate = (params as { is_template?: boolean } | undefined)?.is_template;
+      if (isTemplate) {
+        return new Promise((resolve) => {
+          releaseTemplates = resolve;
+        });
+      }
+      return Promise.resolve([
+        {
+          id: 'prog-1',
+          name: 'Probationary Firefighter',
+          structure_type: 'sequential',
+          active: true,
+          is_template: false,
+          version: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ]);
+    });
+
+    renderWithRouter(<TrainingProgramsPage />);
+    await screen.findByText('Probationary Firefighter');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Templates/i }));
+    await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: true }));
+
+    // Back to Programs while the Templates request is still in flight.
+    await userEvent.click(screen.getByRole('tab', { name: /Programs/i }));
+    await screen.findByText('Probationary Firefighter');
+
+    releaseTemplates([
+      {
+        id: 'tmpl-1',
+        name: 'Stale Template Result',
+        structure_type: 'phases',
+        active: true,
+        is_template: true,
+        version: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    // The superseded response must not overwrite the Programs view.
+    await waitFor(() => expect(screen.queryByText('Stale Template Result')).not.toBeInTheDocument());
+    expect(screen.getByText('Probationary Firefighter')).toBeInTheDocument();
+  });
+
+  it('closes an open management dialog if training.manage is revoked', async () => {
+    mockHasPermission = true;
+    const { rerender } = renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /New Requirement/i }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    // The dialog only performs training.manage actions, so it must not survive
+    // the permission going away and offer a Save that would 403.
+    mockHasPermission = false;
+    rerender(<TrainingProgramsPage />);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('offers the first-pipeline prompt to a training manager with no programs', async () => {
+    mockHasPermission = true;
+    mockGetPrograms.mockResolvedValue([]);
+    renderWithRouter(<TrainingProgramsPage />);
+
+    expect(await screen.findByText('No programs yet')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Create Your First Pipeline/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/training/programs/new');
   });
 });

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**264 tables · 4473 columns · 852 foreign keys**
+**264 tables · 4474 columns · 852 foreign keys**
 
 ---
 
@@ -313,7 +313,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`departure_clearances`](#departure_clearances) | `DepartureClearance` | 18 | Departure Clearance model |
 | [`equipment_kit_items`](#equipment_kit_items) | `EquipmentKitItem` | 9 | One line item in a kit template — specifies what item/category |
 | [`equipment_kits`](#equipment_kits) | `EquipmentKit` | 10 | Kit/bundle template for issuing multiple items as a set. |
-| [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 21 | Equipment Request model |
+| [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 22 | Equipment Request model |
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 51 | Inventory Item model |
@@ -4683,6 +4683,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quantity` | INTEGER | no |  | `1` |  |
 | `request_type` | ENUM(`checkout`, `issuance`, `purchase`, `return`) | no |  | `'checkout'` |  |
 | `requested_duration` | VARCHAR(20) | no |  | `'temporary'` |  |
+| `requested_size` | VARCHAR(50) | yes |  |  |  |
 | `priority` | ENUM(`low`, `normal`, `high`) | no |  | `'normal'` |  |
 | `reason` | TEXT | yes |  |  |  |
 | `status` | ENUM(`pending`, `approved`, `denied`, `fulfilled`) | no | IDX | `'pending'` |  |

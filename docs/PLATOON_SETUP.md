@@ -21,7 +21,8 @@ you instead build each shift's roster ad hoc, you don't need platoons.
 
 ## Step 1 — Enable platoons for your department
 
-1. Go to **Scheduling → Settings**.
+1. Go to **Administration → Scheduling Admin → General**
+   (`/scheduling/admin/settings/general`).
 2. Turn on the platoon option. This sets
    `org.settings["scheduling"]["platoons_enabled"] = true`.
 
@@ -36,13 +37,14 @@ that.
 
 You have three ways to assign it:
 
-1. **Department Platoon Overview** (`/scheduling/platoons`, linked from
-   **Scheduling → Settings → Platoons → Department platoon overview**): see every
+1. **Department Platoon Overview** (`/scheduling/admin/platoons`, a card on
+   **Administration → Scheduling Admin**, and linked from
+   **Scheduling Administration → Settings → Platoons**): see every
    platoon and its members at a glance, select any number of members, and
    **bulk-assign** them to a platoon (or clear it) in one step. Best for initial
    setup and shuffling crews.
-2. **Settings → Platoons roster:** an inline list with a per-member dropdown —
-   handy for quick one-off edits.
+2. **Scheduling Administration → Settings → Platoons** (`/scheduling/admin/settings/platoons`):
+   an inline list with a per-member dropdown — handy for quick one-off edits.
 3. **Member admin UI:** set an individual member's platoon from their record.
 
 Leave a member's platoon blank if they aren't part of the rotation (e.g. admin

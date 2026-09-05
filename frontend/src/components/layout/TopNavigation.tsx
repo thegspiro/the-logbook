@@ -263,6 +263,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
+              ...(isModuleOn('scheduling')
+                ? // Gate mirrors SideNavigation; the reasoning is documented there.
+                  [{ label: 'Scheduling Admin', path: '/scheduling/admin', permission: 'scheduling.manage' }]
+                : []),
               ...(isModuleOn('inventory')
                 ? // Gate mirrors SideNavigation; the reasoning is documented there.
                   // Keep the gate adjacent to `path`: navGateIntegrity reads a

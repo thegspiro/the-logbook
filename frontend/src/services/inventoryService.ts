@@ -82,6 +82,7 @@ import type {
   InventoryLotCreate,
   InventoryLotUpdate,
   ExpiringLot,
+  RequestableCatalogResponse,
 } from './eventServices';
 import { asArray } from '../utils/asArray';
 
@@ -653,6 +654,22 @@ export const inventoryService = {
     return response.data;
   },
 
+  /**
+   * The gear a member may request, grouped into products with their sizes.
+   *
+   * Separate from `getItems`, which is the quartermaster's flat catalog: this
+   * one collapses size variants, matches a search against the category and
+   * variant-group names, and keeps out-of-stock variants in the list.
+   */
+  async getRequestableCatalog(params?: {
+    search?: string | undefined;
+    category_id?: string | undefined;
+    limit?: number | undefined;
+  }): Promise<RequestableCatalogResponse> {
+    const response = await api.get<RequestableCatalogResponse>('/inventory/requestable-catalog', { params });
+    return { products: asArray(response.data?.products), categories: asArray(response.data?.categories) };
+  },
+
   // Equipment requests
   async createEquipmentRequest(data: {
     item_name: string;
@@ -660,6 +677,7 @@ export const inventoryService = {
     category_id?: string | undefined;
     quantity?: number;
     requested_duration: 'temporary' | 'ongoing';
+    requested_size?: string | undefined;
     priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {

@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type { InventoryItem, UserInventoryResponse } from '../types';
+import type { UserInventoryResponse } from '../types';
 
 const mockGetUserInventory = vi.fn();
 const mockGetEquipmentRequests = vi.fn();
 const mockGetReturnRequests = vi.fn();
 const mockGetItems = vi.fn();
+const mockGetRequestableCatalog = vi.fn();
 const mockCreateEquipmentRequest = vi.fn();
 const mockCheckInItem = vi.fn();
 const mockExtendCheckout = vi.fn();
@@ -19,6 +20,7 @@ vi.mock('../../../services/api', () => ({
     getEquipmentRequests: (...a: unknown[]) => mockGetEquipmentRequests(...a) as unknown,
     getReturnRequests: (...a: unknown[]) => mockGetReturnRequests(...a) as unknown,
     getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
+    getRequestableCatalog: (...a: unknown[]) => mockGetRequestableCatalog(...a) as unknown,
     createEquipmentRequest: (...a: unknown[]) => mockCreateEquipmentRequest(...a) as unknown,
     checkInItem: (...a: unknown[]) => mockCheckInItem(...a) as unknown,
     extendCheckout: (...a: unknown[]) => mockExtendCheckout(...a) as unknown,
@@ -88,20 +90,6 @@ const fullInv: UserInventoryResponse = {
   ],
 };
 
-const availableItem: InventoryItem = {
-  id: 'avail-1',
-  organization_id: 'org-1',
-  name: 'Spare Radio',
-  condition: 'good',
-  status: 'available',
-  tracking_type: 'individual',
-  quantity: 1,
-  quantity_issued: 0,
-  active: true,
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-};
-
 describe('MyEquipmentPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -109,6 +97,7 @@ describe('MyEquipmentPage', () => {
     mockGetEquipmentRequests.mockResolvedValue({ requests: [] });
     mockGetReturnRequests.mockResolvedValue([]);
     mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetRequestableCatalog.mockResolvedValue({ products: [], categories: [] });
     mockCreateEquipmentRequest.mockResolvedValue({});
     mockCheckInItem.mockResolvedValue({});
     mockExtendCheckout.mockResolvedValue({});
@@ -224,83 +213,46 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  // This branch replaces the request-type picker with a duration picker: the
-  // member states how long they need the item and the quartermaster decides
-  // how to fulfill it. #1876's parameterized request-type test goes with the
-  // control it exercised — there is no request-type combobox on this form any
-  // more — but its "no priority combobox" assertion is carried into the first
-  // test below so #1875's removal still cannot be silently undone.
-  it('submits a temporary duration intent after searching and selecting an item', async () => {
-    mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
+  // The request form itself moved to RequestEquipmentModal, which owns the
+  // catalog browse, the size step and the payload — and is tested there. What
+  // stays this page's responsibility is the wiring: the button opens it, and a
+  // submitted request refreshes the panel that lists them.
+  it('opens the request modal from the page action', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
-    expect(screen.getByLabelText('How long do you need it?')).toBeInTheDocument();
-    expect(screen.getByText(/quartermaster will determine the final issue method/i)).toBeInTheDocument();
-    // #1875 took the member's priority picker away; this branch must not bring
-    // it back while replacing request_type with requested_duration.
-    expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
-    await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
-    await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
-    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
-    await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
-    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual({
-      category_id: undefined,
-      item_id: 'avail-1',
-      item_name: 'Spare Radio',
-      quantity: 1,
-      reason: undefined,
-      requested_duration: 'temporary',
+    expect(await screen.findByRole('dialog', { name: 'Request Equipment' })).toBeInTheDocument();
+    expect(screen.getByLabelText('What do you need?')).toBeInTheDocument();
+  });
+
+  it('shows the size a member asked for in their own request list', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [
+        {
+          id: 'req-1',
+          requester_id: 'me',
+          item_name: 'Long Sleeve',
+          quantity: 1,
+          request_type: 'issuance',
+          requested_duration: 'ongoing',
+          requested_size: 'xxxl',
+          priority: 'normal',
+          status: 'pending',
+          created_at: '2026-03-01T00:00:00Z',
+          updated_at: '2026-03-01T00:00:00Z',
+        },
+      ],
     });
-  });
-
-  it('offers a lot-stocked pool item the stock it actually has', async () => {
-    // `quantity` is emptied into an opening-balance lot the moment an item
-    // crosses onto the lot ledger, and nothing maintains it afterwards. Read
-    // on its own it tells the member a shelf full of gloves is out of stock,
-    // and hands them a `min=1 max=0` quantity box they cannot submit — for
-    // stock issue_from_pool would dispense without complaint.
-    const lotStocked: InventoryItem = {
-      ...availableItem,
-      id: 'pool-1',
-      name: 'Structural Gloves',
-      tracking_type: 'pool',
-      quantity: 0,
-      is_lot_stocked: true,
-      lot_stock: 40,
-    };
-    mockGetItems.mockResolvedValue({ items: [lotStocked], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByRole('heading', { name: 'My Issued Gear' });
 
-    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
-    await user.type(screen.getByPlaceholderText('Search available items...'), 'Gloves');
-    await user.click(await screen.findByRole('button', { name: /Structural Gloves/ }));
+    await user.click(screen.getByRole('button', { name: /My Requests/ }));
 
-    expect(screen.getByText(/40 available/)).toBeInTheDocument();
-    expect(await screen.findByLabelText(/quantity/i)).toHaveAttribute('max', '40');
-  });
-
-  it('submits ongoing duration intent independently of fulfillment', async () => {
-    mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
-    const user = userEvent.setup();
-    renderWithRouter(<MyEquipmentPage />);
-    await screen.findByRole('heading', { name: 'My Issued Gear' });
-
-    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
-    await user.selectOptions(screen.getByLabelText('How long do you need it?'), 'ongoing');
-    await user.type(screen.getByPlaceholderText('Search available items...'), 'Radio');
-    await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
-    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
-
-    await waitFor(() =>
-      expect(mockCreateEquipmentRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ requested_duration: 'ongoing' })
-      )
-    );
+    // Stored lowercase, shown the way the rest of the app writes it.
+    expect(await screen.findByText(/Size 3XL/)).toBeInTheDocument();
   });
 });

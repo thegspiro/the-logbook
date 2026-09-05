@@ -1,6 +1,7 @@
 # Administration Pages — the shared frame
 
-_Added 2026-08-23._ Members, Training, Inventory and Events each had their own
+_Added 2026-08-23; Scheduling joined 2026-09-05._ Members, Training, Inventory
+and Events each had their own
 administration page header, their own stat layout, and their own idea of what
 belonged above the tab bar. They now share one frame. **The tabs and their
 contents are unchanged** — this replaced what sat above them, not the work
@@ -21,12 +22,13 @@ Three of the four slots are the department's choice. **The fourth is always the
 count the attention queue is about**, and it is not stored at all — a page
 cannot be configured into hiding the number its own queue is measuring.
 
-| Module    | Built-in default three                           |
-| --------- | ------------------------------------------------ |
-| Members   | Active, Probationary, Inactive                   |
-| Training  | Compliance, Hours this quarter, Active programs  |
-| Inventory | Items tracked, Issued to members, Out for repair |
-| Events    | Upcoming, RSVPs this week, Check-ins logged      |
+| Module     | Built-in default three                           |
+| ---------- | ------------------------------------------------ |
+| Members    | Active, Probationary, Inactive                   |
+| Training   | Compliance, Hours this quarter, Active programs  |
+| Inventory  | Items tracked, Issued to members, Out for repair |
+| Events     | Upcoming, RSVPs this week, Check-ins logged      |
+| Scheduling | To close out, Short-staffed, Hours this month    |
 
 **A department that configures nothing keeps these.** Absence of a stored
 preference means the module's built-in default four — never "no metrics". An
