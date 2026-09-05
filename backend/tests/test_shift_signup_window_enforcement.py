@@ -427,6 +427,140 @@ class TestReopeningIsBoundedByTheShiftsAge:
         assert reopened.late_signup_until is not None
 
 
+class TestRosterLockOnAssignmentMutations:
+    """Hiding a control is not enforcing a rule.
+
+    The panel withdraws confirm, decline, remove, withdraw and the seat
+    dropdown once a shift is past its end plus the grace period, but every one
+    of those mutations is reachable by a direct request. Withdraw is the sharp
+    one: it deletes an assignment that hours have already been recorded
+    against. Only ``scheduling.manage`` is exempt, exactly as the client is.
+    """
+
+    async def _seated_on_a_locked_shift(self, svc, org_id, officer_id, member_id):
+        """A member on a shift that ended twenty days ago.
+
+        Seated as MANAGER because that is the only actor the signup window
+        still admits on a shift this old — which is the same records path this
+        lock keeps open.
+        """
+        shift = await _shift_starting(
+            svc, org_id, officer_id, minutes_from_now=-(20 * 24 * 60 + 720)
+        )
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, officer_id, actor=SignupActor.MANAGER
+        )
+        assert err is None, err
+        return shift, assignment
+
+    async def test_a_member_cannot_withdraw_from_a_locked_roster(
+        self, db_session, org_and_members
+    ):
+        # The withdraw button is gone from the panel; the endpoint behind it
+        # deleted the assignment the recorded hours hang off just the same.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        _, assignment = await self._seated_on_a_locked_shift(
+            svc, org_id, officer_id, member_id
+        )
+
+        ok, err = await svc.delete_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id), actor=SignupActor.MEMBER
+        )
+        assert ok is False
+        assert err == (
+            "This shift ended too long ago to change its roster. "
+            "A scheduling administrator can still correct it."
+        )
+        still_there = await svc.get_shift_assignments(
+            uuid.UUID(assignment.shift_id), uuid.UUID(org_id)
+        )
+        assert [a.id for a in still_there] == [assignment.id]
+
+    async def test_a_member_cannot_confirm_a_locked_roster(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        _, assignment = await self._seated_on_a_locked_shift(
+            svc, org_id, officer_id, member_id
+        )
+
+        result, err = await svc.confirm_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(member_id),
+            uuid.UUID(org_id),
+            actor=SignupActor.MEMBER,
+        )
+        assert result is None
+        assert "too long ago" in (err or "")
+
+    async def test_an_officer_cannot_edit_a_locked_roster(
+        self, db_session, org_and_members
+    ):
+        # An assigner is bounded here, unlike the signup window where the grace
+        # period exists so they can seat a late arrival.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        _, assignment = await self._seated_on_a_locked_shift(
+            svc, org_id, officer_id, member_id
+        )
+
+        result, err = await svc.update_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(org_id),
+            {"position": "officer"},
+            actor=SignupActor.MEMBER,
+        )
+        assert result is None
+        assert "too long ago" in (err or "")
+
+    async def test_a_scheduling_admin_still_corrects_the_record(
+        self, db_session, org_and_members
+    ):
+        # The exemption the whole design rests on: somebody has to be able to
+        # repair a roster after the fact, and this is who.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        _, assignment = await self._seated_on_a_locked_shift(
+            svc, org_id, officer_id, member_id
+        )
+
+        result, err = await svc.update_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(org_id),
+            {"position": "officer"},
+            actor=SignupActor.MANAGER,
+        )
+        assert err is None
+        assert result is not None
+
+        ok, err = await svc.delete_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id), actor=SignupActor.MANAGER
+        )
+        assert ok is True
+        assert err is None
+
+    async def test_a_member_still_withdraws_while_the_crew_is_out(
+        self, db_session, org_and_members
+    ):
+        # Half way through a twelve-hour shift: nothing here is a record yet,
+        # and a member changing their mind is ordinary.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _shift_starting(svc, org_id, officer_id, minutes_from_now=-360)
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, officer_id, actor=SignupActor.MANAGER
+        )
+        assert err is None, err
+
+        ok, err = await svc.delete_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id), actor=SignupActor.MEMBER
+        )
+        assert ok is True
+        assert err is None
+
+
 class TestSignupClosedReason:
     async def test_reports_the_state_the_endpoint_enforces(
         self, db_session, org_and_members
