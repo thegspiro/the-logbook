@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The shifts nobody closed out now have a list, not just a number (2026-09-05)
+
+**Added**
+
+- **`/scheduling/admin/closeout` — the close-out queue.** Every shift that has
+  ended and was never closed, oldest first, with the wait on each row. A shift
+  nobody closed leaves no trace on the board, which draws the future, so the only
+  sign of one was the Scheduling Administration hub's **To close out** number:
+  how many there are, never which. Finding them meant paging back through the
+  calendar a day at a time. The settings that govern what close-out asks for are
+  shown beneath the queue, read-only, each linking to the section that owns it.
+- **A shift still running is not backlog.** What counts as ended is
+  `shiftEndInstant` — a shift's `end_time`, else its start plus the department's
+  open-ended cushion, the same number the roster lock stands on and the same rule
+  the server's own backlog count uses. A shift with no recorded end is not a
+  malformed shift: a crew goes out and comes back when the job is done.
+- **Cancelled shifts are excluded.** Nothing ran, so there is nothing to record,
+  and counting them makes a backlog that can never reach zero.
+
+**Changed**
+
+- **`shiftEndInstant` is now exported from `shiftBoard.ts`** and `rosterDeadline`
+  reads through it rather than recomputing the same fallback. Three answers
+  depend on when a shift ended — when the roster locks, whether the shift is
+  still running, and whether it is waiting to be closed — and they must not
+  drift apart. No behaviour change: the lock computes exactly what it did.
+- **The Scheduling Administration hub gains an "After the shift" heading.**
+  Closing a shift out is work waiting on somebody; reporting is what you read
+  afterwards, so it is not a row under Reporting.
+- **`docs/SCHEDULING_MODULE.md` no longer describes a superseded fix.** It
+  claimed the hub's Short-staffed metric reads the seat list with a `JSON_TYPE`
+  guard; that implementation was replaced by
+  `SchedulingService.filter_shifts_with_open_positions` before the change
+  describing it landed, and the paragraph survived the merge. It now records what
+  the two rules actually are and why they can differ.
+
+**Known, and deliberate**
+
+- **There is one close-out implementation and this page is not it.** A department
+  recording a call count gets the existing three-step wizard, opened in place on
+  the row with that shift's outstanding equipment checks and the department's own
+  blocking rule. Every other department's close-out is the finalize checklist
+  inside the shift panel, which reads that shift's attendance, equipment checks
+  and manual hours — so the row opens the shift instead. Re-rendering that
+  checklist here would be a second copy of a flow that decides what goes on a
+  member's record.
+- **The page is department-wide and requires `scheduling.manage`**, like every
+  page in Scheduling Administration. **A shift officer loses nothing:** the shift
+  panel grants the named officer authority over their own shift's crew,
+  attendance, calls and close-out without a department-wide grant, mirroring the
+  backend, and that route is untouched.
+
 ### The Documents page invited members to upload files (2026-09-05)
 
 **Fixed**

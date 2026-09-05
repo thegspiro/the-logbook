@@ -84,6 +84,7 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling/admin', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/scheduling/admin/closeout', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },

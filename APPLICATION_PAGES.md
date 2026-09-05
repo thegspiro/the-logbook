@@ -599,6 +599,7 @@ section had no scheduling entry at all. That row is gone.
 | `/scheduling/admin/planning`               | Shift Planning — staffing gaps | `scheduling.manage` |
 | `/scheduling/admin/planning/templates`     | Shift Templates Management     | `scheduling.manage` |
 | `/scheduling/admin/planning/patterns`      | Shift Pattern Management       | `scheduling.manage` |
+| `/scheduling/admin/closeout`               | Shift Close-Out — the queue    | `scheduling.manage` |
 | `/scheduling/admin/reports`                | Scheduling Reports             | `scheduling.manage` |
 | `/scheduling/admin/platoons`               | Platoon Management             | `scheduling.manage` |
 | `/scheduling/admin/positions`              | Position Qualification Roster  | `scheduling.manage` |
@@ -650,7 +651,7 @@ three routed sections in the order the work happens.
 > question it answers.
 
 > **One thing is judged differently, on purpose:** openness. `shiftStatusInfo`
-> zeroes a shift's open seats once the *member* signup window closes, which is
+> zeroes a shift's open seats once the _member_ signup window closes, which is
 > right for a board offering a claim button. An officer can still seat somebody
 > after that, so inheriting the member's answer would hide the shifts most
 > urgently in need of one — the ones starting today.
@@ -660,6 +661,38 @@ three routed sections in the order the work happens.
 > `ShiftSettings` object, so a second screen writing them means whichever saved
 > last silently reverts the other. Same trap that moved checklist timing to a
 > single home in Inventory.
+
+#### Shift Close-Out (`/scheduling/admin/closeout`) _(2026-09-05)_
+
+A shift nobody closed out leaves no trace on the board, which draws the future.
+The only sign of one was the hub's **To close out** number, which says how many
+there are and not which — so finding them meant paging back through the calendar
+a day at a time. This is the list behind that number, oldest first, with the
+close-out opened on the row and the settings that govern it shown beneath.
+
+> **When a shift ended is one answer, shared.**
+> `modules/scheduling/utils/closeoutQueue.ts` reads `shiftEndInstant` from
+> `shiftBoard.ts` — `end_time`, else `start_time` plus the department's
+> open-ended cushion — which is also what the roster lock stands on and how the
+> server derives the hub's metric. A shift with no recorded end is not
+> malformed: a crew goes out and comes back when the job is done. Reading it as
+> ended the instant it began is what put a crew still working at the top of the
+> backlog, where nothing could clear it until somebody finalized a shift they
+> were still on.
+
+> **There is one close-out implementation, and it is not this page.** A
+> department recording a call count gets `ShiftCloseoutWizard`, opened in place
+> on the row. Every other department's close-out is the finalize checklist inside
+> `ShiftDetailPanel`, which reads that shift's attendance, equipment checks and
+> manual hours — so the row opens the shift instead of re-rendering a flow that
+> decides what goes on a member's record.
+
+> **The page is department-wide; a shift officer's own route is unchanged.**
+> `ShiftDetailPanel` grants the named officer authority over their shift's crew,
+> attendance, calls and close-out without a department-wide grant, mirroring the
+> backend, and that path does not come through here. This page is the
+> officer-of-the-department view, so it stands on `scheduling.manage` like every
+> other page in Scheduling Administration.
 
 > **`scheduling.manage` is in `ADMIN_NAVIGATION_PERMISSIONS`.** Without it a
 > scheduling officer holding nothing else administrative never sees the
