@@ -24,10 +24,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # security_alerts is a model-only table — no migration creates it;
-    # deployments materialize it via create_all(), which already includes
-    # organization_id and these indexes. On a fresh chain run there is
-    # nothing to alter or backfill.
+    # Defensive only. ``security_alerts`` IS created by the migration chain —
+    # 20260228_0100 creates it outright, which makes that a required ancestor
+    # of this revision, so the table is present by the time this runs. Claiming
+    # otherwise is the false positive CLAUDE.md pitfall #26 records being
+    # reverted after an empirical ``alembic upgrade head`` against an empty
+    # database. The guard is kept because it costs one reflection and cannot be
+    # wrong, but it is not load-bearing, and it is not the pattern to copy for
+    # a genuinely create_all-only table — for those the guard is required.
     from sqlalchemy import inspect
 
     if "security_alerts" not in inspect(op.get_bind()).get_table_names():
