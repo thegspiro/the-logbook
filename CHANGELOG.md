@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The dashboard's Administrative hours read "Unavailable", then read the whole department's (2026-09-05)
+
+**Fixed**
+
+- **Administrative hours said "Unavailable" to every ordinary member.**
+  "Unavailable" is a claim the figure is unknown; the figure was simply never
+  fetched. The dashboard gated the admin-hours read on `admin_hours.view`, a
+  permission that exists in the registry and that no default position or rank
+  grants — while every other gate on the same feature is open: `/admin-hours`
+  carries no `ProtectedRoute`, the member-facing sidebar entry carries no
+  permission, and `GET /admin-hours/summary` requires only authentication. So
+  the row sat at "Unavailable" beside a control that navigates to a page the
+  member can in fact open. The read is now unconditional, and a member who has
+  logged no administrative time this month reads `0`.
+
+- **An officer's "My Hours" card totalled the whole department.**
+  `GET /admin-hours/summary` only falls back to the caller's own id for someone
+  _without_ `admin_hours.manage`, and the service applies no user filter when
+  none is supplied — so a manage holder saw every member's administrative hours
+  summed under a card headed "My Hours". Removing the gate above widened this
+  from wildcard holders to every officer, so the request now passes the
+  member's own id explicitly, as the Admin Hours page already did.
+
+- **Everything logged today fell outside the month.** The month-to-date range
+  went as a bare `YYYY-MM-DD`; the endpoint parses that as midnight and filters
+  `clock_in_at <= end_date`, so the current day was excluded entirely, and the
+  start bound cut the month at UTC midnight rather than the department's —
+  pulling the tail of the previous month in for any department west of UTC.
+  Both bounds now go through the same `startOfReportingDayUTC` /
+  `endOfReportingDayUTC` helpers the Admin Hours screens use.
+
+**Changed**
+
+- **The month's hours are stated once.** The dashboard header carried a
+  "N hrs in Month" chip duplicating the total on the hours card directly below
+  it, with none of the per-source split behind it — so a member reading the
+  chip had no way to see which source the figure came from. The card, which
+  carries the same total plus the breakdown and its own failure state, is now
+  the single statement.
+
 ### A shift that ran weeks ago still offered its live controls (2026-09-04)
 
 **Fixed**
