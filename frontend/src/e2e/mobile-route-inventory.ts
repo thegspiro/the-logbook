@@ -1005,13 +1005,19 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
-    path: '/scheduling/admin/templates',
+    path: '/scheduling/admin/planning',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/scheduling/admin/planning/templates',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
-    path: '/scheduling/admin/patterns',
+    path: '/scheduling/admin/planning/patterns',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'exempt',
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
