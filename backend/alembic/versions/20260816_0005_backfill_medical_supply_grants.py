@@ -94,9 +94,15 @@ def _covered(permission: str, granted: list[str]) -> bool:
 
 def upgrade() -> None:
     bind = op.get_bind()
-    # positions is a model-only table, materialized by startup create_all which
-    # runs AFTER migrations on a fresh install. Absent means a new database,
-    # where DEFAULT_POSITIONS seeds all of this anyway.
+    # Defensive only. ``positions`` IS created by the migration chain — the
+    # initial schema builds ``roles`` and 20260805_0008 renames it, which makes
+    # that a required ancestor of this revision, so the table is present by the
+    # time this runs. Claiming otherwise is the false positive CLAUDE.md
+    # pitfall #26 records being reverted after an empirical ``alembic upgrade
+    # head`` against an empty database. The guard is kept because it costs one
+    # reflection and cannot be wrong, but it is not load-bearing, and it is not
+    # the pattern to copy for a genuinely create_all-only table — for those the
+    # guard is required.
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 
