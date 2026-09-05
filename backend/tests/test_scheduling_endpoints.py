@@ -88,15 +88,20 @@ class TestEndpointPermissions:
         ), "Route /swap-requests/{request_id}/review POST not found"
         assert any("require_permission" in d or "scheduling" in d for d in deps)
 
-    def test_qualification_roster_requires_officer_permission(self):
-        """Baseline scheduling viewers must not see members' training records."""
+    def test_qualification_roster_requires_scheduling_manage(self):
+        """Baseline scheduling viewers must not see members' training records.
+
+        Narrowed from ``scheduling.manage`` OR either training grant when the
+        page moved into Scheduling Administration and locked to the one grant.
+        Pinned exactly, and not merely "some permission is required", because a
+        client gate is not a gate: with the endpoint left wider, a training
+        officer refused by the page could still pull the whole roster — member
+        eligibility and EVOC standing — straight from the API.
+        """
         deps = self._get_route_deps("/eligibility/roster", "GET")
 
         assert deps is not None, "Route /eligibility/roster GET not found"
-        assert deps == [
-            "get_db",
-            "PermissionChecker(scheduling.manage,training.view_all,training.manage)",
-        ]
+        assert deps == ["get_db", "PermissionChecker(scheduling.manage)"]
 
 
 class TestPlatoonRosterPermissions:

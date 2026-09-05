@@ -16,12 +16,13 @@ vi.mock('../store/schedulingStore', () => ({
 
 import { ReportContentDisplay } from './ReportContentDisplay';
 
-const report = (callTypes: string[]): ShiftCompletionReport =>
+const report = (callTypes: string[], source?: string): ShiftCompletionReport =>
   ({
     id: 'r1',
     hours_on_shift: 12,
     calls_responded: callTypes.length,
     call_types: callTypes,
+    ...(source ? { data_sources: { call_types: source } } : {}),
   }) as ShiftCompletionReport;
 
 beforeEach(() => {
@@ -35,23 +36,42 @@ describe('ReportContentDisplay call types', () => {
     // On count-only tracking these are filled in from the shift's own tally,
     // so they are slugs no officer ever typed.
     storeState.callTypeLabels = { mutual_aid: 'Mutual Aid' };
-    render(<ReportContentDisplay report={report(['mutual_aid'])} />);
+    render(<ReportContentDisplay report={report(['mutual_aid'], 'org_calls')} />);
 
     expect(screen.getByText('Mutual Aid')).toBeInTheDocument();
     expect(screen.queryByText('mutual_aid')).not.toBeInTheDocument();
   });
 
   it('passes through a value it has no label for', () => {
-    // Detailed tracking stores the incident text an officer typed; there is
-    // no slug to resolve and nothing to replace it with.
-    render(<ReportContentDisplay report={report(['Structure Fire'])} />);
+    render(<ReportContentDisplay report={report(['Structure Fire'], 'org_calls')} />);
     expect(screen.getByText('Structure Fire')).toBeInTheDocument();
+  });
+
+  it('leaves an officer’s own wording alone', () => {
+    // Detailed tracking stores what the officer typed. If they wrote "fire"
+    // and the configured `fire` slug is later renamed, relabelling here would
+    // silently rewrite their historical report.
+    storeState.callTypeLabels = { fire: 'Structure Fire' };
+    render(<ReportContentDisplay report={report(['fire'], 'shift_calls')} />);
+
+    expect(screen.getByText('fire')).toBeInTheDocument();
+    expect(screen.queryByText('Structure Fire')).not.toBeInTheDocument();
+  });
+
+  it('leaves a report with no recorded provenance alone', () => {
+    // Written before the backend recorded which shape this column holds.
+    // Verbatim is what it rendered as before labels existed, and the safe
+    // direction — the alternative rewrites an officer's words.
+    storeState.callTypeLabels = { fire: 'Structure Fire' };
+    render(<ReportContentDisplay report={report(['fire'])} />);
+
+    expect(screen.getByText('fire')).toBeInTheDocument();
   });
 
   it('loads the settings itself rather than assuming a parent did', () => {
     // The member-facing report page mounts none of the scheduling screens
     // that would have.
-    render(<ReportContentDisplay report={report(['mutual_aid'])} />);
+    render(<ReportContentDisplay report={report(['mutual_aid'], 'org_calls')} />);
     expect(storeState.loadSettings).toHaveBeenCalled();
   });
 });

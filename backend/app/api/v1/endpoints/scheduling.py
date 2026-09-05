@@ -24,6 +24,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
+from app.models.call_tracking import MAX_CALL_TYPES, UNCLASSIFIED_CALL_TYPE
 from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
@@ -3395,9 +3396,13 @@ async def get_position_roster(
         max_length=50,
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("scheduling.manage", "training.view_all", "training.manage")
-    ),
+    # `scheduling.manage` alone. This accepted the training grants too, because
+    # the roster reads as a training-compliance view — but the page moved into
+    # Scheduling Administration and narrowed to the one grant, and a client gate
+    # is not a gate: leaving this wider let a training officer keep pulling the
+    # whole roster, member eligibility and EVOC standing included, straight from
+    # the API. The revocation has to be enforced where the data is.
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """
     List every active member eligible for a shift position, and why.
@@ -3407,7 +3412,7 @@ async def get_position_roster(
     completed training, or the org's open-position list), their current EVOC
     level, and the apparatus they hold an operator record on.
 
-    **Permissions required:** scheduling.manage, training.view_all, or training.manage
+    **Permissions required:** scheduling.manage
     """
     service = ShiftEligibilityService(db)
     roster = await service.get_position_roster(
@@ -3476,6 +3481,120 @@ async def update_eligibility_settings(
     )
 
 
+async def _reject_deleting_a_used_call_type(
+    db: AsyncSession,
+    organization_id: str,
+    incoming: CallTrackingSettings,
+) -> None:
+    """Refuse a save that drops a type calls are filed under.
+
+    The editor already hides delete for a type with anything on record, but
+    that decision is made against a settings snapshot the browser may have
+    held for an hour, and a direct API client never saw it at all. Either way
+    the write replaces the whole list, so a slug dropped from it leaves every
+    call filed under it with nothing to resolve its label — exactly what
+    retirement exists to prevent. Retiring on the caller's behalf would be
+    worse than refusing: it silently does something other than what they
+    asked for.
+
+    Compared against the **raw** stored slugs rather than the reader's
+    normalized list. The reader truncates at the cap and drops duplicates and
+    the reserved slug, and a slug it hid is still the value its calls are
+    filed under — so a save built from the shortened list the editor was given
+    would drop it without this guard ever seeing it go.
+    """
+    eligibility = ShiftEligibilityService(db)
+    org = await eligibility._get_org(organization_id)
+    if org is None:
+        return
+    in_force = eligibility.effective_call_type_slugs(org)
+
+    # The cap, enforced as a ratchet rather than a wall. A hand-edited
+    # configuration already over it must still be able to save a list that
+    # does not grow, or the only way to shorten it is barred. Measured
+    # against the *persisted* list, not the set in force: the latter adds the
+    # defaults the reader falls back to, which are not entries this save is
+    # replacing, so counting them would raise the ceiling — 49 legacy slugs
+    # the reader rejects plus the nine defaults would let 51 through.
+    persisted = eligibility.stored_call_type_slugs(org)
+    if len(incoming.call_types) > MAX_CALL_TYPES and len(incoming.call_types) > len(
+        persisted
+    ):
+        raise ValueError(f"A department can have at most {MAX_CALL_TYPES} call types.")
+
+    kept = {t.slug for t in incoming.call_types}
+    removed = in_force - kept
+    # The reserved bucket slug can never be kept — the reader hides it and the
+    # schema refuses it — so counting its disappearance as a deletion left an
+    # organization that had configured it unable to save its settings at all:
+    # every representable payload omits it, and this guard rejected every one.
+    # Its own calls keep resolving through the untyped bucket, which is where
+    # a report already counts them.
+    removed.discard(UNCLASSIFIED_CALL_TYPE)
+    if not removed:
+        return
+
+    service = CallTrackingService(db)
+
+    locked = await service.slugs_locked_by_history(organization_id, removed)
+    blocked = sorted(removed & locked)
+    if blocked:
+        raise ValueError(
+            "Cannot delete a call type that history still refers to: "
+            + ", ".join(blocked)
+            + ". Turn it off instead to stop offering it."
+        )
+
+
+async def _call_type_usage_for(db: AsyncSession, user: User) -> dict[str, int]:
+    """Per-type call counts, for callers allowed to see call volume.
+
+    This endpoint is readable by every member so the UI can gate platoon
+    features, but an all-time call tally broken down by type is the same
+    operational picture ``/scheduling/reports/call-volume`` gates behind
+    ``scheduling.report`` — served here it would be a coarse call-volume
+    report with no permission on it at all. Only the settings screen needs
+    it, and that screen already requires ``scheduling.manage`` to save, so
+    everyone else gets an empty map and an editor that offers retirement
+    rather than deletion.
+    """
+    if not (
+        user_has_permission(user, "scheduling.manage")
+        or user_has_permission(user, "scheduling.report")
+    ):
+        return {}
+    return await CallTrackingService(db).type_usage_counts(user.organization_id)
+
+
+async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
+    """Types the editor must not offer to delete, for the same audience.
+
+    Broader than a call count: a filed shift report can outlive the calls it
+    was built from. Sent so the editor can disable delete up front rather than
+    letting the save come back refused with nothing on screen having warned.
+    """
+    if not (
+        user_has_permission(user, "scheduling.manage")
+        or user_has_permission(user, "scheduling.report")
+    ):
+        return []
+    eligibility = ShiftEligibilityService(db)
+    org = await eligibility._get_org(user.organization_id)
+    if org is None:
+        return []
+    # Bounded by what is actually in force. The answer can only contain those
+    # slugs, and asking unbounded made the settings screen's cost grow with
+    # the department's whole report history.
+    candidates = eligibility.effective_call_type_slugs(org)
+    if not candidates:
+        return []
+    return sorted(
+        await CallTrackingService(db).slugs_locked_by_history(
+            user.organization_id, candidates
+        )
+    )
+
+
 @router.get("/settings", response_model=SchedulingFeatureSettings)
 async def get_scheduling_feature_settings(
     db: AsyncSession = Depends(get_db),
@@ -3508,9 +3627,8 @@ async def get_scheduling_feature_settings(
         open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
         enforce_evoc=service.get_evoc_enforcement(org),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
-        call_type_usage=await CallTrackingService(db).type_usage_counts(
-            current_user.organization_id
-        ),
+        call_type_usage=await _call_type_usage_for(db, current_user),
+        call_type_locked=await _call_type_locked_for(db, current_user),
     )
 
 
@@ -3526,6 +3644,10 @@ async def update_scheduling_feature_settings(
         # Only touch the overtime fields when the caller actually sent them,
         # so a partial save (e.g. the platoon toggle) can't wipe the cap.
         fields_set = data.model_fields_set
+        if "call_tracking" in fields_set and data.call_tracking is not None:
+            await _reject_deleting_a_used_call_type(
+                db, current_user.organization_id, data.call_tracking
+            )
         result = await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
             # Guarded like every sibling field. Passed unconditionally, a
@@ -3618,9 +3740,8 @@ async def update_scheduling_feature_settings(
         call_tracking=CallTrackingSettings(
             **service.get_call_tracking_settings(saved_org)
         ),
-        call_type_usage=await CallTrackingService(db).type_usage_counts(
-            current_user.organization_id
-        ),
+        call_type_usage=await _call_type_usage_for(db, current_user),
+        call_type_locked=await _call_type_locked_for(db, current_user),
     )
 
 

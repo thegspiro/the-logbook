@@ -12,7 +12,8 @@
  * `checkPermission` is exact match plus module wildcard, so `scheduling.manage`
  * implies neither `inventory.check_manage` nor `settings.manage`. Two of these
  * cards point into Inventory, whose grants a scheduling officer does not hold
- * by virtue of running the schedule — they are gated on Inventory's own.
+ * by virtue of running the schedule — they are gated on Inventory's own. Every
+ * other card, and the hub's own route, is `scheduling.manage`.
  *
  * Narrower than the route is always safe — it hides a card. Wider is the bug.
  *
@@ -130,9 +131,6 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
 
   // ── People & eligibility ───────────────────────────────────────────────
   {
-    // Wider than the rest on purpose: a training officer holds no scheduling
-    // grant and this page is a training-compliance view as much as a
-    // scheduling one. Its route has always admitted them.
     id: 'positions',
     label: 'Who Can Fill What',
     description: 'Every member against the positions they are cleared for, and why',
@@ -140,7 +138,7 @@ export const SCHEDULING_HUB_CARDS: SchedulingHubCard[] = [
     icon: ShieldCheck,
     section: 'People & eligibility',
     tone: 'green',
-    anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
+    permission: 'scheduling.manage',
     requiresModule: 'scheduling',
   },
   {
