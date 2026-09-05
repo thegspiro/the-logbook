@@ -24,6 +24,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
+from app.models.call_tracking import UNCLASSIFIED_CALL_TYPE
 from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
@@ -3504,6 +3505,13 @@ async def _reject_deleting_a_used_call_type(
         return
     kept = {t.slug for t in incoming.call_types}
     removed = eligibility.raw_call_type_slugs(org) - kept
+    # The reserved bucket slug can never be kept — the reader hides it and the
+    # schema refuses it — so counting its disappearance as a deletion left an
+    # organization that had configured it unable to save its settings at all:
+    # every representable payload omits it, and this guard rejected every one.
+    # Its own calls keep resolving through the untyped bucket, which is where
+    # a report already counts them.
+    removed.discard(UNCLASSIFIED_CALL_TYPE)
     if not removed:
         return
 

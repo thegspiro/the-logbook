@@ -117,6 +117,20 @@ let settingsRequest: Promise<void> | null = null;
  */
 let settingsGeneration = 0;
 
+/**
+ * Bumped only by `resetSettings`, captured by every organization-scoped
+ * loader in this store.
+ *
+ * `settingsGeneration` covers the settings request alone, and clearing the
+ * state does nothing to a `loadMembers` / `loadTemplates` / `loadApparatus` /
+ * `loadSummary` promise already awaiting a response: it lands afterwards and
+ * writes the previous department's roster, templates or apparatus back in,
+ * with its loaded flag set so nothing refetches. Separate from
+ * `settingsGeneration` because `invalidateSettings` means "one setting is
+ * stale", which is no reason to discard a roster already on its way.
+ */
+let accountGeneration = 0;
+
 export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   // ─── Initial State ──────────────────────────────────────────────────────
   members: [],
@@ -202,11 +216,11 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   },
 
   resetSettings: () => {
-    // Shares the generation counter with `invalidateSettings`: a response in
-    // flight across an account boundary must be discarded for the same reason
-    // one in flight across a save must be, and for a stronger one — it would
-    // repopulate the previous department's values and mark them loaded.
+    // Bumps both: the settings counter for the same reason
+    // `invalidateSettings` does, and the account counter so every other
+    // in-flight loader drops its response too.
     settingsGeneration += 1;
+    accountGeneration += 1;
     settingsRequest = null;
     set({
       members: [],
@@ -235,9 +249,12 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   loadMembers: async () => {
     if (get().membersLoaded || get().membersLoading) return;
+    const generation = accountGeneration;
     set({ membersLoading: true });
     try {
       const users = await userService.getUsers();
+      // Started under a different account: this roster is not theirs.
+      if (generation !== accountGeneration) return;
       const members = users
         .filter((m) => m.status === UserStatus.ACTIVE)
         .map((m) => ({
@@ -249,48 +266,57 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     } catch {
       // Non-critical — components fall back gracefully
     } finally {
-      set({ membersLoading: false });
+      if (generation === accountGeneration) set({ membersLoading: false });
     }
   },
 
   loadTemplates: async () => {
     if (get().templatesLoaded || get().templatesLoading) return;
+    const generation = accountGeneration;
     set({ templatesLoading: true });
     try {
       const templates = await schedulingService.getTemplates({
         active_only: true,
       });
+      if (generation !== accountGeneration) return;
       // No array guard needed here: schedulingService normalizes every
       // array-returning method at the boundary (see asArray there).
       set({ templates, templatesLoaded: true });
     } catch {
-      set({ templatesLoaded: true }); // mark loaded even on error to prevent retry loop
+      // Mark loaded even on error to prevent a retry loop — but not against
+      // an account that has since changed.
+      if (generation === accountGeneration) set({ templatesLoaded: true });
     } finally {
-      set({ templatesLoading: false });
+      if (generation === accountGeneration) set({ templatesLoading: false });
     }
   },
 
   loadApparatus: async () => {
     if (get().apparatusLoaded) return;
+    const generation = accountGeneration;
     try {
       const apparatus = await schedulingService.getBasicApparatus();
+      if (generation !== accountGeneration) return;
       set({ apparatus, apparatusLoaded: true });
     } catch {
-      set({ apparatusLoaded: true });
+      if (generation === accountGeneration) set({ apparatusLoaded: true });
     }
   },
 
   loadSummary: async () => {
     if (get().summaryLoading) return;
+    const generation = accountGeneration;
     set({ summaryLoading: true, summaryError: null });
     try {
       const summary = await schedulingService.getSummary();
+      if (generation !== accountGeneration) return;
       set({ summary });
     } catch (err) {
+      if (generation !== accountGeneration) return;
       const message = getErrorMessage(err, 'Failed to load scheduling summary');
       set({ summaryError: message });
     } finally {
-      set({ summaryLoading: false });
+      if (generation === accountGeneration) set({ summaryLoading: false });
     }
   },
 

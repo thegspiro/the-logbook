@@ -1561,6 +1561,13 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
         with a, b, c:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
+    async def test_the_reserved_slug_does_not_deadlock_the_settings_screen(self):
+        """An org that had configured `unclassified` cannot send it back — the
+        reader hides it and the schema refuses it — so counting its
+        disappearance as a deletion left every representable save rejected,
+        with no way to repair the organization at all."""
+        await self._save(["ems"], ["ems", UNCLASSIFIED_CALL_TYPE], {"ems"})
+
     async def test_a_slug_the_reader_truncated_away_is_still_guarded(self):
         """The editor is handed the reader's shortened list, so a used type
         past the cap is absent from the save and would vanish silently."""

@@ -24,6 +24,7 @@ vi.mock('../../../services/api', () => ({
 
 import { useSchedulingStore } from './schedulingStore';
 import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
+import { UserStatus } from '../../../constants/enums';
 
 describe('schedulingStore', () => {
   beforeEach(() => {
@@ -358,6 +359,27 @@ describe('schedulingStore', () => {
       expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
       expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
       expect(useSchedulingStore.getState().platoonsEnabled).toBe(false);
+    });
+
+    it('drops an in-flight roster that started under the previous account', async () => {
+      // Clearing the state does nothing to a request already awaiting a
+      // response: it lands afterwards and writes the previous department's
+      // roster back in, with its loaded flag set so nothing refetches.
+      let release: (v: unknown) => void = () => {};
+      mockGetUsers.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        })
+      );
+
+      const inFlight = useSchedulingStore.getState().loadMembers();
+      useSchedulingStore.getState().resetSettings();
+
+      release([{ id: 'u1', first_name: 'Prior', last_name: 'Member', status: UserStatus.ACTIVE }]);
+      await inFlight;
+
+      expect(useSchedulingStore.getState().members).toEqual([]);
+      expect(useSchedulingStore.getState().membersLoaded).toBe(false);
     });
 
     it('clears every organization-scoped value, not just the settings', () => {
