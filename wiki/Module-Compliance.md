@@ -115,3 +115,69 @@ returns 403. See the [Training Module](Module-Training#member--officer-exports).
 ---
 
 **See also:** [Training Module](Module-Training) | [Security Overview](Security-Overview)
+
+## The Compliance Matrix becomes a queue you can work _(2026-09-05)_
+
+The member × requirement icon grid is replaced by a **triage rail**. Every cell
+said only "met" or "not met", so a coordinator could see who was short without
+seeing by how much, and the screen offered nowhere to go next.
+
+Members — or requirements, on the other axis — are now grouped by standing,
+ordered worst-first, and stepped through one at a time, with the numbers behind
+each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
+26 days"_.
+
+### ⚠️ Your compliance percentages may move
+
+Two grading defects were fixed, and both were in the pessimistic direction:
+
+- **A member exempt from a requirement could never reach 100%.**
+  `completion_pct` divided by every active requirement while counting only the
+  ones applicable to the member, so anyone whose membership type excused them
+  from one was capped below full compliance no matter what they did. The
+  denominator is now the requirements actually asked of them, reported
+  alongside as `requirements_met` / `requirements_total`.
+- **A certification expiring soon read as a failure.** The tally counted only
+  the `met` tone, so a member holding a card valid for another 26 days rendered
+  under "Compliant" reading _"1 of 2 met · 1 open item"_ — a contradiction on
+  the face of the screen. **A cert valid today is met today**; the tone is a
+  renewal warning, and the orange "Due soon" pill still marks the row.
+
+### The dashboard link lands filtered
+
+The Needs Attention widget has been linking to `?status=noncompliant` all along
+and the grid ignored it, dropping the coordinator into the full unfiltered
+roster. Clearing the chip drops the parameter too, so a refresh does not
+silently re-apply a filter that was just dismissed.
+
+### API
+
+`GET /training/compliance-matrix` gains optional per-cell progress
+(`progress_current`, `progress_required`, `progress_unit`, the pre-waiver
+`base_required`, `waived_months`, and the evaluation window), per-requirement
+meta (type, frequency, target, unit), and a top-level `as_of`.
+
+**Additive only** — the four original cell keys are unchanged, so the printable
+report and any other consumer keep working.
+
+`as_of` matters more than it looks: compliance is evaluated through a cut-off,
+not through the viewer's clock, and each requirement can move its own via
+`include_current_month`. Measuring expiry from the browser's `new Date()` had
+turned a certificate the backend had accepted into a lapsed cell.
+
+### Actions are limited to ones with something behind them
+
+Print, a CSV export written through the formula-injection-safe `buildCsv`, and
+links to member training records. **The mock's Notify and Assign buttons had no
+endpoint** — a control wired to nothing invites somebody to believe a message
+was sent.
+
+### A screen reports what the backend decided
+
+This redesign is the worked example behind CLAUDE.md pitfall #29. Four things
+the backend already defines were re-derived in the frontend and drifted from
+every one of them: which requirements grade a member, the compliant/at-risk
+thresholds, when a requirement is at risk, and who the "non-compliant" deep
+link means. None raised, none failed a test, and each produced a number that
+looked plausible on its own — visible only by opening two screens and noticing
+they disagree.

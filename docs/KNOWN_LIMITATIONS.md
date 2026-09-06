@@ -3046,6 +3046,40 @@ FORM-10 note). Not a cross-tenant or disclosure issue — the only effect is
 that a form-specific business rule silently doesn't apply to one of its two
 submission channels.
 
+## FORM-10-related — `allow_multiple_submissions` Has No Control In The Form Builder (2026-09-06)
+
+Distinct from the scope question above, and found while documenting it rather
+than by the review pass: **nothing in the frontend writes
+`allow_multiple_submissions`.** `components/forms/FormBuilder.tsx` exposes no
+control for it, `pages/FormsPage.tsx` writes only `is_public`, and a grep of
+`frontend/src` finds the field in exactly three places — the type in
+`services/formTypes.ts`, test fixtures, and `pages/PublicFormPage.tsx:345`,
+which **reads** it to decide whether to offer _Submit Another Response_ after a
+successful submission.
+
+The column defaults to `True` (`models/form.py:127`, and `bool = True` on the
+create schema). So every form a department creates through the application
+allows multiple submissions, and there is **no path in the UI to change that** —
+only a caller hitting the API directly can set it `False`.
+
+The practical consequence is that the enforcement #2306 hardened is currently
+unreachable for any department using the application normally. Nothing is
+broken by this and no data is at risk; the fix was still correct, because the
+column is settable through the API and the race was real for anyone who had set
+it. But it means "set your form to one submission per person" must not be
+written into operator documentation as an available step, and it is why
+`docs/training/20-september-2026-release-changes.md` and the wiki handoff for
+this window say explicitly that the checkbox does not exist.
+
+This is the inverse of CLAUDE.md Pitfall #19 ("a config switch must have a
+reader before it has a UI"): here there is a reader, an enforcer and a stored
+column, and no writer. Closing it means either adding the control to the form
+builder — which needs the product decision in the entry above first, since a
+checkbox labelled "one submission per person" that silently governs only the
+public link would be its own defect — or removing the column and its
+enforcement. Recorded rather than fixed because both directions are product
+calls, not documentation ones.
+
 ## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
 
 `member_qualifications` (`app/models/qualification.py`) **does** have a

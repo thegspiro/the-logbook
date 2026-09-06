@@ -637,3 +637,91 @@ POST   /api/v1/elections/{id}/import-attendees   # Import event attendees into b
 ---
 
 **See also:** [Prospective Members](../docs/PROSPECTIVE_MEMBERS_MODULE.md) | [Role System](Role-System)
+
+## Ballot eligibility and duplicate-vote hardening _(2026-09-02)_
+
+The elections security review's third pass closed ten findings. Most are one
+shape wearing different clothes, and it is worth stating the shape once.
+
+### Name collisions between a position and a ballot item
+
+Voting eligibility is checked per candidate against **one of two independent
+rule sets**, depending on how that candidate is classified. When a plain
+election position and an unrelated ballot item happened to share an exact name,
+the classification picked one rule set and skipped the other — so **a token
+authorized for the unrestricted contest could cast a vote for the restricted
+one under the same name.**
+
+Fixed by detecting the collision and requiring **both** rule sets to authorize
+the vote. The fix then needed a fix of its own: where a legacy contest shared a
+name with _two_ different restricted positions at once (via its internal id and
+its displayed title), the check picked one of the two effectively at random. It
+now requires clearing **every** colliding name.
+
+The check is defined once and reused by every vote-submission route — the
+single-vote link, the ballot preview and the full-ballot route each had to be
+closed separately, and defining it once is what stops them drifting apart
+again.
+
+### The database's duplicate-vote safety net could not recognise a duplicate
+
+On a contest configured to accept votes differently from the rest of its
+election — several selections on one contest while the rest allows one — the
+two submission routes **computed different internal fingerprints for the
+identical vote**, so the near-simultaneous double-vote constraint could not see
+them as the same vote. A voter holding two unused ballot links could cast one
+through each and have both counted.
+
+Both routes now compute the same fingerprint, and both recognise every label a
+legacy contest can be recorded under. Separately, a legitimate vote could be
+**wrongly rejected** as a duplicate of a completely different contest whose
+displayed title matched another contest's internal identifier.
+
+### A custom membership tier kept restricted voting rights
+
+A member moved onto a department's own custom tier (e.g. "Senior") kept
+counting as an operational/regular voter for ballots restricted to that
+category, **even though a custom tier is documented to match none of the
+built-in voter categories.**
+
+The cause is worth recording: an unrelated and _correct_ shift-scheduling fix
+started preserving a member's prior class/status across a tier switch, and
+election eligibility reads the same two columns and inherited the carryover.
+Eligibility now re-checks the member's live membership tier before trusting
+those columns.
+
+### Mixed elections
+
+- A member eligible **only** for a plain position never received a ballot at
+  all — the decision to skip a member with zero eligible ballot items ran
+  before their position eligibility was checked.
+- A tier-wide voting ban and an administrator's per-voter override were both
+  honoured for structured ballot items and **silently ignored for plain
+  positions**.
+- Casting a vote for a plain position could prematurely mark a ballot fully
+  submitted while a legitimate ballot-item vote was still outstanding, so that
+  second valid vote was rejected as a duplicate.
+
+> **Known limitation, flagged not fixed:** an eligible member's plain-position
+> vote in a mixed election has no way to be cast today. See
+> `KNOWN_LIMITATIONS.md`.
+
+### Paper-ballot batches and locking
+
+- **Officer attestation could race a concurrent election close** — the
+  attestation locked the batch but not the election, so a batch attested
+  moments before close could be confirmed after the election had already
+  generated its certified results excluding it.
+- **Voiding was not safe against two officers at once**: both could load the
+  same votes before either committed, and the second commit silently overwrote
+  the first officer's recorded reason and timestamp.
+- **Attestation, voiding and election deletion locked the batch and the
+  election in opposite orders** and could deadlock. All three now lock in the
+  same order.
+- A vote submitted through an emailed link could **read stale election/token
+  state past its own row lock** — the lock was acquired correctly, but the
+  already-cached pre-lock Python objects were returned instead of the freshly
+  locked row's values.
+
+Full per-finding write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-13 … ELEC-39).

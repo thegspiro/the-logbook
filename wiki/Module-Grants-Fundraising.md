@@ -104,3 +104,22 @@ at runtime per organization, not via deployment-level flags.
 ---
 
 **See also:** [Grants & Fundraising Research](../docs/GRANTS_FUNDRAISING_MODULE.md) | [Troubleshooting](Troubleshooting#grants-module-issues-2026-03-05)
+
+## List endpoints page at the database _(2026-09-05)_
+
+Every grants and fundraising list endpoint — opportunities, applications,
+budget items, expenditures, compliance tasks, notes, campaigns, donors,
+donations, pledges and fundraising events — previously fetched an
+organization's **entire** matching table from the database before selecting the
+requested page in application memory.
+
+For a department with years of donation, donor or grant-application history,
+every list page view scanned and loaded the complete history regardless of how
+small the requested page was.
+
+`skip`/`limit` now apply in the SQL query itself, so a page load only reads the
+rows it actually displays.
+
+**No response shape or ordering changed** for any request within the documented
+row limits. Nothing needs re-checking after the upgrade — the lists simply stop
+getting slower as history accumulates.

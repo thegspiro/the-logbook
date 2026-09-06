@@ -1732,3 +1732,113 @@ built-in three metrics are **Upcoming**, **RSVPs this week** and **Check-ins
 logged**; the fourth slot is always the count the queue is about. Access is
 `events.manage`. See the
 [shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+
+## Who's going, RSVP and the waitlist _(2026-09-01)_
+
+Three things a member could not do before this: see who else is attending,
+respond to an event that does not require a response, and find out where they
+stand in a queue.
+
+### The attendee list can be shared with members
+
+An event's attendee list was reachable only with `events.manage`, so an ordinary
+member saw aggregate counts and nothing else.
+
+**What a member sees is names and going status — nothing else.** Contact
+details, RSVP notes, dietary restrictions, accessibility needs, guest counts and
+check-in times stay in the organizer view and are never included.
+
+| Setting | Where | Default |
+| --- | --- | --- |
+| Attendee visibility | Organization settings → Events | **Managers only** |
+| Per-event override | On the event itself, in either direction | Inherits the organization default |
+
+**The default ships as managers-only**, so nothing changes for an existing
+department until an administrator opts in. Inheriting is a real third state, not
+a missing value — no existing event was changed by the upgrade.
+
+> **Screenshot needed:**
+> _[An event detail page as a member with attendee visibility switched on: the
+> going list showing names and status only, and the waitlist position line
+> beneath it. Capture the member view, not the organizer view — the point of
+> the shot is what a member can now see.]_
+
+### Responding to an event that does not require a response
+
+`requires_rsvp` now means **"a response is expected"**, not "responses are
+permitted". It still drives the Required badge, the deadline and the
+non-respondent reminder audience.
+
+What it no longer does is refuse a response outright, which had left members
+with nothing to do on the majority of events.
+
+**Inline RSVP from the dashboard** is available too, matching the sign-up open
+shifts already offered there.
+
+### Waitlist standing
+
+The detail page says **"You're #2 of 5 on the waitlist"** rather than only that
+a waitlist exists, ordered by the same column the server actually promotes on.
+
+Releasing several seats now promotes several members rather than one, and a
+party larger than the whole event is refused at RSVP time instead of sitting at
+the head of the queue blocking everyone behind it.
+
+### ⚠️ Guests occupy seats now
+
+`allow_guests` had been on the model since the beginning and was **read
+nowhere**, so guests were accepted on events that forbade them. Capacity counted
+going *rows*, leaving guests out entirely, so a capped event could be
+oversubscribed by however many guests attendees brought.
+
+Capacity is now a sum of seats.
+
+> **A capped event will fill sooner than it used to. That is the correction, not
+> a regression.** Events already over the seat count are left alone rather than
+> retroactively waitlisted — they simply admit nobody new.
+
+### Also fixed
+
+- **"Apply to all future events" works on an optional series**, and goes through
+  the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank,
+  which had quietly discarded their notes — and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+
+## The check-in QR code is withheld until its window opens _(2026-09-05)_
+
+**A greyed-out QR code is still a QR code.** Outside the check-in window the
+event QR page rendered the real code at 40% opacity so the page would be "ready"
+when the window opened. A phone camera reads a code straight through that, so
+members scanned early, hit a check-in that refuses them, and had nothing on the
+page explaining why.
+
+The code is now withheld entirely until check-in is actually open, with a
+same-size placeholder holding the space so the layout does not shift when the
+real code takes over on the next 30-second refresh.
+
+> The gate is "can check in", **not** the stricter "window is officially open".
+> A Flexible/Window event admits a scan up to an hour before its official
+> window, and withholding the code there would have blocked a check-in the
+> backend was ready to accept.
+
+**The window could also open without the page noticing for 90 seconds.** The
+30-second poll on both the QR page and the self-check-in page was being answered
+from the shared client cache — fresh for 30s, then served stale for a further 60s
+while revalidating in the background. The whole point of that payload is
+reporting whether the window is open *right now*, so it now skips the cache.
+
+## Meeting records are audited, and Unlink unlinks _(2026-08-31)_
+
+- **Clicking "Unlink" on a meeting minutes record's linked event showed an
+  "Event unlinked" success message, but the link was never actually removed** —
+  it reappeared on the next page load. Unlinking now takes effect immediately
+  and persists.
+- **Creating, editing, deleting or approving a meeting record — or adding,
+  removing or editing its attendees and action items — left no record of who
+  made the change or when.** Meeting *minutes* already recorded this; the
+  meeting scheduling records now do too.
+- An election's linked meeting was a link to nowhere — there is no meeting
+  detail screen, so naming the meeting cost the reader their place. It is text
+  now; the "(change)" control is unaffected.
