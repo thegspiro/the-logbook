@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notification Rules invited an officer to create one they cannot (2026-09-06)
+
+**Fixed**
+
+- **The empty Notification Rules tab addressed a button most of its readers
+  never see.** `notifications.view` opens the tab; creating a rule is
+  `notifications.manage` on the server, and those are not the same population
+  — 16 of the 21 seeded positions carrying view, among them captains,
+  lieutenants, the treasurer, the secretary and the training and safety
+  officers, stop short of manage. All of them read "Create your first
+  notification rule to start sending automated notifications." over a card with
+  no button on it. The heading "No Notification Rules" still answers everyone
+  who opens the tab, and a search that matches nothing is still reported to
+  everyone; it is the invitation that is now withheld.
+- **The Add Rule dialog rendered on its own open state**, so a session that
+  lost `notifications.manage` with the form open kept it on screen with a live
+  submit button. It is now gated on the same permission as the two buttons that
+  open it.
+
 ### The Elections page pitched an election members cannot call (2026-09-06)
 
 **Fixed**
