@@ -1515,14 +1515,11 @@ const PipelineDetailPage: React.FC = () => {
         {/* Matches TrainingProgramsPage: members without training.manage cannot
             open /training/admin, so the Admin crumb only renders for users who
             can actually follow it. */}
-        <Breadcrumbs
-          items={[
-            { label: 'Training', path: '/training' },
-            ...(canManage ? [{ label: 'Admin', path: '/training/admin' }] : []),
-            { label: 'Programs', path: '/training/programs' },
-            { label: program.name },
-          ]}
-        />
+        {/* The hub is a sibling of this page, so `underHub` supplies it with the
+            registry's label and gate. The trail ends at Programs rather than
+            repeating the programme's name, which the <h1> below already
+            carries — the same shape /grants/applications/:id uses. */}
+        <Breadcrumbs underHub="/training/admin" />
 
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
