@@ -48,10 +48,74 @@ class TestEndpointPermissions:
                         return dep_names
         return None
 
-    def test_list_shifts_requires_scheduling_view(self):
+    def test_list_shifts_admits_both_scheduling_grants(self):
+        """Either grant reads the list, and the assertion names both.
+
+        `permission_matches` is literal — an exact name, `scheduling.*`, or
+        `*` — so `scheduling.manage` does not imply `scheduling.view`. With
+        only `view` here, a position granted `scheduling.manage` alone was
+        admitted to every page in Scheduling Administration and then refused
+        the shifts those pages exist to list, so the close-out queue and the
+        staffing-gaps list could show nothing but their load-failure state.
+
+        Pinned exactly rather than as "some permission is required", because
+        the looser assertion this replaces would have passed throughout.
+        """
         deps = self._get_route_deps("/shifts", "GET")
         assert deps is not None, "Route /shifts GET not found"
-        assert any("require_permission" in d or "scheduling" in d for d in deps)
+        assert "PermissionChecker(scheduling.view,scheduling.manage)" in deps
+
+    def test_every_read_an_admin_page_makes_admits_manage(self):
+        """The reads behind Scheduling Administration take either grant.
+
+        `permission_matches` is literal — an exact name, `scheduling.*` or `*` —
+        so `scheduling.manage` does not imply `scheduling.view`. Every page under
+        `/scheduling/admin` is gated on `manage` alone, so a position holding
+        only that grant reached those pages and was refused the data they are
+        built on: the close-out queue and the staffing-gaps list showed nothing
+        but their load-failure state, the shift panel's uncaught
+        `getShiftAssignments` rejected its whole load, and Shift Planning could
+        not list a template or a pattern at all.
+
+        Pinned as a set rather than one endpoint at a time, because it was found
+        one endpoint at a time — twice — and the next page added here will reach
+        for one of these without thinking about it.
+        """
+        for path, method in (
+            ("/shifts", "GET"),
+            ("/shifts/{shift_id}", "GET"),
+            ("/shifts/{shift_id}/assignments", "GET"),
+            ("/shifts/{shift_id}/attendance", "GET"),
+            ("/shifts/{shift_id}/calls", "GET"),
+            ("/templates", "GET"),
+            ("/templates/{template_id}", "GET"),
+            ("/patterns", "GET"),
+            ("/patterns/{pattern_id}", "GET"),
+        ):
+            deps = self._get_route_deps(path, method)
+            assert deps is not None, f"Route {path} {method} not found"
+            assert (
+                "PermissionChecker(scheduling.view,scheduling.manage)" in deps
+            ), f"{method} {path} does not admit scheduling.manage"
+
+    def test_member_facing_reads_stay_on_scheduling_view(self):
+        """The widening above is scoped, not a blanket.
+
+        These are the member's own surfaces — the board, the summary, their
+        requests. No `scheduling.manage` page reads them, so they keep the
+        narrower gate rather than drifting wider by habit.
+        """
+        for path in (
+            "/calendar/week",
+            "/calendar/month",
+            "/summary",
+            "/time-off",
+        ):
+            deps = self._get_route_deps(path, "GET")
+            assert deps is not None, f"Route {path} GET not found"
+            assert (
+                "PermissionChecker(scheduling.view)" in deps
+            ), f"GET {path} unexpectedly widened"
 
     def test_create_shift_requires_scheduling_manage(self):
         deps = self._get_route_deps("/shifts", "POST")
