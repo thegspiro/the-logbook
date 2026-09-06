@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
+
+**Fixed**
+
+- **Building an equipment checklist on a phone, the blue "Add item" button
+  at the bottom of a location could not be tapped.** It was drawn
+  underneath the checklist's own bottom bar and the app's bottom
+  navigation, so taps landed on those instead. Adding an item has moved
+  onto the checklist's bottom bar, where it stays reachable, follows the
+  location you last opened, and scrolls to that location when you use it.
+  Adding a _location_ is still on the same bar, now labelled "Location",
+  and remains available from the buttons below the list as before.
+- **Several buttons were smaller than a fingertip on a phone.** Buttons on
+  My Issued Gear, My Equipment Checklists, Reorder Requests and the
+  checklist builder now meet the 44-pixel minimum touch size on phones.
+- **A stray scrollbar under the tabs on an inventory item's page** has been
+  removed.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**
