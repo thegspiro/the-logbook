@@ -1046,7 +1046,7 @@ Renders a paper-formatted member training record including:
 - Compliance indicators (green/yellow/red) for all active requirements
 - Complete chronological list of training records with course, date, hours, and category
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Member Training Print Page showing the letter-size layout with member info header, hours summary cards, certification table, compliance status badges, and the training records table._
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Member Training Print Page showing the letter-size layout: the "Training Record" heading with the member's name beneath it and the generated date and `Compliance: <label>` line at the top right; the four stat tiles (Total Hours, Hours This Year, Active Certifications, Completed Courses); the Requirements Met / Expiring Soon / Expired summary row; and the Program Enrollments, Certifications and Training History tables. Shoot a member who holds certifications and at least one enrollment — each of those three tables is omitted when it has no rows._
 
 ### Training Program Print Page
 
@@ -1059,7 +1059,7 @@ Renders a training program detail for paper:
 - Milestones with completion criteria
 - Enrollment roster with per-member progress percentages
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Program Print Page showing the program header, phase accordion expanded with requirements and progress bars, milestone checkpoints, and enrollment table._
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Program Print Page showing the "Training Program" heading with the program name and description, and the generated date, code and version at the top right; the Structure / Target Position / Time Limit / Enrolled strip; the Program Phases table (number, name, description, time limit, requirement count); the Program Requirements table (requirement, phase, required, description); and the Enrolled Members table. Shoot a phase-based program that has members enrolled — the Enrolled Members table is not rendered at zero, and the Program Phases table is not rendered for a program with no phases._
 
 ### Compliance Matrix Print Page
 
@@ -1073,7 +1073,7 @@ Renders the department-wide compliance matrix (all members × all requirements) 
 - Optimized for letter-size landscape printing with repeat headers across pages
 - Designed for annual reviews, regulatory audits, and compliance filing
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page showing the grid with member names on the left, requirement names across the top, and colored cells with percentages. Show the landscape orientation and page break indicators._
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page in landscape showing the four summary counts (100% Complete, Partially Complete, Not Started, Requirements); the grid with member names down the left, a colour-coded Completion percentage beside each, and one column per requirement — headings truncated to twelve characters, cells carrying `✓`, `◐` or `—` rather than colour or a percentage; and the Training Officer / Chief signature block at the foot. Shoot a department with few enough requirements that the grid fits the sheet; past roughly twenty the columns run off the right edge._
 
 ### Print Buttons on Source Pages
 
