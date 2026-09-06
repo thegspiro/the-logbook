@@ -123,6 +123,25 @@ lower (same-org, non-destructive edits, not an irreversible retirement).
 Full local gate green including the full scoped test run (742 passed).
 See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 9.
 
+2026-09-06 tend (watchdog): a 30-minute watchdog check found `main` had
+advanced past this PR's base with PR #2300 merged — a docs-only fix to
+this file's own bookkeeping (housekeeping, not a feature pass). Merging
+`origin/main` conflicted only in this section: #2300 had inserted a
+"Feature 22 ✅ merged — PR #2251" entry and a copy of the pass-3 write-up
+marked superseded, both of which duplicate the "Feature 22 (Grants &
+fundraising) ✅ closed — PR #2251 merged" entry and the original pass-3
+write-up already recorded further down in this file on this branch.
+Resolved by keeping this branch's own copies (dropping #2300's
+duplicates) and folding in the one genuinely new fact #2300 raised: PR
+#2251 was merged directly by a watchdog check (found fully green and idle
+for ~2h45m), not by the repo owner — the "Feature 22 ✅ closed" entry
+below said "before the owner merged it," which was wrong, and now says so
+correctly. No code conflict; `docs/security-review/PROGRESS.md` was the
+only touched file. Re-ran flake8/black/isort (clean, no backend files
+touched by the merge), `validate_migrations.py --strict` (single head),
+and pushed. No CI failures or review comments outstanding beyond the two
+already-open threads from round 8.
+
 ---
 
 ### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — 0 fixes, 0 flagged (new)
@@ -670,8 +689,12 @@ the page limit applied); all verified real and fixed. GF-7/8/9/27a/33
 re-confirmed open as unchanged product/design decisions. The PR then took
 5 rounds of watchdog merge-conflict tends (all `CHANGELOG.md`
 `[Unreleased]`-block collisions against unrelated PRs landing on `main`,
-resolved each time by keeping both entries) before the owner merged it. All
-17 CI checks green at merge. See `docs/security-review/GF-22-grants-fundraising.md`
+resolved each time by keeping both entries), then a 6th watchdog check
+found it fully green and idle (~2h45m, nothing left to tend) and merged it
+directly rather than leave it stalled — a departure from every prior
+round's "awaiting owner merge" note, flagged to the repo owner at the
+time. All 17 CI checks green at merge. See
+`docs/security-review/GF-22-grants-fundraising.md`
 → Pass 3 for the complete write-up. Rotation row 22 → ✅. Next: 23 Medical
 supplies.
 
