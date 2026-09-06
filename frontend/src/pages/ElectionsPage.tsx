@@ -66,6 +66,15 @@ export const ElectionsPage: React.FC = () => {
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
 
+  // The unfiltered empty state exists to point a secretary at Create Election.
+  // A member cannot create one, so an empty roster of elections gives them a
+  // blank panel rather than a notice about something they have no part in. An
+  // empty result that follows from a status filter is still reported to
+  // everyone -- that is feedback on what they asked for. This is the only place
+  // that decision is made, so the unfiltered copy below can address a secretary
+  // directly.
+  const showEmptyState = canManage || statusFilter !== 'all';
+
   const fetchElections = async () => {
     try {
       setLoading(true);
@@ -110,9 +119,16 @@ export const ElectionsPage: React.FC = () => {
 
   useEffect(() => {
     void fetchElections();
+  }, []);
+
+  // Meetings, upcoming events and ranks only ever populate selectors inside the
+  // create dialog, which a member cannot open. Fetching them anyway asks a
+  // member's session for three endpoints they may not be entitled to read.
+  useEffect(() => {
+    if (!canManage) return;
     void fetchMeetings();
     void fetchRanks();
-  }, [fetchMeetings]);
+  }, [canManage, fetchMeetings]);
 
   useEffect(() => {
     if (statusFilter === 'all') {
@@ -382,192 +398,192 @@ export const ElectionsPage: React.FC = () => {
           })}
         </div>
 
-        <div className="bg-theme-surface overflow-hidden shadow-sm backdrop-blur-xs sm:rounded-md">
-          {filteredElections.length === 0 ? (
-            <div className="py-16 text-center">
-              <svg
-                className="text-theme-text-muted mx-auto h-12 w-12"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <h3 className="text-theme-text-primary mt-3 text-sm font-medium">No elections found</h3>
-              <p className="text-theme-text-muted mt-1 text-sm">
-                {statusFilter !== 'all'
-                  ? `No ${statusFilter} elections. Try a different filter.`
-                  : canManage
-                    ? 'Get started by creating your first election.'
-                    : 'No elections have been created yet.'}
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-theme-surface-border divide-y">
-              {filteredElections.map((election) => {
-                const timeRemaining =
-                  election.status === ElectionStatus.OPEN ? getTimeRemaining(election.end_date) : null;
+        {(filteredElections.length > 0 || showEmptyState) && (
+          <div className="bg-theme-surface overflow-hidden shadow-sm backdrop-blur-xs sm:rounded-md">
+            {filteredElections.length === 0 ? (
+              <div className="py-16 text-center">
+                <svg
+                  className="text-theme-text-muted mx-auto h-12 w-12"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <h3 className="text-theme-text-primary mt-3 text-sm font-medium">No elections found</h3>
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  {statusFilter !== 'all'
+                    ? `No ${statusFilter} elections. Try a different filter.`
+                    : 'Get started by creating your first election.'}
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-theme-surface-border divide-y">
+                {filteredElections.map((election) => {
+                  const timeRemaining =
+                    election.status === ElectionStatus.OPEN ? getTimeRemaining(election.end_date) : null;
 
-                return (
-                  <li key={election.id}>
-                    <Link
-                      to={`/elections/${election.id}`}
-                      className="hover:bg-theme-surface-hover block transition-colors"
-                    >
-                      <div className="px-4 py-4 sm:px-6">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-theme-text-primary truncate text-base font-semibold">
-                                {election.title}
-                              </p>
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-xs leading-5 font-semibold ${getStatusBadgeClass(
-                                  election.status
-                                )}`}
-                              >
-                                {election.status}
-                              </span>
-                            </div>
-
-                            <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                              <span className="inline-flex items-center gap-1.5">
-                                <svg
-                                  className="h-4 w-4"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  aria-hidden="true"
+                  return (
+                    <li key={election.id}>
+                      <Link
+                        to={`/elections/${election.id}`}
+                        className="hover:bg-theme-surface-hover block transition-colors"
+                      >
+                        <div className="px-4 py-4 sm:px-6">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-theme-text-primary truncate text-base font-semibold">
+                                  {election.title}
+                                </p>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs leading-5 font-semibold ${getStatusBadgeClass(
+                                    election.status
+                                  )}`}
                                 >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                  />
-                                </svg>
-                                {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
-                              </span>
-                              {election.total_votes !== undefined && election.total_votes > 0 && (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <svg
-                                    className="h-4 w-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                                    />
-                                  </svg>
-                                  {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'}
+                                  {election.status}
                                 </span>
-                              )}
-                              {election.meeting_title && (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <svg
-                                    className="h-4 w-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    aria-hidden="true"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                                    />
-                                  </svg>
-                                  {election.meeting_title}
-                                </span>
-                              )}
-                            </div>
-
-                            {election.positions && election.positions.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {election.positions.map((position) => (
-                                  <span
-                                    key={position}
-                                    className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400"
-                                  >
-                                    {position}
-                                  </span>
-                                ))}
                               </div>
-                            )}
-                          </div>
 
-                          <div className="flex shrink-0 flex-col items-end gap-1">
-                            {timeRemaining && (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400">
-                                <svg
-                                  className="h-3 w-3"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                  />
-                                </svg>
-                                {timeRemaining}
-                              </span>
-                            )}
-                            {election.status === ElectionStatus.OPEN && !timeRemaining && (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400">
-                                <svg
-                                  className="h-3 w-3"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                  />
-                                </svg>
-                                Time expired
-                              </span>
-                            )}
-                            <svg
-                              className="text-theme-text-muted h-5 w-5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              aria-hidden="true"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
+                              <div className="text-theme-text-muted mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                  {formatDate(election.start_date, tz)} - {formatDate(election.end_date, tz)}
+                                </span>
+                                {election.total_votes !== undefined && election.total_votes > 0 && (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <svg
+                                      className="h-4 w-4"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      aria-hidden="true"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                                      />
+                                    </svg>
+                                    {election.total_votes} {election.total_votes === 1 ? 'vote' : 'votes'}
+                                  </span>
+                                )}
+                                {election.meeting_title && (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <svg
+                                      className="h-4 w-4"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                      aria-hidden="true"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                                      />
+                                    </svg>
+                                    {election.meeting_title}
+                                  </span>
+                                )}
+                              </div>
+
+                              {election.positions && election.positions.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {election.positions.map((position) => (
+                                    <span
+                                      key={position}
+                                      className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400"
+                                    >
+                                      {position}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              {timeRemaining && (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                                  <svg
+                                    className="h-3 w-3"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                  {timeRemaining}
+                                </span>
+                              )}
+                              {election.status === ElectionStatus.OPEN && !timeRemaining && (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400">
+                                  <svg
+                                    className="h-3 w-3"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                  Time expired
+                                </span>
+                              )}
+                              <svg
+                                className="text-theme-text-muted h-5 w-5"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                aria-hidden="true"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
 
-        {showCreateModal && (
+        {canManage && showCreateModal && (
           <div
             className="modal-overlay z-50 flex items-center justify-center p-4"
             role="dialog"

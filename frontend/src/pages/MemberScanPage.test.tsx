@@ -44,6 +44,20 @@ describe('MemberScanPage', () => {
     vi.clearAllMocks();
     mockStart.mockResolvedValue(undefined);
     mockGetCameras.mockResolvedValue([{ id: 'cam-1', label: 'Front Camera' }]);
+    // jsdom's URL outlives a test, and the trail this page now renders is
+    // derived from it. Every test below states the route it runs at rather
+    // than inheriting whichever one ran last (CLAUDE.md pitfall #28a).
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('renders a breadcrumb trail at its own route', () => {
+    // The trail is opt-in per page: nothing but this fails if the component is
+    // dropped from the page, and the trail is the only route back to Members
+    // Administration, which is where the navigation files this page.
+    window.history.replaceState({}, '', '/members/scan');
+    renderWithRouter(<MemberScanPage />);
+
+    expect(screen.getByRole('navigation', { name: /breadcrumb/i })).toBeInTheDocument();
   });
 
   it('should render the page title', () => {

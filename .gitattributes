@@ -1,0 +1,33 @@
+# CHANGELOG.md is an append-only ledger, and that is exactly the shape a
+# textual merge handles worst. Every PR adds its entry at the top of
+# `## [Unreleased]`, so two concurrent PRs write different content at the same
+# offset and git reports a conflict on the pair -- not because they disagree,
+# but because neither can be placed relative to the other without a rule.
+#
+# `union` is that rule: keep both sides. It is correct here specifically
+# because entries are independent and additive -- no PR edits another's entry,
+# so there is no case where taking both loses an intended change. On
+# 2026-09-06 it was the sole remaining conflict across every open PR.
+#
+# WHAT THIS DOES NOT DO -- established by trying it, after an earlier version
+# of this comment implied otherwise. GitHub's server-side merge does NOT apply
+# .gitattributes merge drivers, so the "Merge pull request" button still
+# reports a conflict and still refuses. Every merge run by a git client does
+# honour it: `git merge main` on a branch, `git pull`, and merging a PR branch
+# locally. So the workflow this supports is resolve-locally-then-push, not
+# merge-in-the-UI.
+#
+# SECOND SHARP EDGE: git reads merge attributes from the tree being merged
+# INTO, not from either side's content. A branch created before this file
+# existed still hits the conflict when main is merged into it, because its own
+# checkout has no .gitattributes. Cherry-pick this file onto the branch first,
+# then merge.
+#
+# What union itself does not cover: two branches editing the *same* entry,
+# where it keeps both revisions as adjacent duplicate lines rather than
+# conflicting. That is visible in review, but it is the tradeoff.
+#
+# Deliberately not applied to scripts/screenshots/audit_baseline.txt, the other
+# file that was conflicting. Branches there *delete* lines (see #2330, which
+# empties the baseline) and union would resurrect every deleted entry silently.
+CHANGELOG.md merge=union

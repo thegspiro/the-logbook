@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
 import { schedulingService } from '../modules/scheduling/services/api';
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 // Mock scheduling module API
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -135,6 +136,24 @@ describe('SchedulingPage', () => {
       // test for the wrong reason on one render and fail it on another.
       const hrefs = screen.queryAllByRole('link').map((link) => link.getAttribute('href'));
       expect(hrefs.filter((href) => href?.startsWith('/scheduling/admin'))).toEqual([]);
+    });
+
+    it('closes an open Create Shift form if scheduling.manage is revoked', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'scheduling.manage');
+
+      const { rerender } = renderWithRouter(<SchedulingPage />);
+      await waitFor(() => expectTabVisible('Schedule'));
+
+      await user.click(screen.getByRole('button', { name: /Create Shift/i }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+      // The form only ever posts a scheduling.manage-gated create, so it must
+      // not survive the permission going away and offer a Create that 403s.
+      mockCheckPermission.mockReturnValue(false);
+      rerender(<SchedulingPage />);
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
     it('should not render admin links for non-admin users', async () => {
@@ -338,6 +357,84 @@ describe('SchedulingPage', () => {
       // initiate.
       await user.click(screen.getByRole('button', { name: 'Dismiss detail' }));
       expect(await screen.findByRole('heading', { name: 'Create Shift' })).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Every control in the Create Shift dialog is reachable by its visible label.
+   *
+   * The whole modal shipped with no htmlFor/id pair at all, so a screen reader
+   * announced nine unnamed fields and clicking a label focused nothing. This
+   * asserts the entire set rather than one field: that is the assertion that
+   * would have caught the original defect, and it fails loudly if a field is
+   * added later without a label.
+   */
+  describe('form labelling', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      // Templates reach the page through the shared store, and the template
+      // search box only renders past five of them.
+      useSchedulingStore.setState({
+        templates: Array.from({ length: 6 }, (_, i) => ({
+          id: `t${i}`,
+          name: `Template ${i}`,
+          is_active: true,
+          start_time_of_day: '08:00',
+          end_time_of_day: '16:00',
+        })) as never,
+        templatesLoaded: true,
+        // The Apparatus field renders only when the department has apparatus,
+        // and Shift Officer only alongside it.
+        apparatus: [{ id: 'a1', unit_number: 'Engine 1', is_active: true }] as never,
+        apparatusLoaded: true,
+        members: [{ id: 'm1', label: 'A Member' }] as never,
+        membersLoaded: true,
+      });
+    });
+
+    afterEach(() => {
+      // The page is still mounted and subscribed to the store here, so this
+      // reset re-renders it; unwrapped it emits React's act(...) warning, which
+      // would sit in the output of every later run and mask a real one.
+      act(() => {
+        useSchedulingStore.setState({
+          templates: [],
+          templatesLoaded: false,
+          apparatus: [],
+          apparatusLoaded: false,
+          members: [],
+          membersLoaded: false,
+        });
+      });
+    });
+
+    it('names every field in the Create Shift dialog', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      await screen.findByRole('heading', { name: 'Create Shift' });
+
+      expect(screen.getByLabelText('Shift Template')).toBeInTheDocument();
+      expect(screen.getByLabelText('Search shift templates')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Start Date/)).toBeInTheDocument();
+      expect(screen.getByLabelText('End Date')).toBeInTheDocument();
+
+      // Apparatus, the times and Notes live behind the collapsible section.
+      await user.click(screen.getByRole('button', { name: /Additional Options/ }));
+
+      expect(screen.getByLabelText(/Apparatus/)).toBeInTheDocument();
+      for (const field of ['Start Time', 'End Time']) {
+        for (const part of ['hour', 'minute', 'AM/PM']) {
+          expect(screen.getByRole('combobox', { name: `${field} ${part}` })).toBeInTheDocument();
+        }
+      }
+      expect(screen.getByLabelText(/Shift Officer/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+
+      // Custom Times heads a pair of fields rather than naming one, so it is a
+      // group rather than a label.
+      expect(screen.getByRole('group', { name: /Custom Times/ })).toBeInTheDocument();
     });
   });
 });

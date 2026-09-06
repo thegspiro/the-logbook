@@ -1253,7 +1253,9 @@ async function armStationAndTap(page) {
   await page.waitForFunction(
     () => {
       const el = document.querySelector("#station-target");
-      return el instanceof HTMLSelectElement && !el.disabled && el.options.length > 0;
+      return (
+        el instanceof HTMLSelectElement && !el.disabled && el.options.length > 0
+      );
     },
     { timeout: 20_000 },
   );
@@ -1288,7 +1290,10 @@ async function openStandingShiftDialog(page) {
   const days = page.locator("[role='gridcell']").locator("visible=true");
   const total = await days.count();
   for (let i = 0; i < total && !(await tuesday.count()); i += 1) {
-    await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
+    await days
+      .nth(i)
+      .click({ timeout: 5_000 })
+      .catch(() => {});
     await page.waitForTimeout(200);
   }
   await tuesday.click({ timeout: 15_000 });
@@ -3019,8 +3024,7 @@ export const SHOTS = [
     // Anchored on the label, with the wrapper matched by the shared `card`
     // utility rather than the raw `rounded-lg border` it used to carry -- the
     // same migration that moved the shift-report cards.
-    selector:
-      "div.card:has(label:text-is('Training records date range'))",
+    selector: "div.card:has(label:text-is('Training records date range'))",
   },
   {
     id: "04-37-hour-tracking-mapping",

@@ -289,12 +289,13 @@ Time-off request for date ranges.
 ### Shifts
 
 ```
-GET    /api/v1/scheduling/shifts                    # List shifts (with date filters)
+GET    /api/v1/scheduling/shifts                    # List shifts (scheduling.view or scheduling.manage)†
 POST   /api/v1/scheduling/shifts                    # Create shift (scheduling.manage)
 GET    /api/v1/scheduling/shifts/{id}               # Get shift by ID
 PATCH  /api/v1/scheduling/shifts/{id}               # Update shift (scheduling.manage)
 DELETE /api/v1/scheduling/shifts/{id}               # Delete shift (scheduling.manage)
 GET    /api/v1/scheduling/shifts/open               # Get upcoming open shifts
+GET    /api/v1/scheduling/shifts/needing-closeout   # Ended, never closed out, oldest first (scheduling.manage)
 GET    /api/v1/scheduling/calendar/week/{date}      # Week calendar view
 GET    /api/v1/scheduling/calendar/month/{y}/{m}    # Month calendar view
 ```
@@ -506,6 +507,16 @@ All four require `scheduling.manage` **or** being the shift's own officer
 (`_authorize_shift_management`). Each step writes as it advances, so an
 interrupted close-out resumes rather than restarting.
 
+`GET /scheduling/shifts/needing-closeout` is the list of shifts still owing one
+— the rows behind the administration hub's **To close out** metric. Both read
+`closeout_backlog_criteria` in `scheduling_service`, so the number on the card
+and the length of the queue are one population read twice; they were two while
+the page re-derived the set from a date range and the metric had none. It takes
+no date range for that reason, is ordered by when each shift was actually over
+(`end_time`, or `start_time` plus the department's open-ended cushion), and
+stands on `scheduling.manage` alone — unlike `GET /scheduling/shifts`, it is the
+whole department's backlog with no member filter applied.
+
 `GET …/closeout` → `CloseoutStateResponse`:
 
 | Field                                         | Meaning                                                                                                                    |
@@ -613,6 +624,7 @@ out of the route source and fails if the two drift.
 | Shift Patterns       | `/scheduling/admin/planning/patterns`      | `scheduling.manage`                                      |
 | Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                 |
 | Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings` |
+| Shift Close-Out      | `/scheduling/admin/closeout`               | `scheduling.manage`                                      |
 | Who Can Fill What    | `/scheduling/admin/positions`              | `scheduling.manage`                                      |
 | Platoons             | `/scheduling/admin/platoons`               | `scheduling.manage`                                      |
 | Eligibility Rules    | `/scheduling/admin/settings/eligibility`   | `scheduling.manage`                                      |
@@ -668,7 +680,7 @@ shift needs, and a second answer here is exactly how three screens come to
 disagree about one shift.
 
 **One rule is deliberately different: openness.** `shiftStatusInfo` zeroes a
-shift's open seats once the *member* signup window closes — right for a board
+shift's open seats once the _member_ signup window closes — right for a board
 offering a claim button, since nothing a member browsing can do about those
 chairs. An officer can still seat somebody, so a planning screen inheriting the
 member's answer would hide the shifts most urgently in need of one.
@@ -677,12 +689,59 @@ member's answer would hide the shifts most urgently in need of one.
 written by one footer Save that PUTs the whole `ShiftSettings` object; a second
 screen writing them means whichever saved last silently reverts the other.
 
-**The metric and this screen now use the same capacity rule.** The `scheduling`
-ModuleSpec read `min_staffing` alone, which reported a three-seat brush truck
-carrying one person as fully staffed. It reads the seat list first, as
-`shiftCapacity` does — with a `JSON_TYPE` guard, because SQLAlchemy persists a
-Python `None` as the JSON literal `null` and `JSON_LENGTH('null')` is 1, so a
-shift that named no seats read as a one-seat crew.
+**The hub metric and this screen answer the same question from two rules, and
+that is deliberate.** The `scheduling` ModuleSpec's Short-staffed metric goes
+through `SchedulingService.filter_shifts_with_open_positions` — the matcher
+already behind the open-shifts list and the staffing report, which pairs each
+required slot with a held position and falls back to a minimum of one. This
+screen reads `shiftCapacity`, which returns null for a shift that names neither
+positions nor a `min_staffing`. So a department that has stated no crew size
+anywhere sees such a shift in the hub's count while nobody is on it and not in
+this list. Each is right about its own question: the server is asked "is anybody
+covering this", the board is asked "how short is it", and "crew size not set" is
+not a number.
+
+> **† `scheduling.manage` does not imply `scheduling.view`.** Permission
+> matching is literal — an exact name, `scheduling.*` or `*` — so a position
+> holding only `scheduling.manage` is admitted to every page under
+> `/scheduling/admin` and would be refused the reads those pages are built on.
+> Nine reads therefore accept either grant: the shift list, a shift and its
+> assignments, attendance and calls, and templates and patterns with their
+> detail routes. The member's own surfaces — the week and month calendars, the
+> summary, time-off — keep `scheduling.view` alone, and
+> `test_scheduling_endpoints.py` pins both halves so neither drifts.
+
+### Shift Close-Out _(2026-09-05)_
+
+`/scheduling/admin/closeout` — the shifts that have ended and were never closed,
+oldest first, over a date range (the last 30 days by default). A shift nobody
+closed leaves no trace on the board, which draws the future, so the only sign of
+one was the hub's **To close out** number: how many, never which.
+
+**When a shift ended is `shiftEndInstant` in `shiftBoard.ts`**, read through
+`modules/scheduling/utils/closeoutQueue.ts` — `end_time`, else `start_time` plus
+the department's `open_ended_shift_cushion_hours`. That is the same number the
+roster lock stands on and the same rule the server's backlog count uses, so the
+queue, the lock and the hub metric cannot disagree about one shift. Cancelled
+shifts are excluded: nothing ran, so there is nothing to record, and counting
+them makes a backlog that can never reach zero.
+
+**There is one close-out implementation, and it is not this page.** A department
+whose `call_tracking.mode` is `count_only` gets `ShiftCloseoutWizard`, opened in
+place on the row with the shift's outstanding end-of-shift checks and the
+department's blocking rule passed in. Every other department's close-out is the
+finalize checklist inside `ShiftDetailPanel`, which reads that shift's
+attendance, equipment checks and manual hours — so the row navigates to
+`/scheduling?shift=<id>` rather than re-rendering a flow that decides what goes
+on a member's record.
+
+**The close-out settings are shown, not edited**, on the same rule the planning
+screen follows: one editing home, so two screens cannot overwrite each other.
+
+**The page is department-wide, on `scheduling.manage`.** A named shift officer's
+own route to closing their shift is unchanged and does not pass through here:
+`ShiftDetailPanel` grants them that authority per shift without a
+department-wide grant, mirroring the backend.
 
 **Headline metrics and the attention queue** come from the `scheduling`
 `ModuleSpec` in `backend/app/services/admin_hub_service.py`: shifts still to

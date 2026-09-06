@@ -616,6 +616,7 @@ schedule to find the settings.
 | Shift Planning          | `/scheduling/admin/planning`           | `scheduling.manage` |
 | Shift Templates         | `/scheduling/admin/planning/templates` | `scheduling.manage` |
 | Shift Patterns          | `/scheduling/admin/planning/patterns`  | `scheduling.manage` |
+| Shift Close-Out         | `/scheduling/admin/closeout`           | `scheduling.manage` |
 | Scheduling Reports      | `/scheduling/admin/reports`            | `scheduling.manage` |
 | Platoons                | `/scheduling/admin/platoons`           | `scheduling.manage` |
 | Who Can Fill What       | `/scheduling/admin/positions`          | `scheduling.manage` |
@@ -627,6 +628,17 @@ lists every short shift over a date range with the assignment on the row. What
 counts as short comes from `shiftBoard.ts`, so it cannot disagree with the
 calendar; openness alone is judged for an officer rather than a member, because
 an officer can still seat somebody after member signup closes.
+
+**Shift Close-Out** _(2026-09-05)_ lists the shifts that ended and were never
+closed, oldest first. A shift nobody closed leaves no trace on the board, which
+draws the future, so the only sign of one was the hub's "To close out" number.
+A shift with no recorded end is judged against the department's open-ended
+cushion — the same number the roster lock uses — so a crew still out is not
+backlog. The row opens the department's own close-out: the three-step wizard
+where the department records a call count, and the shift itself everywhere else,
+because that close-out is the finalize checklist inside the shift panel and
+there is one of it. A shift officer's own route to closing their shift is
+unchanged and does not go through this page.
 
 Settings sections: `general`, `apparatus`, `platoons`, `eligibility`,
 `notifications`, `shift-reports` — each its own route, so a section can be

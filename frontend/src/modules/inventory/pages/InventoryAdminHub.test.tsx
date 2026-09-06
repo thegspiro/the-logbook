@@ -204,7 +204,7 @@ describe('InventoryAdminHub', () => {
       'Charges',
       'Return Requests',
       'Storage Areas',
-      'Import / Export',
+      'Import',
       'Gear Requests',
       'Write-Offs',
       'Reorder Requests',

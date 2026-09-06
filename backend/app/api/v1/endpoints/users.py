@@ -1017,10 +1017,14 @@ async def assign_user_roles(
     user.roles = roles
     await db.commit()
 
-    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    # Re-query with eager loading to avoid MissingGreenlet on serialization.
+    # The org filter is redundant — the user was resolved in-org above and 404s
+    # otherwise — and is here so the re-read is not a by-id query kept safe only
+    # by what happened earlier in the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()
@@ -1120,10 +1124,14 @@ async def add_role_to_user(
     user.roles.append(role)
     await db.commit()
 
-    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    # Re-query with eager loading to avoid MissingGreenlet on serialization.
+    # The org filter is redundant — the user was resolved in-org above and 404s
+    # otherwise — and is here so the re-read is not a by-id query kept safe only
+    # by what happened earlier in the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()
@@ -1226,10 +1234,14 @@ async def remove_role_from_user(
     user.roles.remove(role_to_remove)
     await db.commit()
 
-    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    # Re-query with eager loading to avoid MissingGreenlet on serialization.
+    # The org filter is redundant — the user was resolved in-org above and 404s
+    # otherwise — and is here so the re-read is not a by-id query kept safe only
+    # by what happened earlier in the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()
@@ -1458,10 +1470,14 @@ async def update_contact_info(
 
     await db.commit()
 
-    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    # Re-query with eager loading to avoid MissingGreenlet on serialization.
+    # The org filter is redundant — the user was resolved in-org above and 404s
+    # otherwise — and is here so the re-read is not a by-id query kept safe only
+    # by what happened earlier in the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()
@@ -1755,10 +1771,14 @@ async def update_user_profile(
 
     await db.commit()
 
-    # Re-query with eager loading to avoid MissingGreenlet on serialization
+    # Re-query with eager loading to avoid MissingGreenlet on serialization.
+    # The org filter is redundant — the user was resolved in-org above and 404s
+    # otherwise — and is here so the re-read is not a by-id query kept safe only
+    # by what happened earlier in the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
         .options(selectinload(User.positions))
     )
     user = result.scalar_one_or_none()

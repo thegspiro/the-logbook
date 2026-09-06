@@ -18,6 +18,7 @@ import { formatDate } from '../../utils/dateFormatting';
 import { COHORT_STATUS_COLORS, COHORT_STATUS_LABELS } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
 import type { CourseCohort } from '../../types/training';
+import { Breadcrumbs } from '../../components/ux';
 
 interface CohortsPageProps {
   embedded?: boolean;
@@ -48,6 +49,9 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
   if (showWizard) {
     return (
       <div className={embedded ? '' : 'mx-auto max-w-4xl px-4 py-8'}>
+        {/* The wizard replaces the whole page, so the trail belongs here too —
+            otherwise the only way out of a focused flow is its own Cancel. */}
+        {!embedded && <Breadcrumbs underHub="/training/admin" />}
         <h2 className="text-theme-text-primary mb-6 text-xl font-semibold">New cohort</h2>
         <CohortWizard
           onCancel={() => setShowWizard(false)}
@@ -63,6 +67,9 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
       <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
+        {/* Not when embedded: this also renders inside a Training Administration
+            tab, where a trail would sit within the very hub it points at. */}
+        {!embedded && <Breadcrumbs underHub="/training/admin" />}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             {!embedded && (

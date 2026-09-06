@@ -209,6 +209,68 @@ def open_ended_cushion_hours(settings: Dict[str, Any]) -> int:
     return max(OPEN_ENDED_SHIFT_CUSHION_HOURS, min(configured, 72))
 
 
+def closeout_backlog_halves(
+    organization_id: Any, settings: Dict[str, Any], now: datetime
+) -> tuple[tuple, tuple]:
+    """Criteria for the shifts that have ended and were never closed out.
+
+    Returned as two halves rather than one clause, because a shift's end is not
+    one column. A shift that states an ``end_time`` ended at it; one that states
+    none ended when the department's open-ended cushion ran out, and the cushion
+    is the same number the roster lock stands on. Anything that reads this needs
+    to know which half a row came from — the hub's metric dates each row's age
+    from the column that made it eligible, and dating an open-ended shift from
+    its start announces it as three days overdue the moment it appears in a
+    department running a seventy-two hour cushion.
+
+    Cancelled and finalized shifts are excluded here rather than by each caller.
+    A cancelled shift did not run, so there is nothing to record about it, and
+    counting one makes a backlog that can never reach zero.
+
+    Pure, and the single definition of this population: the administration
+    metric and the close-out queue read it through this so they cannot come to
+    different answers about which shifts are waiting.
+    """
+    cushion = timedelta(hours=open_ended_cushion_hours(settings))
+    scoped = (
+        Shift.organization_id == organization_id,
+        Shift.status != ShiftStatus.CANCELLED,
+        Shift.is_finalized.is_(False),
+    )
+    ended = (*scoped, Shift.end_time.isnot(None), Shift.end_time < now)
+    open_ended = (
+        *scoped,
+        Shift.end_time.is_(None),
+        Shift.start_time < now - cushion,
+    )
+    return ended, open_ended
+
+
+def closeout_backlog_criteria(
+    organization_id: Any, settings: Dict[str, Any], now: datetime
+):
+    """The same population as one clause, for a caller that lists rather than counts."""
+    ended, open_ended = closeout_backlog_halves(organization_id, settings, now)
+    return or_(and_(*ended), and_(*open_ended))
+
+
+def closeout_effective_end(settings: Dict[str, Any]):
+    """When a shift was over, as an orderable SQL expression.
+
+    ``end_time`` where there is one, else ``start_time`` plus the cushion — the
+    same rule ``closeout_backlog_halves`` selects on and the same one
+    ``shiftEndInstant`` applies in the client. Ordering a queue by it is what
+    makes "oldest first" and pagination agree; ordering by ``start_time``
+    instead interleaves an open-ended shift with shifts that ended hours before
+    it did.
+    """
+    cushion = open_ended_cushion_hours(settings)
+    return case(
+        (Shift.end_time.isnot(None), Shift.end_time),
+        else_=Shift.start_time + text(f"INTERVAL {int(cushion)} HOUR"),
+    )
+
+
 def _roster_deadline_from(shift: Any, settings: Dict[str, Any]) -> Optional[datetime]:
     """The last instant this shift's roster may change, from data alone.
 
@@ -1086,6 +1148,51 @@ class SchedulingService:
         shifts = result.scalars().all()
 
         return shifts, total
+
+    async def get_closeout_backlog(
+        self,
+        organization_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+        now: Optional[datetime] = None,
+    ) -> Tuple[List[Shift], int]:
+        """Shifts that have ended and were never closed out, oldest first.
+
+        The row list behind the administration hub's "needs close-out" metric.
+        Both read ``closeout_backlog_criteria``, so the number on the hub card
+        and the length of the queue it links to cannot disagree — which they
+        did while the client re-derived the population from a date range of its
+        own choosing.
+
+        Ordered by when each shift was actually over, not by ``start_time``:
+        an open-ended shift ended a cushion after it began, so ordering by the
+        start interleaves it with shifts that were over hours before it was,
+        and "oldest first" then means nothing across a page boundary. The id
+        breaks ties so a boundary never repeats or skips a row.
+        """
+        now = now or datetime.now(timezone.utc)
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        settings = (org.settings or {}) if org else {}
+
+        criteria = closeout_backlog_criteria(str(organization_id), settings, now)
+        total = (
+            await self.db.execute(
+                select(func.count()).select_from(Shift).where(criteria)
+            )
+        ).scalar()
+
+        result = await self.db.execute(
+            select(Shift)
+            .where(criteria)
+            .order_by(closeout_effective_end(settings).asc(), Shift.id.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all()), total or 0
 
     @staticmethod
     def _bound_shift_window(
@@ -4289,6 +4396,75 @@ class SchedulingService:
                     organization_id=org_id,
                 )
                 await self.db.commit()
+
+            return assignment, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def decline_assignment(
+        self,
+        assignment_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        actor: SignupActor = SignupActor.MANAGER,
+    ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
+        """Decline a shift assignment (by the assigned user).
+
+        The mirror of :meth:`confirm_assignment` and self-scoped for the same
+        reason: declining is the member's own answer to being rostered, so the
+        row is resolved by ``user_id`` as well as id and a foreign assignment
+        id can never cross tenants. The general ``update_assignment`` path
+        stays officer-only — it is how an officer records a decline on
+        somebody's behalf, and it carries edits a member has no business
+        making.
+        """
+        try:
+            query = (
+                select(ShiftAssignment)
+                .where(ShiftAssignment.id == str(assignment_id))
+                .where(ShiftAssignment.user_id == str(user_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
+            )
+            result = await self.db.execute(query)
+            assignment = result.scalar_one_or_none()
+            if not assignment:
+                return None, "Shift assignment not found or not assigned to you"
+
+            # Actor first, so the exempt path costs no extra query — the same
+            # reasoning as confirm_assignment above.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return None, locked
+
+            already_declined = assignment.assignment_status == AssignmentStatus.DECLINED
+            position = assignment.position
+
+            assignment.assignment_status = AssignmentStatus.DECLINED
+            # A member who confirmed and then declined must not keep the
+            # confirmation timestamp: it records an affirmation they have
+            # withdrawn, and the close-out roster reads it.
+            assignment.confirmed_at = None
+
+            await self.db.commit()
+            await self.db.refresh(assignment)
+
+            # Only on the transition, so a repeated tap — or a retry after a
+            # dropped response — does not tell the officer twice that this seat
+            # opened up. update_assignment guards the same notification the
+            # same way.
+            if not already_declined:
+                await self._notify_shift_decline(
+                    shift_id=assignment.shift_id,
+                    user_id=assignment.user_id,
+                    position=str(position or ""),
+                    organization_id=organization_id,
+                    action="declined",
+                )
 
             return assignment, None
         except Exception as e:

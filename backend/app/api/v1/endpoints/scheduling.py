@@ -548,9 +548,23 @@ async def list_shifts(
     end_date: str | None = None,
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # `scheduling.manage` alongside `scheduling.view`, because matching is
+    # literal: `permission_matches` accepts an exact name, `scheduling.*` or
+    # `*`, and nothing makes `manage` imply `view`. A position granted only
+    # `scheduling.manage` — which is what every page in Scheduling
+    # Administration requires — was admitted to those pages and then refused
+    # the shifts they are built to list, so the close-out queue and the
+    # staffing-gaps list could only ever show their load-failure state. Widened
+    # rather than narrowed: nobody who could read this before loses it, and it
+    # is the pairing `print_document_service` already uses for the same reason.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
-    """List shifts with optional date filtering"""
+    """List shifts with optional date filtering.
+
+    Readable with either scheduling grant; see the note on the dependency.
+    """
     service = SchedulingService(db)
 
     try:
@@ -676,11 +690,48 @@ async def get_open_shifts(
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
 
+@router.get("/shifts/needing-closeout", response_model=ShiftsListResponse)
+async def list_shifts_needing_closeout(
+    pagination: PaginationParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    # `scheduling.manage` alone, unlike `/shifts`. This is the whole
+    # department's backlog with no member filter applied, and it is reached
+    # from an administration page that already stands on `manage`. A named
+    # shift officer closing their own shift does not come through here.
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Shifts that have ended and were never closed out, oldest first.
+
+    The row list behind the administration hub's "needs close-out" metric, from
+    the same predicate, so the count on the card and the length of this queue
+    cannot disagree.
+
+    Must be registered before /shifts/{shift_id} to avoid route shadowing.
+    """
+    service = SchedulingService(db)
+    shifts, total = await service.get_closeout_backlog(
+        current_user.organization_id,
+        skip=pagination.skip,
+        limit=pagination.limit,
+    )
+    enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
+    return {
+        "shifts": enriched,
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
+
+
 @router.get("/shifts/{shift_id}", response_model=ShiftDetailResponse)
 async def get_shift(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and this
+    # read is behind a `scheduling.manage` administration page.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a shift by ID with attendance"""
     service = SchedulingService(db)
@@ -1212,7 +1263,15 @@ async def add_attendance(
 async def get_attendance(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # `scheduling.manage` alongside `scheduling.view`: matching is literal, so
+    # nothing makes `manage` imply `view`, and every page in Scheduling
+    # Administration is gated on `manage` alone. A position holding only that
+    # grant was admitted to those pages and refused the reads they are built
+    # on. Widened, never narrowed — no caller who could read this before loses
+    # it. See the note on `list_shifts`.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get all attendance records for a shift"""
     service = SchedulingService(db)
@@ -1657,7 +1716,11 @@ async def create_call(
 async def list_shift_calls(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`. A detailed department records its calls on
+    # the shift panel, which is where the close-out queue sends an officer.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List all calls for a shift"""
     service = SchedulingService(db)
@@ -1726,7 +1789,12 @@ async def delete_call(
 async def list_templates(
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List shift templates"""
     service = SchedulingService(db)
@@ -1763,7 +1831,12 @@ async def create_template(
 async def get_template(
     template_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a shift template by ID"""
     service = SchedulingService(db)
@@ -1820,7 +1893,12 @@ async def delete_template(
 async def list_patterns(
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List shift patterns"""
     service = SchedulingService(db)
@@ -1857,7 +1935,12 @@ async def create_pattern(
 async def get_pattern(
     pattern_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a shift pattern by ID"""
     service = SchedulingService(db)
@@ -1969,7 +2052,15 @@ async def generate_shifts_from_pattern(
 async def list_shift_assignments(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # `scheduling.manage` alongside `scheduling.view`: matching is literal, so
+    # nothing makes `manage` imply `view`, and every page in Scheduling
+    # Administration is gated on `manage` alone. A position holding only that
+    # grant was admitted to those pages and refused the reads they are built
+    # on. Widened, never narrowed — no caller who could read this before loses
+    # it. See the note on `list_shifts`.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List all assignments for a shift"""
     service = SchedulingService(db)
@@ -2209,6 +2300,37 @@ async def confirm_assignment(
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to confirm assignment.", error)
+        )
+    enriched = await service.enrich_assignments([result])
+    return enriched[0]
+
+
+@router.post(
+    "/assignments/{assignment_id}/decline", response_model=ShiftAssignmentResponse
+)
+async def decline_assignment(
+    assignment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Decline own shift assignment.
+
+    The mirror of ``confirm``: answering a roster is the member's own decision
+    either way, so both are self-scoped rather than permission-gated. Declining
+    on somebody else's behalf is an officer edit and goes through
+    ``PATCH /assignments/{assignment_id}``, which requires scheduling.assign or
+    being the shift's officer.
+    """
+    service = SchedulingService(db)
+    result, error = await service.decline_assignment(
+        assignment_id,
+        current_user.id,
+        current_user.organization_id,
+        actor=_roster_actor(current_user),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to decline assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
     return enriched[0]

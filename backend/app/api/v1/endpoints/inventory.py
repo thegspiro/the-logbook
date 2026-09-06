@@ -5761,8 +5761,14 @@ async def update_issuance_charge(
         username=current_user.username,
     )
 
+    # The org filter is redundant — update_issuance_charge above resolves the
+    # issuance in-org and the handler 400s otherwise — and is here so the
+    # re-read is not a by-id query kept safe only by what happened earlier in
+    # the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
-        select(ItemIssuance).where(ItemIssuance.id == str(issuance_id))
+        select(ItemIssuance)
+        .where(ItemIssuance.id == str(issuance_id))
+        .where(ItemIssuance.organization_id == str(current_user.organization_id))
     )
     issuance = result.scalar_one()
     return ItemIssuanceResponse.model_validate(issuance)
@@ -6703,13 +6709,17 @@ async def upsert_member_size_preferences(
 )
 async def get_my_size_preferences(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get the current user's own size preferences.
 
+    A member's own uniform sizes, like the gear issued to them and the
+    requests they raise, are their own record — every sibling endpoint behind
+    "My Issued Gear" requires only authentication, and these two are
+    documented as "self, login required".
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
     service = InventoryService(db)
     prefs = await service.get_member_size_preferences(
@@ -6727,13 +6737,17 @@ async def get_my_size_preferences(
 async def upsert_my_size_preferences(
     data: MemberSizePreferencesCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create or update the current user's own size preferences.
 
+    Self-scoped like the GET above: the row written is keyed on
+    ``current_user``, so this grants no reach over anyone else's sizes. The
+    officer-facing endpoints for another member's sizes keep their own gates
+    (``inventory.view`` to read, ``inventory.manage`` to write).
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
     service = InventoryService(db)
     prefs, error = await service.upsert_member_size_preferences(

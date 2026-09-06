@@ -1001,6 +1001,20 @@ class ShiftEligibilityService:
             if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
         }
 
+    async def effective_call_type_slugs_for(self, organization_id: str) -> set:
+        """:meth:`effective_call_type_slugs`, addressed by id.
+
+        For a caller that holds an organization id rather than the row — the
+        report editor, deciding whether an edited call-type list still holds
+        this department's slugs.
+
+        An organization that cannot be resolved yields the empty set, which
+        fails closed: callers use this to confirm that a value really is a
+        configured type, and an unresolvable organization confirms nothing.
+        """
+        org = await self._get_org(organization_id)
+        return self.effective_call_type_slugs(org) if org else set()
+
     def effective_call_type_slugs(self, org: Organization) -> set:
         """Every slug currently in force, before any normalization.
 

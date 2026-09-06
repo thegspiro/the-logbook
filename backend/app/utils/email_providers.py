@@ -205,6 +205,43 @@ def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
+def invalid_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
+    """Why an *enabled* configuration's identifiers cannot be used, or None.
+
+    Companion to ``missing_for_enabled``, which only asks whether a value is
+    present. A tenant or client ID is a GUID that goes into the authority URL
+    and the token request; a present-but-malformed one (an application *name*,
+    or the secret's ID instead of the secret) passes a truthiness check, saves
+    green with email enabled, and then fails every single send.
+
+    Write paths only, like its companion. Reads reconstruct stored rows
+    through the schema, so rejecting a malformed stored value here would lock
+    an organization out of the screen where they would fix it.
+    """
+    if not email_config.get("enabled") or not uses_microsoft_oauth(email_config):
+        return None
+    # Imported here: the OAuth module imports nothing from this one, and a
+    # module-level import would make that a cycle the moment it does.
+    from app.utils.microsoft_oauth import (
+        MicrosoftOAuthError,
+        validate_client_id,
+        validate_tenant_id,
+    )
+
+    for value, validate in (
+        (email_config.get("microsoft_tenant_id"), validate_tenant_id),
+        (email_config.get("microsoft_client_id"), validate_client_id),
+    ):
+        if not value:
+            # Absence is missing_for_enabled's to report, with its own wording.
+            continue
+        try:
+            validate(value)
+        except MicrosoftOAuthError as e:
+            return str(e)
+    return None
+
+
 def required_field_message(platform: Any, field: str) -> str:
     return (
         f"Enabling {platform} email requires {REQUIRED_FIELD_LABELS[field]}. "

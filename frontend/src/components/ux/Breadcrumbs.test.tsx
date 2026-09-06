@@ -137,6 +137,108 @@ describe('Breadcrumbs', () => {
     expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).not.toBeInTheDocument();
   });
 
+  describe('underHub', () => {
+    it('splices the hub in after the ancestor it shares with the page', () => {
+      // /training/admin and /training/programs are siblings, so no amount of
+      // walking the URL produces the hub crumb.
+      grant('training.manage');
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/admin" />);
+
+      expect(crumbLinks()).toEqual(['/training', '/training/admin']);
+      expect(within(trail()).getByRole('link', { name: 'Training Administration' })).toBeInTheDocument();
+      expect(currentCrumbs()[0]).toHaveTextContent('Programs');
+    });
+
+    it('omits the hub for a viewer whose grants do not open it', () => {
+      // Replaces the hand-rolled `canManage ? … : []`: a member browsing the
+      // programme library from the member navigation is not under Admin, and
+      // offering the crumb would send them to a refusal.
+      grant();
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/admin" />);
+
+      expect(within(trail()).queryByText('Training Administration')).not.toBeInTheDocument();
+      expect(currentCrumbs()[0]).toHaveTextContent('Programs');
+    });
+
+    it('names the hub the way the registry does, not the way a caller guessed', () => {
+      // The two pages that hand-rolled this trail called the hub "Admin" while
+      // the hub, the navigation and the registry called it "Training
+      // Administration". One name per page.
+      grant('training.manage');
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/admin" />);
+
+      expect(within(trail()).queryByText('Admin')).not.toBeInTheDocument();
+    });
+
+    it('adds nothing when the hub is already an ancestor', () => {
+      // /scheduling/admin/reports sits under its hub, so the generated trail
+      // already carries it; splicing would repeat it.
+      grant('scheduling.manage');
+      renderAt('/scheduling/admin/reports', <Breadcrumbs underHub="/scheduling/admin" />);
+
+      expect(crumbLinks()).toEqual(['/scheduling', '/scheduling/admin']);
+    });
+
+    it('adds nothing for a hub the registry does not carry', () => {
+      // A typo must cost the trail its hub, never the page it decorates.
+      grant('training.manage');
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/nope" />);
+
+      expect(crumbLinks()).toEqual(['/training']);
+    });
+
+    it('reaches Inventory Administration from a page outside its URL space', () => {
+      // Most of Inventory's admin pages sit under /inventory/admin and reach
+      // the hub by the URL alone. Temporary Loans, Storage Areas and Import do
+      // not, and their generated trail stopped at /inventory — the items
+      // catalogue, which is a different page from the hub that links to them.
+      grant('inventory.manage');
+      renderAt('/inventory/checkouts', <Breadcrumbs underHub="/inventory/admin" />);
+
+      expect(crumbLinks()).toEqual(['/inventory', '/inventory/admin']);
+      expect(within(trail()).getByRole('link', { name: 'Inventory Administration' })).toBeInTheDocument();
+    });
+
+    it('names the loans page the way the hub card and its heading do', () => {
+      // The segment is "checkouts" while the card and the <h1> both say
+      // "Temporary Loans" — the drift the registry entry exists to close.
+      grant('inventory.manage');
+      renderAt('/inventory/checkouts', <Breadcrumbs underHub="/inventory/admin" />);
+
+      expect(currentCrumbs()[0]).toHaveTextContent('Temporary Loans');
+      expect(within(trail()).queryByText('Checkouts')).not.toBeInTheDocument();
+    });
+
+    it('reaches Members Administration from the scanner', () => {
+      grant('members.manage');
+      renderAt('/members/scan', <Breadcrumbs underHub="/members/admin" />);
+
+      expect(crumbLinks()).toEqual(['/members', '/members/admin']);
+      expect(currentCrumbs()[0]).toHaveTextContent('Scan Member ID');
+    });
+
+    it('omits the hub for a scanner user whose grant does not open it', () => {
+      // The asymmetry is specific to this page and runs the opposite way to the
+      // usual one: users.view opens the scanner but is deliberately NOT an
+      // administrative grant, so a quartermaster reaches a page whose hub is
+      // closed to them. The gate is the hub's, not the page's.
+      grant('users.view');
+      renderAt('/members/scan', <Breadcrumbs underHub="/members/admin" />);
+
+      expect(within(trail()).queryByText('Members Administration')).not.toBeInTheDocument();
+      expect(currentCrumbs()[0]).toHaveTextContent('Scan Member ID');
+    });
+
+    it('hyphenates the check-in station the way its heading does', () => {
+      // Title-casing the segment gives "Check In Station", which is a second
+      // name for one page.
+      grant('members.manage');
+      renderAt('/members/check-in-station', <Breadcrumbs underHub="/members/admin" />);
+
+      expect(currentCrumbs()[0]).toHaveTextContent('Check-In Station');
+    });
+  });
+
   describe('omitCurrentPage', () => {
     it('ends the trail at the parent', () => {
       grant('inventory.manage');

@@ -33,6 +33,7 @@ from app.models.training import (
 )
 from app.models.user import Organization, Position, User, UserStatus
 from app.services.admin_hub_service import MODULE_REGISTRY, AdminHubService
+from app.services.scheduling_service import SchedulingService
 
 pytestmark = pytest.mark.integration
 
@@ -343,6 +344,54 @@ class TestCloseoutBacklog:
         value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
 
         assert value == "0"
+
+    # The number on the hub card and the length of the queue it links to are
+    # one population read twice. They were two: the metric was unbounded while
+    # the close-out page re-derived the set from a date range of its own
+    # choosing, so a shift older than the page's default lookback was counted
+    # here and missing there. Both now read `closeout_backlog_halves`, and this
+    # asserts the agreement rather than the shared call — a later caller that
+    # adds a condition of its own would still pass the latter.
+    async def test_the_card_and_the_queue_it_links_to_agree(self, db_session):
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        # One of each kind the rule distinguishes, so agreement here is not
+        # agreement on the empty set.
+        await _shift(
+            db_session,
+            org,
+            start=NOW - timedelta(days=2, hours=12),
+            end=NOW - timedelta(days=2),
+        )
+        await _shift(db_session, org, start=NOW - timedelta(days=3), end=None)
+        await _shift(db_session, org, start=NOW - timedelta(hours=2), end=None)
+        await _shift(
+            db_session,
+            org,
+            start=NOW - timedelta(days=5),
+            end=NOW - timedelta(days=4, hours=12),
+            finalized=True,
+        )
+        await _shift(
+            db_session,
+            org,
+            start=NOW - timedelta(days=6),
+            end=NOW - timedelta(days=5, hours=12),
+            status=ShiftStatus.CANCELLED,
+        )
+        await _shift(
+            db_session,
+            org,
+            start=NOW + timedelta(hours=1),
+            end=NOW + timedelta(hours=13),
+        )
+
+        value, _ = await _metric(db_session, org, admin, "shifts_needing_closeout")
+        shifts, total = await SchedulingService(db_session).get_closeout_backlog(org.id)
+
+        assert value == "2"
+        assert total == 2
+        assert len(shifts) == 2
 
 
 # ── Short-staffed shifts ────────────────────────────────────────────────────

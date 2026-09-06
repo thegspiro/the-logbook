@@ -7,6 +7,648 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notification Rules invited an officer to create one they cannot (2026-09-06)
+
+**Fixed**
+
+- **The empty Notification Rules tab addressed a button most of its readers
+  never see.** `notifications.view` opens the tab; creating a rule is
+  `notifications.manage` on the server, and those are not the same population
+  — 16 of the 21 seeded positions carrying view, among them captains,
+  lieutenants, the treasurer, the secretary and the training and safety
+  officers, stop short of manage. All of them read "Create your first
+  notification rule to start sending automated notifications." over a card with
+  no button on it. The heading "No Notification Rules" still answers everyone
+  who opens the tab, and a search that matches nothing is still reported to
+  everyone; it is the invitation that is now withheld.
+- **The Add Rule dialog rendered on its own open state**, so a session that
+  lost `notifications.manage` with the form open kept it on screen with a live
+  submit button. It is now gated on the same permission as the two buttons that
+  open it.
+
+### The Elections page pitched an election members cannot call (2026-09-06)
+
+**Fixed**
+
+- **A department with no elections showed members an empty panel captioned as
+  though something were missing.** Creating an election is `elections.manage` on
+  the server, and the Create Election button was already withheld, so the notice
+  spoke to a control the member could not see. With no elections and no status
+  filter applied, a member now gets a blank panel. A status filter that matches
+  nothing still reports that to everyone — that is feedback on what they asked
+  for, not an invitation.
+- **The Create Election dialog rendered on its own open state**, so a session
+  that lost `elections.manage` with the dialog open kept the form on screen and
+  its submit button live. It is now gated on the same permission as the button
+  that opens it, matching the fix applied to the Events, Members, Documents,
+  Scheduling and Minutes dialogs.
+- **A member's session no longer fetches three endpoints it has no use for.**
+  Meetings, upcoming events and operational ranks populate selectors that exist
+  only inside the create dialog, and were requested on every page load
+  regardless of permission — a member without `meetings.view` or `events.view`
+  got 403s that the page swallowed silently.
+
+### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
+
+**Fixed**
+
+- **`effectDepsIntegrity` failed open on the arrays it exists to catch.** The
+  scan for a dependency array's closing bracket stopped 400 characters past the
+  suppression. Prettier puts one entry per line once an array is long, so nine
+  ordinary names already carry the bracket past that — and the array was then
+  skipped as though the suppression governed no dependency array at all. Longer
+  meant likelier to escape, the exact inverse of the rule's intent. The
+  lookahead now bounds the search for the _opening_ bracket only; the match for
+  the close runs to the end of the file. No suppression in the tree was being
+  skipped today, so the gap was latent rather than active.
+- **A legal five-entry array no longer fails the check.** Entries were counted
+  as top-level commas plus one, and Prettier leaves a trailing comma on an
+  expanded array — so five dependencies were reported as six, against a limit
+  that explicitly permits five. Non-empty top-level segments are counted
+  instead.
+
+### The Minutes page advertised a feature members cannot use (2026-09-06)
+
+**Fixed**
+
+- **The empty state sold recording minutes to people who cannot record them.**
+  With nothing recorded, the page showed three cards pitching what the feature
+  gets you — templates, action items, archives and search — above a card
+  telling the reader to "Start recording meeting minutes". Creating minutes is
+  `minutes.manage`-gated on the server and the buttons beside that copy were
+  already withheld, so a member read an advertisement with no way in. The cards
+  and the instruction are now shown only to someone who can act on them.
+
+- **The Record Minutes dialog outlived the permission that opened it.** It
+  rendered on its own open state, so losing `minutes.manage` with it open left
+  the form on screen. It is now gated like the controls that open it.
+
+**Changed**
+
+- **The page still reports "No Meeting Minutes" to everyone.** A member opened
+  it deliberately and deserves the answer; it is the pitch and the instruction
+  that are withheld, not the fact.
+
+### A member's own uniform sizes no longer need a permission (2026-09-06)
+
+**Fixed**
+
+- **`GET`/`PUT /inventory/my/size-preferences` required `inventory.view`.**
+  Both handlers key the row on the caller, so neither reaches another member's
+  sizes — and every sibling endpoint behind "My Issued Gear" (issued gear,
+  equipment requests, return requests, loan extension) requires only
+  authentication. The June 2026 changelog recorded these two the same way,
+  "self, login required", so the grant had drifted from the documented
+  contract. They now require authentication only.
+
+  The practical effect was the My Sizes button: it sits on a route that needs
+  no permission and was rendered unconditionally, so a member whose position
+  lacked `inventory.view` got a button that 403'd. Dormant for a baseline
+  member, who holds that grant.
+
+  **This is a widening.** The officer-facing endpoints for _another_ member's
+  sizes are untouched and keep their stricter gates — `inventory.view` to
+  read, `inventory.manage` to write — and a test now pins both halves.
+
+### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
+
+**Fixed**
+
+- **"Add stock" on the supply worklist is now gated on `inventory.manage`.**
+  Reading the worklist takes `inventory.check_view`, and the administration hub
+  offers it on that grant deliberately — knowing what is about to expire is the
+  checklist officer's business. Adding replacement stock is not:
+  `POST /inventory/items/{id}/lots` requires `inventory.manage`, so a
+  check_view holder got a 403 from a button the page had just offered them. The
+  control is now disabled rather than hidden, with a title naming who does it,
+  matching the Swap control on the apparatus inventory screen — the same
+  manage-gated stock write. Reading the worklist is unchanged.
+
+### Inventory and Members pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Inventory and Members pages that sit beside their
+  administration hub rather than under it.** Most of these two modules' admin
+  pages do nest under `/inventory/admin` and `/members/admin` and already
+  reached their hub by the URL alone. Five did not: Temporary Loans, Storage
+  Areas and Import sit at `/inventory/…`, and the member ID scanner and the
+  Check-In Station at `/members/…`, so their trail stopped at the module landing
+  page — which for Inventory is the items catalogue, a different page from the
+  hub that links to them. Temporary Loans, Import, the scanner and the Check-In
+  Station had no trail at all.
+- **A derived check that an Inventory Administration card outside the hub's URL
+  space names its hub.** The hub crumb is opt-in per page, so a page that should
+  show it and does not simply will not, in silence. Inventory declares its cards
+  as data, which makes the obligation checkable: every card route not already
+  under `/inventory/admin` must carry the hub, and the test names any that does
+  not.
+
+**Fixed**
+
+- **The Inventory hub no longer offers an export the page it opens cannot
+  do.** The "Import / Export" card ("Bulk import from CSV or export inventory
+  data") pointed at `/inventory/import`, which only imports — export is a button
+  on the items list. The card now says "Import" and describes only that.
+- **Three pages no longer carry a second name in their trail.** The crumb for
+  `/inventory/checkouts` read "Checkouts" while the hub card and the page's own
+  heading both said "Temporary Loans"; `/members/check-in-station` title-cased to
+  "Check In Station" against a heading that hyphenates it. The hub-card
+  agreement test now covers Inventory as well as Scheduling, so a card and a
+  crumb naming one page differently fails rather than shipping.
+
+### The close-out queue and the number above it are one list now (2026-09-06)
+
+**Added**
+
+- **`GET /scheduling/shifts/needing-closeout`.** The shifts that have ended and
+  were never closed out, oldest first, gated on `scheduling.manage`. Ordered by
+  when each shift was actually over — `end_time`, or `start_time` plus the
+  department's open-ended cushion — because a shift with no recorded end was
+  over a cushion after it began, and ordering by the start interleaves it with
+  shifts that finished hours earlier. Unlike `GET /scheduling/shifts` it takes
+  `scheduling.manage` alone: it is the whole department's backlog with no
+  member filter applied.
+
+**Changed**
+
+- **The close-out queue reads the server's population instead of deriving its
+  own.** `/scheduling/admin/closeout` and the administration hub's **To close
+  out** card now read one predicate, `closeout_backlog_criteria`. They were two:
+  the metric has no earliest date while the page re-derived the set from a date
+  range it chose, so a shift left unclosed before that range began was counted
+  on the card and missing from the list it linked to.
+- **The queue's From and To controls are gone.** This page is the backlog, not
+  a query over it, and a range is what let it and the card describe different
+  populations. Three workarounds go with them: the six-month default, the
+  reversed-range guard, and the ten-page fetch loop that existed only because
+  the generic shifts endpoint returned mostly closed-out shifts and the unclosed
+  ones could sit on page three. The list is capped at one page of 200 and says
+  so when the backlog is longer, rather than letting a cap read as the end of
+  the work.
+- **The queue refreshes itself as shifts become eligible.** The page no longer
+  re-tests the server's answer against its own cached cushion — an officer who
+  lowered the cushion elsewhere made every other open tab drop rows the server
+  had just declared overdue, and the page then read "Every shift is closed out"
+  with a positive total beside it. Membership is the server's answer alone, so
+  the queue is re-read on the thirty-second clock the waiting badges already
+  run on. The refresh is skipped while a close-out wizard is open, so it cannot
+  unmount unsaved entries, and a failed refresh leaves the last good list on
+  screen rather than blanking a working page.
+
+### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
+
+**Fixed**
+
+- **Building an equipment checklist on a phone, the blue "Add item" button
+  at the bottom of a location could not be tapped.** It was drawn
+  underneath the checklist's own bottom bar and the app's bottom
+  navigation, so taps landed on those instead. Adding an item has moved
+  onto the checklist's bottom bar, where it stays reachable, follows the
+  location you last opened, and scrolls to that location when you use it.
+  Adding a _location_ is still on the same bar, now labelled "Location",
+  and remains available from the buttons below the list as before.
+- **Several buttons were smaller than a fingertip on a phone.** Buttons on
+  My Issued Gear, My Equipment Checklists, Reorder Requests and the
+  checklist builder now meet the 44-pixel minimum touch size on phones.
+- **A stray scrollbar under the tabs on an inventory item's page** has been
+  removed.
+
+### Create Shift: the dialog's fields had no names (2026-09-06)
+
+**Fixed**
+
+- **Nothing in the Create Shift dialog was announced by name.** All nine of its
+  controls — Shift Template, Start Date, End Date, Apparatus, Start Time, End
+  Time, Shift Officer, Notes and the template search box — sat next to a label
+  that was never associated with them, so a screen reader read out nine
+  anonymous fields ("edit text", "combo box") and gave no way to tell which was
+  which. Clicking a label also focused nothing, which is the same defect as seen
+  with a mouse. Every field now carries its label.
+- "Custom Times" heads the Start Time / End Time pair rather than naming a
+  single field, so it is announced as the group it is instead of claiming to be
+  one of them.
+- **The two time fields were announced as a time, not as a field.** Each is
+  three dropdowns (hour, minute, AM/PM) that name themselves, and the start
+  field named itself after whatever time the chosen template starts at — so a
+  screen reader offered "08:00 hour" where it should have said "Start Time
+  hour", and the end field fell back to a bare "Time". All six now carry the
+  visible field name.
+
+### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
+
+**Fixed**
+
+- **`CHANGELOG.md` is marked `merge=union` in a new `.gitattributes`.** Every
+  PR adds its entry at the top of `## [Unreleased]`, so any two open at once
+  write different content at the same offset and git reports a conflict -- not
+  over substance, but because a textual merge has no rule for ordering two
+  additions. On 2026-09-06 this was the only conflict left across all ten open
+  PRs, hitting seven of them.
+
+  Union is sound for this file specifically because entries are independent and
+  additive: no PR edits another's entry, so taking both cannot drop an intended
+  change. It is deliberately **not** applied to
+  `scripts/screenshots/audit_baseline.txt`, the other file that had been
+  conflicting -- branches delete lines there, and union would silently
+  resurrect every deleted entry.
+
+  The tradeoff it does carry: two branches editing the _same_ entry get both
+  revisions as adjacent duplicate lines rather than a conflict. That is visible
+  in review, and is recorded in the `.gitattributes` comment.
+  **Scope, stated plainly because the first version of this entry overstated
+  it: this does not fix the "Merge pull request" button.** GitHub's server-side
+  merge does not apply `.gitattributes` merge drivers, so a PR whose only
+  conflict is this one is still reported as conflicted in the UI and still
+  refuses to merge. What the rule covers is every merge run by a _git client_ --
+  `git merge main` on a feature branch, `git pull`, and merging a PR branch
+  locally before pushing. That is where the seven were resolved.
+
+  **A second sharp edge, since it is not obvious:** git reads merge attributes
+  from the tree being merged **into**, not from either side's content. A branch
+  created before this commit therefore still hits the conflict when main is
+  merged into it, because its own checkout has no `.gitattributes`. Cherry-pick
+  this file onto such a branch first, then merge.
+
+  The tradeoff the rule itself carries: two branches editing the _same_ entry
+  get both revisions as adjacent duplicate lines rather than a conflict. That
+  is visible in review, and is recorded in the `.gitattributes` comment.
+
+### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
+
+Codex raised these on #2206 as it merged, so none were addressed there.
+
+**Fixed**
+
+- **A stalled Microsoft token request could hold a thread forever.** `msal`
+  defaults to no timeout, and nothing above it supplied a deadline: the
+  connection test's `asyncio.timeout` abandons the future but not the worker
+  running it, and a real send goes through `asyncio.to_thread` with no outer
+  timeout at all, so repeated sends against an unreachable authority would
+  consume the executor and stall unrelated threaded work. The client is now
+  built with a finite timeout, as msal's own documentation advises.
+- **A cold cache let concurrent sends each build their own msal client.** The
+  cache lock was released before construction, so every thread in a
+  notification fan-out missed, built its own client and went to Entra ID
+  separately — the throttling the shared token cache exists to avoid.
+  Construction now happens under a per-registration lock with a re-check;
+  the lock is per key rather than global so one slow directory cannot block
+  another tenant's.
+- **A Cloudflare account check that never completed was reported as a verdict.**
+  When the account-scoped request failed with a network error and the
+  fallback user endpoint answered 401 or 403 — which an account-owned token
+  does even when it is perfectly good — the test told the administrator the
+  token was invalid on the strength of a check that never ran. A network
+  failure on either request is now reported as one.
+- **A transport failure was diagnosed as a missing mailbox grant.** The
+  Microsoft OAuth test keyed its "Exchange Online refused the token" message
+  off `connected`, which is true from the moment the socket opens and so
+  stays true for STARTTLS, EHLO, timeout and disconnect failures. The
+  handshake now records whether it was actually reached, before it can
+  raise, and only a real authentication rejection gets that message.
+- **Onboarding could persist a Microsoft auth method the settings screen
+  cannot read.** The mapper stored `microsoftAuthMethod` verbatim while every
+  reader treats an unknown value as App Password, so an unsupported value
+  paired with an App Password passed the enabled check and was written — and
+  the settings schema, which every read rebuilds stored rows through, then
+  rejects it, locking the organization out of the screen that would fix it.
+  The method is validated at that write boundary.
+- **A malformed tenant or client ID could save green and then fail every
+  send.** `missing_for_enabled` only asks whether a value is present, so an
+  application _name_, or the secret's ID instead of the secret, saved
+  successfully with email enabled. `invalid_for_enabled` now applies the
+  existing GUID validation on the write paths — writes only, because
+  rejecting a malformed _stored_ value on read would lock an organization
+  out of the screen where they would correct it.
+
+**Changed**
+
+- **`MicrosoftAuthMethod` moved to `constants/enums.ts`**, where this
+  project's frontend enums live, and every call site now uses the constant
+  instead of a `'oauth'` / `'app_password'` literal. It had been declared
+  beside a response interface in `types/user.ts`, which made a second enum
+  location.
+- **Both Microsoft OAuth setup guides now include the Exchange service
+  principal.** The backend's own contract records that an Exchange
+  administrator must register the application's service principal, and the
+  onboarding and settings instructions omitted it — an Entra ID registration
+  alone is not visible to Exchange, so an administrator following the printed
+  steps would obtain a token and still fail to sign in.
+- **The stale-connection-test guard is covered by behaviour rather than by
+  its own source.** The previous test asserted against the page's source
+  text, so it could pass on a matching string in dead code and proved nothing
+  about a result arriving after an edit. The logic moved into
+  `useEmailConnectionTest`, tested through `renderHook` with a controllable
+  promise: a result that lands after the form changed is now demonstrated to
+  be discarded rather than asserted to be.
+
+### A hand-written hook dependency array can no longer drift (2026-09-06)
+
+**Fixed**
+
+- **The inventory items page keys its reload on `filterParams`, not on a copy
+  of the filters.** Nine filters were maintained in two places — the
+  `filterParams` callback ESLint checks, and a hand-written array beside it
+  that listed six. The five missing entries (location, size, colour, style and
+  the vendor scope) are why those controls did nothing until an unrelated
+  reload applied them; adding them back left the copy in place for the next
+  filter to fall out of. One effect now depends on `filterParams` itself, so a
+  filter added there reaches the reload with no second list to remember.
+- **Every filter takes the same debounced path.** The dropdowns reloaded
+  immediately and the search box after 350ms, which is what made two effects
+  necessary in the first place. One path costs a third of a second on a
+  dropdown and lets changes across several controls coalesce into one request
+  rather than race.
+
+**Added**
+
+- **`effectDepsIntegrity.test.ts` fails on a long hand-maintained dependency
+  array under an `exhaustive-deps` suppression.** In the manner of
+  `routeIntegrity` and `dialogScrollIntegrity`, it walks the source. The
+  threshold is measured rather than chosen: of the 40 suppressions in the tree,
+  the legitimate ones run 0–4 entries — mount-only effects and route-param keys
+  that omit a function identity, where there is no list to drift — and the one
+  defect ran 11. A suppression is still the right call for those; what is
+  banned is the array that is trying to be exhaustive by hand.
+
+### Declining your own shift no longer answers 403 (2026-09-06)
+
+**Added**
+
+- **`POST /scheduling/assignments/{id}/decline`** — the mirror of the existing
+  `confirm` route, self-scoped the same way: the assignment is resolved by
+  `user_id` as well as id, so a foreign id can never cross tenants. It clears
+  `confirmed_at` when a member withdraws an affirmation they had already given,
+  and only notifies the officer on the transition, so a retry after a dropped
+  response does not report the seat open twice.
+
+**Fixed**
+
+- **A member could not decline their own shift assignment.** Confirm and
+  Decline sit side by side on My Shifts and in the shift detail panel, and are
+  only ever offered on your own seat — but only Confirm had a route of its own.
+  Decline reached for `PATCH /assignments/{id}`, which requires
+  `scheduling.assign` or being the shift's officer, so a member holding neither
+  got a 403 from a button that was theirs to press. Both screens now call the
+  new endpoint. The PATCH route is unchanged and stays officer-only: it is how
+  an officer records a decline on somebody's behalf, and it carries edits a
+  member has no business making.
+
+### Events and Training pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Events and Training pages that sit beside their
+  administration hub rather than under it.** Both hubs are tab-based and live at
+  `/events/admin` and `/training/admin`, while their pages are siblings —
+  `/training/programs`, not `/training/admin/programs` — so no amount of walking
+  the URL reaches the hub. Shift Templates, Event Analytics, Programs, the
+  programme detail, Course Library, Skills Testing, Cohorts and the compliance
+  configuration now show the way back to Administration, and only to a viewer
+  whose grants open it.
+
+**Fixed**
+
+- **The training trail no longer calls the hub something the hub does not call
+  itself.** Programs and the programme detail hand-built their trail and labelled
+  it "Admin", while the hub page, the navigation entry and the breadcrumb
+  registry all called it "Training Administration" — one page under two names.
+  The hub crumb is now taken from the registry, so it cannot drift again.
+- **The programme detail no longer repeats the programme's name.** The trail
+  ended with the name that the heading directly below it already carried.
+
+### Security: outbound integration requests had no response-size cap (2026-09-06)
+
+**Fixed**
+
+- **An integration endpoint (Salesforce, Cal.com, Documenso, or a chat
+  webhook) that returned an oversized or slow-drip response body could
+  drive unbounded memory growth per request.** A size limit was declared
+  in the shared integration HTTP client's code but nothing enforced it.
+  It is now enforced centrally for every connector using the shared
+  `create_integration_client()` helper — a response is aborted once it
+  exceeds the limit, before it can be buffered into memory — with no
+  change needed at most connectors' call sites. PayPal's two outbound
+  calls (`get_access_token`, `verify_webhook_signature`) built their own
+  bare `httpx.AsyncClient` instead of using the shared helper and were
+  not covered by the initial fix; they now go through
+  `create_integration_client()` too (with PayPal's own vendor-tuned
+  timeout preserved via a new `timeout=` override), so every **httpx-based**
+  integration connector's outbound calls are covered. **Named exception:**
+  Google Calendar's connector (`google_calendar_service.py`) builds its
+  client via `googleapiclient.discovery.build()`, which wires up its own
+  `httplib2`-based transport entirely outside `create_integration_client()`
+  — it is not covered by this fix. See
+  `docs/KNOWN_LIMITATIONS.md` ("Google Calendar's Connector Bypasses the
+  Shared HTTP Hardening") for why a safe fix wasn't forced through in this
+  pass and what it would take.
+- **`create_integration_client()`'s `**kwargs` interface silently dropped
+  `http2`, `http1`, and `cert`.** Because this factory always supplies an
+  explicit `transport=`, pinned httpx 0.28.1 never applied those kwargs to
+  the actual connection — a caller asking for `http2=True` or a client
+  certificate got neither, with no error. They're now forwarded to every
+  transport this factory builds (direct and proxy-mounted alike).
+
+### The lightweight apparatus list hides what a member cannot do (2026-09-06)
+
+**Fixed**
+
+- **`/apparatus-basic` no longer offers Add, Edit and Delete to members without
+  `scheduling.manage`.** The lightweight fleet list a department gets when the
+  Apparatus module is off is deliberately readable by everyone — shift staffing
+  needs these unit definitions, so the route carries no permission gate and the
+  list endpoint is auth-only. Its writes are not: create, update and delete all
+  require `scheduling.manage`, so every one of those controls answered 403. The
+  navigation links this page for every member whenever the Apparatus module is
+  off, which made it a full CRUD surface shown to the whole department. Reading
+  the fleet is unchanged.
+
+### A Create Shift form outlived the permission that opened it (2026-09-06)
+
+**Fixed**
+
+- **The Create Shift form rendered on its own open state alone.** Both controls
+  that open it are already withheld from a member, and creating a shift is
+  `scheduling.manage`-gated on the server — but losing the permission while the
+  form was open left a Create Shift button on screen that would 403. The form
+  now closes with the permission, gated at `createShiftOpen` so the dialog-stack
+  registration and the body scroll lock go with it rather than being stranded.
+
+### The shifts nobody closed out now have a list, not just a number (2026-09-05)
+
+**Added**
+
+- **`/scheduling/admin/closeout` — the close-out queue.** Every shift that has
+  ended and was never closed, oldest first, with the wait on each row. A shift
+  nobody closed leaves no trace on the board, which draws the future, so the only
+  sign of one was the Scheduling Administration hub's **To close out** number:
+  how many there are, never which. Finding them meant paging back through the
+  calendar a day at a time. The settings that govern what close-out asks for are
+  shown beneath the queue, read-only, each linking to the section that owns it.
+- **A shift still running is not backlog.** What counts as ended is
+  `shiftEndInstant` — a shift's `end_time`, else its start plus the department's
+  open-ended cushion, the same number the roster lock stands on and the same rule
+  the server's own backlog count uses. A shift with no recorded end is not a
+  malformed shift: a crew goes out and comes back when the job is done.
+- **Cancelled shifts are excluded.** Nothing ran, so there is nothing to record,
+  and counting them makes a backlog that can never reach zero.
+
+**Changed**
+
+- **`shiftEndInstant` is now exported from `shiftBoard.ts`** and `rosterDeadline`
+  reads through it rather than recomputing the same fallback. Three answers
+  depend on when a shift ended — when the roster locks, whether the shift is
+  still running, and whether it is waiting to be closed — and they must not
+  drift apart. No behaviour change: the lock computes exactly what it did.
+- **The Scheduling Administration hub gains an "After the shift" heading.**
+  Closing a shift out is work waiting on somebody; reporting is what you read
+  afterwards, so it is not a row under Reporting.
+- **`docs/SCHEDULING_MODULE.md` no longer describes a superseded fix.** It
+  claimed the hub's Short-staffed metric reads the seat list with a `JSON_TYPE`
+  guard; that implementation was replaced by
+  `SchedulingService.filter_shifts_with_open_positions` before the change
+  describing it landed, and the paragraph survived the merge. It now records what
+  the two rules actually are and why they can differ.
+
+**Known, and deliberate**
+
+- **There is one close-out implementation and this page is not it.** A department
+  recording a call count gets the existing three-step wizard, opened in place on
+  the row with that shift's outstanding equipment checks and the department's own
+  blocking rule. Every other department's close-out is the finalize checklist
+  inside the shift panel, which reads that shift's attendance, equipment checks
+  and manual hours — so the row opens the shift instead. Re-rendering that
+  checklist here would be a second copy of a flow that decides what goes on a
+  member's record.
+- **A failed equipment-checklist lookup is not "nothing outstanding".** That
+  endpoint requires an Inventory grant `scheduling.manage` does not imply, so it
+  refuses an ordinary scheduling officer — and reading the refusal as an empty
+  list would open the close-out wizard with its override control hidden while
+  the server declined every attempt to finish, with nothing on screen saying
+  why. The row reports the failure and offers a retry.
+- **The queue reads the whole range before it says the range is clear.** The
+  shifts endpoint pages and orders by date ascending, and close-out state is
+  filtered client-side afterwards, so one page of a busy range could be entirely
+  closed-out shifts while the unclosed ones sat on a later page — under a
+  heading announcing that every shift in the range was closed out. A range wider
+  than the queue reads now says so rather than being quietly truncated.
+- **A superseded date range no longer wins.** Changing From and then To left two
+  requests in flight, and the older one could land last: the date controls
+  described one range while the queue described another.
+- **A failed settings load is reported, not spun on.** The scheduling store
+  deliberately leaves the settings unloaded on failure so the next mount retries
+  rather than caching a permissive window — which meant this page could not tell
+  a request in flight from one that failed, and showed a spinner that never
+  stopped. Those settings carry the cushion the queue is judged against, so the
+  page says what is missing and offers the retry.
+- **The default range is the department's calendar day**, not the browser's. A
+  UTC browser viewing an America/Los_Angeles department in its evening opened
+  the range on a day the department had not reached, and the opposite offset
+  dropped the department's own current day out of it.
+- **A department that records no calls is described as such.** `call_tracking`
+  has three modes and the summary handled two, so `off` — an explicit decision
+  not to be asked — was reported as "Individual call records".
+- **The cushion row links to the screen that owns it.** It is derived from
+  Inventory's Checklist Timing, and Scheduling settings expose no control for
+  it, so the old link landed on a page where the number shown does not appear.
+  It is a link only for a viewer who can open that screen, and plain text
+  otherwise.
+- **A scheduling manager can read what the administration pages show them.**
+  Permission matching is literal — an exact name, `scheduling.*` or `*` — so
+  nothing makes `manage` imply `view`, and every page under `/scheduling/admin`
+  is gated on `manage` alone. A position holding only that grant was admitted to
+  those pages and then refused the data they exist to display: the close-out
+  queue and the staffing-gaps list could only show their load-failure state, the
+  shift panel's uncaught assignments request rejected its whole load, and Shift
+  Planning could not list a template or a pattern at all. Nine reads now accept
+  either grant — the shift list, a shift and its assignments, attendance and
+  calls, and templates and patterns with their detail routes. A widening, so
+  nobody who could read them before loses anything. The member's own surfaces —
+  the calendars, the summary, time-off — deliberately keep the narrower gate,
+  and both halves are pinned by a test, because this was found one endpoint at a
+  time, twice.
+- **A shift that ended earlier today can be closed out today.** The shift
+  panel's close-out button stood on a day-granular `isPast`, while the server's
+  own rule is that the shift's end has passed — so a shift finishing at 06:00
+  offered no button until the following day, and the new close-out queue, which
+  judges the same instant the server does, listed it with nowhere to act. The
+  button now matches the server; every other control on that panel is unchanged.
+- **The mobile ratchet measures the close-out page.** Its route entry declared
+  no permissions, so the fixture held only the base grants and the check
+  measured `ProtectedRoute`'s Access Denied screen — which passes every budget
+  while testing nothing.
+- **A failed checklist lookup blocks close-out only where the department does.**
+  The fix above went too far in one direction: `finalize_shift` looks at
+  outstanding equipment checks only when `require_end_of_shift_checks` is
+  enabled, so refusing to open the wizard everywhere shut an officer out of a
+  close-out the API would have accepted. It blocks where the server blocks, and
+  reports the failure without blocking where it does not.
+- **The checklist status is re-read every time a row is opened.** Cached, an
+  officer who cancelled the wizard with a check outstanding, waited for the crew
+  to finish it, and reopened the row was shown the same stale answer and made to
+  record an override for work already done.
+- **A reversed date range is refused, not answered.** With `To` earlier than
+  `From` the endpoint applies both bounds and returns nothing, which this screen
+  would have presented as "every shift in this range is closed out" — an invalid
+  input turned into a confident audit result.
+- **A failed settings-summary load is reported, with a retry.** A dash on every
+  row is indistinguishable from the initial loading state, so a transient
+  failure left the panel permanently blank and its editing links unreachable,
+  recoverable only by navigating away and back.
+- **The queue keeps up with the clock.** `useSignupWindow` re-renders on a
+  30-second tick but returns one identity across ticks, so a `useMemo` keyed on
+  it alone froze the queue at first render: a shift whose end passed, or an
+  open-ended one whose cushion expired, never appeared while the page stayed
+  open, and every waiting label stayed at the age it was first drawn.
+- **A slower row cannot replace the wizard you just opened.** Only the clicked
+  row was disabled while its checklists loaded, so a second row could be started
+  first and then displaced by the first click's late answer.
+- **Call types are described only where close-out asks for them.** The wizard
+  renders for count-only departments alone, so naming the types "the breakdown
+  the close-out wizard asks for" described a screen a detailed or off department
+  never sees.
+- **Another row cannot silently discard an open close-out.** The wizard keeps
+  the step being edited — attendance times, call counts — in local state until
+  Next is pressed, and opening a different row unmounts it, so one click threw
+  away typing with no warning. The other rows are held while a wizard is open;
+  the open row's own exit is still there, so switching is a decision rather than
+  an accident.
+- **The call-volume row claims nothing until the settings load.** Its value
+  showed a dash while the line beneath it asserted that calls are logged per
+  incident — a concrete rule, false for a count-only or off department, stated
+  exactly when nothing had read the setting.
+- **The queue opens on six months, not one, and says what it checked.** The
+  hub's **To close out** metric has no earliest date — it counts a shift left
+  unclosed three years ago — so a one-month default let an officer follow a
+  count of three straight into a page reporting the range clear, with the work
+  that sent them there outside it. The default is wider, and where nothing is
+  found the page names the range it read and points at the **From** field,
+  rather than leaving a contradiction with the number on the hub.
+- **An unread equipment-check status is reported as unread, not as zero.** Where
+  the department does not block close-out on those checks a failed lookup no
+  longer stops the wizard opening — the server does not consult them there — but
+  proceeding silently would have put the fabricated zero back one branch over
+  from where it was taken out. The row says nothing read the status.
+- **An open row always has a way out.** The wizard renders nothing at all when
+  its own state request fails — it reports the error and returns null — and the
+  row had already hidden the button that opened it, leaving an empty card whose
+  only escape was a range-level Refresh that does not look related to it.
+- **Refreshing the range cancels a preparation still in flight.** A checklist
+  request left running stayed current and would reopen its wizard on top of the
+  refreshed list: the row an officer closed by refreshing, coming back on its
+  own a moment later.
+- **The close-out settings mirror meets the 44px touch minimum.** Its five value
+  links were 14px of text, which is what the mobile ratchet found the moment it
+  started measuring the page instead of an Access Denied screen. Every inline
+  Retry on the page is a real tap target too — a failure state on a phone is
+  exactly when somebody needs to hit it.
+- **The page is department-wide and requires `scheduling.manage`**, like every
+  page in Scheduling Administration. **A shift officer loses nothing:** the shift
+  panel grants the named officer authority over their own shift's crew,
+  attendance, calls and close-out without a department-wide grant, mirroring the
+  backend, and that route is untouched.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**
@@ -809,6 +1451,17 @@ which merged before a review of it came back.
   only where every stored value really is a type that department has
   configured, checked against the report itself rather than against records
   that can change underneath it.
+- **Editing a draft report's call types lost the department's names for them.**
+  The draft editor offered the shift-report settings' own free-text list
+  ("Structure Fire") even on a report filed against a count-only shift, whose
+  stored types are the department's own — so the stored type did not show as
+  selected, and any chip an officer tapped landed beside it. The saved list then
+  mixed the two, and what was stored stopped resolving to a name and stopped
+  counting as a reason not to delete its type. The editor now offers the
+  department's own call types on those reports, showing each by the name the
+  department gave it, including one that has been retired or removed from
+  settings so it can still be seen and taken off. An edit that keeps them keeps
+  their meaning.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
