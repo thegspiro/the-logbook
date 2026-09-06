@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Elections page pitched an election members cannot call (2026-09-06)
+
+**Fixed**
+
+- **A department with no elections showed members an empty panel captioned as
+  though something were missing.** Creating an election is `elections.manage` on
+  the server, and the Create Election button was already withheld, so the notice
+  spoke to a control the member could not see. With no elections and no status
+  filter applied, a member now gets a blank panel. A status filter that matches
+  nothing still reports that to everyone — that is feedback on what they asked
+  for, not an invitation.
+- **The Create Election dialog rendered on its own open state**, so a session
+  that lost `elections.manage` with the dialog open kept the form on screen and
+  its submit button live. It is now gated on the same permission as the button
+  that opens it, matching the fix applied to the Events, Members, Documents,
+  Scheduling and Minutes dialogs.
+- **A member's session no longer fetches three endpoints it has no use for.**
+  Meetings, upcoming events and operational ranks populate selectors that exist
+  only inside the create dialog, and were requested on every page load
+  regardless of permission — a member without `meetings.view` or `events.view`
+  got 403s that the page swallowed silently.
+
 ### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
 
 **Fixed**
@@ -25,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expanded array — so five dependencies were reported as six, against a limit
   that explicitly permits five. Non-empty top-level segments are counted
   instead.
+
 ### The Minutes page advertised a feature members cannot use (2026-09-06)
 
 **Fixed**
@@ -67,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **This is a widening.** The officer-facing endpoints for _another_ member's
   sizes are untouched and keep their stricter gates — `inventory.view` to
   read, `inventory.manage` to write — and a test now pins both halves.
+
 ### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
 
 **Fixed**
@@ -80,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control is now disabled rather than hidden, with a title naming who does it,
   matching the Swap control on the apparatus inventory screen — the same
   manage-gated stock write. Reading the worklist is unchanged.
+
 ### Inventory and Members pages say which hub they belong to (2026-09-06)
 
 **Added**
@@ -112,6 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Check In Station" against a heading that hyphenates it. The hub-card
   agreement test now covers Inventory as well as Scheduling, so a card and a
   crumb naming one page differently fails rather than shipping.
+
 ### The close-out queue and the number above it are one list now (2026-09-06)
 
 **Added**
@@ -150,6 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run on. The refresh is skipped while a close-out wizard is open, so it cannot
   unmount unsaved entries, and a failed refresh leaves the last good list on
   screen rather than blanking a working page.
+
 ### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
 
 **Fixed**
@@ -167,6 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checklist builder now meet the 44-pixel minimum touch size on phones.
 - **A stray scrollbar under the tabs on an inventory item's page** has been
   removed.
+
 ### Create Shift: the dialog's fields had no names (2026-09-06)
 
 **Fixed**
@@ -187,6 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screen reader offered "08:00 hour" where it should have said "Start Time
   hour", and the end field fell back to a bare "Time". All six now carry the
   visible field name.
+
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
 
 **Fixed**
@@ -209,6 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The tradeoff it does carry: two branches editing the _same_ entry get both
   revisions as adjacent duplicate lines rather than a conflict. That is visible
   in review, and is recorded in the `.gitattributes` comment.
+
 ### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
 
 Codex raised these on #2206 as it merged, so none were addressed there.
