@@ -53,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was created in the same instant.** The retire action already blocked
   retiring an item someone still holds; a very narrow timing window could
   let it miss a hold that was recorded at almost the same moment.
+- **Assigning, checking out, or issuing an item during a batch scan could
+  land on an item retired in the same instant.** The same narrow timing
+  window as above, on the other three actions that hand an item to a
+  member.
+- **Retiring an item that had recently been switched from pooled to
+  individual tracking could go through over stock still checked out to a
+  member.** The check for outstanding checked-out units on a pooled item
+  only ran while the item was still marked as pooled; switching how an
+  item is tracked no longer skips it.
 
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 

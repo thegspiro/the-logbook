@@ -104,9 +104,24 @@ actual vantage point. **MSUP-22** (MED, fixed): added
 `medicalSuppliesService.retireItem` and a Retire action next to Edit,
 behind a `useConfirm()` dialog, matching this module's existing toast
 pattern.
-Full local gate green including the full scoped test run (740 passed
-backend, 49 passed on the medical supplies page).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 8.
+A ninth Codex round then found two more real bugs and one broad, flagged
+gap. **MSUP-23** (MED, fixed): `assign_item_to_user`, `checkout_item`, and
+`issue_from_pool` each locked the item with their own duplicated inline
+SELECT instead of the shared `_get_item_locked` helper, missing
+`populate_existing` — identical in shape to MSUP-10/13's bug, reachable
+via `distribute_items`'s unlocked preload. **MSUP-24** (MED, fixed): the
+pool-issuance retirement check ran only `if tracking_type == POOL`, so
+switching a pool item to individual first (an unrestricted field on the
+generic PATCH) skipped it entirely, letting retirement proceed over units
+still checked out to a member. **MSUP-25** (LOW/MED, flagged): every other
+medical-domain write (update/add-lot/receive-delivery/update-lot/
+delete-lot) shares retire_item's original preflight-then-mutate TOCTOU
+shape MSUP-20/21 closed only for retirement — flagged rather than
+patched, since each of the five needs its own locked re-validation
+designed against its own transaction shape, and the risk is materially
+lower (same-org, non-destructive edits, not an irreversible retirement).
+Full local gate green including the full scoped test run (742 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 9.
 
 ---
 
@@ -558,6 +573,87 @@ doc updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 8,
 MSUP-22. This completes MSUP-16's originally-intended capability end to
 end. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301. Next:
 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 9 — ninth Codex round: two more real bugs, one broad gap flagged
+
+A ninth Codex round found two more real, mechanically-fixable bugs, plus
+one finding broad enough to flag rather than patch in this already
+nine-round PR:
+
+- **`assign_item_to_user`, `checkout_item`, and `issue_from_pool`** each
+  locked the item with their own duplicated inline
+  `select(InventoryItem)...with_for_update()` instead of the shared
+  `_get_item_locked` helper — identical in shape to the bug MSUP-10 fixed
+  for `add_lot` and MSUP-13 fixed for `retire_item`. `distribute_items`
+  (the scan/distribution batch flow) preloads a candidate item unlocked
+  before calling into whichever of these three the item's tracking type
+  routes it to; without `populate_existing`, a concurrent write racing
+  that window (e.g. a retirement committing while the batch request
+  waited on the lock) would be invisible, letting an assignment,
+  checkout, or pool issuance land on a now-retired item.
+- **The pool-issuance retirement check ran only `if tracking_type ==
+POOL`.** `tracking_type` is an ordinary, unrestricted field on the
+  generic `update_item` PATCH, so a caller could switch a pool item to
+  individual specifically to skip this check, then retire the item over
+  units a member still has checked out.
+
+**MSUP-23 (MED, fixed):** all three methods now call `_get_item_locked`
+instead of duplicating the inline SELECT.
+
+A test-writing pitfall worth recording from this fix: the first version
+of the regression test used `assert peek.scalar_one().status == ...`
+(matching `retire_item`'s own staleness test's style) and it **passed
+against the unfixed code**, proving nothing. `retire_item`'s original bug
+(pre-MSUP-13) was pure snapshot staleness (an entirely unlocked read,
+Pitfall #27) — that persists for the whole transaction regardless of
+whether the peeked Python object is still referenced. This bug is
+identity-map _object_ staleness: the locking SELECT's SQL genuinely fetches
+current data, but SQLAlchemy only overwrites an already-loaded cached
+object's attributes when `populate_existing=True` is set — which requires
+an object that is still loaded, and the identity map holds it by _weak_
+reference, so an unreferenced peek is garbage-collected the instant the
+statement finishes and the next query legitimately builds a fresh object
+regardless of the bug. Confirmed empirically: the identical peek query
+with and without binding its result to a kept-alive local variable gave
+opposite outcomes against identical unfixed code. Fixed by binding the
+peek to a variable and keeping it referenced, matching MSUP-10's own
+`add_lot` staleness test, which already does this correctly.
+
+**MSUP-24 (MED, fixed):** the pool-issuance count in
+`_deactivation_block_reason` now runs unconditionally, matching the
+active-checkout count beside it (which was never gated).
+
+**MSUP-25 (LOW/MED, flagged, not fixed):** every other medical-domain
+write (update/add-lot/receive-delivery/update-lot/delete-lot) shares
+`retire_item`'s original preflight-then-mutate TOCTOU shape that MSUP-20/21
+closed only for retirement. Flagged rather than patched: generalizing
+means auditing and instrumenting five more mutation paths individually
+against each one's own transaction shape (not a single mechanical
+patch), and the real-world severity is materially lower than retirement's
+(same-org, non-destructive field edits, not an irreversible removal from
+active inventory). Recorded so it is not silently dropped; a follow-up
+pass should design one shared "validate domain under this mutation's own
+lock" contract rather than resolving each ad hoc.
+
+Guard tests: `test_capacity_locking.py` gained
+`TestLockedMutationsUseTheSharedHelper` (static) and
+`TestRetireItemBlockerCounts.test_the_pool_issuance_check_is_not_gated_on_tracking_type`.
+`test_inventory_identity_map_staleness.py` gained
+`test_checkout_item_sees_a_concurrent_retirement_not_its_own_stale_cache`
+(verified failing/passing as described above). `TestRetireItem` in
+`test_inventory_service.py` gained
+`test_retire_blocked_by_a_pool_issuance_even_after_tracking_type_changed`.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), the directly-touched test files (175
+passed), the full `inventory or medical_supplies`-scoped run (742 passed,
+1 pre-existing skip), and the full backend suite (11,467 passed, 21
+pre-existing skips, 0 failed). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 9, MSUP-23,
+MSUP-24, MSUP-25. Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

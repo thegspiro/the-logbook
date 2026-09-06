@@ -1210,3 +1210,138 @@ MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-22
 is a new fix, completing MSUP-16's originally-intended capability end to
 end; MSUP-1 through MSUP-21 are backend-only and unaffected by this
 frontend-only change.
+
+## Pass 9 — 2026-09-06
+
+A ninth Codex round found two more real, mechanically-fixable bugs, and one
+finding broad enough that it needs a scoped follow-up rather than a patch
+in this already nine-round PR.
+
+### MSUP-23 — MED — `assign_item_to_user`, `checkout_item`, and `issue_from_pool` locked the item with a duplicated inline SELECT missing `populate_existing` — ✅ FIXED
+
+**What:** These three methods each had their own inline
+`select(InventoryItem)...with_for_update()` instead of calling the shared
+`_get_item_locked` helper — identical in shape to the exact bug MSUP-10
+fixed for `add_lot` and MSUP-13 fixed for `retire_item`. `distribute_items`
+(the scan/distribution batch flow) preloads a candidate item unlocked via
+`_lookup_by_item_id`/`lookup_by_code`, in the same session/transaction,
+before calling into whichever of these three the item's tracking type
+routes it to. Without `populate_existing`, a concurrent write racing that
+window (e.g. a retirement committing while the batch request waited on the
+lock) would be invisible: SQLAlchemy's identity map hands back the stale,
+pre-race Python object from the preload rather than the row the locking
+SELECT itself just fetched — letting an assignment, checkout, or pool
+issuance land on a now-retired item, the exact hidden-held state this
+whole PR exists to prevent, from the opposite direction.
+
+**Where:** `app/services/inventory_service.py` — `assign_item_to_user`,
+`checkout_item`, `issue_from_pool`.
+
+**Fix:** all three now call `_get_item_locked(item_id, organization_id)`
+instead of duplicating the inline SELECT, matching `unassign_item` and the
+maintenance-completion paths, which already did.
+
+**A test-writing pitfall worth recording:** the first version of this
+fix's regression test used `assert peek.scalar_one().status == ...` —
+matching `retire_item`'s own staleness test's style — and it passed
+against the _unfixed_ code, silently proving nothing. The two tests are
+demonstrating different mechanisms: `retire_item`'s original bug
+(pre-MSUP-13) was an entirely **unlocked** read (`get_item_by_id`, no
+`FOR UPDATE` at all) — plain Pitfall #27 snapshot staleness, which persists
+for the whole transaction regardless of whether the peeked Python object
+is still referenced. This bug is **identity-map object** staleness: the
+locking SELECT's SQL genuinely fetches current data, but SQLAlchemy only
+overwrites an _already-loaded_ cached object's attributes when
+`populate_existing=True` is set. Testing that requires an object that is
+still loaded — and SQLAlchemy's identity map holds it by weak reference,
+so an unreferenced peek (`peek.scalar_one().status == ...`, matching the
+retire_item test's shape) is garbage-collected the moment the statement
+finishes, and the next query then legitimately builds a fresh object
+regardless of the bug. Confirmed empirically: the same peek query with
+and without binding its result to a kept-alive local variable gave
+opposite outcomes against identical unfixed code. Fixed by binding the
+peek to `cached_item` and keeping it referenced through the rest of the
+test, matching MSUP-10's own `add_lot` staleness test
+(`test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache`),
+which already does this correctly. The lesson: an identity-map-staleness
+test needs a _referenced_ stale object to demonstrate anything; a
+snapshot-staleness test (no lock at all) does not.
+
+**Guard tests:** `test_capacity_locking.py` gained
+`TestLockedMutationsUseTheSharedHelper.test_assign_checkout_and_issue_use_get_item_locked`
+(static, asserts all three call `_get_item_locked`, not an inline SELECT).
+`test_inventory_identity_map_staleness.py` gained
+`test_checkout_item_sees_a_concurrent_retirement_not_its_own_stale_cache`
+(the two-real-session, kept-alive-reference test described above) —
+verified failing against the reverted inline-SELECT code and passing
+after.
+
+### MSUP-24 — MED — the pool-issuance retirement check was skipped once an item's tracking type was switched away from POOL — ✅ FIXED
+
+**What:** `_deactivation_block_reason`'s unreturned-pool-issuance check
+ran only `if item.tracking_type == TrackingType.POOL`. `tracking_type` is
+an ordinary field on the generic `update_item` PATCH with no check against
+outstanding holdings, so a caller could switch a pool item to `individual`
+specifically to skip this check, then retire the item over units a member
+still has checked out — an `ItemIssuance` row persists independently of
+whatever tracking_type the item is relabeled to later, so gating the
+check on the item's _current_ value was never correct.
+
+**Where:** `app/services/inventory_service.py` — `_deactivation_block_reason`.
+
+**Fix:** the pool-issuance count now runs unconditionally, matching the
+active-checkout count just above it (which was never gated). An
+individual-tracked item with no issuance history simply gets a harmless
+zero-row count.
+
+**Guard tests:** `TestRetireItem` in `test_inventory_service.py` gained
+`test_retire_blocked_by_a_pool_issuance_even_after_tracking_type_changed`.
+`test_capacity_locking.py` gained
+`TestRetireItemBlockerCounts.test_the_pool_issuance_check_is_not_gated_on_tracking_type`
+(static, asserts `TrackingType.POOL` no longer appears in
+`_deactivation_block_reason`'s source).
+
+### MSUP-25 — LOW/MED, flagged (not fixed this pass) — every other medical-domain write shares retire_item's original preflight-then-mutate TOCTOU shape
+
+**What:** `update_medical_item`, `add_medical_item_lot`,
+`receive_medical_delivery`, `update_medical_lot`, and `delete_medical_lot`
+all validate domain membership via a plain-read preflight
+(`_require_medical_item`/`_require_medical_category`) _before_ calling
+into the underlying `InventoryService` mutation, exactly like
+`retire_medical_item` did before MSUP-20/21. If a broad `inventory.manage`
+caller reclassifies the item or its category between that preflight and
+the mutation's own lock (where one exists), a medical-only caller could
+mutate a row that raced out of their domain in the same narrow window
+MSUP-20/21 closed for retirement specifically.
+
+**Why flagged, not fixed here:** this is the same root shape as
+MSUP-20/21, but generalizing the fix means auditing and instrumenting five
+more mutation paths individually — `update_item`'s `needs_lock` branching,
+`add_lot`'s two-phase locked carry-forward, `add_lots_bulk`'s per-line
+loop, and `update_lot`/`delete_lot`, which mutate `InventoryLot` rows and
+may not lock the parent `InventoryItem` at all today. Each needs its own
+locked re-validation designed against its own transaction shape, the way
+`retire_item`'s was — not a single mechanical patch. The severity is also
+genuinely lower than retirement's: these are same-organization,
+non-destructive field edits (rename, quantity, lot dates), not an
+irreversible removal from active inventory, and the race requires a
+category reclassification to land in the same narrow window as a
+non-destructive edit — narrower, lower-impact, and effort-disproportionate
+to fix as a ninth-round patch on a PR already this deep into the same
+question. Recorded here so it is not silently dropped; a follow-up pass
+should design one shared "validate domain under this mutation's own lock"
+contract and apply it to all five, rather than resolving each ad hoc.
+
+### Completion gate (pass 9)
+
+| Check                                                                                                                                                                            | Result                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `flake8` / `black --check` / `isort --check-only` (inventory_service.py, all touched backend test files)                                                                         | clean                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                | PASSED — single head, no schema change |
+| `test_inventory_service.py` + `test_capacity_locking.py` + `test_inventory_identity_map_staleness.py` + `test_medical_supplies_domain.py` + `test_inventory_lot_stock_levels.py` | 175 passed                             |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                                                    | 742 passed, 1 pre-existing skip        |
+| `pytest tests/` (full backend suite)                                                                                                                                             | 11,467 passed, 21 pre-existing skips   |
+
+MSUP-4, MSUP-11, MSUP-15, and the new MSUP-25 are the only open, flagged
+items. MSUP-23 and MSUP-24 are new fixes; MSUP-1 through MSUP-22 all
+re-verified intact.

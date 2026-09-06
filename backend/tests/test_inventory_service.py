@@ -1163,6 +1163,35 @@ class TestRetireItem:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_retire_blocked_by_a_pool_issuance_even_after_tracking_type_changed(
+        self, service, mock_db
+    ):
+        """tracking_type is editable through the generic update_item PATCH
+        with no check against outstanding holdings -- a caller could switch
+        a pool item to individual specifically to dodge the pool-issuance
+        check, then retire it over units still checked out to a member. An
+        ItemIssuance row must block retirement regardless of the item's
+        *current* tracking_type."""
+        item = _make_item(
+            assigned_to_user_id=None, tracking_type=TrackingType.INDIVIDUAL
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        # First execute: active checkouts = 0; second: active issuances = 1
+        co_result = MagicMock()
+        co_result.scalar.return_value = 0
+        iss_result = MagicMock()
+        iss_result.scalar.return_value = 1
+        mock_db.execute = AsyncMock(side_effect=[co_result, iss_result])
+
+        success, err = await service.retire_item(
+            UUID(item.id), UUID(item.organization_id)
+        )
+        assert success is False
+        assert "issuance" in err.lower() or "pool" in err.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_retire_item_success(self, service, mock_db):
         """retire_item should succeed and update status/condition/active."""
         item = _make_item(

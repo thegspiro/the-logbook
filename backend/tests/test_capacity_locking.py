@@ -455,3 +455,45 @@ class TestRetireItemBlockerCounts:
             "Both the checkout count and the pool-issuance count must be "
             f"locking reads; found {source.count('with_for_update()')}."
         )
+
+    def test_the_pool_issuance_check_is_not_gated_on_tracking_type(self):
+        """tracking_type is editable through the generic update_item PATCH
+        with no check against outstanding holdings -- gating this check on
+        the item's *current* tracking_type let a caller switch a pool item
+        to individual specifically to skip it, then retire the item over
+        units still checked out to a member."""
+        source = _source_of(
+            inventory_service.InventoryService._deactivation_block_reason
+        )
+        assert "TrackingType.POOL" not in source, (
+            "The pool-issuance count must run unconditionally, not only "
+            "when the item's current tracking_type is POOL -- see the "
+            "docstring above for the bypass this reopens."
+        )
+
+
+class TestLockedMutationsUseTheSharedHelper:
+    """assign_item_to_user, checkout_item, and issue_from_pool each lock
+    the item before mutating it, but three of them used to do it with their
+    own inline SELECT ... FOR UPDATE instead of the shared _get_item_locked
+    helper -- missing the populate_existing=True that helper's own
+    docstring explains is required, not cosmetic. distribute_items (the
+    scan/distribution batch flow) preloads a candidate item unlocked, in
+    the same session/transaction, before calling into any of these -- so
+    without populate_existing, a concurrent write committed while the lock
+    was awaited (e.g. a retirement) would be invisible: the stale, pre-race
+    Python object from the preload is what these methods would keep
+    reading, not the row the locking SELECT itself just fetched.
+    """
+
+    def test_assign_checkout_and_issue_use_get_item_locked(self):
+        for method in (
+            inventory_service.InventoryService.assign_item_to_user,
+            inventory_service.InventoryService.checkout_item,
+            inventory_service.InventoryService.issue_from_pool,
+        ):
+            source = _source_of(method)
+            assert "_get_item_locked(" in source, (
+                f"{method.__name__} must lock its item via _get_item_locked, "
+                "not a duplicated inline SELECT ... FOR UPDATE."
+            )

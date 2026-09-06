@@ -2064,15 +2064,21 @@ class InventoryService:
         if active_co.scalar():
             return "Cannot retire: item has active checkouts. Check it in first."
 
-        if item.tracking_type == TrackingType.POOL:
-            active_iss = await self.db.execute(
-                select(func.count(ItemIssuance.id))
-                .where(ItemIssuance.item_id == str(item.id))
-                .where(ItemIssuance.is_returned.is_(False))
-                .with_for_update()
-            )
-            if active_iss.scalar():
-                return "Cannot retire: item has unreturned pool issuances."
+        # Not gated on the item's *current* tracking_type: that field is
+        # editable through the generic update_item PATCH with no check
+        # against outstanding holdings, so a caller could switch a pool item
+        # to individual specifically to skip this check, then retire it
+        # over units still checked out to a member. An ItemIssuance row
+        # persists independently of whatever tracking_type the item is
+        # relabeled to later, so this must too.
+        active_iss = await self.db.execute(
+            select(func.count(ItemIssuance.id))
+            .where(ItemIssuance.item_id == str(item.id))
+            .where(ItemIssuance.is_returned.is_(False))
+            .with_for_update()
+        )
+        if active_iss.scalar():
+            return "Cannot retire: item has unreturned pool issuances."
 
         return None
 
@@ -2167,14 +2173,13 @@ class InventoryService:
     ) -> Tuple[Optional[ItemAssignment], Optional[str]]:
         """Assign an item to a user"""
         try:
-            # Lock the item row to prevent concurrent modifications
-            lock_result = await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.id == str(item_id))
-                .where(InventoryItem.organization_id == str(organization_id))
-                .with_for_update()
-            )
-            item = lock_result.scalar_one_or_none()
+            # Lock the item row to prevent concurrent modifications.
+            # _get_item_locked, not an inline SELECT: a batch caller
+            # (distribute_items) can load this same item unlocked first, and
+            # without populate_existing this session's identity map would
+            # hand back that stale, pre-lock object instead of the current
+            # row (see _get_item_locked's own docstring).
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
@@ -2593,14 +2598,12 @@ class InventoryService:
         quartermaster intentionally exceed the cap.
         """
         try:
-            # Lock the item row to prevent concurrent issuance race conditions
-            lock_result = await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.id == str(item_id))
-                .where(InventoryItem.organization_id == str(organization_id))
-                .with_for_update()
-            )
-            item = lock_result.scalar_one_or_none()
+            # Lock the item row to prevent concurrent issuance race
+            # conditions. _get_item_locked, not an inline SELECT: see
+            # assign_item_to_user for why (a preloading batch caller like
+            # distribute_items needs populate_existing to see this, not a
+            # stale identity-map copy).
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
@@ -2912,14 +2915,11 @@ class InventoryService:
     ) -> Tuple[Optional[CheckOutRecord], Optional[str]]:
         """Check out an item to a user"""
         try:
-            # Lock the item row to prevent concurrent checkouts
-            lock_result = await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.id == str(item_id))
-                .where(InventoryItem.organization_id == str(organization_id))
-                .with_for_update()
-            )
-            item = lock_result.scalar_one_or_none()
+            # Lock the item row to prevent concurrent checkouts.
+            # _get_item_locked, not an inline SELECT: see assign_item_to_user
+            # for why (a preloading batch caller like distribute_items needs
+            # populate_existing to see this, not a stale identity-map copy).
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
