@@ -78,7 +78,22 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 # An explicit anchor: <a name="..."> or <a id="...">, which several older docs
 # use to keep a stable target across heading rewrites.
 EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
-LINK_RE = re.compile(r"(?<!\!)\[[^\]]*\]\(\s*([^)\s]+?)\s*\)")
+# Matches both `[label](target)` and `![alt](target)`, capturing the same
+# target group either way.
+#
+# Images were excluded by a `(?<!\!)` lookbehind until 2026-09-06. That left
+# the one link class with no safety net anywhere: a dead `[page](Page)` is
+# visible as unlinked text, while a dead image renders as a broken-image icon
+# that reads as a slow load, and the file it points at is a binary nobody
+# greps. wiki/setup-wiki.sh had never copied `wiki/images/` at all, so every
+# relative image reference a wiki page could have made was already broken —
+# undetected, because of this lookbehind.
+#
+# Enabling it found zero pre-existing violations across 520 local image
+# references. The three that a naive scan flags are `![alt](./images/....png)`
+# syntax examples inside fenced blocks and inline code spans, which `links_in`
+# strips before matching.
+LINK_RE = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+?)\s*\)")
 
 
 def slugify(heading: str) -> str:
@@ -107,7 +122,8 @@ def anchors_for(path: str, cache: dict[str, set[str]]) -> set[str]:
 
     found: set[str] = set()
     try:
-        lines = open(path, encoding="utf-8").read().splitlines()
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
     except (OSError, UnicodeDecodeError):
         cache[path] = found
         return found
@@ -143,9 +159,9 @@ def links_in(path: str) -> list[tuple[int, str]]:
     """Every internal link target in a file, with its line number."""
     out: list[tuple[int, str]] = []
     in_fence = False
-    for lineno, line in enumerate(
-        open(path, encoding="utf-8").read().splitlines(), start=1
-    ):
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    for lineno, line in enumerate(lines, start=1):
         if FENCE_RE.match(line):
             in_fence = not in_fence
             continue

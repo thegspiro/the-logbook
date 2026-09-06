@@ -123,6 +123,39 @@ done
 
 echo -e "${GREEN}✓${NC} ${#WIKI_FILES[@]} pages staged for publication"
 
+# Images travel with the pages.
+#
+# This script copied *.md and nothing else until 2026-09-06, which meant a wiki
+# page could not show a screenshot at all. Nothing failed: `cp` was never asked
+# for the image, so the publish succeeded and the page rendered a broken image
+# on the live wiki. wiki/README.md had recommended exactly that relative-path
+# syntax since the directory was created, and Module-Training.md carries three
+# screenshot briefs that could not have been filled.
+#
+# The whole directory is copied rather than a list of files, for the same
+# reason the page glob above is a glob: a hand-maintained list falls behind.
+#
+# The destination is removed first because the wiki clone PERSISTS between runs
+# (this script pulls it when it already exists). A plain copy is additive, so
+# an image deleted here would stay published forever, and a page renamed from
+# under one would leave an orphan nobody ever looks at.
+WIKI_IMAGES_DIR="images"
+
+if [ -d "$WIKI_IMAGES_DIR" ]; then
+    # ${WIKI_DIR:?} refuses to expand to bare "/images" if WIKI_DIR is ever
+    # unset by an edit above — this line is an `rm -rf`, so it does not get to
+    # rely on a variable being set 60 lines earlier.
+    rm -rf "${WIKI_DIR:?}/$WIKI_IMAGES_DIR"
+    cp -R "$WIKI_IMAGES_DIR" "$WIKI_DIR/"
+    image_count=$(find "$WIKI_IMAGES_DIR" -type f | wc -l | tr -d ' ')
+    echo -e "${GREEN}✓${NC} Copied $WIKI_IMAGES_DIR/ ($image_count file(s))"
+else
+    # Not an error: the wiki has no images yet. A page that references one
+    # while this directory is missing is caught in CI by
+    # scripts/check_docs_links.py, which resolves image targets as files.
+    echo -e "${BLUE}·${NC} No $WIKI_IMAGES_DIR/ directory — no images to publish"
+fi
+
 # Troubleshooting is GENERATED, not maintained here.
 #
 # There used to be three troubleshooting documents — docs/TROUBLESHOOTING.md,

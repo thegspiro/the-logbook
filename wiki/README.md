@@ -257,14 +257,35 @@ See the [Installation Guide](Installation) for setup instructions.
 
 ### Images
 
+Put the file in `wiki/images/` and reference it relative to the page:
+
 ```markdown
-![Alt Text](https://url-to-image.png)
+![Members list with the filter row open](images/members-filter.png)
 ```
 
-Or use relative paths if images are in the wiki:
+`setup-wiki.sh` copies the whole `images/` directory into the wiki clone, so
+that path resolves once published. The directory is the **only** place a wiki
+image can live — nothing else in this directory is published but `*.md`.
+
+Three things follow from that, worth knowing before adding one:
+
+- **The path is checked.** `scripts/check_docs_links.py` resolves image targets
+  as files, so a reference to something not in `wiki/images/` fails CI rather
+  than publishing a broken image. That check is the reason to prefer a relative
+  path over an absolute `raw.githubusercontent.com` URL, which it cannot verify.
+- **Deleting an image here deletes it from the published wiki.** The publish
+  removes the destination directory before copying, so the live wiki matches
+  this one rather than accumulating every image ever published.
+- **Images are committed to this repository**, where they are reviewable in a
+  pull request alongside the page that uses them. Keep them reasonably sized —
+  `docs/training/images/` is 44 MB across 516 captures, and the wiki does not
+  need that scale.
+
+An external URL still works where the image genuinely lives elsewhere (a shields.io
+badge, say), and is not link-checked:
 
 ```markdown
-![Screenshot](images/screenshot.png)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 ```
 
 ### Code Blocks
