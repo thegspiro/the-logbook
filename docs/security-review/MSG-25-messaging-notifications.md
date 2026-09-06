@@ -1,8 +1,8 @@
 # Security Review — Messaging & Notifications
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-31 (pass 2) · **PR:** #1907 (pass 1), pass 2 PR recorded in
-`PROGRESS.md`
+2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1907 (pass 1), pass 2 PR
+recorded in `PROGRESS.md`, pass 3 PR TBD
 
 ## Pass 1 (2026-08-26)
 

@@ -2959,7 +2959,7 @@ recipients within the message's own org — and requires an admin
 this is a data-integrity/compliance-record risk rather than a security
 vulnerability in the access-control sense.
 
-## MSG-12 — A Failed, Stranded, or Throttled Department-Message Delivery Is Never Retried (2026-08-31)
+## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
 `MessageDeliveryService._claim_delivery` commits a
 `DepartmentMessageDelivery` row with `status="pending"` before calling out to
@@ -2971,12 +2971,24 @@ department message is published exactly once — no future `deliver()` call
 for that message will come back around. There are three distinct ways a
 member ends up not receiving a channel they should have:
 
-- **Stranded `pending`.** If the worker process is killed, OOM-killed, or
-  loses its DB connection between the claim commit and `_finish_delivery`'s
-  follow-up commit, the row is left in `status="pending"` permanently.
-  Narrow blast radius: one recipient/channel/message, and only if a crash
-  lands in that exact window.
-- **`failed`, from an ordinary provider error.** `_finish_delivery(attempt,
+- **Stranded `pending` — FIXED (2026-09-06).** If the worker process is
+  killed, OOM-killed, or loses its DB connection between the claim commit
+  and `_finish_delivery`'s follow-up commit, the row was left in
+  `status="pending"` permanently. A new scheduled task,
+  `run_recover_stranded_message_deliveries` (`app/services/
+scheduled_tasks.py`, every 30 minutes, `_STRANDED_CLAIM_AFTER_MINUTES =
+35`), now sweeps `pending` rows older than the cutoff: it retires claims
+  whose message was deactivated/deleted or whose recipient dropped out of
+  the audience since (recorded as `failed` with a reason, not left
+  `pending` forever — otherwise one dead message would fill the bounded
+  scan window and starve recoverable claims behind it), and re-delivers the
+  rest via `MessageDeliveryService.deliver(message, only_user_ids=...)`,
+  which reclaims the stale claim (`_reclaim_stale_delivery`) rather than
+  duplicating it. Deliberately may occasionally re-send to a member whose
+  original worker was merely slow past the cutoff, not actually dead — the
+  chosen direction to err, since the alternative is a notice they never
+  get. Guard tests in `backend/tests/test_message_delivery_claim_recovery.py`.
+- **`failed`, from an ordinary provider error — still open.** `_finish_delivery(attempt,
 error)` commits the same row as `status="failed"` whenever the provider
   raises, or reports zero successes (`EmailService.send_email` returning
   `(sent, failed)`, `SMSService.send_bulk_sms` returning a count) — no
@@ -3004,24 +3016,28 @@ to miss, so any one of these three, on the one delivery attempt a message
 ever gets, permanently and silently drops that member from the channel of
 record for that message.
 
-Closing this needs a product decision, not a mechanical patch, and the
-decision has to cover all three paths together — a fix scoped to
-`DepartmentMessageDelivery` rows alone (`pending`/`failed`) leaves the
-throttled path, which creates no row, completely unaddressed. Open
-questions: what counts as eligible for retry (any `failed`/stale-`pending`
-row? a cap on attempts?), whether a throttled batch should be recorded
-somewhere retriable rather than just logged, whether retry is automatic
-via a new scheduled task or surfaced to an admin instead, and — since a
-crash could land either before or after the provider actually accepted the
-send — whether the department would rather risk an occasional duplicate
-delivery (retry unconditionally) or an occasional silent miss (leave it
-and alert). None was chosen here.
+The stranded-`pending` path above is now closed. The remaining two —
+`failed` and throttled — still need a product decision, not a mechanical
+patch, and it has to cover both together: a fix scoped to
+`DepartmentMessageDelivery` rows alone (i.e. a `failed`-row sweep) leaves
+the throttled path, which creates no row, completely unaddressed. Open
+questions: what counts as eligible for retry on a `failed` row (any
+failure? a cap on attempts, so a permanently-invalid address doesn't retry
+forever?), whether a throttled batch should be recorded somewhere
+retriable rather than just logged, whether retry is automatic via a new
+scheduled task or surfaced to an admin instead, and whether the department
+would rather risk an occasional duplicate delivery (retry unconditionally)
+or an occasional silent miss (leave it and alert) — the same tradeoff the
+stranded-`pending` fix already made in favor of the former. None was
+chosen here for the remaining two paths.
 
 Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
 25, pass 2, MSG-12); both the `failed`-status path and the throttled/
 no-row path were caught by two separate rounds of Codex's review of the PR
 recording this finding, broadening it from the `pending`-only scenario
-originally reported. No `SMSService`/`EmailService` allowlist or
+originally reported — and it was that same `pending`-only scenario that
+got the fix, per pass 3 (`docs/security-review/MSG-25-messaging-
+notifications.md`). No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
 
