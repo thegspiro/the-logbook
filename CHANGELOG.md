@@ -16,11 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item is assigned, checked out, or (for pooled stock) has an unreturned
   issuance, and keeps the item's other fields consistent with being
   retired — the general item-update path had none of that, so a plain edit
-  turning an item inactive could remove it from every active list and
-  picker with no safeguards, and (even when nothing was blocking it) leave
-  it in a state where it could still be handed out again immediately
-  afterward. Editing an item no longer accepts that field at all; retiring
-  an item is now the only way to deactivate one.
+  turning an item inactive (directly, or by setting its status and
+  condition to retired without touching that flag) could remove it from
+  every active list and picker with no safeguards, and (even when nothing
+  was blocking it) leave it in a state where it could still be handed out
+  again immediately afterward. Editing an item no longer accepts either
+  route at all; retiring an item is now the only way to deactivate one, and
+  the retire action itself now re-checks the item's current holder right
+  before deactivating it, closing a narrow window where a member could be
+  assigned the item in the instant before it was retired.
 - **An item's detail page could show stale stock for consumables tracked by
   lot.** The list view already computed on-hand stock from dated lots for
   any item stocked that way; the single-item detail page (medical supplies

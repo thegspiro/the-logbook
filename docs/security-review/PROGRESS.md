@@ -45,8 +45,19 @@ checked out again, since those gate on `status` not `active`). **MSUP-12**
 (MED, fixed) supersedes MSUP-7's fix: `update_item` now rejects `active`
 outright rather than trying to replicate `retire_item`'s full contract
 inline — no frontend caller sends it through this path today.
-Full local gate green including the full backend suite (11,449 passed).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
+A fourth Codex round found MSUP-12's own reject condition still missed one
+route (a bare `status`/`condition` pair of RETIRED with no `active` key at
+all) and that `retire_item` itself still used an unlocked read before its
+blocker checks. **MSUP-13** (MED, fixed) supersedes MSUP-12: `update_item`
+now also rejects the RETIRED status/condition pair, and `retire_item` now
+fetches through `_get_item_locked`. **MSUP-14** (LOW/MED, fixed) — the
+general item detail page still read `item.quantity` directly instead of
+the shared `onHandQuantity()` helper, so a lot-stocked item's detail page
+still showed stale stock despite MSUP-8 already attaching lot stock to the
+response. **MSUP-15** (LOW, flagged) — the item edit form's Quantity field
+has no lot-stocked awareness; a product/UX decision, not a mechanical fix.
+Full local gate green including the full backend suite (11,453 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 4.
 
 ---
 
@@ -211,6 +222,83 @@ passed in the four directly-touched test files, 728 passed in the full
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3, MSUP-12
 (supersedes MSUP-7). Rotation row 23 still ⏳ — awaiting owner merge of PR
 #2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 4 — fourth Codex round: MSUP-12's own fix still had a gap, plus a frontend companion
+
+A fourth Codex round, reviewing the commit that fixed MSUP-12, found its
+own reject condition still had a gap in the same shape, plus one unrelated
+frontend finding and a locking gap in `retire_item` itself:
+
+- **The RETIRED status/condition pair bypassed MSUP-12 entirely.**
+  `update_item` rejected `"active" in update_data`, but a caller could send
+  `{"status": "retired", "condition": "retired"}` with no `active` key at
+  all — that pair passes `_validate_item_state` with none of
+  `retire_item`'s blocker checks, no lock, and no `active` sync.
+- **`retire_item` had its own unlocked read**, independent of the above: it
+  called `get_item_by_id` (no lock) before its blocker checks, so a
+  concurrent `assign_item_to_user`/`checkout_item` — both of which lock the
+  item before committing — could land between the check and this call's
+  own commit, over the same transaction's stale, pre-race read (the same
+  class of bug MSUP-10 closed for `add_lot`).
+
+**MSUP-13 (MED, fixed), supersedes MSUP-12:** `update_item`'s reject now
+also covers a `status`/`condition` pair of RETIRED; `retire_item` now
+fetches via `_get_item_locked`. `_deactivation_block_reason` dropped its
+now-unused `verb` parameter and its docstring, which a reviewer flagged
+(P1) as stale the moment MSUP-12 landed ("shared by retire_item and
+update_item" — it hasn't been, since MSUP-12), was rewritten to say
+`update_item` never calls it.
+
+Guard tests: `TestUpdateItemRejectsActive` gained 3 cases (2 mock
+`_get_item_locked` rather than `get_item_by_id`, since a status/condition
+payload routes through the locked fetch); `TestRetireItem`'s existing 6
+cases now mock `_get_item_locked` to match; a new two-real-session test in
+`test_inventory_identity_map_staleness.py`
+(`test_retire_item_sees_a_concurrent_assignment_not_its_own_stale_cache`)
+confirms `retire_item` sees a concurrent assignment committed after its
+own transaction's first read, not its stale snapshot.
+
+**MSUP-14 (LOW/MED, fixed)** — separately, `ItemDetailPage.tsx`'s "Qty On
+Hand" field still read `item.quantity` directly instead of the shared
+`onHandQuantity()` helper the two list pages already use, so a lot-stocked
+item's detail page kept showing stale stock even though MSUP-8 already
+attached `lot_stock` to the response. Fixed by switching the field to
+`onHandQuantity(item)`.
+
+**MSUP-15 (LOW, flagged)** — `ItemFormModal.tsx`'s edit form has no
+lot-stocked awareness on its Quantity field; flagged as a product/UX
+decision (hide/disable/relabel for a lot-stocked item?) rather than fixed.
+
+**A one-time test-database cleanup, root-caused rather than just
+patched:** the fail-before run of the new staleness test above, against
+the unfixed `retire_item`, ran all the way through `retire_item`'s success
+path (including its `log_audit_event` call and commit) before the test's
+own assertion caught the wrong result and failed — leaking one permanent,
+unattributed (`organization_id=NULL`) row into the shared
+`intranet_test.audit_logs` table. That single row broke 8 unrelated tests
+across `test_audit_shipping.py`/`test_audit_org_scoping.py`/
+`test_audit_retention_archival.py`, all downstream of
+`archive_expired_logs`'s intentionally-unscoped `head` query. Confirmed via
+`git stash` (same 8 failures against a fully clean tree, ruling out this
+PR's code) that a single orphaned row was the table's entire content;
+deleting it fixed all 8 immediately. `_cleanup` in
+`test_inventory_identity_map_staleness.py` now takes an optional `item_id`
+and deletes matching `audit_logs` rows by `event_data->>'$.item_id'`, so a
+future fail-before run of this test (or any new real-session test reaching
+a `log_audit_event` call) cleans up after itself.
+
+Full gate re-run after all four rounds: flake8/black/isort clean,
+`validate_migrations.py --strict` (single head, no schema change), the
+directly-touched backend test files and the 3 previously-broken audit test
+files all green, `npm run typecheck`/`eslint` clean on both touched
+frontend files, `ItemDetailPage.test.tsx` (7 passed), and the full backend
+suite (11,453 passed, 21 pre-existing skips, 0 failed). Findings doc
+updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 4,
+MSUP-13 (supersedes MSUP-12), MSUP-14, MSUP-15. Rotation row 23 still ⏳ —
+awaiting owner merge of PR #2301. Next: 24 Meetings & minutes, once this PR
+merges.
 
 ---
 

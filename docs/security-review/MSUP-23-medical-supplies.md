@@ -706,3 +706,193 @@ flagged items (both unchanged/new cross-cutting product decisions) —
 MSUP-8/9/10 and the final MSUP-12 (which supersedes MSUP-7's first fix)
 are new fixes, not re-verifications, and MSUP-1 through MSUP-6 all
 re-verified intact as described earlier in this Pass 3 section.
+
+## Pass 4 — 2026-09-06
+
+A fourth Codex round on the same PR found that MSUP-12's own fix — the
+`"active" in update_data` reject — still had a gap in the same shape, plus a
+display-side companion to MSUP-8 and a locking gap in `retire_item` itself.
+
+### MSUP-13 — MED — MSUP-12 blocked `active` but not a `status`/`condition`
+
+### pair of RETIRED, and `retire_item` re-read the item unlocked — ✅ FIXED (supersedes MSUP-12)
+
+**What:** Two gaps, both closed by the same investigation:
+
+1. **The RETIRED status/condition pair bypassed MSUP-12 entirely.**
+   `update_item` rejects `"active" in update_data`, but a caller could send
+   `{"status": "retired", "condition": "retired"}` with no `active` key at
+   all. That pair passes `_validate_item_state` — RETIRED has no
+   assigned-user rule blocking it in `_REQUIRES_ASSIGNED_USER` — with none
+   of `retire_item`'s blocker checks (assignment/checkout/pool-issuance),
+   no lock, and no `active` sync. An item could be marked RETIRED in every
+   externally-visible way while `active` stayed `True` and none of the
+   guards MSUP-7/MSUP-12 exist for ever ran.
+2. **`retire_item` had its own unlocked read**, independent of the
+   `update_item` gaps above: it called `get_item_by_id` (no lock) before
+   its blocker checks, so a concurrent `assign_item_to_user` or
+   `checkout_item` — both of which lock the item row before committing —
+   could land between `retire_item`'s check and its own commit, over the
+   same transaction's stale, pre-race read. This is the same class of bug
+   as MSUP-10 (CLAUDE.md pitfall #27: a locking re-read is required, not
+   just a lock), just on the one write path here that had never picked up
+   `_get_item_locked` at all.
+
+**Where:** `app/services/inventory_service.py` — `update_item`,
+`_deactivation_block_reason`, `retire_item`.
+
+**Fix:**
+
+- `update_item`'s reject condition now also covers
+  `update_data.get("status") == ItemStatus.RETIRED.value` and
+  `update_data.get("condition") == ItemCondition.RETIRED.value`, alongside
+  the existing `active` check — all three routes to deactivating an item
+  outside `retire_item` are rejected with the same "use the retire action"
+  error.
+- `retire_item` now fetches the item via `_get_item_locked` instead of
+  `get_item_by_id`, closing the same class of race MSUP-10 closed for
+  `add_lot`.
+- `_deactivation_block_reason` dropped its `verb` parameter (it is now only
+  ever called with `"retire"`, from `retire_item` alone) and its docstring
+  was rewritten to say plainly that `update_item` does not call it and
+  never will — replicating retire_item's locked/blocker-checked/
+  status-synced/audited contract inline was already rejected as the wrong
+  shape when MSUP-12 was fixed; the old docstring describing it as "shared
+  by retire_item and update_item" was stale the moment MSUP-12 landed and a
+  Codex reviewer flagged it as misleading (P1) for exactly that reason.
+
+**Guard tests:**
+
+- `TestUpdateItemRejectsActive` (`test_inventory_service.py`) gained
+  `test_rejects_the_retired_status_condition_pair_even_without_active`,
+  `test_rejects_retired_condition_alone`, and
+  `test_a_non_retired_status_change_is_still_allowed` — the first two mock
+  `service._get_item_locked` rather than `service.get_item_by_id`, since a
+  `status`/`condition` payload makes `needs_lock` true and the real
+  `update_item` calls the locked fetch for it.
+- `TestRetireItem` (pre-existing, 6 cases) now mocks
+  `service._get_item_locked` instead of `service.get_item_by_id`, matching
+  the method `retire_item` actually calls.
+- `test_inventory_identity_map_staleness.py` gained
+  `test_retire_item_sees_a_concurrent_assignment_not_its_own_stale_cache`:
+  two real database sessions (matching this file's established pattern —
+  a mock has no identity map, and the shared-connection savepoint
+  `db_session` fixture cannot show a genuine cross-transaction commit
+  becoming visible to a lock acquired afterward). Session A peeks the item
+  unassigned with an unlocked read; session B independently assigns it and
+  commits; session A's own `retire_item` call must see B's committed
+  assignment and refuse, not the pre-race snapshot it read before B ran.
+  Confirmed failing (item retired over a live assignment) against
+  `get_item_by_id`, passing against `_get_item_locked`.
+
+**A one-time test-database cleanup this fix required:** the fail-before run
+of the new staleness test above, against the _unfixed_ `retire_item`,
+correctly reproduced the bug — `retire_item` incorrectly succeeded over the
+concurrent assignment — which meant it ran all the way through
+`retire_item`'s success path, including its `log_audit_event` call and
+`self.db.commit()`, _before_ the test's own assertion caught the wrong
+result and failed. That committed one permanent row into the shared
+`intranet_test.audit_logs` table (this file's own `_cleanup` helper deletes
+the org/user/item rows it creates, but had no reason to know about audit
+rows until now). `retire_item`'s `log_audit_event` call stamps neither
+`organization_id` nor `user_id`, so the row was also unreachable by every
+existing org-scoped cleanup query.
+
+That single orphaned row broke 8 unrelated tests across
+`test_audit_shipping.py`, `test_audit_org_scoping.py`, and
+`test_audit_retention_archival.py` — all of it downstream of
+`archive_expired_logs`'s `head` query
+(`select(AuditLog).order_by(AuditLog.id).limit(1)`), which is intentionally
+unscoped in production (retention has to walk from the _true_ head of the
+table) but means any test assuming it owns a clean table breaks the moment
+one other row exists anywhere with a lower id. Root-caused by reproducing
+the 8 failures against a fully clean `git stash` of every uncommitted
+change (same 8 failures, ruling out this PR's code as the cause), then
+confirming a single row (`id=2059`, `organization_id=NULL`, event
+`inventory_item_retired`, `event_data->>'$.item_id'` matching this test's
+item) was the entire table's contents. Deleting that row immediately fixed
+all 8. Fixed at the root rather than just deleted once: `_cleanup` now
+takes an optional `item_id` and, when given, deletes
+`audit_logs` rows by `JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.item_id'))`
+matching this test's own fresh `uuid4()` — safe against any other
+concurrently-running test's rows, and it means a future fail-before run of
+this same test (or any new real-session test in this file that reaches a
+`log_audit_event` call) cleans up after itself instead of corrupting
+shared test-database state for unrelated suites again.
+
+### MSUP-14 — LOW/MED — the general item detail page still displayed a
+
+### lot-stocked pool item's stale `quantity` column, not its lot-derived on-hand — ✅ FIXED
+
+**What:** MSUP-8 made the single-item detail _response_ attach `lot_stock`
+for a lot-stocked item, but `frontend/.../pages/ItemDetailPage.tsx`'s "Qty
+On Hand" field still read `item.quantity` directly — the same raw ledger
+column that `add_lot`/`_carry_forward_column_stock` treat as a
+best-effort mirror, not the source of truth, for a lot-stocked item. A
+department viewing a lot-stocked item's detail page saw a different number
+than the one `InventoryItemsPage.tsx` and `PoolItemsPage.tsx` already
+computed correctly via the shared `onHandQuantity()` helper.
+
+**Where:** `frontend/src/modules/inventory/pages/ItemDetailPage.tsx`.
+
+**Fix:** the "Qty On Hand" field now calls
+`onHandQuantity(item)` (`../utils/onHand.ts`) — the same canonical
+lot-vs-`quantity` helper already used by the two list pages and the
+medical-supplies module — instead of reading `item.quantity` directly.
+`medicalSuppliesService.getItem` (MSUP-8's other call site) has no live
+frontend caller today, so this page is the only one with a visible effect
+right now; the fix is applied at the shared display layer rather than
+duplicated so any future caller gets it for free.
+
+**Guard tests:** `ItemDetailPage.test.tsx` gained two cases — a
+lot-stocked pool item with `quantity: 0, lot_stock: 12` renders "12", not
+"0"; a non-lot-stocked item still falls back to `quantity` unchanged.
+
+### MSUP-15 — LOW, flagged (not fixed) — the item edit form's "Quantity"
+
+### field has no lot-stocked awareness
+
+**What:** `ItemFormModal.tsx`'s edit form always shows a plain, editable
+"Quantity" input pre-filled from `editItem.quantity` and saves whatever the
+admin types back to that same column — with no indication that for a
+lot-stocked item, `quantity` is a best-effort mirror and the real on-hand
+figure is the sum of that item's lots (now correctly shown as "Qty On
+Hand" on the detail page per MSUP-14). An admin who opens the edit form for
+a lot-stocked item, sees "Quantity: 0" (or whatever the mirror currently
+holds), and — reasonably, given the detail page right next to it says
+"12" — "corrects" it by typing 12 and saving, writes a number into the
+mirror column with no lot backing it, at least until the next lot-driven
+carry-forward silently overwrites it again.
+
+**Why flagged, not fixed:** this is a product/UX question, not a
+mechanical bug — should the Quantity field be hidden, disabled, or
+relabeled ("Mirror — read-only") for a lot-stocked item, and if editable,
+should the change go through a lot adjustment instead of the raw column?
+Any of those changes whoever's-facing behavior in a way that should be a
+deliberate product decision, not a security-review guess. No data
+corruption occurs today from this alone (no code path treats the edited
+mirror value as authoritative over the lots), so this is not gated as a
+security finding.
+
+**Recommendation:** either disable/hide the Quantity input when
+`is_lot_stocked` is true (matching how the detail page already treats it
+as derived), or relabel it to make clear it is not the authoritative
+on-hand count.
+
+### Completion gate (pass 4)
+
+| Check                                                                                                                                                                | Result                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `flake8` (inventory_service.py, both touched backend test files)                                                                                                     | clean                                |
+| `black --check` (same files)                                                                                                                                         | clean                                |
+| `isort --check-only` (same files)                                                                                                                                    | clean                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                    | PASSED — single head                 |
+| `test_inventory_service.py` + `test_inventory_identity_map_staleness.py` + `test_inventory_lot_stock_levels.py`                                                      | all passing                          |
+| `test_audit_shipping.py` + `test_audit_org_scoping.py` + `test_audit_retention_archival.py` (the 8 discovered failures, root-caused to a leaked test row, now clean) | 20 passed                            |
+| `pytest tests/` (full backend suite)                                                                                                                                 | 11,453 passed, 21 pre-existing skips |
+| Frontend: `ItemDetailPage.test.tsx`                                                                                                                                  | 7 passed (5 existing + 2 new)        |
+| Frontend: `npm run typecheck`, `eslint` on both touched files                                                                                                        | clean                                |
+
+MSUP-4, MSUP-11, and the new MSUP-15 remain the only open, flagged items.
+MSUP-13 and MSUP-14 are new fixes; MSUP-1 through MSUP-12 all re-verified
+intact.

@@ -835,15 +835,18 @@ class TestUpdateItemRejectsActive:
     dedicated to changing it through a plain edit. A first attempt gated a
     clearing attempt on the same checks retire_item runs (assignment,
     checkout, pool issuance), directly in this unlocked method — a Codex
-    review caught two gaps that check alone could not close: it ran
+    review caught three gaps that check alone could not close: it ran
     against a read this method does not lock, so a concurrent
     assign/checkout could still land between the check and this call's own
-    commit; and a caller could clear `active` while leaving `status` at
+    commit; a caller could clear `active` while leaving `status` at
     AVAILABLE, which assign_item_to_user/checkout_item gate on rather than
     `active` — letting the "deactivated" item be handed out again
-    immediately. retire_item already closes both, atomically, with its own
-    audit trail, so update_item now rejects `active` outright rather than
-    trying to replicate that contract inline."""
+    immediately; and a caller could skip `active` entirely and send a
+    `status`/`condition` pair of RETIRED directly, which passes
+    `_validate_item_state` with none of retire_item's checks. retire_item
+    already closes all three, atomically, with its own audit trail, so
+    update_item now rejects `active` and a RETIRED `status`/`condition`
+    outright rather than trying to replicate that contract inline."""
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -912,6 +915,70 @@ class TestUpdateItemRejectsActive:
         assert err is None
         assert result is item
         assert item.name == "Relabeled"
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_the_retired_status_condition_pair_even_without_active(
+        self, service, mock_db
+    ):
+        """Skipping `active` and sending status/condition RETIRED directly
+        passes _validate_item_state on its own — RETIRED has no
+        assigned-user rule blocking it — so that pair must be rejected the
+        same way `active` is, or it bypasses the whole guard."""
+        item = _make_item(
+            active=True,
+            assigned_to_user_id=str(uuid4()),
+            status=ItemStatus.AVAILABLE,
+            condition=ItemCondition.GOOD,
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"status": "retired", "condition": "retired"},
+        )
+        assert result is None
+        assert "retire" in err.lower()
+        assert item.status == ItemStatus.AVAILABLE
+        assert item.active is True
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_retired_condition_alone(self, service, mock_db):
+        item = _make_item(active=True, assigned_to_user_id=None)
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"condition": "retired"},
+        )
+        assert result is None
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_a_non_retired_status_change_is_still_allowed(self, service, mock_db):
+        """The rejection targets RETIRED specifically — an ordinary status
+        change (e.g. to in_maintenance) is unaffected."""
+        item = _make_item(
+            active=True,
+            assigned_to_user_id=None,
+            status=ItemStatus.AVAILABLE,
+            condition=ItemCondition.DAMAGED,
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"status": "in_maintenance"},
+        )
+        assert err is None
+        assert item.status == ItemStatus.IN_MAINTENANCE
         mock_db.commit.assert_awaited_once()
 
 
@@ -992,7 +1059,7 @@ class TestRetireItem:
     @pytest.mark.asyncio
     async def test_retire_item_not_found(self, service, mock_db):
         """retire_item should return error if item does not exist."""
-        service.get_item_by_id = AsyncMock(return_value=None)
+        service._get_item_locked = AsyncMock(return_value=None)
 
         success, err = await service.retire_item(uuid4(), uuid4())
         assert success is False
@@ -1003,7 +1070,7 @@ class TestRetireItem:
     async def test_retire_item_blocked_when_assigned(self, service, mock_db):
         """retire_item should block if item is currently assigned to a user."""
         item = _make_item(assigned_to_user_id=str(uuid4()))
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         success, err = await service.retire_item(
             UUID(item.id), UUID(item.organization_id)
@@ -1016,7 +1083,7 @@ class TestRetireItem:
     async def test_retire_item_blocked_when_checked_out(self, service, mock_db):
         """retire_item should block if item has active checkouts."""
         item = _make_item(assigned_to_user_id=None)
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # db.execute returns count=1 for active checkouts
         mock_result = MagicMock()
@@ -1036,7 +1103,7 @@ class TestRetireItem:
     ):
         """retire_item should block a POOL item that has unreturned issuances."""
         item = _make_item(assigned_to_user_id=None, tracking_type=TrackingType.POOL)
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # First execute: active checkouts = 0; second: active issuances = 1
         co_result = MagicMock()
@@ -1058,7 +1125,7 @@ class TestRetireItem:
         item = _make_item(
             assigned_to_user_id=None, tracking_type=TrackingType.INDIVIDUAL
         )
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # active checkouts count = 0
         mock_result = MagicMock()
@@ -1083,7 +1150,7 @@ class TestRetireItem:
     async def test_retire_item_db_exception_rolls_back(self, service, mock_db):
         """retire_item should rollback on database error."""
         item = _make_item(assigned_to_user_id=None)
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # active checkouts count = 0
         mock_result = MagicMock()

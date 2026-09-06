@@ -85,8 +85,29 @@ async def _insert_org_and_user(session, org_id: str, user_id: str) -> None:
     )
 
 
-async def _cleanup(org_id: str) -> None:
+async def _cleanup(org_id: str, item_id: str | None = None) -> None:
     async with database_manager.session_factory() as session:
+        if item_id is not None:
+            # retire_item (and the transfer path) call log_audit_event and
+            # commit on success -- a real row in the shared audit_logs table
+            # that nothing else in this file's teardown touches. It doesn't
+            # even carry this test's organization_id (retire_item's call site
+            # stamps neither organization_id nor user_id), so org-scoped
+            # deletes above can't reach it either. Left behind, one such row
+            # corrupts every other test that assumes archive_expired_logs's
+            # unscoped `MIN(id)` "head" query owns the whole table -- exactly
+            # what happened here: a single leaked row from an earlier
+            # fail-before run of this test broke 8 unrelated audit retention/
+            # shipping/org-scoping tests. event_data->>'$.item_id' is this
+            # test's own fresh uuid4(), so this can't touch another test's
+            # concurrently-written rows.
+            await session.execute(
+                text(
+                    "DELETE FROM audit_logs "
+                    "WHERE JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.item_id')) = :item_id"
+                ),
+                {"item_id": item_id},
+            )
         # inventory_notification_queue.performed_by/user_id FK the users this
         # test creates -- _queue_inventory_notification (best-effort, wrapped
         # in try/except in the service) queues a row on every successful
@@ -414,3 +435,83 @@ async def test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache():
         await session_a.close()
         await session_b.close()
         await _cleanup_lots(org_id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_retire_item_sees_a_concurrent_assignment_not_its_own_stale_cache():
+    """retire_item used an unlocked ``get_item_by_id`` read before its
+    blocker checks, so under REPEATABLE READ a transaction that had already
+    read anything could still see the pre-race snapshot for its own
+    subsequent blocker check even after a concurrent assignment committed
+    (CLAUDE.md pitfall #27) -- retirement could go through over a now-held
+    item. Session A establishes a snapshot with an early unlocked peek
+    (standing in for whatever read started A's transaction in a real
+    request); session B independently assigns the item and commits; A's own
+    retire_item call must see B's committed assignment and refuse, not the
+    unassigned state cached before B ever ran.
+    """
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    item_id = str(uuid.uuid4())
+
+    async with database_manager.session_factory() as setup:
+        await _insert_org_and_user(setup, org_id, user_id)
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_items "
+                "(id, organization_id, name, tracking_type, `condition`, status) "
+                "VALUES (:id, :org, :name, :tt, :cond, :status)"
+            ),
+            {
+                "id": item_id,
+                "org": org_id,
+                "name": "Thermal Imager",
+                "tt": TrackingType.INDIVIDUAL.value,
+                "cond": ItemCondition.GOOD.value,
+                "status": ItemStatus.AVAILABLE.value,
+            },
+        )
+        await setup.commit()
+
+    session_a = database_manager.session_factory()
+    session_b = database_manager.session_factory()
+    try:
+        # Session A: an early unlocked read establishes this transaction's
+        # REPEATABLE READ snapshot before B ever runs.
+        peek = await session_a.execute(
+            select(InventoryItem).where(InventoryItem.id == item_id)
+        )
+        assert peek.scalar_one().assigned_to_user_id is None
+
+        # Session B: an independent, already-committed assignment -- the
+        # race retire_item's locked re-read exists to catch.
+        service_b = InventoryService(session_b)
+        assignment, err_b = await service_b.assign_item_to_user(
+            item_id=uuid.UUID(item_id),
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            assigned_by=uuid.UUID(user_id),
+        )
+        assert assignment is not None, err_b
+        await session_b.commit()
+
+        # Session A: retire the same item, in the same session/transaction
+        # that already read it unassigned above. This is the assertion that
+        # matters: it must observe B's committed assignment, not the
+        # pre-race snapshot.
+        service_a = InventoryService(session_a)
+        success_a, err_a = await service_a.retire_item(
+            item_id=uuid.UUID(item_id), organization_id=uuid.UUID(org_id)
+        )
+        assert success_a is False, (
+            "retire_item succeeded over a concurrently-assigned item -- it "
+            "read its own session's stale, pre-race cached copy instead of "
+            "B's committed assignment (identity-map/snapshot staleness)"
+        )
+        assert "assigned" in (err_a or "").lower()
+    finally:
+        await session_a.rollback()
+        await session_b.rollback()
+        await session_a.close()
+        await session_b.close()
+        await _cleanup(org_id, item_id=item_id)

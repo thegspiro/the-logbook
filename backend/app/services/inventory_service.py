@@ -1966,21 +1966,36 @@ class InventoryService:
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
-            # `active` is not a field this method accepts. A first attempt
-            # gated it on the same checks retire_item runs (assignment,
-            # checkout, pool issuance) directly in this unlocked method, but
-            # a Codex review caught two gaps that check alone could not
-            # close: the check ran against a read this method does not lock,
-            # so a concurrent assign/checkout could still land between the
-            # check and this call's own commit; and a caller could clear
-            # `active` while leaving `status` at AVAILABLE, which
-            # assign_item_to_user/checkout_item gate on rather than
-            # `active` — letting the "deactivated" item be handed out again
-            # immediately. retire_item already closes both, atomically,
-            # with its own audit trail; nothing in this codebase reactivates
-            # a retired item, so there is no legitimate use of this field
+            # `active` is not a field this method accepts, and neither is a
+            # `status`/`condition` pair of RETIRED — both are retire_item's
+            # job alone. A first attempt gated a bare `active` clear on the
+            # same checks retire_item runs (assignment, checkout, pool
+            # issuance) directly in this unlocked method, but a Codex review
+            # caught three gaps that check alone could not close:
+            #
+            # 1. The check ran against a read this method does not lock, so
+            #    a concurrent assign/checkout could still land between the
+            #    check and this call's own commit.
+            # 2. A caller could clear `active` while leaving `status` at
+            #    AVAILABLE, which assign_item_to_user/checkout_item gate on
+            #    rather than `active` — letting the "deactivated" item be
+            #    handed out again immediately.
+            # 3. A caller could skip `active` entirely and send
+            #    {"status": "retired", "condition": "retired"} directly:
+            #    that pair passes `_validate_item_state` (RETIRED has no
+            #    assigned-user rule blocking it) with none of retire_item's
+            #    blocker checks and no `active` sync at all.
+            #
+            # retire_item already closes all three, atomically (locked
+            # fetch, blocker checks, status/condition/active set together,
+            # dedicated audit trail); nothing in this codebase reactivates a
+            # retired item, so there is no legitimate use of any of these
             # here to preserve.
-            if "active" in update_data:
+            if (
+                "active" in update_data
+                or update_data.get("status") == ItemStatus.RETIRED.value
+                or update_data.get("condition") == ItemCondition.RETIRED.value
+            ):
                 return None, "Use the item's retire action to deactivate it"
 
             # Validate resulting state
@@ -2029,22 +2044,18 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
-    async def _deactivation_block_reason(
-        self, item: InventoryItem, verb: str = "retire"
-    ) -> Optional[str]:
-        """Why ``item`` cannot be taken out of active inventory right now.
+    async def _deactivation_block_reason(self, item: InventoryItem) -> Optional[str]:
+        """Why ``item`` cannot be retired right now, or ``None`` if it can be.
 
-        Shared by ``retire_item`` and ``update_item`` (when a caller clears
-        ``active`` through the generic PATCH path rather than the dedicated
-        retire endpoint) so both enforce the same invariant: an item that is
-        still assigned, checked out, or holding unreturned pool issuances
-        must not be able to disappear from active inventory while someone
-        still has it. ``update_item`` accepts ``active`` on its own schema
-        with no route dedicated to clearing it, so without this shared check
-        that path silently bypassed every one of these guards.
+        Used only by ``retire_item``. ``update_item`` (the generic item
+        PATCH) does not call this — it rejects `active`, and a `status`/
+        `condition` pair of RETIRED, outright, rather than trying to
+        replicate retire_item's locked/blocker-checked/status-synced/
+        audited contract inline. retire_item is the only place an item can
+        be taken out of active inventory.
         """
         if item.assigned_to_user_id:
-            return f"Cannot {verb}: item is currently assigned. Unassign it first."
+            return "Cannot retire: item is currently assigned. Unassign it first."
 
         active_co = await self.db.execute(
             select(func.count(CheckOutRecord.id))
@@ -2052,7 +2063,7 @@ class InventoryService:
             .where(CheckOutRecord.is_returned.is_(False))
         )
         if active_co.scalar():
-            return f"Cannot {verb}: item has active checkouts. Check it in first."
+            return "Cannot retire: item has active checkouts. Check it in first."
 
         if item.tracking_type == TrackingType.POOL:
             active_iss = await self.db.execute(
@@ -2061,20 +2072,28 @@ class InventoryService:
                 .where(ItemIssuance.is_returned.is_(False))
             )
             if active_iss.scalar():
-                return f"Cannot {verb}: item has unreturned pool issuances."
+                return "Cannot retire: item has unreturned pool issuances."
 
         return None
 
     async def retire_item(
         self, item_id: UUID, organization_id: UUID, notes: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Retire an item (soft delete). Blocks if item has active checkouts or assignments."""
+        """Retire an item (soft delete). Blocks if item has active checkouts or assignments.
+
+        Locks the row before checking blockers, not just around the eventual
+        write: an unlocked read here let a concurrent assign_item_to_user or
+        checkout_item — both of which lock the item before committing — land
+        between this method's blocker check and its own commit, so retirement
+        could still go through over a now-held item using this transaction's
+        stale, pre-race read.
+        """
         try:
-            item = await self.get_item_by_id(item_id, organization_id)
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return False, "Item not found"
 
-            block_reason = await self._deactivation_block_reason(item, verb="retire")
+            block_reason = await self._deactivation_block_reason(item)
             if block_reason:
                 return False, block_reason
 
