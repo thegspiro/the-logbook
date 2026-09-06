@@ -40,7 +40,7 @@ import type {
   StorageAreaResponse,
   Location,
 } from '../types';
-import { getStatusStyle, getStatusLabel, getConditionColor } from '../types';
+import { getStatusStyle, getStatusLabel, getConditionColor, sizeLabel } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
@@ -436,9 +436,12 @@ const ItemDetailPage: React.FC = () => {
         {/* Physical — uniform, ppe */}
         {['uniform', 'ppe'].includes(itemType) && (
           <Card title="Physical" icon={<Shirt className="h-4 w-4" />}>
-            <Field label="Standard Size" value={item.standard_size ? item.standard_size.toUpperCase() : '--'} />
+            {/* sizeLabel, not toUpperCase: the stored value is a code, and
+                upper-casing it renders `one_size` as ONE_SIZE and `xxxl` as
+                XXXL where every picker in the app says One Size and 3XL. */}
+            <Field label="Standard Size" value={sizeLabel(item.standard_size) || '--'} />
             <Field label="Style" value={item.style ? item.style.replace(/_/g, ' ') : '--'} />
-            <Field label="Size (legacy)" value={item.size || '--'} />
+            <Field label="Size (legacy)" value={sizeLabel(item.size) || '--'} />
             <Field label="Color" value={item.color || '--'} />
           </Card>
         )}

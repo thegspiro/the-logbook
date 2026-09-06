@@ -9,6 +9,9 @@ import {
   getConditionColor,
   getItemTypeFromCategory,
   sizeLabel,
+  standardSizeCode,
+  SIZE_PICKER_GROUPS,
+  CUSTOM_SIZE_OPTION,
 } from './index';
 
 describe('ITEM_TYPES', () => {
@@ -162,6 +165,110 @@ describe('sizeLabel', () => {
     expect(sizeLabel(null)).toBe('');
     expect(sizeLabel(undefined)).toBe('');
     expect(sizeLabel('')).toBe('');
+  });
+});
+
+describe('SIZE_PICKER_GROUPS', () => {
+  const values = SIZE_PICKER_GROUPS.flatMap((g) => g.options.map((o) => o.value));
+
+  // Pinned rather than derived: the picker writes `standard_size`, which the
+  // backend validates against the `StandardSize` enum in
+  // `backend/app/models/inventory.py`. A value that enum accepts and this list
+  // omits comes back blank in the picker and is cleared on the next save; a
+  // value this list adds and the enum lacks is a 422. Keep the two in step.
+  it('offers every value the backend StandardSize enum accepts', () => {
+    expect(values).toEqual([
+      'xxs',
+      'xs',
+      's',
+      'm',
+      'l',
+      'xl',
+      'xxl',
+      'xxxl',
+      'xxxxl',
+      'one_size',
+      '6',
+      '6.5',
+      '7',
+      '7.5',
+      '8',
+      '8.5',
+      '9',
+      '9.5',
+      '10',
+      '10.5',
+      '11',
+      '11.5',
+      '12',
+      '12.5',
+      '13',
+      '14',
+      '15',
+      '28',
+      '30',
+      '32',
+      '34',
+      '36',
+      '38',
+      '40',
+      '42',
+      '44',
+      '46',
+    ]);
+  });
+
+  // `custom` is a stored sentinel meaning "the real value is in free-text
+  // size". The picker's own escape hatch clears `standard_size` instead, so
+  // the null fallback every reader already has covers a custom size.
+  it('does not offer the custom sentinel as a size', () => {
+    expect(values).not.toContain('custom');
+    expect(values).not.toContain(CUSTOM_SIZE_OPTION);
+  });
+
+  it('labels every option', () => {
+    for (const group of SIZE_PICKER_GROUPS) {
+      for (const option of group.options) {
+        expect(option.label).not.toBe('');
+      }
+    }
+  });
+});
+
+describe('standardSizeCode', () => {
+  it.each([
+    ['l', 'l'],
+    ['one_size', 'one_size'],
+    ['10.5', '10.5'],
+    ['34', '34'],
+  ])('resolves %s to the picker option %s', (stored, code) => {
+    expect(standardSizeCode(stored)).toBe(code);
+  });
+
+  // A size typed into the old free-text box was stored however it was typed,
+  // and the list endpoint's size filter compares against the lowercase code —
+  // so "L" never matched the L filter. Landing it on the same picker option
+  // is what stops the two from staying apart.
+  it('matches a stored code case-insensitively', () => {
+    expect(standardSizeCode('L')).toBe('l');
+    expect(standardSizeCode(' XL ')).toBe('xl');
+  });
+
+  it('reports free text as outside the vocabulary', () => {
+    expect(standardSizeCode('10.5 EE')).toBe('');
+    expect(standardSizeCode('Large')).toBe('');
+  });
+
+  // The sentinel means the size lives in the free-text column, so resolving it
+  // to free text is what it asks for.
+  it('reports the custom sentinel as outside the vocabulary', () => {
+    expect(standardSizeCode('custom')).toBe('');
+  });
+
+  it('returns an empty string for no size on file', () => {
+    expect(standardSizeCode(null)).toBe('');
+    expect(standardSizeCode(undefined)).toBe('');
+    expect(standardSizeCode('')).toBe('');
   });
 });
 
