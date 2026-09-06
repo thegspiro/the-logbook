@@ -222,23 +222,53 @@ class PushService:
         untrusted client value enters.
         """
         endpoint_hash = hash_endpoint(endpoint)
-        # A locking read from the start, not a plain SELECT: the self-refresh
-        # decision just below depends on *who currently owns this endpoint*,
-        # and a plain read can answer that from a snapshot already stale by
-        # the time this request began (its transaction's snapshot was fixed
-        # when `current_user` was loaded upstream, same shape as the count
-        # below). Deciding "genuine refresh" from a stale answer is how a
-        # concurrent transfer away from this endpoint could be overwritten
-        # right back by a refresh that still believes it owns it — the row
-        # ends up assigned to the new owner with the old owner's encryption
-        # keys, so a notification meant for the new owner gets pushed (and
-        # is decryptable) on the old owner's device. Locking it also closes
-        # a pre-existing gap where two brand-new subscribes for the same
-        # endpoint could both decide "no existing row" and race the INSERT's
-        # unique constraint. Two different endpoints are never contended
-        # between two different callers, so this lock cannot itself deadlock
-        # against another caller's row — only the sorted user-row locks
-        # below are ever shared across callers.
+        # An unlocked guess only, used to decide which User rows need
+        # locking below -- not to decide anything about the endpoint
+        # itself. It can be stale (this transaction's snapshot was already
+        # fixed when `current_user` was loaded upstream), which is fine
+        # here: it only has to be a reasonable candidate, not the truth.
+        guess = await self.db.execute(
+            select(PushSubscription.user_id).where(
+                PushSubscription.endpoint_hash == endpoint_hash
+            )
+        )
+        guessed_owner = guess.scalar_one_or_none()
+
+        # Lock every user this call might touch, in a fixed order (sorted
+        # by id, not by which side of a swap either request is on) --
+        # BEFORE taking any lock on the endpoint row itself. Two callers
+        # trading endpoints with each other (A claims B's device, B claims
+        # A's, at the same time) would otherwise each lock their own
+        # target's endpoint row first and then block on the other's
+        # endpoint row while holding it: a textbook AB/BA deadlock, still
+        # reachable even with the user-row locks below if an endpoint-row
+        # lock were taken before them (reproduced in CI on an earlier
+        # version of this fix — see the deadlock guard test). Acquiring
+        # every request's locks in the same global order, endpoint-row
+        # locks included, makes one fully finish before the other can even
+        # attempt its own endpoint-row lock, instead of each holding one
+        # half of a cycle. The count that follows must then be a *locking*
+        # read of its own — under REPEATABLE READ, merely acquiring this
+        # lock does not refresh what a plain SELECT would see
+        # (CLAUDE.md pitfall #27): only a locking read is defined to
+        # return the latest committed rows.
+        lock_user_ids = {str(user_id)}
+        if guessed_owner is not None:
+            lock_user_ids.add(guessed_owner)
+        for uid in sorted(lock_user_ids):
+            await self.db.execute(select(User).where(User.id == uid).with_for_update())
+
+        # The authoritative read: locked, and only now -- after the shared
+        # user-row locks above, never before. A plain read here could
+        # still decide "I already own this" from data already stale
+        # relative to a concurrent transfer, overwriting the row's
+        # encryption keys while leaving `user_id` pointing at the new
+        # owner: a notification meant for the new owner would then be
+        # encrypted with keys only the OLD owner's device holds the
+        # matching private key for, and delivered there instead. Locking
+        # it also closes a pre-existing gap where two brand-new subscribes
+        # for the same endpoint could both decide "no existing row" and
+        # race the INSERT's unique constraint.
         result = await self.db.execute(
             select(PushSubscription)
             .where(PushSubscription.endpoint_hash == endpoint_hash)
@@ -260,31 +290,6 @@ class PushService:
             await self.db.refresh(existing)
             return existing
 
-        # Lock the user row first: it is the one thing every one of this
-        # user's concurrent subscribe() calls already shares, so locking it
-        # serializes them the way the seats-being-counted never could (a
-        # not-yet-inserted subscription has no row to lock). The count that
-        # follows must then be a *locking* read of its own — under
-        # REPEATABLE READ, the request's transaction already took its
-        # snapshot when `current_user` was loaded upstream, so merely
-        # acquiring this lock does not refresh what a plain SELECT would see
-        # (CLAUDE.md pitfall #27): only a locking read is defined to return
-        # the latest committed rows.
-        #
-        # When reassigning an endpoint away from a different user, that
-        # user's row is locked too — in a fixed order (sorted by id, not by
-        # which side of the swap either request is on). Two callers trading
-        # endpoints with each other (A claims B's device, B claims A's, at
-        # the same time) would otherwise each lock their own target first
-        # and then block on the other's existing row: a textbook AB/BA
-        # deadlock. Acquiring both requests' locks in the same global order
-        # makes one of them fully finish (or fully back off) before the
-        # other can proceed, instead of each holding one half of a cycle.
-        lock_user_ids = {str(user_id)}
-        if existing and existing.user_id != str(user_id):
-            lock_user_ids.add(existing.user_id)
-        for uid in sorted(lock_user_ids):
-            await self.db.execute(select(User).where(User.id == uid).with_for_update())
         count_result = await self.db.execute(
             select(func.count())
             .select_from(PushSubscription)
