@@ -14,6 +14,7 @@ import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { DuesStatus, DUES_STATUS_COLORS, DuesFrequency } from '../types';
 import type { DuesSummary } from '../types';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 // =============================================================================
 // Constants
@@ -124,6 +125,7 @@ const DuesManagementPage: React.FC = () => {
   if (isLoading && duesSchedules.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Dues Management</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Manage member dues schedules and payments</p>
@@ -135,6 +137,8 @@ const DuesManagementPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
+
       {/* Header */}
       <div>
         <h1 className="text-theme-text-primary text-2xl font-bold">Dues Management</h1>

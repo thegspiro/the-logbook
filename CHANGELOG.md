@@ -50,6 +50,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request", which surfaced as a one-off red months after the strategy landed,
   on an unrelated pull request. The pattern no longer emits two adjacent
   hyphens; single hyphens still generate.
+### The program print sheet's Enrolled Members table could never render (2026-09-06)
+
+**Fixed**
+
+- **The printable training programme now loads its roster from
+  `GET /training/programs/programs/{id}/enrollments`.** It read
+  `program.enrollments`, and the programme response
+  (`ProgramWithPhasesAndRequirements`) carries phases, requirements and
+  milestones and no enrollments field — so the Enrolled Members section was
+  always skipped and the header always printed `Enrolled: 0`, on every sheet.
+  Nothing was missing on the backend: that endpoint already exists, is
+  org-scoped and permission-gated, and returns exactly the enriched shape the
+  table was written against, which is why the table already carried a cast for
+  `user_name`.
+
+- **A member who cannot read the roster gets an em dash, not a confident `0`.**
+  The route is gated on the training module alone while the endpoint needs
+  `training.view_all` or `training.manage`, so the call degrades — correctly,
+  since withholding the roster is the right privacy outcome. But degrading to an
+  empty list would have printed `Enrolled: 0` on paper for a programme with
+  twenty members on it. "Could not read" and "nobody enrolled" are now distinct.
+
+- **The Current Phase column shows the phase.**
+  `ProgramEnrollmentResponse` serializes `current_phase_id` and no nested phase
+  object, so reading `current_phase.name` would have printed an em dash for
+  every member even once the rows arrived. The name resolves from the
+  programme's own phases, the way the requirements table above it already
+  resolved its phase column.
+
+### Finance and Elections pages keep their trail in every state (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the six Finance section pages.** Budgets, Purchase
+  Requests, Expense Reports, Check Requests, Dues and Finance Settings had none,
+  while the detail and form pages beneath them did — so a trail appeared once
+  you opened a record and disappeared when you went back to the list it came
+  from.
+- **A trail on the election detail page, in all three of its states.** Its URL
+  is `/elections/:electionId`, and a generated trail skips the id and then
+  suppresses itself for having only one crumb, so the page showed nothing. Its
+  loading and not-found branches offered no route away at all — not even the
+  "Back to Elections" link the loaded page carries — which is what a member
+  following a stale election link landed on.
+
+**Fixed**
+
+- **Four Finance pages showed their trail only after loading finished.** The
+  three request forms and the approval-chain settings rendered `<Breadcrumbs />`
+  in the loaded branch and not in the skeleton branch above it. This is the
+  mirror of the defect fixed earlier in the same directory, where two detail
+  pages had a trail _while_ loading and lost it once the record arrived.
+- **The Expense Reports crumb no longer reads "Expenses".** The page heading,
+  the detail page's back link and the testing registry all call it Expense
+  Reports; only the URL segment says otherwise.
+
+**Changed**
+
+- **The finance breadcrumb test now checks every branch a page can return,
+  rather than the last one.** It was written against the first direction of this
+  defect and was blind to the second by construction, which is how four pages
+  kept a trail-less loading branch. Both directions are now covered, and the
+  failure names the branch index.
 
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
