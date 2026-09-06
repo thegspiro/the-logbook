@@ -226,6 +226,18 @@ rules:
 `app/`. Their CI already has a `backend-security` job, so that is affordable —
 but not for a rule that is 80% false positives.
 
+#### One more adoption cost, found the hard way
+
+`pip install semgrep` into the backend environment **downgrades `mcp` from the
+pinned 2.1.1 to 1.29.0** — semgrep depends on `mcp`, and the older version has
+no `mcp.server.mcpserver`, which `app/mcp/server.py` and `app/mcp/registry.py`
+both import. Four tests in `test_module_api_gating.py` start failing with
+`ModuleNotFoundError`, and they fail in a way that reads as a pre-existing
+repository defect rather than as environment damage.
+
+Anyone adopting Semgrep here must install it somewhere isolated — its own
+virtualenv, or the pinned GitHub Action — never alongside `requirements.txt`.
+
 #### Verdict
 
 Option B. The ratchet is what ships.

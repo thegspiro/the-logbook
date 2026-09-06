@@ -38,24 +38,6 @@ app/api/public/salesforce_webhook.py::salesforce_inbound_webhook::Integration::i
 # Not yet reviewed.
 app/api/v1/endpoints/external_training.py::perform_sync_task::ExternalTrainingProvider::provider_id
 
-# Reviewed 2026-09-06: safe. InventoryService.update_issuance_charge filters
-# ItemIssuance.organization_id and returns "not found" otherwise; the endpoint
-# raises 400 on that, so this re-fetch runs on an id already validated in-org.
-# Kept as a hardening candidate, not a defect.
-app/api/v1/endpoints/inventory.py::update_issuance_charge::ItemIssuance::issuance_id
-
-# Reviewed 2026-09-06: all five safe, each the same shape. Every handler fetches
-# the user with .where(User.organization_id == current_user.organization_id)
-# and raises 404 first; the flagged query is the re-read for eager-loaded
-# serialization that CLAUDE.md pitfall #11 requires. Read line by line this
-# time, not inferred from one handler.
-# Kept as hardening candidates, not defects.
-app/api/v1/endpoints/users.py::add_role_to_user::User::user_id
-app/api/v1/endpoints/users.py::assign_user_roles::User::user_id
-app/api/v1/endpoints/users.py::remove_role_from_user::User::user_id
-app/api/v1/endpoints/users.py::update_contact_info::User::user_id
-app/api/v1/endpoints/users.py::update_user_profile::User::user_id
-
 # Not yet reviewed.
 app/services/admin_hours_service.py::bulk_approve::User::member_id
 app/services/admin_hours_service.py::clock_in::User::user_id
