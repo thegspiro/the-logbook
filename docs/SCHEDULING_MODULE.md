@@ -1631,7 +1631,7 @@ Invalid values fall back to the Schedule tab. This enables deep-linking from not
 Equipment checks are no longer tied exclusively to active shifts:
 
 - Members can perform ad-hoc checks on any apparatus at any time
-- Navigate to **Scheduling > Equipment Checks** tab to start
+- Navigate to **Operations > Fleet Readiness** to start
 - Checks saved without shift association appear in reports as "ad hoc"
 - Admin link added from Equipment Checks tab to template management
 

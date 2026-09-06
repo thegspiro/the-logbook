@@ -4677,6 +4677,12 @@ class Seeder:
 
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
+        # Linking supply positions edits the template's items, which drafts it
+        # again — and this step runs *after* `seed_equipment_checks`, so that
+        # step's publish sweep has already been and gone. Without this the
+        # medic template stays inactive and the sealed-compartment check below
+        # cannot find it ("Template not found").
+        self._publish_seeded_templates()
         return {
             "template_id": pick(template, "id"),
             "apparatus_id": pick(medic, "id"),
@@ -5339,6 +5345,58 @@ class Seeder:
 
     # -- scheduling: equipment check templates and completed checks --
 
+    def _publish_seeded_templates(self) -> list[str]:
+        """Re-publish every check template this seeder drafted by editing it.
+
+        Editing a template's *content* is a draft operation: every compartment
+        and item mutation runs through the API's `_advance_content_revision`,
+        which bumps the revision and sets `is_active = False` so a crew cannot
+        answer a checklist that changed under them. Creating a template with
+        `is_active: True` and then adding a section header, linking a supply
+        position or repairing a check type therefore leaves it **inactive** —
+        and `_resolve_templates` skips inactive templates, so the check create
+        answers "Template is not applicable to this shift" and the whole
+        equipment-check step aborts.
+
+        That is exactly what happened: "Engine Daily Check" and "Medic 3 Supply
+        Check" both sat at `is_active = 0`, the member's My Checklists screen
+        read "No active checklists", and seven guide-03 captures had nothing to
+        photograph. The failure names the template, not the edit that drafted
+        it, which is why it read as a template/shift mismatch for weeks.
+
+        A sweep rather than a call beside each edit: the edits are spread over
+        three methods that run in an order this function does not control, and
+        the targeted version is one forgotten call away from silently
+        reproducing the bug. Publishing is the same PUT the template builder
+        issues when an editor presses Publish, and it does not advance the
+        revision, so it is safe to repeat and safe to run after the last edit.
+        """
+        published: list[str] = []
+        for template in items(
+            self.api.get("/equipment-checks/templates"), "templates"
+        ):
+            if pick(template, "is_active", "isActive"):
+                continue
+            template_id = pick(template, "id")
+            if not template_id:
+                continue
+            try:
+                self.api.put(
+                    f"/equipment-checks/templates/{template_id}",
+                    {"is_active": True},
+                )
+            except ApiError as exc:
+                # A template with no checkable item cannot be published, and
+                # the API says so. That is a template problem, not a publish
+                # problem, so name it and carry on rather than aborting every
+                # later template.
+                self.blocked.append(
+                    f"publish template {pick(template, 'name')}: {exc}"
+                )
+                continue
+            published.append(str(pick(template, "name") or template_id))
+        return published
+
     def _add_section_header(self, template_id: str | None) -> None:
         """Put one section header on the engine checklist.
 
@@ -5616,6 +5674,12 @@ class Seeder:
         # happened to work while the demo database returned engines first, and
         # crashed the whole step the first time a fresh seed ordered a medic
         # or ladder shift into the front of the list.
+        # Every content edit above returned its template to draft. Publish
+        # before resolving shifts: an inactive template is invisible to
+        # `_resolve_templates`, and the check create below then refuses with
+        # "Template is not applicable to this shift".
+        self._publish_seeded_templates()
+
         shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
         target_shifts = [
             s for s in shifts if pick(s, "id") and apparatus_type_of(s) == "engine"
@@ -14170,6 +14234,12 @@ class Seeder:
             sealed.append((pick(compartment, "id"), name))
         if len(sealed) < 2:
             return {"blocked": "expected two named compartments to seal"}
+
+        # Marking a compartment sealed is a content edit, so the two PUTs above
+        # just returned this template to draft — and the check POST below
+        # resolves the template by id among the *active* ones, answering
+        # "Template not found". Publish between the edit and the consumer.
+        self._publish_seeded_templates()
 
         # A prior count carrying both tags. Guarded on the seal history rather
         # than on the check list: the point of the fixture is that

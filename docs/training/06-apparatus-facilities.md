@@ -817,7 +817,7 @@ Two long-standing problems here were fixed on 2026-08-10:
 
 ### Standalone Equipment Checks
 
-Equipment checks can now be performed on any apparatus at any time, independent of active shifts. Navigate to **Scheduling > Equipment Checks** to see available apparatus and start a check.
+Equipment checks can now be performed on any apparatus at any time, independent of active shifts. Navigate to **Operations > Fleet Readiness** to see available apparatus and start a check.
 
 See [Shifts & Scheduling > Standalone Equipment Checks](./03-scheduling.md#standalone-equipment-checks) for the full workflow.
 
