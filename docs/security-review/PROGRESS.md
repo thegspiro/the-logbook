@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 23 (Medical supplies)'s PR #2301 merged
+(`40cac24`) after 10 Codex review rounds — see the Log for the full
+round-by-round detail and `docs/security-review/MSUP-23-medical-supplies.md`
+for the findings write-up. Rotation row 23 -> ✅. Next: 24 Meetings &
+minutes.
+
+---
+
+### Feature 23 (Medical supplies) — full history (PR #2301, merged)
+
 **Feature 23 (Medical supplies), pass 3** — branch
 `claude/security-review-medical-supplies`,
 [PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). Initial
@@ -9525,8 +9535,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | 🔄     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -10569,3 +10579,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   8927/8927 full backend suite pass. Findings doc:
   `docs/security-review/SEC2-28-security-audit-ip.md`. PR #1911 opened and
   subscribed. Next: 29 reports & analytics, once #1911 merges.
+- **2026-09-06 — Feature 23 (Medical supplies) ✅ closed — PR #2301 merged**
+  (merge commit `40cac24`). Ten Codex review rounds over one PR — each
+  round found a real gap the previous round's own fix had left open, most
+  strikingly MSUP-13's correct security fix deterministically breaking two
+  already-shipped frontend controls (MSUP-26), caught only in round 10.
+  27 findings total: 18 fixed (3 of those superseding an earlier, less
+  complete fix on the same finding), 5 flagged (MSUP-4/11/15 as
+  cross-cutting/product decisions; MSUP-25 as a scoped follow-up covering
+  three concrete instances of one systemic TOCTOU shape that needs a
+  shared "validate domain under this mutation's own lock" design, not a
+  patch-per-instance). Full write-up:
+  `docs/security-review/MSUP-23-medical-supplies.md`. Rotation row 23 ->
+  ✅. Open PR row cleared. Next: 24 Meetings & minutes.
