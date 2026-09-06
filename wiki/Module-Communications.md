@@ -385,3 +385,29 @@ two.
 `created_at` (`e93b6a4d21c7`) answers the other half — the audience is mutable
 after publication, so "was this member in the audience when the notice went
 out, or added afterwards?" was unanswerable from the table.
+
+## Push-device cap, and acknowledgment history survives an audience change _(2026-09-06)_
+
+- **A member could register an unlimited number of push-notification devices.**
+  Every later notification to that member then fanned out to every registered
+  device — an unbounded resource cost with no legitimate reason a real person
+  would ever approach it. Registering a new device is now capped at **20 per
+  member**; refreshing a device already registered is unaffected.
+- **An email subtitle was not escaped before going into outgoing mail.** No
+  current sender passes anything but static text through it, so this had no
+  live effect — it is fixed so a future sender that does cannot reintroduce it.
+
+### Narrowing an audience no longer erases the acknowledgment record
+
+This is the user-facing half of the `revoked_at` column added earlier in this
+window.
+
+Editing who a department message goes out to **after it is published** could
+silently erase the record of who had already read or formally acknowledged it —
+because the row kept for evidence was the same row that granted access, so
+removing access removed the evidence.
+
+A member dropped from a corrected audience now **keeps their read/acknowledgment
+record**, marked as no longer active rather than deleted. An acknowledgment
+report therefore stays accurate after the audience is adjusted, and the member's
+access to the message is still correctly withdrawn.

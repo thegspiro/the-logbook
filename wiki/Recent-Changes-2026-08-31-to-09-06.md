@@ -326,6 +326,15 @@ Tell your officers about these:
 - **Session-hijack detection silenced itself after firing once**, because its
   own earlier fix promoted the attacker's IP to trusted. An ongoing hijack was
   detected exactly once and then went quiet.
+- **A member could register an unlimited number of push-notification
+  devices**, and every later notification to them fanned out to all of them —
+  an unbounded cost with no legitimate reason a real person would approach it.
+  Capped at 20 per member; refreshing a device you already have is unaffected.
+- **Narrowing a published message's audience could erase the record of who had
+  already read or acknowledged it.** A member dropped from a corrected audience
+  now keeps their receipt — marked no longer active rather than deleted — so an
+  acknowledgment report stays accurate after the audience is adjusted, and
+  their access to the message is still correctly withdrawn.
 - **A meeting attendance waiver resolved member and grantor names without an
   organization filter.** Not a live leak — the ids always came from an
   org-scoped write elsewhere — but it relied on that staying true, and the
