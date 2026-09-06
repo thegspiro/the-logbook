@@ -2895,70 +2895,6 @@ route above should also close this path — most likely by having
 `APPROVED` and requiring the dedicated route (or its replacement) for that
 transition specifically.
 
-## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record; an Independent Audit Entry May Survive (2026-08-31)
-
-`MessagingService.reconcile_recipients` rebuilds a published message's audience
-when an admin edits its targeting (e.g. switches from "by role" to a corrected
-role list). For every member the new audience no longer includes, it hard-
-deletes their `DepartmentMessageRecipient` row outright — including `read_at`
-and `acknowledged_at`, if they had already read or acknowledged the message.
-
-This is the same information `delete_message`'s own docstring calls
-"compliance evidence" and specifically soft-deletes the parent message to
-avoid losing (`app/services/messaging_service.py`, `delete_message`) — but
-`reconcile_recipients` (same file) discards it via a plain audience edit, no
-confirmation, no message deletion involved. A message that "requires
-acknowledgment," gets acknowledged by everyone, and then has its role list
-tweaked to fix a typo loses every acknowledgment row for anyone who falls
-outside the corrected set — `get_acknowledgment_report` would then show them
-as never having acknowledged it at all, and they'd drop out of its
-denominator entirely.
-
-**This does not necessarily erase all compliance evidence, but the backup is
-best-effort, not guaranteed.** `acknowledge_message`
-(`app/api/v1/endpoints/messages.py:425-436`) writes an independent
-`message_acknowledged` audit-log entry — user id, message id, timestamp —
-through the tamper-evident audit hash chain at the moment of acknowledgment,
-and `reconcile_recipients` never touches `audit_logs`. When that write
-succeeds, it survives the recipient-row deletion and could be used during
-remediation to reconstruct who had acknowledged before the audience was
-narrowed. But `AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is
-deliberately fail-open — it catches any exception on the write, logs it, and
-returns `None` rather than raising, "so audit log failures don't break the
-caller's operation" — and `acknowledge_message` never checks that return
-value, so the acknowledgment itself still succeeds either way. If the audit
-write silently failed (e.g. a transient DB error at flush/refresh), no
-`message_acknowledged` row exists, and a later `reconcile_recipients` on that
-member leaves nothing — report, inbox, or audit log — behind. What is
-reliably lost by the recipient-row deletion is the _report's_ live state
-(and, per the visibility mechanism below, the message's presence in that
-member's inbox); whether the underlying evidence of the acknowledgment
-survives depends on whether that audit write happened to succeed.
-
-Closing this needs a product decision, not a mechanical patch: keeping the
-recipient row for anyone with `read_at`/`acknowledged_at` set would preserve
-the history, but `get_inbox`/`_visible_message_or_none` currently derive
-_visibility_ from the same row (a `JOIN` on `DepartmentMessageRecipient`, no
-independent live re-check of `_is_targeted`) — so keeping the row also keeps
-the message visible in that member's inbox after they've been un-targeted,
-which may or may not be the intended behavior. The options are (a) keep
-resolved rows and accept that an already-engaged member keeps seeing a message
-they're no longer formally targeted by, (b) add a separate "still visible"
-flag so a resolved-but-untargeted row can be excluded from inbox visibility
-while its read/ack timestamps survive for reporting, or (c) accept the current
-behavior as correct — the audience is a live definition, not a historical one,
-and narrowing it is understood to also narrow who the report covers. None was
-chosen here.
-
-Found during `docs/security-review/MSG-25-messaging-notifications.md`
-(feature 25, pass 2) while reviewing the recipient-materialization
-architecture (`DepartmentMessageRecipient`, added since pass 1 by PR #1938).
-Not exploitable cross-tenant — `reconcile_recipients` only ever touches
-recipients within the message's own org — and requires an admin
-(`notifications.manage`) to edit an already-published message's targeting, so
-this is a data-integrity/compliance-record risk rather than a security
-vulnerability in the access-control sense.
-
 ## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
 `MessageDeliveryService._claim_delivery` commits a
@@ -3040,6 +2976,49 @@ got the fix, per pass 3 (`docs/security-review/MSG-25-messaging-
 notifications.md`). No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
+
+## MSG-15 — Web Push's Send-Time DNS-Rebinding Pin Is Skipped Outside `ENVIRONMENT in ("production", "staging")` (2026-09-06)
+
+`PushService._send_one` only builds the IP-pinned `requests` session that
+closes the check/use DNS-rebinding window
+(`_pinned_session`/`_resolve_public_address`) when `settings.ENVIRONMENT`
+is exactly `"production"` or `"staging"`. `ENVIRONMENT` is a bare,
+unvalidated `str` (`core/config.py:32`, default `"development"`, no
+enum) — so a real deployment left at the default, or set to any value
+other than those two exact strings, sends every push through `webpush()`
+with no send-time pin, relying solely on `validate_push_endpoint`'s
+one-time, subscribe-time check.
+
+The gate is not an oversight: `tests/test_push_service.py` runs a real
+local HTTP server standing in for a browser push service (deliberately
+not mocked, so encryption/VAPID/DB constraints are genuinely exercised),
+reachable only at `http://127.0.0.1:<port>` — which `validate_push_endpoint`'s
+HTTPS-only, exact-vendor-hostname allowlist would reject outright if
+pinning/validation ran unconditionally in tests. `PushService.subscribe()`
+itself does not call `validate_push_endpoint` (by design, that check lives
+at the API boundary), so the test suite subscribes such endpoints
+directly and depends on the environment gate to reach them at all. The
+same `ENVIRONMENT in ("production", "staging")` idiom is also this
+codebase's established pattern for other prod-only checks
+(`core/config.py:460`), so a push-specific carve-out would be
+inconsistent with it.
+
+Closing this properly needs one of: a test-infrastructure change so the
+local test server does not depend on skipping validation (e.g. an
+explicit test-only bypass rather than an environment-string coincidence),
+or a more precise signal than `ENVIRONMENT` for "is this deployment
+internet-facing." Either is a design decision, not a one-line fix. The
+practical exposure today is narrow — `validate_push_endpoint`'s exact-
+hostname allowlist (~7 real vendor hosts) already means an attacker would
+need to compromise DNS for a major push vendor (`fcm.googleapis.com` et
+al.), not merely stand up an arbitrary host, so this is a defense-in-depth
+gap rather than an open path.
+
+Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
+25, pass 3, MSG-15). Not exploitable cross-tenant — this affects the send
+path for any recipient's push, regardless of org, and requires either a
+misconfigured `ENVIRONMENT` on a real deployment or DNS compromise of a
+push vendor to matter at all.
 
 ## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
 

@@ -234,6 +234,14 @@ class TestBuildShell:
         assert colourway_context(ACCENT_RED, "")["status_chip_cell"] == ""
         assert body.count("<p") == 1  # the content's paragraph, and no subline
 
+    def test_subtitle_is_escaped(self):
+        # Unlike title, subtitle has no caller-side escaping guarantee
+        # (wrap_email_body escapes title itself before calling in) — this
+        # is the one place every caller goes through, so it's escaped here.
+        body = build_shell("T", "        <p>x</p>", subtitle="<script>x</script>")
+        assert "<script>" not in body
+        assert "&lt;script&gt;" in body
+
     def test_the_old_centred_logo_block_is_gone(self):
         body = build_shell("T", "        <p>x</p>")
         assert '<div class="logo">' not in body

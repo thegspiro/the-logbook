@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: unbounded push-device registration, and an unescaped email subtitle (2026-09-06)
+
+**Fixed**
+
+- **A member could register an unlimited number of push-notification
+  devices.** Every future notification to that member would then fan out
+  to every registered device — an unbounded resource cost with no
+  legitimate reason a real person would ever approach. Registering a new
+  device is now capped at 20 per member (refreshing an existing device
+  isn't affected).
+- **An email subtitle was not escaped before being included in outgoing
+  mail.** No current sender passes anything but static text there, so this
+  had no live effect, but it's fixed so a future sender that does can't
+  reintroduce it.
+
+### Messaging: narrowing a published message's audience no longer erases acknowledgment history (2026-09-06)
+
+**Fixed**
+
+- **Editing who a department message goes out to after it's published
+  could silently erase the record of who had already read or formally
+  acknowledged it.** A member dropped from a corrected audience now keeps
+  their read/acknowledgment record — it's marked as no longer active
+  rather than deleted — so an acknowledgment report stays accurate even
+  after the audience is adjusted, and the member's access to the message
+  is still correctly withdrawn.
+
 ### Security: a meeting attendance waiver's name lookup did not filter by organization (2026-09-06)
 
 **Fixed**

@@ -17,13 +17,21 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 from uuid import UUID
 
 import requests
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.notification import PushSubscription
 
 logger = logging.getLogger(__name__)
+
+# A real member has a handful of devices (phone, tablet, station computer).
+# With no cap, an authenticated caller could register unbounded distinct
+# endpoints (each a real hostname on the vendor allowlist, so
+# validate_push_endpoint alone does not stop this) and turn every future
+# notification into a many-thousand-fold fan-out of blocking send_to_user
+# calls. Generous enough that no legitimate use ever hits it.
+_MAX_PUSH_SUBSCRIPTIONS_PER_USER = 20
 
 # pywebpush is optional: deployments with PUSH_ENABLED=false should not be
 # forced to install it. Import failure degrades to "push unavailable" rather
@@ -229,6 +237,17 @@ class PushService:
             await self.db.commit()
             await self.db.refresh(existing)
             return existing
+
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(PushSubscription)
+            .where(PushSubscription.user_id == str(user_id))
+        )
+        if count_result.scalar_one() >= _MAX_PUSH_SUBSCRIPTIONS_PER_USER:
+            raise ValueError(
+                f"Maximum of {_MAX_PUSH_SUBSCRIPTIONS_PER_USER} push "
+                "subscriptions reached. Remove an old device first."
+            )
 
         sub = PushSubscription(
             organization_id=str(organization_id),

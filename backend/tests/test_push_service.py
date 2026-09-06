@@ -211,6 +211,59 @@ class TestSubscribe:
         assert moved.organization_id == str(org_b)
         assert await _count(db_session, "user_id", user_a) == 0
 
+    async def test_a_user_cannot_register_unbounded_devices(self, db_session, two_orgs):
+        """With no cap, every future notification to this member becomes a
+        many-thousand-fold fan-out of real network sends (send_to_user loops
+        every stored subscription). A handful of real devices never
+        approaches the cap; only a scripted flood does."""
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_id, user_id = two_orgs["a"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER):
+            await svc.subscribe(
+                org_id, user_id, f"https://push.example/{i}", p256dh, auth
+            )
+
+        with pytest.raises(ValueError, match="Maximum"):
+            await svc.subscribe(
+                org_id,
+                user_id,
+                "https://push.example/one-too-many",
+                p256dh,
+                auth,
+            )
+        assert await _count(db_session, "user_id", user_id) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        )
+
+    async def test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap(
+        self, db_session, two_orgs
+    ):
+        """Re-pointing an already-stored endpoint (browser refresh) must not
+        count as a new device — otherwise a member at the cap could never
+        refresh an existing subscription."""
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_id, user_id = two_orgs["a"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER):
+            await svc.subscribe(
+                org_id, user_id, f"https://push.example/{i}", p256dh, auth
+            )
+
+        again = await svc.subscribe(
+            org_id, user_id, "https://push.example/0", p256dh, auth, "refreshed"
+        )
+        assert again.user_agent == "refreshed"
+        assert await _count(db_session, "user_id", user_id) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        )
+
 
 class TestSend:
     async def test_request_is_a_valid_encrypted_vapid_push(
