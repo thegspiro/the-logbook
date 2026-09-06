@@ -7,6 +7,7 @@ import { CourseSyllabusBuilder } from '../components/training/CourseSyllabusBuil
 import { SkeletonCardGrid } from '../components/ux/Skeleton';
 import { Pagination } from '../components/ux/Pagination';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useAuthStore } from '../stores/authStore';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 import { COURSE_QUALIFICATIONS } from '../constants/enums';
 import { formCoercions } from '../utils/formValues';
@@ -407,6 +408,12 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
 // min-h-screen wrapper and the big page header to avoid doubling them up.
 const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { confirm } = useConfirm();
+  // The catalog is readable by anyone in the training module; creating,
+  // editing, deactivating and building a syllabus are all `training.manage`
+  // on the backend, so the controls for them are gated on the same permission
+  // rather than left visible to fail with a 403.
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('training.manage');
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -535,16 +542,18 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
               </p>
             </div>
           )}
-          <button
-            onClick={() => {
-              setEditCourse(null);
-              setShowModal(true);
-            }}
-            className="btn-primary flex items-center space-x-2"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Add Course</span>
-          </button>
+          {canManage && (
+            <button
+              onClick={() => {
+                setEditCourse(null);
+                setShowModal(true);
+              }}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Plus className="h-5 w-5" />
+              <span>Add Course</span>
+            </button>
+          )}
         </div>
 
         {/* Search & Filters */}
@@ -625,7 +634,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                 ? 'No courses match your filters'
                 : 'No courses in your library yet'}
             </p>
-            {!searchTerm && !filterType && !filterCategory && (
+            {canManage && !searchTerm && !filterType && !filterCategory && (
               <button
                 onClick={() => {
                   setEditCourse(null);
@@ -649,35 +658,37 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
                       </div>
                       {course.code && <span className="text-theme-text-muted font-mono text-xs">{course.code}</span>}
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => setSyllabusCourse(course)}
-                        className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
-                        aria-label={`Manage classes for ${course.name}`}
-                        title="Manage classes"
-                      >
-                        <ListOrdered className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditCourse(course);
-                          setShowModal(true);
-                        }}
-                        className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
-                        aria-label={`Edit ${course.name}`}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          void handleDelete(course.id, course.name);
-                        }}
-                        className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
-                        aria-label={`Delete ${course.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+                    {canManage && (
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => setSyllabusCourse(course)}
+                          className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                          aria-label={`Manage classes for ${course.name}`}
+                          title="Manage classes"
+                        >
+                          <ListOrdered className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditCourse(course);
+                            setShowModal(true);
+                          }}
+                          className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                          aria-label={`Edit ${course.name}`}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleDelete(course.id, course.name);
+                          }}
+                          className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                          aria-label={`Delete ${course.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {course.description && (
@@ -758,56 +769,60 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
         )}
       </main>
 
-      <CourseFormModal
-        isOpen={showModal}
-        course={editCourse}
-        categories={categories}
-        onClose={() => {
-          setShowModal(false);
-          setEditCourse(null);
-          // A dismissed modal must still settle the builder's promise.
-          pendingCourseResolver?.(null);
-          setPendingCourseResolver(null);
-        }}
-        onSuccess={(saved) => {
-          void loadData();
-          if (saved) pendingCourseResolver?.(saved);
-          setPendingCourseResolver(null);
-        }}
-      />
+      {canManage && (
+        <>
+          <CourseFormModal
+            isOpen={showModal}
+            course={editCourse}
+            categories={categories}
+            onClose={() => {
+              setShowModal(false);
+              setEditCourse(null);
+              // A dismissed modal must still settle the builder's promise.
+              pendingCourseResolver?.(null);
+              setPendingCourseResolver(null);
+            }}
+            onSuccess={(saved) => {
+              void loadData();
+              if (saved) pendingCourseResolver?.(saved);
+              setPendingCourseResolver(null);
+            }}
+          />
 
-      {syllabusCourse && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Classes for ${syllabusCourse.name}`}
-        >
-          <DialogPanel
-            onClose={() => setSyllabusCourse(null)}
-            className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto"
-          >
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <div>
-                <h2 className="text-theme-text-primary text-xl font-bold">{syllabusCourse.name}</h2>
-                <p className="text-theme-text-muted text-sm">Classes that make up this course</p>
-              </div>
-              <button
-                onClick={() => {
-                  setSyllabusCourse(null);
-                  void loadData();
-                }}
-                className="text-theme-text-muted hover:text-theme-text-primary"
-                aria-label="Close"
+          {syllabusCourse && (
+            <div
+              className="modal-overlay z-50 flex items-center justify-center p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Classes for ${syllabusCourse.name}`}
+            >
+              <DialogPanel
+                onClose={() => setSyllabusCourse(null)}
+                className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto"
               >
-                <X className="h-5 w-5" />
-              </button>
+                <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                  <div>
+                    <h2 className="text-theme-text-primary text-xl font-bold">{syllabusCourse.name}</h2>
+                    <p className="text-theme-text-muted text-sm">Classes that make up this course</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSyllabusCourse(null);
+                      void loadData();
+                    }}
+                    className="text-theme-text-muted hover:text-theme-text-primary"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <CourseSyllabusBuilder course={syllabusCourse} onCreateCourse={requestNewCourse} />
+                </div>
+              </DialogPanel>
             </div>
-            <div className="modal-body">
-              <CourseSyllabusBuilder course={syllabusCourse} onCreateCourse={requestNewCourse} />
-            </div>
-          </DialogPanel>
-        </div>
+          )}
+        </>
       )}
     </div>
   );
