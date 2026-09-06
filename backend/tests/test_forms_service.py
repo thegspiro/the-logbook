@@ -501,17 +501,24 @@ class TestConcurrentDuplicateSubmissionCheck:
         try:
             # Pin both transactions' REPEATABLE READ snapshot *before* either
             # coroutine starts: a snapshot is fixed at a transaction's first
-            # read, whichever statement that happens to be, so an innocuous
-            # throwaway read here has the same effect as the real first read
-            # inside submit_public_form(). asyncio.gather does not guarantee
-            # that both attempts reach their own first read before either
-            # commits -- without this, a scheduling quirk could let session
-            # A run to completion before session B's snapshot is taken, in
-            # which case B would see A's committed row and correctly reject
-            # it, passing the assertion below without ever exercising the
-            # staleness this test exists to catch.
-            await session_a.execute(text("SELECT 1"))
-            await session_b.execute(text("SELECT 1"))
+            # *consistent read*, whichever statement that happens to be, so
+            # an innocuous throwaway read here has the same effect as the
+            # real first read inside submit_public_form() -- as long as it
+            # actually engages InnoDB. A bare ``SELECT 1`` does not: it names
+            # no table, so the server answers it without ever starting an
+            # InnoDB snapshot, and the transaction's real snapshot would
+            # still be taken later, at whichever statement happens to touch
+            # a table first. Reading the organization row we already
+            # committed above is a real InnoDB access. Without this,
+            # asyncio.gather does not guarantee that both attempts reach
+            # their own first read before either commits -- a scheduling
+            # quirk could let session A run to completion before session B's
+            # snapshot is taken, in which case B would see A's committed row
+            # and correctly reject it, passing the assertion below without
+            # ever exercising the staleness this test exists to catch.
+            pin_snapshot = text("SELECT id FROM organizations WHERE id = :o")
+            await session_a.execute(pin_snapshot, {"o": org_id})
+            await session_b.execute(pin_snapshot, {"o": org_id})
 
             svc_a = FormsService(session_a)
             svc_b = FormsService(session_b)

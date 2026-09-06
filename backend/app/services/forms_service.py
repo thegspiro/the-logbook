@@ -970,99 +970,19 @@ class FormsService:
         submitted_by: Optional[str] = None,
         enforce_daily_cap: bool = False,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
-        """Submit a public form while enforcing its identity policy.
-
-        Retries once on a genuine InnoDB deadlock (MySQL error 1213) out of
-        the no-repeat duplicate-submission check below. That check's second
-        query can match zero rows (no prior submission yet), and a
-        ``FOR UPDATE`` probe that matches nothing takes an InnoDB *gap* lock
-        over the index range instead of a record lock; unlike a record lock,
-        a gap lock is compatible with another transaction's gap lock on the
-        same range. Two callers submitting the first-ever entry for two
-        *different* no-repeat forms can each acquire a compatible gap lock
-        and then each block on the other's insert-intention lock -- a
-        deadlock, not a correctness bug (same shape as FAC-45 in
-        ``documents_service.py`` and MSG-13 in ``push_service.py``).
-
-        The retry re-runs the whole attempt from a fresh ``get_form_by_slug``
-        rather than resuming the failed one: a deadlock's rollback expires
-        every attribute on the ``form`` loaded in the failed attempt, and
-        async SQLAlchemy cannot transparently re-fetch an expired
-        relationship (``form.fields``) without a lazy-load, which raises
-        outside a greenlet. Retrying the whole method sidesteps that
-        entirely by never touching the old, now-expired instance.
-        """
-        for attempt in (1, 2):
-            try:
-                return await self._submit_public_form_once(
-                    slug=slug,
-                    data=data,
-                    submitter_name=submitter_name,
-                    submitter_email=submitter_email,
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    honeypot_value=honeypot_value,
-                    submitted_by=submitted_by,
-                    enforce_daily_cap=enforce_daily_cap,
-                )
-            except OperationalError as exc:
-                if attempt == 2 or not _is_deadlock(exc):
-                    return None, safe_error_detail(exc)
-                logger.warning(
-                    "Deadlock on public form submission for slug {}, retrying once",
-                    slug,
-                )
-        raise AssertionError("unreachable")  # pragma: no cover
-
-    async def _submit_public_form_once(
-        self,
-        slug: str,
-        data: Dict[str, Any],
-        submitter_name: Optional[str] = None,
-        submitter_email: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        honeypot_value: Optional[str] = None,
-        submitted_by: Optional[str] = None,
-        enforce_daily_cap: bool = False,
-    ) -> Tuple[Optional[FormSubmission], Optional[str]]:
+        """Submit a public form while enforcing its identity policy."""
         try:
             # Honeypot bot detection - if the hidden field has a value, it's a bot
             if honeypot_value:
                 # Silently reject but return success to not tip off the bot
                 return None, None
 
-            form = await self.get_form_by_slug(slug)
-            if not form:
-                return None, "Form not found or not available"
-
-            if form.require_authentication and not submitted_by:
-                return None, "Authentication is required to submit this form"
-
-            if not form.allow_multiple_submissions:
-                if not submitted_by:
-                    return None, "Authentication is required to submit this form"
-                # Serialize same-form submissions before checking. Locking the
-                # Form row alone is not enough (CLAUDE.md pitfall #27): under
-                # REPEATABLE READ the duplicate check's own snapshot is fixed
-                # at this transaction's first read — here, the earlier
-                # get_form_by_slug() call above — so a plain SELECT after the
-                # lock still answers from before the other request committed.
-                # The duplicate check itself must be a locking read to see
-                # the latest committed row.
-                await self.db.execute(
-                    select(Form.id).where(Form.id == str(form.id)).with_for_update()
-                )
-                prior = await self.db.execute(
-                    select(FormSubmission.id)
-                    .where(
-                        FormSubmission.form_id == str(form.id),
-                        FormSubmission.submitted_by == submitted_by,
-                    )
-                    .with_for_update()
-                )
-                if prior.scalar_one_or_none() is not None:
-                    return None, "You have already submitted this form"
+            form, lock_error = await self._get_form_and_lock_for_no_repeat(
+                slug, submitted_by
+            )
+            if lock_error:
+                return None, lock_error
+            assert form is not None  # guaranteed whenever lock_error is None
 
             # Validate required fields (FORM-6: presence AND a non-empty value —
             # a key holding "" / whitespace / [] does not satisfy "required").
@@ -1114,17 +1034,93 @@ class FormsService:
             await self._process_integrations(submission, form)
 
             return submission, None
-        except OperationalError as exc:
-            await self.db.rollback()
-            if _is_deadlock(exc):
-                # Let submit_public_form's retry loop handle it -- see that
-                # method's docstring for why the retry re-runs from scratch
-                # rather than resuming here.
-                raise
-            return None, safe_error_detail(exc)
         except Exception as e:
             await self.db.rollback()
             return None, safe_error_detail(e)
+
+    async def _get_form_and_lock_for_no_repeat(
+        self, slug: str, submitted_by: Optional[str]
+    ) -> Tuple[Optional[Form], Optional[str]]:
+        """Fetch *slug*'s form and, for a no-repeat form, prove no prior
+        submission exists from *submitted_by*.
+
+        Returns ``(form, None)`` on success, or ``(form_or_None, error)`` to
+        reject the submission with *error*.
+
+        Retries once on a genuine InnoDB deadlock (MySQL error 1213). The
+        duplicate-check query below can match zero rows (no prior submission
+        yet), and a ``FOR UPDATE`` probe that matches nothing takes an
+        InnoDB *gap* lock over the index range instead of a record lock;
+        unlike a record lock, a gap lock is compatible with another
+        transaction's gap lock on the same range. Two callers submitting
+        the first-ever entry for two *different* no-repeat forms can each
+        acquire a compatible gap lock and then each block on the other's
+        insert-intention lock -- a deadlock, not a correctness bug (same
+        shape as FAC-45 in ``documents_service.py`` and MSG-13 in
+        ``push_service.py``).
+
+        Deliberately isolated from the rest of ``submit_public_form``:
+        nothing after this point (daily-cap reservation, the insert, its
+        commit, integration processing) may run twice. Retrying the whole
+        submission after a commit had already succeeded would double-spend
+        the daily-cap counter and, if the duplicate check is what would find
+        the just-committed row, misreport a successful first attempt as a
+        duplicate (Codex, pass-3 follow-up).
+
+        The retry re-runs from a fresh ``get_form_by_slug`` rather than
+        resuming the failed attempt: a deadlock's rollback expires every
+        attribute on the ``form`` loaded before it, and async SQLAlchemy
+        cannot transparently re-fetch an expired relationship
+        (``form.fields``) without a lazy-load, which raises outside a
+        greenlet.
+        """
+        for attempt in (1, 2):
+            try:
+                form = await self.get_form_by_slug(slug)
+                if not form:
+                    return None, "Form not found or not available"
+
+                if form.require_authentication and not submitted_by:
+                    return form, "Authentication is required to submit this form"
+
+                if not form.allow_multiple_submissions:
+                    if not submitted_by:
+                        return (
+                            form,
+                            "Authentication is required to submit this form",
+                        )
+                    # Serialize same-form submissions before checking. Locking
+                    # the Form row alone is not enough (CLAUDE.md pitfall
+                    # #27): under REPEATABLE READ the duplicate check's own
+                    # snapshot is fixed at this transaction's first read --
+                    # here, the get_form_by_slug() call above -- so a plain
+                    # SELECT after the lock still answers from before the
+                    # other request committed. The duplicate check itself
+                    # must be a locking read to see the latest committed row.
+                    await self.db.execute(
+                        select(Form.id).where(Form.id == str(form.id)).with_for_update()
+                    )
+                    prior = await self.db.execute(
+                        select(FormSubmission.id)
+                        .where(
+                            FormSubmission.form_id == str(form.id),
+                            FormSubmission.submitted_by == submitted_by,
+                        )
+                        .with_for_update()
+                    )
+                    if prior.scalar_one_or_none() is not None:
+                        return form, "You have already submitted this form"
+
+                return form, None
+            except OperationalError as exc:
+                await self.db.rollback()
+                if attempt == 2 or not _is_deadlock(exc):
+                    raise
+                logger.warning(
+                    "Deadlock on no-repeat check for form slug {}, retrying once",
+                    slug,
+                )
+        raise AssertionError("unreachable")  # pragma: no cover
 
     async def get_submissions(
         self,
