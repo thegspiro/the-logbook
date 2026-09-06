@@ -5761,8 +5761,14 @@ async def update_issuance_charge(
         username=current_user.username,
     )
 
+    # The org filter is redundant — update_issuance_charge above resolves the
+    # issuance in-org and the handler 400s otherwise — and is here so the
+    # re-read is not a by-id query kept safe only by what happened earlier in
+    # the handler (CLAUDE.md pitfall #14).
     result = await db.execute(
-        select(ItemIssuance).where(ItemIssuance.id == str(issuance_id))
+        select(ItemIssuance)
+        .where(ItemIssuance.id == str(issuance_id))
+        .where(ItemIssuance.organization_id == str(current_user.organization_id))
     )
     issuance = result.scalar_one()
     return ItemIssuanceResponse.model_validate(issuance)
