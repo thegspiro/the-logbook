@@ -25,6 +25,7 @@ rebuilt: a fresh instance would re-authenticate on every message.
 import hashlib
 import re
 import threading
+import time
 from collections import OrderedDict
 from typing import Any, Optional
 
@@ -36,6 +37,15 @@ from loguru import logger
 MICROSOFT_OAUTH_SCOPE = "https://outlook.office365.com/.default"
 
 _AUTHORITY_TEMPLATE = "https://login.microsoftonline.com/{tenant}"
+
+# Passed to msal as the underlying requests timeout, which msal's own
+# documentation says to set. Without it a stalled authority blocks the
+# calling thread forever: the connection test's asyncio timeout abandons the
+# future but not the worker running it, and a real send goes through
+# asyncio.to_thread with no outer deadline at all, so repeated sends against
+# an unreachable endpoint would consume the executor and stall unrelated
+# threaded work. Comfortably inside the 30s connection-test budget.
+MICROSOFT_TOKEN_TIMEOUT_SECONDS = 10
 
 # A tenant is a GUID or a verified domain (contoso.onmicrosoft.com). It is
 # interpolated into the authority URL, so anything else is rejected rather
@@ -52,6 +62,118 @@ _DOMAIN = re.compile(
 _MAX_CACHED_APPS = 16
 _app_cache: "OrderedDict[tuple[str, str, str], Any]" = OrderedDict()
 _app_cache_lock = threading.Lock()
+
+
+class _Registration:
+    """Serializes work for one app registration, for as long as anyone needs it.
+
+    Reference-counted rather than dropped when a build finishes: a waiter
+    holding the lock object while the entry was removed would be joined by
+    the next arrival on a *different* lock, and the two would then run
+    concurrently — which during an authority outage is repeated overlapping
+    discovery on the threads this serialization exists to protect. Counting
+    users keeps the entry installed while any thread holds or awaits it, and
+    removes it when the last one leaves, so the registry still cannot
+    outgrow the work in flight.
+
+    Reentrant because ``acquire_access_token`` holds it across the whole
+    build-and-fetch sequence while ``_client_app`` takes it again for the
+    build alone; both entry points stay correct on their own.
+    """
+
+    __slots__ = ("lock", "users")
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.users = 0
+
+
+_registrations: "dict[tuple[str, str, str], _Registration]" = {}
+
+# How long one failed flight speaks for the callers behind it. Serializing
+# token acquisition means a queue forms during an authority outage, and
+# without this each waiter in turn would spend the full timeout discovering
+# what the flight ahead of it already established — turning a burst into
+# minutes of executor time for one unreachable directory. Recorded only for
+# transport failures, which are the slow ones: a credential Entra ID rejects
+# comes back promptly, and cooling that down would delay a corrected secret
+# from taking effect.
+_FAILURE_COOLDOWN_SECONDS = 30
+_recent_failures: "OrderedDict[tuple[str, str, str], tuple[float, str]]" = OrderedDict()
+
+
+def _recent_failure(key: tuple) -> Optional[str]:
+    """The message from a still-current failed flight, or None."""
+    with _app_cache_lock:
+        entry = _recent_failures.get(key)
+        if entry is None:
+            return None
+        failed_at, message = entry
+        if time.monotonic() - failed_at >= _FAILURE_COOLDOWN_SECONDS:
+            _recent_failures.pop(key, None)
+            return None
+        _recent_failures.move_to_end(key)
+        return message
+
+
+def _record_failure(key: tuple, message: str) -> None:
+    with _app_cache_lock:
+        _recent_failures[key] = (time.monotonic(), message)
+        _recent_failures.move_to_end(key)
+        # Capped like _app_cache: one more dict keyed by registration is one
+        # more thing that must not grow without bound.
+        while len(_recent_failures) > _MAX_CACHED_APPS:
+            _recent_failures.popitem(last=False)
+
+
+def _clear_failure(key: tuple) -> None:
+    with _app_cache_lock:
+        _recent_failures.pop(key, None)
+
+
+def _transport_failure_message(exc: Exception) -> str:
+    """Say which transport failure happened, not merely that one did.
+
+    A blanket timeout message sends an administrator after latency and
+    firewalls when the exception already identifies something else — an
+    inspecting proxy whose certificate the server does not trust, say.
+    """
+    import requests
+
+    if isinstance(exc, requests.exceptions.Timeout):
+        return (
+            "Microsoft did not respond within "
+            f"{MICROSOFT_TOKEN_TIMEOUT_SECONDS} seconds. Check outbound access "
+            "to login.microsoftonline.com and try again."
+        )
+    if isinstance(exc, requests.exceptions.SSLError):
+        return (
+            "The TLS connection to login.microsoftonline.com could not be "
+            "established. If this network inspects TLS traffic, its "
+            "certificate authority has to be trusted by the server."
+        )
+    return (
+        "Could not reach Microsoft to obtain an access token "
+        f"({type(exc).__name__}). Check outbound access to "
+        "login.microsoftonline.com."
+    )
+
+
+def _enter_registration(key: tuple) -> _Registration:
+    with _app_cache_lock:
+        registration = _registrations.get(key)
+        if registration is None:
+            registration = _Registration()
+            _registrations[key] = registration
+        registration.users += 1
+    return registration
+
+
+def _leave_registration(key: tuple, registration: _Registration) -> None:
+    with _app_cache_lock:
+        registration.users -= 1
+        if registration.users <= 0:
+            _registrations.pop(key, None)
 
 
 class MicrosoftOAuthError(ValueError):
@@ -96,35 +218,64 @@ def xoauth2_string(user: str, access_token: str) -> str:
     return f"user={user}\x01auth=Bearer {access_token}\x01\x01"
 
 
-def _client_app(tenant_id: str, client_id: str, client_secret: str) -> Any:
-    """A cached ``msal`` confidential client for one app registration.
-
-    Keyed by a hash of the secret as well as the identifiers, so rotating
-    the secret builds a new client rather than reusing one that would keep
-    presenting the retired credential.
-    """
-    import msal
-
-    secret_digest = hashlib.sha256(client_secret.encode("utf-8")).hexdigest()
-    key = (tenant_id, client_id, secret_digest)
+def _cached_app(key: tuple) -> Any:
     with _app_cache_lock:
         cached = _app_cache.get(key)
         if cached is not None:
             _app_cache.move_to_end(key)
-            return cached
+        return cached
 
-    app = msal.ConfidentialClientApplication(
-        client_id,
-        authority=_AUTHORITY_TEMPLATE.format(tenant=tenant_id),
-        client_credential=client_secret,
-    )
 
-    with _app_cache_lock:
-        _app_cache[key] = app
-        _app_cache.move_to_end(key)
-        while len(_app_cache) > _MAX_CACHED_APPS:
-            _app_cache.popitem(last=False)
-    return app
+def _cache_key(tenant_id: str, client_id: str, client_secret: str) -> tuple:
+    """Identifies one app registration, with the secret reduced to a digest.
+
+    The secret is part of the identity so a rotation builds a new client
+    rather than reusing one that would keep presenting the retired
+    credential; hashing keeps the raw value out of a long-lived dict key.
+    """
+    digest = hashlib.sha256(client_secret.encode("utf-8")).hexdigest()
+    return (tenant_id, client_id, digest)
+
+
+def _client_app(tenant_id: str, client_id: str, client_secret: str) -> Any:
+    """A cached ``msal`` confidential client for one app registration.
+
+    The point of caching is msal's token cache, which lives on the instance.
+    Building under the registration lock with a re-check is what makes that
+    hold: a notification fan-out starting from a cold cache would otherwise
+    have every thread miss and build its own client.
+    """
+    import msal
+
+    key = _cache_key(tenant_id, client_id, client_secret)
+
+    cached = _cached_app(key)
+    if cached is not None:
+        return cached
+
+    registration = _enter_registration(key)
+    try:
+        with registration.lock:
+            # Another thread may have built it while this one waited.
+            cached = _cached_app(key)
+            if cached is not None:
+                return cached
+
+            app = msal.ConfidentialClientApplication(
+                client_id,
+                authority=_AUTHORITY_TEMPLATE.format(tenant=tenant_id),
+                client_credential=client_secret,
+                timeout=MICROSOFT_TOKEN_TIMEOUT_SECONDS,
+            )
+
+            with _app_cache_lock:
+                _app_cache[key] = app
+                _app_cache.move_to_end(key)
+                while len(_app_cache) > _MAX_CACHED_APPS:
+                    _app_cache.popitem(last=False)
+            return app
+    finally:
+        _leave_registration(key, registration)
 
 
 def _describe_failure(result: Optional[dict]) -> str:
@@ -162,19 +313,62 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
     """Return an Exchange Online access token for the app registration.
 
     Raises ``MicrosoftOAuthError`` with an administrator-facing message when
-    the credentials are malformed or Microsoft declines the request.
+    the credentials are malformed, Microsoft declines the request, or the
+    directory cannot be reached.
     """
+    import requests
+
     tenant = validate_tenant_id(tenant_id)
     client = validate_client_id(client_id)
     if not isinstance(client_secret, str) or not client_secret:
         raise MicrosoftOAuthError("Microsoft 365 client secret is required")
 
-    app = _client_app(tenant, client, client_secret)
-    # msal serves a cached token when one is still valid, so this is not a
-    # network round trip on every send.
-    result = app.acquire_token_for_client(scopes=[MICROSOFT_OAUTH_SCOPE])
+    key = _cache_key(tenant, client, client_secret)
+
+    # A flight that just failed on the transport speaks for the callers
+    # behind it, so a burst against an unreachable directory costs one
+    # attempt rather than one per caller.
+    recent = _recent_failure(key)
+    if recent is not None:
+        raise MicrosoftOAuthError(recent)
+
+    registration = _enter_registration(key)
+    try:
+        # Held across the build *and* the token request, not just the build.
+        # msal locks each search of its token cache but not the whole
+        # miss-to-network sequence, so sharing one client is not enough on a
+        # cold start: every thread would see the empty cache and send its own
+        # client-credentials request, which is the burst at Entra ID this
+        # serialization exists to prevent. Once a token is cached the lock is
+        # held only for an in-memory lookup, and a refresh single-flights the
+        # same way.
+        with registration.lock:
+            # Re-checked inside the lock: a caller that queued behind a
+            # flight which then failed should be released by that result,
+            # not start the same doomed attempt over again.
+            recent = _recent_failure(key)
+            if recent is not None:
+                raise MicrosoftOAuthError(recent)
+
+            app = _client_app(tenant, client, client_secret)
+            result = app.acquire_token_for_client(scopes=[MICROSOFT_OAUTH_SCOPE])
+    except requests.exceptions.RequestException as e:
+        # msal lets transport failures through untouched, and the timeout
+        # above makes one an expected outcome rather than a surprise. Left
+        # raw it reaches the endpoint's generic handler and is reported as an
+        # internal error, which tells an administrator nothing about their
+        # mail configuration.
+        message = _transport_failure_message(e)
+        logger.error("Microsoft 365 OAuth transport failure: {}", e)
+        _record_failure(key, message)
+        raise MicrosoftOAuthError(message) from e
+    finally:
+        _leave_registration(key, registration)
 
     token = (result or {}).get("access_token")
+    if token:
+        # The directory is reachable again; nothing should be held back.
+        _clear_failure(key)
     if not token:
         message = _describe_failure(result)
         logger.error(

@@ -1,3 +1,5 @@
+import type { MicrosoftAuthMethod } from '../../../constants/enums';
+
 /**
  * Onboarding Module Types
  */
@@ -41,7 +43,7 @@ export interface EmailConfig {
 
   // Microsoft 365 — signs in to smtp.office365.com as fromEmail, with an App
   // Password (Basic auth, retiring) or an Entra ID app registration.
-  microsoftAuthMethod?: 'app_password' | 'oauth';
+  microsoftAuthMethod?: MicrosoftAuthMethod;
   microsoftAppPassword?: string;
   microsoftTenantId?: string;
   microsoftClientId?: string;
