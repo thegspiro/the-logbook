@@ -223,7 +223,14 @@ export function AdminHubFrame<K extends string>({
             className="order-2 sm:order-1"
           />
           {summary && showAttentionQueue && (
-            <AdminAttentionQueue items={summary.attention} moduleLabel={title} className="order-1 sm:order-2" />
+            // `?? []` for the same reason `metrics` above has it, and the
+            // asymmetry was the bug: a summary that arrived without `attention`
+            // is truthy, so the queue rendered and died on `items.length`,
+            // taking the whole page to the ErrorBoundary. The field is required
+            // by the API schema, so this is defence against a shape surprise
+            // rather than a case anyone has seen in production — but the cost of
+            // that surprise was a white screen instead of a missing card.
+            <AdminAttentionQueue items={summary.attention ?? []} moduleLabel={title} className="order-1 sm:order-2" />
           )}
           {error && !loading && (
             <p className="text-theme-text-muted order-1 text-xs sm:order-2" role="status">

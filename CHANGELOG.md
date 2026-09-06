@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The mobile checks on Scheduling Administration were measuring nothing (2026-09-06)
+
+**Fixed**
+
+- **Three defects the mobile ratchet could not see.** Every route under
+  `/scheduling/admin` is gated on `scheduling.manage`, which the test fixture did
+  not hold, so all four measured the Access Denied screen — passing every budget
+  while testing nothing. With the grant in place: the administration hub was
+  white-screening on a summary that carried no attention list (`AdminHubFrame`
+  defaulted `metrics` but not `attention`); the scheduling reports tab bar pushed
+  **Call Volume** 85px off the right of a 375px screen, undeclared as a scroll
+  region and so not keyboard-reachable either; and Shift Planning's settings
+  mirror carried five 14px-tall links where a thumb needs 44.
+- **The close-out queue's row is now in the fixture.** Without a shift that has
+  ended and was never closed, that route's check measured the filter bar and the
+  empty state, never a queue row or its close-out control.
+
 ### Two close-out failures that showed an officer nothing (2026-09-06)
 
 **Fixed**

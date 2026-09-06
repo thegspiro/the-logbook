@@ -95,7 +95,12 @@ const PlanningSettingsSummary: React.FC = () => {
           <div key={row.label} className="flex items-baseline justify-between gap-3">
             <dt className="text-theme-text-muted text-xs">{row.label}</dt>
             <dd className="text-theme-text-primary text-xs font-medium">
-              <Link to={row.href} className="hover:underline">
+              {/* `mobile-touch-target` for the same reason the close-out mirror
+                  carries it: a 14px-tall link is a real control at 47x14, and a
+                  thumb misses it. The ratchet could not see these until the
+                  route declared its permissions — before that it was measuring
+                  Access Denied. */}
+              <Link to={row.href} className="mobile-touch-target px-1 hover:underline">
                 {row.value}
               </Link>
             </dd>
