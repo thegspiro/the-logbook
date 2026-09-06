@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two close-out failures that showed an officer nothing (2026-09-06)
+
+**Fixed**
+
+- **A shift's equipment check status now says when it could not be read.** The
+  checklist endpoint wants an Inventory grant that `scheduling.manage` does not
+  imply, so it refuses an ordinary scheduling officer — and the shift panel
+  substituted an empty list, which reads as "nothing outstanding". The warning
+  and the override control both disappeared, while a department that blocks
+  close-out on those checks had the server refuse every finalize with nothing on
+  screen to explain it. The panel now distinguishes unknown from none, offers
+  the override without demanding it, and will not send an override with no
+  reason attached whatever made the officer tick the box.
+- **A `?shift=` link that fails says so instead of vanishing.** The deep-link
+  handler caught the failure, stripped the parameter and rendered nothing,
+  dropping the officer on the generic schedule with no error and no way back to
+  the shift — the destination of the close-out queue's **Open the shift to close
+  it**. The parameter is now kept on failure, so Retry has something to retry,
+  and is stripped only once the shift has actually opened or the officer
+  dismisses the message.
+
 ### The Minutes page advertised a feature members cannot use (2026-09-06)
 
 **Fixed**
