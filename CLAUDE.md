@@ -496,6 +496,14 @@ This application handles protected health information (PHI) and must maintain HI
 
 These are recurring errors identified from the project's change history. Follow these rules to avoid re-introducing them.
 
+A few entries state the rule here and keep their full text in `docs/rules/`,
+loaded on demand (by the matching skill in `.claude/skills/`, or by anyone
+following the link). **Only a rule with a machine check behind it is allowed to
+move** — then a reader who never opens the linked file costs a red build, not a
+shipped defect. Everything unenforced stays here in full. `docs/rules/` is used
+rather than the skill directory because `AGENTS.md` makes these repository
+rules and the other agents working this repo cannot read `.claude/skills/`.
+
 ### 1. Empty Strings: Always Use `||`, Never `??` for Form Values
 
 **The #1 most common bug in this project.** React form fields initialize as empty strings (`""`). The nullish coalescing operator (`??`) only filters `null`/`undefined` — it does NOT filter `""`. This causes empty strings to be sent to the backend, where Pydantic validators reject them with 422 errors.
@@ -785,12 +793,25 @@ client-supplied id is an IDOR / cross-tenant leak.
 # WRONG — any org can read/mutate this row by guessing/knowing the id
 result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
 
-# CORRECT — scope to the caller's org (or resolve via an org-scoped parent)
+# CORRECT (a) — the model carries organization_id: filter it
 result = await db.execute(
-    select(Candidate).where(
-        Candidate.id == candidate_id,
-        Candidate.organization_id == organization_id,
+    select(Apparatus).where(
+        Apparatus.id == apparatus_id,
+        Apparatus.organization_id == organization_id,
     )
+)
+
+# CORRECT (b) — the model does NOT carry one: resolve the parent in-org, then
+# constrain the child by its parent FK. 48 of the 263 mapped models are this
+# shape — Candidate, FormField, ApprovalChainStep, Motion — and for them (a) is
+# not merely discouraged, it raises AttributeError.
+election = await service.get_election(election_id, current_user.organization_id)
+if not election:
+    raise HTTPException(status_code=404, detail="Election not found")
+result = await db.execute(
+    select(Candidate)
+    .where(Candidate.id == str(candidate_id))
+    .where(Candidate.election_id == str(election_id))
 )
 ```
 
@@ -811,6 +832,17 @@ and in some cases (e.g. an eager-loaded template relationship with no org filter
 on the join) it leaks the other org's data back in the response. Prefer a shared
 `assert_in_org(db, Model, id, org_id)` helper over ad-hoc checks.
 
+**Partly guarded, as of 2026-09-06.**
+`tests/test_org_scoping_ratchet.py` freezes the unscoped by-id queries that
+existed on that date and fails on any new one. It is a ratchet, not a rule: it
+covers only ids that are **bare names** on models that **carry
+`organization_id`**, so it says nothing about an id read off another object, and
+nothing at all about the 48 models with no such column (`Candidate`,
+`FormField`, `ApprovalChainStep`, …) which must use the parent-resolution shape
+above. A green run is not coverage. `docs/ORG_SCOPING_SWEEP.md` records what was
+measured, and why a precise check — including a Semgrep taint rule, which was
+built and rejected — is not available.
+
 **Rule:** When writing or reviewing any endpoint/service that takes an id or FK
 from the client: (1) org-scope every by-id query, (2) resolve mutation targets
 through an org-scoped fetch even behind `require_permission`, (3) validate
@@ -820,29 +852,23 @@ don't grant.
 
 ### 15. CSV / Spreadsheet Exports: Always Use `SafeCsvWriter`, Never Raw `csv.writer`
 
-Exported CSVs are opened in Excel / Google Sheets, which **execute** any cell
-whose value begins with `=`, `+`, `-`, `@` (or a leading tab/CR) as a formula.
-Free-text fields written to an export — member names, notes, item descriptions,
-memos — are attacker-influenceable, so a member named `=cmd|…` runs a formula on
-whatever staff member opens the export (formula/CSV injection). The
-2026-07 module audit found this live in six separate exporters that used raw
-`csv.writer`.
+**Rule:** exported CSVs are opened in Excel / Google Sheets, which **execute**
+any cell whose value begins with `=`, `+`, `-`, `@` (or a leading tab/CR). The
+free-text fields in an export are attacker-influenceable, so a member named
+`=cmd|…` runs a formula on whatever staff member opens the file. Any CSV that
+leaves the system MUST be written with `SafeCsvWriter` / `SafeDictCsvWriter`
+from `app/utils/csv_export.py` — never bare `csv.writer`. They are drop-in and
+take the same arguments. Reading (`csv.reader`, `csv.DictReader`) is fine.
 
 ```python
-# WRONG — a cell starting with = / + / - / @ executes in Excel/Sheets
-import csv
-writer = csv.writer(output)
-
-# CORRECT — SafeCsvWriter neutralizes every cell (drop-in, same interface)
 from app.utils.csv_export import SafeCsvWriter
 writer = SafeCsvWriter(output)
 ```
 
-**Rule:** Any CSV that leaves the system (member exports, compliance reports,
-finance/QuickBooks exports, audit hand-offs) MUST be written with
-`SafeCsvWriter` from `app/utils/csv_export.py` — never bare `csv.writer`. It
-prefixes formula-trigger cells with a `'`, transparent to the reader. The same
-applies to any other spreadsheet-bound output.
+Full text in
+**[docs/rules/tenancy.md](./docs/rules/tenancy.md#csv--spreadsheet-exports-always-use-safecsvwriter-never-raw-csvwriter)**.
+`tests/test_csv_writer_sweep.py` enforces it with an AST sweep over `app/` and
+`scripts/`.
 
 ### 16. Never Use `window.confirm` / `window.alert` / `window.prompt` _(2026-08-09)_
 
@@ -1119,85 +1145,21 @@ this rule, not a re-run.
 
 ### 23. A Seeded Rank Grant Reaches the Database Through a Position _(2026-08-24)_
 
-`operational_ranks` has no `permissions` column. Rank defaults resolve at
-runtime from `OPERATIONAL_RANKS` via `get_rank_default_permissions`, which
-makes "removing a grant from a rank needs no data migration" sound obviously
-true. It is false, and the reason is one line of aliasing:
+**Rule:** `operational_ranks` has no `permissions` column, which makes
+"removing a grant from a rank needs no data migration" sound obviously true. It
+is false: `DEFAULT_POSITIONS["firefighter"]["permissions"]` **is** the rank's
+list — the same object — so a rank's grants do reach the database, by way of a
+system position, and an installation that has run onboarding keeps them until a
+migration rewrites that row. Changing a seeded grant means changing the
+registry **and** writing a migration covering every stored `positions` row that
+carries it. A published revision is frozen: ship the delta as a new child
+revision, never an in-place edit.
 
-```python
-# permissions.py — DEFAULT_POSITIONS
-"firefighter": {
-    ...
-    "permissions": OPERATIONAL_RANKS["firefighter"]["default_permissions"],
-},
-```
-
-`DEFAULT_POSITIONS["firefighter"]["permissions"]` **is** the rank's list — the
-same object. Onboarding creates a system _position_ with slug `firefighter`
-carrying a copy of it, and `dependencies.py` unions every assigned position's
-stored permissions. So the rank's grants do reach the database, by way of a
-position, and an installation that already ran onboarding keeps them until a
-migration rewrites that row.
-
-This cost a review round on #1795: `compliance.view` was revoked from the
-`member` position only, and would have stayed live for everyone holding the
-Firefighter position on every existing department.
-
-It also defeats naive analysis. A survey that reads each role's body looking
-for `SOMETHING.name` literals sees an empty list under `firefighter`, because
-the entry is a reference — which is how the gap was missed in the first place.
-
-**Rule:** changing a seeded grant means changing the registry **and** writing a
-migration that covers every stored `positions` row carrying it — for a rank
-grant, both the `member`-style position and the rank-mirroring one. Scope the
-`UPDATE` to `is_system = True`: a position the department **created** is theirs.
-Verify the migration by running it against a real table rather than by
-reading it; `20260824_2140_31e2816df7c3` and its precedent
-`20260814_0004` are the shape to copy. `tests/test_baseline_member_grants.py`
-asserts the day-one grant set on all three registry entries by name, aliasing
-or not, so the persisted path is covered rather than inferred.
-
-**`is_system = True` does not mean the row is unedited** _(2026-09-04)_. It
-separates the seeded positions from ones the department added — nothing more.
-`RoleService.update_role` (`app/services/role_service.py`) explicitly permits
-editing a **system** position's `permissions` and leaves the flag set, so a
-seeded row may hold exactly what an administrator chose. An earlier version of
-this rule said the scope preserved "a department's own customized position",
-and three migrations were written against that reading.
-
-Nothing in the row distinguishes a grant the seed wrote from one an
-administrator added, so decide by direction rather than by guessing provenance:
-
-- **Revoking** a grant that discloses other members' data — reporting,
-  rosters, compliance, another member's record — is unconditional. Leaving it
-  in place on an unrecognized row keeps the disclosure open; the cost of being
-  wrong is an administrator re-adding it on the positions screen.
-- **Adding** a grant is gated on some positive evidence the row is an
-  unrepaired seed. An unconditional add overrides a department that removed the
-  grant deliberately, and a missing benign grant discloses nothing.
-
-Do not try to recognize an unedited row by matching its whole permission list:
-`20260901_1320_f7b3c8d2e569` did, and every later migration that touched those
-rows moved them out of the match. A snapshot of a whole row is pinned to the
-build that produced it, so it also misses every row written by any _other_
-build — silently, while reading as though it covered them. `b4d1c8e37f52` was
-written that way and had to be superseded by `c7a4e91d3b68`: gate instead on a
-signal no build could have produced, which for an addition is usually the
-**absence of the very grants being added** when nothing in the editor can emit
-them. That answer cannot drift, because adding a module to the registry cannot
-move a row across it. Say in the migration's docstring which direction you chose
-and what it costs when it is wrong.
-
-**Superseded, not edited — and the distinction is the whole repair.** The first
-attempt at that fix rewrote `b4d1c8e37f52` in place, which changes nothing where
-it matters: Alembic records a revision as applied by id, so an installation that
-already ran the narrow version never executes the widened body, and the rows it
-skipped are exactly the ones the widening exists to reach. A published revision
-is frozen (pitfall #20) and the delta belongs in a child revision — the shape
-`f3b8d0c26a17` states plainly: "A new revision is also the only thing that
-reaches an installation which already stamped either version." Being sure
-nothing has upgraded yet is not a substitute; that is another unverifiable
-premise, which is the failure this rule already exists to stop.
+Full text — why `is_system = True` does not mean unedited, which direction
+(revoking vs. adding) may run unconditionally, and why gating on a whole
+permission list fails — in
+**[docs/rules/migrations.md](./docs/rules/migrations.md#a-seeded-rank-grant-reaches-the-database-through-a-position)**.
+`tests/test_baseline_member_grants.py` asserts the day-one grant set by name.
 
 ### 24. Do Not Reuse a Branch Name After Its Pull Request Merges _(2026-08-24)_
 
@@ -1221,186 +1183,62 @@ a close-and-reopen.
 
 ### 25. A `LIKE` Pattern Is Built by `like_pattern`, and the `ESCAPE` Clause Is Not Optional _(2026-08-25)_
 
-A user's search string reaches SQL as a **pattern**, not a literal. SQLAlchemy
-parameterizes the value, so this is not injection — but `%` and `_` inside that
-parameter are still wildcards. A member who types `%` gets every row the org
-has, and the paginated list's count query scans all of it.
-
-Escaping the term is only half the fix. `.ilike(pattern)` with no `ESCAPE`
-clause leaves the escape character up to MySQL's `sql_mode`: under
-`NO_BACKSLASH_ESCAPES` the backslashes are literal and every wildcard comes
-back. The escaping _looks_ present in review and does nothing at runtime.
+**Rule:** a user's search string reaches SQL as a **pattern**, not a literal.
+SQLAlchemy parameterizes the value, so this is not injection — but `%` and `_`
+inside it are still wildcards, and a member who types `%` gets every row the
+org has. Build the pattern with `like_pattern()` from `app/utils/sql_search.py`
+and pass `escape=LIKE_ESCAPE_CHAR` on **every** `like`/`ilike`, including one
+whose pattern is system-generated. Without the kwarg the escaping is inert
+under MySQL's `NO_BACKSLASH_ESCAPES` and looks entirely correct in review.
 
 ```python
-# WRONG — the filter stops filtering the moment somebody types "%"
-pattern = f"%{search}%"
-q.where(Model.name.ilike(pattern))
-
-# WRONG — escaped, but the database was never told what the escape char is
-safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-q.where(Model.name.ilike(f"%{safe}%"))
-
-# CORRECT
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 q.where(Model.name.ilike(like_pattern(search), escape=LIKE_ESCAPE_CHAR))
 ```
 
-**Rule:** never hand-roll the transform — `app/utils/sql_search.py` owns it, and
-the fifteen copies that existed before 2026-08-25 are why forty-seven call sites
-forgot the kwarg. Pass `escape=LIKE_ESCAPE_CHAR` on **every** `like`/`ilike`,
-including one whose pattern is system-generated (`"ORD-2026-%"`): it is inert
-there, and covering it is what leaves the invariant with no exceptions to
-maintain. `tests/test_like_escaping.py` enforces both halves.
-
-**Related:** when a query escapes a term for SQL and then re-checks the result
-in Python, the Python side compares against the **raw** input. Comparing against
-the escaped form is how the inventory barcode search came to report the wrong
-`matched_field` for any code containing `%`, `_` or `\`.
+Full text, including the Python-side `matched_field` corollary, in
+**[docs/rules/tenancy.md](./docs/rules/tenancy.md#a-like-pattern-is-built-by-like_pattern-and-the-escape-clause-is-not-optional)**.
+`tests/test_like_escaping.py` enforces both halves across the repository.
 
 ### 26. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
 
-**40 of this schema's 254 tables are never created by any migration.**
-`event_requests`, `prospects`, the whole finance-approval set (`budgets`,
-`budget_categories`, `check_requests`, `expense_reports`, ...) and more come
-into being when `main.py`'s `_fast_path_init()` calls `create_all()` and
-stamps Alembic at head — the deployment model
-`app/utils/enum_normalization` documents.
+**Rule:** 40 of this schema's 254 tables are never created by any migration —
+they come into being when `main.py`'s `_fast_path_init()` calls `create_all()`.
+CI runs `alembic upgrade head` against an **empty** database, so reflecting or
+altering such a table raises `NoSuchTableError` and kills the whole upgrade,
+not just the one step. Guard the step on the table's existence. Skipping is
+correct, not merely safe: a table `create_all` builds later is built from the
+models, which already declare the new column.
 
-**A table renamed into existence by a migration does not belong on this
-list, even if no migration ever `create_table`s it under its current name.**
-`positions`/`user_positions` looked like textbook examples — no
-`op.create_table("positions", ...)` anywhere in the chain — until a
-2026-08-31 review (`docs/security-review/MSG-25-messaging-notifications.md`,
-MSG-11) added an unnecessary guard on exactly that reasoning, then had to
-revert it once empirical testing (a real `alembic upgrade head` against a
-fresh database, not just re-reading the migration source) showed the tables
-already exist by then: `20260805_0008_rename_roles_to_positions.py` renames
-`roles`/`user_roles` — created outright by the initial schema migration —
-to `positions`/`user_positions`, and is a required upgrade-path ancestor of
-every later migration that touches them. `backend/tests/
-test_migration_create_all_tables.py`'s `_tables_created_by_migrations` now
-credits `op.rename_table` destinations for exactly this reason — trust that
-function's output (or an empirical fresh-database run) over a manual grep
-for `create_table`.
-
-That is deliberate, and it is also a trap, because **CI runs `alembic upgrade
-head` against an empty database** in the integration and contract jobs, before
-anything calls `create_all`. Reflecting a column on a table that is not there
-raises `NoSuchTableError`, and that kills the entire upgrade — not just the one
-step:
-
-```python
-# WRONG — dies on any database that has not started the app yet
-def _has_column(table: str, column: str) -> bool:
-    inspector = sa.inspect(op.get_bind())
-    return column in {c["name"] for c in inspector.get_columns(table)}
-
-if not _has_column("event_requests", "staffing_shift_id"):
-    op.add_column("event_requests", sa.Column(...))
-
-# CORRECT — require the table as well as the absent column
-def _has_table(table: str) -> bool:
-    return table in sa.inspect(op.get_bind()).get_table_names()
-
-if _has_table("event_requests") and not _has_column("event_requests", "..."):
-    op.add_column("event_requests", sa.Column(...))
-```
-
-**Skipping is correct, not merely safe.** A table `create_all` builds later is
-built from the models, which already declare the new column.
-
-This was live on 2026-08-24: two migrations adding columns to `event_requests`
-failed on every fresh database, which is four red matrix jobs (MySQL 8.0 and
-MariaDB 10.11 × integration and contract), not one. Fifteen of the sixteen
-existing migrations that touch such a table already guarded; the pattern was
-simply undocumented.
-
-**Rule:** before altering a table in a migration, check whether any migration
-creates it. If none does, guard the step on the table's existence.
-`tests/test_migration_create_all_tables.py` enforces this and was clean when
+Full text — the detection helper, the `op.rename_table` subtlety, and why
+`alembic upgrade head` alone does not produce a working schema — in
+**[docs/rules/migrations.md](./docs/rules/migrations.md#a-migration-must-tolerate-a-table-only-create_all-builds)**.
+`tests/test_migration_create_all_tables.py` enforces it and was clean when
 written, so any failure is new.
-
-**Related, same root:** `alembic upgrade head` alone does not produce a working
-schema. On a freshly migrated database `scripts/repair_schema.py` still adds a
-dozen columns the models declare and no migration creates. Treat the models as
-the schema of record and migrations as alterations on top — not the reverse.
 
 ### 27. A Capacity Check Is a Read-Then-Write, and Needs the Row Locked _(2026-08-25)_
 
-Anything with a limit — seats on a shift, `max_attendees` on an event, a role
-on an outreach signup sheet — is enforced by counting what is already there and
-then inserting. Two requests arriving together both read the count before
-either commits, both decide there is room, and the limit is exceeded by exactly
-the number of people who tapped at once. It is invisible in testing, because
-one request never races itself.
+**Rule:** anything with a limit — seats on a shift, `max_attendees`, a role on
+a signup sheet — is enforced by counting what is there and then inserting. Two
+requests arriving together both read before either commits, and the cap is
+exceeded by however many people tapped at once. It takes **two** changes, and
+the second is the one everybody misses:
 
-It takes **two** changes, and the second is the one everybody misses.
+1. **Lock the parent row** (`for_update=True`) to serialize the decision. Lock
+   the parent, not the rows being counted — the conflicting rows do not exist
+   yet.
+2. **Make the count itself a locking read** (`.with_for_update()`). Under
+   InnoDB's default REPEATABLE READ a plain `SELECT` answers from the snapshot
+   taken at the transaction's first read, and taking a row lock does not
+   refresh it. Every one of these checks runs behind an endpoint that already
+   loaded the parent, so the snapshot predates the lock: the second
+   transaction blocks, waits, acquires the lock, counts — and still sees the
+   tally from before the first one committed.
 
-**1. Lock the parent row**, to serialize the decision:
-
-```python
-# WRONG — two members both see the last seat
-shift = await self.get_shift_by_id(shift_id, organization_id)
-
-# CORRECT — serialize on the row everyone contends for
-shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
-```
-
-Lock the parent, not the rows being counted: the seats that would conflict do
-not exist yet, so there is nothing to lock; the shift/event/request row is the
-one thing both transactions already share.
-
-**2. Make the count itself a locking read**, or the lock buys nothing:
-
-```python
-# STILL WRONG — the row is locked and the count is stale anyway
-occupied = await self.db.execute(select(func.count()).where(...))
-
-# CORRECT
-occupied = await self.db.execute(select(func.count()).where(...).with_for_update())
-```
-
-Under InnoDB's default REPEATABLE READ — which is what this app runs, no
-`isolation_level` is set on the engine — a plain `SELECT` answers from the
-snapshot taken at the transaction's **first** read, and acquiring a row lock
-does not refresh it. Every one of these checks runs behind an endpoint that
-already loaded the shift or the event, so the snapshot predates the lock. The
-second transaction blocks, waits, acquires the lock, counts — and sees the
-tally from before the first one committed. Demonstrated on this schema:
-
-```
-T2 reads (snapshot taken)
-T1 locks parent, counts 0, inserts, commits
-T2 locks parent  ->  plain count: 0   locking count: 1   (truth: 1)
-```
-
-A locking read is defined to see the latest committed version, which is why it
-is the fix. `SELECT ... FOR UPDATE` on the count is not there for the lock.
-
-This is easy to get wrong and invisible in review, because the code reads as
-correct and the comment above it says so. `event_service` carried the comment
-"event row is locked, so this count is consistent" from the day it was written;
-the row was locked and the count was not consistent.
-
-**Enforce the lock wherever the limit is enforced.** Shift assignment briefly
-locked only for self-signup, on the reasoning that an officer may overfill a
-crew deliberately. Half true: the _headcount_ cap is waived for officers, the
-_named-seat_ cap is not — a seat on a crew is one seat whoever fills it — so
-two officers, or an officer racing a member, still raced for the last Driver
-seat. Check which caps actually run on each path before making the lock
-conditional on any of them.
-
-Found on 2026-08-24 in the outreach role seats and the outreach signup sheet
-(two coordinators each creating a shift, one orphaned), on 2026-08-25 in
-generic shift seat capacity, which had the same shape since it was written, and
-the same day in all five capacity counts, which were locking the right row and
-then reading a stale number.
-
-**Rule:** when adding a feature with a cap, a quota, or a one-per-thing
-invariant, ask what happens if two requests arrive in the same millisecond. If
-the answer involves a count followed by an insert, lock the parent row **and**
-make the count a locking read. `tests/test_capacity_locking.py` asserts both
-halves at every site.
+Full text, including the demonstrated trace and the officer-override subtlety
+that left named-seat caps racing, in
+**[docs/rules/tenancy.md](./docs/rules/tenancy.md#a-capacity-check-is-a-read-then-write-and-needs-the-row-locked)**.
+`tests/test_capacity_locking.py` asserts both halves at every site.
 
 ### 28. `vi.clearAllMocks()` Does Not Reset Implementations, So Mock Config Leaks Between `describe` Blocks _(2026-08-30)_
 

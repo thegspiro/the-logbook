@@ -192,7 +192,7 @@ Observe all repository-specific testing rules in `CLAUDE.md`, including the docu
 
 The Logbook is multi-tenant and handles operational/member information. Security and tenant isolation are correctness requirements.
 
-Before changing backend queries, relationships, foreign keys, exports, authentication, authorization, cookies, middleware, or user-controlled data handling, review the corresponding rules in `CLAUDE.md`.
+Before changing backend queries, relationships, foreign keys, exports, authentication, authorization, cookies, middleware, or user-controlled data handling, review the corresponding rules in `CLAUDE.md`. The endpoint and service rules in full — the `org_scoping` helper for validating client-supplied foreign keys, the repo-wide guards CI runs, the `LIKE`-escaping rule and the capacity-locking rule — are in [docs/rules/tenancy.md](docs/rules/tenancy.md). Organization scoping itself (CLAUDE.md pitfall #14) is **not** in that file: it has no repo-wide check, so it stays in `CLAUDE.md` and must be read there.
 
 In particular:
 
@@ -217,7 +217,7 @@ When a schema or persisted data shape changes:
 5. provide a downgrade when safe and meaningful, or explicitly document intentional irreversibility where repository conventions permit it;
 6. do not edit an already-deployed migration merely to change current behavior unless repository policy explicitly calls for that.
 
-Review the migration, JSON-column, foreign-key, and seed-data pitfalls documented in `CLAUDE.md` before modifying persistence behavior.
+Review the migration, JSON-column, foreign-key, and seed-data pitfalls documented in `CLAUDE.md` before modifying persistence behavior. The Alembic rules in full — how this schema is actually built, the hygiene checks CI enforces, the tables no migration creates, and the seeded-grant rule — are in [docs/rules/migrations.md](docs/rules/migrations.md), which `CLAUDE.md` links to rather than repeating. It is repository documentation on an ordinary path: read it directly, whatever agent you are.
 
 ## Reuse Existing Architecture
 
