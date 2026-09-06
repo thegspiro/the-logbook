@@ -1525,6 +1525,148 @@ class TestAssignmentManagement:
         assert "not assigned to you" in err.lower() or "not found" in err.lower()
 
     @pytest.mark.asyncio
+    async def test_decline_assignment(self, db_session, setup_org_and_users):
+        """Declining your own seat is self-service, exactly like confirming.
+
+        The screens only ever offer Decline on your own assignment, but the
+        only route that could record it was the officer-scoped
+        ``update_assignment``, so a member answering their own roster got a
+        403. This is its mirror of ``confirm_assignment``.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        declined, err = await svc.decline_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user2_id), uuid.UUID(org_id)
+        )
+        assert err is None
+        assert declined.assignment_status == AssignmentStatus.DECLINED
+
+    @pytest.mark.asyncio
+    async def test_decline_assignment_wrong_user(self, db_session, setup_org_and_users):
+        """Self-scoped the same way confirm is: the id alone is not enough."""
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        # user_id (the officer) tries to decline user2's assignment. Recording
+        # a decline on somebody's behalf is an officer edit and belongs to
+        # update_assignment, not here.
+        result, err = await svc.decline_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert result is None
+        assert "not assigned to you" in err.lower() or "not found" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_decline_assignment_clears_confirmation(
+        self, db_session, setup_org_and_users
+    ):
+        """A withdrawn affirmation must not leave its timestamp behind.
+
+        ``confirmed_at`` is what the close-out roster reads, so a member who
+        confirms and then declines would otherwise still look confirmed to the
+        officer closing the shift.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        confirmed, err = await svc.confirm_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user2_id), uuid.UUID(org_id)
+        )
+        assert err is None
+        assert confirmed.confirmed_at is not None
+
+        declined, err = await svc.decline_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user2_id), uuid.UUID(org_id)
+        )
+        assert err is None
+        assert declined.assignment_status == AssignmentStatus.DECLINED
+        assert declined.confirmed_at is None
+
+    @pytest.mark.asyncio
+    async def test_decline_assignment_is_idempotent(
+        self, db_session, setup_org_and_users
+    ):
+        """A second decline still succeeds and stays declined.
+
+        The screens decline optimistically and retry on a dropped response, so
+        the second call must not become an error the member sees.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        for _ in range(2):
+            declined, err = await svc.decline_assignment(
+                uuid.UUID(assignment.id), uuid.UUID(user2_id), uuid.UUID(org_id)
+            )
+            assert err is None
+            assert declined.assignment_status == AssignmentStatus.DECLINED
+
+    @pytest.mark.asyncio
     async def test_delete_assignment(self, db_session, setup_org_and_users):
         org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)

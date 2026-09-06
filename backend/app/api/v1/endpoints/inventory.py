@@ -6703,13 +6703,17 @@ async def upsert_member_size_preferences(
 )
 async def get_my_size_preferences(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get the current user's own size preferences.
 
+    A member's own uniform sizes, like the gear issued to them and the
+    requests they raise, are their own record — every sibling endpoint behind
+    "My Issued Gear" requires only authentication, and these two are
+    documented as "self, login required".
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
     service = InventoryService(db)
     prefs = await service.get_member_size_preferences(
@@ -6727,13 +6731,17 @@ async def get_my_size_preferences(
 async def upsert_my_size_preferences(
     data: MemberSizePreferencesCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create or update the current user's own size preferences.
 
+    Self-scoped like the GET above: the row written is keyed on
+    ``current_user``, so this grants no reach over anyone else's sizes. The
+    officer-facing endpoints for another member's sizes keep their own gates
+    (``inventory.view`` to read, ``inventory.manage`` to write).
+
     **Authentication required**
-    **Requires permission: inventory.view**
     """
     service = InventoryService(db)
     prefs, error = await service.upsert_member_size_preferences(
