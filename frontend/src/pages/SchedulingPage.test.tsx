@@ -368,16 +368,25 @@ describe('SchedulingPage', () => {
         // The Apparatus field renders only when the department has apparatus,
         // and Shift Officer only alongside it.
         apparatus: [{ id: 'a1', unit_number: 'Engine 1', is_active: true }] as never,
+        apparatusLoaded: true,
         members: [{ id: 'm1', label: 'A Member' }] as never,
+        membersLoaded: true,
       });
     });
 
     afterEach(() => {
-      useSchedulingStore.setState({
-        templates: [],
-        templatesLoaded: false,
-        apparatus: [],
-        members: [],
+      // The page is still mounted and subscribed to the store here, so this
+      // reset re-renders it; unwrapped it emits React's act(...) warning, which
+      // would sit in the output of every later run and mask a real one.
+      act(() => {
+        useSchedulingStore.setState({
+          templates: [],
+          templatesLoaded: false,
+          apparatus: [],
+          apparatusLoaded: false,
+          members: [],
+          membersLoaded: false,
+        });
       });
     });
 
@@ -397,8 +406,11 @@ describe('SchedulingPage', () => {
       await user.click(screen.getByRole('button', { name: /Additional Options/ }));
 
       expect(screen.getByLabelText(/Apparatus/)).toBeInTheDocument();
-      expect(screen.getByLabelText('Start Time')).toBeInTheDocument();
-      expect(screen.getByLabelText('End Time')).toBeInTheDocument();
+      for (const field of ['Start Time', 'End Time']) {
+        for (const part of ['hour', 'minute', 'AM/PM']) {
+          expect(screen.getByRole('combobox', { name: `${field} ${part}` })).toBeInTheDocument();
+        }
+      }
       expect(screen.getByLabelText(/Shift Officer/)).toBeInTheDocument();
       expect(screen.getByLabelText('Notes')).toBeInTheDocument();
 

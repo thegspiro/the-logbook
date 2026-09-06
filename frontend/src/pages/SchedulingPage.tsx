@@ -951,14 +951,9 @@ const SchedulingPage: React.FC = () => {
                                 </label>
                                 <TimeQuarterHour
                                   id="create-shift-start-time"
+                                  aria-label="Start Time"
                                   value={shiftForm.customStartTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
-                                  placeholder={(() => {
-                                    const tmpl =
-                                      effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) ||
-                                      defaultTemplate;
-                                    return tmpl?.start_time_of_day || '';
-                                  })()}
                                   className="form-input"
                                 />
                               </div>
@@ -971,6 +966,7 @@ const SchedulingPage: React.FC = () => {
                                 </label>
                                 <TimeQuarterHour
                                   id="create-shift-end-time"
+                                  aria-label="End Time"
                                   value={shiftForm.customEndTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
                                   className="form-input"

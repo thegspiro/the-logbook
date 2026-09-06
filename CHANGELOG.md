@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - "Custom Times" heads the Start Time / End Time pair rather than naming a
   single field, so it is announced as the group it is instead of claiming to be
   one of them.
+- **The two time fields were announced as a time, not as a field.** Each is
+  three dropdowns (hour, minute, AM/PM) that name themselves, and the start
+  field named itself after whatever time the chosen template starts at — so a
+  screen reader offered "08:00 hour" where it should have said "Start Time
+  hour", and the end field fell back to a bare "Time". All six now carry the
+  visible field name.
 
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
