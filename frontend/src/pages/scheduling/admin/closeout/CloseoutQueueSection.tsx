@@ -6,10 +6,17 @@
  * "To close out" number, which says how many there are and not which. This is
  * the list behind that number.
  *
- * What counts as ended is `closeoutQueue`, which reads the board's own
- * `shiftEndInstant` — so an open-ended shift is judged against the department's
- * cushion here exactly as it is by the roster lock and by the server's own
- * backlog count.
+ * Which shifts are in it is the server's answer, not this page's:
+ * `GET /scheduling/shifts/needing-closeout` reads the same predicate the hub's
+ * **To close out** metric counts, so the number on the card and the length of
+ * this list are one population read twice. They used to be two — the metric has
+ * no earliest date while this page re-derived the set from a date range of its
+ * own choosing, so a shift left unclosed before the range began was counted
+ * there and missing here.
+ *
+ * `closeoutQueue` stays, as the presentation rule: it reads the board's own
+ * `shiftEndInstant` for the waiting label, so an open-ended shift is described
+ * here against the department's cushion exactly as the roster lock judges it.
  *
  * **There is one close-out implementation, not two.** A department recording a
  * call count gets the three-step wizard, opened in place on the row; every
@@ -33,42 +40,22 @@ import {
 } from '../../../../modules/scheduling/utils/closeoutQueue';
 import { equipmentCheckService } from '../../../../modules/inventory/services/equipmentCheckApi';
 import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../../../modules/inventory/types/equipmentCheck';
-import { addCalendarDays, formatCalendarDate, formatTime, getTodayLocalDate } from '../../../../utils/dateFormatting';
+import { formatCalendarDate, formatTime } from '../../../../utils/dateFormatting';
 import { useTimezone } from '../../../../hooks/useTimezone';
 import { EmptyState } from '../../../../components/ux/EmptyState';
 import { ShiftCloseoutWizard } from '../../ShiftCloseoutWizard';
 
 /**
- * How far back the queue looks by default.
+ * Rows read in one request.
  *
- * Six months rather than one. The hub's **To close out** metric has no lower
- * bound at all — `_scheduling_closeout_backlog` counts a shift left unclosed
- * three years ago — and this page is described as the list behind that number.
- * A month-wide default meant an officer could follow a metric reading three
- * straight into a page reporting that the range was clear, with the very work
- * that sent them here sitting outside it.
- *
- * Not unbounded, though, and the reason is the endpoint's own ordering: it
- * returns shifts oldest first, so a range covering all of a department's
- * history would spend the page budget below on shifts closed years ago and
- * could truncate before reaching the backlog. Six months covers a real backlog
- * without that risk; the empty state below says what was actually checked, and
- * the server-side close-out endpoint is what will make the two populations
- * identical rather than merely close.
+ * One page, not a paging loop. The endpoint returns the backlog itself, oldest
+ * first — every row is work waiting — so the first page is the part to do
+ * first and a department with more than this has not been told anything untrue
+ * by being shown it. The loop this replaces existed because the generic shifts
+ * endpoint returned mostly closed-out shifts, so the unclosed ones could sit on
+ * page three and one page read as "nothing waiting".
  */
-const DEFAULT_LOOKBACK_DAYS = 180;
-
-/** Shifts per request. The endpoint's own ceiling is 1000; this pages under it. */
 const PAGE_SIZE = 200;
-
-/**
- * Pages this will fetch before it stops and says the range is too wide.
- *
- * A bound rather than an unbounded loop: the range is an officer's to choose,
- * and "every shift since the department started" is a request nobody meant to
- * make. Two thousand shifts is several years of backlog.
- */
-const MAX_PAGES = 10;
 
 const unitLabel = (shift: ShiftRecord): string =>
   shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus';
@@ -88,16 +75,13 @@ const CloseoutQueueSection: React.FC = () => {
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
   const navigate = useNavigate();
 
-  // The department's calendar day, not the browser's. A UTC browser looking at
-  // an America/Los_Angeles department late in its evening would otherwise open
-  // the range on tomorrow, and the opposite offset drops the department's own
-  // current day out of the default range entirely.
-  const [from, setFrom] = useState(() => addCalendarDays(getTodayLocalDate(timezone), -DEFAULT_LOOKBACK_DAYS));
-  const [to, setTo] = useState(() => getTodayLocalDate(timezone));
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [truncated, setTruncated] = useState(false);
+  // What the server says the whole backlog is, which is not always what was
+  // returned: the list is capped at one page, and a cap nobody is told about
+  // reads as the end of the work.
+  const [total, setTotal] = useState(0);
   const [settingsTried, setSettingsTried] = useState(false);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
@@ -124,22 +108,21 @@ const CloseoutQueueSection: React.FC = () => {
 
   const settingsFailed = settingsTried && !settingsLoaded;
 
-  // Changing From and then To fires two requests, and the first can land last.
-  // Without this the date controls describe one range while the queue below
-  // them describes another, and nothing on screen says so.
+  // Kept, but no longer load-bearing, and that is worth writing down rather
+  // than leaving for the next reader to work out. Two reads used to overlap
+  // routinely: changing From and then To fired one each and the first could
+  // land last. With the range gone the only callers are Refresh — disabled
+  // while a read is in flight — and the finalize handler, so there is no
+  // sequence left here that drives it. It stays because it is one comparison
+  // and the hazard returns with the next caller, not because a test can still
+  // reach it; the test that used to drive it typed into a date field that no
+  // longer exists, and was removed rather than rewritten to pass on nothing.
   const requestId = useRef(0);
   // The same hazard one control over: `preparing` disables only the row that
   // was clicked, so a second row can be started while the first is still
   // fetching, and the slower answer would otherwise replace the wizard the
   // officer most recently opened.
   const openId = useRef(0);
-
-  // `To` earlier than `From` is not an empty range, it is a range nobody meant.
-  // The endpoint applies both bounds without cross-field validation and returns
-  // zero rows, which this screen would then present as "every shift in this
-  // range is closed out" — an invalid input turned into a confident audit
-  // result.
-  const rangeReversed = Boolean(from && to && from > to);
 
   const load = useCallback(async () => {
     const mine = ++requestId.current;
@@ -151,51 +134,28 @@ const CloseoutQueueSection: React.FC = () => {
     setPreparing(null);
     setChecksFailed(null);
     setChecksUnknown(null);
-    if (rangeReversed) {
-      setShifts([]);
-      setFailed(false);
-      setTruncated(false);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     setFailed(false);
-    setTruncated(false);
     try {
-      // Paged rather than capped at one request. The endpoint orders by date
-      // ascending and finalization is filtered here afterwards, so the first
-      // page of a busy range can be entirely closed-out shifts while the
-      // unclosed ones sit on page three — and the screen would then announce
-      // that every shift in the range is closed out. An answer that confident
-      // has to be built from the whole range.
-      const collected: ShiftRecord[] = [];
-      let page = 0;
-      let more = true;
-      while (more && page < MAX_PAGES) {
-        const result = await schedulingService.getShifts({
-          start_date: from,
-          end_date: to,
-          skip: page * PAGE_SIZE,
-          limit: PAGE_SIZE,
-        });
-        if (mine !== requestId.current) return;
-        collected.push(...result.shifts);
-        page += 1;
-        more = result.shifts.length === PAGE_SIZE && collected.length < result.total;
-      }
+      const result = await schedulingService.getShiftsNeedingCloseout({ limit: PAGE_SIZE });
       if (mine !== requestId.current) return;
-      setShifts(collected);
-      setTruncated(more);
+      setShifts(result.shifts);
+      // Coerced rather than trusted. `total` is typed as a number, but the
+      // value is whatever the response carried, and an absent one compared
+      // against a length silently answers false — which is the branch that
+      // decides whether the officer is told the list is capped.
+      setTotal(result.total ?? 0);
     } catch {
       // Said rather than swallowed: an empty queue and a failed load look
       // identical, and one of them tells an officer there is no work waiting.
       if (mine !== requestId.current) return;
       setFailed(true);
       setShifts([]);
+      setTotal(0);
     } finally {
       if (mine === requestId.current) setLoading(false);
     }
-  }, [from, to, rangeReversed]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -276,20 +236,11 @@ const CloseoutQueueSection: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="card flex flex-wrap items-end gap-3 p-4">
-        <label className="flex min-w-0 flex-col gap-1 text-sm">
-          <span className="text-theme-text-muted text-xs font-medium">From</span>
-          <input
-            type="date"
-            className="form-input px-3 text-sm"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </label>
-        <label className="flex min-w-0 flex-col gap-1 text-sm">
-          <span className="text-theme-text-muted text-xs font-medium">To</span>
-          <input type="date" className="form-input px-3 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
+      {/* No date range. This list is the backlog the server defines, not a
+          query over it — a range is what let this page and the hub's count
+          describe different populations, and narrowing a backlog is not a thing
+          an officer needs to do to it. */}
+      <div className="card flex flex-wrap items-center gap-3 p-4">
         <button
           type="button"
           onClick={() => void load()}
@@ -299,27 +250,18 @@ const CloseoutQueueSection: React.FC = () => {
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Refresh
         </button>
-        <p className="text-theme-text-muted min-w-0 flex-1 text-right text-sm" role="status" aria-live="polite">
-          {rangeReversed
-            ? ''
-            : loading || (!settingsLoaded && !settingsFailed)
-              ? 'Checking…'
-              : failed || settingsFailed
-                ? ''
-                : `${queue.length} shift${queue.length === 1 ? '' : 's'} waiting to be closed out`}
+        <p className="text-theme-text-muted min-w-0 flex-1 text-sm" role="status" aria-live="polite">
+          {loading || (!settingsLoaded && !settingsFailed)
+            ? 'Checking…'
+            : failed || settingsFailed
+              ? ''
+              : `${queue.length} shift${queue.length === 1 ? '' : 's'} waiting to be closed out`}
         </p>
       </div>
 
-      {rangeReversed && (
-        <div className="alert-warning text-sm" role="alert">
-          The <strong>To</strong> date is earlier than <strong>From</strong>, so this range holds no days at all.
-          Nothing has been checked.
-        </div>
-      )}
-
       {failed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
-          <span className="flex-1">This range did not load, so nothing below is a complete answer.</span>
+          <span className="flex-1">The close-out queue did not load, so nothing below is a complete answer.</span>
           <button
             type="button"
             className="mobile-touch-target px-2 font-semibold underline"
@@ -351,38 +293,32 @@ const CloseoutQueueSection: React.FC = () => {
         </div>
       )}
 
-      {/* Better a stated bound than a silent one: at this point the list below
-          is the oldest part of the range, which is the right part to work
-          first, but "every shift is closed out" would not be true of the rest. */}
-      {truncated && (
+      {/* Better a stated bound than a silent one. The rows below are the oldest
+          of the backlog, which is the right part to work first — but the count
+          in the hub is the whole of it, and an officer who closes these and
+          sees the number still standing needs to know why. */}
+      {!loading && !failed && total > shifts.length && (
         <div className="alert-warning text-sm" role="alert">
-          This range holds more shifts than one screen reads. The oldest {MAX_PAGES * PAGE_SIZE} are listed; narrow the
-          range to see the rest.
+          The oldest {shifts.length} of {total} shifts waiting are listed. Close these out and refresh for the rest.
         </div>
       )}
 
-      {!rangeReversed && (loading || (!settingsLoaded && !settingsFailed)) && (
+      {(loading || (!settingsLoaded && !settingsFailed)) && (
         <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       )}
 
-      {!loading && !rangeReversed && settingsLoaded && !failed && !truncated && queue.length === 0 && (
-        <>
-          <EmptyState
-            icon={CheckCircle2}
-            title="Every shift in this range is closed out"
-            description="A shift still running is not counted — one with no recorded end is judged against the department's open-ended cushion, the same number the roster lock uses."
-          />
-          {/* Said here rather than left to be inferred: the hub's To close out
-              metric has no lower bound, so an officer who arrived from a
-              non-zero count and finds nothing needs to know that only this
-              range was read, not that the count was wrong. */}
-          <p className="text-theme-text-muted mt-2 text-center text-xs">
-            Only {from || 'the beginning'} to {to} was checked. The hub&rsquo;s <strong>To close out</strong> count has
-            no earliest date, so widen <strong>From</strong> if it disagrees with this.
-          </p>
-        </>
+      {/* No date qualifier any more, and none is owed: this is the department's
+          whole backlog, however far back it runs, so "every shift" is now the
+          literal claim rather than a claim about a range the officer has to
+          check. */}
+      {!loading && settingsLoaded && !failed && queue.length === 0 && (
+        <EmptyState
+          icon={CheckCircle2}
+          title="Every shift is closed out"
+          description="A shift still running is not counted — one with no recorded end is judged against the department's open-ended cushion, the same number the roster lock uses."
+        />
       )}
 
       {!loading &&
@@ -462,7 +398,7 @@ const CloseoutQueueSection: React.FC = () => {
                   fails — it reports the error and returns null — and this row
                   has already hidden the button that opened it. Without a
                   row-level way out that leaves an empty card whose only escape
-                  is the range-level Refresh, which does not look related to it. */}
+                  is the Refresh above, which does not look related to it. */}
               {isOpen && (
                 <button
                   type="button"

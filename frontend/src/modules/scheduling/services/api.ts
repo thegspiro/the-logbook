@@ -507,6 +507,29 @@ export const schedulingService = {
     return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
   },
 
+  /**
+   * The shifts that have ended and were never closed out, oldest first.
+   *
+   * The row list behind the administration hub's **To close out** metric, from
+   * the same server-side predicate, so the number on the card and the length of
+   * the queue it links to cannot disagree. It takes no date range on purpose:
+   * a range is what made them two different populations, since the metric has
+   * no earliest date and the page had to pick one.
+   *
+   * Same shape as `getShifts`, so `normalizeShift` and `ShiftRecord` are
+   * unchanged and `closeoutQueue` stays the presentation rule.
+   */
+  async getShiftsNeedingCloseout(params?: {
+    skip?: number;
+    limit?: number;
+  }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }>(
+      '/scheduling/shifts/needing-closeout',
+      { params }
+    );
+    return { ...response.data, shifts: asArray(response.data?.shifts).map(normalizeShift) };
+  },
+
   async createShift(data: ShiftCreate): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>('/scheduling/shifts', data);
     return normalizeShift(response.data);
