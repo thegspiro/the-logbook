@@ -17,7 +17,9 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 28 (Security, audit & IP), pass 3** — branch
-`claude/friendly-babbage-mxcgij`, PR pending (opening this iteration).
+`claude/friendly-babbage-mxcgij`,
+[PR #2333](https://github.com/thegspiro/the-logbook/pull/2333). Subscribed;
+awaiting CI/review.
 
 ---
 
