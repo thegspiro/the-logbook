@@ -8648,6 +8648,36 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "03-101-shift-details-modal-laptop",
+    doc: "03-scheduling.md",
+    line: 3354,
+    anchor: "The Shift Details modal at laptop width with the crew board visible",
+    alt: "The Shift Details surface as a centred modal at laptop width, with the crew board visible",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => !shift.is_finalized),
+    // Element, not fullPage: the dialog is `fixed inset-0` with the page
+    // beneath it, so a full-page shot would still be the whole viewport
+    // anyway -- clip to the panel itself so the surrounding scrim is not the
+    // majority of the frame.
+    selector: 'div[role="dialog"]',
+  },
+  {
+    // A second image for the same marker as 03-101 -- one description asks
+    // for both a laptop and a phone capture. apply_placeholders fills the
+    // placeholder from 03-101's matching anchor; this file is inserted next
+    // to it by hand (see SCREENSHOT_CURRENCY.md), the same way 08-75/08-76
+    // were paired.
+    id: "03-102-shift-details-modal-phone",
+    doc: "03-scheduling.md",
+    line: 3354,
+    anchor: "not-auto-applied -- see 03-101, inserted by hand",
+    alt: "The Shift Details surface as a centred, inset modal at 390px phone width",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => !shift.is_finalized),
+    viewport: "mobile",
+    selector: 'div[role="dialog"]',
+  },
+  {
     id: "03-08-calls-runs-section",
     doc: "03-scheduling.md",
     line: 174,
@@ -10717,6 +10747,26 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "02-107-compliance-matrix-triage",
+    doc: "02-training.md",
+    line: 2618,
+    anchor: "The redesigned Compliance Matrix triage rail: members grouped by standing",
+    alt: "The redesigned Compliance Matrix: a triage rail of members grouped by standing, worst first, with one member's per-requirement detail open and the non-compliant status chip from a dashboard deep link above the queue",
+    // Selecting nobody defaults the detail pane to the first (worst-standing)
+    // item — see `activeId` in ComplianceMatrixTab — so no click is needed to
+    // get "one member's detail open". `status=noncompliant` is what a
+    // dashboard deep link sends and is what paints the status chip the
+    // placeholder asks for.
+    route: "/training/admin?page=dashboard&tab=compliance&status=noncompliant",
+    fullPage: true,
+    // Per-requirement rows legitimately read "No date on record" for anything
+    // with nothing filed yet — a real, populated triage rail, not an empty
+    // state. detectEmptyState's short-line "No …" pattern cannot tell that
+    // apart from a page-level empty state, so this is the incidental case
+    // README's "Empty states are held back" section describes.
+    allowEmptyState: true,
+  },
+  {
     id: "02-67-competency-matrix",
     doc: "02-training.md",
     line: 1156,
@@ -12762,6 +12812,22 @@ export const SHOTS = [
     alt: 'The member roster as an ordinary member: titled "Member Directory", with no usernames, hire-date column, Actions column or bulk selection',
     auth: "member",
     route: "/members",
+    fullPage: true,
+  },
+  {
+    id: "01-41-profile-visibility",
+    doc: "01-membership.md",
+    line: 1685,
+    anchor: "The profile-visibility controls on a member's own profile",
+    alt: "The five profile-visibility toggles on My Account -> Privacy: email, phone and mobile visible to members by default, personal email and mailing address not",
+    auth: "member",
+    route: "/account?tab=privacy",
+    // The defaults themselves are a mix (email/phone/mobile visible, personal
+    // email/address not, see DEFAULT_PROFILE_VISIBILITY) -- no toggling
+    // needed to get "a mix of on and off states".
+    prepare: async (page) => {
+      await page.waitForSelector("text=Visible to members", { timeout: 20_000 });
+    },
     fullPage: true,
   },
   {

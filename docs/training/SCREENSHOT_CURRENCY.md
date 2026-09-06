@@ -35,6 +35,131 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Restarted 2026-09-06 (second pass) — 3 more of the 28, and a one-off environment fix worth keeping
+
+A fresh capture session — the prior "Restarted 2026-09-06" entry below ran in
+an environment that no longer exists (this pipeline's demo database is
+disposable per session), so bootstrap and seed ran again from an empty
+database. The same three pre-existing seeder failures reproduced verbatim
+(`training enhancements`, `equipment checks`, `sealed compartments` — see that
+entry for detail), confirming they are real product bugs and not an artifact
+of one run. Two additional non-fatal `Blocked` notes also reproduced
+(`minutes approve` — separation of duties, and `member checklist states` — no
+free engine shift); neither affects any placeholder this pass touched.
+
+**Three of the 28 remaining placeholders filled**, each verified by looking at
+the image, not just at a successful exit code:
+
+| Placeholder | Manifest id(s) | Note |
+| --- | --- | --- |
+| `01-membership.md` — profile-visibility controls | `01-41-profile-visibility` | See "contact visibility" below — this one needed an environment fix first |
+| `02-training.md` — Compliance Matrix triage rail | `02-107-compliance-matrix-triage` | `status=noncompliant` in the route reproduces a dashboard deep link's chip; the worst-standing member's detail pane is open by default (`activeId` falls back to `flat[0]`), so no click was needed |
+| `03-scheduling.md` — Shift Details modal, laptop + phone | `03-101-shift-details-modal-laptop`, `03-102-shift-details-modal-phone` | Confirmed `role="dialog"`, 56rem laptop / 1rem-inset phone, exactly as described. Two images for one marker: `03-101` carries the real anchor and was applied by `apply_placeholders.py`; `03-102` was inserted by hand directly beneath it, the same way `08-75`/`08-76` were paired |
+
+**The profile-visibility shot needed a one-off environment change, not a
+manifest trick.** `ContactInfoSettings.enabled` defaults to `False` — a
+department that has never touched the setting shows every one of a member's
+three org-gated fields (work email, phone, mobile) as "Off for everyone
+(department setting)", which is a real state but not the "mix of on and off"
+the placeholder asks for, because the org-level ceiling forecloses it before
+the member's own switch is ever consulted. `PATCH
+/organization/settings/contact-info` with `enabled/show_email/show_phone/
+show_mobile: true` as the admin, run once by hand before this one capture,
+lets the seeded member's actual per-field defaults (`DEFAULT_PROFILE_VISIBILITY`
+— email/phone/mobile visible, personal email/address not) show through, which
+is exactly the mix pictured. **This is not persisted by `seed_demo_data.py`**,
+so a from-scratch reseed reproduces the org's shipped default (everything
+org-hidden) unless this PATCH is repeated — worth folding into the seeder
+directly next time this guide's placeholder needs re-shooting, rather than
+re-discovering the same 20-minute detour.
+
+**One false-positive empty-state flag, corrected in the manifest rather than
+worked around.** `02-107` first captured as `~ (empty: "No date on record")` —
+`detectEmptyState`'s short-line `"No …"` pattern matched a per-requirement row
+that legitimately has nothing filed yet, on a page that is otherwise a fully
+populated, worst-first triage rail. `allowEmptyState: true` is the documented
+mechanism for exactly this ("Empty states are held back" in the README); a
+second capture with it set produced the same (correct) image and applied
+cleanly.
+
+**Re-verified, not re-shot for content reasons, against the fresh seed:** the
+navigation reference shots (`00-15-sidebar-member`, `00-16-sidebar-admin`,
+`00-26-sidebar-officer-checklists`, `08-31-sidebar-notification-badge`), the
+member/coordinator directory pair (`01-01`, `01-40-member-directory`),
+`02-106-course-library-member`, `05-66-my-equipment`, `18-02-store-admin`
+(already pointed at `/inventory/admin/store`, Overview tab, title reads
+"Department Store" — this capture is current), and guide 20's five already-
+captured markers (`20-01` hub, `20-02` staffing gaps, `20-03` dashboard
+timeline, `20-04` my-shifts hours, `20-06` quick-add sheet). All eleven were
+inspected and match the application as it stands today; none needed a
+manifest change. This is the "navigation capture" and part of the "Replace"/
+"New" sweep from the Aug 31 – Sep 6 disposition below, addressed by
+confirming the already-written entries still produce the right picture on a
+clean environment rather than by re-deriving them.
+
+`status_report.py`: **534 of 559 placeholders filled, 25 remaining** (was
+530/558/28). `check_docs_links.py`: 344 files, 0 broken links.
+`audit_images.py --baseline`: 534 images checked, no new findings (the one
+pre-existing "edges" flag is already in the baseline).
+
+### Still queued — the rest of the Aug 31 – Sep 6 disposition, and 25 placeholders
+
+This pass did not attempt the disposition's largest items, for the reasons the
+disposition itself gives or that surfaced while triaging this session:
+
+- **Table header alignment sweep (37 files).** A global CSS fix already
+  landed (`thead th` alignment moved into `@layer base`, guarded by
+  `frontend/src/styles/tableHeaderAlignment.test.ts`); the stale *captures*
+  taken before that fix still need re-shooting. No file list exists yet
+  correlating screenshot ids to the 37 affected source files — building that
+  list is the actual next step, not re-shooting from memory.
+- **Call types editor**, **gear request form (two steps)**, **event attendee
+  visibility as a member**, **Claude (MCP) connect form + service-key panel**:
+  four of the eight screens identified as achievable this session were
+  deferred rather than rushed. Each needs UI investigation (exact settings
+  path, an interaction sequence, or — for the MCP key — a redaction step) this
+  pass did not budget for, and getting one wrong produces exactly the
+  "broken/mismatched image" this project is trying to avoid. All four still
+  have a real, working route and no known blocker; they are the highest-value
+  next targets precisely because they do **not** need a seeder extension.
+- **Org chart** (outline/diagram/node modal, 3 shots) and the **Testing
+  Checklist module** (Modules-off, Testing Home run picker, printable report,
+  3 shots) — both guide 08 **and** 19 carry the same markers. Confirmed still
+  blocked on missing seed data (no org-chart hierarchy, no testing-checklist
+  runs), as the prior entry below found. The Modules-off shot additionally
+  needs to be taken **before** demo seeding runs (see "One capture that
+  cannot be taken honestly" below) — it cannot be produced against this
+  session's already-seeded database at all.
+- **`/communications/photo-use-consent`** (guide 19) — needs three members in
+  three distinct consent states, which nothing currently seeds.
+- **Settings → Email, Test Connection** (guide 20) — needs a real SMTP
+  target; not attemptable against this disposable stack, as already recorded.
+- **Guide 20's own My Checklists/Fleet Readiness sidebar marker** (line 52) —
+  distinct from `00-26`, which fills guide 00's version of this same content.
+  `00-26` already demonstrates both rows exist and render correctly (see
+  above); guide 20's marker just needs its own manifest entry reusing that
+  proven `prepare`, split into a member capture (My Checklists only) and an
+  officer capture (both rows) per its own wording.
+
+25 placeholders remain: guide 03 (1, call types), 04 (1, event attendee), 05
+(1, gear request), 08 (6: org chart x3, Modules-off, Testing Home, printable
+report), 16 (1, Claude MCP), 19 (7: the same six guide-08 screens duplicated,
+plus photo-use-consent), 20 (8, unchanged by this pass — its own duplicate
+markers for call types, compliance matrix, gear request, shift details, event
+attendee and Claude MCP, plus its two unique markers: the My
+Checklists/Fleet Readiness sidebar shot and Test Connection).
+
+**Guide 20's duplicate markers for compliance-matrix and shift-details were
+not filled this pass.** `02-107` and `03-101`/`03-102` satisfy guide 02's and
+guide 03's own markers; guide 20 describes the identical screens at its own
+lines (361 and 430) and needs its own manifest entries reusing the same
+route/prepare, per the "same screen, separate id" convention this project
+already follows for `03-100`/`20-04` and `08-77`/`20-03`. Left for the next
+pass rather than done reflexively here, since guide 20's count did not move
+this session and duplicating a verified-correct capture is low-risk, low-
+effort work that does not need to compete for this session's remaining time
+against the four higher-value new screens above.
+
 ## Restarted 2026-09-06 — the eight-commit drift list, and 14 of the 42
 
 The recurring capture session was recreated from a fresh `main` (past

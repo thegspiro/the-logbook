@@ -3352,11 +3352,9 @@ bleed on phones and capped at 32rem above that. It is now a **centred dialog**:
 The wider desktop box gives the crew board and the close-out checklist's
 per-member hours inputs room they did not have at 512px.
 
-> **Screenshot needed:**
-> _[The Shift Details modal at laptop width with the crew board visible, and a
-> second capture at 390px phone width. Every existing capture of this surface
-> shows a right-edge drawer, which no longer exists — these are replacements,
-> not additions.]_
+![The Shift Details surface as a centred modal at laptop width, with the crew board visible](./images/03-101-shift-details-modal-laptop.png)
+
+![The Shift Details surface as a centred, inset modal at 390px phone width](./images/03-102-shift-details-modal-phone.png)
 
 **Escape inside the driver-blocked dialog no longer closes the shift behind
 it.** Shift Details hand-rolled Escape on a listener that could not see the
