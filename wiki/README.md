@@ -257,14 +257,43 @@ See the [Installation Guide](Installation) for setup instructions.
 
 ### Images
 
+Put the file in `wiki/images/` and reference it relative to the page:
+
 ```markdown
-![Alt Text](https://url-to-image.png)
+![Members list with the filter row open](images/members-filter.png)
 ```
 
-Or use relative paths if images are in the wiki:
+`setup-wiki.sh` copies the whole `images/` directory into the wiki clone, so
+that path resolves once published. The directory is the **only** place a wiki
+image can live — nothing else in this directory is published but `*.md`.
+
+Three things follow from that, worth knowing before adding one:
+
+- **The path is checked, and so is its location.** `scripts/check_docs_links.py`
+  resolves image targets as files and additionally rejects a wiki image that
+  lands outside `images/` — pointing at `../docs/training/images/…` would
+  resolve fine in this repository and still publish broken, since that
+  directory is not copied. Those checks are the reason to prefer a relative
+  path over an absolute `raw.githubusercontent.com` URL, which cannot be
+  verified.
+- **Only committed files are published.** The publish copies tracked files
+  only, so a scratch capture or editor artifact sitting in `images/` is left
+  behind and named in the output rather than pushed to a public wiki
+  unreviewed. Commit an image before expecting it to appear.
+- **Deleting an image here deletes it from the published wiki.** The
+  destination is cleared before every copy — including when you delete the
+  last image and the directory goes with it — so the live wiki matches this
+  one rather than accumulating every image ever published.
+- **Images are committed to this repository**, where they are reviewable in a
+  pull request alongside the page that uses them. Keep them reasonably sized —
+  `docs/training/images/` is 44 MB across 516 captures, and the wiki does not
+  need that scale.
+
+An external URL still works where the image genuinely lives elsewhere (a shields.io
+badge, say), and is not link-checked:
 
 ```markdown
-![Screenshot](images/screenshot.png)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 ```
 
 ### Code Blocks

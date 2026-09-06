@@ -16,10 +16,190 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[PR #2306](https://github.com/thegspiro/the-logbook/pull/2306)** — Feature 26
-(Forms) pass 3: FORM-10 (stale-snapshot duplicate-submission race) fixed,
-one item flagged. Rotation row 26 -> ⏳ pending PR. Next: tend #2306 to
-green and merged, then 27 Integrations.
+**Feature 27 (Integrations), pass 3, Codex-round follow-up** — branch
+`claude/security-review-integrations-followup`,
+[PR #2311](https://github.com/thegspiro/the-logbook/pull/2311).
+
+**PR #2307 merged (by the repo owner) before a Codex review round on it
+landed**, so its 6 review-thread fixes could not go into that PR — a new
+branch/PR was opened per CLAUDE.md pitfall #24 (never reuse a branch name
+after its PR merges; `claude/security-review-integrations` already had). All
+6 threads replied to on #2307 (still valid there as a record of what was
+found), 5 resolved, and their fixes carried forward into #2311 against
+current `main`.
+
+**INT-7 is now ✅ FIXED** (the Codex round found the original "flagged, not
+fixed" call in #2307 was based on a false premise): `create_integration_
+client()`'s transport now wraps every connector's response stream and
+aborts once `MAX_RESPONSE_SIZE` (10 MB) is exceeded, enforced centrally with
+no connector call site changed. All of INT-1 through INT-6 re-verified
+intact. A narrower related gap (no wall-clock request deadline) is tracked
+separately in `KNOWN_LIMITATIONS.md`. Route inventory corrected to 21
+endpoints across six files (two public webhook routers,
+`salesforce_webhook.py`/`paypal_webhook.py`, were missed in passes 2-3 and
+are now reviewed and clean). The inbound-webhook body-size claim was also
+corrected: nginx is deployment-conditional, but the pre-existing, ASGI-level
+`RequestSizeLimitMiddleware` caps bodies at 60 MB regardless — no new
+finding needed. Full completion gate green against current `main` — see the
+Log and `docs/security-review/INT-27-integrations.md` for detail.
+Subscribed to #2311; awaiting CI/review.
+
+---
+
+### 2026-09-06 — Feature 27 (Integrations, pass 3) — Codex round on #2307 (merged before landing) → new PR #2311
+
+Tended PR #2307 to address 6 unresolved Codex review threads posted at
+2026-09-06T13:15:26Z (CI already green, no merge conflicts). Before the
+fixes could be pushed, **the repo owner merged #2307** — the branch's
+merge commit into `main` is `86660d1`, capturing head `792cf3e`, so none of
+this round's fixes reached `main` through that PR. Per CLAUDE.md pitfall
+#24 (never reuse a branch name after its PR merges), opened a new branch
+(`claude/security-review-integrations-followup`) from the fix commit and a
+new PR, #2311, rather than continuing to push to the now-merged
+`claude/security-review-integrations`.
+
+Investigated all 6 threads against the actual code rather than accepting or
+dismissing them on the comment text alone:
+
+- **Timeout semantics (P2):** confirmed against the pinned httpx 0.28.1's
+  own source — `Timeout(10.0, connect=5.0)` is a per-read timeout, not a
+  10s wall-clock total; a slow-drip response can hold a connection open
+  indefinitely. Fixed the doc/comment wording; raised INT-7's pre-fix
+  severity note accordingly; the still-open half (no total-duration cap)
+  moved to its own `KNOWN_LIMITATIONS.md` entry.
+- **Reachable population (P2):** confirmed `create_event`/`create_shift`/
+  `create_record` (permissions `events.manage`/`scheduling.manage`/
+  `training.manage`) all enqueue `notify_entity_created`, which fans out to
+  every enabled chat webhook the same as any `integrations.manage`-gated
+  connector call — corrected the finding's "Impact" section.
+- **Central enforcement (the important one, P2):** Codex was right, and
+  INT-7 was fixable in one file, not just flaggable. Verified end-to-end
+  against a real `httpx.AsyncHTTPTransport` over an actual socket before
+  committing to it: httpx's non-streaming `.get()`/`.request()` still fully
+  drains `response.stream` via `Response.aread()`, so a wrapping transport
+  (`_SizeLimitedTransport`/`_SizeLimitedAsyncStream` in `base.py`) that
+  counts bytes and aborts on the stream itself enforces the cap centrally,
+  with zero connector call sites changed. **INT-7 is now ✅ FIXED**, with 4
+  new guard tests (`test_integration_response_size_cap.py`), including an
+  end-to-end test through a real connector.
+- **Inbound body-size / nginx dependency (P2):** confirmed nginx is
+  deployment-conditional (`docker-compose.yml`'s `nginx` service is
+  `profiles: [production]`; the backend publishes directly otherwise) —
+  but also confirmed a pre-existing, ASGI-level `RequestSizeLimitMiddleware`
+  (outermost middleware, `main.py`) already caps every inbound request body
+  at 60 MB regardless of nginx. Net: the "arbitrarily large body" DoS
+  doesn't hold as described; corrected the doc's claim rather than opening
+  a new "INT-8" finding, since the existing control already closes the
+  unbounded case.
+- **Route inventory (P2):** confirmed `salesforce_webhook.py` and
+  `paypal_webhook.py` were mounted but never read in passes 2-3. Read both
+  in full against this pass's own checklist dimensions — both clean
+  (signature verification, replay protection, rate limiting, org
+  resolution via the id-matched row); one inaccurate docstring fixed in
+  `salesforce_webhook.py`; one new minor follow-up noted, not fixed
+  (`paypal_service.py`'s own two outbound calls to PayPal use a bare
+  `httpx.AsyncClient` rather than `create_integration_client()`, so they
+  don't inherit the INT-7 fix — low risk, since PayPal's API host is a
+  fixed constant, never client-supplied). Route inventory corrected to 21
+  endpoints across six files.
+- **ESLint warning dismissal (P1):** replied citing the PR #2305 (Feature 25) precedent for this exact disagreement — pre-existing, untouched-file,
+  under-threshold warnings are a policy question for the repo owner, not a
+  defect in this change. Left open, not resolved, matching that precedent.
+
+5 of 6 threads fixed and resolved on #2307 (replies stand there as the
+record); the 6th (ESLint) replied-only and left open. All 5 fixes carried
+into #2311. Completion gate re-run against current `main`: flake8/black/
+isort clean; migrations validated (431 revisions, single head, no schema
+change); 4/4 new guard tests, 2374/2374 scoped and 11476/11476 full backend
+suite pass. No frontend file touched. Findings doc, `docs/module-audit/
+integrations.md`, `docs/KNOWN_LIMITATIONS.md`, and `CHANGELOG.md` all
+updated to match. PR #2311 opened and subscribed. Rotation row 27 stays
+⏳ pending PR. Next: tend #2311 to green and merged, then 28 Security,
+audit & IP.
+
+---
+
+### 2026-09-06 — Feature 27 (Integrations, pass 3) — PR #2307 opened
+
+Read every backend file in this feature's declared scope in full, plus
+`calcom_sync.py`, `app/api/public/integrations_webhook.py` (public inbound
+webhooks) and `app/services/integration_services/base.py`/`__init__.py`
+(the connector dispatcher), none of which pass 1/2 read in full. Route
+counts unchanged: `integrations.py` 7, `salesforce_sync.py` 9,
+`calcom_sync.py` 1, plus 2 intentionally-public webhook routes — all
+enumerated, none newly ungated. `integrations.py` grew 710 → 841 lines
+since pass 2; the growth is new Claude (MCP) integration glue (a
+`claude-mcp` catalog entry + config schema, MCP-service-key revocation on
+disconnect gated by `require_audit_entry` so an unrecorded revocation
+rolls back rather than silently succeeding, the same audit gate on
+updating a live MCP integration's config) plus new `nfc-id-cards`/`paypal`
+catalog entries — all reviewed and clean; the wider MCP module (`app/mcp/*`)
+is not a declared file of this feature and already has its own
+`KNOWN_LIMITATIONS.md` entry from outside this rotation, the same scope
+line Feature 15 (Scheduling, pass 3) drew for its own MCP tool file, so
+not duplicated here. One new finding: **INT-7** (LOW-MED, flagged) —
+`base.py` declared a `MAX_RESPONSE_SIZE` constant with a docstring
+claiming a response-size cap on the shared HTTP client; nothing enforces
+it (`create_integration_client()` returns a plain non-streaming
+`httpx.AsyncClient`, and every connector's `.get(...).json()` buffers the
+full body before any caller-side code could check it), so a
+department-configured integration endpoint that returns an oversized or
+slow-drip body can drive unbounded per-request memory growth. Gated
+behind `integrations.manage` (not directly reachable by an unprivileged
+member); inbound webhook bodies are already bounded by nginx's global
+`client_max_body_size 50M`, unaffected by this finding. Flagged rather
+than fixed: closing it means every connector's response-read call site
+switching from a non-streaming read to `client.stream(...)` plus a
+running-byte-count abort — a behavior change across ~10 files at once
+(some, like Salesforce's own paginated bulk pull, may need a different cap
+than a webhook test), not a same-file patch. Corrected `docs/module-audit/
+integrations.md`'s "size cap" bullet, which had claimed this control was
+verified when it was never checked against the code. INT-1 through INT-6
+re-verified intact, all held. Full completion gate green: flake8/black/
+isort clean; migrations validated (431 revisions, single head, no schema
+change); 2412/2412 scoped and 11472/11472 full backend suite pass;
+frontend `tsc`/`eslint` 0 errors (3 pre-existing warnings, unrelated file).
+One sandbox-only wrinkle recorded in the findings doc rather than as a
+finding: this worktree started with no `node_modules`, which made `eslint`/
+`tsc` fall back to a global toolchain that couldn't resolve `@types/node`
+(1032 spurious warnings) until `npm ci` fixed it — same shape as
+`SKT-19-skills-testing.md`'s pass 3 note. Findings doc:
+`docs/security-review/INT-27-integrations.md` (Pass 3). PR #2307 opened
+and subscribed. Rotation row 27 -> ⏳ pending PR. Next: tend #2307 to
+green and merged, then 28 Security, audit
+& IP.
+
+---
+
+### 2026-09-06 — Feature 26 (Forms, pass 3) ✅ merged — PR #2306
+
+Re-verified FORM-1 through FORM-9 and BXC-1 from passes 1-2 against
+current code — all hold, nothing regressed. One new finding: **FORM-10**
+(MEDIUM, fixed) — `submit_public_form`'s "one submission per person"
+enforcement (`allow_multiple_submissions=False`) locked the `Form` row,
+but the duplicate-submission check itself was a plain `SELECT`; under
+InnoDB's default REPEATABLE READ that read answers from the transaction's
+first-read snapshot regardless of the later lock (CLAUDE.md pitfall #27),
+so two near-simultaneous submissions from the same member (a double-click,
+or two tabs/devices) could both pass the check and both insert, defeating
+the setting entirely. Fixed by making the duplicate-check query itself a
+locking read (`.with_for_update()`), the same pattern already established
+in this codebase for this exact bug class (FAC-45, MSG-13). Flagged, not
+fixed: the authenticated (non-public) `submit_form` path enforces no
+`allow_multiple_submissions` check at all — every prior pass has scoped
+this setting to the public-submission policy, so this is a pre-existing
+product-scope question, not a regression; mirrored into
+`KNOWN_LIMITATIONS.md`. New guard test
+(`TestConcurrentDuplicateSubmissionCheck`) uses two genuinely independent
+DB sessions via `asyncio.gather`, verified to reliably reproduce 2
+successful submissions before the fix and exactly 1 after. Full
+completion gate green: flake8/black/isort clean; migrations validated (no
+schema change this pass); 436/436 scoped and 11,472/11,472 full backend
+suite pass; no frontend file touched. PR opened, went fully green (17/17)
+and all 7 Codex review threads were resolved with fixes landed, then left
+idle for over an hour before being merged directly by a watchdog check.
+Full write-up: `docs/security-review/FORM-26-forms.md` (Pass 3). Rotation
+row 26 -> ✅. Next: 27 Integrations.
 
 ---
 
@@ -9638,8 +9818,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⏳     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |

@@ -8,6 +8,13 @@ salesforce OAuth+sync, calendar, documenso, weather, EMS), model
 `app/models/integration.py`.
 **Audited:** iteration 12 (external-service surfaces — SSRF, credential
 handling, OAuth, webhook verification).
+**Correction (security-review INT-27 pass 3, Codex round, 2026-09-06):** this
+inventory omitted two more public inbound webhook routers mounted alongside
+`integrations_webhook.py` — `app/api/public/salesforce_webhook.py` (1
+endpoint) and `app/api/public/paypal_webhook.py` (1 endpoint). Both reviewed
+in that pass and found clean (signature verification, replay protection,
+rate limiting, org resolution via the id-matched integration row). See
+`docs/security-review/INT-27-integrations.md`'s route inventory for detail.
 
 ## Verified good ✅
 
@@ -30,9 +37,25 @@ handling, OAuth, webhook verification).
   (`is_duplicate_webhook`) + rate limiting; org-scoped from the integration.
 - **Tenant isolation:** every by-id read/connect/disconnect/update/test filters
   `organization_id`; salesforce sync resolves via an org-scoped helper; base
-  HTTP client has hardened defaults (TLS verify, no redirect-following, timeouts,
-  size cap). Salesforce URLs are fixed constants / regex-locked to
-  `*.salesforce.com`. flake8 clean; no TODO/FIXME.
+  HTTP client has hardened defaults (TLS verify, no redirect-following,
+  timeouts, and — see the correction below — a response-size cap). Salesforce
+  URLs are fixed constants / regex-locked to `*.salesforce.com`. flake8 clean;
+  no TODO/FIXME.
+  **Correction (security-review INT-27, 2026-09-06):** this bullet previously
+  also claimed a response-size cap, which turned out to be false at the
+  time — `base.py`'s `MAX_RESPONSE_SIZE` constant was declared but never
+  read anywhere in the codebase; every connector's non-streaming
+  `client.get(...).json()` buffered the full response into memory
+  regardless of size (INT-7, pass 3 first draft).
+  **Update (Codex round, same pass, 2026-09-06): the claim is now true.**
+  `create_integration_client()` wraps its transport with
+  `_SizeLimitedTransport`, which aborts a response once `MAX_RESPONSE_SIZE`
+  bytes have been read — enforced centrally, no connector call site
+  changed. See INT-7 (now ✅ FIXED) in
+  `docs/security-review/INT-27-integrations.md`. Still true as stated: the
+  hardened client has no **wall-clock** request deadline (`INTEGRATION_
+TIMEOUT`'s 10s is a per-read timeout, not a total), tracked as a separate,
+  still-open follow-up in `KNOWN_LIMITATIONS.md`.
 
 ## Findings
 
