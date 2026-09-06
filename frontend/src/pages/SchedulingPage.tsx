@@ -593,7 +593,9 @@ const SchedulingPage: React.FC = () => {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Shift Template</label>
+                      <label htmlFor="create-shift-template" className="form-label">
+                        Shift Template
+                      </label>
                       {effectiveTemplates.length > 5 && (
                         <input
                           autoCapitalize="none"
@@ -601,12 +603,14 @@ const SchedulingPage: React.FC = () => {
                           spellCheck={false}
                           type="text"
                           placeholder="Search templates..."
+                          aria-label="Search shift templates"
                           value={templateSearch}
                           onChange={(e) => setTemplateSearch(e.target.value)}
                           className="form-input mb-2 text-sm focus:ring-violet-500"
                         />
                       )}
                       <select
+                        id="create-shift-template"
                         value={shiftForm.shiftTemplate}
                         onChange={(e) => {
                           const tmpl = effectiveTemplates.find((t) => t.id === e.target.value);
@@ -771,8 +775,11 @@ const SchedulingPage: React.FC = () => {
                     {/* Start / End Date — always visible */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Date *</label>
+                        <label htmlFor="create-shift-start-date" className="form-label">
+                          Start Date *
+                        </label>
                         <input
+                          id="create-shift-start-date"
                           type="date"
                           value={shiftForm.startDate}
                           onChange={(e) => {
@@ -789,8 +796,11 @@ const SchedulingPage: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Date</label>
+                        <label htmlFor="create-shift-end-date" className="form-label">
+                          End Date
+                        </label>
                         <input
+                          id="create-shift-end-date"
                           type="date"
                           value={shiftForm.endDate}
                           onChange={(e) =>
@@ -821,12 +831,13 @@ const SchedulingPage: React.FC = () => {
                     {/* Apparatus Selection */}
                     {apparatusList.length > 0 && (
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                        <label htmlFor="create-shift-apparatus" className="form-label">
                           <span className="flex items-center gap-1.5">
                             <Truck className="h-4 w-4" /> Apparatus <span aria-hidden="true">*</span>
                           </span>
                         </label>
                         <select
+                          id="create-shift-apparatus"
                           value={shiftForm.apparatus_id}
                           onChange={(e) =>
                             setShiftForm({
@@ -921,19 +932,25 @@ const SchedulingPage: React.FC = () => {
                       {showAdvancedOptions && (
                         <div className="border-theme-surface-border space-y-4 border-t px-4 pt-1 pb-4">
                           {/* Custom Time Override */}
-                          <div>
-                            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                          <div role="group" aria-labelledby="create-shift-custom-times">
+                            <span id="create-shift-custom-times" className="form-label">
                               <span className="flex items-center gap-1.5">
                                 <Clock className="h-4 w-4" /> Custom Times
                               </span>
-                            </label>
+                            </span>
                             <p className="text-theme-text-muted mb-2 text-xs">
                               Override the template times for this shift
                             </p>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="text-theme-text-muted mb-1 block text-xs">Start Time</label>
+                                <label
+                                  htmlFor="create-shift-start-time"
+                                  className="text-theme-text-muted mb-1 block text-xs"
+                                >
+                                  Start Time
+                                </label>
                                 <TimeQuarterHour
+                                  id="create-shift-start-time"
                                   value={shiftForm.customStartTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
                                   placeholder={(() => {
@@ -946,8 +963,14 @@ const SchedulingPage: React.FC = () => {
                                 />
                               </div>
                               <div>
-                                <label className="text-theme-text-muted mb-1 block text-xs">End Time</label>
+                                <label
+                                  htmlFor="create-shift-end-time"
+                                  className="text-theme-text-muted mb-1 block text-xs"
+                                >
+                                  End Time
+                                </label>
                                 <TimeQuarterHour
+                                  id="create-shift-end-time"
                                   value={shiftForm.customEndTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
                                   className="form-input"
@@ -968,12 +991,13 @@ const SchedulingPage: React.FC = () => {
                           {/* Shift Officer Selection */}
                           {membersList.length > 0 && (
                             <div>
-                              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                              <label htmlFor="create-shift-officer" className="form-label">
                                 <span className="flex items-center gap-1.5">
                                   <Users className="h-4 w-4" /> Shift Officer
                                 </span>
                               </label>
                               <select
+                                id="create-shift-officer"
                                 value={shiftForm.shift_officer_id}
                                 onChange={(e) =>
                                   setShiftForm({
@@ -995,8 +1019,11 @@ const SchedulingPage: React.FC = () => {
 
                           {/* Notes */}
                           <div>
-                            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Notes</label>
+                            <label htmlFor="create-shift-notes" className="form-label">
+                              Notes
+                            </label>
                             <textarea
+                              id="create-shift-notes"
                               value={shiftForm.notes}
                               onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
                               rows={2}
