@@ -27,19 +27,27 @@
 # The integration id IS the credential.
 
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe.
+#   - _load_integration::Integration::integration_id
+#     public webhook: there is no caller org, and the integration id IS the credential
 app/api/public/integrations_webhook.py::_load_integration::Integration::integration_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe.
+#   - paypal_inbound_webhook::Integration::integration_id
+#     public webhook: there is no caller org, and the integration id IS the credential
 app/api/public/paypal_webhook.py::paypal_inbound_webhook::Integration::integration_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe.
+#   - salesforce_inbound_webhook::Integration::integration_id
+#     public webhook: there is no caller org, and the integration id IS the credential
 app/api/public/salesforce_webhook.py::salesforce_inbound_webhook::Integration::integration_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe.
+#   - perform_sync_task::ExternalTrainingProvider::provider_id
+#     the endpoint resolves the provider with an organization_id filter and 404s otherwise before queueing this background task; hardening candidate — it holds organization_id and does not apply it here
 app/api/v1/endpoints/external_training.py::perform_sync_task::ExternalTrainingProvider::provider_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - bulk_approve::User::member_id
 #     member_id comes off entries fetched with an organization_id filter above
 #   - clock_in::User::user_id
@@ -53,41 +61,59 @@ app/services/admin_hours_service.py::clock_in::User::user_id
 app/services/admin_hours_service.py::create_manual_entry::User::user_id
 app/services/admin_hours_service.py::edit_pending_entry::User::owner_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _reload_operator::ApparatusOperator::operator_id
+#     caller passes operator.id from the row it just resolved
 app/services/apparatus_service.py::_reload_operator::ApparatusOperator::operator_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - get_user_from_token::User::user_id
+#     the id is the verified JWT 'sub'; this call establishes who the caller IS, so there is no caller org to scope to
 app/services/auth_service.py::get_user_from_token::User::user_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _lock_destination_folder::DocumentFolder::folder_id
+#     update_document runs assert_in_org on the client-supplied folder_id first (DOC-6/XC-1); this query selects only .id, a lock acquisition
+#   - _lock_folder_by_id::DocumentFolder::folder_id
+#     caller passes peeked_folder.id; id-only lock acquisition
 app/services/documents_service.py::_lock_destination_folder::DocumentFolder::folder_id
 app/services/documents_service.py::_lock_folder_by_id::DocumentFolder::folder_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _notify_leadership::User::performed_by
+#     performed_by threads down from the acting user in org-scoped election flows
 #   - check_voter_eligibility::User::user_id
 #     both callers are safe: one passes current_user.id, the other (preview_ballot_for_user) verifies the target in-org first
 #   - process_election_lifecycle::Election::election_id
 #     election_id comes off an org-filtered query above; this is the re-fetch
+app/services/election_service.py::_notify_leadership::User::performed_by
 app/services/election_service.py::check_voter_eligibility::User::user_id
 app/services/election_service.py::process_election_lifecycle::Election::election_id
 
-# Not yet reviewed.
-app/services/election_service.py::_notify_leadership::User::performed_by
-
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _send_check_failure_notification::EquipmentCheckTemplate::template_id
+#     reached only from submit_check, which resolves the template in-org first
+#   - _send_check_failure_notification::User::checked_by
+#     checked_by is the submitting member, resolved by the same org-scoped flow
 app/services/equipment_check_service.py::_send_check_failure_notification::EquipmentCheckTemplate::template_id
 app/services/equipment_check_service.py::_send_check_failure_notification::User::checked_by
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - get_user_name::User::user_id
+#     display-name lookup; every caller supplies current_user.id or an id off an org-scoped row (event_request.assigned_to, entry.performed_by)
 app/services/event_request_service.py::get_user_name::User::user_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _entity_creator_email::User::requester_id
+#     requester_id comes from _entity_creator_id(entity_type, entity_id, org_id), which is org-scoped
 app/services/finance_service.py::_entity_creator_email::User::requester_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _get_user::User::user_id
+#     notification helper; caller passes member_id off an org-scoped inventory row
 app/services/inventory_notification_service.py::_get_user::User::user_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - create_return_request::CheckOutRecord::checkout_id
 #     assert_in_org() bounds all three client FKs before any ownership lookup — textbook #14c
 #   - create_return_request::ItemAssignment::assignment_id
@@ -98,26 +124,30 @@ app/services/inventory_service.py::create_return_request::CheckOutRecord::checko
 app/services/inventory_service.py::create_return_request::ItemAssignment::assignment_id
 app/services/inventory_service.py::create_return_request::ItemIssuance::issuance_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - get_preset::Position::position_id
 #     position_id is returned by _primary_position_id(user_id, organization_id), already org-scoped
 app/services/label_service.py::get_preset::Position::position_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - reactivate_member::User::reactivated_by
 #     reactivated_by is current_user.id; the target user is fetched with an organization_id filter
 app/services/member_archive_service.py::reactivate_member::User::reactivated_by
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _deactivate_linked_waiver::TrainingWaiver::waiver_id
+#     caller passes leave.linked_training_waiver_id off an org-scoped leave row
+#   - _update_linked_waiver::TrainingWaiver::waiver_id
+#     caller passes leave.linked_training_waiver_id off an org-scoped leave row
 app/services/member_leave_service.py::_deactivate_linked_waiver::TrainingWaiver::waiver_id
 app/services/member_leave_service.py::_update_linked_waiver::TrainingWaiver::waiver_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - link_event::User::linked_by
 #     linked_by is current_user.id
 app/services/membership_pipeline_service.py::link_event::User::linked_by
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - generate_report::User::performed_by
 #     performed_by is current_user.id
 #   - generate_report::User::user_id
@@ -125,25 +155,43 @@ app/services/membership_pipeline_service.py::link_event::User::linked_by
 app/services/property_return_service.py::generate_report::User::performed_by
 app/services/property_return_service.py::generate_report::User::user_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _subscribe_once::PushSubscription::peeked_id
+#     point lookup on an id the endpoint_hash peek found, taken purely to lock; documented gap-lock avoidance
+#   - _subscribe_once::User::uid
+#     id-only lock acquisition over the user rows this call may touch, in sorted order; deadlock-avoidance, not a read
 app/services/push_service.py::_subscribe_once::PushSubscription::peeked_id
 app/services/push_service.py::_subscribe_once::User::uid
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - set_user_roles::User::user_id
+#     UNREACHABLE — no caller in app/, tests only. Unscoped throughout, and the role_ids are not org-checked either. See docs/ORG_SCOPING_SWEEP.md section 4c: not exploitable today, but it must be scoped or deleted before anything wires it up
 app/services/role_service.py::set_user_roles::User::user_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - resolve_check_templates::Apparatus::apparatus_id
 #     caller passes shift.apparatus_id from an org-scoped shift, alongside the same organization_id
 #   - resolve_check_templates::ApparatusType::app_type_id
 #     app_type_id is read from the Apparatus row resolved on the line above
+#   - run_recover_stranded_message_deliveries::DepartmentMessage::message_id
+#     scheduled task invoked from TASK_RUNNERS with no caller org; sweeps system-wide by design
 app/services/scheduled_tasks.py::resolve_check_templates::Apparatus::apparatus_id
 app/services/scheduled_tasks.py::resolve_check_templates::ApparatusType::app_type_id
-
-# Not yet reviewed.
 app/services/scheduled_tasks.py::run_recover_stranded_message_deliveries::DepartmentMessage::message_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _email_swap_expiry::User::recipient_id
+#     recipient_id is read off the swap_request row the org-scoped caller resolved
+#   - _member_display_name::User::user_id
+#     display-name helper reached from _notify_shift_assignment, itself entered from org-scoped assignment flows
+#   - _notify_shift_assignment::Shift::shift_id
+#     notification helper; shift_id arrives from an assignment path that resolved the shift in-org
+#   - _notify_shift_decline::Shift::shift_id
+#     delete_assignment fetches the assignment with an organization_id filter, then derives shift_id from it
+#   - _notify_shift_decline::User::user_id
+#     same path: user_id is assignment.user_id off the org-filtered assignment
+#   - _send_finalization_notification::User::officer_id
+#     officer_id is the finalizing user from an org-scoped finalization flow
 app/services/scheduling_service.py::_email_swap_expiry::User::recipient_id
 app/services/scheduling_service.py::_member_display_name::User::user_id
 app/services/scheduling_service.py::_notify_shift_assignment::Shift::shift_id
@@ -151,17 +199,25 @@ app/services/scheduling_service.py::_notify_shift_decline::Shift::shift_id
 app/services/scheduling_service.py::_notify_shift_decline::User::user_id
 app/services/scheduling_service.py::_send_finalization_notification::User::officer_id
 
-# Reviewed 2026-09-06 (services pass): safe.
+# Reviewed 2026-09-06: safe unless noted.
 #   - get_report::ShiftCompletionReport::report_id
 #     optional organization_id IS applied, via a builder .where() the ratchet cannot see (its documented blind spot); EC-9 documents the unscoped path
 app/services/shift_completion_service.py::get_report::ShiftCompletionReport::report_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - lock_attempt_capacity::TrainingRequirement::requirement_id
+#     the endpoint derives requirement_id from a SkillTest query filtered on organization_id
 app/services/skills_testing_service.py::lock_attempt_capacity::TrainingRequirement::requirement_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _maybe_auto_advance_phase::ProgramEnrollment::enrollment_id
+#     enrollment ids come from queries inside delete_program_phase, which resolved the phase via _get_program_phase(phase_id, program_id, organization_id)
+#   - _recalculate_enrollment_progress::ProgramEnrollment::enrollment_id
+#     same path, plus callers passing progress.enrollment_id / enrollment.id off already-resolved rows
 app/services/training_program_service.py::_maybe_auto_advance_phase::ProgramEnrollment::enrollment_id
 app/services/training_program_service.py::_recalculate_enrollment_progress::ProgramEnrollment::enrollment_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06: safe unless noted.
+#   - _notify_training_officers::User::finalized_by
+#     finalized_by is the acting user from an org-scoped session finalization
 app/services/training_session_service.py::_notify_training_officers::User::finalized_by
