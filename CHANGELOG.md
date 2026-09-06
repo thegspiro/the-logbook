@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member's own uniform sizes no longer need a permission (2026-09-06)
+
+**Fixed**
+
+- **`GET`/`PUT /inventory/my/size-preferences` required `inventory.view`.**
+  Both handlers key the row on the caller, so neither reaches another member's
+  sizes — and every sibling endpoint behind "My Issued Gear" (issued gear,
+  equipment requests, return requests, loan extension) requires only
+  authentication. The June 2026 changelog recorded these two the same way,
+  "self, login required", so the grant had drifted from the documented
+  contract. They now require authentication only.
+
+  The practical effect was the My Sizes button: it sits on a route that needs
+  no permission and was rendered unconditionally, so a member whose position
+  lacked `inventory.view` got a button that 403'd. Dormant for a baseline
+  member, who holds that grant.
+
+  **This is a widening.** The officer-facing endpoints for _another_ member's
+  sizes are untouched and keep their stricter gates — `inventory.view` to
+  read, `inventory.manage` to write — and a test now pins both halves.
+
 ### Events and Training pages say which hub they belong to (2026-09-06)
 
 **Added**
