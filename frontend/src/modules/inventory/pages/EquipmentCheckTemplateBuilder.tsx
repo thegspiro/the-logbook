@@ -3442,7 +3442,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-[44px] dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => {
                   const job = quickAddJobs.current[item.clientKey ?? ''];
                   if (job) runQuickAdd(job);
@@ -3452,7 +3452,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 max-md:min-h-[44px] dark:text-red-400 dark:hover:bg-red-900/20"
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-red-400 dark:hover:bg-red-900/20"
                 onClick={() => {
                   delete quickAddJobs.current[item.clientKey ?? ''];
                   replaceQuickAddItem(compKey, item.clientKey ?? '', null);
@@ -4163,7 +4163,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               aria-label={`Add item to ${comp.name || 'location'}`}
               className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
-              onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+              // Through openAddSurface, not setMobileAddLocations directly: the
+              // action bar's Add item follows whichever location was last
+              // opened, and a handler that skips the funnel leaves it pointing
+              // at the previous one. That is the drift openAddSurface's own
+              // docstring says cannot happen, and this call site was it.
+              onClick={() => openAddSurface(key)}
             >
               <Plus className="h-4 w-4" aria-hidden="true" /> Add
             </button>
@@ -5349,7 +5354,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11"
+              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11 max-md:min-w-11"
             >
               <CheckCircle2 className="h-4 w-4" /> Publish
             </button>

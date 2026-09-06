@@ -346,6 +346,21 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(bar).getByRole('button', { name: 'Add an item to Cab' })).toBeVisible();
   });
 
+  it('retargets when a location header opens its own add panel', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+    expect(within(bar).getByRole('button', { name: 'Add an item to Medical bag' })).toBeVisible();
+
+    // The location row's own Add is a second way in, and it has to move the
+    // target too: leaving it behind would send the next tap on the bar to a
+    // different location than the panel the author is looking at.
+    await user.click(screen.getByRole('button', { name: 'Add item to Cab' }));
+
+    expect(within(bar).getByRole('button', { name: 'Add an item to Cab' })).toBeVisible();
+  });
+
   it('keeps adding an item available while the template still has blockers', async () => {
     // A count item with no par is an item-level blocker, which is what puts
     // the bar into its Review state — the state a template spends most of its

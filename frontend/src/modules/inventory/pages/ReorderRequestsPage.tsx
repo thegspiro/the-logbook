@@ -227,7 +227,7 @@ const ReorderFormModal: React.FC<{
                 <button
                   key={alert.category_id}
                   type="button"
-                  className="rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-700 hover:bg-yellow-500/30 max-md:min-h-[44px] dark:text-yellow-300"
+                  className="rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-700 hover:bg-yellow-500/30 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-yellow-300"
                   onClick={() => {
                     const firstItem = alert.items?.[0];
                     setF((p) => ({
@@ -893,7 +893,7 @@ export const ReorderRequestsPage: React.FC = () => {
                               setEditRequest(req);
                               setShowCreate(true);
                             }}
-                            className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded px-2 py-1 text-xs max-md:min-h-[44px]"
+                            className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded px-2 py-1 text-xs max-md:min-h-[44px] max-md:min-w-[44px]"
                           >
                             Edit
                           </button>
