@@ -224,6 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visible field name.
 
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**
 
@@ -232,8 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   write different content at the same offset and git reports a conflict -- not
   over substance, but because a textual merge has no rule for ordering two
   additions. On 2026-09-06 this was the only conflict left across all ten open
-  PRs, hitting seven of them, and each one costs a merge, a resolution and a
-  full CI re-run.
+  PRs, hitting seven of them.
 
   Union is sound for this file specifically because entries are independent and
   additive: no PR edits another's entry, so taking both cannot drop an intended
@@ -245,6 +245,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The tradeoff it does carry: two branches editing the _same_ entry get both
   revisions as adjacent duplicate lines rather than a conflict. That is visible
   in review, and is recorded in the `.gitattributes` comment.
+  **Scope, stated plainly because the first version of this entry overstated
+  it: this does not fix the "Merge pull request" button.** GitHub's server-side
+  merge does not apply `.gitattributes` merge drivers, so a PR whose only
+  conflict is this one is still reported as conflicted in the UI and still
+  refuses to merge. What the rule covers is every merge run by a _git client_ --
+  `git merge main` on a feature branch, `git pull`, and merging a PR branch
+  locally before pushing. That is where the seven were resolved.
+
+  **A second sharp edge, since it is not obvious:** git reads merge attributes
+  from the tree being merged **into**, not from either side's content. A branch
+  created before this commit therefore still hits the conflict when main is
+  merged into it, because its own checkout has no `.gitattributes`. Cherry-pick
+  this file onto such a branch first, then merge.
+
+  The tradeoff the rule itself carries: two branches editing the _same_ entry
+  get both revisions as adjacent duplicate lines rather than a conflict. That
+  is visible in review, and is recorded in the `.gitattributes` comment.
 
 ### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
 
