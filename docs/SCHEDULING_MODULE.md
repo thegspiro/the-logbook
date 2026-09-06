@@ -289,7 +289,7 @@ Time-off request for date ranges.
 ### Shifts
 
 ```
-GET    /api/v1/scheduling/shifts                    # List shifts (scheduling.view or scheduling.manage)
+GET    /api/v1/scheduling/shifts                    # List shifts (scheduling.view or scheduling.manage)†
 POST   /api/v1/scheduling/shifts                    # Create shift (scheduling.manage)
 GET    /api/v1/scheduling/shifts/{id}               # Get shift by ID
 PATCH  /api/v1/scheduling/shifts/{id}               # Update shift (scheduling.manage)
@@ -689,6 +689,16 @@ anywhere sees such a shift in the hub's count while nobody is on it and not in
 this list. Each is right about its own question: the server is asked "is anybody
 covering this", the board is asked "how short is it", and "crew size not set" is
 not a number.
+
+> **† `scheduling.manage` does not imply `scheduling.view`.** Permission
+> matching is literal — an exact name, `scheduling.*` or `*` — so a position
+> holding only `scheduling.manage` is admitted to every page under
+> `/scheduling/admin` and would be refused the reads those pages are built on.
+> Nine reads therefore accept either grant: the shift list, a shift and its
+> assignments, attendance and calls, and templates and patterns with their
+> detail routes. The member's own surfaces — the week and month calendars, the
+> summary, time-off — keep `scheduling.view` alone, and
+> `test_scheduling_endpoints.py` pins both halves so neither drifts.
 
 ### Shift Close-Out _(2026-09-05)_
 

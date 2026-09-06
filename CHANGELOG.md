@@ -86,14 +86,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it, so the old link landed on a page where the number shown does not appear.
   It is a link only for a viewer who can open that screen, and plain text
   otherwise.
-- **A scheduling manager can list shifts.** `GET /scheduling/shifts` accepted
-  only `scheduling.view`, and permission matching is literal — an exact name,
-  `scheduling.*` or `*` — so nothing makes `manage` imply `view`. A position
-  granted `scheduling.manage` alone was admitted to every page in Scheduling
-  Administration and then refused the shifts those pages exist to list, so the
-  close-out queue and the staffing-gaps list could only ever show their
-  load-failure state. The endpoint now accepts either grant: a widening, so
-  nobody who could read it before loses it.
+- **A scheduling manager can read what the administration pages show them.**
+  Permission matching is literal — an exact name, `scheduling.*` or `*` — so
+  nothing makes `manage` imply `view`, and every page under `/scheduling/admin`
+  is gated on `manage` alone. A position holding only that grant was admitted to
+  those pages and then refused the data they exist to display: the close-out
+  queue and the staffing-gaps list could only show their load-failure state, the
+  shift panel's uncaught assignments request rejected its whole load, and Shift
+  Planning could not list a template or a pattern at all. Nine reads now accept
+  either grant — the shift list, a shift and its assignments, attendance and
+  calls, and templates and patterns with their detail routes. A widening, so
+  nobody who could read them before loses anything. The member's own surfaces —
+  the calendars, the summary, time-off — deliberately keep the narrower gate,
+  and both halves are pinned by a test, because this was found one endpoint at a
+  time, twice.
 - **A shift that ended earlier today can be closed out today.** The shift
   panel's close-out button stood on a day-granular `isPast`, while the server's
   own rule is that the shift's end has passed — so a shift finishing at 06:00

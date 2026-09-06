@@ -694,7 +694,11 @@ async def get_open_shifts(
 async def get_shift(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and this
+    # read is behind a `scheduling.manage` administration page.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a shift by ID with attendance"""
     service = SchedulingService(db)
@@ -1226,7 +1230,15 @@ async def add_attendance(
 async def get_attendance(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # `scheduling.manage` alongside `scheduling.view`: matching is literal, so
+    # nothing makes `manage` imply `view`, and every page in Scheduling
+    # Administration is gated on `manage` alone. A position holding only that
+    # grant was admitted to those pages and refused the reads they are built
+    # on. Widened, never narrowed — no caller who could read this before loses
+    # it. See the note on `list_shifts`.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get all attendance records for a shift"""
     service = SchedulingService(db)
@@ -1671,7 +1683,11 @@ async def create_call(
 async def list_shift_calls(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`. A detailed department records its calls on
+    # the shift panel, which is where the close-out queue sends an officer.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List all calls for a shift"""
     service = SchedulingService(db)
@@ -1740,7 +1756,12 @@ async def delete_call(
 async def list_templates(
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List shift templates"""
     service = SchedulingService(db)
@@ -1777,7 +1798,12 @@ async def create_template(
 async def get_template(
     template_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a shift template by ID"""
     service = SchedulingService(db)
@@ -1834,7 +1860,12 @@ async def delete_template(
 async def list_patterns(
     active_only: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List shift patterns"""
     service = SchedulingService(db)
@@ -1871,7 +1902,12 @@ async def create_pattern(
 async def get_pattern(
     pattern_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # See the note on `list_shifts`: `manage` does not imply `view`, and
+    # templates and patterns are reached only from Shift Planning, which is
+    # gated on `scheduling.manage` alone.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """Get a shift pattern by ID"""
     service = SchedulingService(db)
@@ -1983,7 +2019,15 @@ async def generate_shifts_from_pattern(
 async def list_shift_assignments(
     shift_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    # `scheduling.manage` alongside `scheduling.view`: matching is literal, so
+    # nothing makes `manage` imply `view`, and every page in Scheduling
+    # Administration is gated on `manage` alone. A position holding only that
+    # grant was admitted to those pages and refused the reads they are built
+    # on. Widened, never narrowed — no caller who could read this before loses
+    # it. See the note on `list_shifts`.
+    current_user: User = Depends(
+        require_permission("scheduling.view", "scheduling.manage")
+    ),
 ):
     """List all assignments for a shift"""
     service = SchedulingService(db)
