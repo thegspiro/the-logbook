@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events and Training pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Events and Training pages that sit beside their
+  administration hub rather than under it.** Both hubs are tab-based and live at
+  `/events/admin` and `/training/admin`, while their pages are siblings —
+  `/training/programs`, not `/training/admin/programs` — so no amount of walking
+  the URL reaches the hub. Shift Templates, Event Analytics, Programs, the
+  programme detail, Course Library, Skills Testing, Cohorts and the compliance
+  configuration now show the way back to Administration, and only to a viewer
+  whose grants open it.
+
+**Fixed**
+
+- **The training trail no longer calls the hub something the hub does not call
+  itself.** Programs and the programme detail hand-built their trail and labelled
+  it "Admin", while the hub page, the navigation entry and the breadcrumb
+  registry all called it "Training Administration" — one page under two names.
+  The hub crumb is now taken from the registry, so it cannot drift again.
+- **The programme detail no longer repeats the programme's name.** The trail
+  ended with the name that the heading directly below it already carried.
+
 ### Security: outbound integration requests had no response-size cap (2026-09-06)
 
 **Fixed**
@@ -49,6 +72,180 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   form was open left a Create Shift button on screen that would 403. The form
   now closes with the permission, gated at `createShiftOpen` so the dialog-stack
   registration and the body scroll lock go with it rather than being stranded.
+
+### The shifts nobody closed out now have a list, not just a number (2026-09-05)
+
+**Added**
+
+- **`/scheduling/admin/closeout` — the close-out queue.** Every shift that has
+  ended and was never closed, oldest first, with the wait on each row. A shift
+  nobody closed leaves no trace on the board, which draws the future, so the only
+  sign of one was the Scheduling Administration hub's **To close out** number:
+  how many there are, never which. Finding them meant paging back through the
+  calendar a day at a time. The settings that govern what close-out asks for are
+  shown beneath the queue, read-only, each linking to the section that owns it.
+- **A shift still running is not backlog.** What counts as ended is
+  `shiftEndInstant` — a shift's `end_time`, else its start plus the department's
+  open-ended cushion, the same number the roster lock stands on and the same rule
+  the server's own backlog count uses. A shift with no recorded end is not a
+  malformed shift: a crew goes out and comes back when the job is done.
+- **Cancelled shifts are excluded.** Nothing ran, so there is nothing to record,
+  and counting them makes a backlog that can never reach zero.
+
+**Changed**
+
+- **`shiftEndInstant` is now exported from `shiftBoard.ts`** and `rosterDeadline`
+  reads through it rather than recomputing the same fallback. Three answers
+  depend on when a shift ended — when the roster locks, whether the shift is
+  still running, and whether it is waiting to be closed — and they must not
+  drift apart. No behaviour change: the lock computes exactly what it did.
+- **The Scheduling Administration hub gains an "After the shift" heading.**
+  Closing a shift out is work waiting on somebody; reporting is what you read
+  afterwards, so it is not a row under Reporting.
+- **`docs/SCHEDULING_MODULE.md` no longer describes a superseded fix.** It
+  claimed the hub's Short-staffed metric reads the seat list with a `JSON_TYPE`
+  guard; that implementation was replaced by
+  `SchedulingService.filter_shifts_with_open_positions` before the change
+  describing it landed, and the paragraph survived the merge. It now records what
+  the two rules actually are and why they can differ.
+
+**Known, and deliberate**
+
+- **There is one close-out implementation and this page is not it.** A department
+  recording a call count gets the existing three-step wizard, opened in place on
+  the row with that shift's outstanding equipment checks and the department's own
+  blocking rule. Every other department's close-out is the finalize checklist
+  inside the shift panel, which reads that shift's attendance, equipment checks
+  and manual hours — so the row opens the shift instead. Re-rendering that
+  checklist here would be a second copy of a flow that decides what goes on a
+  member's record.
+- **A failed equipment-checklist lookup is not "nothing outstanding".** That
+  endpoint requires an Inventory grant `scheduling.manage` does not imply, so it
+  refuses an ordinary scheduling officer — and reading the refusal as an empty
+  list would open the close-out wizard with its override control hidden while
+  the server declined every attempt to finish, with nothing on screen saying
+  why. The row reports the failure and offers a retry.
+- **The queue reads the whole range before it says the range is clear.** The
+  shifts endpoint pages and orders by date ascending, and close-out state is
+  filtered client-side afterwards, so one page of a busy range could be entirely
+  closed-out shifts while the unclosed ones sat on a later page — under a
+  heading announcing that every shift in the range was closed out. A range wider
+  than the queue reads now says so rather than being quietly truncated.
+- **A superseded date range no longer wins.** Changing From and then To left two
+  requests in flight, and the older one could land last: the date controls
+  described one range while the queue described another.
+- **A failed settings load is reported, not spun on.** The scheduling store
+  deliberately leaves the settings unloaded on failure so the next mount retries
+  rather than caching a permissive window — which meant this page could not tell
+  a request in flight from one that failed, and showed a spinner that never
+  stopped. Those settings carry the cushion the queue is judged against, so the
+  page says what is missing and offers the retry.
+- **The default range is the department's calendar day**, not the browser's. A
+  UTC browser viewing an America/Los_Angeles department in its evening opened
+  the range on a day the department had not reached, and the opposite offset
+  dropped the department's own current day out of it.
+- **A department that records no calls is described as such.** `call_tracking`
+  has three modes and the summary handled two, so `off` — an explicit decision
+  not to be asked — was reported as "Individual call records".
+- **The cushion row links to the screen that owns it.** It is derived from
+  Inventory's Checklist Timing, and Scheduling settings expose no control for
+  it, so the old link landed on a page where the number shown does not appear.
+  It is a link only for a viewer who can open that screen, and plain text
+  otherwise.
+- **A scheduling manager can read what the administration pages show them.**
+  Permission matching is literal — an exact name, `scheduling.*` or `*` — so
+  nothing makes `manage` imply `view`, and every page under `/scheduling/admin`
+  is gated on `manage` alone. A position holding only that grant was admitted to
+  those pages and then refused the data they exist to display: the close-out
+  queue and the staffing-gaps list could only show their load-failure state, the
+  shift panel's uncaught assignments request rejected its whole load, and Shift
+  Planning could not list a template or a pattern at all. Nine reads now accept
+  either grant — the shift list, a shift and its assignments, attendance and
+  calls, and templates and patterns with their detail routes. A widening, so
+  nobody who could read them before loses anything. The member's own surfaces —
+  the calendars, the summary, time-off — deliberately keep the narrower gate,
+  and both halves are pinned by a test, because this was found one endpoint at a
+  time, twice.
+- **A shift that ended earlier today can be closed out today.** The shift
+  panel's close-out button stood on a day-granular `isPast`, while the server's
+  own rule is that the shift's end has passed — so a shift finishing at 06:00
+  offered no button until the following day, and the new close-out queue, which
+  judges the same instant the server does, listed it with nowhere to act. The
+  button now matches the server; every other control on that panel is unchanged.
+- **The mobile ratchet measures the close-out page.** Its route entry declared
+  no permissions, so the fixture held only the base grants and the check
+  measured `ProtectedRoute`'s Access Denied screen — which passes every budget
+  while testing nothing.
+- **A failed checklist lookup blocks close-out only where the department does.**
+  The fix above went too far in one direction: `finalize_shift` looks at
+  outstanding equipment checks only when `require_end_of_shift_checks` is
+  enabled, so refusing to open the wizard everywhere shut an officer out of a
+  close-out the API would have accepted. It blocks where the server blocks, and
+  reports the failure without blocking where it does not.
+- **The checklist status is re-read every time a row is opened.** Cached, an
+  officer who cancelled the wizard with a check outstanding, waited for the crew
+  to finish it, and reopened the row was shown the same stale answer and made to
+  record an override for work already done.
+- **A reversed date range is refused, not answered.** With `To` earlier than
+  `From` the endpoint applies both bounds and returns nothing, which this screen
+  would have presented as "every shift in this range is closed out" — an invalid
+  input turned into a confident audit result.
+- **A failed settings-summary load is reported, with a retry.** A dash on every
+  row is indistinguishable from the initial loading state, so a transient
+  failure left the panel permanently blank and its editing links unreachable,
+  recoverable only by navigating away and back.
+- **The queue keeps up with the clock.** `useSignupWindow` re-renders on a
+  30-second tick but returns one identity across ticks, so a `useMemo` keyed on
+  it alone froze the queue at first render: a shift whose end passed, or an
+  open-ended one whose cushion expired, never appeared while the page stayed
+  open, and every waiting label stayed at the age it was first drawn.
+- **A slower row cannot replace the wizard you just opened.** Only the clicked
+  row was disabled while its checklists loaded, so a second row could be started
+  first and then displaced by the first click's late answer.
+- **Call types are described only where close-out asks for them.** The wizard
+  renders for count-only departments alone, so naming the types "the breakdown
+  the close-out wizard asks for" described a screen a detailed or off department
+  never sees.
+- **Another row cannot silently discard an open close-out.** The wizard keeps
+  the step being edited — attendance times, call counts — in local state until
+  Next is pressed, and opening a different row unmounts it, so one click threw
+  away typing with no warning. The other rows are held while a wizard is open;
+  the open row's own exit is still there, so switching is a decision rather than
+  an accident.
+- **The call-volume row claims nothing until the settings load.** Its value
+  showed a dash while the line beneath it asserted that calls are logged per
+  incident — a concrete rule, false for a count-only or off department, stated
+  exactly when nothing had read the setting.
+- **The queue opens on six months, not one, and says what it checked.** The
+  hub's **To close out** metric has no earliest date — it counts a shift left
+  unclosed three years ago — so a one-month default let an officer follow a
+  count of three straight into a page reporting the range clear, with the work
+  that sent them there outside it. The default is wider, and where nothing is
+  found the page names the range it read and points at the **From** field,
+  rather than leaving a contradiction with the number on the hub.
+- **An unread equipment-check status is reported as unread, not as zero.** Where
+  the department does not block close-out on those checks a failed lookup no
+  longer stops the wizard opening — the server does not consult them there — but
+  proceeding silently would have put the fabricated zero back one branch over
+  from where it was taken out. The row says nothing read the status.
+- **An open row always has a way out.** The wizard renders nothing at all when
+  its own state request fails — it reports the error and returns null — and the
+  row had already hidden the button that opened it, leaving an empty card whose
+  only escape was a range-level Refresh that does not look related to it.
+- **Refreshing the range cancels a preparation still in flight.** A checklist
+  request left running stayed current and would reopen its wizard on top of the
+  refreshed list: the row an officer closed by refreshing, coming back on its
+  own a moment later.
+- **The close-out settings mirror meets the 44px touch minimum.** Its five value
+  links were 14px of text, which is what the mobile ratchet found the moment it
+  started measuring the page instead of an Access Denied screen. Every inline
+  Retry on the page is a real tap target too — a failure state on a phone is
+  exactly when somebody needs to hit it.
+- **The page is department-wide and requires `scheduling.manage`**, like every
+  page in Scheduling Administration. **A shift officer loses nothing:** the shift
+  panel grants the named officer authority over their own shift's crew,
+  attendance, calls and close-out without a department-wide grant, mirroring the
+  backend, and that route is untouched.
 
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
