@@ -858,7 +858,7 @@ resumes rather than restarting:
 | `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`                                                       |
 | `/inventory/checklists/my`                          | My Equipment Checklists          | Authenticated                                                                |
 | `/inventory/admin/checklists`                       | Equipment Checklists admin       | `inventory.check_manage`                                                     |
-| `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`       |
+| `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `inventory.check_view`, `inventory.manage`                            |
 | `/inventory/admin/checklists/settings`              | Checklist Settings               | any of `settings.manage`, `organization.update_settings`                     |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory              | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
 | `/inventory/checklists`                             | Fleet Board                      | any of `inventory.check_view`, `scheduling.manage`                           |
@@ -901,10 +901,20 @@ scoped to a single apparatus as the Check log tab of Apparatus Detail.
 
 #### Expiring on Apparatus (`/inventory/admin/checklists/supply`) _(documented 2026-08-10)_
 
-The supply officer's worklist. Reached from **Scheduling → Supply** (the tile
-carries a count badge) and from the **Inventory Admin Hub**. Lists checklist
-positions that are expiring, expired, short of target, or reported used, each with
-the ready replacement stock behind it.
+The supply officer's worklist. Reached from the **Inventory Admin Hub**, the
+**Fleet Board** and **Apparatus Detail**. Lists checklist positions that are
+expiring, expired, short of target, or reported used, each with the ready
+replacement stock behind it.
+
+> **Narrowed 2026-09-06, for the reason the note above gives.** The route also
+> admitted `scheduling.manage`, which `GET /equipment-check/supply/expiring-items`
+> does not: a shift officer holding only it passed the guard and met a 403 on
+> load, reaching a page that rendered nothing but its failure state. Narrowed
+> rather than widening the endpoint, because the worklist is fleet-wide item
+> stock and expiry — inventory data, and a purely scheduling grant is not
+> authority to read it. The hub card and the two inbound links carried the same
+> over-wide reading and were corrected with it, so none of them now offers the
+> page to somebody it will refuse.
 
 | Control    | Options                                       |
 | ---------- | --------------------------------------------- |
