@@ -1031,6 +1031,17 @@ which merged before a review of it came back.
   only where every stored value really is a type that department has
   configured, checked against the report itself rather than against records
   that can change underneath it.
+- **Editing a draft report's call types lost the department's names for them.**
+  The draft editor offered the shift-report settings' own free-text list
+  ("Structure Fire") even on a report filed against a count-only shift, whose
+  stored types are the department's own — so the stored type did not show as
+  selected, and any chip an officer tapped landed beside it. The saved list then
+  mixed the two, and what was stored stopped resolving to a name and stopped
+  counting as a reason not to delete its type. The editor now offers the
+  department's own call types on those reports, showing each by the name the
+  department gave it, including one that has been retired or removed from
+  settings so it can still be seen and taken off. An edit that keeps them keeps
+  their meaning.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
