@@ -18,6 +18,7 @@ import type {
   TrainingCategory,
   TrainingType,
 } from '../types/training';
+import { Breadcrumbs } from '../components/ux';
 
 // ==================== Course Form Modal ====================
 
@@ -525,6 +526,9 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
       <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
+        {/* Not when embedded: this also renders inside a Training Administration
+            tab, where a trail would sit within the very hub it points at. */}
+        {!embedded && <Breadcrumbs underHub="/training/admin" />}
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           {embedded ? (
