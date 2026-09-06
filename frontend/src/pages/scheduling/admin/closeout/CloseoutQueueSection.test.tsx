@@ -106,6 +106,67 @@ describe('CloseoutQueueSection', () => {
     vi.useRealTimers();
   });
 
+  // The wizard's blocking rule is `requireChecks && outstanding > 0`, and the
+  // server enforces checks only when the department has enabled them. Making
+  // the lookup fatal everywhere shut an officer out of a close-out the API
+  // would have accepted — a worse failure than the fabricated zero it replaced.
+  it('opens the wizard despite a failed lookup where checks do not block', async () => {
+    storeState.requireEndOfShiftChecks = false;
+    mockGetShiftChecklists.mockRejectedValue(new Error('403'));
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getByRole('button', { name: /Close out/ }));
+
+    expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('not blocking');
+    expect(screen.queryByText(/equipment checks could not be read/)).not.toBeInTheDocument();
+  });
+
+  // Cancel with a check outstanding, the crew finishes it, reopen: a cached
+  // answer forces an override for work that has since been done.
+  it('re-reads the checklists each time a row is opened', async () => {
+    mockGetShiftChecklists.mockResolvedValueOnce([
+      { templateId: 't1', templateName: 'End of shift', checkTiming: 'end_of_shift', isCompleted: false },
+    ]);
+    mockGetShiftChecklists.mockResolvedValueOnce([
+      { templateId: 't1', templateName: 'End of shift', checkTiming: 'end_of_shift', isCompleted: true },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getByRole('button', { name: /Close out/ }));
+    expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('1 outstanding');
+
+    // The wizard's own cancel is mocked away, so drive the same state change
+    // the officer's Refresh would: reload the range, which closes the row.
+    await user.click(screen.getByRole('button', { name: /Refresh/ }));
+    await user.click(await screen.findByRole('button', { name: /Close out/ }));
+
+    expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('0 outstanding');
+    expect(mockGetShiftChecklists).toHaveBeenCalledTimes(2);
+  });
+
+  // A reversed range is not an empty range. The endpoint applies both bounds
+  // and returns nothing, which this screen would present as an audit result.
+  it('refuses to read a reversed range rather than calling it clear', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+    mockGetShifts.mockClear();
+
+    await user.clear(screen.getByLabelText('From'));
+    await user.type(screen.getByLabelText('From'), '2026-09-30');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/earlier than/);
+    expect(screen.queryByText(/Every shift in this range is closed out/)).not.toBeInTheDocument();
+    // Clearing the field first leaves `From` empty for a moment, which is a
+    // legitimate open-ended lower bound and does load. The reversed pair never
+    // reaches the endpoint.
+    expect(mockGetShifts).not.toHaveBeenCalledWith(expect.objectContaining({ start_date: '2026-09-30' }));
+  });
+
   // The endpoint orders by date ascending and finalization is filtered here
   // afterwards, so a busy range's first page can be entirely closed-out shifts
   // while the unclosed ones sit on a later one. Reading one page and then

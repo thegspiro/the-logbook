@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../../test/utils';
 
 const mockGetFeatureSettings = vi.fn();
@@ -120,5 +121,26 @@ describe('CloseoutSettingsSummary', () => {
     expect(await screen.findByText('What close-out asks for')).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     expect(screen.queryByText('Block close-out')).not.toBeInTheDocument();
+  });
+
+  // A dash on every row is indistinguishable from the initial loading state, so
+  // a silent failure left this panel permanently blank with no way back except
+  // navigating away and returning — which is not an instruction anybody gave.
+  it('says the settings did not load, and recovers on retry', async () => {
+    mockGetFeatureSettings.mockRejectedValueOnce(new Error('nope'));
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/did not load/);
+
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: true,
+      open_ended_shift_cushion_hours: 12,
+      call_tracking: { mode: 'count_only', call_types: [] },
+    });
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Block close-out')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

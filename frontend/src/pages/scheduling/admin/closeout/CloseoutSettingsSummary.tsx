@@ -68,6 +68,8 @@ const callVolumeHint = (mode: string | undefined): string => {
 
 const CloseoutSettingsSummary: React.FC = () => {
   const [feature, setFeature] = useState<SchedulingFeatureSettings | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const { isModuleOn } = useEnabledModules();
 
@@ -76,16 +78,23 @@ const CloseoutSettingsSummary: React.FC = () => {
     void (async () => {
       try {
         const loaded = await schedulingService.getFeatureSettings();
-        if (!cancelled) setFeature(loaded);
+        if (!cancelled) {
+          setFeature(loaded);
+          setFailed(false);
+        }
       } catch {
-        // Non-critical: the queue above it is the page, and a dash reads as
-        // "not loaded" rather than as a value nobody set.
+        // Said, with a way out. A dash on every row is indistinguishable from
+        // the initial loading state, so a transient failure left this panel
+        // permanently blank and its editing links unreachable — and the only
+        // recovery was navigating away and back, which is not an instruction
+        // anybody was given.
+        if (!cancelled) setFailed(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   const mode = feature?.call_tracking?.mode;
   const canOpenChecklistTiming =
@@ -133,6 +142,20 @@ const CloseoutSettingsSummary: React.FC = () => {
       <p className="text-theme-text-muted mt-1 text-xs">
         Shown here, changed in Scheduling settings — one editing home, so two screens cannot overwrite each other.
       </p>
+      {failed && (
+        <div className="alert-warning mt-3 flex items-center gap-2 text-sm" role="alert">
+          <span className="flex-1">
+            These settings did not load, so the values below are not this department&rsquo;s.
+          </span>
+          <button
+            type="button"
+            className="mobile-touch-target px-2 font-semibold underline"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <dl className="mt-3 space-y-2">
         {rows.map((row) => (
           <div key={row.label} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
@@ -142,11 +165,14 @@ const CloseoutSettingsSummary: React.FC = () => {
             </dt>
             <dd className="text-theme-text-primary shrink-0 text-xs font-medium">
               {row.href ? (
-                <Link to={row.href} className="hover:underline">
+                // A real tap target, not 14px of text. The mobile ratchet holds
+                // every route to a 44px minimum and these five links were the
+                // whole of this page's debt against it.
+                <Link to={row.href} className="mobile-touch-target px-1 hover:underline">
                   {row.value}
                 </Link>
               ) : (
-                row.value
+                <span className="mobile-touch-target px-1">{row.value}</span>
               )}
             </dd>
           </div>

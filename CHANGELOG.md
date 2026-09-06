@@ -104,6 +104,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no permissions, so the fixture held only the base grants and the check
   measured `ProtectedRoute`'s Access Denied screen — which passes every budget
   while testing nothing.
+- **A failed checklist lookup blocks close-out only where the department does.**
+  The fix above went too far in one direction: `finalize_shift` looks at
+  outstanding equipment checks only when `require_end_of_shift_checks` is
+  enabled, so refusing to open the wizard everywhere shut an officer out of a
+  close-out the API would have accepted. It blocks where the server blocks, and
+  reports the failure without blocking where it does not.
+- **The checklist status is re-read every time a row is opened.** Cached, an
+  officer who cancelled the wizard with a check outstanding, waited for the crew
+  to finish it, and reopened the row was shown the same stale answer and made to
+  record an override for work already done.
+- **A reversed date range is refused, not answered.** With `To` earlier than
+  `From` the endpoint applies both bounds and returns nothing, which this screen
+  would have presented as "every shift in this range is closed out" — an invalid
+  input turned into a confident audit result.
+- **A failed settings-summary load is reported, with a retry.** A dash on every
+  row is indistinguishable from the initial loading state, so a transient
+  failure left the panel permanently blank and its editing links unreachable,
+  recoverable only by navigating away and back.
+- **The close-out settings mirror meets the 44px touch minimum.** Its five value
+  links were 14px of text, which is what the mobile ratchet found the moment it
+  started measuring the page instead of an Access Denied screen. Every inline
+  Retry on the page is a real tap target too — a failure state on a phone is
+  exactly when somebody needs to hit it.
 - **The page is department-wide and requires `scheduling.manage`**, like every
   page in Scheduling Administration. **A shift officer loses nothing:** the shift
   panel grants the named officer authority over their own shift's crew,

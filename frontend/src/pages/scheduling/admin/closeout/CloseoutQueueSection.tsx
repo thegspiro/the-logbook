@@ -102,12 +102,26 @@ const CloseoutQueueSection: React.FC = () => {
   // them describes another, and nothing on screen says so.
   const requestId = useRef(0);
 
+  // `To` earlier than `From` is not an empty range, it is a range nobody meant.
+  // The endpoint applies both bounds without cross-field validation and returns
+  // zero rows, which this screen would then present as "every shift in this
+  // range is closed out" — an invalid input turned into a confident audit
+  // result.
+  const rangeReversed = Boolean(from && to && from > to);
+
   const load = useCallback(async () => {
     const mine = ++requestId.current;
+    setOpenRow(null);
+    if (rangeReversed) {
+      setShifts([]);
+      setFailed(false);
+      setTruncated(false);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFailed(false);
     setTruncated(false);
-    setOpenRow(null);
     try {
       // Paged rather than capped at one request. The endpoint orders by date
       // ascending and finalization is filtered here afterwards, so the first
@@ -142,7 +156,7 @@ const CloseoutQueueSection: React.FC = () => {
     } finally {
       if (mine === requestId.current) setLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, rangeReversed]);
 
   useEffect(() => {
     void load();
@@ -167,27 +181,42 @@ const CloseoutQueueSection: React.FC = () => {
     // the close-out is clear to run and the server would refuse it. The server
     // is the gate either way; this is about not telling the officer otherwise.
     //
-    // And a failure is a failure, never an empty list. The checklist endpoint
-    // wants `inventory.check_view` or `inventory.check_submit`, neither of
-    // which `scheduling.manage` implies — so this request 403s for a perfectly
-    // ordinary scheduling officer. Reading that as "no checks outstanding"
-    // opens the wizard with its override control hidden, and if the department
-    // blocks close-out on those checks the finalize call then refuses every
-    // attempt with nothing on screen explaining why. A refusal with no route
-    // forward is where a safety control turns into a workaround.
-    if (!checks[entry.shift.id]) {
-      setPreparing(entry.shift.id);
-      setChecksFailed(null);
-      try {
-        const summaries = await equipmentCheckService.getShiftChecklists(entry.shift.id);
-        setChecks((current) => ({ ...current, [entry.shift.id]: summaries }));
-      } catch {
+    // Read every time, never cached. An officer who cancels the wizard while a
+    // check is outstanding, waits for the crew to finish it, and reopens the
+    // row was otherwise shown the same stale answer and made to record an
+    // override for work that had since been done.
+    setPreparing(entry.shift.id);
+    setChecksFailed(null);
+    try {
+      const summaries = await equipmentCheckService.getShiftChecklists(entry.shift.id);
+      setChecks((current) => ({ ...current, [entry.shift.id]: summaries }));
+    } catch {
+      // A failure is a failure, never an empty list: the endpoint wants
+      // `inventory.check_view` or `inventory.check_submit`, neither of which
+      // `scheduling.manage` implies, so it refuses an ordinary scheduling
+      // officer. Reading that as "no checks outstanding" hides the wizard's
+      // override control.
+      //
+      // But it only *blocks* where the server does. `finalize_shift` looks at
+      // outstanding checks only when the department has enabled
+      // `require_end_of_shift_checks`; everywhere else the count is a note on
+      // the screen and nothing more. Refusing to open the wizard there would
+      // shut an officer out of a close-out the API would have accepted — a
+      // worse failure than the one this catch exists to prevent, and one this
+      // page introduced by treating every lookup as load-bearing.
+      setChecks((current) => {
+        const next = { ...current };
+        delete next[entry.shift.id];
+        return next;
+      });
+      if (requireEndOfShiftChecks) {
         setChecksFailed(entry.shift.id);
         setPreparing(null);
         return;
       }
-      setPreparing(null);
+      setChecksFailed(null);
     }
+    setPreparing(null);
     setOpenRow(entry.shift.id);
   };
 
@@ -221,18 +250,31 @@ const CloseoutQueueSection: React.FC = () => {
           Refresh
         </button>
         <p className="text-theme-text-muted min-w-0 flex-1 text-right text-sm" role="status" aria-live="polite">
-          {loading || (!settingsLoaded && !settingsFailed)
-            ? 'Checking…'
-            : failed || settingsFailed
-              ? ''
-              : `${queue.length} shift${queue.length === 1 ? '' : 's'} waiting to be closed out`}
+          {rangeReversed
+            ? ''
+            : loading || (!settingsLoaded && !settingsFailed)
+              ? 'Checking…'
+              : failed || settingsFailed
+                ? ''
+                : `${queue.length} shift${queue.length === 1 ? '' : 's'} waiting to be closed out`}
         </p>
       </div>
+
+      {rangeReversed && (
+        <div className="alert-warning text-sm" role="alert">
+          The <strong>To</strong> date is earlier than <strong>From</strong>, so this range holds no days at all.
+          Nothing has been checked.
+        </div>
+      )}
 
       {failed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
           <span className="flex-1">This range did not load, so nothing below is a complete answer.</span>
-          <button type="button" className="font-semibold underline" onClick={() => void load()}>
+          <button
+            type="button"
+            className="mobile-touch-target px-2 font-semibold underline"
+            onClick={() => void load()}
+          >
             Retry
           </button>
         </div>
@@ -249,7 +291,11 @@ const CloseoutQueueSection: React.FC = () => {
             The department&rsquo;s scheduling settings did not load, so a shift with no recorded end cannot be judged
             against its cushion. Nothing is listed below.
           </span>
-          <button type="button" className="font-semibold underline" onClick={loadDepartmentSettings}>
+          <button
+            type="button"
+            className="mobile-touch-target px-2 font-semibold underline"
+            onClick={loadDepartmentSettings}
+          >
             Retry
           </button>
         </div>
@@ -265,13 +311,13 @@ const CloseoutQueueSection: React.FC = () => {
         </div>
       )}
 
-      {(loading || (!settingsLoaded && !settingsFailed)) && (
+      {!rangeReversed && (loading || (!settingsLoaded && !settingsFailed)) && (
         <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       )}
 
-      {!loading && settingsLoaded && !failed && !truncated && queue.length === 0 && (
+      {!loading && !rangeReversed && settingsLoaded && !failed && !truncated && queue.length === 0 && (
         <EmptyState
           icon={CheckCircle2}
           title="Every shift in this range is closed out"
@@ -331,7 +377,11 @@ const CloseoutQueueSection: React.FC = () => {
                     This shift&rsquo;s equipment checks could not be read, so close-out is not offered here. It needs an
                     Inventory checklist permission your account may not hold.
                   </span>
-                  <button type="button" className="font-semibold underline" onClick={() => void openCloseout(entry)}>
+                  <button
+                    type="button"
+                    className="mobile-touch-target px-2 font-semibold underline"
+                    onClick={() => void openCloseout(entry)}
+                  >
                     Retry
                   </button>
                 </div>
