@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
+**Fixed**
+
+- **`CHANGELOG.md` is marked `merge=union` in a new `.gitattributes`.** Every
+  PR adds its entry at the top of `## [Unreleased]`, so any two open at once
+  write different content at the same offset and git reports a conflict -- not
+  over substance, but because a textual merge has no rule for ordering two
+  additions. On 2026-09-06 this was the only conflict left across all ten open
+  PRs, hitting seven of them, and each one costs a merge, a resolution and a
+  full CI re-run.
+
+  Union is sound for this file specifically because entries are independent and
+  additive: no PR edits another's entry, so taking both cannot drop an intended
+  change. It is deliberately **not** applied to
+  `scripts/screenshots/audit_baseline.txt`, the other file that had been
+  conflicting -- branches delete lines there, and union would silently
+  resurrect every deleted entry.
+
+  The tradeoff it does carry: two branches editing the _same_ entry get both
+  revisions as adjacent duplicate lines rather than a conflict. That is visible
+  in review, and is recorded in the `.gitattributes` comment.
+
 ### A hand-written hook dependency array can no longer drift (2026-09-06)
 
 **Fixed**
