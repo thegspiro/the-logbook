@@ -2758,3 +2758,35 @@ Fulfilment now resolves the request to the **variant** and offers all of its
 sibling rows, so what you can fulfil from matches the availability the member
 was shown when they asked. Rows outside that variant — a different size, colour,
 style or product — stay excluded, exactly as before.
+
+## Retiring is the only way to deactivate an item _(2026-09-06)_
+
+**A plain edit could take an item out of active inventory while a member still
+had it.**
+
+The **Retire** action has always had safeguards: it refuses to deactivate an
+item that is assigned, checked out, or — for pooled stock — has an unreturned
+issuance, and it keeps the item's other fields consistent with being retired.
+
+The ordinary edit form had none of them. Setting an item inactive, or setting
+its status and condition to retired, removed it from every active list and
+picker with no checks at all — and left it in a state where it could be handed
+out again straight afterwards.
+
+**Editing an item no longer offers either route.** If you need an item out of
+service, use **Retire**. It also now re-checks who holds the item at the moment
+you retire it, rather than when you opened the screen.
+
+Three related fixes:
+
+- **Medical-supplies managers can retire medical items again.** The retire
+  action used to live only on the general inventory permission, so closing the
+  gap above would have left a manager holding only the medical-supplies grant
+  with no way to retire anything. Medical supplies has its own retire action
+  now, under the permission that screen already uses.
+- **An item's detail page shows current stock for lot-tracked consumables.**
+  The list already worked this out from dated lots; the detail page did not, and
+  could show an older figure.
+- **Every category appears in the pickers.** A department with a long category
+  list could have categories past an internal cap silently missing from every
+  picker and filter.

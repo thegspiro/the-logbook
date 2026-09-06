@@ -1072,3 +1072,45 @@ The product and variant identity the catalog groups by is now one definition
 (`_product_key` / `_variant_key` / `_variant_identity`), consumed by both the
 grouping and the fulfilment narrowing rather than restated on each side — which
 is what let the two drift apart in the first place.
+
+## Retiring is the only way to deactivate an item _(2026-09-06)_
+
+**A generic item edit could deactivate equipment still checked out.**
+
+The dedicated retire action blocks deactivation while an item is assigned,
+checked out, or (for pooled stock) carries an unreturned issuance, and keeps the
+item's other fields consistent with being retired. **The general item-update
+path had none of that**, so a plain edit turning an item inactive — directly, or
+by setting its status and condition to retired without touching that flag —
+removed it from every active list and picker with no safeguards, and left it in
+a state where it could still be handed out again immediately.
+
+Editing an item **no longer accepts either route**. Retiring is the only way to
+deactivate one.
+
+The retire action itself now **re-checks the item's current holder immediately
+before deactivating**, closing a narrow window in which a member could be
+assigned the item in the instant before it was retired.
+
+### Three knock-ons
+
+- **Medical-supplies managers lost their retire path when the gap closed.** The
+  dedicated retire action existed only on the general inventory permission, so
+  a manager holding only the medical-supplies grant had no way to retire a
+  medical item once editing stopped accepting it. Medical supplies now has its
+  own retire action under the same permission every other action on that screen
+  uses.
+- **An item's detail page could show stale stock for lot-tracked consumables.**
+  The list view already computed on-hand stock from dated lots for any item
+  stocked that way; the single-item detail page — medical supplies and general
+  inventory alike — did not, and could show the older quantity figure.
+- **A large category list could lose categories from pickers.** Category pickers
+  (medical supplies, general inventory and CSV import) only ever fetch the
+  complete list, with no lower page to reach, so a low internal cap meant
+  anything past it was **silently absent** from every picker and filter.
+
+### Also
+
+Receiving an item's very first stock lot at the same moment as a quantity
+correction could record the wrong opening count — including losing it entirely
+if the item had nothing on hand yet.

@@ -438,3 +438,38 @@ Pagination now applies in the SQL query itself. **No response shape or ordering
 changed** for any request within the documented row limits, so nothing needs
 re-checking after the upgrade — pages simply stop getting slower as history
 accumulates.
+
+### Retiring is now the only way to deactivate an item _(2026-09-06)_
+
+**A plain edit could take an item out of active inventory while a member still
+held it.**
+
+The dedicated **Retire** action blocks deactivation on an item that is
+assigned, checked out, or (for pooled stock) has an unreturned issuance, and
+keeps the item's other fields consistent with being retired. The general
+item-edit path had none of that — so setting an item inactive, either directly
+or by setting its status and condition to retired, removed it from every active
+list and picker with no safeguards, and left it in a state where it could still
+be handed out again immediately afterwards.
+
+**Editing an item no longer accepts either route.** Retiring is the only way to
+deactivate one, and the retire action now re-checks the item's current holder
+immediately before deactivating — closing a narrow window in which a member
+could be assigned the item an instant before it was retired.
+
+Three knock-on fixes went with it:
+
+- **A medical-supplies manager without broader inventory access lost the
+  ability to retire a medical item.** Closing the gap above removed their only
+  path, because the retire action existed solely on the general inventory
+  permission. Medical supplies now has its own retire action, under the same
+  medical-supplies permission every other action on that screen already uses.
+- **An item's detail page could show stale stock for consumables tracked by
+  lot.** The list view already computed on-hand stock from dated lots; the
+  single-item detail page — medical supplies and general inventory alike — did
+  not, and could show the item's older quantity figure instead.
+- **A department with a large category list could find categories missing from
+  pickers.** Category pickers fetch the complete list with no lower page to
+  reach, and a low internal cap meant anything past it was silently absent from
+  every picker and filter. Raised well above any realistic department's
+  category count.
