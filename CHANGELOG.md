@@ -23,8 +23,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bare `httpx.AsyncClient` instead of using the shared helper and were
   not covered by the initial fix; they now go through
   `create_integration_client()` too (with PayPal's own vendor-tuned
-  timeout preserved via a new `timeout=` override), so every integration
-  connector's outbound calls are covered.
+  timeout preserved via a new `timeout=` override), so every **httpx-based**
+  integration connector's outbound calls are covered. **Named exception:**
+  Google Calendar's connector (`google_calendar_service.py`) builds its
+  client via `googleapiclient.discovery.build()`, which wires up its own
+  `httplib2`-based transport entirely outside `create_integration_client()`
+  — it is not covered by this fix. See
+  `docs/KNOWN_LIMITATIONS.md` ("Google Calendar's Connector Bypasses the
+  Shared HTTP Hardening") for why a safe fix wasn't forced through in this
+  pass and what it would take.
+- **`create_integration_client()`'s `**kwargs` interface silently dropped
+  `http2`, `http1`, and `cert`.** Because this factory always supplies an
+  explicit `transport=`, pinned httpx 0.28.1 never applied those kwargs to
+  the actual connection — a caller asking for `http2=True` or a client
+  certificate got neither, with no error. They're now forwarded to every
+  transport this factory builds (direct and proxy-mounted alike).
 
 ### A Create Shift form outlived the permission that opened it (2026-09-06)
 

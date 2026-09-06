@@ -411,6 +411,147 @@ pass-3 table above still stands for those two checks.
 
 ---
 
+## Follow-up round 5 (2026-09-06) — transport kwargs silently dropped; Google Calendar's coverage gap named
+
+### INT-8 — P2 — connection-affecting kwargs (`http2`, `http1`, `cert`) weren't applied to the wrapped transports — ✅ FIXED
+
+**What:** `create_integration_client()`'s existing `**kwargs` interface lets a
+caller pass any `httpx.AsyncClient` keyword through. For `http2=True`,
+`http1=False` or `cert=...`, that flowed to `httpx.AsyncClient(...)` only —
+and pinned httpx 0.28.1's `AsyncClient._init_transport()` returns whatever
+`transport=` it was given immediately, without ever building a transport
+from `verify`/`cert`/`trust_env`/`http1`/`http2`/`limits`:
+
+```python
+def _init_transport(self, ..., transport=None):
+    if transport is not None:
+        return transport
+    return AsyncHTTPTransport(verify=..., cert=..., http1=..., http2=..., ...)
+```
+
+`create_integration_client()` always supplies an explicit `transport=` (the
+size-limiting wrapper from INT-7), so the inner `AsyncHTTPTransport` this
+factory builds never saw `http1`/`http2`/`cert` at all — it silently kept
+HTTP/1 enabled, HTTP/2 disabled, and no client certificate regardless of
+what the caller asked for, with no error and nothing on `AsyncClient` itself
+reflecting the mismatch. Same shape as the `trust_env` gap fixed earlier
+this round: an opt-out/opt-in on the client's own constructor arguments was
+defeated by the factory's `transport=` override, just for a different set of
+kwargs.
+
+**Reproduced:** `create_integration_client(http2=True, trust_env=False)`
+against pre-fix code had `client._transport._transport._pool._http2 ==
+False`; the equivalent stock `httpx.AsyncClient(http2=True)` has it `True`.
+A `cert=` pointed at a nonexistent file raised nothing pre-fix (silently
+ignored) versus `FileNotFoundError` post-fix (proof the value now actually
+reaches `AsyncHTTPTransport`'s SSL-context construction — same verification
+shape as `test_create_integration_client_trust_env_false_transport_ignores_
+env_ssl_vars` used for `trust_env`).
+
+**Fix:** `http1`, `http2` and `cert` are pulled out as named parameters on
+`create_integration_client()` (default `http1=True`, `http2=False`,
+`cert=None`, matching stock httpx's own defaults) and forwarded to every
+`AsyncHTTPTransport(...)` this module constructs — the default transport,
+the explicit-`proxy=` mount, and each environment-derived proxy mount built
+by `_environment_proxy_mounts()` (which also gained the same three
+parameters). They're still passed to `httpx.AsyncClient(...)` too, matching
+stock behavior byte-for-byte (including its `http2=True` → `import h2`
+availability check, which now runs consistently with the transport actually
+requiring `h2` to negotiate HTTP/2).
+
+No current connector call site passes any of the three — this is the same
+"future caller must not silently lose what it asked for" posture as the
+`trust_env`/`proxy` parameters already documented in this function's
+docstring.
+
+**Guard tests** (`test_integration_response_size_cap.py`):
+`test_create_integration_client_http2_kwarg_reaches_the_transport`,
+`test_create_integration_client_http1_false_reaches_the_transport`,
+`test_create_integration_client_default_still_has_http2_disabled` (no
+regression to the no-kwarg default), `test_create_integration_client_cert_
+kwarg_reaches_the_transport`, and `test_environment_proxy_mounts_forwards_
+http2_and_cert` (the proxy-mount path specifically — a proxied request must
+not lose protocol selection or mTLS that the direct-connection transport
+was given).
+
+### INT-9 — P2 — Google Calendar's connector bypasses the response-size cap and any future centralized deadline — tracked, not fixed
+
+**What:** the CHANGELOG's INT-7 entry says "every integration connector's
+outbound calls are covered." That was already corrected once this round for
+PayPal (see the pass-3 note above); it is still inaccurate for a second,
+architecturally distinct connector. `GoogleCalendarService._build_service()`
+(`google_calendar_service.py`) does not use `httpx` at all — it calls
+`googleapiclient.discovery.build("calendar", "v3", credentials=creds)` with
+no `http=` argument, so `push_event`/`update_event`/`delete_event`/
+`test_connection`'s `.execute()` calls run through whatever transport
+`googleapiclient` builds for itself, not `create_integration_client()`.
+
+**Investigated, not guessed:** traced `build()`'s no-`http=` path to
+`googleapiclient._auth.authorized_http()`, which returns
+`google_auth_httplib2.AuthorizedHttp(credentials, http=build_http())` —
+`build_http()` is a plain `httplib2.Http()`. `httplib2.Http._conn_request()`
+(confirmed against the pinned version, `httplib2==0.32.0`) always ends with
+`content = response.read()` — an **unconditional, unbounded read** on the
+raw `http.client.HTTPResponse` from Python's stdlib, called with no byte
+limit and no streaming option. `httplib2` exposes no size-cap parameter of
+any kind; the only way to intercept the read is a custom `connection_type`
+passed to `httplib2.Http()` that overrides `getresponse()` to wrap the
+returned response's `.read`, reaching into `httplib2`'s private connection
+internals plus CPython's `http.client` implementation details — a materially
+different, deeper, and more fragile change than the httpx-based fixes in
+this document (including PayPal's, which was a one-line swap to the
+existing shared factory because PayPal was already on `httpx`). Per this
+round's own scope guidance, that fix was not attempted under review-loop
+time pressure without being able to verify it holds across `httplib2`
+versions and the two layers of wrapping (`google_auth_httplib2.
+AuthorizedHttp` around `httplib2.Http`) in between.
+
+**Decision: qualify and track, not force a fix.** The same reasoning
+applies to the `KNOWN_LIMITATIONS.md` wall-clock-deadline follow-up's
+proposed centralized fix (an `httpx.AsyncClient` subclass wrapping `send()`
+in `asyncio.timeout()`, constructed inside `create_integration_client()`):
+it would also miss Google Calendar entirely, for the identical reason — the
+connector never reaches that factory. Both documents are corrected below
+rather than left overclaiming coverage.
+
+**Impact:** same reachable population and severity class as INT-7 pre-fix,
+scoped to one connector — an org admin (`integrations.manage`) who connects
+a Google Calendar integration is trusting Google's API and OAuth token
+endpoint to behave; a compromised or malfunctioning response from either is
+not bounded by size or, once a deadline exists elsewhere, by time. Lower
+practical likelihood than the general case (the endpoint is Google's own,
+not an arbitrary self-hosted destination — there is no SSRF vector here,
+same as PayPal's), but the exception is real and now named rather than
+silently absent from every "every connector" claim.
+
+**Fix applied:**
+
+- `CHANGELOG.md`'s INT-7 entry: qualified from "every integration
+  connector's outbound calls are covered" to name the httpx-based scope and
+  the Google Calendar exception explicitly.
+- `docs/KNOWN_LIMITATIONS.md`: new entry ("Google Calendar's Connector
+  Bypasses the Shared HTTP Hardening") tracking this as an open, scoped
+  follow-up, and the existing wall-clock-deadline entry corrected to note
+  its proposed fix would not reach Google Calendar either.
+
+**Not fixed this round** — reaching `httplib2`'s read path safely needs its
+own dedicated, verified change (a custom `connection_type` with a test
+proving it actually aborts an oversized `httplib2` response, not just that
+it compiles), tracked in `KNOWN_LIMITATIONS.md` rather than guessed at here.
+
+### Completion gate — follow-up round 5 (2026-09-06)
+
+| Check                                                                                                                 | Result                                                                    |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                         | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                                                                                  | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                             | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                     | ✅ 431 revisions, single head (`d7c1b95e2a40`), PASSED (no schema change) |
+| `pytest tests/test_integration_response_size_cap.py -v`                                                               | ✅ 25 passed                                                              |
+| backend tests, scope (`-k "integration or salesforce or paypal or webhook or calcom or google_calendar or calendar"`) | ✅ 2411 passed, 21 skipped (env-only), 0 failed                           |
+
+---
+
 ## Pass 2 (2026-08-31)
 
 **Backend:** `app/api/v1/endpoints/integrations.py` (710 L, 7 endpoints),

@@ -433,6 +433,75 @@ async def test_create_integration_client_headers_identity_wins_on_collision():
         await client.aclose()
 
 
+async def test_create_integration_client_http2_kwarg_reaches_the_transport():
+    """Codex, 2026-09-06: AsyncClient._init_transport (pinned httpx 0.28.1)
+    returns whatever transport= it is given immediately, without ever
+    applying verify/cert/trust_env/http1/http2/limits to it. Because this
+    factory always supplies an explicit transport=, an http2=True kwarg
+    passed through **kwargs to httpx.AsyncClient used to be silently
+    swallowed: the client claimed HTTP/2 but its actual connection pool kept
+    it disabled. http2= must now be forwarded to the wrapped
+    AsyncHTTPTransport so the underlying httpcore pool actually enables it."""
+    client = create_integration_client(http2=True, trust_env=False)
+    try:
+        pool = client._transport._transport._pool
+        assert pool._http2 is True
+    finally:
+        await client.aclose()
+
+
+async def test_create_integration_client_http1_false_reaches_the_transport():
+    """Same gap as above, for disabling HTTP/1 in favor of HTTP/2-only."""
+    client = create_integration_client(http1=False, http2=True, trust_env=False)
+    try:
+        pool = client._transport._transport._pool
+        assert pool._http1 is False
+        assert pool._http2 is True
+    finally:
+        await client.aclose()
+
+
+async def test_create_integration_client_default_still_has_http2_disabled():
+    """Sanity check: without an explicit http2=True, the pool must still
+    default to HTTP/1-only, matching stock httpx.AsyncClient()."""
+    client = create_integration_client()
+    try:
+        pool = client._transport._transport._pool
+        assert pool._http2 is False
+    finally:
+        await client.aclose()
+
+
+async def test_create_integration_client_cert_kwarg_reaches_the_transport():
+    """Codex, 2026-09-06: same _init_transport short-circuit as http2= above
+    — a cert= kwarg used to be silently dropped because it never reached the
+    AsyncHTTPTransport this factory constructs. Proven the same way
+    test_create_integration_client_trust_env_false_transport_ignores_env_ssl_vars
+    proves trust_env reaches the transport: an unreadable cert file must
+    cause AsyncHTTPTransport's SSL context construction to fail loudly,
+    which only happens if cert= actually reached the transport."""
+    with pytest.raises(FileNotFoundError):
+        create_integration_client(cert="/nonexistent/path/to/cert.pem")
+
+
+async def test_environment_proxy_mounts_forwards_http2_and_cert():
+    """The proxy-mount transport built by _environment_proxy_mounts() must
+    receive the same http1/http2/cert as the direct-connection transport —
+    a proxied request should not silently lose protocol selection or mTLS
+    just because it happened to go through a proxy mount."""
+    with patch.dict(
+        os.environ,
+        {"HTTP_PROXY": "http://proxy.example:8080", "HTTPS_PROXY": ""},
+        clear=False,
+    ):
+        mounts = _environment_proxy_mounts(MAX_RESPONSE_SIZE, http1=False, http2=True)
+        http_transport = mounts.get("http://")
+        assert isinstance(http_transport, _SizeLimitedTransport)
+        pool = http_transport._transport._pool
+        assert pool._http1 is False
+        assert pool._http2 is True
+
+
 async def test_create_integration_client_mounts_match_stock_httpx_resolution():
     """Parity check: given the same environment, the mounts
     create_integration_client() builds via _environment_proxy_mounts() must
