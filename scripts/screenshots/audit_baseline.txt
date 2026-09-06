@@ -116,3 +116,17 @@
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
 04-47-template-reminder-audience.png
+
+# Added 2026-09-06, and NOT a legacy entry — read this before assuming it is.
+#
+# Every line above predates the 2026-08-15 canvas move, per the header. This one
+# does not: 08-57 was captured fresh on 2026-09-06, re-captured once to check,
+# and reproduced the same 15px pale-gradient strip both times. So the modal case
+# the header describes as historical is still live — moving the themed canvas
+# from `body` to `html` did not cover a dialog whose overlay sits inside `body`.
+#
+# Kept as a baseline entry rather than a re-shoot because re-shooting does not
+# change it; the fix is in the overlay's own styling, not in the capture. Delete
+# this line when that is fixed — CI fails on a stale entry, which is what makes
+# the list shrink.
+08-57-template-reset-dialog.png
