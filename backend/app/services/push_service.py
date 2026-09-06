@@ -448,11 +448,20 @@ class PushService:
             return 0
 
         try:
+            # Capped here too, not just at registration: the cap in
+            # subscribe() only rejects *future* additions, so an account
+            # that already exceeded it before that fix shipped would
+            # otherwise still fan every notification out to all of them.
+            # Newest-first, so a trim always drops the same devices a
+            # member would expect to be least current.
             result = await self.db.execute(
-                select(PushSubscription).where(
+                select(PushSubscription)
+                .where(
                     PushSubscription.organization_id == str(organization_id),
                     PushSubscription.user_id == str(user_id),
                 )
+                .order_by(PushSubscription.created_at.desc())
+                .limit(_MAX_PUSH_SUBSCRIPTIONS_PER_USER)
             )
             subs = list(result.scalars().all())
         except Exception:

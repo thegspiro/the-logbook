@@ -472,6 +472,55 @@ class TestSend:
         assert sent == 2
         assert {r["path"] for r in received} == {"/phone", "/tablet"}
 
+    async def test_delivery_is_capped_for_an_account_that_predates_the_limit(
+        self, db_session, two_orgs, push_service_url, received, vapid_keys
+    ):
+        """MSG-13's cap in `subscribe()` only rejects *future* additions --
+        an account that already exceeded it before that fix shipped would
+        otherwise still fan every notification out to every legacy row.
+        Newest-first, so the devices actually reached are the ones a member
+        would expect to still be current."""
+        from datetime import datetime, timedelta, timezone
+
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_id, user_id = two_orgs["a"]
+        now = datetime.now(timezone.utc)
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER + 5):
+            p256dh, auth = _client_keys()
+            endpoint = f"{push_service_url}/device-{i}"
+            await db_session.execute(
+                text(
+                    "INSERT INTO push_subscriptions"
+                    " (id, organization_id, user_id, endpoint, endpoint_hash,"
+                    " p256dh, auth, created_at)"
+                    " VALUES (:id, :org, :user, :endpoint, :hash, :p256dh, :auth, :created)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "org": org_id,
+                    "user": user_id,
+                    "endpoint": endpoint,
+                    "hash": hash_endpoint(endpoint),
+                    "p256dh": p256dh,
+                    "auth": auth,
+                    # Oldest first (device-0 is oldest), so the newest
+                    # _MAX_PUSH_SUBSCRIPTIONS_PER_USER are device-5..24.
+                    "created": now + timedelta(seconds=i),
+                },
+            )
+        await db_session.commit()
+        assert await _count(db_session, "user_id", user_id) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER + 5
+        )
+
+        svc = PushService(db_session)
+        sent = await svc.send_to_user(org_id, user_id, "Drill", "1900")
+
+        assert sent == _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        reached = {r["path"] for r in received}
+        assert reached == {f"/device-{i}" for i in range(5, 25)}
+
     async def test_unconfigured_deployment_sends_nothing(
         self,
         db_session,
