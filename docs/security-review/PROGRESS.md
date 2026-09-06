@@ -18,15 +18,16 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 25 (Messaging & notifications), pass 3** — branch
 `claude/security-review-messaging-notifications`,
-pass 3 PR pending. Two new findings fixed (MSG-13: unbounded push-device
-registration; MSG-14: unescaped email subtitle), one flagged
-(MSG-15: push's send-time DNS-rebinding pin is skipped outside
-`ENVIRONMENT in (production, staging)`, deliberate for test infra, needs a
-design decision to close properly), and a doc correction (MSG-10 was
-already fixed on `main` — `KNOWN_LIMITATIONS.md` still described the old
-behavior). Full completion gate green — see the Log and
+[PR #2305](https://github.com/thegspiro/the-logbook/pull/2305). Two new
+findings fixed (MSG-13: unbounded push-device registration; MSG-14:
+unescaped email subtitle), one flagged (MSG-15: push's send-time
+DNS-rebinding pin is skipped outside `ENVIRONMENT in (production,
+staging)`, deliberate for test infra, needs a design decision to close
+properly), and a doc correction (MSG-10 was already fixed on `main` —
+`KNOWN_LIMITATIONS.md` still described the old behavior). Full completion
+gate green — see the Log and
 `docs/security-review/MSG-25-messaging-notifications.md` for detail.
-About to be pushed and opened.
+Subscribed; awaiting CI/review.
 
 ---
 
