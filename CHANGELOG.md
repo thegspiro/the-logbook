@@ -30,6 +30,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A failed settings load says so.** Both sections render every toggle `false`
   before their data arrives, which reads as a department that has turned the
   feature off. They now report the failure and offer a retry instead.
+### The set of paths that can create an account is now pinned (2026-09-06)
+
+**Added**
+
+- **`backend/tests/test_account_creation_paths.py`** records every route that
+  can put a live account in the database, and what gates each one. `users.create`
+  reads like the answer to "who can create an account here" and is not: three
+  places in `app/` construct a `User` row, and five request-reachable routes
+  reach them — direct creation, prospect transfer, two auto-transfer routes
+  behind pipeline step completion, and self-registration behind the
+  `REGISTRATION_ENABLED` setting. None of them is a hole; the transfer paths
+  enforce the same rank and role ceilings as `POST /users` and refuse the same
+  administrative-class-plus-rank pair, and the auto-transfer routes pass neither
+  rank nor roles. What was missing was a record, so a sixth path could be added
+  without anyone noticing the answer had changed. An AST sweep now fails on a
+  new `User(...)` anywhere under `app/`, naming the file and function, and the
+  gate on each known route is asserted so a silent widening or narrowing fails
+  in CI rather than in a review that happens to look.
 
 ### Events and Training record pages keep their trail in every state (2026-09-06)
 
@@ -59,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   links back to the record rather than inventing a title. The analytics page
   renders no trail at all when it has no event id, because it also serves
   platform-wide metrics where every crumb would be the page you are already on.
+
 ### Add Member asked a permission that gates the prospect pipeline (2026-09-06)
 
 **Fixed**
@@ -103,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selects as well. The two grants are held by the same positions in every
   seeded position and rank, so this changes no one's access today; it removes
   the second name.
+
 ### Staffing gaps inherits the fixes the close-out queue got (2026-09-06)
 
 **Fixed**
@@ -164,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it**. The parameter is now kept on failure, so Retry has something to retry,
   and is stripped only once the shift has actually opened or the officer
   dismisses the message.
+
 ### Security: clearing a saved report's name could 500 instead of returning a clear error (2026-09-06)
 
 **Fixed**
@@ -184,6 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rows. See `docs/KNOWN_LIMITATIONS.md` (RPT5-29-1).
 - See `docs/security-review/RPT5-29-reports-analytics.md` for the full
   writeup.
+
 ### Nobody could run a finance approval chain (2026-09-06)
 
 **Fixed**
@@ -227,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request", which surfaced as a one-off red months after the strategy landed,
   on an unrelated pull request. The pattern no longer emits two adjacent
   hyphens; single hyphens still generate.
+
 ### The program print sheet's Enrolled Members table could never render (2026-09-06)
 
 **Fixed**
