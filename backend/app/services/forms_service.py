@@ -968,17 +968,24 @@ class FormsService:
             if not form.allow_multiple_submissions:
                 if not submitted_by:
                     return None, "Authentication is required to submit this form"
-                # Serialize same-form submissions before checking. A plain
-                # check-then-insert allows two concurrent requests from the
-                # same member to both pass the duplicate check.
+                # Serialize same-form submissions before checking. Locking the
+                # Form row alone is not enough (CLAUDE.md pitfall #27): under
+                # REPEATABLE READ the duplicate check's own snapshot is fixed
+                # at this transaction's first read — here, the earlier
+                # get_form_by_slug() call above — so a plain SELECT after the
+                # lock still answers from before the other request committed.
+                # The duplicate check itself must be a locking read to see
+                # the latest committed row.
                 await self.db.execute(
                     select(Form.id).where(Form.id == str(form.id)).with_for_update()
                 )
                 prior = await self.db.execute(
-                    select(FormSubmission.id).where(
+                    select(FormSubmission.id)
+                    .where(
                         FormSubmission.form_id == str(form.id),
                         FormSubmission.submitted_by == submitted_by,
                     )
+                    .with_for_update()
                 )
                 if prior.scalar_one_or_none() is not None:
                     return None, "You have already submitted this form"

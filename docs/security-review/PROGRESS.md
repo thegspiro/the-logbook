@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 25 (Messaging & notifications)'s PR #2305 merged
-(`c24df34`). Rotation row 25 -> ✅. Next: 26 Forms.
+**None yet.** Feature 26 (Forms) pass 3 review complete (FORM-10 fixed,
+one item flagged) — PR not yet opened. Rotation row 26 -> ⏳ pending PR.
+Next: open the PR for Feature 26, tend it to green, then 27 Integrations.
 
 ---
 
@@ -9636,7 +9637,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | 🔄     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⏳     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
@@ -10763,3 +10764,32 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   `docs/security-review/MSG-25-messaging-notifications.md` (Pass 3).
   Rotation row 25 -> ⏳ pending PR. Next: open the PR, tend it to green,
   then 26 Forms.
+- **26 Forms ⏳** — third-lap pass. Loaded prior art (`CHECKLIST.md`,
+  `SEC-00-cross-cutting-baseline.md`, `docs/module-audit/forms.md`,
+  `docs/app-review/forms.md`, this feature's own passes 1-2) before reading
+  any code; re-verified every prior finding (FORM-1 through FORM-9, BXC-1)
+  against the current source — all still hold, nothing regressed. One new
+  finding: **FORM-10 (MED)** — the "one submission per person" duplicate
+  check in `submit_public_form` locked the `Form` row before checking for a
+  prior submission, but the check itself was a plain `SELECT`, which under
+  REPEATABLE READ answers from the snapshot taken at the transaction's
+  first read (`get_form_by_slug`, called before the lock section runs) —
+  the same class of bug as CLAUDE.md pitfall #27. Two concurrent
+  submissions from the same member (a double-click, or two tabs) could both
+  pass the check and both insert, defeating the setting entirely. Fixed by
+  making the duplicate check itself a locking read, matching the
+  FAC-45/MSG-13 precedent already established elsewhere in this codebase.
+  Guard test (`TestConcurrentDuplicateSubmissionCheck`) uses two genuinely
+  independent DB sessions and `asyncio.gather`, and reliably reproduces two
+  successful submissions on the unpatched query every run (the staleness is
+  a guaranteed REPEATABLE READ property, not a timing coin-flip). Also
+  flagged, not fixed: the equivalent authenticated (non-public)
+  `submit_form` path enforces no `allow_multiple_submissions` check at all
+  — a pre-existing scope question (mirrored into `KNOWN_LIMITATIONS.md`),
+  not a regression. Full completion gate green: flake8/black/isort clean;
+  migrations validated (no new migration this pass); 436/436 forms-scoped
+  and 11,472/11,472 full backend suite pass (one more than Feature 25's run,
+  from the new guard test); frontend `tsc`/`eslint` n/a (no frontend file
+  touched). Findings doc: `docs/security-review/FORM-26-forms.md` (Pass 3).
+  Rotation row 26 -> ⏳ pending PR. Next: open the PR, tend it to green,
+  then 27 Integrations.

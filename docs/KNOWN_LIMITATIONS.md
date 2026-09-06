@@ -3020,6 +3020,32 @@ path for any recipient's push, regardless of org, and requires either a
 misconfigured `ENVIRONMENT` on a real deployment or DNS compromise of a
 push vendor to matter at all.
 
+## FORM-10-related — `allow_multiple_submissions` Is Enforced Only On The Public Submit Path (2026-09-06)
+
+`Form.allow_multiple_submissions` is a single, general-purpose column with no
+hint in the schema that it applies to one submission channel only, but only
+`public/forms.py`'s `submit_public_form` (and the service method behind it)
+actually enforces it. The authenticated, non-public path
+(`POST /forms/{form_id}/submit` → `FormsService.submit_form`) never checks it
+at all — a member can submit the same "one submission per person" form
+repeatedly through that endpoint regardless of the setting.
+
+This has stood since the setting was introduced and every prior review pass
+(module audit, app-review, and security-review passes 1-2) scoped FORM-5
+(the sibling finding about this same column) to the public path specifically,
+so it is a pre-existing scope question rather than a regression. Whether the
+authenticated path should also honor it depends on what "multiple
+submissions" is meant to mean for an internally-submitted form — e.g. a
+recurring training acknowledgment is presumably meant to be resubmittable,
+while a one-time equipment request is not — which needs a product decision
+(most likely a separate setting, since the two channels' correct defaults
+may differ), not a guess encoded as a fix.
+
+Found by `docs/security-review/FORM-26-forms.md` (feature 26, pass 3,
+FORM-10 note). Not a cross-tenant or disclosure issue — the only effect is
+that a form-specific business rule silently doesn't apply to one of its two
+submission channels.
+
 ## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
 
 `member_qualifications` (`app/models/qualification.py`) **does** have a
