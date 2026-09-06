@@ -766,23 +766,29 @@ that opened them**, leaving their actions on screen after the grant went away.
 
 ### A public form could take two submissions from a member limited to one
 
-Set a public form to **one submission per person** and it could still take two
-from the same member, if both arrived at the same instant — a double-tap on
-Submit, or the form open in two tabs. The check for an earlier submission was
-reading a snapshot of the database from before it ran, so each of the two saw an
-empty history.
+A form limited to **one submission per person** could still take two from the
+same member, if both arrived at the same instant — a double-tap on Submit, or the
+form open in two tabs. The check for an earlier submission was reading a snapshot
+of the database from before it ran, so each of the two saw an empty history.
 
-**Teach it this way:** the setting now does what it says. Submissions already
+**Teach it this way:** the enforcement now does what it says. Submissions already
 recorded are untouched, so a form you suspect this happened on still has the
 duplicates in its responses list, and they are removed there like any other
 response.
 
-**Say the limitation out loud, because it is easy to assume otherwise.** The
-per-person limit applies to the **public link only**. A form filled in from
-inside the application by a signed-in member has never enforced it — that is
-long-standing behaviour, unchanged by this fix, and now recorded in
-`docs/KNOWN_LIMITATIONS.md`. If a department depends on one-per-person, they
-must collect through the public link.
+**Do not teach this as a setting your audience can go and change.** Two
+limits, both of which will otherwise generate support questions:
+
+- **The form builder has no control for it.** The limit is stored on the form and
+  enforced by the server, but no screen writes it and new forms default to
+  allowing multiple submissions — so today it can only be set by a caller using
+  the API directly. If somebody asks where the checkbox is, the answer is that
+  there isn't one yet.
+- **It covers the public link only.** A form filled in from inside the
+  application by a signed-in member has never enforced a per-person limit —
+  long-standing behaviour, not something this fix changed.
+
+Both are recorded in `docs/KNOWN_LIMITATIONS.md`.
 
 ---
 

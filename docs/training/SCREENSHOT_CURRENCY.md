@@ -69,6 +69,7 @@ These are worth handling as sweeps rather than one image at a time.
 | Phone bottom bar → Quick Add sheet | 390px viewport, member account (officer rows are gated and must not appear) |
 | My Shifts → Hours view | Three cards (this month / this year / all time) above the month table |
 | Gear request form — product step and size step | Two shots: category filters with one row per product; then the size step with the member's size preselected and an out-of-stock size labelled |
+| Inventory Administration → **Department Store** section | The four cards (Store Overview / Catalog / Orders / Payments) that are now the documented way into the store console. `18-storefront.md` sends readers here and nothing in the set shows it |
 
 ### Replace — the screen changed under the existing capture
 
@@ -88,6 +89,7 @@ These are worth handling as sweeps rather than one image at a time.
 | Training Programs as a member | Requirements and Templates tabs gone; the whole tab strip is hidden |
 | Course Library as a member | Add / Edit / Delete / Manage classes withheld |
 | Any settings screen on a phone | Section pills are 44px now, and the overflow row is a real scroll strip |
+| `18-02-store-admin.png` | The console is **Department Store** at `/inventory/admin/store`, not "Store Admin" at `/store/admin`. Title and address are both in frame, so this one capture dates the whole storefront guide. Shoot the Overview tab |
 
 ### Do not capture
 

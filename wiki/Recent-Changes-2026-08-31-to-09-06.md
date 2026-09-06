@@ -401,23 +401,29 @@ same window.
 
 ### A public form's "one submission per person" limit now holds _(2026-09-06)_
 
-**A form set to accept one submission per person could take two from the same
+**A form limited to one submission per person could take two from the same
 member** if both arrived at the same moment — a double-click on Submit, or the
-form open in two tabs or on two devices. The check that looked for an earlier
-submission read from a snapshot of the database taken before the check ran, so
-two submissions arriving together each saw "no previous submission" and both
-were filed.
+form open in two tabs. The check that looked for an earlier submission read from
+a snapshot of the database taken before the check ran, so two submissions
+arriving together each saw "no previous submission" and both were filed.
 
-The limit now holds. Nothing about the form or the setting changes, and
-submissions already recorded are untouched — if you have a form where you
-suspect this happened, the duplicates are still in the responses list and can be
-removed there.
+Submissions already recorded are untouched. If you have a form where you suspect
+this happened, the duplicates are still in the responses list and can be removed
+there.
 
-**One thing this does not cover.** The limit applies to the **public** form link
-only. A form submitted from inside the application, by a signed-in member, has
-never enforced a per-person limit — that is long-standing behaviour, not
-something this change altered, and it is now written down in
-`docs/KNOWN_LIMITATIONS.md`. If you rely on one-per-person, use the public link.
+**Two things to know before you go looking for this setting.**
+
+- **There is no control for it in the form builder.** The limit lives on the
+  form record and is enforced by the server, but nothing on the Forms screen
+  writes it, and new forms default to **allowing multiple submissions**. In
+  practice that means no department can turn one-per-person on from inside the
+  application today — only a caller using the API directly can set it. This is a
+  gap, not a change: the fix above hardened enforcement that was already there.
+  Recorded in `docs/KNOWN_LIMITATIONS.md`.
+- **It applies to the public form link only.** A form filled in from inside the
+  application by a signed-in member has never enforced a per-person limit. That
+  is long-standing behaviour, unchanged by this fix, and also recorded in
+  `docs/KNOWN_LIMITATIONS.md`.
 
 ### The inventory items page's location panel agrees with its list _(2026-09-06)_
 

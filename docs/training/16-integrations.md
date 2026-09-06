@@ -302,7 +302,8 @@ A payment settles an order automatically only when **both** hold:
 1. The payment reference contains exactly one order number in `ORD-YYYY-NNNN` form — read from PayPal's `invoice_id`, `custom_id`, or note.
 2. The amount equals that order's outstanding balance **exactly**.
 
-Anything else is recorded and left for a person under **Store Admin > Payments**:
+Anything else is recorded and left for a person under **Department Store >
+Payments**:
 
 | Outcome               | Meaning                                                           |
 | --------------------- | ----------------------------------------------------------------- |
@@ -326,7 +327,8 @@ The matcher reads whatever reference the payer or the department attached:
 
 ### Working the Review Queue
 
-**Store Admin > Payments** lists everything unresolved. For each entry:
+**Department Store > Payments** (`/inventory/admin/store?tab=payments`) lists
+everything unresolved. For each entry:
 
 - **Apply to order** — settles the order. For an unmatched payment, enter the order to credit first. This writes through the normal payment path, so the order timeline, the member's receipt email, and the window rollups all behave as if it had been marked paid by hand.
 - **Dismiss** — for payments that aren't store orders at all (a donation, a dues payment, a refund). An applied payment cannot be dismissed.
