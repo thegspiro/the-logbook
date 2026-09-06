@@ -939,13 +939,16 @@ test_subtitle_is_escaped` (MSG-14). Verified to fail against the
 
 ## Completion gate (pass 3)
 
-| Check                                                                                  | Result  |
-| -------------------------------------------------------------------------------------- | ------- |
-| `flake8 app/ tests/ alembic/`                                                          | pending |
-| `black --check app/ tests/ alembic/`                                                   | pending |
-| `isort --check-only app/ tests/ alembic/`                                              | pending |
-| `python3 scripts/validate_migrations.py --strict`                                      | pending |
-| backend tests, scope (`-k "push_service or email_theme or messaging or notification"`) | pending |
-| backend tests, full suite                                                              | pending |
-| `npx tsc --noEmit` (frontend)                                                          | pending |
-| `npx eslint .` (frontend)                                                              | pending |
+| Check                                                                                  | Result                                                        |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                          | clean (0 violations)                                          |
+| `black --check app/ tests/ alembic/`                                                   | clean (1503 files unchanged)                                  |
+| `isort --check-only app/ tests/ alembic/`                                              | clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                      | PASSED — 431 revisions, single head                           |
+| backend tests, scope (`-k "push_service or email_theme or messaging or notification"`) | 747 passed, 1 skipped (pre-existing, py_vapid/http-ece)       |
+| backend tests, full suite                                                              | 11,471 passed, 21 skipped (environment-only), 0 failed        |
+| `npx tsc --noEmit` (frontend)                                                          | 0 errors                                                      |
+| `npx eslint .` (frontend)                                                              | 0 errors, 3 pre-existing warnings (unrelated file, untouched) |
+
+No frontend file was modified by this pass, so `tsc`/`eslint` establish
+that the backend fixes didn't regress the frontend build.
