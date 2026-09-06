@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Housekeeping, not a feature pass** — branch
+`claude/security-review-progress-note-2301`,
+[PR #2302](https://github.com/thegspiro/the-logbook/pull/2302). Docs-only:
+corrects this file's own bookkeeping after the watchdog merge of PR #2301
+(feature 23, medical supplies, pass 10) below — clears the stale "PR #2301
+open" section and marks rotation row 23 done. No feature is under review
+on this branch. Recorded here anyway so a `/security-review` iteration
+that reads this file before #2302 merges tends this PR rather than
+reading a premature "None" and starting feature 24 concurrently with it.
+Once #2302 merges, clear this section — feature 24 is next.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies, pass 10) ✅ merged — PR #2301
+
+A 30-minute watchdog check found PR #2301 fully green and idle:
+`mergeable_state: clean`, all 17 CI checks passing, Codex review completed
+on the current head commit (`5d989ba`) with no unresolved blocking
+findings (MSUP-25 is an intentionally-scoped follow-up recorded in the
+findings doc, not a blocker). Merged it directly (`40cac247`) rather than
+leave a fully-green PR stalled, consistent with the departure recorded for
+PR #2251 above. Rotation row 23 → ✅. Next: 24 Meetings & minutes — left
+for the next `/security-review` iteration rather than started here, to
+avoid racing that session's own run.
+
+---
+
+**Superseded — the pass-10 write-up below is preserved for history.**
+
 **Feature 23 (Medical supplies), pass 3** — branch
 `claude/security-review-medical-supplies`,
 [PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). Initial
@@ -9525,7 +9554,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
