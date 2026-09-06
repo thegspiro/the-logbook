@@ -16,10 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 29 (Reports & analytics), pass 4** — branch
+**Feature 29 (Reports & analytics), pass 4 (round 2 / pass 5)** — branch
 `claude/security-review-reports-analytics-pass4`,
-[PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Subscribed;
-awaiting CI/review.
+[PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Extended with
+a second round rather than opened as a new PR — see the pass-5 log entry
+below. Subscribed; awaiting CI/review.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics, pass 5 — round 2 on PR #2344)
+
+PR #2344 (pass 4) was already open when this iteration started. Per the
+one-PR-per-feature rule, this round extends that same branch rather than
+opening a competing PR. Pass 4 was explicitly delta-only and named
+`reports_service.py`, `dashboard.py` and `label_service.py` as **not**
+re-read end to end since pass 3; this round supplied that full read.
+
+Found 2 real, verified gaps pass 4's delta-only scope could not have caught
+(both outside the delta it read) and fixed 1:
+
+1. **`compliance_status`/`training_summary`'s requirement breakdown re-derive
+   training compliance independently of the shared evaluator** in
+   `training_compliance.py` (profile scoping, waivers, date windows) —
+   Pitfall #29 shape: an org with no formal `ProgramEnrollment`s reads as
+   ~0% compliant on this report while `/dashboard/admin-summary` and the
+   compliance-matrix show the same members compliant, same day, same org.
+   Flagged (architecture/product decision), not fixed.
+2. **`PATCH /reports/saved/{id}`** used a bare `setattr` loop instead of
+   `apply_updates`, so an explicit `name: null` reached `db.commit()` against
+   a NOT NULL column and raised an uncaught `IntegrityError` (500) instead of
+   a 400. Fixed, matching the sibling `label_printer_service.update_printer`.
+
+Also re-verified pass 3's `list_waivers` org-scoping fix
+(`attendance_dashboard_service.py:309-320`) — still present, but landed via a
+_different_ feature's rotation pass (`6d784018`, meetings-minutes MM-14,
+since that service is also reached from `meetings.py`), not this one. Noted
+so as not to double-claim it.
+
+3 guard tests added
+(`TestSavedReportUpdateExplicitNull`). Full gate green: flake8/black/isort
+clean on `app/`, `tests/`, `alembic/` at CI's pinned versions; migrations
+PASSED (431 migrations, single head); 517/518 scoped tests pass (1 skipped,
+pywebpush env-only); frontend typecheck 0 errors, eslint 0 errors (no
+frontend files touched). Findings doc:
+`docs/security-review/RPT5-29-reports-analytics.md`. Rotation row 29 stays
+✅ (pending PR merge, unchanged from pass 4). Next: 30 Onboarding, once
+PR #2344 merges.
 
 ---
 
