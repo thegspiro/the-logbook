@@ -278,6 +278,46 @@ class TestWaivers:
         assert out[0]["member_name"] == "Jane Smith"
         assert out[0]["granted_by_name"] == "Bob Admin"
 
+    async def test_list_waivers_scopes_member_and_grantor_lookup_to_org(self):
+        """w.user_id/w.waiver_granted_by come off an already org-scoped
+        MeetingAttendee row today, but the name lookup must not rely on
+        that being the only guard — a future write path that skips it
+        would otherwise leak a cross-org member's name (pitfall 14a)."""
+        waiver = SimpleNamespace(
+            id="att1",
+            user_id="u1",
+            waiver_reason="Sick",
+            waiver_granted_by="admin",
+            waiver_granted_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        member = SimpleNamespace(full_name="Jane Smith")
+        grantor = SimpleNamespace(full_name="Bob Admin")
+        captured = []
+
+        async def _execute(stmt):
+            # The column list of a `select(User)` always mentions
+            # "organization_id" (it's a mapped column) even with no such
+            # filter — so check the WHERE clause specifically, not the
+            # whole compiled statement.
+            where_sql = str(
+                stmt.whereclause.compile(compile_kwargs={"literal_binds": True})
+            )
+            captured.append(where_sql)
+            if len(captured) == 1:
+                return _scalars([waiver])
+            if len(captured) == 2:
+                return _one(member)
+            return _one(grantor)
+
+        db = MagicMock()
+        db.execute = _execute
+
+        await AttendanceDashboardService(db).list_waivers("m1", "org-1")
+
+        member_query, grantor_query = captured[1], captured[2]
+        assert "organization_id" in member_query
+        assert "organization_id" in grantor_query
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

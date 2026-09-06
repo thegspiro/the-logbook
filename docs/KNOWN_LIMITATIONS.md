@@ -2880,6 +2880,21 @@ today), which lowers today's exploitability but does not change that the API
 itself grants any `meetings.manage` holder an unconditional, unaudited-before-
 this-pass, untracked approval with no self-check.
 
+**Update (pass 3, 2026-09-06):** the same missing state-machine guard is also
+reachable through the generic `PATCH /meetings/{id}` route — `MeetingUpdate.
+status` accepts any legal enum value including `"approved"`, and
+`MeetingsService.update_meeting` applies it via `apply_updates` with no
+transition check, so a plain edit can flip a meeting straight to `APPROVED`
+while leaving `approved_by`/`approved_at` at whatever they already were
+(typically still `None`) — a more silent version of the same gap, since it
+records no approval actor or timestamp at all. Same permission
+(`meetings.manage`) gates both routes, so this doesn't widen who can reach
+the gap, only how. Whichever option is chosen for the sibling `/approve`
+route above should also close this path — most likely by having
+`update_meeting` reject a client-supplied `status` transition into
+`APPROVED` and requiring the dedicated route (or its replacement) for that
+transition specifically.
+
 ## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record; an Independent Audit Entry May Survive (2026-08-31)
 
 `MessagingService.reconcile_recipients` rebuilds a published message's audience
