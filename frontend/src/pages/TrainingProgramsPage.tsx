@@ -219,15 +219,12 @@ const TrainingProgramsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Members without training.manage cannot open /training/admin, so the
-            Admin crumb only renders for users who can actually follow it. */}
-        <Breadcrumbs
-          items={[
-            { label: 'Training', path: '/training' },
-            ...(canManage ? [{ label: 'Admin', path: '/training/admin' }] : []),
-            { label: 'Programs' },
-          ]}
-        />
+        {/* The hub is a sibling of this page, not an ancestor, so the trail
+            cannot reach it from the URL. `underHub` splices it in with the
+            registry's own label and gate: a member without training.manage
+            does not see it, and it can no longer drift from the hub's name —
+            this trail used to call the page "Admin". */}
+        <Breadcrumbs underHub="/training/admin" />
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

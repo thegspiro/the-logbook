@@ -49,6 +49,27 @@ interface BreadcrumbsProps {
    * thing entirely.
    */
   omitCurrentPage?: boolean;
+  /**
+   * Insert an administration hub's crumb into the generated trail, for a page
+   * that belongs to that hub but does not sit under it in the URL.
+   *
+   * Events and Training put their hubs at `/events/admin` and `/training/admin`
+   * while their pages are siblings — `/training/programs`, not
+   * `/training/admin/programs` — so no amount of walking the URL produces the
+   * hub. The crumb is spliced in after the last ancestor the two paths share.
+   *
+   * Label and gate come from `BREADCRUMB_ROUTES`, so the trail cannot drift
+   * from the hub's own name, and a viewer whose grants do not open the hub
+   * simply does not see it — replacing the `canManage ? … : []` that two pages
+   * hand-rolled, one of which called the page "Admin" while the hub, the
+   * navigation and the registry all called it "Training Administration".
+   *
+   * An unregistered path inserts nothing rather than throwing; a trail must
+   * never break its page. `breadcrumbRoutes.test.ts` scans for every value
+   * used in source and fails on one the registry does not carry, so a typo is
+   * caught there rather than by its silence.
+   */
+  underHub?: string;
 }
 
 const PATH_LABELS: Record<string, string> = {
@@ -237,14 +258,59 @@ function generateBreadcrumbs(pathname: string, checkPermission?: (permission: st
   return { crumbs, endsAtCurrentPage };
 }
 
-export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '', omitCurrentPage = false }) => {
+/**
+ * Splice a sibling hub's crumb into a generated trail.
+ *
+ * The hub is inserted directly after the deepest ancestor it shares with the
+ * current page — `/training/admin` and `/training/programs` share `/training`,
+ * so the trail reads Training › Training Administration › Programs. Returns the
+ * trail untouched when the hub is unregistered, when the viewer's grants do not
+ * open it, or when it is already an ancestor and the generated trail therefore
+ * carries it.
+ */
+const withHubCrumb = (
+  crumbs: BreadcrumbItem[],
+  pathname: string,
+  hubPath: string,
+  canCheck: (permission: string) => boolean
+): BreadcrumbItem[] => {
+  const hub = BREADCRUMB_ROUTES[hubPath];
+  if (!hub || !canLinkCrumb(hubPath, canCheck)) return crumbs;
+  if (pathname === hubPath || pathname.startsWith(hubPath + '/')) return crumbs;
+
+  const hubSegments = hubPath.split('/').filter(Boolean);
+  const pageSegments = pathname.split('/').filter(Boolean);
+  let shared = 0;
+  while (shared < hubSegments.length - 1 && hubSegments[shared] === pageSegments[shared]) shared += 1;
+  // No shared ancestor means the hub is not this page's parent in any sense.
+  if (shared === 0) return crumbs;
+
+  const crumb: BreadcrumbItem = {
+    label: hub.label ?? titleCase(hubSegments[hubSegments.length - 1] ?? ''),
+    path: hubPath,
+  };
+  return [...crumbs.slice(0, shared), crumb, ...crumbs.slice(shared)];
+};
+
+export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
+  items,
+  className = '',
+  omitCurrentPage = false,
+  underHub,
+}) => {
   const location = useLocation();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const generated = generateBreadcrumbs(location.pathname, checkPermission);
 
   // Trimmed only when the trail was generated — see the prop.
   const trimmed = omitCurrentPage && !items;
-  const base = items ?? generated.crumbs;
+  // Explicit items are the caller's own trail; a hub they wanted would already
+  // be in it.
+  const generatedCrumbs =
+    underHub && !items
+      ? withHubCrumb(generated.crumbs, location.pathname, underHub, checkPermission ?? DENY_ALL)
+      : generated.crumbs;
+  const base = items ?? generatedCrumbs;
   const crumbs = trimmed ? base.slice(0, -1) : base;
 
   // Which crumb, if any, is the page being viewed. Explicit items keep the old

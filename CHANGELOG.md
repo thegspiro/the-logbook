@@ -75,6 +75,40 @@ Codex raised these on #2206 as it merged, so none were addressed there.
   promise: a result that lands after the form changed is now demonstrated to
   be discarded rather than asserted to be.
 
+### Events and Training pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Events and Training pages that sit beside their
+  administration hub rather than under it.** Both hubs are tab-based and live at
+  `/events/admin` and `/training/admin`, while their pages are siblings —
+  `/training/programs`, not `/training/admin/programs` — so no amount of walking
+  the URL reaches the hub. Shift Templates, Event Analytics, Programs, the
+  programme detail, Course Library, Skills Testing, Cohorts and the compliance
+  configuration now show the way back to Administration, and only to a viewer
+  whose grants open it.
+
+**Fixed**
+
+- **The training trail no longer calls the hub something the hub does not call
+  itself.** Programs and the programme detail hand-built their trail and labelled
+  it "Admin", while the hub page, the navigation entry and the breadcrumb
+  registry all called it "Training Administration" — one page under two names.
+  The hub crumb is now taken from the registry, so it cannot drift again.
+- **The programme detail no longer repeats the programme's name.** The trail
+  ended with the name that the heading directly below it already carried.
+
+### A Create Shift form outlived the permission that opened it (2026-09-06)
+
+**Fixed**
+
+- **The Create Shift form rendered on its own open state alone.** Both controls
+  that open it are already withheld from a member, and creating a shift is
+  `scheduling.manage`-gated on the server — but losing the permission while the
+  form was open left a Create Shift button on screen that would 403. The form
+  now closes with the permission, gated at `createShiftOpen` so the dialog-stack
+  registration and the body scroll lock go with it rather than being stranded.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**

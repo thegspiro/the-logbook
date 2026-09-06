@@ -137,6 +137,57 @@ describe('Breadcrumbs', () => {
     expect(screen.queryByRole('navigation', { name: /breadcrumb/i })).not.toBeInTheDocument();
   });
 
+  describe('underHub', () => {
+    it('splices the hub in after the ancestor it shares with the page', () => {
+      // /training/admin and /training/programs are siblings, so no amount of
+      // walking the URL produces the hub crumb.
+      grant('training.manage');
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/admin" />);
+
+      expect(crumbLinks()).toEqual(['/training', '/training/admin']);
+      expect(within(trail()).getByRole('link', { name: 'Training Administration' })).toBeInTheDocument();
+      expect(currentCrumbs()[0]).toHaveTextContent('Programs');
+    });
+
+    it('omits the hub for a viewer whose grants do not open it', () => {
+      // Replaces the hand-rolled `canManage ? … : []`: a member browsing the
+      // programme library from the member navigation is not under Admin, and
+      // offering the crumb would send them to a refusal.
+      grant();
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/admin" />);
+
+      expect(within(trail()).queryByText('Training Administration')).not.toBeInTheDocument();
+      expect(currentCrumbs()[0]).toHaveTextContent('Programs');
+    });
+
+    it('names the hub the way the registry does, not the way a caller guessed', () => {
+      // The two pages that hand-rolled this trail called the hub "Admin" while
+      // the hub, the navigation and the registry called it "Training
+      // Administration". One name per page.
+      grant('training.manage');
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/admin" />);
+
+      expect(within(trail()).queryByText('Admin')).not.toBeInTheDocument();
+    });
+
+    it('adds nothing when the hub is already an ancestor', () => {
+      // /scheduling/admin/reports sits under its hub, so the generated trail
+      // already carries it; splicing would repeat it.
+      grant('scheduling.manage');
+      renderAt('/scheduling/admin/reports', <Breadcrumbs underHub="/scheduling/admin" />);
+
+      expect(crumbLinks()).toEqual(['/scheduling', '/scheduling/admin']);
+    });
+
+    it('adds nothing for a hub the registry does not carry', () => {
+      // A typo must cost the trail its hub, never the page it decorates.
+      grant('training.manage');
+      renderAt('/training/programs', <Breadcrumbs underHub="/training/nope" />);
+
+      expect(crumbLinks()).toEqual(['/training']);
+    });
+  });
+
   describe('omitCurrentPage', () => {
     it('ends the trail at the parent', () => {
       grant('inventory.manage');
