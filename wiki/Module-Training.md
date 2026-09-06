@@ -1077,7 +1077,9 @@ renders phases and requirements only.
 
 > **Enrolled Members cannot currently render, and `Enrolled:` always reads 0.**
 > The page builds both from `program.enrollments`, but it loads the program from
-> `GET /training/programs/{id}`, whose `ProgramWithPhasesAndRequirements`
+> `GET /training/programs/programs/{id}` — the segment doubles because the
+> router mounts at `/training/programs` and its handler sits at
+> `/programs/{program_id}` — whose `ProgramWithPhasesAndRequirements`
 > response carries `phases`, `requirements` and `milestones` and **no
 > enrollments field**. The component types it as an optional extra, so nothing
 > errors — the list is simply always empty. Treat the enrolment count on a
@@ -1125,13 +1127,13 @@ Each source page now includes a **Print** button that navigates to the correspon
 
 ### Edge Cases
 
-| Scenario                            | Behavior                                                             |
-| ----------------------------------- | -------------------------------------------------------------------- |
-| Member with no training records     | Print page shows empty table with "No records found" message         |
-| Program with no enrollments         | Enrollment section shows "No members enrolled"                       |
-| Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers |
-| Browser blocks auto-print dialog    | Page remains visible for manual Ctrl+P                               |
-| Print page for member on leave      | Leave period shown with pro-rated requirement adjustments            |
+| Scenario                            | Behavior                                                                                                                                                                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member with no training records     | The section is **omitted entirely** — no empty table, no message. A member with nothing recorded prints a header and the stat tiles alone                                                                                                                 |
+| Program with no enrollments         | The Enrolled Members section is **omitted entirely**, and always is — see the note above on why `Enrolled:` never leaves 0                                                                                                                                |
+| Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers                                                                                                                                                                                      |
+| Browser blocks auto-print dialog    | Page remains visible for manual Ctrl+P                                                                                                                                                                                                                    |
+| Print page for member on leave      | The **evaluation** accounts for the leave — a waiver reduces the required total behind the scenes — but no print page shows the leave period, the waived months or the adjusted target. The sheet reports the outcome, not the allowance that produced it |
 
 ---
 

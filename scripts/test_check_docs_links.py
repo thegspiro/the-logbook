@@ -108,6 +108,31 @@ class ImageFlagIsCarried(unittest.TestCase):
             ]
 
 
+class AngleBracketedDestinations(unittest.TestCase):
+    """`<...>` is the only destination form that can carry a space, so it is
+    the one a filename with a space needs — and wiki/setup-wiki.sh goes out of
+    its way to publish those (`git ls-files -z`). Before this was parsed the
+    two halves disagreed: the publisher supported such a filename and the
+    checker reported any reference to it as broken, brackets included."""
+
+    def test_bracketed_destination_loses_its_brackets(self):
+        assert targets("![shot](<images/a.png>)\n") == ["images/a.png"]
+
+    def test_bracketed_destination_may_contain_spaces(self):
+        assert targets("![shot](<images/my shot.png>)\n") == ["images/my shot.png"]
+
+    def test_bracketed_destination_with_a_title(self):
+        assert targets('![shot](<images/a.png> "Dash")\n') == ["images/a.png"]
+
+    def test_bracketed_link_target(self):
+        assert targets("[Guide](<Module-Training>)\n") == ["Module-Training"]
+
+    def test_empty_destination_yields_an_empty_target(self):
+        # `<>` is a legal empty destination; main() treats it as a same-page
+        # anchor with nothing to resolve rather than a missing file.
+        assert targets("[a](<>)\n") == [""]
+
+
 class ImagesAreNeverWikiPages(unittest.TestCase):
     """A bare target inside wiki/ is a page reference — unless it is an image.
     `![diagram](Home)` would otherwise resolve against wiki/Home.md, pass, and

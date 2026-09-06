@@ -110,7 +110,7 @@ EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
 # strips before matching.
 LINK_RE = re.compile(
     r"(!?)\[[^\]]*\]\("
-    r"\s*([^)\s]+?)\s*"
+    r"\s*(?:<([^<>]*)>|([^)\s]+?))\s*"
     r"""(?:"[^"]*"|'[^']*'|\([^)]*\))?\s*"""
     r"\)"
 )
@@ -203,7 +203,11 @@ def links_in(path: str) -> list[tuple[int, str, bool]]:
         line = re.sub(r"`[^`]*`", lambda m: " " * len(m.group(0)), line)
         for m in LINK_RE.finditer(line):
             is_image = bool(m.group(1))
-            target = m.group(2)
+            # `<...>` wins when present: it is the only form that can carry a
+            # space, which is exactly what a filename with a space needs — and
+            # the publisher goes out of its way to support those. Group 2 can
+            # be the empty string for `<>`, so test against None, not falsity.
+            target = m.group(2) if m.group(2) is not None else m.group(3)
             # External and non-file schemes are out of scope on purpose.
             if re.match(r"^(https?:|mailto:|tel:|data:|//)", target):
                 continue
