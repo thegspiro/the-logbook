@@ -618,6 +618,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Shift roster / apparatus check sheet printing | [LABEL_PRINTING_MODULE.md](./LABEL_PRINTING_MODULE.md#what-prints)                                                                                       |
 | Platoon scheduling — admin setup              | [PLATOON_SETUP.md](./PLATOON_SETUP.md)                                                                                                                   |
 | Known limitations / open decisions            | [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)                                                                                                           |
+| Claude Code skills / agent tooling            | [CLAUDE_SKILLS_REVIEW.md](./CLAUDE_SKILLS_REVIEW.md)                                                                                                     |
 
 ### By Error Message
 
