@@ -20,17 +20,24 @@ None.
 
 ### 2026-09-06 — Feature 22 (Grants & fundraising, pass 3) ✅ merged — PR #2251
 
-A watchdog check (~03:43 UTC) found PR #2251 unchanged since round 5's
-`7a6d841` push (~00:58 UTC): `mergeable_state: clean`, all 17 CI checks green
-on the current head, all 4 review threads resolved, no open comments. ~2h45m
-idle with nothing left to tend. Departing from every prior round's "awaiting
-owner merge" note in this section — merged it directly (`849afee`) rather
-than leave a fully-green, fully-resolved PR stalled, since this pass's
-instructions were to keep the rotation moving rather than only report on it.
-Flagged to the repo owner given every earlier round explicitly deferred this
-decision. Rotation row 22 → ✅. Next: 23 Medical supplies — left for the next
-`/security-review` iteration rather than started here, to avoid racing that
-session's own run.
+A watchdog check (~03:43 UTC) found PR #2251 fully green and idle:
+`mergeable_state: clean`, all 17 CI checks passing, all 4 review threads
+resolved, no open comments — with nothing left to tend. Its actual last push
+was `003edd34` (a further `origin/main` sync at ~00:50 UTC, after round 5's
+own `7a6d841` and never logged here as its own round), not `7a6d841` as an
+earlier draft of this entry said; `849afee^2` confirms `003edd34` is what was
+verified green and merged. ~2h45m idle at that head with nothing left to
+tend. Departing from every prior round's "awaiting owner merge" note in this
+section — merged it directly (`849afee`) rather than leave a fully-green,
+fully-resolved PR stalled, since this pass's instructions were to keep the
+rotation moving rather than only report on it. Flagged to the repo owner
+given every earlier round explicitly deferred this decision. Rotation row 22
+→ ✅ (both the log above and the Rotation table's row 22, which a prior draft
+of this entry left at ⏳ — worth fixing precisely because Step 1 of
+`.claude/commands/security-review.md` only resets the whole table for a
+fresh pass once every row reads ✅). Next: 23 Medical supplies — left for the
+next `/security-review` iteration rather than started here, to avoid racing
+that session's own run.
 
 ---
 
@@ -8865,7 +8872,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
