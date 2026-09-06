@@ -21,6 +21,7 @@ import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, List
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -163,6 +164,98 @@ async def _count(db, column: str, value: str) -> int:
         {"v": value},
     )
     return result.scalar() or 0
+
+
+class TestDeadlockRetry:
+    """`subscribe()`'s lock ordering closes the specific two-party deadlock
+    shapes this rotation found (see TestConcurrentEndpointSwapDoesNotDeadlock
+    and TestConcurrentRefreshDuringTransferStaysConsistent below), but a
+    deeper interleaving among three or more concurrent callers can still
+    hit a real InnoDB deadlock (Codex, round 4) -- a deadlock is not a
+    correctness failure, just a transaction MySQL cleanly aborts and rolls
+    back, so the standard response is to retry the loser once."""
+
+    async def test_a_deadlock_is_retried_once_and_then_succeeds(self):
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.push_service import PushService
+
+        class _FakeOrig(Exception):
+            args = (1213, "Deadlock found when trying to get lock")
+
+        db = MagicMock()
+        db.rollback = AsyncMock()
+        svc = PushService(db)
+
+        calls = {"n": 0}
+
+        async def fake_once(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError("stmt", {}, _FakeOrig())
+            return "the-subscription"
+
+        svc._subscribe_once = fake_once
+        result = await svc.subscribe(
+            "org-1", "user-1", "https://push.example/x", "p", "a"
+        )
+
+        assert result == "the-subscription"
+        assert calls["n"] == 2
+        db.rollback.assert_awaited_once()
+
+    async def test_a_second_deadlock_is_not_retried_again(self):
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.push_service import PushService
+
+        class _FakeOrig(Exception):
+            args = (1213, "Deadlock found when trying to get lock")
+
+        db = MagicMock()
+        db.rollback = AsyncMock()
+        svc = PushService(db)
+
+        calls = {"n": 0}
+
+        async def always_deadlocks(*args, **kwargs):
+            calls["n"] += 1
+            raise OperationalError("stmt", {}, _FakeOrig())
+
+        svc._subscribe_once = always_deadlocks
+        with pytest.raises(OperationalError):
+            await svc.subscribe("org-1", "user-1", "https://push.example/x", "p", "a")
+
+        assert calls["n"] == 2
+
+    async def test_a_non_deadlock_operational_error_is_never_retried(self):
+        """A blanket retry-on-OperationalError would also retry a lost
+        connection, a lock-wait timeout, or a syntax error -- silently
+        masking failures that aren't the specific, always-safe-to-retry
+        deadlock case."""
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.push_service import PushService
+
+        class _FakeOrig(Exception):
+            args = (2006, "MySQL server has gone away")
+
+        db = MagicMock()
+        db.rollback = AsyncMock()
+        svc = PushService(db)
+
+        calls = {"n": 0}
+
+        async def connection_lost(*args, **kwargs):
+            calls["n"] += 1
+            raise OperationalError("stmt", {}, _FakeOrig())
+
+        svc._subscribe_once = connection_lost
+        with pytest.raises(OperationalError):
+            await svc.subscribe("org-1", "user-1", "https://push.example/x", "p", "a")
+
+        assert calls["n"] == 1
+        db.rollback.assert_not_awaited()
 
 
 class TestSubscribe:

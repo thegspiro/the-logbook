@@ -18,6 +18,7 @@ from uuid import UUID
 
 import requests
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -25,6 +26,19 @@ from app.models.notification import PushSubscription
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+_DEADLOCK_MYSQL_CODE = 1213
+
+
+def _is_deadlock(exc: OperationalError) -> bool:
+    """Whether *exc* is InnoDB error 1213 (deadlock), not some other
+    operational failure a blanket retry would otherwise silently mask."""
+    if exc.orig and hasattr(exc.orig, "args") and exc.orig.args:
+        code = exc.orig.args[0]
+        if isinstance(code, int):
+            return code == _DEADLOCK_MYSQL_CODE
+    return "deadlock" in str(exc).lower()
+
 
 # A real member has a handful of devices (phone, tablet, station computer).
 # With no cap, an authenticated caller could register unbounded distinct
@@ -213,26 +227,70 @@ class PushService:
     ) -> PushSubscription:
         """Register (or re-register) a device endpoint for this user.
 
-        Browsers re-issue the same endpoint when a subscription is refreshed,
-        and the same physical device can change hands between members, so an
-        existing row is re-pointed at the current user rather than duplicated.
-
-        The endpoint is validated (SSRF guard) at the API boundary
-        (``subscribe_to_push``) before this is called, since that is where the
-        untrusted client value enters.
+        Retries once on a genuine InnoDB deadlock (MySQL error 1213). The
+        locking below is ordered to avoid the deadlock shapes this rotation
+        found and fixed, but proving a lock-ordering scheme deadlock-free
+        under *arbitrary* concurrent interleavings (three or more callers,
+        each racing a different pair of endpoints/users) is a different,
+        much harder claim than closing the specific two-party shapes that
+        were actually found. A deadlock is not a correctness or data-
+        integrity failure -- InnoDB cleanly aborts and fully rolls back
+        exactly one side -- so retrying the loser once is the standard,
+        safe response, the same shape ``app/utils/db_retry.py`` already
+        uses for transient connection errors (that helper is not reused
+        directly: its exponential backoff is tuned for waiting out a
+        database restart, not for a lock that is typically already free by
+        the time a retry runs).
         """
+        for attempt in (1, 2):
+            try:
+                return await self._subscribe_once(
+                    organization_id, user_id, endpoint, p256dh, auth, user_agent
+                )
+            except OperationalError as exc:
+                if attempt == 2 or not _is_deadlock(exc):
+                    raise
+                logger.warning(
+                    "Deadlock on push subscribe for user %s, retrying once",
+                    user_id,
+                )
+                await self.db.rollback()
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    async def _subscribe_once(
+        self,
+        organization_id: UUID,
+        user_id: UUID,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+        user_agent: Optional[str],
+    ) -> PushSubscription:
         endpoint_hash = hash_endpoint(endpoint)
-        # An unlocked guess only, used to decide which User rows need
-        # locking below -- not to decide anything about the endpoint
-        # itself. It can be stale (this transaction's snapshot was already
-        # fixed when `current_user` was loaded upstream), which is fine
-        # here: it only has to be a reasonable candidate, not the truth.
-        guess = await self.db.execute(
-            select(PushSubscription.user_id).where(
+
+        # A plain peek, never a locking read: a ``FOR UPDATE`` query that
+        # might match nothing takes an InnoDB *gap* lock over the index
+        # range instead of a record lock, and unlike a record lock, a gap
+        # lock is compatible with another transaction's gap lock on the
+        # same range -- two callers registering different brand-new
+        # endpoints that happen to hash into the same gap can each acquire
+        # one, then each block on the other's later insert-intention lock:
+        # a deadlock neither is holding anything exclusive to cause. Same
+        # shape, same fix, as FAC-45 in ``documents_service.py``: peek
+        # first with a plain read, and only take a real lock via a point
+        # lookup on an id the peek already found. The peek is also allowed
+        # to be stale for a different reason -- this transaction's
+        # snapshot was already fixed when `current_user` was loaded
+        # upstream -- which is fine here, since it only decides which User
+        # rows to lock below, never anything about the endpoint itself.
+        peeked = await self.db.execute(
+            select(PushSubscription.id, PushSubscription.user_id).where(
                 PushSubscription.endpoint_hash == endpoint_hash
             )
         )
-        guessed_owner = guess.scalar_one_or_none()
+        peeked_row = peeked.first()
+        peeked_id = peeked_row.id if peeked_row else None
+        guessed_owner = peeked_row.user_id if peeked_row else None
 
         # Lock every user this call might touch, in a fixed order (sorted
         # by id, not by which side of a swap either request is on) --
@@ -258,23 +316,26 @@ class PushService:
         for uid in sorted(lock_user_ids):
             await self.db.execute(select(User).where(User.id == uid).with_for_update())
 
-        # The authoritative read: locked, and only now -- after the shared
-        # user-row locks above, never before. A plain read here could
-        # still decide "I already own this" from data already stale
+        # The authoritative read: a point lookup by id (a real record lock,
+        # never a query that might match nothing), and only now -- after
+        # the shared user-row locks above, never before. A plain read here
+        # could still decide "I already own this" from data already stale
         # relative to a concurrent transfer, overwriting the row's
         # encryption keys while leaving `user_id` pointing at the new
         # owner: a notification meant for the new owner would then be
         # encrypted with keys only the OLD owner's device holds the
-        # matching private key for, and delivered there instead. Locking
-        # it also closes a pre-existing gap where two brand-new subscribes
-        # for the same endpoint could both decide "no existing row" and
-        # race the INSERT's unique constraint.
-        result = await self.db.execute(
-            select(PushSubscription)
-            .where(PushSubscription.endpoint_hash == endpoint_hash)
-            .with_for_update()
-        )
-        existing = result.scalar_one_or_none()
+        # matching private key for, and delivered there instead. If the
+        # row was deleted between the peek and here, this simply finds
+        # nothing and falls through to the brand-new-subscription path
+        # below, exactly like a peek that found nothing in the first place.
+        existing = None
+        if peeked_id is not None:
+            result = await self.db.execute(
+                select(PushSubscription)
+                .where(PushSubscription.id == peeked_id)
+                .with_for_update()
+            )
+            existing = result.scalar_one_or_none()
 
         # A genuine refresh (the caller already owns this exact endpoint) is
         # the only case exempt from the cap below — reassigning someone
