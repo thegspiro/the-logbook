@@ -2060,8 +2060,7 @@ position that is meant to carry it if that was your intent.
 lookup configuration the module uses — the values you would otherwise have been
 editing in one-off dialogs.
 
-> **[SCREENSHOT NEEDED — `/facilities/settings`.** _Demo data:_ at least two
-> lookup categories populated, so the screen is not empty.**]**
+![Facilities Settings with the types, statuses and maintenance-type lookup categories populated](./images/19-42-facilities-settings.png)
 
 ### Two officers, one new facility
 
@@ -2203,9 +2202,7 @@ back to the inbox is the URL's own parent.
 It needs **no permission beyond signing in**, and that is safe rather than
 loose: the server only serves a message the caller was actually targeted with.
 
-> **[SCREENSHOT NEEDED — `/messages/:id`.** _Demo data:_ a department message
-> with a body long enough to show the page is not a modal, its sender and sent
-> date visible, and the breadcrumb back to the inbox in frame.**]**
+![A department message on its own page at /messages/:id — sender, sent date and the breadcrumb back to the inbox all in frame](./images/19-43-messages-detail.png)
 
 ### Two message fixes worth knowing
 
