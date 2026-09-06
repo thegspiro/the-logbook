@@ -472,23 +472,132 @@ the prior pass's summary:
   medical-specific patch. `docs/KNOWN_LIMITATIONS.md`'s MSUP-4 row is
   unchanged and accurate.
 
-No new finding. All 110 scoped tests
-(`test_medical_supplies_domain.py` + `test_inventory_service.py`) pass
-unmodified, confirming every pass-1/pass-2 fix and guard test still holds
-against the current code with zero drift in the logic this router and its
-domain-pinning helpers depend on.
+All 110 scoped tests (`test_medical_supplies_domain.py` +
+`test_inventory_service.py`) passed unmodified at this point, confirming
+every pass-1/pass-2 fix and guard test still held against the current code
+with zero drift in the logic this router and its domain-pinning helpers
+depend on — but this pass's own "no new finding" conclusion was wrong. A
+Codex review round on PR #2301 caught three real gaps that a
+tenant-isolation/domain-pinning lens does not cover, all in the same
+shared `InventoryService` methods this router calls. All three fixed.
 
-### Completion gate (pass 3)
+### MSUP-7 — MED — a generic item PATCH could deactivate an item while it was still assigned, checked out, or pool-issued — ✅ FIXED
 
-| Check                                                                               | Result     |
-| ----------------------------------------------------------------------------------- | ---------- |
-| `flake8 app/api/v1/endpoints/medical_supplies.py app/services/inventory_service.py` | clean      |
-| `black --check` (same files)                                                        | clean      |
-| `isort --check-only` (same files)                                                   | clean      |
-| `tests/test_endpoint_auth_coverage.py`                                              | 1 passed   |
-| `tests/test_medical_supplies_domain.py tests/test_inventory_service.py`             | 110 passed |
+**What:** `InventoryItemUpdate` carries `active: Optional[bool]`, and
+`update_medical_item`/the general `inventory.py` `update_item` route pass
+it straight to `InventoryService.update_item`, which committed it via
+`apply_updates` with no check at all. The dedicated retire endpoint
+(`retire_item`) blocks deactivation while the item is assigned, has an
+active checkout, or (for a pool item) has an unreturned issuance — none of
+that ran on this path.
 
-No migration, no schema change, no code change this pass — every finding
-from pass 1/pass 2 was re-verified against current code rather than
-re-fixed, and MSUP-4 remains the sole open, flagged item (unchanged product
-decision).
+**Where:** `app/services/inventory_service.py` — `update_item`.
+
+**Failure scenario:** a medical supply officer sends
+`PATCH /medical-supplies/items/{item_id}` with `{"active": false}` on a
+device currently issued to a member. `update_item` commits it directly:
+the item disappears from every active list and picker while the member
+still physically holds it, with no error and no record of why it left
+active inventory (unlike `retire_item`, which logs a dedicated audit event
+and sets `status`/`condition` to `RETIRED` consistently). Reachable from
+both `medical_supplies.py` and the general `inventory.py` router — a
+cross-cutting gap in the shared service method, not medical-specific, but
+directly exercised by this feature's own `update_medical_item` route.
+
+**Fix:** extracted the three checks `retire_item` already ran
+(assignment, active checkout, unreturned pool issuance) into a shared
+`_deactivation_block_reason(item, verb)` helper, used by both
+`retire_item` (verb="retire", same error text as before) and `update_item`
+(verb="deactivate", new). `update_item` now runs the check whenever
+`update_data` sets `active` to `False` on a currently-active item, and
+returns the same kind of clean error string as every other validation
+failure on that method — no change for any update that leaves `active`
+alone, and no change to `retire_item`'s existing behavior or messages.
+
+**Guard tests:** `TestUpdateItemDeactivationGuard` in
+`test_inventory_service.py` (6 cases) — blocks deactivation when
+assigned/checked-out/pool-issued, allows it when nothing blocks it, skips
+the check entirely when the item is already inactive or when `active` is
+being set to `True`. Verified fail-before/pass-after by reverting the fix
+and confirming all three blocking cases regressed to a silent commit.
+
+### MSUP-8 — LOW/MED — the single-item detail response never attached lot stock — ✅ FIXED
+
+**What:** `get_items` (the list endpoint) calls `_attach_lot_stock` on
+every row it returns, but `get_item_by_id` — used by both
+`get_medical_item` and the general `inventory.py` `get_item` route — never
+did. `InventoryItemResponse.lot_stock`/`is_lot_stocked` therefore came
+back at their `None`/`False` defaults on the detail view.
+
+**Where:** `app/services/inventory_service.py` — `get_item_by_id`.
+
+**Failure scenario:** an item stocked purely through dated lots (the
+supply-officer workflow this feature exists for) has a stale or zero
+`quantity` column, because lots and `quantity` are separate ledgers and
+receiving a lot never touches the column. The list view correctly reports
+the lot-derived on-hand count; opening that same item's detail page
+reported the stale column instead, disagreeing with the screen the officer
+just came from.
+
+**Fix:** `get_item_by_id` gained an `attach_lot_stock: bool = False`
+parameter, off by default since most of its 9 call sites are write paths
+(`update_item`, `retire_item`, assignment/checkout flows,
+`create_item_if_absent`) with no use for the extra query.
+`get_medical_item` and `inventory.py`'s `get_item` — the two single-item
+detail responses — now pass `attach_lot_stock=True`.
+
+**Guard tests:** `TestGetItemByIdAttachesLotStockOnRequest` in
+`test_inventory_lot_stock_levels.py` (3 cases) — default omits the
+lot-totals query entirely (no behavior change for the 9 existing
+callers), `attach_lot_stock=True` populates `is_lot_stocked`/`lot_stock`,
+and a missing item still short-circuits without querying lots.
+
+### MSUP-9 — LOW/MED — `get_categories`'s 200-row default silently truncated a department's category list — ✅ FIXED
+
+**What:** none of `get_categories`' three real callers (the medical and
+gear category pickers, and the CSV-import name-to-id lookup) pass
+`skip`/`limit` — each treats the result as the organization's complete
+category set, and no frontend screen offers a way to page through
+categories. The method's `limit: int = 200` default silently dropped every
+category past the 200th, with no error surfaced anywhere.
+
+**Where:** `app/services/inventory_service.py` — `get_categories`.
+
+**Failure scenario:** a department with more than 200 active categories in
+either domain (a plausible ceiling after years of use, sub-categorization,
+or a large multi-station department) finds categories past the 200th
+absent from the picker in both `list_medical_categories` and the general
+`list_categories` — items already filed under them show an unresolved
+category and cannot be filtered by it, with nothing in the UI indicating
+the list is incomplete.
+
+**Fix:** raised the default `limit` from 200 to 5000. Categories are a
+curated, hand-built structure — closer to positions or roles than to a
+per-transaction table like donations or line items — so a high ceiling
+that will not realistically be reached is the correct bound for a picker
+with no pagination contract, unlike a genuinely unbounded table (the
+inverse of MSUP-4, which is unbounded on purpose because a cap there would
+need real pagination semantics its callers don't have either).
+
+**Guard test:** `TestGetCategoriesDefaultLimit` in
+`test_inventory_service.py` — captures the compiled statement with literal
+binds and asserts `LIMIT 5000`, not `LIMIT 200`. Verified
+fail-before/pass-after.
+
+### Completion gate (pass 3, after the Codex round)
+
+| Check                                                                                                  | Result                               |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `flake8` (medical_supplies.py, inventory.py, inventory_service.py, both test files)                    | clean                                |
+| `black --check` (same files)                                                                           | clean                                |
+| `isort --check-only` (same files)                                                                      | clean                                |
+| `python3 scripts/validate_migrations.py --strict`                                                      | PASSED — single head                 |
+| `tests/test_endpoint_auth_coverage.py`                                                                 | 1 passed                             |
+| `test_medical_supplies_domain.py` + `test_inventory_service.py` + `test_inventory_lot_stock_levels.py` | 133 passed                           |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                          | 729 passed, 1 pre-existing skip      |
+| `pytest tests/` (full backend suite)                                                                   | 11,366 passed, 21 pre-existing skips |
+
+No migration, no schema change. MSUP-4 remains the sole open, flagged item
+(unchanged cross-cutting product decision) — MSUP-7/8/9 above are new
+fixes, not re-verifications, and MSUP-1 through MSUP-6 all re-verified
+intact as described earlier in this Pass 3 section.

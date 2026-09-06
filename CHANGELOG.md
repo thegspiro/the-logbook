@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: a generic item edit could deactivate equipment still checked out (2026-09-06)
+
+**Fixed**
+
+- **Editing an item could take it out of active inventory while a member
+  still held it.** The dedicated retire action blocks deactivation while an
+  item is assigned, checked out, or (for pooled stock) has an unreturned
+  issuance — the general item-update path had no such check, so sending a
+  plain edit with the item turned inactive removed it from every active
+  list and picker without any of those safeguards. Editing an item now
+  enforces the same checks retiring it does.
+- **An item's detail page could show stale stock for consumables tracked by
+  lot.** The list view already computed on-hand stock from dated lots for
+  any item stocked that way; the single-item detail page (medical supplies
+  and general inventory alike) did not, and could show the item's older
+  quantity figure instead.
+- **A department with a large category list could find some categories
+  missing from pickers.** Category pickers (medical supplies, general
+  inventory, and CSV import) only ever fetch a department's complete list,
+  with no lower page to reach — a low internal cap meant categories past
+  it were silently absent from every picker and filter. Raised well above
+  any realistic department's category count.
+
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 
 **Fixed**

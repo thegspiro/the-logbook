@@ -329,7 +329,9 @@ async def get_medical_item(
     org_id = str(current_user.organization_id)
     await _require_medical_item(service, str(item_id), org_id)
 
-    item = await service.get_item_by_id(item_id, current_user.organization_id)
+    item = await service.get_item_by_id(
+        item_id, current_user.organization_id, attach_lot_stock=True
+    )
     if not item:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return item

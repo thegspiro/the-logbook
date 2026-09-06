@@ -807,13 +807,24 @@ class InventoryService:
         exclude_item_types: Optional[Iterable[ItemType]] = None,
         active_only: bool = True,
         skip: int = 0,
-        limit: int = 200,
+        limit: int = 5000,
     ) -> List[InventoryCategory]:
         """Get categories for an organization with pagination.
 
         ``item_types`` / ``exclude_item_types`` scope the result to a domain,
         so the medical-supply page's category picker never offers a uniform
         category and the gear page's never offers a medical one.
+
+        None of this method's three callers (the medical and gear category
+        pickers, and the CSV-import name lookup) pass ``skip``/``limit`` —
+        each treats the result as the organization's complete category set,
+        with no pagination UI anywhere that could ask for a later page. A
+        200-row default silently dropped every category past it, with no
+        error and no way for the picker to reach them. Categories are a
+        curated, hand-built structure (closer to positions than to
+        donations or line items), so a high ceiling that will not realistically
+        be hit is the correct bound here, not real pagination — unlike an
+        actually-unbounded per-transaction table.
         """
         query = select(InventoryCategory).where(
             InventoryCategory.organization_id == str(organization_id)
@@ -1829,9 +1840,22 @@ class InventoryService:
             item.lot_stock = totals.get(item.id)
 
     async def get_item_by_id(
-        self, item_id: UUID, organization_id: UUID
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        attach_lot_stock: bool = False,
     ) -> Optional[InventoryItem]:
-        """Get item by ID with all relationships"""
+        """Get item by ID with all relationships.
+
+        ``attach_lot_stock`` runs the same lot-total lookup ``get_items``
+        already does for every row of a list response — off by default,
+        since most callers here are write paths (``update_item``,
+        ``retire_item``, assignment/checkout flows) that have no use for it
+        and would otherwise pay for an unneeded query. Only a single-item
+        detail response should pass ``True``: without it, an item stocked
+        purely through dated lots reports its stale/zero ``quantity``
+        column instead of the lot ledger's actual on-hand count.
+        """
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.id == str(item_id))
@@ -1846,7 +1870,10 @@ class InventoryService:
                 selectinload(InventoryItem.assignment_history),
             )
         )
-        return result.scalar_one_or_none()
+        item = result.scalar_one_or_none()
+        if item and attach_lot_stock:
+            await self._attach_lot_stock(str(organization_id), [item])
+        return item
 
     async def _get_item_locked(
         self, item_id: UUID, organization_id: UUID
@@ -1939,6 +1966,20 @@ class InventoryService:
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
+            # `active` is on this schema with no route dedicated to clearing
+            # it, so a generic PATCH is the only gate standing between a
+            # caller and hiding an item from active inventory. Route it
+            # through the same checks the dedicated retire endpoint enforces
+            # rather than letting apply_updates commit it unconditionally —
+            # otherwise an item still assigned or checked out could vanish
+            # from every active list while a member still has it.
+            if update_data.get("active") is False and item.active:
+                block_reason = await self._deactivation_block_reason(
+                    item, verb="deactivate"
+                )
+                if block_reason:
+                    return None, block_reason
+
             # Validate resulting state
             new_status = (
                 ItemStatus(update_data["status"])
@@ -1985,6 +2026,42 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    async def _deactivation_block_reason(
+        self, item: InventoryItem, verb: str = "retire"
+    ) -> Optional[str]:
+        """Why ``item`` cannot be taken out of active inventory right now.
+
+        Shared by ``retire_item`` and ``update_item`` (when a caller clears
+        ``active`` through the generic PATCH path rather than the dedicated
+        retire endpoint) so both enforce the same invariant: an item that is
+        still assigned, checked out, or holding unreturned pool issuances
+        must not be able to disappear from active inventory while someone
+        still has it. ``update_item`` accepts ``active`` on its own schema
+        with no route dedicated to clearing it, so without this shared check
+        that path silently bypassed every one of these guards.
+        """
+        if item.assigned_to_user_id:
+            return f"Cannot {verb}: item is currently assigned. Unassign it first."
+
+        active_co = await self.db.execute(
+            select(func.count(CheckOutRecord.id))
+            .where(CheckOutRecord.item_id == str(item.id))
+            .where(CheckOutRecord.is_returned.is_(False))
+        )
+        if active_co.scalar():
+            return f"Cannot {verb}: item has active checkouts. Check it in first."
+
+        if item.tracking_type == TrackingType.POOL:
+            active_iss = await self.db.execute(
+                select(func.count(ItemIssuance.id))
+                .where(ItemIssuance.item_id == str(item.id))
+                .where(ItemIssuance.is_returned.is_(False))
+            )
+            if active_iss.scalar():
+                return f"Cannot {verb}: item has unreturned pool issuances."
+
+        return None
+
     async def retire_item(
         self, item_id: UUID, organization_id: UUID, notes: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
@@ -1994,34 +2071,9 @@ class InventoryService:
             if not item:
                 return False, "Item not found"
 
-            # Block retirement if item has active assignments
-            if item.assigned_to_user_id:
-                return (
-                    False,
-                    "Cannot retire: item is currently assigned. Unassign it first.",
-                )
-
-            # Block if item has active (unreturned) checkouts
-            active_co = await self.db.execute(
-                select(func.count(CheckOutRecord.id))
-                .where(CheckOutRecord.item_id == str(item_id))
-                .where(CheckOutRecord.is_returned.is_(False))
-            )
-            if active_co.scalar():
-                return (
-                    False,
-                    "Cannot retire: item has active checkouts. Check it in first.",
-                )
-
-            # Block if pool item has unreturned issuances
-            if item.tracking_type == TrackingType.POOL:
-                active_iss = await self.db.execute(
-                    select(func.count(ItemIssuance.id))
-                    .where(ItemIssuance.item_id == str(item_id))
-                    .where(ItemIssuance.is_returned.is_(False))
-                )
-                if active_iss.scalar():
-                    return False, "Cannot retire: item has unreturned pool issuances."
+            block_reason = await self._deactivation_block_reason(item, verb="retire")
+            if block_reason:
+                return False, block_reason
 
             item.status = ItemStatus.RETIRED
             item.condition = ItemCondition.RETIRED

@@ -589,9 +589,32 @@ class TestUpdateCategory:
         assert "cannot be cleared" in error.lower()
 
 
-# ============================================
-# Serial Number Uniqueness Tests
-# ============================================
+class TestGetCategoriesDefaultLimit:
+    """None of get_categories' three real callers (the medical and gear
+    category pickers, and the CSV-import name lookup) pass skip/limit —
+    each treats the result as the organization's complete category set,
+    with no pagination UI anywhere that could reach a later page. A
+    200-row default silently dropped every category past it. The default
+    must stay well above any realistic department's category count."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_default_limit_is_not_the_old_200_cap(self, service, mock_db, org_id):
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=cap)
+
+        await service.get_categories(organization_id=org_id)
+
+        sql = str(captured[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "LIMIT 200" not in sql
+        assert "LIMIT 5000" in sql
 
 
 class TestSerialNumberUniqueness:
@@ -805,6 +828,124 @@ class TestUpdateItem:
         )
         assert result is None
         assert "cannot be cleared" in err.lower()
+
+
+class TestUpdateItemDeactivationGuard:
+    """update_item accepts `active` on its own schema, with no route
+    dedicated to clearing it — unlike a status/condition change, nothing
+    stopped a generic PATCH from flipping `active` to False directly,
+    bypassing every check the dedicated retire endpoint enforces. An
+    issued device could vanish from active inventory while a member still
+    held it. update_item must now block exactly where retire_item does."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_blocks_deactivation_when_assigned(self, service, mock_db):
+        item = _make_item(active=True, assigned_to_user_id=str(uuid4()))
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False},
+        )
+        assert result is None
+        assert "assigned" in err.lower() or "unassign" in err.lower()
+        assert item.active is True
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_blocks_deactivation_when_checked_out(self, service, mock_db):
+        item = _make_item(active=True, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 1
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False},
+        )
+        assert result is None
+        assert "checkout" in err.lower() or "check" in err.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_blocks_deactivation_of_pool_item_with_unreturned_issuances(
+        self, service, mock_db
+    ):
+        item = _make_item(
+            active=True, assigned_to_user_id=None, tracking_type=TrackingType.POOL
+        )
+        service.get_item_by_id = AsyncMock(return_value=item)
+        co_result = MagicMock()
+        co_result.scalar.return_value = 0
+        iss_result = MagicMock()
+        iss_result.scalar.return_value = 1
+        mock_db.execute = AsyncMock(side_effect=[co_result, iss_result])
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False},
+        )
+        assert result is None
+        assert "issuance" in err.lower() or "pool" in err.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_allows_deactivation_when_nothing_blocks_it(self, service, mock_db):
+        item = _make_item(active=True, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 0
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False},
+        )
+        assert err is None
+        assert result is item
+        assert item.active is False
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_does_not_check_when_item_is_already_inactive(self, service, mock_db):
+        """Saving an unrelated field on an already-retired item must not run
+        the guard query at all — there is nothing to protect against."""
+        item = _make_item(active=False, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False, "notes": "still retired"},
+        )
+        assert err is None
+        assert result is item
+        mock_db.execute.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_reactivating_an_item_is_not_gated(self, service, mock_db):
+        """The guard only fires on a transition to False — turning an item
+        back on is never blocked by its own former assignment state."""
+        item = _make_item(active=False, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": True},
+        )
+        assert err is None
+        assert item.active is True
+        mock_db.execute.assert_not_awaited()
 
 
 # ============================================

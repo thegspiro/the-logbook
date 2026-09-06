@@ -18,15 +18,23 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 23 (Medical supplies), pass 3** — branch
 `claude/security-review-medical-supplies`,
-[PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). No new
-finding: the endpoint file grew 670 L → 699 L since pass 2 in comments only
-(no route or logic change), and every `InventoryService` method it calls
-was re-read directly against current line numbers (the service grew
-~8,200 L → ~9,995 L from unrelated inventory work). MSUP-1/2/3/5/6's fixes
-and the domain-pinning mechanism all re-verified intact; MSUP-4 (unbounded
-`get_expiring_lots`) re-confirmed still open, unchanged product decision.
-110 scoped tests pass unmodified. See
-`docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
+[PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). Initial
+push re-verified MSUP-1/2/3/5/6's fixes and the domain-pinning mechanism
+intact against current code (`inventory_service.py` grew ~8,200 L →
+~9,995 L from unrelated inventory work since pass 2) and re-confirmed
+MSUP-4 (unbounded `get_expiring_lots`) still open, unchanged — but its "no
+new finding" conclusion was wrong. A Codex review round caught 3 real
+gaps outside the tenant-isolation lens, all fixed: **MSUP-7** (MED) — a
+generic item PATCH could deactivate an item while still assigned, checked
+out, or pool-issued, bypassing every check the dedicated retire endpoint
+enforces; **MSUP-8** (LOW/MED) — the single-item detail response
+(`get_item_by_id`) never attached lot stock the way the list endpoint
+does, so a lot-stocked item's detail page reported its stale `quantity`
+column; **MSUP-9** (LOW/MED) — `get_categories`' 200-row default silently
+truncated a department's category list, since none of its three callers
+paginate or expect a partial result. All three fixed with guard tests;
+full local gate green including the full backend suite (11,366 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
 
 ---
 
@@ -57,6 +65,51 @@ pass. Findings doc: `docs/security-review/MSUP-23-medical-supplies.md` →
 Pass 3. Rotation row 23 → ⏳ (PR open, no code diff — findings-doc and
 `PROGRESS.md` updates only). Next: 24 Meetings & minutes, once this PR
 merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — Codex round: 3 fixed
+
+A Codex review round on PR #2301 disputed this pass's "no new finding"
+conclusion on all 3 points raised, all independently verified real and
+fixed:
+
+- **MSUP-7 (MED)** — `InventoryItemUpdate` carries `active`, and
+  `update_medical_item`/`inventory.py`'s general `update_item` route
+  passed it straight to `InventoryService.update_item`, which committed it
+  unconditionally. The dedicated retire endpoint blocks deactivation while
+  an item is assigned, checked out, or (for a pool item) has an unreturned
+  issuance — none of that ran on the generic PATCH path, so an issued
+  device could vanish from active inventory while a member still held it.
+  Fixed by extracting `retire_item`'s three checks into a shared
+  `_deactivation_block_reason` helper and running it in `update_item`
+  whenever `active` is being cleared on a currently-active item.
+- **MSUP-8 (LOW/MED)** — `get_items` attaches lot stock to every row;
+  `get_item_by_id` (backing both the medical and general single-item GET
+  routes) never did, so a lot-stocked item's detail page reported its
+  stale/zero `quantity` column instead of the lot ledger's actual on-hand
+  count. Fixed with an opt-in `attach_lot_stock` parameter, defaulted off
+  for `get_item_by_id`'s 9 mostly-write-path callers and set `True` on the
+  two single-item detail responses.
+- **MSUP-9 (LOW/MED)** — none of `get_categories`' three callers (medical
+  picker, gear picker, CSV-import lookup) paginate; each treats the result
+  as the complete category set. The 200-row default silently dropped
+  every category past it with no error. Fixed by raising the default to
+  5000 — categories are a curated, hand-built structure, not an
+  unbounded per-transaction table, so a high ceiling is the correct bound
+  here (the inverse reasoning from MSUP-4, which stays unbounded on
+  purpose).
+
+Guard tests added for all three (`TestUpdateItemDeactivationGuard`,
+`TestGetItemByIdAttachesLotStockOnRequest`, `TestGetCategoriesDefaultLimit`),
+each verified to fail against the pre-fix code and pass after. Full gate:
+flake8/black/isort clean, `validate_migrations.py --strict` (single head,
+no schema change), 133 passed in the directly-touched test files, 729
+passed in the full `inventory or medical_supplies`-scoped run, and the
+full backend suite (11,366 passed, 21 pre-existing skips, 0 failed).
+Findings doc updated: `docs/security-review/MSUP-23-medical-supplies.md` →
+Pass 3, MSUP-7/8/9. Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

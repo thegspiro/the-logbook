@@ -149,6 +149,56 @@ class TestItemsCarryTheirLotStock:
         mock_db.execute.assert_not_awaited()
 
 
+class TestGetItemByIdAttachesLotStockOnRequest:
+    """get_items always attaches lot stock; get_item_by_id did not, so a
+    single-item detail view (medical-supplies' and gear's own GET
+    /items/{id}) reported the stale/zero `quantity` column instead of the
+    lot ledger for any item stocked purely through dated lots. Off by
+    default here — most callers of get_item_by_id are write paths with no
+    use for it — and opt-in for the two single-item detail endpoints."""
+
+    async def test_default_does_not_attach_lot_stock(self, service, mock_db):
+        item = _item("i-1", quantity=0, reorder_point=None)
+        item_result = MagicMock()
+        item_result.scalar_one_or_none.return_value = item
+        mock_db.execute = AsyncMock(return_value=item_result)
+
+        found = await service.get_item_by_id(item_id="i-1", organization_id="org-1")
+
+        assert found is item
+        # Only the item-fetch query ran — no lot-totals lookup, so nothing
+        # was ever assigned to is_lot_stocked/lot_stock on this mock.
+        assert mock_db.execute.await_count == 1
+
+    async def test_attach_lot_stock_true_populates_the_ledger(self, service, mock_db):
+        item = _item("i-1", quantity=0, reorder_point=None)
+        item_result = MagicMock()
+        item_result.scalar_one_or_none.return_value = item
+        totals_result = MagicMock()
+        totals_result.all.return_value = [("i-1", 12)]
+        mock_db.execute = AsyncMock(side_effect=[item_result, totals_result])
+
+        found = await service.get_item_by_id(
+            item_id="i-1", organization_id="org-1", attach_lot_stock=True
+        )
+
+        assert (found.is_lot_stocked, found.lot_stock) == (True, 12)
+
+    async def test_attach_lot_stock_true_skips_the_query_when_item_missing(
+        self, service, mock_db
+    ):
+        item_result = MagicMock()
+        item_result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(return_value=item_result)
+
+        found = await service.get_item_by_id(
+            item_id="missing", organization_id="org-1", attach_lot_stock=True
+        )
+
+        assert found is None
+        assert mock_db.execute.await_count == 1
+
+
 class TestAddLotsBulk:
     def _wire_items(self, mock_db, known_ids):
         """Answer the org-scope check with ids, and everything after it empty.
