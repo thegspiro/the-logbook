@@ -34,6 +34,7 @@ from app.utils.email_providers import (
     EMAIL_SECRET_FIELDS,
     REDACTED_SECRET,
     connection_identity,
+    invalid_for_enabled,
     missing_for_enabled,
     normalize_stored_platform,
     required_field_message,
@@ -473,6 +474,11 @@ class OrganizationService:
                 raise ValueError(
                     required_field_message(email_section.get("platform"), missing)
                 )
+            # Present but unusable is the same failure as absent: it saves
+            # green and then cannot send.
+            invalid = invalid_for_enabled(email_section)
+            if invalid:
+                raise ValueError(invalid)
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
