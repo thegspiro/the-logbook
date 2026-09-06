@@ -140,6 +140,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders for count-only departments alone, so naming the types "the breakdown
   the close-out wizard asks for" described a screen a detailed or off department
   never sees.
+- **Another row cannot silently discard an open close-out.** The wizard keeps
+  the step being edited — attendance times, call counts — in local state until
+  Next is pressed, and opening a different row unmounts it, so one click threw
+  away typing with no warning. The other rows are held while a wizard is open;
+  the open row's own exit is still there, so switching is a decision rather than
+  an accident.
+- **The call-volume row claims nothing until the settings load.** Its value
+  showed a dash while the line beneath it asserted that calls are logged per
+  incident — a concrete rule, false for a count-only or off department, stated
+  exactly when nothing had read the setting.
 - **The queue opens on six months, not one, and says what it checked.** The
   hub's **To close out** metric has no earliest date — it counts a shift left
   unclosed three years ago — so a one-month default let an officer follow a

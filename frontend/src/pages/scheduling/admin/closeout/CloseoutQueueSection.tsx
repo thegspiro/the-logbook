@@ -390,6 +390,9 @@ const CloseoutQueueSection: React.FC = () => {
         queue.map((entry) => {
           const shift = entry.shift;
           const isOpen = openRow === shift.id;
+          // Only the count-only wizard holds unsaved state; the other branch
+          // navigates away, so there is nothing on this page to protect.
+          const blockedByOpenRow = openRow !== null && !isOpen && callTrackingMode === 'count_only';
           const pending = outstandingChecks(shift.id);
           return (
             <div key={shift.id} className="card space-y-3 p-4">
@@ -470,11 +473,18 @@ const CloseoutQueueSection: React.FC = () => {
                 </button>
               )}
 
+              {/* Held while another row's wizard is open. That wizard keeps the
+                  step being edited — attendance times, call counts — in local
+                  state until Next is pressed, and switching rows unmounts it,
+                  so one click on a different row silently discarded typing. The
+                  open row carries its own "Close this row", so switching is
+                  still one deliberate step; it just is not an accident. */}
               {!isOpen && (
                 <button
                   type="button"
                   onClick={() => void openCloseout(entry)}
-                  disabled={preparing === shift.id}
+                  disabled={preparing === shift.id || blockedByOpenRow}
+                  title={blockedByOpenRow ? 'Close the open row first — it has unsaved close-out entries.' : undefined}
                   className="btn-primary mobile-touch-target inline-flex items-center gap-2 px-4 text-sm font-semibold disabled:opacity-50"
                 >
                   {callTrackingMode === 'count_only' ? (

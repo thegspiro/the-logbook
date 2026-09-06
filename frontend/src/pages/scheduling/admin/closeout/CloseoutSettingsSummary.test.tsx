@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../../test/utils';
 
@@ -129,6 +129,41 @@ describe('CloseoutSettingsSummary', () => {
 
     expect(await screen.findByText('12 hours')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '12 hours' })).not.toBeInTheDocument();
+  });
+
+  // The value rendered a dash while the hint underneath asserted "calls are
+  // logged per incident" — a concrete rule, false for a count-only or off
+  // department, stated exactly when nothing had read the setting. The guard had
+  // been dropped to satisfy exactOptionalPropertyTypes.
+  it('claims nothing about how calls are recorded until the settings load', async () => {
+    let release: (value: unknown) => void = () => {};
+    mockGetFeatureSettings.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      })
+    );
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    await screen.findByText('What close-out asks for');
+    expect(screen.queryByText(/logged per incident/)).not.toBeInTheDocument();
+    expect(screen.getByText(/did not load/)).toBeInTheDocument();
+
+    await act(async () => {
+      release({
+        require_end_of_shift_checks: false,
+        call_tracking: { mode: 'count_only', call_types: [] },
+      });
+    });
+
+    expect(screen.getByText('A count at close-out')).toBeInTheDocument();
+  });
+
+  it('claims nothing about how calls are recorded when the settings fail', async () => {
+    mockGetFeatureSettings.mockRejectedValue(new Error('nope'));
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    await screen.findByRole('alert');
+    expect(screen.queryByText(/logged per incident/)).not.toBeInTheDocument();
   });
 
   // A dash reads as "not loaded"; a fabricated default reads as a value

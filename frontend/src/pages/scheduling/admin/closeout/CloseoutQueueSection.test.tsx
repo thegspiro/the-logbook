@@ -274,6 +274,49 @@ describe('CloseoutQueueSection', () => {
     expect(screen.queryByTestId('closeout-wizard')).not.toBeInTheDocument();
   });
 
+  // The wizard keeps the step being edited in local state until Next is pressed,
+  // and switching rows unmounts it — so one click on another row silently threw
+  // away typing. The open row's own exit is still there; switching just has to
+  // be deliberate.
+  it('will not let another row unmount an open wizard', async () => {
+    mockGetShifts.mockResolvedValue({
+      shifts: [unclosedShift, { ...unclosedShift, id: 'shift-2', apparatus_unit_number: 'Engine 2' }],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getAllByRole('button', { name: /Close out/ })[0] as HTMLElement);
+    expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('wizard for shift-1');
+
+    const other = screen.getByRole('button', { name: /Close out/ });
+    expect(other).toBeDisabled();
+
+    await user.click(other);
+    expect(screen.getByTestId('closeout-wizard')).toHaveTextContent('wizard for shift-1');
+  });
+
+  // The other branch navigates away, so there is no unsaved state on this page
+  // to protect and no reason to hold the row.
+  it('does not hold the other rows when the row action only opens the shift', async () => {
+    storeState.callTrackingMode = 'detailed';
+    mockGetShifts.mockResolvedValue({
+      shifts: [unclosedShift, { ...unclosedShift, id: 'shift-2', apparatus_unit_number: 'Engine 2' }],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    });
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    for (const button of screen.getAllByRole('button', { name: /Open the shift to close it/ })) {
+      expect(button).toBeEnabled();
+    }
+  });
+
   // A reversed range is not an empty range. The endpoint applies both bounds
   // and returns nothing, which this screen would present as an audit result.
   it('refuses to read a reversed range rather than calling it clear', async () => {

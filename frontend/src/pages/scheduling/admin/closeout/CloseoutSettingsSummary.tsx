@@ -49,18 +49,32 @@ const SHIFT_REPORTS = '/scheduling/admin/settings/shift-reports';
 const CHECKLIST_TIMING = '/inventory/admin/checklists/settings';
 const CHECKLIST_TIMING_PERMISSIONS = ['settings.manage', 'organization.update_settings'];
 
-/** How the department records call volume, in the officer's words. */
-const callVolumeLabel = (mode: string | undefined): string => {
-  // Three modes, not two. Folding `off` into the `detailed` branch read as
-  // "Individual call records" for a department that has said it does not want
-  // to be asked at all — the opposite of what it configured.
+/**
+ * How the department records call volume, in the officer's words.
+ *
+ * Both take the settings rather than the mode, because both have to answer the
+ * same way when nothing has been read yet. `loaded` false is not a mode: the
+ * value renders a dash for it, and the hint said "calls are logged per
+ * incident" — a concrete rule, false for a count-only or off department, stated
+ * exactly when the setting was unknown. That happened because the hint's guard
+ * was dropped to satisfy `exactOptionalPropertyTypes`, trading a type error for
+ * a false statement. Keeping the unknown case *inside* these two functions is
+ * what stops the value and the hint disagreeing again.
+ *
+ * Three modes, not two: folding `off` into the `detailed` branch told a
+ * department that had asked not to be prompted the opposite of what it set.
+ * And a missing `mode` on loaded settings means today's behaviour, never `off`
+ * (pitfall #19) — which is a different thing from settings that never arrived.
+ */
+const callVolumeLabel = (loaded: boolean, mode: string | undefined): string => {
+  if (!loaded) return '—';
   if (mode === 'count_only') return 'A count at close-out';
   if (mode === 'off') return 'Not recorded';
-  // A missing setting means today's behaviour, never 'off' (pitfall #19).
   return 'Individual call records';
 };
 
-const callVolumeHint = (mode: string | undefined): string => {
+const callVolumeHint = (loaded: boolean, mode: string | undefined): string => {
+  if (!loaded) return 'Not known — the department’s scheduling settings did not load';
   if (mode === 'count_only') return 'Close-out asks for the count and credits it to the crew';
   if (mode === 'off') return 'Close-out does not ask about calls';
   return 'Close-out does not ask for a count; calls are logged per incident';
@@ -109,9 +123,9 @@ const CloseoutSettingsSummary: React.FC = () => {
     },
     {
       label: 'Call volume',
-      value: feature ? callVolumeLabel(mode) : '—',
+      value: callVolumeLabel(Boolean(feature), mode),
       href: GENERAL,
-      hint: callVolumeHint(mode),
+      hint: callVolumeHint(Boolean(feature), mode),
     },
     {
       label: 'Open-ended shift cushion',
