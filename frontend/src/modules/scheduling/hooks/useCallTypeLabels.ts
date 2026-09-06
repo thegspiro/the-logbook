@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect } from 'react';
 import { useSchedulingStore } from '../store/schedulingStore';
+import type { CallTypeOption } from '../types';
 
 /**
  * Whether a shift report's stored call types are this org's type slugs.
@@ -44,6 +45,32 @@ export const useCallTypeLabels = (): ((value: string) => string) => {
   }, [loadSettings]);
 
   return useCallback((value: string) => labels[value] ?? value, [labels]);
+};
+
+/**
+ * The department's own call types, for an editor that has to offer them.
+ *
+ * A report whose stored types are org slugs must be edited in slugs, or the
+ * saved list mixes the two vocabularies: the shift-report settings carry their
+ * own free-text list (`shift_review_call_types`, "Structure Fire"), which is
+ * the right thing to offer for detailed tracking and the wrong thing here —
+ * the stored slug does not even appear selected, and toggling any chip appends
+ * a label beside it. What is stored then stops resolving to a label and stops
+ * counting as a reason not to delete its type.
+ *
+ * Retired types are returned too. One already on a report has to render, and
+ * be removable; a caller offering these for a *new* selection filters on
+ * `active` itself.
+ */
+export const useOrgCallTypes = (): CallTypeOption[] => {
+  const callTypes = useSchedulingStore((s) => s.callTypes);
+  const loadSettings = useSchedulingStore((s) => s.loadSettings);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  return callTypes;
 };
 
 /**
