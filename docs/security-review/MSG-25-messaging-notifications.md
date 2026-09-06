@@ -880,6 +880,39 @@ real gap, both fixed:**
   thread open for a maintainer call rather than resolving it myself, since
   it is a policy-scope question (whether to tighten `max-warnings`
   repo-wide) rather than a defect in this change.
+- **Round 3, P1:** the self-refresh fast path decided "the caller already
+  owns this endpoint" from the same _plain_ read used to guess who to
+  lock — itself stale for the reason round 1's own fix already
+  established (the request's transaction snapshot predates `subscribe()`
+  being called). If a transfer away from the endpoint committed in
+  between, the refresh would still overwrite the row's encryption keys
+  with its own while leaving `user_id` pointing at the new owner: a push
+  meant for the new owner would then be encrypted with keys only the
+  _old_ owner's device holds the matching private key for, and delivered
+  there instead. Fixed by making the endpoint lookup itself a locking
+  read before the self-refresh decision is made. Guard test:
+  `TestConcurrentRefreshDuringTransferStaysConsistent::
+test_a_refresh_racing_a_transfer_never_splits_owner_from_keys`.
+- **CI itself then caught a real deadlock — not from Codex, from a live
+  MariaDB run of round 2's own guard test.** `Backend Integration Tests
+(MariaDB 10.11)` failed on the round-3 commit with
+  `OperationalError: (1213, 'Deadlock found when trying to get lock')`
+  from `test_two_users_swapping_endpoints_at_once_both_succeed` — the
+  exact scenario round 2 was supposed to have closed. Root cause: round
+  3's fix took its endpoint-row lock _before_ round 2's sorted user-row
+  locks, reintroducing the identical AB/BA cycle round 2 closed, just
+  relocated onto the endpoint rows instead of the user rows. Fixed by
+  reordering: the unlocked guess of the endpoint's current owner now only
+  decides which `User` rows to lock (never anything about the endpoint
+  itself); those locks are still acquired sorted, exactly as round 2
+  established; only after they're held does the request take its one
+  locking read of the specific endpoint row. No test changes were
+  needed — both existing guard tests already asserted exactly the
+  properties this reordering restores. This is the one guard test in
+  this PR that this sandbox's inability to build `pywebpush`/`http-ece`
+  could not substitute a mocked check for: only a real, live database run
+  reproduces an actual InnoDB/MariaDB deadlock-detector outcome, and CI —
+  not local verification — is what caught this.
 
 ### MSG-14 — LOW — `build_shell`'s `subtitle` was not HTML-escaped — ✅ FIXED
 
