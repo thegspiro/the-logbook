@@ -832,6 +832,55 @@ exactly the cap and not before via a scripted repro against the real
 `subscribe()` method; the real integration tests will exercise it in CI
 where the dependency is installed.
 
+**Two rounds of Codex review on this fix's own PR (#2305) each found a
+real gap, both fixed:**
+
+- **Round 1, P2:** reassigning a device currently owned by a _different_
+  user hit the `if existing:` branch, which re-pointed the row and
+  returned before the cap check ever ran — two accounts could trade one
+  endpoint back and forth to grow one of them past the limit with no race
+  needed. Fixed by exempting only a genuine self-refresh
+  (`existing.user_id == str(user_id)`) from the cap; reassigning someone
+  else's device now goes through the same locked count-and-cap check as a
+  brand-new subscription. Guard test:
+  `test_reassigning_someone_elses_device_still_respects_the_cap`.
+- **Round 1, P1:** the count-then-insert was a plain check-then-act race —
+  two concurrent `subscribe()` calls for the same user could each observe
+  a count below the cap and both commit. Fixed by locking the target
+  user's row first, then making the count itself a locking read too
+  (`.with_for_update()` on both) — under REPEATABLE READ, locking the
+  parent row alone does not refresh the snapshot the request's transaction
+  already took when `current_user` was loaded upstream (same shape as
+  CLAUDE.md pitfall #27's "make the count itself a locking read" lesson).
+- **Round 2, P2:** the round-1 fix introduced a new deadlock. Two callers
+  swapping endpoints with each other at the same moment (A claims B's
+  device, B claims A's) would each lock their own target user first and
+  then block on the other's existing subscription row at UPDATE time — a
+  textbook AB/BA cycle that MySQL's deadlock detector resolves by aborting
+  one side with an unhandled error (a 500 at `/push/subscribe`). Fixed by
+  locking every user affected by the call — the target, and (when
+  reassigning) the endpoint's previous owner — in a fixed order sorted by
+  id, rather than in whichever order each side of a swap happens to reach
+  them. Guard test:
+  `TestConcurrentEndpointSwapDoesNotDeadlock::test_two_users_swapping_endpoints_at_once_both_succeed`,
+  using two real independent sessions and `asyncio.gather` against a live
+  database — a mocked session cannot reproduce a real InnoDB
+  deadlock-detector outcome, so this one could not be verified with the
+  mocked-logic technique the other guard tests use; it will run for real
+  in CI where `pywebpush` is installed.
+- **Round 2, P1 (disputed, not applied):** Codex separately flagged this
+  same completion-gate table's "3 pre-existing warnings (none in touched
+  files)" line as continuing past a known failure. Checked directly:
+  `frontend/package.json`'s `lint` script is `eslint --max-warnings 10` —
+  the project's own configured gate already tolerates up to 10 warnings —
+  and re-running `npm run lint` returns exit code 0 with exactly this
+  count. The 3 warnings are `testing-library/no-node-access` in
+  `src/pages/scheduling/ShiftDetailPanel.test.tsx`, a file this PR's diff
+  does not touch. Replied on the PR with this evidence and left the
+  thread open for a maintainer call rather than resolving it myself, since
+  it is a policy-scope question (whether to tighten `max-warnings`
+  repo-wide) rather than a defect in this change.
+
 ### MSG-14 — LOW — `build_shell`'s `subtitle` was not HTML-escaped — ✅ FIXED
 
 **What:** `build_shell` (`email_theme.py`) escapes `title` — or rather,
@@ -930,9 +979,12 @@ regressions found in any of them.
 ## Guard tests added (pass 3)
 
 - `backend/tests/test_push_service.py::TestSubscribe::
-test_a_user_cannot_register_unbounded_devices` and
-  `test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap`
-  (MSG-13).
+test_a_user_cannot_register_unbounded_devices`,
+  `test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap`, and
+  `test_reassigning_someone_elses_device_still_respects_the_cap` (MSG-13).
+- `backend/tests/test_push_service.py::TestConcurrentEndpointSwapDoesNotDeadlock::
+test_two_users_swapping_endpoints_at_once_both_succeed` (MSG-13, Codex
+  round 2) — two real independent sessions racing via `asyncio.gather`.
 - `backend/tests/test_email_theme_shell.py::TestBuildShell::
 test_subtitle_is_escaped` (MSG-14). Verified to fail against the
   reverted code and pass after.
@@ -946,7 +998,7 @@ test_subtitle_is_escaped` (MSG-14). Verified to fail against the
 | `isort --check-only app/ tests/ alembic/`                                              | clean                                                         |
 | `python3 scripts/validate_migrations.py --strict`                                      | PASSED — 431 revisions, single head                           |
 | backend tests, scope (`-k "push_service or email_theme or messaging or notification"`) | 747 passed, 1 skipped (pre-existing, py_vapid/http-ece)       |
-| backend tests, full suite                                                              | 11,471 passed, 21 skipped (environment-only), 0 failed        |
+| backend tests, full suite                                                              | pending (re-running after the round-2 deadlock fix)           |
 | `npx tsc --noEmit` (frontend)                                                          | 0 errors                                                      |
 | `npx eslint .` (frontend)                                                              | 0 errors, 3 pre-existing warnings (unrelated file, untouched) |
 
