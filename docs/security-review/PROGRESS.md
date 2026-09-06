@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None yet.** Feature 26 (Forms) pass 3 review complete (FORM-10 fixed,
-one item flagged) — PR not yet opened. Rotation row 26 -> ⏳ pending PR.
-Next: open the PR for Feature 26, tend it to green, then 27 Integrations.
+**[PR #2306](https://github.com/thegspiro/the-logbook/pull/2306)** — Feature 26
+(Forms) pass 3: FORM-10 (stale-snapshot duplicate-submission race) fixed,
+one item flagged. Rotation row 26 -> ⏳ pending PR. Next: tend #2306 to
+green and merged, then 27 Integrations.
 
 ---
 
