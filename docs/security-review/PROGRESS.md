@@ -16,33 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 27 (Integrations), pass 3, Codex-round follow-up** — branch
-`claude/security-review-integrations-followup`,
-[PR #2311](https://github.com/thegspiro/the-logbook/pull/2311).
+None. Feature 27 (Integrations) is fully merged (PR #2311); see the Log
+entry below and Rotation row 27 (✅). Currently reviewing Feature 28
+(Security, audit & IP).
 
-**PR #2307 merged (by the repo owner) before a Codex review round on it
-landed**, so its 6 review-thread fixes could not go into that PR — a new
-branch/PR was opened per CLAUDE.md pitfall #24 (never reuse a branch name
-after its PR merges; `claude/security-review-integrations` already had). All
-6 threads replied to on #2307 (still valid there as a record of what was
-found), 5 resolved, and their fixes carried forward into #2311 against
-current `main`.
+---
 
-**INT-7 is now ✅ FIXED** (the Codex round found the original "flagged, not
-fixed" call in #2307 was based on a false premise): `create_integration_
-client()`'s transport now wraps every connector's response stream and
-aborts once `MAX_RESPONSE_SIZE` (10 MB) is exceeded, enforced centrally with
-no connector call site changed. All of INT-1 through INT-6 re-verified
-intact. A narrower related gap (no wall-clock request deadline) is tracked
-separately in `KNOWN_LIMITATIONS.md`. Route inventory corrected to 21
-endpoints across six files (two public webhook routers,
-`salesforce_webhook.py`/`paypal_webhook.py`, were missed in passes 2-3 and
-are now reviewed and clean). The inbound-webhook body-size claim was also
-corrected: nginx is deployment-conditional, but the pre-existing, ASGI-level
-`RequestSizeLimitMiddleware` caps bodies at 60 MB regardless — no new
-finding needed. Full completion gate green against current `main` — see the
-Log and `docs/security-review/INT-27-integrations.md` for detail.
-Subscribed to #2311; awaiting CI/review.
+### 2026-09-06 — Feature 27 (Integrations, pass 3) ✅ merged — PR #2311
+
+Watchdog check found PR #2311 (the Codex-round follow-up recorded in this
+row) had merged at 2026-09-06T16:29:29Z — the "Open PR" note above was
+stale, still pointing at it as open. No new commits landed on `main` in the
+interim that would need re-verification against Feature 27's code. Rotation
+row 27 → ✅. Next: 28 Security, audit & IP.
 
 ---
 
@@ -9819,8 +9805,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | 🔄     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
