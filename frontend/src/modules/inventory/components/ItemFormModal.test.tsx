@@ -207,6 +207,20 @@ describe('ItemFormModal', () => {
   // quartermaster editing a variant-generated shirt read "l" where every other
   // screen says "L" — and left `standard_size` at its old value on save.
   describe('size picker', () => {
+    // `vi.clearAllMocks()` in the parent `beforeEach` clears recorded calls but
+    // not implementations, and an unconsumed `…Once` stays queued through it —
+    // so a block that configures nothing runs on whatever its neighbour left
+    // behind, and passes or fails on file order (CLAUDE.md pitfall #28).
+    // `mockReset()` before each default is what makes these defaults hold.
+    beforeEach(() => {
+      mockGetVendors.mockReset();
+      mockGetVendors.mockResolvedValue([]);
+      mockCreateItem.mockReset();
+      mockCreateItem.mockResolvedValue({});
+      mockUpdateItem.mockReset();
+      mockUpdateItem.mockResolvedValue({});
+    });
+
     const sizeSelect = (): HTMLElement => screen.getByLabelText('Size');
 
     it('shows the readable label for a stored size code', () => {
