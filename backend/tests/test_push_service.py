@@ -13,6 +13,7 @@ is how a real push service reports that the browser has dropped the
 subscription.
 """
 
+import asyncio
 import base64
 import json
 import os
@@ -37,6 +38,7 @@ Vapid02 = pytest.importorskip(
 ).Vapid02
 
 from app.core.config import settings
+from app.core.database import database_manager
 from app.services.push_service import (
     PYWEBPUSH_AVAILABLE,
     PushService,
@@ -520,3 +522,123 @@ class TestCascade:
         await db_session.commit()
 
         assert await _count(db_session, "user_id", user_id) == 0
+
+
+async def _insert_org_and_user(session, org_id: str, user_id: str, label: str) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO organizations (id, name, organization_type, slug, timezone)"
+            " VALUES (:id, :name, :otype, :slug, :tz)"
+        ),
+        {
+            "id": org_id,
+            "name": f"Push Cap Deadlock Test Org {label}",
+            "otype": "fire_department",
+            "slug": f"pcdt-{org_id[:8]}",
+            "tz": "UTC",
+        },
+    )
+    await session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name,"
+            " last_name, email, password_hash, status)"
+            " VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+        ),
+        {
+            "id": user_id,
+            "org": org_id,
+            "un": f"member-{user_id[:8]}",
+            "fn": "Test",
+            "ln": "Member",
+            "em": f"member-{user_id[:8]}@test.com",
+            "pw": "hashed",
+        },
+    )
+
+
+async def _cleanup_users(*org_ids: str) -> None:
+    async with database_manager.session_factory() as session:
+        for org_id in org_ids:
+            await session.execute(
+                text("DELETE FROM push_subscriptions WHERE organization_id = :o"),
+                {"o": org_id},
+            )
+            await session.execute(
+                text("DELETE FROM users WHERE organization_id = :o"), {"o": org_id}
+            )
+            await session.execute(
+                text("DELETE FROM organizations WHERE id = :o"), {"o": org_id}
+            )
+        await session.commit()
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestConcurrentEndpointSwapDoesNotDeadlock:
+    async def test_two_users_swapping_endpoints_at_once_both_succeed(self):
+        """Codex round 1 on MSG-13: locking the *target* user's row to
+        serialize the cap check introduces a new deadlock if two callers
+        swap endpoints with each other at the same moment -- A claims B's
+        device while B claims A's. Each request would lock its own target
+        first and then block on the other's existing row: a textbook
+        AB/BA cycle. Locking every affected user (target and, when
+        reassigning, the previous owner) in a fixed sorted order -- not in
+        whichever order each request happens to reach them -- must make one
+        request's full lock set a strict subset of a consistent order, so
+        neither can hold half of a cycle. Both requests must complete
+        (whichever wins the race for the smaller id proceeds fully before
+        the other can start), not raise a deadlock error.
+
+        Real committed rows and two genuinely independent sessions running
+        concurrently via asyncio.gather -- a mocked session cannot
+        reproduce a real InnoDB lock-wait/deadlock detector outcome.
+        """
+        org_a, user_a = str(uuid.uuid4()), str(uuid.uuid4())
+        org_b, user_b = str(uuid.uuid4()), str(uuid.uuid4())
+        p256dh, auth = _client_keys()
+
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_user(setup, org_a, user_a, "A")
+            await _insert_org_and_user(setup, org_b, user_b, "B")
+            await setup.commit()
+
+        session_a = database_manager.session_factory()
+        session_b = database_manager.session_factory()
+        try:
+            # Each user starts by owning one endpoint, then both requests
+            # try to claim the OTHER's endpoint at the same time.
+            svc_a = PushService(session_a)
+            svc_b = PushService(session_b)
+            await svc_a.subscribe(
+                org_a, user_a, "https://push.example/dev-a", p256dh, auth
+            )
+            await session_a.commit()
+            await svc_b.subscribe(
+                org_b, user_b, "https://push.example/dev-b", p256dh, auth
+            )
+            await session_b.commit()
+
+            async def claim(svc, session, org_id, user_id, endpoint):
+                sub = await svc.subscribe(org_id, user_id, endpoint, p256dh, auth)
+                await session.commit()
+                return sub
+
+            result_a, result_b = await asyncio.gather(
+                claim(svc_a, session_a, org_a, user_a, "https://push.example/dev-b"),
+                claim(svc_b, session_b, org_b, user_b, "https://push.example/dev-a"),
+                return_exceptions=True,
+            )
+
+            for label, result in (("A", result_a), ("B", result_b)):
+                assert not isinstance(result, BaseException), (
+                    f"claim {label} raised {result!r} instead of completing -- "
+                    "the swap deadlocked"
+                )
+
+            assert result_a.user_id == str(user_a)
+            assert result_b.user_id == str(user_b)
+        finally:
+            await session_a.rollback()
+            await session_b.rollback()
+            await session_a.close()
+            await session_b.close()
+            await _cleanup_users(org_a, org_b)

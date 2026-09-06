@@ -253,9 +253,21 @@ class PushService:
         # acquiring this lock does not refresh what a plain SELECT would see
         # (CLAUDE.md pitfall #27): only a locking read is defined to return
         # the latest committed rows.
-        await self.db.execute(
-            select(User).where(User.id == str(user_id)).with_for_update()
-        )
+        #
+        # When reassigning an endpoint away from a different user, that
+        # user's row is locked too — in a fixed order (sorted by id, not by
+        # which side of the swap either request is on). Two callers trading
+        # endpoints with each other (A claims B's device, B claims A's, at
+        # the same time) would otherwise each lock their own target first
+        # and then block on the other's existing row: a textbook AB/BA
+        # deadlock. Acquiring both requests' locks in the same global order
+        # makes one of them fully finish (or fully back off) before the
+        # other can proceed, instead of each holding one half of a cycle.
+        lock_user_ids = {str(user_id)}
+        if existing and existing.user_id != str(user_id):
+            lock_user_ids.add(existing.user_id)
+        for uid in sorted(lock_user_ids):
+            await self.db.execute(select(User).where(User.id == uid).with_for_update())
         count_result = await self.db.execute(
             select(func.count())
             .select_from(PushSubscription)
