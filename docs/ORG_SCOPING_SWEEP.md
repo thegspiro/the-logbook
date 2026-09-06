@@ -243,8 +243,10 @@ virtualenv, or the pinned GitHub Action — never alongside `requirements.txt`.
 Option B. The ratchet is what ships.
 
 **Built:** `backend/tests/test_org_scoping_ratchet.py` plus
-`backend/tests/org_scoping_baseline.txt` — **47 entries across 27 files**, the
-bare-name ids on org-bearing models. It runs in the ordinary backend suite, in
+`backend/tests/org_scoping_baseline.txt` — **47 entries across 27 files** as
+built, the bare-name ids on org-bearing models. (46 since `set_user_roles` was
+scoped; the list may only shrink, so a count below 47 is the ratchet working
+rather than an entry going missing.) It runs in the ordinary backend suite, in
 about 6 seconds, needing no CI change.
 
 Verified by mutation in both directions: adding an unscoped query fails
@@ -359,6 +361,94 @@ baseline is a backlog of _unverified_ sites, not of suspected ones.
 **26 services entries remain unread** — the private helpers and the eleven
 functions with no org context, which need caller tracing rather than local
 reading.
+
+## 4c. Third pass — the baseline is fully triaged
+
+Read 2026-09-06 on `claude/org-scoping-services-burndown-2`: the remaining 26
+`app/services/` entries, plus the four in `app/api/` that no pass had reached.
+**Every one of the 47 baseline entries now carries a recorded verdict.**
+
+These needed a different method from §4b. Almost all are `_private` helpers, so
+nothing in the function itself decides safety — the id arrives already
+resolved, or it does not. The pass was driven by a caller-tracing script: for
+each entry, find every call to the enclosing function across `app/`, bind the
+flagged parameter positionally or by keyword, and print the expression the
+caller supplies. That turns "read 26 functions and their histories" into "read
+26 argument expressions", and only the handful that resolve to a bare
+pass-through need a second hop.
+
+**Running total: 51 sites read across three passes, one finding.**
+
+### The finding: `RoleService.set_user_roles` is unreachable and unscoped
+
+`app/services/role_service.py:655`. No caller anywhere in `app/` — only its own
+definition and two references in `tests/test_role_service.py`.
+
+It takes **no `organization_id` at all**, and nothing in it is org-scoped:
+
+- `get_user_roles(db, user_id)` — no org
+- `select(User).where(User.id == user_id)` — no org filter
+- `select(Role).where(Role.id.in_(role_ids))` — **the role ids are not
+  org-checked either**
+- the `delete` / `insert` on `user_roles` — no org constraint
+
+So it would replace any user's positions with any positions, across tenants,
+including administrator-bearing ones. It is not exploitable today because
+nothing routes to it. The live path — `users.py::assign_user_roles` — is a
+strictly stronger duplicate: it fetches the user org-scoped, fetches the roles
+with `Role.organization_id == current_user.organization_id`, and calls both
+`_enforce_role_grant_ceiling` and `assert_positions_retain_administrator`.
+
+**This is a loaded gun, not a wound.** The danger is that it reads like a ready
+helper: a future endpoint that calls it inherits a cross-tenant privilege
+escalation, and the reviewer of _that_ change sees only a one-line service call.
+Two defensible fixes, and the choice is a product decision rather than a
+security one:
+
+- **Delete it,** with its two tests. It duplicates a live path that is already
+  better. `CLAUDE.md`'s app-review rotation lists dead-code removal as a safe
+  fix, and deleting an unreachable method changes no behaviour.
+- **Scope it** — validate `role_ids` against the target user's organization with
+  `assert_all_in_org` before the insert, and org-scope the `User` fetch. This
+  needs no signature change (the org is derivable from the user row) and makes
+  it safe to wire up.
+
+**Resolved by scoping, not deletion** (2026-09-06, after this pass merged).
+The owner chose to keep the method. It now resolves the target user inside
+`organization_id`, runs `assert_all_in_org` over `role_ids` before any write,
+and org-filters the `select(Role)` behind the administrator-continuity check.
+Its baseline entry is gone — `test_baseline_has_no_stale_entries` is what
+required that, which is the ratchet doing the job it was built for.
+
+One correction to the option above, recorded because the reasoning was wrong
+rather than merely incomplete: it claimed scoping "needs no signature change
+(the org is derivable from the user row)". Deriving the org from the row you
+are about to trust is circular — it bounds nothing, since a caller passing a
+foreign `user_id` gets that user's own org back and every check then passes.
+`organization_id` is therefore a **required, keyword-only** parameter. Optional
+would have left the unscoped path in place for a caller to forget, which is the
+shape pitfall #14b warns about and the one `ShiftCompletionService.get_report`
+still carries as EC-9. There were no production callers to migrate.
+
+### Everything else, by mechanism
+
+| Why it is safe                                                                                                                                                                  |                                      Count |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -----------------------------------------: |
+| The id is read off a row the caller already resolved (`operator.id`, `leave.linked_training_waiver_id`, `assignment.user_id`, `peeked_folder.id`)                               |                                         11 |
+| Notification / display helper reached only from an org-scoped flow                                                                                                              |                                          8 |
+| Id-only `SELECT ... FOR UPDATE`: a lock acquisition, not a read                                                                                                                 |                                          4 |
+| `assert_in_org` bounds the client-supplied id first                                                                                                                             | 1 (`_lock_destination_folder`, DOC-6/XC-1) |
+| Structurally unscopeable: the JWT-subject lookup that _establishes_ the caller, a `TASK_RUNNERS` sweep with no caller org, three public webhooks where the id is the credential |                                          5 |
+
+### Two hardening candidates, not defects
+
+Both hold an `organization_id` and simply do not apply it on the flagged query,
+so they are safe only by their caller's history — the same shape as the six
+re-reads hardened in #2337:
+
+- `scheduling_service._notify_shift_assignment` — `select(Shift).where(Shift.id == ...)`
+- `external_training.perform_sync_task` — the background task re-fetches the
+  provider after the endpoint validated it, across a session boundary
 
 ## 5. Effort
 

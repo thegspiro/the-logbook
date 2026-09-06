@@ -259,11 +259,19 @@ Click on any budget in the list to view its detail page at `/finance/budgets/:id
 > The **transaction table** is an unconditional `<EmptyState>` stub — there is
 > no fetch behind it and no code path that ever displays a row.
 >
-> The **bar is permanently at 0%**. Spend and encumbrance accrue when a
-> purchase request or expense report is approved, and nothing can be approved:
-> `finance.approve` gates all three approval endpoints and no shipped role
-> grants it, while the one account holding `*` is refused by separation of
-> duties for anything it raised. Both are recorded in
+> The **bar reads 0% until something is approved**, because spend and
+> encumbrance accrue only on approval.
+>
+> **Narrowed 2026-09-06.** Until that date nothing could be approved at all:
+> `finance.approve` gates the approval endpoints and no seeded position held
+> it, leaving only the `*` IT administrator, who is refused by separation of
+> duties for anything they raised. The **Treasurer** now carries
+> `finance.approve` and `finance.configure_approvals`, seeded and back-filled
+> to departments that already onboarded. What remains is a configuration
+> matter: a department whose only approver is the Treasurer still cannot clear
+> a request the Treasurer raised, so a chain that must survive that needs a
+> second approver step. Both the stub table and the approval history are
+> recorded in
 > [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-could-approve-anything-2026-08-12-narrowed-2026-09-06).
 
 ### Budget Summary
