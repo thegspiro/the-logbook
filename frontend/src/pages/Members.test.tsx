@@ -114,9 +114,9 @@ async function renderRoster(): Promise<void> {
 
 /**
  * Grant an exact permission set rather than a blanket boolean. members.manage
- * and members.create are not the same population -- the Captain, Vice
- * President and Assistant Secretary positions hold the first without the
- * second -- and a mock answering true to everything cannot tell them apart.
+ * and users.create are not the same population -- the Captain, Vice President
+ * and Assistant Secretary positions hold the first without the second -- and a
+ * mock answering true to everything cannot tell them apart.
  */
 function installDefaults(held: string[]): void {
   // Reset rather than clear: an implementation left by a neighbouring block
@@ -256,12 +256,12 @@ describe('Members roster — regular member (no members.manage)', () => {
   });
 });
 
-describe('Members roster — captain (members.manage without members.create)', () => {
+describe('Members roster — captain (members.manage without users.create)', () => {
   // The Captain, Vice President and Assistant Secretary positions, and the
   // Captain rank, are seeded this way. Adding and importing land on
-  // MembersAdminHub tabs gated on members.create, and the hub falls back to
-  // Manage rather than erroring -- so an Add Member button offered here would
-  // silently drop the click.
+  // MembersAdminHub tabs gated on users.create -- what POST /users enforces --
+  // and the hub falls back to Manage rather than erroring, so an Add Member
+  // button offered here would silently drop the click.
   beforeEach(() => installDefaults(['members.manage']));
 
   it('withholds Add Member and Import CSV from the toolbar', async () => {
@@ -293,7 +293,7 @@ describe('Members roster — captain (members.manage without members.create)', (
 });
 
 describe('Members roster — membership coordinator (members.manage)', () => {
-  beforeEach(() => installDefaults(['members.manage', 'members.create']));
+  beforeEach(() => installDefaults(['members.manage', 'users.create']));
 
   it('offers the add and import prompt on an empty roster', async () => {
     mockGetUsers.mockResolvedValue([]);

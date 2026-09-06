@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Add Member asked a permission that gates the prospect pipeline (2026-09-06)
+
+**Fixed**
+
+- **`members.create` does not gate creating a member, despite its name.**
+  Nothing that creates a member enforces it: `POST /users` requires
+  `users.create`, and the prospect-transfer path that also mints a user row
+  requires `members.manage` or `prospective_members.manage`. `members.create`
+  is enforced only on the prospect pipeline — `POST /prospects` and
+  `/prospects/check-existing`. Its registry description read "Create new
+  members", which is how the members admin hub came to gate its Add Member and
+  Import tabs on it; both tabs submit through `userService.createMember`, which
+  posts to `POST /users`. All four entry points — the hub's two tabs, the
+  roster toolbar and empty-state prompt, and the command palette's Add Member
+  action — now ask `users.create`. The two grants are held by the same seeded
+  positions and ranks, so no one's access changes; the affordances now name the
+  gate that decides them. The permission itself is unchanged: renaming it would
+  be a breaking config change for any department that granted it, so its
+  description moved instead.
+- **A comment in the membership pipeline cited `users.create_member`**, a
+  permission that has never existed, and the membership training guide named
+  `members.create` as the requirement for adding and importing members. Both
+  now name `users.create`.
+
 ### Add Member was offered to three positions it did not work for (2026-09-06)
 
 **Fixed**
@@ -62,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect and was blind to the second by construction, which is how four pages
   kept a trail-less loading branch. Both directions are now covered, and the
   failure names the branch index.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**

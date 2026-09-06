@@ -43,13 +43,14 @@ const Members: React.FC = () => {
   // mean nothing to a member looking someone up. A member without the grant
   // gets a directory; a coordinator gets the management table unchanged.
   const canManageMembers = checkPermission('members.manage');
-  // Adding and importing answer to members.create, not members.manage. Both
-  // buttons navigate to tabs on MembersAdminHub, which gates them on
-  // members.create and silently falls back to Manage when the tab is not
-  // openable -- so gating them here on members.manage sent a Captain, Vice
-  // President or Assistant Secretary (who hold manage without create) to a
-  // screen that quietly dropped what they clicked.
-  const canCreateMembers = checkPermission('members.create');
+  // Adding and importing answer to users.create, not members.manage. Both
+  // buttons navigate to tabs on MembersAdminHub, which gates them on the same
+  // grant and silently falls back to Manage when the tab is not openable -- so
+  // gating them here on members.manage sent a Captain, Vice President or
+  // Assistant Secretary (who hold manage without create) to a screen that
+  // quietly dropped what they clicked. users.create is what POST /users
+  // actually enforces; members.create only reads like it (see MembersAdminHub).
+  const canCreateMembers = checkPermission('users.create');
   const [members, setMembers] = useState<User[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
