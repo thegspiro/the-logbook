@@ -16,7 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+**Housekeeping, not a feature pass** — branch
+`claude/security-review-progress-note-2251`,
+[PR #2300](https://github.com/thegspiro/the-logbook/pull/2300). Docs-only:
+corrects this file's own bookkeeping after the feature-22 watchdog merge
+below (clears the stale "PR #2251 open" section, fixes a wrong SHA and a
+rotation-row status per Codex review). No feature is under review on this
+branch. Recorded here anyway so a `/security-review` iteration that reads
+this file before #2300 merges tends this PR rather than reading a
+premature "None" and starting feature 23 concurrently with it. Once #2300
+merges, clear this section — feature 23 is next.
 
 ### 2026-09-06 — Feature 22 (Grants & fundraising, pass 3) ✅ merged — PR #2251
 
