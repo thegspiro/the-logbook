@@ -16,11 +16,70 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 26 (Forms)'s PR #2306 merged (`0315eef`) after a single
-pass — CI fully green (17/17), all 7 Codex review threads resolved with
-fixes landed, and idle for over an hour, so it was merged directly per
-the 30-minute watchdog precedent (PR #2301, #2303). Rotation row 26 -> ✅.
-Next: 27 Integrations.
+**Feature 27 (Integrations), pass 3** — branch
+`claude/security-review-integrations`, PR opening now (this section will be
+updated with the real link in a follow-up commit to the same branch). One
+new finding, **INT-7** (LOW-MED, flagged): `base.py`'s `MAX_RESPONSE_SIZE`
+constant was declared but never enforced by any connector — every outbound
+integration HTTP call buffers its full response into memory with no cap,
+contradicting `docs/module-audit/integrations.md`'s "size cap" claim
+(corrected in the same pass). Flagged rather than fixed: closing it means a
+behavior-changing streaming-read refactor across ~10 connector files at
+once, not a same-file patch. All of INT-1 through INT-6 re-verified intact.
+Full completion gate green — see the Log and
+`docs/security-review/INT-27-integrations.md` for detail. Subscribed;
+awaiting CI/review.
+
+---
+
+### 2026-09-06 — Feature 27 (Integrations, pass 3) — PR opening
+
+Read every backend file in this feature's declared scope in full, plus
+`calcom_sync.py`, `app/api/public/integrations_webhook.py` (public inbound
+webhooks) and `app/services/integration_services/base.py`/`__init__.py`
+(the connector dispatcher), none of which pass 1/2 read in full. Route
+counts unchanged: `integrations.py` 7, `salesforce_sync.py` 9,
+`calcom_sync.py` 1, plus 2 intentionally-public webhook routes — all
+enumerated, none newly ungated. `integrations.py` grew 710 → 841 lines
+since pass 2; the growth is new Claude (MCP) integration glue (a
+`claude-mcp` catalog entry + config schema, MCP-service-key revocation on
+disconnect gated by `require_audit_entry` so an unrecorded revocation
+rolls back rather than silently succeeding, the same audit gate on
+updating a live MCP integration's config) plus new `nfc-id-cards`/`paypal`
+catalog entries — all reviewed and clean; the wider MCP module (`app/mcp/*`)
+is not a declared file of this feature and already has its own
+`KNOWN_LIMITATIONS.md` entry from outside this rotation, the same scope
+line Feature 15 (Scheduling, pass 3) drew for its own MCP tool file, so
+not duplicated here. One new finding: **INT-7** (LOW-MED, flagged) —
+`base.py` declared a `MAX_RESPONSE_SIZE` constant with a docstring
+claiming a response-size cap on the shared HTTP client; nothing enforces
+it (`create_integration_client()` returns a plain non-streaming
+`httpx.AsyncClient`, and every connector's `.get(...).json()` buffers the
+full body before any caller-side code could check it), so a
+department-configured integration endpoint that returns an oversized or
+slow-drip body can drive unbounded per-request memory growth. Gated
+behind `integrations.manage` (not directly reachable by an unprivileged
+member); inbound webhook bodies are already bounded by nginx's global
+`client_max_body_size 50M`, unaffected by this finding. Flagged rather
+than fixed: closing it means every connector's response-read call site
+switching from a non-streaming read to `client.stream(...)` plus a
+running-byte-count abort — a behavior change across ~10 files at once
+(some, like Salesforce's own paginated bulk pull, may need a different cap
+than a webhook test), not a same-file patch. Corrected `docs/module-audit/
+integrations.md`'s "size cap" bullet, which had claimed this control was
+verified when it was never checked against the code. INT-1 through INT-6
+re-verified intact, all held. Full completion gate green: flake8/black/
+isort clean; migrations validated (431 revisions, single head, no schema
+change); 2412/2412 scoped and 11472/11472 full backend suite pass;
+frontend `tsc`/`eslint` 0 errors (3 pre-existing warnings, unrelated file).
+One sandbox-only wrinkle recorded in the findings doc rather than as a
+finding: this worktree started with no `node_modules`, which made `eslint`/
+`tsc` fall back to a global toolchain that couldn't resolve `@types/node`
+(1032 spurious warnings) until `npm ci` fixed it — same shape as
+`SKT-19-skills-testing.md`'s pass 3 note. Findings doc:
+`docs/security-review/INT-27-integrations.md` (Pass 3). Rotation row 27 ->
+⏳ pending PR. Next: open the PR, tend it to green, then 28 Security, audit
+& IP.
 
 ---
 
@@ -9672,7 +9731,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | 🔄     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |

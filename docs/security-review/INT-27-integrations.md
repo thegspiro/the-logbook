@@ -1,6 +1,222 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2087 (pass 1: #1910, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** pass 3 TBD (pass 2: #2087, merged; pass 1: #1910, merged)
+
+---
+
+## Pass 3 (2026-09-06) — one new finding (dead safeguard), everything else re-verified
+
+**Scope of growth since pass 2:** `integrations.py` grew 710 → 841 lines (+131);
+`salesforce_sync.py` (585), `salesforce_service.py` (447),
+`salesforce_oauth_service.py` (161) are byte-identical; `salesforce_sync_
+service.py` grew 958 → 966 (+8, unrelated to security — no new call site of
+either eviction/audit/exception-handling logic). Read all backend files in
+this feature's declared scope in full, plus `calcom_sync.py`,
+`app/api/public/integrations_webhook.py` (public, inbound webhooks — not
+explicitly enumerated in pass 2's file list) and
+`app/services/integration_services/base.py`, `__init__.py` (the connector
+dispatcher), neither of which pass 1/2 read in full either.
+
+**The +131 lines in `integrations.py` are new Claude (MCP) integration
+glue** (`claude-mcp` catalog entry + `ClaudeMcpConfig` schema, `_test_mcp_
+connection`, MCP-service-key revocation on disconnect, `require_audit_entry`
+gating on the MCP config update path) plus new `nfc-id-cards` and `paypal`
+catalog entries. **The wider MCP module (`app/mcp/*`, ~5,000+ L) is not a
+declared file of this feature and already carries its own
+`KNOWN_LIMITATIONS.md` entry from outside this rotation** — the same scope
+line Feature 15 (Scheduling, pass 3) drew for its own MCP tool file; not
+duplicated here. What _is_ in scope is the glue inside `integrations.py`
+itself, reviewed below.
+
+### Route inventory (re-verified, unchanged counts)
+
+`integrations.py`: 7 routes, same set as pass 2 (no new route — the MCP glue
+lives inside the existing `connect`/`disconnect`/`update`/`test-connection`
+handlers, all still `require_permission("integrations.manage")` + id+org
+filter). `salesforce_sync.py`: 9 routes, unchanged. `calcom_sync.py`: 1 route
+(`GET /bookings`, `integrations.manage`, org-scoped via `_get_calcom_
+integration`). `app/api/public/integrations_webhook.py`: 2 intentionally
+public routes (`POST /documenso/{id}`, `POST /calcom/{id}`) — both rate
+limited (30/min/IP), reject any integration with no configured
+`webhook_secret` (fail closed), verify HMAC/shared-secret with
+`hmac.compare_digest`-based helpers, replay-protected
+(`is_duplicate_webhook`), and resolve the acting org from the id-matched
+`Integration` row rather than from the payload. 19 endpoints total across
+the four files, all enumerated, none newly ungated.
+
+### MCP glue reviewed (new since pass 2) ✅
+
+- **`disconnect_integration`** revokes every MCP service key
+  (`McpKeyService.revoke_all`, row-locked, org-scoped) when the `claude-mcp`
+  integration is disconnected — a key must not outlive the connection it was
+  issued under, or reconnecting would silently reinstate it. Each revocation
+  is audit-logged and gated by `require_audit_entry` (`app/api/v1/endpoints/
+mcp_keys.py`): if the audit write itself failed, the whole disconnect
+  rolls back rather than silently revoking a key with no record — a
+  deliberately stricter failure mode than this file's other audit calls
+  (`log_audit_event` alone, which swallows its own failure), and the
+  comment on `require_audit_entry` names why: a widened/rotated key with no
+  record is exactly the failure the record exists to catch.
+- **`update_integration`** applies the same `require_audit_entry` gate when
+  the integration being updated is `claude-mcp` — a live service key's
+  access is what a config change to `access_mode`/`expose_finance`/
+  `expose_medical_screening`/`expose_full_schedule` widens or narrows, so an
+  unrecorded change to it is treated the same as an unrecorded key change.
+  Other integration types keep the existing best-effort `log_audit_event`.
+- **`_test_mcp_connection`** makes no outbound call (nothing external to
+  reach) — it reports whether the integration is connected and whether an
+  active service key exists, reading `McpKeyService(db).active_keys(
+integration.organization_id)` where `integration` was already fetched by
+  id+org above. No new SSRF/tenant-isolation surface.
+- **`ClaudeMcpConfig`** (`schemas/integration.py`): `extra="forbid"`, four
+  boolean/enum switches, no secret-shaped or URL-shaped field — none of
+  `_validate_urls_in_config`'s SSRF check or `_extract_secrets`' secret
+  split apply to it, correctly (there is nothing in this config to
+  SSRF-check or encrypt).
+
+Deeper MCP internals (`app/mcp/keys.py`'s `McpKeyService`, `app/mcp/tools/*`,
+redaction, transport auth) are out of this feature's declared scope per the
+precedent above and were not re-derived; `active_keys`/`revoke_all`'s
+signatures and locking were read only far enough to confirm the call sites
+inside `integrations.py` use them correctly (org id passed, row-locked,
+audit-gated).
+
+### Findings
+
+#### INT-7 — LOW-MED — `MAX_RESPONSE_SIZE` is declared, never enforced — 🚩 FLAGGED
+
+**What:** `app/services/integration_services/base.py` declares a 10 MB
+`MAX_RESPONSE_SIZE` constant with a docstring claiming "response size
+limits" as one of the hardened client's defaults. Nothing reads this
+constant anywhere in the codebase (`grep -rn MAX_RESPONSE_SIZE app/` — one
+hit, its own declaration). `create_integration_client()` returns a plain
+`httpx.AsyncClient` with no size-related config; every connector
+(`calcom_service.list_bookings`, `documenso_service`, `salesforce_service._
+request`, the chat senders, PayPal) calls the client's non-streaming
+`.get()`/`.request()` and then `.json()`/`.text`, which buffers the entire
+response body into process memory before any caller-side code — including a
+hypothetical check against this constant — ever runs. This is not a new
+regression; it has been true since the constant and docstring were written
+(pre-dates pass 1), but no prior pass named it — `docs/module-audit/
+integrations.md`'s "Tenant isolation" bullet listed "size cap" among the
+base client's verified-good hardened defaults, which per this rotation's own
+rule ("a claim in Verified good must name the mechanism that makes it true")
+was not actually checked against the code; corrected in that doc.
+
+**Where:** `backend/app/services/integration_services/base.py:23` (constant,
+now commented per the fix below); every connector's response-consuming call
+site (not enumerated individually — the gap is structural, not per-file).
+
+**Failure scenario:** the department's own configured Salesforce instance,
+Documenso deployment, Cal.com instance, or generic webhook target — any of
+which could be self-hosted, compromised, or simply misbehaving — returns an
+arbitrarily large response body (a malformed/huge JSON payload, a hung
+chunked-transfer stream, or a deliberately oversized reply from a
+compromised self-hosted endpoint an admin pointed the integration at). The
+request handler buffers the entire body into memory before `.json()` can
+even raise a decode error, so a single request can consume memory
+proportional to whatever the remote endpoint chooses to send, unbounded by
+anything in this codebase. `INTEGRATION_TIMEOUT` (10s total) bounds how long
+this can run per request but not how much memory one request can consume in
+that window over a fast connection.
+
+**Impact:** every trigger for an outbound integration call requires
+`integrations.manage` (an org admin), so this is not directly reachable by
+an unprivileged member — the realistic actor is a self-hosted third-party
+endpoint the admin configured that later misbehaves or is compromised, not
+an anonymous attacker. Inbound webhook bodies (the one path an unauthenticated
+caller can influence) are already bounded by nginx's global `client_max_body_
+size 50M` in `infrastructure/nginx/nginx.conf` — a separate, pre-existing
+control this finding does not change. Scored LOW-MED: real unbounded memory
+growth on a plausible trigger, but gated behind an admin-configured
+destination and a request-scoped (not persistent) resource, not a
+cross-tenant or credential-exposure issue.
+
+**Why flagged, not fixed:** enforcing this correctly means every connector's
+response-reading call site switching from `client.get(url).json()` to
+`client.stream(...)` plus a running-byte-count abort — httpx's non-streaming
+request methods have already fully buffered the body by the time a response
+object reaches any caller-side code, so there is no single-file, low-risk
+place to intercept this after the fact. That is a call-site-by-call-site
+change across roughly ten connector files with a real behavior change on
+every one (a legitimate large-but-under-cap response still needs the
+streaming read to work correctly, e.g. Salesforce's own paginated bulk pull),
+which is exactly the "changes behavior… gets flagged, not implemented" case
+in this rotation's own rules — verifying ten independent streaming-refactor
+diffs against real (or fully-mocked) HTTP behavior in one pass is a correctness
+risk in its own right, not just a scope one.
+
+**Fix applied (doc-only, no behavior change):** removed the false "response
+size limits" claim from `base.py`'s docstring and corrected `docs/module-
+audit/integrations.md`'s "size cap" bullet, both now pointing at this
+finding instead of asserting a control that doesn't exist. Mirrored into
+`KNOWN_LIMITATIONS.md` as an owner-decision follow-up (pick a cap value and
+whether every connector needs it, e.g. Salesforce's own bulk pulls may
+legitimately need a higher one than a webhook test-connection call).
+
+### Re-verified from pass 1/2 (all hold)
+
+- **INT-1** (send-time SSRF re-validation): intact — re-checked
+  `assert_outbound_url_safe` call sites directly (grep above) across
+  calcom/discord/slack/teams/webhook services; unchanged from pass 2.
+- **INT-2** (OAuth `error` URL-encoded): intact.
+- **INT-3** (list/get gated on `integrations.manage`, `/connected`
+  status-only on bare auth, registered first): intact, route table
+  above confirms both routes and their comments in the source
+  (`integrations.py:463-467`, `:483-493`) still state the rationale.
+- **INT-4** (`exclude_unset` partial-PATCH merge): intact.
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist): unchanged, still
+  an owner behavior decision, not auto-applied.
+- **INT-6** (connector exception sanitization, type-based via
+  `sanitize_connector_error`): intact at all originally-fixed sites
+  (`integrations.py:840`, `salesforce_sync_service.py:664`/`704`) plus the
+  three re-raise-with-interpolation sites (google/outlook calendar, NWS
+  weather) — re-checked via grep for `Exception(f"...{e}"/{exc})`-shaped
+  interpolation across every connector file: zero hits, only safe
+  hand-authored messages remain.
+- **SOQL injection defense, OAuth state validation, instance-URL domain
+  pinning, secret redaction, tenant isolation**: all re-confirmed against
+  current code, no change since pass 2.
+
+## Guard tests added
+
+None this pass — INT-7 is a flagged design gap, not a fixed defect, so
+there is no "revert this line, watch a test fail" shape available; enforcing
+a guard test here would mean asserting on the _absence_ of streaming reads
+across ten files, which is exactly the kind of brittle, easily-defeated test
+this rotation avoids adding for its own sake. If/when INT-7 is fixed, the
+guard test belongs with that fix (one oversized-response test per connector
+switched to streaming).
+
+## Completion gate (pass 3)
+
+| Check                                                                                 | Result                                                                                                                           |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                         | ✅ 0 violations                                                                                                                  |
+| `black --check app/ tests/ alembic/`                                                  | ✅ 1503 files unchanged                                                                                                          |
+| `isort --check-only app/ tests/ alembic/`                                             | ✅ clean                                                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                     | ✅ 431 revisions, single head (`d7c1b95e2a40`), PASSED                                                                           |
+| backend tests, scope (`-k "integration or salesforce or calcom or connector or nfc"`) | ✅ 2412 passed, 21 skipped (env-only), 0 failed                                                                                  |
+| backend tests, full suite (`pytest tests/ -q`)                                        | ✅ 11472 passed, 21 skipped (env-only), 0 failed                                                                                 |
+| `tsc --noEmit` (frontend)                                                             | ✅ 0 errors                                                                                                                      |
+| `eslint .` (frontend)                                                                 | ✅ 0 errors, 3 pre-existing warnings (`ShiftDetailPanel.test.tsx`, unrelated/untouched, well under the `--max-warnings 10` gate) |
+
+**One environment wrinkle, same shape as `SKT-19-skills-testing.md`'s pass 3
+note — recorded here rather than as a finding.** This worktree started with
+no `node_modules`; `npx eslint .`/`npx tsc --noEmit` initially fell back to a
+global toolchain that could not resolve `@types/node`, producing 1032
+spurious `@typescript-eslint/no-unsafe-*` warnings across unrelated files
+(mostly Node-built-in access in test/tooling scripts) before `npm ci` (from
+the worktree root) installed a real `node_modules` and both commands
+returned the clean result in the table above. Recorded here so a future
+reader does not mistake either number for a real `main`-red finding.
+
+No frontend source file was touched this pass, so `tsc`/`eslint` verify no
+regression rather than validate new code.
+
+---
+
+## Pass 2 (2026-08-31)
 
 **Backend:** `app/api/v1/endpoints/integrations.py` (710 L, 7 endpoints),
 `app/api/v1/endpoints/salesforce_sync.py` (585 L, 9 endpoints),
