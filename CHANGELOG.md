@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The close-out queue and the number above it are one list now (2026-09-06)
+
+**Added**
+
+- **`GET /scheduling/shifts/needing-closeout`.** The shifts that have ended and
+  were never closed out, oldest first, gated on `scheduling.manage`. Ordered by
+  when each shift was actually over — `end_time`, or `start_time` plus the
+  department's open-ended cushion — because a shift with no recorded end was
+  over a cushion after it began, and ordering by the start interleaves it with
+  shifts that finished hours earlier. Unlike `GET /scheduling/shifts` it takes
+  `scheduling.manage` alone: it is the whole department's backlog with no
+  member filter applied.
+
+**Changed**
+
+- **The close-out queue reads the server's population instead of deriving its
+  own.** `/scheduling/admin/closeout` and the administration hub's **To close
+  out** card now read one predicate, `closeout_backlog_criteria`. They were two:
+  the metric has no earliest date while the page re-derived the set from a date
+  range it chose, so a shift left unclosed before that range began was counted
+  on the card and missing from the list it linked to.
+- **The queue's From and To controls are gone.** This page is the backlog, not
+  a query over it, and a range is what let it and the card describe different
+  populations. Three workarounds go with them: the six-month default, the
+  reversed-range guard, and the ten-page fetch loop that existed only because
+  the generic shifts endpoint returned mostly closed-out shifts and the unclosed
+  ones could sit on page three. The list is capped at one page of 200 and says
+  so when the backlog is longer, rather than letting a cap read as the end of
+  the work.
+- **The queue refreshes itself as shifts become eligible.** The page no longer
+  re-tests the server's answer against its own cached cushion — an officer who
+  lowered the cushion elsewhere made every other open tab drop rows the server
+  had just declared overdue, and the page then read "Every shift is closed out"
+  with a positive total beside it. Membership is the server's answer alone, so
+  the queue is re-read on the thirty-second clock the waiting badges already
+  run on. The refresh is skipped while a close-out wizard is open, so it cannot
+  unmount unsaved entries, and a failed refresh leaves the last good list on
+  screen rather than blanking a working page.
 ### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
 
 **Fixed**
