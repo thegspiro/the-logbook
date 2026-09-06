@@ -16,10 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 24 (Meetings & minutes)'s PR #2303 merged (`e8f6e2c`)
-after a single pass — CI green (17/17) and Codex review completed with no
-findings on first push, so no fix-and-repush round was needed this time.
-Rotation row 24 -> ✅. Next: 25 Messaging & notifications.
+**Housekeeping, not a feature pass** — branch
+`claude/security-review-progress-note-2303`,
+[PR #2304](https://github.com/thegspiro/the-logbook/pull/2304). Docs-only:
+records that PR #2303 (feature 24, meetings & minutes, pass 3) merged
+fully green with no Codex findings, clears the stale "PR #2303 open"
+section, and marks rotation row 24 done. No feature is under review on
+this branch. Recorded here anyway so a `/security-review` iteration that
+reads this file before #2304 merges tends this PR rather than reading a
+premature "None" and starting feature 25 concurrently with it. Once #2304
+merges, clear this section — feature 25 is next.
+
+---
+
+### 2026-09-06 — Feature 24 (Meetings & minutes, pass 3) ✅ merged — PR #2303
+
+Feature 24 (Meetings & minutes)'s PR #2303 merged (`e8f6e2c`) after a
+single pass — CI went green (17/17) and Codex's review completed with no
+findings on the first push, so no fix-and-repush round was needed this
+time. Rotation row 24 -> ✅. Next: 25 Messaging & notifications.
 
 ---
 
@@ -9585,7 +9600,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | 🔄     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
