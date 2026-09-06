@@ -361,6 +361,85 @@ describe('SchedulingPage', () => {
   });
 
   /**
+   * A `?shift=` link that will not resolve.
+   *
+   * This is where the close-out queue's "Open the shift to close it" sends an
+   * officer, so the failure lands on somebody who came here to do one specific
+   * thing. The handler used to catch it, strip the parameter and render
+   * nothing — leaving them on the generic board with no error, no retry, and a
+   * URL that no longer said what they had asked for.
+   */
+  describe('a deep link that fails', () => {
+    const mockGetShift = vi.mocked(schedulingService.getShift);
+
+    beforeEach(() => {
+      mockGetShift.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+    });
+
+    it('says the shift could not be opened rather than showing a bare schedule', async () => {
+      mockGetShift.mockRejectedValue(new Error('boom'));
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+
+      renderWithRouter(<SchedulingPage />);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/could not be opened/);
+    });
+
+    it('keeps the shift in the URL so a retry has something to retry', async () => {
+      mockGetShift.mockRejectedValue(new Error('boom'));
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+
+      renderWithRouter(<SchedulingPage />);
+      await screen.findByRole('alert');
+
+      // The parameter is the request. Dropping it on failure discarded what the
+      // officer asked for and left the URL describing a page they never chose.
+      expect(window.location.search).toContain('shift=shift-1');
+    });
+
+    it('retries the same shift, and clears the error when it works', async () => {
+      // Driven by a flag rather than `mockRejectedValueOnce`: the effect can run
+      // more than once for a single mount, which consumes a one-shot mock before
+      // Retry is ever clicked and leaves the test asserting the happy path twice.
+      let succeed = false;
+      mockGetShift.mockImplementation((() =>
+        succeed
+          ? Promise.resolve({ id: 'shift-1', shift_date: '2099-01-01' })
+          : Promise.reject(new Error('boom'))) as never);
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await screen.findByRole('alert');
+      succeed = true;
+
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Shift Details' })).toBeInTheDocument();
+      expect(screen.queryByText(/could not be opened/)).not.toBeInTheDocument();
+      // Stripped now that it resolved, which is the one point at which the
+      // request has actually been served.
+      expect(window.location.search).not.toContain('shift=shift-1');
+    });
+
+    it('lets the officer dismiss it and keep the schedule', async () => {
+      mockGetShift.mockRejectedValue(new Error('boom'));
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await screen.findByRole('alert');
+
+      await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+      expect(screen.queryByText(/could not be opened/)).not.toBeInTheDocument();
+      // Dismiss is the one deliberate way the parameter goes without success:
+      // the officer has said they are done with it, so a re-render must not
+      // reopen the same failure.
+      expect(window.location.search).not.toContain('shift=shift-1');
+    });
+  });
+
+  /**
    * Every control in the Create Shift dialog is reachable by its visible label.
    *
    * The whole modal shipped with no htmlFor/id pair at all, so a screen reader

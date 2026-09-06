@@ -590,8 +590,21 @@ REPORTS_MANAGE = Permission(
 )
 
 # Members (additional)
+#
+# Despite the name, this does NOT gate creating a member: POST /users requires
+# users.create, and the prospect-transfer path that also mints a User row
+# requires members.manage or prospective_members.manage. members.create is
+# enforced only on the prospect pipeline (POST /prospects and
+# /prospects/check-existing). The description said "Create new members", and the
+# members admin hub gated its Add Member and Import tabs on it for exactly that
+# reason -- the tabs post to POST /users, so they were reading the name rather
+# than the enforcement (corrected 2026-09-06). Renaming it to match would be a
+# breaking config change for any department that granted it, so the description
+# is what moved.
 MEMBERS_CREATE = Permission(
-    "members.create", "Create new members", PermissionCategory.MEMBERS
+    "members.create",
+    "Add prospective members to the recruitment pipeline",
+    PermissionCategory.MEMBERS,
 )
 
 # Training (additional)
@@ -1700,6 +1713,15 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FUNDRAISING_MANAGE.name,
             FINANCE_VIEW.name,
             FINANCE_MANAGE.name,
+            # The approval chain is the treasurer's to run: without these two
+            # the feature has a model, endpoints and a settings screen that no
+            # seeded position could reach, so a department that built a chain
+            # had every submitted request strand in PENDING_APPROVAL. Granting
+            # approve does not let the treasurer wave through their own
+            # spending -- `assert_different_person` in FinanceService refuses
+            # self-approval whoever holds the permission (SEC FIN-4).
+            FINANCE_APPROVE.name,
+            FINANCE_CONFIGURE_APPROVALS.name,
             # Utility accounts, insurance policies, and capital-project
             # budgets are financial records the treasurer must read without
             # holding facility write access.

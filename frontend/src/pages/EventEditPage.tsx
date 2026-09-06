@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
+import { Breadcrumbs } from '../components/ux';
 import { Calendar, ArrowLeft, Info } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -93,13 +94,28 @@ export const EventEditPage: React.FC = () => {
     void navigate(`/events/${eventId}`);
   };
 
+  // Explicit items: /events/:id/edit skips the id, leaving "Events > Edit" with
+  // no sign of which event — and the loading and error branches had no route
+  // away at all. The event crumb links back to the record being edited.
+  const trail = [
+    { label: 'Events', path: '/events' },
+    ...(event ? [{ label: event.title, path: `/events/${eventId ?? ''}` }] : [{ label: 'Event' }]),
+    { label: 'Edit' },
+  ];
+
   if (loading) {
-    return <LoadingSpinner message="Loading event..." />;
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+        <LoadingSpinner message="Loading event..." />
+      </div>
+    );
   }
 
   if (error && !event) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
@@ -168,6 +184,8 @@ export const EventEditPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+
         {/* Header */}
         <div className="mb-8">
           <Link

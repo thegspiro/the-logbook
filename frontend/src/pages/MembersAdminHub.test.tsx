@@ -1,9 +1,9 @@
 /**
  * Which member admin tabs a member can actually open.
  *
- * members.manage lets an officer work the roster; members.create is what puts
- * a new person on it. The tab bar honours that split, and so must the URL —
- * a bookmarked link cannot be a way around a permission.
+ * members.manage lets an officer work the roster; users.create is what puts a
+ * new person on it. The tab bar honours that split, and so must the URL — a
+ * bookmarked link cannot be a way around a permission.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -59,6 +59,21 @@ describe('MembersAdminHub', () => {
         'Settings',
       ]);
     });
+  });
+
+  // Both create tabs submit through userService.createMember, which posts to
+  // POST /users -- and that endpoint requires users.create. These tabs asked
+  // members.create until 2026-09-06, which reads like the right grant and gates
+  // the prospect pipeline instead. The names are only distinguishable by
+  // asserting the one asked for, because the two are held by the same seeded
+  // positions and any boolean mock passes either way.
+  it('asks for the grant POST /users actually enforces', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    renderAt('');
+
+    await waitFor(() => expect(screen.getAllByRole('tab').length).toBeGreaterThan(0));
+    expect(mockCheckPermission).toHaveBeenCalledWith('users.create');
+    expect(mockCheckPermission).not.toHaveBeenCalledWith('members.create');
   });
 
   it('hides the create tabs from a member who may not create', async () => {

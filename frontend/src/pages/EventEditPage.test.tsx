@@ -130,7 +130,7 @@ describe('EventEditPage', () => {
 
       const backLink = await screen.findByRole('link', { name: /back to event/i });
       expect(backLink).toHaveAttribute('href', '/events/evt-1');
-      expect(screen.getByText(/Existing Event/)).toBeInTheDocument();
+      expect(screen.getByText(/Update the details for/)).toBeInTheDocument();
     });
 
     it('should pre-fill form with event data', async () => {

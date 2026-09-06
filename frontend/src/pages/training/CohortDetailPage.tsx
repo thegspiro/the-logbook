@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { courseCohortService } from '../../services/api';
 import { SkeletonPage } from '../../components/ux/Skeleton';
+import { Breadcrumbs } from '../../components/ux/Breadcrumbs';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { ConfirmDialog } from '../../components/ux/ConfirmDialog';
 import DateTimeQuarterHour from '../../components/ux/DateTimeQuarterHour';
@@ -171,11 +172,29 @@ export const CohortDetailPage: React.FC = () => {
       }
     });
 
-  if (loading) return <SkeletonPage />;
+  // Explicit items: /training/cohorts/:cohortId skips the id, and the one crumb
+  // left over would suppress the trail entirely. One definition, all three
+  // branches — the not-found branch most of all, since a removed cohort is
+  // exactly where a member arrives from a stale link.
+  const trail = [
+    { label: 'Training', path: '/training' },
+    { label: 'Cohorts', path: '/training/cohorts' },
+    { label: cohort?.name || 'Cohort' },
+  ];
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+        <SkeletonPage />
+      </div>
+    );
+  }
 
   if (!cohort) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
+        <Breadcrumbs items={trail} />
         <EmptyState
           icon={AlertTriangle}
           title="Cohort not found"
@@ -197,6 +216,8 @@ export const CohortDetailPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <Breadcrumbs items={trail} />
+
       <button
         type="button"
         onClick={() => {

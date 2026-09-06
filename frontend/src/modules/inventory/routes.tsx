@@ -476,13 +476,20 @@ export const getInventoryRoutes = () => {
           </ProtectedRoute>
         }
       />
+      {/* Matches what `GET /equipment-check/supply/expiring-items` accepts, and
+          deliberately no wider. The gate used to admit `scheduling.manage`,
+          which that endpoint does not: a shift officer holding only it passed
+          the route and got a 403 on load, so the page they reached showed
+          nothing but its failure state. The worklist is fleet-wide item stock
+          and expiry — inventory data — so the fix is to stop admitting a
+          purely scheduling grant rather than to disclose that data to one. */}
       <Route
         path="/inventory/admin/checklists/supply"
         element={
           <ProtectedRoute
             requiredModule="inventory"
             moduleLabel="Inventory"
-            requiredAnyPermission={['scheduling.manage', 'inventory.check_view', 'inventory.manage']}
+            requiredAnyPermission={['inventory.check_view', 'inventory.manage']}
           >
             <Suspense fallback={null}>
               <SupplyExpiringPage />

@@ -588,7 +588,7 @@ assignments, check-in state) remains visible to any member.
 | ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
 | `/scheduling`                               | Scheduling Hub (members)                | Authenticated                                                             |
 | `/scheduling/admin`                         | Scheduling Administration               | `scheduling.manage`                                                       |
-| `/inventory/admin/checklists/supply`        | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`    |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus (supply worklist) | any of `inventory.check_view`, `inventory.manage`                         |
 | `/inventory/checklists/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 ### Scheduling Tabs
