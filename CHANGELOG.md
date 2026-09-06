@@ -43,10 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it were silently absent from every picker and filter. Raised well above
   any realistic department's category count.
 - **Receiving an item's very first stock lot at the same moment as a
-  quantity correction could record the wrong opening count.** The count
+  quantity correction could record the wrong opening count — including
+  losing it entirely if the item had nothing on hand yet.** The count
   carried into that first lot could reflect the value from just before the
-  correction rather than the corrected one, in the rare case both happened
-  together.
+  correction rather than the corrected one; if the item's count was zero
+  at that exact moment, the correction could be dropped altogether, in the
+  rare case both happened together.
+- **Retiring an item did not always catch a checkout or assignment that
+  was created in the same instant.** The retire action already blocked
+  retiring an item someone still holds; a very narrow timing window could
+  let it miss a hold that was recorded at almost the same moment.
 
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 

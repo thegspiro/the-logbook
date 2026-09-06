@@ -1167,6 +1167,80 @@ class TestRetireItem:
         assert "DB error" in err
         mock_db.rollback.assert_awaited_once()
 
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_item_rechecks_domain_under_the_lock(self, service, mock_db):
+        """A domain-scoped caller (e.g. medical_supplies.py's
+        retire_medical_item, holding only inventory.manage_medical) can
+        pass required_item_types to re-validate domain membership against
+        the *locked* item -- closing a race where a concurrent
+        reclassification lands between that caller's own preflight check
+        and this method acquiring the lock."""
+        item = _make_item(assigned_to_user_id=None, category_id="cat-gear")
+        service._get_item_locked = AsyncMock(return_value=item)
+        service.category_in_domain = AsyncMock(return_value=False)
+
+        success, err = await service.retire_item(
+            UUID(item.id),
+            UUID(item.organization_id),
+            required_item_types=["medical"],
+        )
+
+        assert success is False
+        assert "not found" in err.lower()
+        service.category_in_domain.assert_awaited_once_with(
+            "cat-gear", str(item.organization_id), ["medical"]
+        )
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_item_proceeds_when_domain_check_passes(
+        self, service, mock_db
+    ):
+        item = _make_item(assigned_to_user_id=None, category_id="cat-medical")
+        service._get_item_locked = AsyncMock(return_value=item)
+        service.category_in_domain = AsyncMock(return_value=True)
+
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 0
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("app.core.audit.log_audit_event", new_callable=AsyncMock):
+            success, err = await service.retire_item(
+                UUID(item.id),
+                UUID(item.organization_id),
+                required_item_types=["medical"],
+            )
+
+        assert success is True
+        assert err is None
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_item_skips_the_domain_check_by_default(
+        self, service, mock_db
+    ):
+        """The general inventory.py retire route passes no
+        required_item_types -- it must not pay for or trip a check
+        medical_supplies.py's route alone needs."""
+        item = _make_item(assigned_to_user_id=None)
+        service._get_item_locked = AsyncMock(return_value=item)
+        service.category_in_domain = AsyncMock(return_value=False)
+
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 0
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("app.core.audit.log_audit_event", new_callable=AsyncMock):
+            success, err = await service.retire_item(
+                UUID(item.id), UUID(item.organization_id)
+            )
+
+        assert success is True
+        assert err is None
+        service.category_in_domain.assert_not_awaited()
+
 
 # ============================================
 # Checkout Item Tests

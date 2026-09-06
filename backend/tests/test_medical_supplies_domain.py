@@ -341,6 +341,9 @@ class TestItemDomainPinning:
 
         svc.retire_item.assert_awaited_once()
         assert svc.retire_item.await_args.kwargs["notes"] == "Expired, discarded"
+        assert svc.retire_item.await_args.kwargs["required_item_types"] == (
+            MEDICAL_ITEM_TYPES
+        )
         assert result == {"message": "Item retired successfully"}
         ms.log_audit_event.assert_awaited_once()
         assert (

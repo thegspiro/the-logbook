@@ -2043,6 +2043,14 @@ class InventoryService:
         replicate retire_item's locked/blocker-checked/status-synced/
         audited contract inline. retire_item is the only place an item can
         be taken out of active inventory.
+
+        Both counts below are locking reads (Pitfall #27): retire_item's
+        item-row lock forces a concurrent checkout/assignment to block until
+        this transaction commits, but under REPEATABLE READ a *plain* SELECT
+        here would still answer from this transaction's first-read snapshot
+        — predating that lock — so it would not see a checkout or issuance
+        the other side committed while waiting on the lock. ``FOR UPDATE``
+        is what makes the read itself current, not the item lock alone.
         """
         if item.assigned_to_user_id:
             return "Cannot retire: item is currently assigned. Unassign it first."
@@ -2051,6 +2059,7 @@ class InventoryService:
             select(func.count(CheckOutRecord.id))
             .where(CheckOutRecord.item_id == str(item.id))
             .where(CheckOutRecord.is_returned.is_(False))
+            .with_for_update()
         )
         if active_co.scalar():
             return "Cannot retire: item has active checkouts. Check it in first."
@@ -2060,6 +2069,7 @@ class InventoryService:
                 select(func.count(ItemIssuance.id))
                 .where(ItemIssuance.item_id == str(item.id))
                 .where(ItemIssuance.is_returned.is_(False))
+                .with_for_update()
             )
             if active_iss.scalar():
                 return "Cannot retire: item has unreturned pool issuances."
@@ -2067,7 +2077,11 @@ class InventoryService:
         return None
 
     async def retire_item(
-        self, item_id: UUID, organization_id: UUID, notes: Optional[str] = None
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        notes: Optional[str] = None,
+        required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Retire an item (soft delete). Blocks if item has active checkouts or assignments.
 
@@ -2077,10 +2091,28 @@ class InventoryService:
         between this method's blocker check and its own commit, so retirement
         could still go through over a now-held item using this transaction's
         stale, pre-race read.
+
+        ``required_item_types``, when given, re-validates domain membership
+        against the *locked* item's ``category_id`` rather than trusting a
+        caller's own preflight check (e.g. medical_supplies.py's
+        ``_require_medical_item``): a domain-scoped caller (holding
+        ``inventory.manage_medical`` but not the broader ``inventory.manage``)
+        that checked domain membership before this call, racing a concurrent
+        reclassification of the item to a different domain, would otherwise
+        retire an item outside the domain their permission grants them. Once
+        the row is locked here, no concurrent write to this item's
+        ``category_id`` can land until this transaction commits, so this
+        check's answer cannot go stale under it the way the preflight check
+        could.
         """
         try:
             item = await self._get_item_locked(item_id, organization_id)
             if not item:
+                return False, "Item not found"
+
+            if required_item_types is not None and not await self.category_in_domain(
+                item.category_id, str(organization_id), required_item_types
+            ):
                 return False, "Item not found"
 
             block_reason = await self._deactivation_block_reason(item)
@@ -6606,35 +6638,40 @@ class InventoryService:
         # it into an opening-balance lot — doubling the stock on hand and
         # letting the department issue units that are not there.
         #
-        # Lock the item rows: they are the thing both requests already share,
-        # and the lots that would conflict do not exist yet, so there is
-        # nothing there to lock. The `quantity > 0` filter then does the rest
-        # of the work, because a locking read sees the latest committed
-        # version — the loser of the race re-reads the zero the winner wrote
-        # and carries nothing forward.
+        # Lock every target item first, unconditionally, and decide from the
+        # refreshed quantity only after the lock is held — not the other way
+        # around. Filtering `quantity > 0` in the locking SELECT's WHERE
+        # clause (an earlier version of this method did) locks nothing for a
+        # row that reads 0 *at that instant*: a concurrent quantity edit
+        # raising it to a positive value moments later takes no lock,
+        # commits freely, and is never revisited here (this call already
+        # decided, correctly at the time, that the item had nothing to
+        # carry). The edit's units then sit in `quantity` forever unread,
+        # because the lot this call creates for the *other* items makes
+        # every reader stop consulting the column for lot-stocked items in
+        # the same request — orphaning a positive balance no reader will
+        # ever look at again.
         #
         # populate_existing=True is required, not cosmetic — see
         # _get_item_locked's docstring for the mechanism. add_lot loads this
         # same item, unlocked, immediately before calling this method (its
         # only caller that does); without this, a quantity edit committed in
         # that window is invisible here even though the WHERE clause itself
-        # sees it. The filter alone only catches the edit dropping quantity
-        # to zero (the row stops matching and nothing is carried); an edit
-        # to a different positive number would still match, but the lot
-        # created below would read the item's stale pre-edit quantity from
-        # this session's identity map — inventing or losing units in the
-        # opening-balance lot.
+        # sees it.
         result = await self.db.execute(
             select(InventoryItem)
             .where(
                 InventoryItem.id.in_(item_ids),
                 InventoryItem.organization_id == organization_id,
-                InventoryItem.quantity > 0,
             )
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        items = list(result.scalars().all())
+        items = [
+            item
+            for item in result.scalars().all()
+            if item.quantity and item.quantity > 0
+        ]
         if not items:
             return
 

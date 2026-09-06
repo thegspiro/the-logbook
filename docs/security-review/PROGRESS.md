@@ -67,8 +67,28 @@ behind this router's usual permission/domain pattern. **MSUP-17** (LOW,
 comment hygiene, fixed): `update_item`'s rejection comment had drifted
 into review chronology ("a Codex review caught three gaps...") instead of
 stating the durable invariant; rewritten.
-Full local gate green including the full scoped test run (735 passed).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 5.
+A sixth Codex round then found two P1 concurrency gaps in code this PR's
+own earlier rounds had touched, plus a P2 TOCTOU gap in MSUP-16's new
+route. **MSUP-18** (MED, fixed): `_carry_forward_column_stock`'s locking
+SELECT filtered `quantity > 0` _inside_ the `FOR UPDATE` query, so an item
+at 0 was never locked at all — a concurrent quantity edit racing that
+narrow window took no lock, committed freely, and was never revisited,
+orphaning those units once the delivery lot made every reader stop
+consulting the column. Fixed by locking every target item unconditionally
+and moving the quantity decision to a Python filter over the refreshed
+rows. **MSUP-19** (MED, fixed): `_deactivation_block_reason`'s two blocker
+counts (active checkouts, pool issuances) were plain reads — the item lock
+forces a concurrent checkout/assignment to wait, but under REPEATABLE READ
+a plain SELECT still answers from this transaction's pre-lock snapshot, so
+retirement could still count zero for a holding that, by the time it
+checked, was already real and committed. Fixed by making both counts
+locking reads. **MSUP-20** (LOW/MED, fixed): the new medical retire route
+validated domain membership before the lock, not under it — a concurrent
+reclassification could let a medical-only caller retire an item that raced
+out of their domain. Fixed with a new `required_item_types` parameter on
+`retire_item` that re-validates against the locked item's `category_id`.
+Full local gate green including the full scoped test run (738 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 6.
 
 ---
 
@@ -366,6 +386,79 @@ skip). Findings doc updated:
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 5, MSUP-16,
 MSUP-17. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
 Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 6 — sixth Codex round: two concurrency gaps in this PR's own fixes, one TOCTOU gap in MSUP-16's new route
+
+A sixth Codex round, reviewing the commit that added MSUP-16's medical
+retire route, found two P1 concurrency gaps in code this PR's own earlier
+rounds had already touched, plus a P2 TOCTOU gap in the route MSUP-16 just
+added:
+
+- **`_carry_forward_column_stock`'s locking SELECT filtered
+  `quantity > 0` inside the `FOR UPDATE` query itself**, so an item
+  currently at 0 was never matched and never locked. A concurrent quantity
+  edit raising it to positive in that window took no lock either, committed
+  freely, and was never revisited — this call had already decided,
+  correctly for the instant it ran, that there was nothing to carry. Those
+  units then sat in the column forever unread, because the delivery lot
+  this call creates makes every reader stop consulting `quantity` for that
+  item. Same disappearing-stock failure mode MSUP-10 closed, for a case
+  MSUP-10's fix did not reach (there, the row _was_ matched and locked, just
+  read stale; here, the row was never matched at all).
+- **`_deactivation_block_reason`'s two blocker counts (active checkouts,
+  pool issuances) were plain reads.** `retire_item`'s item lock (MSUP-13)
+  does force a concurrent checkout/assignment to block until this
+  transaction commits, but under REPEATABLE READ a plain SELECT still
+  answers from this transaction's pre-lock snapshot — locking the item
+  does not, by itself, refresh what a later plain read sees. So retirement
+  could still count zero for a holding that, by the time it checked, was
+  already real and committed.
+- **The new medical retire route validated domain membership before the
+  lock, not under it.** A concurrent reclassification landing between
+  `retire_medical_item`'s preflight check and `retire_item`'s lock could
+  let a medical-only caller retire an item that raced out of the medical
+  domain — the service never rechecked the category once locked.
+
+**MSUP-18 (MED, fixed):** the locking SELECT now locks every target item
+unconditionally (id/organization_id only); the `quantity > 0` decision
+moved to a Python filter over the refreshed, post-lock rows.
+
+**MSUP-19 (MED, fixed):** both counts in `_deactivation_block_reason` now
+add `.with_for_update()`, the same fix this file's other capacity checks
+already apply — a lock is necessary and not sufficient; the read that
+decides has to be locking too.
+
+**MSUP-20 (LOW/MED, fixed):** `retire_item` gained an optional
+`required_item_types` parameter that re-validates domain membership
+against the _locked_ item's `category_id`, using the existing
+`category_in_domain` helper — by which point no concurrent write to that
+column can land until this transaction commits.
+`retire_medical_item` now passes `required_item_types=MEDICAL_ITEM_TYPES`
+alongside its existing preflight check (kept as a fast-fail, matching
+every sibling route). The general inventory.py retire route passes
+nothing, so this adds no behavior or cost there.
+
+Guard tests: `test_capacity_locking.py` gained
+`test_the_lock_is_not_conditioned_on_quantity` (static, verified
+fail-before/pass-after) and a new `TestRetireItemBlockerCounts` class
+asserting both blocker counts are locking reads, matching this file's
+established static-inspection convention. `TestRetireItem` in
+`test_inventory_service.py` gained 3 cases for the domain re-check
+(fails closed, passes through, and is skipped entirely when
+`required_item_types` is omitted). `TestItemDomainPinning` in
+`test_medical_supplies_domain.py` now asserts `retire_medical_item` passes
+`required_item_types=MEDICAL_ITEM_TYPES` through.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), the directly-touched test files (169
+passed), `test_endpoint_auth_coverage.py` (1 passed), and the full
+`inventory or medical_supplies`-scoped run (738 passed, 1 pre-existing
+skip). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 6, MSUP-18,
+MSUP-19, MSUP-20. Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

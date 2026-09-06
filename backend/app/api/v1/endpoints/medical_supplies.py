@@ -481,12 +481,19 @@ async def retire_medical_item(
     """
     service = InventoryService(db)
     org_id = str(current_user.organization_id)
+    # A fast-fail preflight matching every other route on this router, plus
+    # the authoritative check: `required_item_types` re-validates domain
+    # membership against the item's *locked* category_id, so a concurrent
+    # reclassification between this preflight and retire_item's lock can't
+    # let a medical-only manager retire an item that raced out of the
+    # medical domain.
     await _require_medical_item(service, str(item_id), org_id)
 
     _, error = await service.retire_item(
         item_id=item_id,
         organization_id=current_user.organization_id,
         notes=retire_data.notes,
+        required_item_types=MEDICAL_ITEM_TYPES,
     )
     if error:
         raise HTTPException(

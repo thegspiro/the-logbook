@@ -973,3 +973,130 @@ MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-16
 is a new fix (a genuine functional regression introduced by this same PR's
 earlier rounds, not a pre-existing gap); MSUP-17 is comment hygiene, no
 behavior change.
+
+## Pass 6 — 2026-09-06
+
+A sixth Codex round, reviewing the commit that added the medical retire
+route (MSUP-16) and the earlier locking fixes, found two P1 concurrency
+gaps in code this PR's own rounds had already touched, plus a P2 TOCTOU
+gap in the route MSUP-16 just added.
+
+### MSUP-18 — MED — `_carry_forward_column_stock`'s locking SELECT excluded zero-quantity rows from the lock entirely — ✅ FIXED
+
+**What:** The locking SELECT that decides whether an item's `quantity`
+needs to be carried into an opening-balance lot filtered
+`InventoryItem.quantity > 0` _inside the same `FOR UPDATE` query_ — so an
+item currently at 0 was never matched, and therefore never locked. A
+concurrent quantity edit raising it to a positive number in the narrow
+window between that decision and this call's own commit takes no lock
+either (nothing was holding one), commits freely, and is never revisited:
+this call already decided, correctly for the instant it ran, that there
+was nothing to carry. The edited units then sit in the `quantity` column
+forever unread, because the delivery lot this call creates for the item
+makes every reader stop consulting that column for it — the exact
+disappearing-stock failure mode MSUP-10 closed for the "quantity changes
+to a different positive number while already matched and locked" case,
+but here for the "quantity starts at zero and is never locked at all"
+case, which MSUP-10's fix did not reach.
+
+**Where:** `app/services/inventory_service.py` —
+`_carry_forward_column_stock`.
+
+**Fix:** the locking SELECT now locks every target item unconditionally
+(`id`/`organization_id` only in its `WHERE`), and the `quantity > 0`
+decision moved to a Python filter over the refreshed, post-lock rows.
+Every target item is now serialized on before this call decides whether
+it has anything to carry, regardless of what its `quantity` read before
+the lock was acquired.
+
+**Guard tests:** `TestFirstLotLedgerTransition` in `test_capacity_locking.py`
+gained `test_the_lock_is_not_conditioned_on_quantity`, asserting the
+locking SELECT's `WHERE` clause does not reference `InventoryItem.quantity`
+— verified fail-before (failed against the reverted `quantity > 0` filter)
+/ pass-after, matching this file's existing static-inspection convention
+for this exact method (`test_the_item_rows_are_locked`,
+`test_both_reads_are_locking`).
+
+### MSUP-19 — MED — `retire_item`'s blocker counts were plain reads, invisible to a concurrent checkout/issuance committed while retirement waited on the lock — ✅ FIXED
+
+**What:** `retire_item` locks the item row via `_get_item_locked` before
+checking blockers (MSUP-13's fix), which does force a concurrent
+`assign_item_to_user`/`checkout_item` — both of which lock the item before
+inserting their holding record — to block until this transaction commits.
+But `_deactivation_block_reason`'s two blocker counts (active checkouts,
+unreturned pool issuances) were plain `SELECT COUNT(...)` queries. Under
+InnoDB's default REPEATABLE READ (CLAUDE.md pitfall #27), a plain SELECT
+answers from the snapshot taken at this transaction's _first_ read, which
+predates the item lock — locking the item does not, by itself, refresh
+what a later plain read within the same transaction sees. So even though
+the concurrent checkout is forced to wait and its row genuinely exists by
+the time retirement's counts run, those counts could still report zero and
+let retirement proceed over a holding that, by then, is already real and
+committed.
+
+**Where:** `app/services/inventory_service.py` — `_deactivation_block_reason`.
+
+**Fix:** both count queries now add `.with_for_update()`, making them
+locking reads that see the latest committed data rather than the
+transaction's first-read snapshot — the same fix MSUP-27-class capacity
+checks elsewhere in this file already apply (a lock alone is necessary and
+not sufficient; the read that decides has to be locking too).
+
+**Guard tests:** new `TestRetireItemBlockerCounts` in
+`test_capacity_locking.py` asserts both counts in
+`_deactivation_block_reason` are locking reads (`with_for_update()` appears
+twice), matching this file's established convention for pinning this exact
+class of invariant.
+
+### MSUP-20 — LOW/MED — the new medical retire route validated domain membership before the lock, not under it — ✅ FIXED
+
+**What:** MSUP-16's `retire_medical_item` calls `_require_medical_item`
+(an unlocked preflight, matching every other route on this router) before
+delegating to `service.retire_item`. If a broad `inventory.manage` caller
+reclassifies the item to a gear category in the window between that
+preflight and `retire_item` acquiring its row lock, the medical-only
+caller's retirement would still proceed — the service never rechecked the
+category once locked. A caller holding only `inventory.manage_medical`
+could, under this narrow race, retire an item outside the domain their
+permission grants them.
+
+**Where:** `app/api/v1/endpoints/medical_supplies.py` —
+`retire_medical_item`; `app/services/inventory_service.py` —
+`retire_item`.
+
+**Fix:** `retire_item` gained an optional `required_item_types` parameter.
+When given, it re-validates domain membership (via the existing
+`category_in_domain` helper) against the item's `category_id` _after_
+`_get_item_locked` returns — by which point no concurrent write to this
+item's `category_id` can land until this transaction commits, so the
+answer cannot go stale under it the way the preflight check could.
+`retire_medical_item` now passes `required_item_types=MEDICAL_ITEM_TYPES`
+alongside its existing preflight (kept as a fast-fail for the common,
+non-race case, consistent with every sibling route on this router). The
+general `inventory.py` retire route passes nothing, so this adds no
+behavior or query cost there.
+
+**Guard tests:** `TestRetireItem` in `test_inventory_service.py` gained 3
+cases — a failing domain re-check returns "Item not found" without ever
+reaching a commit, a passing check proceeds normally, and omitting
+`required_item_types` (the general route's call shape) skips the check
+entirely (`category_in_domain` never awaited). `TestItemDomainPinning` in
+`test_medical_supplies_domain.py` was extended to assert
+`retire_medical_item` passes `required_item_types=MEDICAL_ITEM_TYPES`
+through to the service.
+
+### Completion gate (pass 6)
+
+| Check                                                                                                                                                                            | Result                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `flake8` / `black --check` / `isort --check-only` (inventory_service.py, medical_supplies.py, all touched tests)                                                                 | clean                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                | PASSED — single head, no schema change |
+| `test_inventory_service.py` + `test_medical_supplies_domain.py` + `test_capacity_locking.py` + `test_inventory_identity_map_staleness.py` + `test_inventory_lot_stock_levels.py` | 169 passed                             |
+| `test_endpoint_auth_coverage.py`                                                                                                                                                 | 1 passed                               |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                                                    | 738 passed, 1 pre-existing skip        |
+| `pytest tests/` (full backend suite)                                                                                                                                             | 11,461 passed, 21 pre-existing skips   |
+
+MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-18,
+MSUP-19, and MSUP-20 are new fixes; MSUP-1 through MSUP-17 all re-verified
+intact (no code in this round touched their fixes beyond the two methods
+named above).

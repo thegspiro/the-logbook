@@ -400,10 +400,10 @@ class TestFirstLotLedgerTransition:
         """The lock alone is not enough; both halves of pitfall #27 apply.
 
         Under REPEATABLE READ a plain SELECT answers from the snapshot taken
-        at the transaction's first read, which predates the lock. The item
-        read carries the `quantity > 0` filter that makes the loser of the
-        race carry nothing forward, and the lot-existence read has to be
-        current for the same reason.
+        at the transaction's first read, which predates the lock. Both the
+        item read and the lot-existence read have to be current for that
+        reason -- whichever side loses the race must see the winner's
+        committed write, not the pre-race snapshot.
         """
         source = _source_of(
             inventory_service.InventoryService._carry_forward_column_stock
@@ -411,4 +411,47 @@ class TestFirstLotLedgerTransition:
         assert source.count("with_for_update()") == 2, (
             "Both the item read and the lot-existence read must be locking "
             f"reads; found {source.count('with_for_update()')}."
+        )
+
+    def test_the_lock_is_not_conditioned_on_quantity(self):
+        """A `quantity > 0` filter on the *locking* SELECT locks nothing for
+        a row currently at 0 -- a concurrent edit raising it moments later
+        takes no lock either, commits freely, and is never revisited: this
+        call already decided, correctly at the time, that the item had
+        nothing to carry. The edit's units then sit in the column forever
+        unread, because the delivery lot this call creates for the item
+        makes every reader stop consulting `quantity` for it. Every target
+        item must be locked unconditionally; the quantity check belongs
+        only in the Python filtering that runs after the lock is held.
+        """
+        source = _source_of(
+            inventory_service.InventoryService._carry_forward_column_stock
+        )
+        first_select = source.index("select(InventoryItem)")
+        first_lock = source.index(".with_for_update()", first_select)
+        item_select = source[first_select:first_lock]
+        assert "InventoryItem.quantity" not in item_select, (
+            "The item-locking SELECT's WHERE clause must not filter on "
+            "quantity -- see the docstring above for the race this reopens."
+        )
+
+
+class TestRetireItemBlockerCounts:
+    """retire_item locks the item row before checking whether it can be
+    retired, but the lock alone only serializes writes to the item itself.
+    The two counts _deactivation_block_reason runs against CheckOutRecord
+    and ItemIssuance are a separate read, and under REPEATABLE READ a plain
+    SELECT there still answers from this transaction's first-read snapshot
+    -- predating the item lock -- so retirement could wait for, acquire,
+    win the item lock, and still count zero active holdings for a checkout
+    or pool issuance a concurrent request committed while it waited.
+    """
+
+    def test_both_blocker_counts_are_locking(self):
+        source = _source_of(
+            inventory_service.InventoryService._deactivation_block_reason
+        )
+        assert source.count("with_for_update()") == 2, (
+            "Both the checkout count and the pool-issuance count must be "
+            f"locking reads; found {source.count('with_for_update()')}."
         )
