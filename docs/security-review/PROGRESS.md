@@ -17,8 +17,8 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 27 (Integrations), pass 3** — branch
-`claude/security-review-integrations`, PR opening now (this section will be
-updated with the real link in a follow-up commit to the same branch). One
+`claude/security-review-integrations`,
+[PR #2307](https://github.com/thegspiro/the-logbook/pull/2307). One
 new finding, **INT-7** (LOW-MED, flagged): `base.py`'s `MAX_RESPONSE_SIZE`
 constant was declared but never enforced by any connector — every outbound
 integration HTTP call buffers its full response into memory with no cap,
@@ -32,7 +32,7 @@ awaiting CI/review.
 
 ---
 
-### 2026-09-06 — Feature 27 (Integrations, pass 3) — PR opening
+### 2026-09-06 — Feature 27 (Integrations, pass 3) — PR #2307 opened
 
 Read every backend file in this feature's declared scope in full, plus
 `calcom_sync.py`, `app/api/public/integrations_webhook.py` (public inbound
@@ -77,8 +77,9 @@ finding: this worktree started with no `node_modules`, which made `eslint`/
 `tsc` fall back to a global toolchain that couldn't resolve `@types/node`
 (1032 spurious warnings) until `npm ci` fixed it — same shape as
 `SKT-19-skills-testing.md`'s pass 3 note. Findings doc:
-`docs/security-review/INT-27-integrations.md` (Pass 3). Rotation row 27 ->
-⏳ pending PR. Next: open the PR, tend it to green, then 28 Security, audit
+`docs/security-review/INT-27-integrations.md` (Pass 3). PR #2307 opened
+and subscribed. Rotation row 27 -> ⏳ pending PR. Next: tend #2307 to
+green and merged, then 28 Security, audit
 & IP.
 
 ---
