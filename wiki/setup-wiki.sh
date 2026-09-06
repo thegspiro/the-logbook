@@ -176,6 +176,30 @@ if [ -n "$dirty_images" ]; then
     exit 1
 fi
 
+# A tracked symlink is the third way unreviewed bytes reach the public wiki,
+# and the least visible. Git tracks a link as mode 120000 — it is a legitimately
+# committed, reviewed-looking entry — but `cp` without -P follows it, so
+# `images/capture.png -> /home/someone/member-export.csv` publishes a file from
+# the publisher's machine that was never in the repository at all. Reproduced
+# before this guard existed: the destination received the target's bytes.
+#
+# Rejecting beats copying with -P. Publishing the link itself would leave a
+# dangling symlink on the wiki, and the checker cannot see the difference
+# either — a symlink's path is still lexically inside wiki/images/.
+symlink_images=""
+while IFS= read -r -d '' img; do
+    [ -L "$img" ] && symlink_images="${symlink_images}    ${img}"$'\n'
+done < <(git ls-files -z "$WIKI_IMAGES_DIR")
+
+if [ -n "$symlink_images" ]; then
+    echo -e "${RED}✗${NC} Symlink(s) tracked under $WIKI_IMAGES_DIR/:"
+    printf '%s' "$symlink_images"
+    echo -e "  Publishing follows these and copies the target's bytes — a file"
+    echo -e "  from this machine, not from the repository. Replace them with"
+    echo -e "  real files."
+    exit 1
+fi
+
 image_count=0
 while IFS= read -r -d '' img; do
     mkdir -p "$WIKI_DIR/$(dirname "$img")"
