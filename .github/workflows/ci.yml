@@ -210,9 +210,16 @@ jobs:
       # The checker itself runs as a step of `ci-success` (it has to — see the
       # comment on that job); this is the regression suite for its logic, and
       # it imports the checker, which is the one dependency this suite needs.
-      - name: Install script-test dependency
+      - name: Install script-test dependencies
         if: "!cancelled()"
-        run: pip install 'PyYAML==6.0.2'
+        # PyYAML for the CI-gate checker this suite imports; Pillow for
+        # test_audit_images, which builds synthetic captures to pin the
+        # screenshot audit's surviving dark-page tier. Both pinned to the
+        # versions already declared elsewhere, so this job cannot drift onto
+        # different behaviour from the ones that run the real scripts. Without
+        # Pillow the audit tests skip rather than fail, which would leave the
+        # check's contract untested while looking green.
+        run: pip install 'PyYAML==6.0.2' 'Pillow==12.3.0'
 
       - name: Run repo-root script tests
         if: "!cancelled()"

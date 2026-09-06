@@ -125,20 +125,35 @@ def check_unpainted_gutter(image: Image.Image) -> str | None:
     if strip > 40:
         return None  # too wide to be a scrollbar gutter; likely intentional
 
-    # Severity, so the report can be acted on without opening 39 files. What the
-    # gutter changed *to* depends on the capture's theme: on a dark page the old
-    # white strip became a dark gradient (obvious), on a light page it became a
-    # pale one (a 15px difference nobody will notice). Only the first tier is
-    # worth a re-shoot on its own account.
+    # Only a dark page is reported. A light page under a modal scrim is not a
+    # regression signal and never can be: a dialog's scrim is
+    # `position: fixed; inset: 0`, so it is laid out against the initial
+    # containing block, which excludes the gutter `scrollbar-gutter: stable`
+    # reserves on the root. The scrim therefore stops 15px short of the window
+    # edge *by definition*, and the root gradient keeps showing through. Nothing
+    # a capture can do changes that, which is why re-shooting never cleared
+    # these and why the baseline could only grow.
+    #
+    # It reported one constant, forever, at the price of failing CI on every new
+    # modal screenshot. On 2026-09-06 that came due: a routine capture refresh
+    # turned `main` red and blocked four unrelated PRs, none of whose authors
+    # had touched an image, and none of whom could clear it — re-capture does
+    # not work and editing this contract is not a screenshot task. Three earlier
+    # sessions each recommended this change in `audit_baseline.txt` and each
+    # declined to make it for the same reason. This is that decision, taken.
+    #
+    # The dark-page tier stays. `styles/index.css` now sets `background-color`
+    # on the root, so a dark capture paints the gutter in the theme colour and
+    # nothing should trip this — but it is a real defect when it does, and it is
+    # the half that a re-capture can actually fix.
     page = _mean_luma(image)
-    tier = (
+    if page >= 90:
+        return None
+
+    return (
+        f"{strip}px strip at right edge, page luma {page:.0f} — "
         "STARK — dark page, white strip becomes dark gradient"
-        if page < 90
-        else (
-            "subtle — light page (likely a modal overlay); white becomes pale gradient"
-        )
     )
-    return f"{strip}px strip at right edge, page luma {page:.0f} — {tier}"
 
 
 CHECKS = {
