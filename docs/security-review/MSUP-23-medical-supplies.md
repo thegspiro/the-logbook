@@ -1100,3 +1100,62 @@ MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-18,
 MSUP-19, and MSUP-20 are new fixes; MSUP-1 through MSUP-17 all re-verified
 intact (no code in this round touched their fixes beyond the two methods
 named above).
+
+## Pass 7 — 2026-09-06
+
+A seventh Codex round, reviewing the commit that fixed MSUP-20, found that
+fix's own re-check still had a gap in the same shape as MSUP-19.
+
+### MSUP-21 — LOW/MED — MSUP-20's domain re-check locked the item but not the separate category row it queried — ✅ FIXED (supersedes MSUP-20)
+
+**What:** MSUP-20 made `retire_item`'s domain re-check read the _locked_
+item's `category_id`, which is correct — but the `category_in_domain`
+call it then made was still a plain (non-locking) read against the
+_separate_ `InventoryCategory` row. Locking `InventoryItem` does not lock
+`InventoryCategory`, and `retire_medical_item`'s own preflight
+(`_require_medical_item`) already executes a plain read before
+`retire_item` is even called — under REPEATABLE READ, that preflight read
+is what establishes this transaction's snapshot (the snapshot is taken at
+the transaction's _first_ read, not per-statement). So a plain
+`category_in_domain` read later in the same transaction, no matter how
+late, still answers from that same pre-race snapshot: if a broad
+`inventory.manage` caller changes the _category's own_ `item_type` (medical
+→ gear) while this retirement is in flight, the re-check could still see
+the old, medical `item_type` and let the retirement through. This is
+exactly the same root cause as MSUP-19 (a lock on one row does not make an
+unrelated plain read of another row current), just found one call site
+later — the category check MSUP-20 added had the identical gap MSUP-19 had
+already fixed for the checkout/issuance counts on the very same PR.
+
+**Where:** `app/services/inventory_service.py` — `category_in_domain`,
+`retire_item`.
+
+**Fix:** `category_in_domain` gained an optional `for_update: bool = False`
+parameter (default unchanged — every other caller is a stateless preflight
+with nothing of its own to lock, so a plain read stays the default and
+this adds no cost or behavior change to them). `retire_item`'s domain
+re-check now passes `for_update=True`, making that read bypass the
+transaction's snapshot the way `_get_item_locked` and MSUP-19's blocker
+counts already do.
+
+**Guard tests:** new `TestCategoryInDomainForUpdate` in
+`test_inventory_service.py` (2 cases, compiled-SQL capture matching
+`TestGetCategoriesDefaultLimit`'s pattern) — the default call compiles
+with no `FOR UPDATE`, `for_update=True` compiles with it. Verified
+fail-before (failed against the plain read) / pass-after.
+`test_retire_item_rechecks_domain_under_the_lock` updated to assert
+`category_in_domain` is now called with `for_update=True`.
+
+### Completion gate (pass 7)
+
+| Check                                                                                                                                                                            | Result                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `flake8` / `black --check` / `isort --check-only` (inventory_service.py, test_inventory_service.py)                                                                              | clean                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                | PASSED — single head, no schema change |
+| `test_inventory_service.py` + `test_medical_supplies_domain.py` + `test_capacity_locking.py` + `test_inventory_identity_map_staleness.py` + `test_inventory_lot_stock_levels.py` | 171 passed                             |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                                                    | 740 passed, 1 pre-existing skip        |
+| `pytest tests/` (full backend suite)                                                                                                                                             | 11,463 passed, 21 pre-existing skips   |
+
+MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-21
+is a new fix (supersedes MSUP-20); MSUP-1 through MSUP-20 all re-verified
+intact.

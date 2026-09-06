@@ -87,8 +87,16 @@ validated domain membership before the lock, not under it — a concurrent
 reclassification could let a medical-only caller retire an item that raced
 out of their domain. Fixed with a new `required_item_types` parameter on
 `retire_item` that re-validates against the locked item's `category_id`.
-Full local gate green including the full scoped test run (738 passed).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 6.
+A seventh Codex round then found that fix had the identical gap MSUP-19
+had just fixed elsewhere on this same PR: `category_in_domain`'s read of
+the _category_ row was still a plain read, so locking the item didn't make
+it current — the caller's own preflight had already opened the
+transaction's snapshot. **MSUP-21** (LOW/MED, fixed, supersedes MSUP-20):
+`category_in_domain` gained an opt-in `for_update` parameter (default
+unchanged for its other, stateless-preflight callers); `retire_item`'s
+domain re-check now passes `for_update=True`.
+Full local gate green including the full scoped test run (740 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 7.
 
 ---
 
@@ -459,6 +467,50 @@ skip). Findings doc updated:
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 6, MSUP-18,
 MSUP-19, MSUP-20. Rotation row 23 still ⏳ — awaiting owner merge of PR
 #2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 7 — seventh Codex round: MSUP-20's own fix had MSUP-19's gap, one call site later
+
+A seventh Codex round, reviewing the commit that fixed MSUP-20, found that
+fix's own domain re-check still had a gap in the identical shape MSUP-19
+had just fixed elsewhere on this same PR:
+
+- MSUP-20 made `retire_item`'s domain re-check read the _locked_ item's
+  `category_id` — correct — but the `category_in_domain` call it then made
+  was still a plain (non-locking) read against the _separate_
+  `InventoryCategory` row. Locking `InventoryItem` does not lock
+  `InventoryCategory`, and `retire_medical_item`'s own preflight already
+  executes a plain read before `retire_item` is even called — under
+  REPEATABLE READ, that preflight read is what establishes this
+  transaction's snapshot (taken at the transaction's _first_ read, not
+  per-statement). So the later plain `category_in_domain` read still
+  answered from that same pre-race snapshot: a broad `inventory.manage`
+  caller changing the category's own `item_type` (medical → gear) while
+  retirement was in flight could still be invisible to the check. Same root
+  cause as MSUP-19 (a lock on one row does not make an unrelated plain read
+  of another row current), found one call site later.
+
+**MSUP-21 (LOW/MED, fixed, supersedes MSUP-20):** `category_in_domain`
+gained an opt-in `for_update: bool = False` parameter — default unchanged,
+so its other, stateless-preflight-only callers pay no cost and see no
+behavior change. `retire_item`'s domain re-check now passes
+`for_update=True`, making that read bypass the transaction's snapshot the
+same way `_get_item_locked` and MSUP-19's blocker counts already do.
+
+Guard tests: new `TestCategoryInDomainForUpdate` in
+`test_inventory_service.py` (2 cases, compiled-SQL capture matching
+`TestGetCategoriesDefaultLimit`'s pattern) — verified fail-before (failed
+against a plain read) / pass-after. `test_retire_item_rechecks_domain_
+under_the_lock` updated to assert the `for_update=True` call.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), the directly-touched test files (171
+passed), and the full `inventory or medical_supplies`-scoped run (740
+passed, 1 pre-existing skip). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 7, MSUP-21.
+Rotation row 23 still ⏳ — awaiting owner merge of PR #2301. Next: 24
+Meetings & minutes, once this PR merges.
 
 ---
 

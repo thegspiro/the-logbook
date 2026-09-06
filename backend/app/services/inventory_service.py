@@ -2098,12 +2098,17 @@ class InventoryService:
         ``_require_medical_item``): a domain-scoped caller (holding
         ``inventory.manage_medical`` but not the broader ``inventory.manage``)
         that checked domain membership before this call, racing a concurrent
-        reclassification of the item to a different domain, would otherwise
-        retire an item outside the domain their permission grants them. Once
-        the row is locked here, no concurrent write to this item's
-        ``category_id`` can land until this transaction commits, so this
-        check's answer cannot go stale under it the way the preflight check
-        could.
+        reclassification, would otherwise retire an item outside the domain
+        their permission grants them. Once the row is locked here, no
+        concurrent write to this item's own ``category_id`` can land until
+        this transaction commits -- but the category *row itself* is a
+        separate object the item lock does not protect, and the caller's own
+        preflight already opened this transaction's REPEATABLE READ
+        snapshot, so a plain read of the category here would still answer
+        from before a concurrent reclassification of the category (its
+        ``item_type``, not the item's ``category_id``) commits. The
+        ``category_in_domain(..., for_update=True)`` call below is what
+        makes this check current rather than the item lock alone.
         """
         try:
             item = await self._get_item_locked(item_id, organization_id)
@@ -2111,7 +2116,10 @@ class InventoryService:
                 return False, "Item not found"
 
             if required_item_types is not None and not await self.category_in_domain(
-                item.category_id, str(organization_id), required_item_types
+                item.category_id,
+                str(organization_id),
+                required_item_types,
+                for_update=True,
             ):
                 return False, "Item not found"
 
@@ -6458,22 +6466,35 @@ class InventoryService:
         category_id: Optional[str],
         organization_id: str,
         item_types: Iterable[ItemType],
+        for_update: bool = False,
     ) -> bool:
         """Is this category one of ``item_types``, in this organization?
 
         Fails closed: an unresolvable or uncategorized id is not in the
         domain. A medical-only officer reaching for a uniform category must be
         refused, and so must one reaching for a category that does not exist.
+
+        ``for_update``, off by default, makes this a locking read (Pitfall
+        #27) for the one caller that needs it: retire_item's post-lock
+        domain re-check. Locking the item row does not lock this category
+        row, and the caller's own earlier preflight check already opened
+        this transaction's REPEATABLE READ snapshot -- so a plain read here
+        would still answer from before a concurrent reclassification of the
+        *category itself* (as opposed to the item's category_id, which the
+        item lock does protect), no matter how late in the transaction it
+        runs. Every other caller is a stateless preflight with nothing of
+        its own to lock, so a plain read stays the default.
         """
         if not category_id:
             return False
-        found = await self.db.scalar(
-            select(InventoryCategory.id).where(
-                InventoryCategory.id == str(category_id),
-                InventoryCategory.organization_id == organization_id,
-                InventoryCategory.item_type.in_(list(item_types)),
-            )
+        stmt = select(InventoryCategory.id).where(
+            InventoryCategory.id == str(category_id),
+            InventoryCategory.organization_id == organization_id,
+            InventoryCategory.item_type.in_(list(item_types)),
         )
+        if for_update:
+            stmt = stmt.with_for_update()
+        found = await self.db.scalar(stmt)
         return found is not None
 
     async def name_in_domain(

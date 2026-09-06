@@ -617,6 +617,49 @@ class TestGetCategoriesDefaultLimit:
         assert "LIMIT 5000" in sql
 
 
+class TestCategoryInDomainForUpdate:
+    """category_in_domain defaults to a plain read -- every caller besides
+    retire_item's post-lock domain re-check is a stateless preflight with
+    nothing of its own to lock. for_update=True is the one opt-in that
+    makes it a locking read (Pitfall #27), needed because locking the item
+    row does not lock a separate category row, and an earlier plain read
+    in the same transaction (the caller's own preflight) already opened
+    the REPEATABLE READ snapshot a plain read here would otherwise still
+    answer from."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_default_is_a_plain_read(self, service, mock_db, org_id):
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            return "cat-1"
+
+        mock_db.scalar = AsyncMock(side_effect=cap)
+
+        await service.category_in_domain("cat-1", org_id, ["medical"])
+
+        sql = str(captured[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "FOR UPDATE" not in sql
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_for_update_true_is_a_locking_read(self, service, mock_db, org_id):
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            return "cat-1"
+
+        mock_db.scalar = AsyncMock(side_effect=cap)
+
+        await service.category_in_domain("cat-1", org_id, ["medical"], for_update=True)
+
+        sql = str(captured[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "FOR UPDATE" in sql
+
+
 class TestSerialNumberUniqueness:
 
     @pytest.mark.asyncio
@@ -1189,7 +1232,7 @@ class TestRetireItem:
         assert success is False
         assert "not found" in err.lower()
         service.category_in_domain.assert_awaited_once_with(
-            "cat-gear", str(item.organization_id), ["medical"]
+            "cat-gear", str(item.organization_id), ["medical"], for_update=True
         )
         mock_db.commit.assert_not_awaited()
 
