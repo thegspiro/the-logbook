@@ -913,6 +913,56 @@ test_a_refresh_racing_a_transfer_never_splits_owner_from_keys`.
   could not substitute a mocked check for: only a real, live database run
   reproduces an actual InnoDB/MariaDB deadlock-detector outcome, and CI —
   not local verification — is what caught this.
+- **Round 4 — three more findings, two fixed with a structural change,
+  one fixed with a scope-appropriate delivery-side bound rather than a
+  data migration:**
+  - **Gap-lock deadlock, same-user and cross-user.** The endpoint lookup
+    still took a `FOR UPDATE` read that could match nothing (for a
+    genuinely brand-new endpoint) — and a "not found" locking read takes
+    an InnoDB _gap_ lock over the index range instead of a record lock.
+    Unlike a record lock, a gap lock is compatible with another
+    transaction's gap lock on the same range: two callers registering
+    different never-before-seen endpoints that hash into the same gap
+    (same user or different users — reported as two separate findings,
+    same mechanism) can each acquire one, then each block on the other's
+    later insert-intention lock. This is the identical shape already
+    fixed once in this codebase — FAC-45 in `documents_service.py` — and
+    fixed the same way: peek by `endpoint_hash` with a plain read first
+    (never locking), and only take a real lock via a point lookup on the
+    id the peek already found. A brand-new endpoint now never takes any
+    lock on the endpoint table before its INSERT.
+  - **A deeper residual interleaving, closed with a retry rather than a
+    fourth ordering patch.** Codex's own follow-up: a stale guess plus
+    two _unrelated_ concurrent transfers landing at just the right moment
+    can still make one request's cap-count range-lock overlap a different
+    request's specific-row lock — a real deadlock shape, but one with no
+    single resource both sides could agree to lock first, since which
+    rows a target's own cap-count will touch is exactly what's unknown
+    before the lock is taken. Continuing to chase individual
+    interleavings risks introducing a fifth subtle ordering bug under
+    time pressure without ever proving the scheme deadlock-free for
+    arbitrary N-party cases. A deadlock is not a correctness or
+    data-integrity failure — InnoDB always cleanly aborts and fully rolls
+    back exactly one side — so `subscribe()` now retries once,
+    specifically on MySQL error 1213, never any other `OperationalError`
+    (which would silently mask a real connectivity or syntax failure
+    instead of retrying a lock).
+  - **The cap only protected new registrations.** `send_to_user` still
+    loaded and iterated every existing row for a user, so an account that
+    already exceeded 20 devices before this fix shipped kept the exact
+    fan-out this whole change exists to prevent. Fixed at delivery rather
+    than with a data migration — trimming existing rows would force a
+    decision about _which_ of an over-cap account's devices to delete,
+    a real and irreversible product call this PR shouldn't make
+    unilaterally. `send_to_user`'s query is now ordered newest-first and
+    capped at the same `_MAX_PUSH_SUBSCRIPTIONS_PER_USER`, so a legacy
+    over-cap account is delivered to its most recent devices only, with
+    no schema change and no information lost.
+  - **Guard tests:** `TestDeadlockRetry` (retries once on 1213, never on a
+    second deadlock or any non-deadlock `OperationalError`);
+    `test_delivery_is_capped_for_an_account_that_predates_the_limit`
+    (inserts 25 rows directly, bypassing `subscribe()`'s cap, and asserts
+    delivery reaches only the 20 newest).
 
 ### MSG-14 — LOW — `build_shell`'s `subtitle` was not HTML-escaped — ✅ FIXED
 
