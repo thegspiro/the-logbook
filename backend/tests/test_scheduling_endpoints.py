@@ -117,6 +117,37 @@ class TestEndpointPermissions:
                 "PermissionChecker(scheduling.view)" in deps
             ), f"GET {path} unexpectedly widened"
 
+    def test_closeout_backlog_stays_on_scheduling_manage(self):
+        """The one scheduling read that is *not* widened to `view`.
+
+        `/shifts` returns a member their own visible shifts when they hold only
+        `scheduling.view`; this returns the whole department's unclosed backlog
+        with no member filter at all. It is reached from a page already gated on
+        `manage`, so pairing it with `view` the way the reads above are paired
+        would hand every member a department-wide list. Pinned so the pairing is
+        not applied here by habit.
+        """
+        deps = self._get_route_deps("/shifts/needing-closeout", "GET")
+        assert deps is not None, "Route /shifts/needing-closeout GET not found"
+        assert "PermissionChecker(scheduling.manage)" in deps
+
+    def test_closeout_backlog_is_registered_before_the_shift_detail_route(self):
+        """Otherwise `/shifts/{shift_id}` swallows it and the path parses as an id.
+
+        FastAPI matches in declaration order, so a literal segment added after a
+        path parameter is unreachable — and the failure is a 422 about an
+        invalid UUID, which reads like a client bug rather than a routing one.
+        `/shifts/open` carries the same note for the same reason.
+        """
+        paths = [
+            route.path
+            for route in router.routes
+            if "GET" in getattr(route, "methods", set())
+        ]
+        assert paths.index("/shifts/needing-closeout") < paths.index(
+            "/shifts/{shift_id}"
+        )
+
     def test_create_shift_requires_scheduling_manage(self):
         deps = self._get_route_deps("/shifts", "POST")
         assert deps is not None, "Route /shifts POST not found"

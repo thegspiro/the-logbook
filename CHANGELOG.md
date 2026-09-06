@@ -39,6 +39,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Check In Station" against a heading that hyphenates it. The hub-card
   agreement test now covers Inventory as well as Scheduling, so a card and a
   crumb naming one page differently fails rather than shipping.
+### The close-out queue and the number above it are one list now (2026-09-06)
+
+**Added**
+
+- **`GET /scheduling/shifts/needing-closeout`.** The shifts that have ended and
+  were never closed out, oldest first, gated on `scheduling.manage`. Ordered by
+  when each shift was actually over — `end_time`, or `start_time` plus the
+  department's open-ended cushion — because a shift with no recorded end was
+  over a cushion after it began, and ordering by the start interleaves it with
+  shifts that finished hours earlier. Unlike `GET /scheduling/shifts` it takes
+  `scheduling.manage` alone: it is the whole department's backlog with no
+  member filter applied.
+
+**Changed**
+
+- **The close-out queue reads the server's population instead of deriving its
+  own.** `/scheduling/admin/closeout` and the administration hub's **To close
+  out** card now read one predicate, `closeout_backlog_criteria`. They were two:
+  the metric has no earliest date while the page re-derived the set from a date
+  range it chose, so a shift left unclosed before that range began was counted
+  on the card and missing from the list it linked to.
+- **The queue's From and To controls are gone.** This page is the backlog, not
+  a query over it, and a range is what let it and the card describe different
+  populations. Three workarounds go with them: the six-month default, the
+  reversed-range guard, and the ten-page fetch loop that existed only because
+  the generic shifts endpoint returned mostly closed-out shifts and the unclosed
+  ones could sit on page three. The list is capped at one page of 200 and says
+  so when the backlog is longer, rather than letting a cap read as the end of
+  the work.
+- **The queue refreshes itself as shifts become eligible.** The page no longer
+  re-tests the server's answer against its own cached cushion — an officer who
+  lowered the cushion elsewhere made every other open tab drop rows the server
+  had just declared overdue, and the page then read "Every shift is closed out"
+  with a positive total beside it. Membership is the server's answer alone, so
+  the queue is re-read on the thirty-second clock the waiting badges already
+  run on. The refresh is skipped while a close-out wizard is open, so it cannot
+  unmount unsaved entries, and a failed refresh leaves the last good list on
+  screen rather than blanking a working page.
+### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
+
+**Fixed**
+
+- **Building an equipment checklist on a phone, the blue "Add item" button
+  at the bottom of a location could not be tapped.** It was drawn
+  underneath the checklist's own bottom bar and the app's bottom
+  navigation, so taps landed on those instead. Adding an item has moved
+  onto the checklist's bottom bar, where it stays reachable, follows the
+  location you last opened, and scrolls to that location when you use it.
+  Adding a _location_ is still on the same bar, now labelled "Location",
+  and remains available from the buttons below the list as before.
+- **Several buttons were smaller than a fingertip on a phone.** Buttons on
+  My Issued Gear, My Equipment Checklists, Reorder Requests and the
+  checklist builder now meet the 44-pixel minimum touch size on phones.
+- **A stray scrollbar under the tabs on an inventory item's page** has been
+  removed.
+### Create Shift: the dialog's fields had no names (2026-09-06)
+
+**Fixed**
+
+- **Nothing in the Create Shift dialog was announced by name.** All nine of its
+  controls — Shift Template, Start Date, End Date, Apparatus, Start Time, End
+  Time, Shift Officer, Notes and the template search box — sat next to a label
+  that was never associated with them, so a screen reader read out nine
+  anonymous fields ("edit text", "combo box") and gave no way to tell which was
+  which. Clicking a label also focused nothing, which is the same defect as seen
+  with a mouse. Every field now carries its label.
+- "Custom Times" heads the Start Time / End Time pair rather than naming a
+  single field, so it is announced as the group it is instead of claiming to be
+  one of them.
+- **The two time fields were announced as a time, not as a field.** Each is
+  three dropdowns (hour, minute, AM/PM) that name themselves, and the start
+  field named itself after whatever time the chosen template starts at — so a
+  screen reader offered "08:00 hour" where it should have said "Start Time
+  hour", and the end field fell back to a bare "Time". All six now carry the
+  visible field name.
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
 
 **Fixed**

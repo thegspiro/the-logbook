@@ -295,6 +295,7 @@ GET    /api/v1/scheduling/shifts/{id}               # Get shift by ID
 PATCH  /api/v1/scheduling/shifts/{id}               # Update shift (scheduling.manage)
 DELETE /api/v1/scheduling/shifts/{id}               # Delete shift (scheduling.manage)
 GET    /api/v1/scheduling/shifts/open               # Get upcoming open shifts
+GET    /api/v1/scheduling/shifts/needing-closeout   # Ended, never closed out, oldest first (scheduling.manage)
 GET    /api/v1/scheduling/calendar/week/{date}      # Week calendar view
 GET    /api/v1/scheduling/calendar/month/{y}/{m}    # Month calendar view
 ```
@@ -505,6 +506,16 @@ POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm
 All four require `scheduling.manage` **or** being the shift's own officer
 (`_authorize_shift_management`). Each step writes as it advances, so an
 interrupted close-out resumes rather than restarting.
+
+`GET /scheduling/shifts/needing-closeout` is the list of shifts still owing one
+— the rows behind the administration hub's **To close out** metric. Both read
+`closeout_backlog_criteria` in `scheduling_service`, so the number on the card
+and the length of the queue are one population read twice; they were two while
+the page re-derived the set from a date range and the metric had none. It takes
+no date range for that reason, is ordered by when each shift was actually over
+(`end_time`, or `start_time` plus the department's open-ended cushion), and
+stands on `scheduling.manage` alone — unlike `GET /scheduling/shifts`, it is the
+whole department's backlog with no member filter applied.
 
 `GET …/closeout` → `CloseoutStateResponse`:
 

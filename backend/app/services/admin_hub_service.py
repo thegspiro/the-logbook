@@ -89,6 +89,7 @@ from app.schemas.admin_hub import (
 from app.services.organization_service import OrganizationService
 from app.services.scheduling_service import (
     SchedulingService,
+    closeout_backlog_halves,
     open_ended_cushion_hours,
 )
 from app.services.training_compliance import compute_org_compliance_pct
@@ -1298,10 +1299,10 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     return value.replace(tzinfo=timezone.utc)
 
 
-async def _open_ended_cushion(ctx: MetricContext) -> int:
-    """The department's open-ended cushion, or the built-in floor."""
+async def _scheduling_settings(ctx: MetricContext) -> dict:
+    """The department's settings, or an empty mapping when it cannot be read."""
     org = await ctx.db.get(Organization, ctx.organization_id)
-    return open_ended_cushion_hours((org.settings if org else None) or {})
+    return (org.settings if org else None) or {}
 
 
 async def _short_staffed_shifts(
@@ -1349,28 +1350,20 @@ async def _scheduling_closeout_backlog(ctx: MetricContext) -> tuple[int, Optiona
     moment it appeared, in a department running a seventy-two hour cushion.
     """
     now = datetime.now(timezone.utc)
-    cushion = timedelta(hours=await _open_ended_cushion(ctx))
-    scoped = (
-        Shift.organization_id == ctx.organization_id,
-        Shift.status != ShiftStatus.CANCELLED,
-        Shift.is_finalized.is_(False),
-    )
+    settings = await _scheduling_settings(ctx)
+    cushion = timedelta(hours=open_ended_cushion_hours(settings))
+    # The same two halves the close-out queue lists, from
+    # `scheduling_service`, so the number on this card and the length of the
+    # queue it links to cannot come apart. They already had: the metric was
+    # unbounded while the page re-derived the population from a date range of
+    # its own choosing.
+    ended, open_ended = closeout_backlog_halves(ctx.organization_id, settings, now)
 
     ended_count, oldest_ended = await _count_and_oldest(
-        ctx.db,
-        Shift,
-        *scoped,
-        Shift.end_time.isnot(None),
-        Shift.end_time < now,
-        date_column=Shift.end_time,
+        ctx.db, Shift, *ended, date_column=Shift.end_time
     )
     open_count, oldest_open = await _count_and_oldest(
-        ctx.db,
-        Shift,
-        *scoped,
-        Shift.end_time.is_(None),
-        Shift.start_time < now - cushion,
-        date_column=Shift.start_time,
+        ctx.db, Shift, *open_ended, date_column=Shift.start_time
     )
 
     ages = [
