@@ -792,11 +792,19 @@ const NotificationsPage: React.FC = () => {
                 <div className="card p-12 text-center">
                   <Bell className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                   <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notification Rules</h3>
-                  <p className="text-theme-text-secondary mb-6">
-                    {searchQuery
-                      ? 'No rules match your search query.'
-                      : 'Create your first notification rule to start sending automated notifications.'}
-                  </p>
+                  {/* Most holders of notifications.view cannot create a rule:
+                      16 of the 21 seeded positions carrying it -- captains,
+                      lieutenants, the treasurer, the secretary, the training
+                      and safety officers -- stop short of notifications.manage.
+                      The heading is the answer they came for; the invitation
+                      below it is addressed to a button they will never see. */}
+                  {(searchQuery || canManage) && (
+                    <p className="text-theme-text-secondary mb-6">
+                      {searchQuery
+                        ? 'No rules match your search query.'
+                        : 'Create your first notification rule to start sending automated notifications.'}
+                    </p>
+                  )}
                   {canManage && !searchQuery && (
                     <button
                       onClick={() => setShowCreateModal(true)}
@@ -1051,7 +1059,7 @@ const NotificationsPage: React.FC = () => {
         )}
 
         {/* Create Rule Modal */}
-        {showCreateModal && (
+        {canManage && showCreateModal && (
           <div
             className="fixed inset-0 z-50 overflow-y-auto"
             role="dialog"
