@@ -123,6 +123,82 @@ done
 
 echo -e "${GREEN}✓${NC} ${#WIKI_FILES[@]} pages staged for publication"
 
+# Images travel with the pages.
+#
+# This script copied *.md and nothing else until 2026-09-06, which meant a wiki
+# page could not show a screenshot at all. Nothing failed: `cp` was never asked
+# for the image, so the publish succeeded and the page rendered a broken image
+# on the live wiki. wiki/README.md had recommended exactly that relative-path
+# syntax since the directory was created, and Module-Training.md carries three
+# screenshot briefs that could not have been filled.
+#
+# The whole directory is copied rather than a list of files, for the same
+# reason the page glob above is a glob: a hand-maintained list falls behind.
+#
+# The destination is removed first because the wiki clone PERSISTS between runs
+# (this script pulls it when it already exists). A plain copy is additive, so
+# an image deleted here would stay published forever, and a page renamed from
+# under one would leave an orphan nobody ever looks at.
+WIKI_IMAGES_DIR="images"
+
+# The clear runs UNCONDITIONALLY, before the copy, and that ordering is the
+# whole point. Deleting the last image removes the directory too — git cannot
+# track an empty one — so a clear nested inside an `if [ -d images ]` would be
+# skipped in exactly the case that needs it, stranding every published image in
+# the persistent clone forever.
+#
+# ${WIKI_DIR:?} refuses to expand to bare "/images" if WIKI_DIR is ever unset
+# by an edit above — this is an `rm -rf`, so it does not get to rely on a
+# variable being set 60 lines earlier.
+rm -rf "${WIKI_DIR:?}/$WIKI_IMAGES_DIR"
+
+# Only TRACKED files are published. `cp -R` of the directory would sweep up
+# whatever happens to be sitting there — an editor artifact, a scratch capture,
+# a screenshot taken but not yet reviewed — and the `git add .` below would push
+# it to a public wiki, unreviewed. That is the opposite of what wiki/README.md
+# promises about images being reviewable in a pull request, and this application
+# handles PHI: an unreviewed screenshot is not a file to publish by accident.
+#
+# -z and `read -d ''` so a filename containing a space or newline cannot split
+# into two paths.
+#
+# Tracked is not the same as committed. `git ls-files` filters filenames while
+# `cp` reads the working tree, so a tracked screenshot overwritten locally and
+# not yet committed would publish its uncommitted bytes — the same unreviewed
+# content this block exists to keep off a public wiki, wearing a reviewed
+# filename. Refuse rather than warn: the maintainer running this is watching a
+# publish succeed, not reading its output.
+dirty_images=$(git diff --name-only HEAD -- "$WIKI_IMAGES_DIR")
+if [ -n "$dirty_images" ]; then
+    echo -e "${RED}✗${NC} Tracked image(s) under $WIKI_IMAGES_DIR/ differ from HEAD:"
+    echo "$dirty_images" | sed 's/^/    /'
+    echo -e "  Commit them (so they are reviewable) or restore them, then publish."
+    exit 1
+fi
+
+image_count=0
+while IFS= read -r -d '' img; do
+    mkdir -p "$WIKI_DIR/$(dirname "$img")"
+    cp "$img" "$WIKI_DIR/$img"
+    image_count=$((image_count + 1))
+done < <(git ls-files -z "$WIKI_IMAGES_DIR")
+
+if [ "$image_count" -gt 0 ]; then
+    echo -e "${GREEN}✓${NC} Copied $image_count tracked image(s) from $WIKI_IMAGES_DIR/"
+else
+    # Not an error: the wiki has no images yet. A page referencing one that is
+    # missing — or one outside wiki/images/, which this script cannot publish —
+    # is caught in CI by scripts/check_docs_links.py.
+    echo -e "${BLUE}·${NC} No tracked files in $WIKI_IMAGES_DIR/ — no images to publish"
+fi
+
+untracked_images=$(git ls-files --others --exclude-standard "$WIKI_IMAGES_DIR")
+if [ -n "$untracked_images" ]; then
+    echo -e "${YELLOW}!${NC} Untracked file(s) under $WIKI_IMAGES_DIR/ were NOT published:"
+    echo "$untracked_images" | sed 's/^/    /'
+    echo -e "  Commit them if they belong on the wiki."
+fi
+
 # Troubleshooting is GENERATED, not maintained here.
 #
 # There used to be three troubleshooting documents — docs/TROUBLESHOOTING.md,
