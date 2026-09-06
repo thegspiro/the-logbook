@@ -15,6 +15,7 @@ import {
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { MicrosoftAuthMethod } from '@/constants/enums';
 
 interface EmailConfig {
   // Cloudflare Email Service
@@ -26,7 +27,7 @@ interface EmailConfig {
 
   // Microsoft 365 — signs in to smtp.office365.com as fromEmail, with an App
   // Password (Basic auth, retiring) or an Entra ID app registration.
-  microsoftAuthMethod?: 'app_password' | 'oauth';
+  microsoftAuthMethod?: MicrosoftAuthMethod;
   microsoftAppPassword?: string;
   microsoftTenantId?: string;
   microsoftClientId?: string;
@@ -52,8 +53,8 @@ interface EmailConfig {
  * because the backend reads an absent method as App Password, which is what
  * every row written before OAuth existed means by it.
  */
-const microsoftCredentialProblem = (config: EmailConfig, method: 'app_password' | 'oauth'): string | null => {
-  if (method === 'oauth') {
+const microsoftCredentialProblem = (config: EmailConfig, method: MicrosoftAuthMethod): string | null => {
+  if (method === MicrosoftAuthMethod.OAUTH) {
     if (!config.microsoftTenantId?.trim()) return 'Please enter your Microsoft 365 directory (tenant) ID';
     if (!config.microsoftClientId?.trim()) return 'Please enter your Microsoft 365 application (client) ID';
     if (!config.microsoftClientSecret?.trim()) return 'Please enter your Microsoft 365 client secret';
@@ -112,7 +113,7 @@ const EmailConfiguration: React.FC = () => {
 
   // Onboarding is always a new setup, so Microsoft starts on the app
   // registration rather than on the Basic auth Microsoft is retiring.
-  const microsoftAuthMethod = config.microsoftAuthMethod || 'oauth';
+  const microsoftAuthMethod = config.microsoftAuthMethod || MicrosoftAuthMethod.OAUTH;
 
   // Sent rather than the raw config so the method the form is showing is the
   // method the backend stores — an omitted key would be read as App Password.
@@ -378,8 +379,16 @@ const EmailConfiguration: React.FC = () => {
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {(
                   [
-                    { id: 'oauth', label: 'App registration (OAuth)', hint: 'Recommended' },
-                    { id: 'app_password', label: 'App Password', hint: 'Basic auth — retiring' },
+                    {
+                      id: MicrosoftAuthMethod.OAUTH,
+                      label: 'App registration (OAuth)',
+                      hint: 'Recommended',
+                    },
+                    {
+                      id: MicrosoftAuthMethod.APP_PASSWORD,
+                      label: 'App Password',
+                      hint: 'Basic auth — retiring',
+                    },
                   ] as const
                 ).map((m) => (
                   <button
@@ -400,7 +409,7 @@ const EmailConfiguration: React.FC = () => {
               </div>
             </div>
 
-            {microsoftAuthMethod === 'oauth' ? (
+            {microsoftAuthMethod === MicrosoftAuthMethod.OAUTH ? (
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
@@ -452,7 +461,12 @@ const EmailConfiguration: React.FC = () => {
                     <li>Add the SMTP.SendAsApp application permission for Office 365 Exchange Online</li>
                     <li>Grant admin consent for that permission</li>
                     <li>Create a client secret and copy its value — it is shown only once</li>
-                    <li>Have your Exchange administrator grant the application SendAs on this mailbox</li>
+                    <li>
+                      In Exchange Online PowerShell, have your Exchange administrator register the application&apos;s
+                      service principal — an Entra ID registration on its own is not visible to Exchange, and without
+                      this step the token is issued but sign-in still fails
+                    </li>
+                    <li>Have that administrator grant the application SendAs on this mailbox</li>
                   </ol>
                   <a
                     href="https://entra.microsoft.com/"
