@@ -2874,6 +2874,47 @@ addition, not a security-review drive-by fix.
 reject `is_scheduled=True` at the API layer with a clear "not yet supported"
 error until a sender exists, rather than the current silent-accept.
 
+## RPT5-29-1 — `compliance_status`/`training_summary` Re-Derive Training Compliance Instead of Consuming the Shared Evaluator (2026-09-06)
+
+`reports_service._generate_compliance_status` (the `compliance_status`
+report) and `_generate_training_summary`'s `requirement_breakdown` section
+both compute per-member/per-requirement completion from `ProgramEnrollment` +
+`RequirementProgress` — "did this member's structured training-program
+enrollment mark this requirement complete?" `app/services/
+training_compliance.py`'s `compute_org_compliance_pct` (used by
+`/dashboard/admin-summary`'s `training_completion_pct`, and by the training
+compliance-matrix endpoint) answers a related but different question —
+"has this member completed a `TrainingRecord` inside this requirement's
+compliance window?" — additionally applying compliance-profile-scoped
+requirement lists, per-profile threshold overrides, waivers, and per-
+requirement date windows (rolling periods, custom annual windows).
+
+This is CLAUDE.md **Pitfall #29**: two endpoints computing the same-sounding
+"compliance" metric off the same `TrainingRequirement` rows, by different
+rules, with no shared authority. An organization that tracks its annual
+training requirements via direct `TrainingRecord` completion (no formal
+`ProgramEnrollment`) sees every member as 0%/sharply-understated on the
+"Compliance Status" report while `/dashboard/admin-summary` and the
+compliance-matrix screen show the same members compliant for the same date —
+visible only by opening both screens, not by any test or error.
+
+**Not fixed:** `compute_org_compliance_pct` currently returns only an
+org-wide percentage, not the per-member breakdown `compliance_status` renders,
+so consuming it directly is a return-shape refactor of a shared utility, not a
+drive-by. The alternative — relabeling `compliance_status`/`requirement_
+breakdown` to say plainly they measure program-enrollment progress, not
+org-wide annual compliance — is a product decision about what those screens
+should say. (Security review RPT-29 pass 5,
+`docs/security-review/RPT5-29-reports-analytics.md`, RPT5-29-1.)
+
+**Options for closing it:** (1) extend `training_compliance.py` to also
+return a per-member breakdown and have `_generate_compliance_status` consume
+it, retiring its own `ProgramEnrollment`-based evaluation; or (2) rename/
+re-scope `compliance_status` and `requirement_breakdown` to be explicit that
+they measure training-_program_ enrollment completion, distinct from the
+org-wide annual-requirement compliance the dashboard and compliance-matrix
+report.
+
 ## CRON2-31-12/13 — Two Scheduled-Task Gaps Left Open by This Rotation's Pass (2026-08-27)
 
 - **`run_action_item_reminders` has no org loop at all**

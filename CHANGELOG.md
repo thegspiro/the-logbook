@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: clearing a saved report's name could 500 instead of returning a clear error (2026-09-06)
+
+**Fixed**
+
+- **`PATCH /reports/saved/{id}` used a bare `setattr` loop instead of
+  `apply_updates`**, so an explicit `"name": null` — a valid value for the
+  request schema's `Optional[str]` field — reached `db.commit()` against the
+  NOT NULL `name` column and raised an uncaught `IntegrityError` (an
+  unhandled 500) instead of the 400 every other rejected value on this
+  endpoint returns. Switched to `apply_updates`, matching the sibling
+  `label_printer_service.update_printer`.
+- **Flagged, not fixed:** the "Compliance Status" report and the training
+  summary's per-requirement breakdown compute member compliance from
+  training-_program_ enrollment progress, while the dashboard and the
+  training compliance-matrix compute it from the shared, profile/waiver/
+  date-window-aware evaluator in `training_compliance.py` — two different
+  answers to "is this member compliant?" from the same `TrainingRequirement`
+  rows. See `docs/KNOWN_LIMITATIONS.md` (RPT5-29-1).
+- See `docs/security-review/RPT5-29-reports-analytics.md` for the full
+  writeup.
 ### Nobody could run a finance approval chain (2026-09-06)
 
 **Fixed**

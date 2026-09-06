@@ -16,10 +16,97 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 28 (Security, audit & IP), pass 3** — branch
-`claude/friendly-babbage-mxcgij`,
-[PR #2333](https://github.com/thegspiro/the-logbook/pull/2333). Subscribed;
-awaiting CI/review.
+**Feature 29 (Reports & analytics), pass 4 (round 2 / pass 5)** — branch
+`claude/security-review-reports-analytics-pass4`,
+[PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Extended with
+a second round rather than opened as a new PR — see the pass-5 log entry
+below. `subscribe_pr_activity` returned "could not subscribe" both times it
+was tried this round (possibly another watcher already on the PR); awaiting
+CI/review either way.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics, pass 5 — round 2 on PR #2344)
+
+PR #2344 (pass 4) was already open when this iteration started. Per the
+one-PR-per-feature rule, this round extends that same branch rather than
+opening a competing PR. Pass 4 was explicitly delta-only and named
+`reports_service.py`, `dashboard.py` and `label_service.py` as **not**
+re-read end to end since pass 3; this round supplied that full read.
+
+Found 2 real, verified gaps pass 4's delta-only scope could not have caught
+(both outside the delta it read) and fixed 1:
+
+1. **`compliance_status`/`training_summary`'s requirement breakdown re-derive
+   training compliance independently of the shared evaluator** in
+   `training_compliance.py` (profile scoping, waivers, date windows) —
+   Pitfall #29 shape: an org with no formal `ProgramEnrollment`s reads as
+   ~0% compliant on this report while `/dashboard/admin-summary` and the
+   compliance-matrix show the same members compliant, same day, same org.
+   Flagged (architecture/product decision), not fixed.
+2. **`PATCH /reports/saved/{id}`** used a bare `setattr` loop instead of
+   `apply_updates`, so an explicit `name: null` reached `db.commit()` against
+   a NOT NULL column and raised an uncaught `IntegrityError` (500) instead of
+   a 400. Fixed, matching the sibling `label_printer_service.update_printer`.
+
+Also re-verified pass 3's `list_waivers` org-scoping fix
+(`attendance_dashboard_service.py:309-320`) — still present, but landed via a
+_different_ feature's rotation pass (`6d784018`, meetings-minutes MM-14,
+since that service is also reached from `meetings.py`), not this one. Noted
+so as not to double-claim it.
+
+3 guard tests added
+(`TestSavedReportUpdateExplicitNull`). Full gate green: flake8/black/isort
+clean on `app/`, `tests/`, `alembic/` at CI's pinned versions; migrations
+PASSED (431 migrations, single head); 517/518 scoped tests pass (1 skipped,
+pywebpush env-only); frontend typecheck 0 errors, eslint 0 errors (no
+frontend files touched). Findings doc:
+`docs/security-review/RPT5-29-reports-analytics.md`. Rotation row 29 stays
+✅ (pending PR merge, unchanged from pass 4). Next: 30 Onboarding, once
+PR #2344 merges.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics, pass 4)
+
+Feature 28's PR #2333 merged at 18:24:13Z (main is its merge commit
+`f7a9ad8d`), so the stale Open PR row above it was cleared and the rotation
+advanced. Pass 4 over Reports & analytics, **delta-focused by design**: pass 3
+(PR #2091, `b6c283a7`) read all ten files end to end one commit-range ago, so
+this pass read the full diff since it — 141 insertions across 5 files — plus a
+fresh enumeration of all 30 routes, the new `hidden_prospect_ids` surface, and
+targeted whole-feature sweeps. The bodies of `reports_service.py`,
+`dashboard.py` and `label_service.py` outside that delta were **not** re-read;
+that limit is stated in the findings doc rather than papered over.
+
+**No new findings, and no code changed.** Eight verified-good claims, each
+naming its mechanism. The three that took real work: (1) the
+`equipment_check.manage` → `inventory.check_manage` swap on the operations
+dashboard does **not** reach the baseline — resolved `DEFAULT_POSITIONS` and
+`OPERATIONAL_RANKS` live, `member` holds `check_submit`/`view` and
+`firefighter` holds `view`, neither holds `check_manage` nor the `inventory.*`
+wildcard that would grant it (Pitfall #23 clear); (2) the new
+`call_type_labels` in both call-volume reports resolves through
+`ShiftEligibilityService._get_org(org_id)` off `current_user.organization_id`,
+so it cannot cross tenants; (3) `PII_REPORT_PERMISSIONS` is complete for the
+current 13 generators — enumerated every ungated generator's output keys and
+confirmed the `"name"` fields in `apparatus_status`/`inventory_status` are
+asset names, not member names. An unbounded `awk` first suggested
+`event_attendance` carried `member_name`; bounding each function to its next
+`def` showed that hit belonged elsewhere, and the doc records the correction.
+
+Also verified: the label preset's new UNSET semantics keep the in-org FK check
+on `printer_id` (Pitfalls #1 and #14c both satisfied), and prospect
+self-access filtering reaches **all three** label paths including `print`,
+with `_filter_ids` normalizing both sides against the re-cased-UUID bypass.
+
+Full gate green on `f7a9ad8d`: flake8/black/isort clean across `app/`,
+`tests/`, `alembic/` at CI's pinned versions (verified rather than assumed —
+a missing `isort` passes silently); migrations PASSED; 816/816 scoped tests
+pass, 1 skipped (pywebpush, env-only); frontend typecheck 0 errors, eslint 0
+errors. Findings doc:
+`docs/security-review/RPT4-29-reports-analytics.md`. Rotation row 29 → ✅
+(pending PR merge). Next: 30 Onboarding.
 
 ---
 
@@ -9841,7 +9928,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
