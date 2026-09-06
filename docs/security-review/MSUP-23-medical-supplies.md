@@ -1345,3 +1345,98 @@ contract and apply it to all five, rather than resolving each ad hoc.
 MSUP-4, MSUP-11, MSUP-15, and the new MSUP-25 are the only open, flagged
 items. MSUP-23 and MSUP-24 are new fixes; MSUP-1 through MSUP-22 all
 re-verified intact.
+
+## Pass 10 — 2026-09-06
+
+A tenth Codex round found that MSUP-13's own fix broke two already-shipped
+frontend flows outright, plus one more bypass in the same shape as
+MSUP-25's flagged class.
+
+### MSUP-26 — MED — MSUP-13's status/condition-RETIRED rejection deterministically broke two shipped frontend flows — ✅ FIXED
+
+**What:** `InventoryItemsPage.tsx`'s "Bulk Status Change" picker and
+`ItemFormModal.tsx`'s Condition dropdown both still offered `Retired` as a
+selectable option and, on selection, submitted exactly the
+`status`/`condition` RETIRED pair MSUP-13 made `update_item` reject
+outright. Both controls shipped before MSUP-7 through MSUP-13 existed;
+none of those rounds' frontend-caller searches caught them because they
+don't literally send `active` — same shape as MSUP-16/22 (a real
+capability broken by this PR's own fix chain, not a pre-existing gap), but
+here the break is a guaranteed 400 on every use of two already-shipped
+controls, not a narrow permission-holder's missing path.
+
+**Where:** `frontend/src/modules/inventory/pages/InventoryItemsPage.tsx`
+(bulk status picker), `frontend/src/modules/inventory/components/ItemFormModal.tsx`
+(Condition picker).
+
+**Fix:** both pickers now filter `retired` out of their options
+(`STATUS_OPTIONS`/`ITEM_CONDITION_OPTIONS` themselves are untouched, since
+both are also used for filter dropdowns and label lookups elsewhere that
+still need `retired` to remain a valid, displayable value). Retiring
+continues to be reachable only through the dedicated Retire action
+already present in both pages' per-row actions.
+
+**Guard tests:** `ItemFormModal.test.tsx`'s
+`test_derives_a_retired_status_from_a_retired_condition` (which exercised
+the now-removed option) was replaced with a test asserting `Retired` is
+absent from the rendered options.
+`InventoryItemsPage.test.tsx` gained the equivalent assertion for the bulk
+status picker.
+
+### MSUP-27 — MED — `update_item` let a caller silently reopen an already-retired item's status — ✅ FIXED
+
+**What:** MSUP-13's reject condition only catches a payload _entering_
+retirement (`active` present, or a `status`/`condition` pair of RETIRED).
+It says nothing about an _already-retired_ item's `status`/`condition`
+being changed to something else — `PATCH {"status": "available",
+"condition": "good"}` on a retired item touches neither of the guarded
+values, so it passes through untouched. Since `active` is never mentioned
+in that payload, it stays `false` while `status` becomes `available` —
+and `assign_item_to_user`/`checkout_item` gate on `status`, not `active`,
+so the item could be handed to a member while remaining hidden from every
+active-inventory listing. Nothing in this codebase reactivates a retired
+item (re-confirmed again this round), so there was never a legitimate
+transition here to preserve.
+
+**Where:** `app/services/inventory_service.py` — `update_item`.
+
+**Fix:** added a second reject condition: if the item is currently
+inactive (`not item.active`) and the update touches `status` or
+`condition` at all, reject with a clear error. Fields unrelated to
+status/condition (name, storage location, notes, etc.) remain editable on
+a retired item for record-keeping.
+
+**Guard tests:** `TestUpdateItemRejectsActive` gained
+`test_rejects_reopening_a_retired_items_status` (verified fail-before/
+pass-after) and `test_a_retired_items_unrelated_fields_stay_editable`
+(confirms the guard is scoped to status/condition, not every field).
+
+**Also discovered, folded into MSUP-25's flagged scope rather than fixed
+separately:** the maintenance-completion path
+(`complete_maintenance`/`InventoryMaintenancePage.tsx`'s "Condition After
+Work" picker) can independently write a RETIRED condition, and
+`_enforce_state_invariant`'s auto-correction then sets `status = RETIRED`
+too — entirely outside `update_item` and this round's guard, with none of
+`retire_item`'s locking, blocker checks, or audit trail, and leaving
+`active` untouched (`True`). This is the same systemic shape MSUP-25 already
+flags (a write path other than `retire_item` producing retirement-equivalent
+state); recorded here as a concrete second instance for the same follow-up
+pass to address, not fixed now for the same scope/severity reasons MSUP-25
+was flagged rather than fixed.
+
+### Completion gate (pass 10)
+
+| Check                                                                                               | Result                                 |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `flake8` / `black --check` / `isort --check-only` (inventory_service.py, test_inventory_service.py) | clean                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                   | PASSED — single head, no schema change |
+| `test_inventory_service.py`                                                                         | 97 passed                              |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                       | 744 passed, 1 pre-existing skip        |
+| `pytest tests/` (full backend suite)                                                                | 11,469 passed, 21 pre-existing skips   |
+| Frontend: `npm run typecheck`, `eslint`                                                             | clean                                  |
+| `InventoryItemsPage.test.tsx` + `ItemFormModal.test.tsx`                                            | 52 passed                              |
+
+MSUP-4, MSUP-11, MSUP-15, and MSUP-25 (now covering a second concrete
+instance, the maintenance-completion path) are the only open, flagged
+items. MSUP-26 and MSUP-27 are new fixes; MSUP-1 through MSUP-24 all
+re-verified intact.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { InventoryItem, InventoryVendor } from '../types';
 
@@ -156,15 +156,14 @@ describe('ItemFormModal', () => {
     });
   });
 
-  it('derives a retired status from a retired condition', async () => {
-    const user = userEvent.setup();
+  it('does not offer Retired as a condition — the backend rejects that pair through this path', () => {
+    // The generic update_item PATCH rejects a status/condition pair of
+    // retired outright (retiring is the dedicated Retire action's job
+    // alone), so offering it here would deterministically 400 on save.
     render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', status: 'available' })} />);
 
-    await user.selectOptions(screen.getByLabelText('Condition'), 'retired');
-    await user.click(screen.getByRole('button', { name: 'Update' }));
-
-    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
-    expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ status: 'retired' });
+    const options = within(screen.getByLabelText('Condition')).getAllByRole('option');
+    expect(options.map((o) => o.textContent)).not.toContain('Retired');
   });
 
   it('sends no status for a condition that is already legal', async () => {

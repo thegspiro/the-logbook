@@ -122,6 +122,23 @@ designed against its own transaction shape, and the risk is materially
 lower (same-org, non-destructive edits, not an irreversible retirement).
 Full local gate green including the full scoped test run (742 passed).
 See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 9.
+A tenth Codex round then found MSUP-13's own fix had deterministically
+broken two already-shipped frontend flows, plus one more retirement-shaped
+bypass. **MSUP-26** (MED, fixed): `InventoryItemsPage.tsx`'s bulk status
+picker and `ItemFormModal.tsx`'s Condition picker both still offered
+`Retired`, which now 400s on save — both pickers now filter it out (the
+shared option lists stay untouched, since both are also used for filters
+and label lookups). **MSUP-27** (MED, fixed): the reject guard only
+caught a payload _entering_ retirement; `PATCH {"status": "available",
+"condition": "good"}` on an already-retired item touched neither guarded
+value, silently reopening it (active stayed false while status became
+distributable again). Now also rejects any status/condition change while
+`active` is false. A third instance of the same shape — the
+maintenance-completion path can independently write a RETIRED
+condition/status pair with none of retire_item's protections — was folded
+into MSUP-25's flagged scope rather than fixed separately.
+Full local gate green including the full scoped test run (744 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 10.
 
 2026-09-06 tend (watchdog): a 30-minute watchdog check found `main` had
 advanced past this PR's base with PR #2300 merged — a docs-only fix to
@@ -673,6 +690,69 @@ pre-existing skips, 0 failed). Findings doc updated:
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 9, MSUP-23,
 MSUP-24, MSUP-25. Rotation row 23 still ⏳ — awaiting owner merge of PR
 #2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 10 — tenth Codex round: MSUP-13's own fix broke two shipped frontend flows
+
+A tenth Codex round found that MSUP-13's `active`/RETIRED rejection
+deterministically broke two already-shipped frontend flows, plus one more
+bypass in the same shape as MSUP-25's flagged class:
+
+- **`InventoryItemsPage.tsx`'s "Bulk Status Change" picker and
+  `ItemFormModal.tsx`'s Condition dropdown** both still offered `Retired`
+  as a selectable option and, on selection, submitted exactly the
+  `status`/`condition` RETIRED pair MSUP-13 made `update_item` reject
+  outright. Both shipped before MSUP-7 through MSUP-13 existed; neither
+  sends `active`, so none of those rounds' frontend-caller searches (which
+  looked specifically for `active`) caught them. Same shape as MSUP-16/22
+  (a real capability broken by this PR's own fix chain), but here the
+  break is a guaranteed 400 on every use of two already-shipped controls.
+- **`update_item`'s reject guard only caught a payload _entering_
+  retirement** (`active` present, or a `status`/`condition` pair of
+  RETIRED). `PATCH {"status": "available", "condition": "good"}` on an
+  already-retired item touches neither guarded value, so it passed
+  through — leaving `active=false` while `status` became `available`,
+  and `assign_item_to_user`/`checkout_item` gate on `status`, not
+  `active`. Nothing in this codebase reactivates a retired item, so this
+  silent reopening had no legitimate use to preserve.
+
+**MSUP-26 (MED, fixed):** both pickers now filter `retired` out of their
+options. `STATUS_OPTIONS`/`ITEM_CONDITION_OPTIONS` themselves are
+untouched — both are also used for filter dropdowns and label lookups
+elsewhere that still need `retired` as a valid, displayable value.
+
+**MSUP-27 (MED, fixed):** `update_item` now also rejects any
+`status`/`condition` change while the item is currently inactive. Fields
+unrelated to status/condition (name, storage location, notes) remain
+editable on a retired item for record-keeping.
+
+**Also discovered, folded into MSUP-25's flagged scope rather than fixed
+separately:** the maintenance-completion path
+(`complete_maintenance`/`InventoryMaintenancePage.tsx`'s "Condition After
+Work" picker) can independently write a RETIRED condition, and
+`_enforce_state_invariant`'s auto-correction then sets `status = RETIRED`
+too — entirely outside this round's guard, with none of `retire_item`'s
+locking, blocker checks, or audit trail, and leaving `active` untouched.
+Recorded as a concrete second instance of MSUP-25's systemic gap rather
+than fixed now, for the same scope/severity reasons.
+
+Guard tests: `ItemFormModal.test.tsx`'s test exercising the now-removed
+Retired condition option was replaced with one asserting it's absent from
+the rendered options; `InventoryItemsPage.test.tsx` gained the equivalent
+for the bulk status picker. `TestUpdateItemRejectsActive` gained
+`test_rejects_reopening_a_retired_items_status` (verified fail-before/
+pass-after) and `test_a_retired_items_unrelated_fields_stay_editable`.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), `test_inventory_service.py` (97 passed),
+the full `inventory or medical_supplies`-scoped run (744 passed, 1
+pre-existing skip), the full backend suite, `npm run typecheck`/`eslint`
+clean, and `InventoryItemsPage.test.tsx` + `ItemFormModal.test.tsx` (52
+passed). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 10, MSUP-26,
+MSUP-27. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
+Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

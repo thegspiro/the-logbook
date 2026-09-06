@@ -1988,6 +1988,21 @@ class InventoryService:
             ):
                 return None, "Use the item's retire action to deactivate it"
 
+            # The guard above only catches *entering* retirement through
+            # this path; it says nothing about an already-retired item's
+            # status/condition being changed to something else. Since
+            # `active` isn't in update_data, that would leave `active=false`
+            # while making `status` distributable again — assign_item_to_user
+            # and checkout_item gate on `status`, not `active`, so the item
+            # could be handed to a member while still hidden from active
+            # inventory. Nothing in this codebase reactivates a retired
+            # item, so there is no legitimate status/condition change to
+            # allow here while the item is inactive.
+            if not item.active and (
+                "status" in update_data or "condition" in update_data
+            ):
+                return None, "Item is retired; status and condition cannot be changed"
+
             # Validate resulting state
             new_status = (
                 ItemStatus(update_data["status"])

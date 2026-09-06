@@ -1038,7 +1038,11 @@ const InventoryItemsPage: React.FC = () => {
           aria-label="New status"
         >
           <option value="">-- Select Status --</option>
-          {STATUS_OPTIONS.map((s) => (
+          {/* Retiring is Retire's job alone -- the backend rejects a
+              status/condition pair of retired through this generic PATCH
+              path, so offering it here would deterministically 400. Use
+              the dedicated Retire action (above) instead. */}
+          {STATUS_OPTIONS.filter((s) => s.value !== 'retired').map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>

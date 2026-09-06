@@ -1024,6 +1024,55 @@ class TestUpdateItemRejectsActive:
         assert item.status == ItemStatus.IN_MAINTENANCE
         mock_db.commit.assert_awaited_once()
 
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_reopening_a_retired_items_status(self, service, mock_db):
+        """A caller could omit `active` and `status`/`condition: retired`
+        entirely and instead PATCH an already-retired item to
+        {"status": "available", "condition": "good"} -- neither destination
+        value is RETIRED, so the reject condition above lets it through.
+        Since `active` isn't touched, that leaves active=false while making
+        status distributable again: assign_item_to_user/checkout_item gate
+        on status, not active. Nothing in this codebase reactivates a
+        retired item, so this must be refused too."""
+        item = _make_item(
+            active=False,
+            status=ItemStatus.RETIRED,
+            condition=ItemCondition.RETIRED,
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"status": "available", "condition": "good"},
+        )
+        assert result is None
+        assert "retired" in (err or "").lower()
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_a_retired_items_unrelated_fields_stay_editable(
+        self, service, mock_db
+    ):
+        """The reopening guard targets status/condition specifically --
+        renaming or otherwise annotating an already-retired item (for
+        record-keeping) is unaffected."""
+        item = _make_item(
+            active=False, status=ItemStatus.RETIRED, condition=ItemCondition.RETIRED
+        )
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": "Renamed after retirement"},
+        )
+        assert err is None
+        assert item.name == "Renamed after retirement"
+        mock_db.commit.assert_awaited_once()
+
 
 # ============================================
 # Update Lot Tests

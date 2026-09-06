@@ -62,6 +62,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   member.** The check for outstanding checked-out units on a pooled item
   only ran while the item was still marked as pooled; switching how an
   item is tracked no longer skips it.
+- **Choosing "Retired" from the bulk status-change picker, or from an
+  item's Condition field, no longer saved.** Both controls have offered
+  Retired since before this release's item-deactivation safeguards were
+  added, and neither was updated when those safeguards started rejecting
+  that combination outright. Retiring an item is now only offered through
+  the dedicated Retire action already present on both screens.
+- **An item could be quietly returned to active status by editing it
+  directly, without going through Retire.** Only the two ways of marking
+  an item retired were blocked; changing a retired item's status or
+  condition back to something else went through unchecked, leaving it
+  hidden from active-inventory lists while distributable again.
 
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 
