@@ -225,6 +225,7 @@ const ExpenseReportFormPage: React.FC = () => {
   if (isLoading && fiscalYears.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <button
           type="button"
           onClick={() => void navigate('/finance/expenses')}
