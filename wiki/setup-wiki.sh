@@ -161,6 +161,21 @@ rm -rf "${WIKI_DIR:?}/$WIKI_IMAGES_DIR"
 #
 # -z and `read -d ''` so a filename containing a space or newline cannot split
 # into two paths.
+#
+# Tracked is not the same as committed. `git ls-files` filters filenames while
+# `cp` reads the working tree, so a tracked screenshot overwritten locally and
+# not yet committed would publish its uncommitted bytes — the same unreviewed
+# content this block exists to keep off a public wiki, wearing a reviewed
+# filename. Refuse rather than warn: the maintainer running this is watching a
+# publish succeed, not reading its output.
+dirty_images=$(git diff --name-only HEAD -- "$WIKI_IMAGES_DIR")
+if [ -n "$dirty_images" ]; then
+    echo -e "${RED}✗${NC} Tracked image(s) under $WIKI_IMAGES_DIR/ differ from HEAD:"
+    echo "$dirty_images" | sed 's/^/    /'
+    echo -e "  Commit them (so they are reviewable) or restore them, then publish."
+    exit 1
+fi
+
 image_count=0
 while IFS= read -r -d '' img; do
     mkdir -p "$WIKI_DIR/$(dirname "$img")"

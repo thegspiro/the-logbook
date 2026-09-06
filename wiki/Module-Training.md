@@ -1095,7 +1095,16 @@ Renders the department-wide compliance matrix (all members × all requirements) 
 - Four counts across the top: 100% Complete, Partially Complete, Not Started, and the number of requirements. The first three are printed green, amber and red respectively — fixed to the label, not to the value, so a zero under "Not Started" is still red
 - Members as rows — sorted by completion, least complete first — and requirements as columns, each heading truncated to twelve characters with the full name on the cell's `title`
 - A **Completion** column carrying each member's percentage, coloured by value: green at 100%, amber above zero, red at zero
-- Per-requirement cells carrying `✓` (met), `◐` (in progress) or `—` (missing) — **glyphs, not colour and not percentages**
+- Per-requirement cells carrying `✓`, `◐` or `—` — **glyphs, not colour and not percentages**. The endpoint emits four statuses; only two get a glyph of their own, and everything else falls through to the dash:
+
+  | Cell | Means                                                             |
+  | ---- | ----------------------------------------------------------------- |
+  | `✓`  | `completed`                                                       |
+  | `◐`  | `in_progress`                                                     |
+  | `—`  | `expired`, `not_started`, **or no record for that member at all** |
+
+  **A lapsed certification and one never started print identically.** The dash is not "missing"; read it as "not currently satisfied" and go to the member's own record — or the on-screen matrix, which distinguishes them — before treating it as work never begun
+
 - A signature block for the Training Officer and the Chief / Department Head
 - Letter landscape. Column headings repeat on each printed page because the grid uses a real `<thead>`, but nothing constrains the width: past roughly twenty requirements the columns run off the right edge of the sheet
 - Designed for annual reviews, regulatory audits, and compliance filing

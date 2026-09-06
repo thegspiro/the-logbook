@@ -30,6 +30,15 @@ def targets(markdown: str) -> list[str]:
         return [target for _lineno, target, _is_image in links_in(path)]
 
 
+def links_in_flags(markdown: str) -> list[bool]:
+    """The is-image flag for each target `links_in` finds in a scratch file."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "page.md")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(markdown)
+        return [is_image for _lineno, _target, is_image in links_in(path)]
+
+
 class ImageTargetsAreChecked(unittest.TestCase):
     def test_image_target_is_returned(self):
         assert targets("![shot](images/dash.png)\n") == ["images/dash.png"]
@@ -97,6 +106,19 @@ class ImageFlagIsCarried(unittest.TestCase):
                 (1, "images/a.png", True),
                 (2, "Module-Events", False),
             ]
+
+
+class ImagesAreNeverWikiPages(unittest.TestCase):
+    """A bare target inside wiki/ is a page reference — unless it is an image.
+    `![diagram](Home)` would otherwise resolve against wiki/Home.md, pass, and
+    publish an <img> pointing at a page of HTML, having skipped the
+    images-directory rule that only the non-page branch reaches."""
+
+    def test_bare_image_target_is_flagged_as_an_image(self):
+        assert links_in_flags("![diagram](Home)\n") == [True]
+
+    def test_bare_link_target_is_not(self):
+        assert links_in_flags("[Home](Home)\n") == [False]
 
 
 class ExternalImagesAreOutOfScope(unittest.TestCase):

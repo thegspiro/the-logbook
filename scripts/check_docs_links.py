@@ -27,6 +27,15 @@ What it checks
 Deliberately **not** checked: external URLs. Verifying those means network calls
 from CI, which turns an unrelated outage into a failed build.
 
+**Known limitation — reference-style links and images are not resolved.**
+``![diagram][arch]`` with a separate ``[arch]: images/x.png`` definition is
+ignored entirely, for links as much as for images, so a broken one passes. This
+is a gap, not a decision: resolving it means parsing definitions and the full,
+collapsed and shortcut reference forms, which is a feature rather than a fix.
+Nothing in the tree uses the syntax today. If that changes, close this before
+relying on the checker for those pages — a check that silently covers only one
+of two spellings is worse than one whose limits are written down.
+
 Slug rules
 ----------
 GitHub's heading-to-anchor conversion, which is what the rendered docs and the
@@ -231,7 +240,17 @@ def main(argv: list[str]) -> int:
                 continue
 
             in_wiki = path.split(os.sep)[0] == WIKI_DIR
-            wiki_page = in_wiki and "/" not in file_part and "." not in file_part
+            # An image is never a wiki page reference, however bare its target
+            # looks. `![diagram](Home)` would otherwise be classified as a page,
+            # pass because wiki/Home.md exists, and publish an <img> pointing at
+            # a page of HTML — slipping past the wiki-images rule below, which
+            # only the non-page branch reaches.
+            wiki_page = (
+                in_wiki
+                and not is_image
+                and "/" not in file_part
+                and "." not in file_part
+            )
 
             if wiki_page:
                 if file_part in WIKI_GENERATED_PAGES:
