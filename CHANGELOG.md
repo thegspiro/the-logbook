@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The program print sheet's Enrolled Members table could never render (2026-09-06)
+
+**Fixed**
+
+- **The printable training programme now loads its roster from
+  `GET /training/programs/programs/{id}/enrollments`.** It read
+  `program.enrollments`, and the programme response
+  (`ProgramWithPhasesAndRequirements`) carries phases, requirements and
+  milestones and no enrollments field — so the Enrolled Members section was
+  always skipped and the header always printed `Enrolled: 0`, on every sheet.
+  Nothing was missing on the backend: that endpoint already exists, is
+  org-scoped and permission-gated, and returns exactly the enriched shape the
+  table was written against, which is why the table already carried a cast for
+  `user_name`.
+
+- **A member who cannot read the roster gets an em dash, not a confident `0`.**
+  The route is gated on the training module alone while the endpoint needs
+  `training.view_all` or `training.manage`, so the call degrades — correctly,
+  since withholding the roster is the right privacy outcome. But degrading to an
+  empty list would have printed `Enrolled: 0` on paper for a programme with
+  twenty members on it. "Could not read" and "nobody enrolled" are now distinct.
+
+- **The Current Phase column shows the phase.**
+  `ProgramEnrollmentResponse` serializes `current_phase_id` and no nested phase
+  object, so reading `current_phase.name` would have printed an em dash for
+  every member even once the rows arrived. The name resolves from the
+  programme's own phases, the way the requirements table above it already
+  resolved its phase column.
+
 ### The close-out queue and the number above it are one list now (2026-09-06)
 
 **Added**
@@ -45,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run on. The refresh is skipped while a close-out wizard is open, so it cannot
   unmount unsaved entries, and a failed refresh leaves the last good list on
   screen rather than blanking a working page.
+
 ### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
 
 **Fixed**
@@ -62,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checklist builder now meet the 44-pixel minimum touch size on phones.
 - **A stray scrollbar under the tabs on an inventory item's page** has been
   removed.
+
 ### Create Shift: the dialog's fields had no names (2026-09-06)
 
 **Fixed**
@@ -82,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screen reader offered "08:00 hour" where it should have said "Start Time
   hour", and the end field fell back to a bare "Time". All six now carry the
   visible field name.
+
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
 
 **Fixed**
@@ -104,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The tradeoff it does carry: two branches editing the _same_ entry get both
   revisions as adjacent duplicate lines rather than a conflict. That is visible
   in review, and is recorded in the `.gitattributes` comment.
+
 ### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
 
 Codex raised these on #2206 as it merged, so none were addressed there.
