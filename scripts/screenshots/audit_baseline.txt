@@ -108,6 +108,25 @@
 # day, by a different session, without either of us having to do anything wrong.
 # The section is now growing roughly as fast as the guides gain modal captures,
 # which is the clearest argument yet for retiring the subtle tier.
+#
+# Ten, as of 2026-09-06 — and this pair is the first to arrive as a RED MAIN
+# rather than as a note in somebody's screenshot pass. #2320 refreshed 424
+# captures; two of them were modal shots on light pages, so the audit flagged
+# them, `Docs Link Check` went red on main, and every open PR in the repo
+# inherited the failure. Neither image is at fault: both were opened and read,
+# both are ordinary usable captures (the Add Screening Record dialog and the
+# Reset to Default dialog), and the only artifact is the 15px gutter this
+# section exists to describe.
+#
+# That changes the cost of not retiring the subtle tier. Through eight entries
+# it was bookkeeping somebody absorbed while already editing screenshots. It is
+# now a tripwire that any capture pass can trip, blocking unrelated work by
+# people who never touched a PNG — and the fix is not available to whoever hits
+# it, because re-capturing cannot clear these and editing the check's contract
+# is out of scope for a screenshot branch. Three sessions have now recommended
+# the same change and declined to make it for the same reason. Whoever picks it
+# up: the tier to drop is the subtle light-page-under-scrim case in
+# `check_unpainted_gutter`, and doing so retires most of the block above too.
 05-75-setup-item-prefilled.png
 06-26-room-delete-subrooms.png
 19-05-qr-regenerate-warning.png
@@ -116,3 +135,5 @@
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
 04-47-template-reminder-audience.png
+08-22-screening-record-form.png
+08-57-template-reset-dialog.png
