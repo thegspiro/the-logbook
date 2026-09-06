@@ -35,6 +35,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every member even once the rows arrived. The name resolves from the
   programme's own phases, the way the requirements table above it already
   resolved its phase column.
+### Notification Rules invited an officer to create one they cannot (2026-09-06)
+
+**Fixed**
+
+- **The empty Notification Rules tab addressed a button most of its readers
+  never see.** `notifications.view` opens the tab; creating a rule is
+  `notifications.manage` on the server, and those are not the same population
+  — 16 of the 21 seeded positions carrying view, among them captains,
+  lieutenants, the treasurer, the secretary and the training and safety
+  officers, stop short of manage. All of them read "Create your first
+  notification rule to start sending automated notifications." over a card with
+  no button on it. The heading "No Notification Rules" still answers everyone
+  who opens the tab, and a search that matches nothing is still reported to
+  everyone; it is the invitation that is now withheld.
+- **The Add Rule dialog rendered on its own open state**, so a session that
+  lost `notifications.manage` with the form open kept it on screen with a live
+  submit button. It is now gated on the same permission as the two buttons that
+  open it.
+
+### The Elections page pitched an election members cannot call (2026-09-06)
+
+**Fixed**
+
+- **A department with no elections showed members an empty panel captioned as
+  though something were missing.** Creating an election is `elections.manage` on
+  the server, and the Create Election button was already withheld, so the notice
+  spoke to a control the member could not see. With no elections and no status
+  filter applied, a member now gets a blank panel. A status filter that matches
+  nothing still reports that to everyone — that is feedback on what they asked
+  for, not an invitation.
+- **The Create Election dialog rendered on its own open state**, so a session
+  that lost `elections.manage` with the dialog open kept the form on screen and
+  its submit button live. It is now gated on the same permission as the button
+  that opens it, matching the fix applied to the Events, Members, Documents,
+  Scheduling and Minutes dialogs.
+- **A member's session no longer fetches three endpoints it has no use for.**
+  Meetings, upcoming events and operational ranks populate selectors that exist
+  only inside the create dialog, and were requested on every page load
+  regardless of permission — a member without `meetings.view` or `events.view`
+  got 403s that the page swallowed silently.
 
 ### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
 
