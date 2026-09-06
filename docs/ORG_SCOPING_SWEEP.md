@@ -3,8 +3,9 @@
 **Date:** 2026-09-06
 **Question:** can org-scoping of by-id queries be enforced by a test, the way
 `test_like_escaping.py` and `test_csv_writer_sweep.py` enforce their rules?
-**Answer:** not as a precise rule. As a **baseline ratchet**, yes — and that is
-what is recommended.
+**Answer:** not as a hand-rolled AST test. As a **baseline ratchet**, yes.
+A taint-analysis engine (option A′) may manage the precise version and is worth
+a spike first — see §4.
 
 Pitfall #14 is the dominant finding class in the 2026-07 module audit and the
 only rule in the backend with both the highest severity and no machine check.
@@ -124,6 +125,52 @@ new mechanism:
 Applied here that gives, from day one: no new unscoped by-id query can land
 without someone writing a line into the baseline with a reason. That is the
 protection the rule needs and does not have.
+
+### A′. Semgrep taint mode — worth a spike before committing to B
+
+_Added 2026-09-06, after surveying the wider skills ecosystem. It revises §3:
+the intractability argued there is specific to a **hand-rolled AST test**, and
+does not automatically extend to a tool built for this analysis._
+
+§3 concludes that separating a real IDOR from the four false-positive classes
+needs dataflow with a notion of "already validated in-org" that crosses a
+service-call boundary. That is a fair description of what a pytest AST sweep
+cannot do. It is also close to a literal description of what a taint-analysis
+engine is for:
+
+| The analysis needs                                                         | Semgrep taint mode calls it |
+| -------------------------------------------------------------------------- | --------------------------- |
+| A client-supplied id (path/query/body parameter)                           | **source**                  |
+| `select(Model).where(Model.id == …)`                                       | **sink**                    |
+| An org filter, `assert_in_org`, or resolution through an org-scoped parent | **sanitizer**               |
+
+Expressed that way, all four false-positive classes in §3 are ids that never
+touch a source — they are read off an already-resolved row — so a taint rule
+should not raise them at all, without an allowlist.
+
+**This is a spike, not a plan.** What it would have to demonstrate:
+
+1. The four classes in §3 go quiet without exemptions.
+2. The `Candidate` shape — parent resolved in-org, child constrained by its
+   parent FK — is recognised as sanitized. This is the hard one: the sanitizer
+   is a _different query on a different model_ earlier in the function.
+3. Interprocedural reach through `self.db.execute(...)` inside a service
+   method whose `organization_id` came from the endpoint.
+
+If (2) and (3) do not hold, fall back to option B. If they do, the result is
+the precise rule §3 says is out of reach, and #14 gets a real check rather than
+a ratchet.
+
+**Cost is lower than it looks.** `.github/workflows/ci.yml` already has a
+`backend-security` job running Bandit and pip-audit, so adding Semgrep is a
+step in an existing job rather than new CI surface. Bandit cannot do this
+itself — it has no taint analysis and no notion of tenancy.
+
+Trail of Bits publishes Claude Code skills for exactly this workflow —
+`semgrep-rule-creator` (writing custom rules), `fp-check` (false-positive
+verification, which is this problem's whole difficulty), and `variant-analysis`
+(finding the other instances of a bug you have one example of). Those are the
+tools for the spike.
 
 ### C. Narrow high-signal sweep — recommended as the triage order, not as the gate
 
