@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect and was blind to the second by construction, which is how four pages
   kept a trail-less loading branch. Both directions are now covered, and the
   failure names the branch index.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
