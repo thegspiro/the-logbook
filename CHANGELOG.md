@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Create Shift: the dialog's fields had no names (2026-09-06)
+
+**Fixed**
+
+- **Nothing in the Create Shift dialog was announced by name.** All nine of its
+  controls — Shift Template, Start Date, End Date, Apparatus, Start Time, End
+  Time, Shift Officer, Notes and the template search box — sat next to a label
+  that was never associated with them, so a screen reader read out nine
+  anonymous fields ("edit text", "combo box") and gave no way to tell which was
+  which. Clicking a label also focused nothing, which is the same defect as seen
+  with a mouse. Every field now carries its label.
+- "Custom Times" heads the Start Time / End Time pair rather than naming a
+  single field, so it is announced as the group it is instead of claiming to be
+  one of them.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**
