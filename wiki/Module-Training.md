@@ -1040,11 +1040,21 @@ Three new print-formatted pages allow officers and administrators to generate pa
 
 Renders a paper-formatted member training record including:
 
-- Member name, rank, station, and membership dates
-- Training hours summary (current period and all-time)
-- Certification status and expiration dates
-- Compliance indicators (green/yellow/red) for all active requirements
-- Complete chronological list of training records with course, date, hours, and category
+- The member's name and one overall compliance label. The name comes from the `?name=` query parameter rather than the record, and reads "Member" when the caller omits it — rank, station and membership dates are not on the sheet. The label is coloured for the `green`, `yellow` and `red` standings; an **exempt** member's label has no colour rule and prints in the body colour
+- Four counts: Total Hours, Hours This Year, Active Certifications, Completed Courses
+- One aggregate compliance row — Requirements Met (`met / total`), Expiring Soon, Expired. There is no per-requirement breakdown on this page; the [Compliance Matrix](#compliance-matrix-print-page) is where a requirement-by-requirement view lives
+- Program Enrollments, with each program's status, progress percentage, enrolment date and target completion
+- Certifications, with number, issuing agency, completion date, expiry and status
+- Training History in reverse-chronological order, with course, type, date, hours, instructor and status
+
+The last three sections are each omitted when they have no rows, so a member with
+no enrolments prints without a Program Enrollments heading at all.
+
+> **A record can appear in both tables.** The two lists are split from one set of
+> training records: Certifications takes anything carrying a certification number
+> **or** typed `certification`, and Training History takes everything else — so a
+> certification recorded without a number satisfies both filters and prints
+> twice. Worth knowing before reading it as duplicate data entry.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Member Training Print Page showing the letter-size layout: the "Training Record" heading with the member's name beneath it and the generated date and `Compliance: <label>` line at the top right; the four stat tiles (Total Hours, Hours This Year, Active Certifications, Completed Courses); the Requirements Met / Expiring Soon / Expired summary row; and the Program Enrollments, Certifications and Training History tables. Shoot a member who holds certifications and at least one enrollment — each of those three tables is omitted when it has no rows._
 
@@ -1054,10 +1064,15 @@ Renders a paper-formatted member training record including:
 
 Renders a training program detail for paper:
 
-- Program name, description, type (Flexible/Sequential/Phase-based), and status
-- Phase breakdown with requirements listed under each phase
-- Milestones with completion criteria
-- Enrollment roster with per-member progress percentages
+- Program name and description, with the program's code and version beside the generated date
+- A four-cell strip: Structure (the stored `structure_type` — `sequential`, `phases` or `flexible` — printed as stored, not title-cased), Target Position, Time Limit and the enrolment count. The program's own status is not on the sheet
+- **Program Phases** — number, name, description, time limit and a count of the requirements in each phase
+- **Program Requirements** — requirement, the phase it belongs to, whether it is required or optional, and its description. This is a **flat table with a Phase column**, not requirements nested under the phase rows above
+- **Enrolled Members** — member, status, progress percentage, enrolment date, target date and current phase
+
+Each of the three tables is omitted when empty, and Enrolled Members starts on a
+new page for a program with more than three phases. Milestones are not printed:
+the page renders phases and requirements only.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Program Print Page showing the "Training Program" heading with the program name and description, and the generated date, code and version at the top right; the Structure / Target Position / Time Limit / Enrolled strip; the Program Phases table (number, name, description, time limit, requirement count); the Program Requirements table (requirement, phase, required, description); and the Enrolled Members table. Shoot a phase-based program that has members enrolled — the Enrolled Members table is not rendered at zero, and the Program Phases table is not rendered for a program with no phases._
 
@@ -1068,9 +1083,12 @@ Renders a training program detail for paper:
 
 Renders the department-wide compliance matrix (all members × all requirements) as a printable grid:
 
-- Members listed as rows, requirements as columns
-- Color-coded cells (green/yellow/red) with percentage values
-- Optimized for letter-size landscape printing with repeat headers across pages
+- Four counts across the top: 100% Complete, Partially Complete, Not Started, and the number of requirements
+- Members as rows — sorted by completion, least complete first — and requirements as columns, each heading truncated to twelve characters with the full name on the cell's `title`
+- A **Completion** column carrying each member's percentage, and the only colour on the sheet: green at 100%, amber above zero, red at zero
+- Per-requirement cells carrying `✓` (met), `◐` (in progress) or `—` (missing) — **glyphs, not colour and not percentages**
+- A signature block for the Training Officer and the Chief / Department Head
+- Letter landscape. Column headings repeat on each printed page because the grid uses a real `<thead>`, but nothing constrains the width: past roughly twenty requirements the columns run off the right edge of the sheet
 - Designed for annual reviews, regulatory audits, and compliance filing
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page in landscape showing the four summary counts (100% Complete, Partially Complete, Not Started, Requirements); the grid with member names down the left, a colour-coded Completion percentage beside each, and one column per requirement — headings truncated to twelve characters, cells carrying `✓`, `◐` or `—` rather than colour or a percentage; and the Training Officer / Chief signature block at the foot. Shoot a department with few enough requirements that the grid fits the sheet; past roughly twenty the columns run off the right edge._
