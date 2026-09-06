@@ -52,7 +52,8 @@ repo-wide machine check**, so its full text stays in `CLAUDE.md` as pitfall
     tests/test_cron_org_loop_isolation.py \
     tests/test_like_escaping.py \
     tests/test_capacity_locking.py \
-    tests/test_csv_writer_sweep.py
+    tests/test_csv_writer_sweep.py \
+    tests/test_org_scoping_ratchet.py
   ```
 
 ## Full text

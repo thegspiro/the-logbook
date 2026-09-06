@@ -806,6 +806,17 @@ and in some cases (e.g. an eager-loaded template relationship with no org filter
 on the join) it leaks the other org's data back in the response. Prefer a shared
 `assert_in_org(db, Model, id, org_id)` helper over ad-hoc checks.
 
+**Partly guarded, as of 2026-09-06.**
+`tests/test_org_scoping_ratchet.py` freezes the unscoped by-id queries that
+existed on that date and fails on any new one. It is a ratchet, not a rule: it
+covers only ids that are **bare names** on models that **carry
+`organization_id`**, so it says nothing about an id read off another object, and
+nothing at all about the 48 models with no such column (`Candidate`,
+`FormField`, `ApprovalChainStep`, …) which must use the parent-resolution shape
+above. A green run is not coverage. `docs/ORG_SCOPING_SWEEP.md` records what was
+measured, and why a precise check — including a Semgrep taint rule, which was
+built and rejected — is not available.
+
 **Rule:** When writing or reviewing any endpoint/service that takes an id or FK
 from the client: (1) org-scope every by-id query, (2) resolve mutation targets
 through an org-scoped fetch even behind `require_permission`, (3) validate

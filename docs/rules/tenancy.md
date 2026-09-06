@@ -269,12 +269,12 @@ The gate is that a rule may only be reached on demand if a missed trigger costs
 a red build rather than a shipped defect. Four rules in this domain fail it and
 stay always-on:
 
-| Rule                                                                | Why it stayed                                                                                                                                                                    |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Pitfall #14** — org-scope every by-id query and FK                | No repo-wide check exists, and it is the highest-severity class here. See above.                                                                                                 |
-| **Pitfall #9** — unbounded in-memory caches                         | No guard. `test_onboarding_rate_limit_scopes.py` covers one feature's scoping, not the size-cap rule.                                                                            |
-| **Pitfall #18** — email-first, SMS behind the `SmsAlert` allowlist  | `test_notification_channels.py` covers the resolver's negative space, but nothing flags a new direct `SMSService` call at a feature call site, which is the shape the rule bans. |
-| **Pitfall #19** — a config switch needs a reader before it has a UI | `test_notification_rules_gate_senders.py` asserts the senders consult `notification_rules`. That is one mechanism; the general rule has no general guard.                        |
+| Rule                                                                | Why it stayed                                                                                                                                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Pitfall #14** — org-scope every by-id query and FK                | Partly guarded since 2026-09-06 by `test_org_scoping_ratchet.py`, which is a ratchet on new code over a subset of the rule — not a check on the rule. It stays here in full. See above, and `docs/ORG_SCOPING_SWEEP.md`. |
+| **Pitfall #9** — unbounded in-memory caches                         | No guard. `test_onboarding_rate_limit_scopes.py` covers one feature's scoping, not the size-cap rule.                                                                                                                    |
+| **Pitfall #18** — email-first, SMS behind the `SmsAlert` allowlist  | `test_notification_channels.py` covers the resolver's negative space, but nothing flags a new direct `SMSService` call at a feature call site, which is the shape the rule bans.                                         |
+| **Pitfall #19** — a config switch needs a reader before it has a UI | `test_notification_rules_gate_senders.py` asserts the senders consult `notification_rules`. That is one mechanism; the general rule has no general guard.                                                                |
 
 Each of these becomes movable the day it gets a check. **Pitfall #15 already
 did**: it sat in this table until `test_csv_writer_sweep.py` was written, and the

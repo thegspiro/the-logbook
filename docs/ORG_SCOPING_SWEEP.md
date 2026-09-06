@@ -106,7 +106,7 @@ next violation, not something that re-litigates 975 existing sites.
 Full dataflow. Highest cost, and the one most likely to end up allowlisted
 into uselessness. Rejected on the evidence in §3.
 
-### B. Baseline ratchet — **recommended**
+### B. Baseline ratchet — **recommended, and built 2026-09-06**
 
 Enumerate today's unscoped sites into a checked-in baseline. Fail on any site
 **not** in it, and fail on a baselined site that no longer flags, so the list
@@ -229,6 +229,26 @@ but not for a rule that is 80% false positives.
 #### Verdict
 
 Option B. The ratchet is what ships.
+
+**Built:** `backend/tests/test_org_scoping_ratchet.py` plus
+`backend/tests/org_scoping_baseline.txt` — **53 entries across 29 files**, the
+bare-name ids on org-bearing models. It runs in the ordinary backend suite, in
+about 6 seconds, needing no CI change.
+
+Verified by mutation in both directions: adding an unscoped query fails
+`test_no_new_unscoped_by_id_query` naming the key; adding an org filter to a
+baselined query fails `test_baseline_has_no_stale_entries`, so the list can
+only shrink. A third check confirms a line shift above a query leaves the
+baseline untouched — the key is `path::function::Model::id`, with no line
+number, because otherwise an edit anywhere above a query rewrites the baseline
+and hides a real change inside the churn.
+
+The baseline says "this existed on 2026-09-06", not "this is safe" — most
+entries have never been read, and the file says so at the top. Three files are
+annotated with a verified reason (the public webhooks, where no caller org
+exists) and one with a partial reading (`users.py`, re-fetch after an
+org-scoped write). Everything else is marked _not yet reviewed_, so presence
+cannot be mistaken for a judgement.
 
 ### C. Narrow high-signal sweep — recommended as the triage order, not as the gate
 
