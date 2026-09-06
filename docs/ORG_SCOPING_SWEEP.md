@@ -304,6 +304,62 @@ filed as one.
 `organization_id`. That is the blind spot §4b documents, met in the wild on the
 first pass.
 
+## 4b. Second burn-down pass — the services layer, 17 sites read, 0 defects
+
+Read 2026-09-06, on branch `claude/org-scoping-services-burndown`. The baseline
+holds **43 entries in `app/services/`** — not the 33 quoted in §4a, which
+counted parameter-fed sites only; the baseline includes locals.
+
+### The triage that made 43 tractable
+
+Reading 43 service methods one by one is a day's work. Classifying them first
+by three cheap AST facts — does the enclosing function take an
+`organization_id` at all, is it public or a `_private` helper, and is the
+flagged id a parameter or a local — sorts them by how much the code already
+knew:
+
+| Signal                                            |  Count | Reading                                                                        |
+| ------------------------------------------------- | -----: | ------------------------------------------------------------------------------ |
+| Public, has an `organization_id` param, client id | **17** | The org was in scope and was not applied here. Read these first.               |
+| Private helper, has an org param                  |     12 | Internal; caller resolved the id.                                              |
+| No org context at all                             |     11 | Cannot be scoped in place; the id must arrive validated. Needs caller tracing. |
+| Public, org param, id is a local                  |      3 | Local derived from an earlier query — check that query.                        |
+
+Only the first group has both the means and the obligation to scope, so it is
+where a real defect would be. That is the burn-down order this section used.
+
+### Result
+
+**All 17 are safe**, by five distinct mechanisms — which is why no single
+static rule finds them:
+
+| Mechanism                                                               | Sites                                                                                                                       |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| The id is `current_user.id`, never client-supplied                      | `clock_in`, `create_manual_entry`, `link_event`, `reactivate_member`'s `reactivated_by`, `generate_report`'s `performed_by` |
+| The endpoint verified the target in-org before calling                  | `check_voter_eligibility` (via `preview_ballot_for_user`), `generate_report`'s `user_id` (via `change_member_status`)       |
+| `assert_in_org()` bounds the client FK first                            | `create_return_request` ×3 — textbook #14c                                                                                  |
+| The id is a local off an org-filtered query above                       | `edit_pending_entry`, `bulk_approve`, `process_election_lifecycle`, `get_preset`, `resolve_check_templates` ×2              |
+| The org filter **is** applied, through a builder the ratchet cannot see | `get_report` — the blind spot this file documents, met in the wild                                                          |
+
+Two are worth singling out. `create_return_request` is the pattern to copy:
+`assert_in_org(..., allow_none=True)` on all three optional holding ids before
+any ownership lookup, so a foreign id cannot even be probed for existence.
+`get_report` is the opposite lesson — it carries an `EC-9` docstring admitting
+the unscoped path "is an IDOR waiting for a forgetful caller", keeps it for
+legacy callers, and applies the filter conditionally through
+`query = query.where(...)`, which is exactly the builder form §4b's own ratchet
+cannot see.
+
+### Running total
+
+**25 sites read across two passes, 0 defects.** Consistent with §2's finding
+that 78% of by-id queries already scope: the rule is largely obeyed, and the
+baseline is a backlog of _unverified_ sites, not of suspected ones.
+
+**26 services entries remain unread** — the private helpers and the eleven
+functions with no org context, which need caller tracing rather than local
+reading.
+
 ## 5. Effort
 
 | Piece                            | Estimate       | Notes                                                                                                                                                                               |
