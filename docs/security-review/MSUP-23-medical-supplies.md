@@ -584,20 +584,82 @@ need real pagination semantics its callers don't have either).
 binds and asserts `LIMIT 5000`, not `LIMIT 200`. Verified
 fail-before/pass-after.
 
-### Completion gate (pass 3, after the Codex round)
+A second Codex round on the same commit caught one more real bug and one
+more real gap, neither covered by the first round's findings above.
 
-| Check                                                                                                  | Result                               |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| `flake8` (medical_supplies.py, inventory.py, inventory_service.py, both test files)                    | clean                                |
-| `black --check` (same files)                                                                           | clean                                |
-| `isort --check-only` (same files)                                                                      | clean                                |
-| `python3 scripts/validate_migrations.py --strict`                                                      | PASSED — single head                 |
-| `tests/test_endpoint_auth_coverage.py`                                                                 | 1 passed                             |
-| `test_medical_supplies_domain.py` + `test_inventory_service.py` + `test_inventory_lot_stock_levels.py` | 133 passed                           |
-| `pytest -k "inventory or medical_supplies"` (full scoped run)                                          | 729 passed, 1 pre-existing skip      |
-| `pytest tests/` (full backend suite)                                                                   | 11,366 passed, 21 pre-existing skips |
+### MSUP-10 — MED — `add_lot` could invent or lose units in an item's opening-balance lot under a concurrent quantity edit — ✅ FIXED
 
-No migration, no schema change. MSUP-4 remains the sole open, flagged item
-(unchanged cross-cutting product decision) — MSUP-7/8/9 above are new
-fixes, not re-verifications, and MSUP-1 through MSUP-6 all re-verified
-intact as described earlier in this Pass 3 section.
+**What:** `add_lot` loads the target item with an unlocked `_get_item`
+read, then calls `_carry_forward_column_stock`, which re-selects the same
+row `.with_for_update()` to move any pre-existing `quantity` into a new
+opening-balance lot before the item's first real lot is recorded. The
+locking re-select had no `populate_existing=True` — the exact identity-map
+pitfall `_get_item_locked`'s own docstring already documents elsewhere in
+this file. The lock is acquired at the SQL level and the `quantity > 0`
+filter is evaluated against the live row, but the Python object the code
+then reads `item.quantity` from is the one `_get_item` cached moments
+earlier, in the same session.
+
+**Where:** `app/services/inventory_service.py` — `_carry_forward_column_stock`.
+
+**Failure scenario:** a supply officer corrects an item's hand-counted
+`quantity` (via `update_item`) in the moment between another officer's
+`add_lot` call reading the item and that call reaching the carry-forward
+step. If the edit changes `quantity` to a different positive number, the
+row still matches the `quantity > 0` filter, so the stale cached object is
+still returned — the opening-balance lot is created with the pre-edit
+quantity, inventing or losing units relative to what the edit actually
+set. (An edit down to exactly zero is already caught by the filter itself,
+which is likely why this survived pass 1 and pass 2's review — the
+narrower zero case reads as handled and the general case was not checked
+separately.)
+
+**Fix:** added `.execution_options(populate_existing=True)` to the locking
+re-select, matching `_get_item_locked`'s own established pattern. No
+behavior change outside the race window — an uncontended call reads the
+same row either way.
+
+**Guard test:** `test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache`
+in `test_inventory_identity_map_staleness.py`, following that file's own
+two-real-session pattern (a mock has no identity map to demonstrate this
+against). Session A performs the unlocked read `_get_item` does inside
+`add_lot`; session B independently commits a quantity edit; session A's
+subsequent `add_lot` call must carry forward B's committed value. Verified
+to fail against the pre-fix code (asserted `10 == 3`, the stale cached
+value instead of the concurrently-committed one) and pass after.
+
+### MSUP-11 — LOW, flagged (not fixed) — a single item's stock-lot list has no row cap
+
+**What:** `list_lots` (backing `GET /medical-supplies/items/{id}/lots` and
+the equivalent gear-side route) has no `limit`/pagination — for an item
+restocked frequently over a long enough history without its depleted lots
+ever being deleted, the query returns every lot ever recorded against it.
+Checklist §6: "List endpoints and exports are bounded."
+
+**Why flagged, not fixed:** same shape as MSUP-4. `list_lots` is a shared
+`InventoryService` method with two callers (medical and general gear), and
+neither frontend screen has any pagination UI to receive a page beyond the
+first — both treat the result as the item's complete lot history. Adding a
+cap changes what "an item's lots" means to both screens with nowhere for
+the rest to go, which is a product decision (a page-size control? a
+"showing latest N" note? a separate history view?), not a mechanical
+medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+### Completion gate (pass 3, after both Codex rounds)
+
+| Check                                                                                                                                               | Result                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `flake8` (medical_supplies.py, inventory.py, inventory_service.py, all three touched test files)                                                    | clean                                |
+| `black --check` (same files)                                                                                                                        | clean                                |
+| `isort --check-only` (same files)                                                                                                                   | clean                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                   | PASSED — single head                 |
+| `tests/test_endpoint_auth_coverage.py`                                                                                                              | 1 passed                             |
+| `test_medical_supplies_domain.py` + `test_inventory_service.py` + `test_inventory_lot_stock_levels.py` + `test_inventory_identity_map_staleness.py` | 136 passed                           |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                       | 730 passed, 1 pre-existing skip      |
+| `pytest tests/` (full backend suite)                                                                                                                | 11,451 passed, 21 pre-existing skips |
+
+No migration, no schema change. MSUP-4 and MSUP-11 remain the only open,
+flagged items (both unchanged/new cross-cutting product decisions) —
+MSUP-7/8/9/10 above are new fixes, not re-verifications, and MSUP-1
+through MSUP-6 all re-verified intact as described earlier in this Pass 3
+section.

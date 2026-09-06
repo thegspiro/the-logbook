@@ -6600,6 +6600,18 @@ class InventoryService:
         # of the work, because a locking read sees the latest committed
         # version — the loser of the race re-reads the zero the winner wrote
         # and carries nothing forward.
+        #
+        # populate_existing=True is required, not cosmetic — see
+        # _get_item_locked's docstring for the mechanism. add_lot loads this
+        # same item, unlocked, immediately before calling this method (its
+        # only caller that does); without this, a quantity edit committed in
+        # that window is invisible here even though the WHERE clause itself
+        # sees it. The filter alone only catches the edit dropping quantity
+        # to zero (the row stops matching and nothing is carried); an edit
+        # to a different positive number would still match, but the lot
+        # created below would read the item's stale pre-edit quantity from
+        # this session's identity map — inventing or losing units in the
+        # opening-balance lot.
         result = await self.db.execute(
             select(InventoryItem)
             .where(
@@ -6608,6 +6620,7 @@ class InventoryService:
                 InventoryItem.quantity > 0,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         items = list(result.scalars().all())
         if not items:

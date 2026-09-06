@@ -32,9 +32,15 @@ enforces; **MSUP-8** (LOW/MED) — the single-item detail response
 does, so a lot-stocked item's detail page reported its stale `quantity`
 column; **MSUP-9** (LOW/MED) — `get_categories`' 200-row default silently
 truncated a department's category list, since none of its three callers
-paginate or expect a partial result. All three fixed with guard tests;
-full local gate green including the full backend suite (11,366 passed).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
+paginate or expect a partial result. A second Codex round caught 2 more:
+**MSUP-10** (MED, fixed) — `add_lot` could invent or lose units in an
+item's opening-balance lot under a concurrent quantity edit (an
+identity-map staleness bug, same class `_get_item_locked` already guards
+against elsewhere in this file); **MSUP-11** (LOW, flagged) — `list_lots`
+(an item's stock-lot history) has no row cap, same shape as MSUP-4.
+5 of 5 findings addressed (4 fixed, 1 flagged); full local gate green
+including the full backend suite (11,451 passed). See
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
 
 ---
 
@@ -110,6 +116,45 @@ full backend suite (11,366 passed, 21 pre-existing skips, 0 failed).
 Findings doc updated: `docs/security-review/MSUP-23-medical-supplies.md` →
 Pass 3, MSUP-7/8/9. Rotation row 23 still ⏳ — awaiting owner merge of PR
 #2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — second Codex round: 1 fixed, 1 flagged
+
+A second Codex round on the same PR #2301 commit caught one more real bug
+and one more real gap, neither covered by the first round:
+
+- **MSUP-10 (MED, fixed)** — `add_lot` loads its target item with an
+  unlocked read, then `_carry_forward_column_stock` re-selects the same
+  row `.with_for_update()` with no `populate_existing=True` — the exact
+  identity-map pitfall `_get_item_locked`'s own docstring documents
+  elsewhere in this file. A quantity edit committed between those two
+  reads is invisible to the code that builds the opening-balance lot
+  (though the SQL-level lock and `quantity > 0` filter both correctly see
+  it), so the lot could invent or lose units relative to what the
+  concurrent edit actually set. Fixed by adding
+  `.execution_options(populate_existing=True)` to the locking re-select,
+  matching the established pattern. Guard test
+  `test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache` in
+  `test_inventory_identity_map_staleness.py` uses that file's own
+  two-real-session pattern (a mock has no identity map to demonstrate this
+  against) — verified to fail against the pre-fix code (asserted a stale
+  10 instead of the concurrently-committed 3) and pass after.
+- **MSUP-11 (LOW, flagged)** — `list_lots` (an item's stock-lot history)
+  has no row cap either, same shape as MSUP-4: shared across the medical
+  and gear routers, neither of which has any pagination UI to receive a
+  page beyond the first. Mirrored into `KNOWN_LIMITATIONS.md` alongside
+  MSUP-4 rather than guessing a page size.
+
+Full gate re-run after both rounds: flake8/black/isort clean on all
+touched files, `validate_migrations.py --strict` (single head, no schema
+change), 136 passed in the four directly-touched test files, 730 passed
+in the full `inventory or medical_supplies`-scoped run, and the full
+backend suite (11,451 passed, 21 pre-existing skips, 0 failed). Findings
+doc updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3,
+MSUP-10/11. `docs/KNOWN_LIMITATIONS.md` gained MSUP-11's row next to
+MSUP-4's. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
+Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

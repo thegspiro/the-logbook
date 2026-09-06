@@ -29,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with no lower page to reach — a low internal cap meant categories past
   it were silently absent from every picker and filter. Raised well above
   any realistic department's category count.
+- **Receiving an item's very first stock lot at the same moment as a
+  quantity correction could record the wrong opening count.** The count
+  carried into that first lot could reflect the value from just before the
+  correction rather than the corrected one, in the rare case both happened
+  together.
 
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 

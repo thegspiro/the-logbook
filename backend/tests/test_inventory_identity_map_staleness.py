@@ -39,6 +39,8 @@ from sqlalchemy import select, text
 from app.core.database import database_manager
 from app.models.inventory import (
     CheckOutRecord,
+    InventoryItem,
+    InventoryLot,
     ItemCondition,
     ItemIssuance,
     ItemStatus,
@@ -303,3 +305,112 @@ async def test_checkin_item_sees_a_concurrent_checkin_not_its_own_stale_cache():
         await session_a.close()
         await session_b.close()
         await _cleanup(org_id)
+
+
+async def _cleanup_lots(org_id: str) -> None:
+    async with database_manager.session_factory() as session:
+        await session.execute(
+            text("DELETE FROM inventory_lots WHERE organization_id = :org"),
+            {"org": org_id},
+        )
+        await session.commit()
+    await _cleanup(org_id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache():
+    """add_lot's own unlocked ``_get_item`` read populates this session's
+    identity map with the item before ``_carry_forward_column_stock`` runs
+    its locked re-select for the exact same row. Session A mirrors that:
+    an unlocked read first (standing in for ``_get_item``'s own read inside
+    ``add_lot``), then a fully independent session B commits a quantity
+    edit before A's ``add_lot`` call reaches the carry-forward step. The
+    opening-balance lot ``add_lot`` creates must reflect B's committed
+    quantity — not the value A's identity map cached before B ever ran,
+    which would invent or lose units in the very first lot recorded
+    against this item.
+    """
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    item_id = str(uuid.uuid4())
+
+    async with database_manager.session_factory() as setup:
+        await _insert_org_and_user(setup, org_id, user_id)
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_items "
+                "(id, organization_id, name, tracking_type, quantity, "
+                "`condition`, status) "
+                "VALUES (:id, :org, :name, :tt, :qty, :cond, :status)"
+            ),
+            {
+                "id": item_id,
+                "org": org_id,
+                "name": "4x4 Gauze",
+                "tt": TrackingType.POOL.value,
+                "qty": 10,
+                "cond": ItemCondition.GOOD.value,
+                "status": ItemStatus.AVAILABLE.value,
+            },
+        )
+        await setup.commit()
+
+    session_a = database_manager.session_factory()
+    session_b = database_manager.session_factory()
+    try:
+        # Session A: the unlocked full-row read add_lot's own _get_item
+        # performs before calling _carry_forward_column_stock -- this is
+        # what puts the pre-race quantity=10 object in A's identity map.
+        peek = await session_a.execute(
+            select(InventoryItem).where(InventoryItem.id == item_id)
+        )
+        cached_item = peek.scalar_one()
+        assert cached_item.quantity == 10
+
+        # Session B: an independent, already-committed quantity correction
+        # -- a hand count catching up the column before this item's first
+        # lot is ever recorded.
+        await session_b.execute(
+            text("UPDATE inventory_items SET quantity = 3 WHERE id = :id"),
+            {"id": item_id},
+        )
+        await session_b.commit()
+
+        # Session A: add_lot for the same item, in the same session that
+        # already cached the pre-race object. This is the assertion that
+        # matters: the opening-balance lot it creates must carry B's
+        # committed 3, not A's stale cached 10.
+        service_a = InventoryService(session_a)
+        lot = await service_a.add_lot(
+            item_id=item_id,
+            organization_id=org_id,
+            data={"lot_number": "LOT-NEW", "quantity": 20},
+            created_by=user_id,
+        )
+        assert lot is not None
+        assert lot.lot_number == "LOT-NEW"
+        assert lot.quantity == 20
+
+        opening_balance = await session_a.execute(
+            select(InventoryLot).where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.lot_number.is_(None),
+            )
+        )
+        carried = opening_balance.scalar_one()
+        assert carried.quantity == 3, (
+            "opening-balance lot carried the stale quantity=10 cached before "
+            "session B's commit, not B's committed quantity=3 -- identity-map "
+            "staleness in _carry_forward_column_stock"
+        )
+
+        refreshed = await session_a.execute(
+            select(InventoryItem.quantity).where(InventoryItem.id == item_id)
+        )
+        assert refreshed.scalar_one() == 0
+    finally:
+        await session_a.rollback()
+        await session_b.rollback()
+        await session_a.close()
+        await session_b.close()
+        await _cleanup_lots(org_id)
