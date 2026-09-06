@@ -27,6 +27,15 @@ What it checks
 Deliberately **not** checked: external URLs. Verifying those means network calls
 from CI, which turns an unrelated outage into a failed build.
 
+**Known limitation — reference-style links and images are not resolved.**
+``![diagram][arch]`` with a separate ``[arch]: images/x.png`` definition is
+ignored entirely, for links as much as for images, so a broken one passes. This
+is a gap, not a decision: resolving it means parsing definitions and the full,
+collapsed and shortcut reference forms, which is a feature rather than a fix.
+Nothing in the tree uses the syntax today. If that changes, close this before
+relying on the checker for those pages — a check that silently covers only one
+of two spellings is worse than one whose limits are written down.
+
 Slug rules
 ----------
 GitHub's heading-to-anchor conversion, which is what the rendered docs and the
@@ -78,7 +87,40 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 # An explicit anchor: <a name="..."> or <a id="...">, which several older docs
 # use to keep a stable target across heading rewrites.
 EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
-LINK_RE = re.compile(r"(?<!\!)\[[^\]]*\]\(\s*([^)\s]+?)\s*\)")
+# Matches both `[label](target)` and `![alt](target)`, capturing the leading
+# `!` so an image can be told from a link, and tolerating Markdown's optional
+# title — `[a](b.md "Title")`, `'Title'` or `(Title)`.
+#
+# Without the title branch the whole reference silently does not match, so a
+# broken target wearing a title is not reported at all. Nothing in the tree uses
+# the form today, which is exactly why it would have gone unnoticed: the first
+# person to write one would get no check on it.
+#
+# Images were excluded by a `(?<!\!)` lookbehind until 2026-09-06. That left
+# the one link class with no safety net anywhere: a dead `[page](Page)` is
+# visible as unlinked text, while a dead image renders as a broken-image icon
+# that reads as a slow load, and the file it points at is a binary nobody
+# greps. wiki/setup-wiki.sh had never copied `wiki/images/` at all, so every
+# relative image reference a wiki page could have made was already broken —
+# undetected, because of this lookbehind.
+#
+# Enabling it found zero pre-existing violations across 520 local image
+# references. The three that a naive scan flags are `![alt](./images/....png)`
+# syntax examples inside fenced blocks and inline code spans, which `links_in`
+# strips before matching.
+LINK_RE = re.compile(
+    r"(!?)\[[^\]]*\]\("
+    r"\s*(?:<([^<>]*)>|([^)\s]+?))\s*"
+    r"""(?:"[^"]*"|'[^']*'|\([^)]*\))?\s*"""
+    r"\)"
+)
+
+# A wiki page's images must resolve inside this directory: wiki/setup-wiki.sh
+# publishes wiki/images/ and nothing else, so an image anywhere else in the
+# repository exists here, passes a plain file check, and is still a broken image
+# on the published wiki. That is the failure this checker exists to stop, so it
+# is checked rather than left to the README's word.
+WIKI_IMAGES_DIR = os.path.join(WIKI_DIR, "images")
 
 
 def slugify(heading: str) -> str:
@@ -107,7 +149,8 @@ def anchors_for(path: str, cache: dict[str, set[str]]) -> set[str]:
 
     found: set[str] = set()
     try:
-        lines = open(path, encoding="utf-8").read().splitlines()
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
     except (OSError, UnicodeDecodeError):
         cache[path] = found
         return found
@@ -139,13 +182,17 @@ def anchors_for(path: str, cache: dict[str, set[str]]) -> set[str]:
     return found
 
 
-def links_in(path: str) -> list[tuple[int, str]]:
-    """Every internal link target in a file, with its line number."""
-    out: list[tuple[int, str]] = []
+def links_in(path: str) -> list[tuple[int, str, bool]]:
+    """Every internal link target in a file: line number, target, is-image.
+
+    The is-image flag is carried rather than discarded because a wiki page's
+    images have a stricter rule than its links — see WIKI_IMAGES_DIR.
+    """
+    out: list[tuple[int, str, bool]] = []
     in_fence = False
-    for lineno, line in enumerate(
-        open(path, encoding="utf-8").read().splitlines(), start=1
-    ):
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    for lineno, line in enumerate(lines, start=1):
         if FENCE_RE.match(line):
             in_fence = not in_fence
             continue
@@ -155,11 +202,16 @@ def links_in(path: str) -> list[tuple[int, str]]:
         # the docs describe their own cross-reference syntax that way.
         line = re.sub(r"`[^`]*`", lambda m: " " * len(m.group(0)), line)
         for m in LINK_RE.finditer(line):
-            target = m.group(1)
+            is_image = bool(m.group(1))
+            # `<...>` wins when present: it is the only form that can carry a
+            # space, which is exactly what a filename with a space needs — and
+            # the publisher goes out of its way to support those. Group 2 can
+            # be the empty string for `<>`, so test against None, not falsity.
+            target = m.group(2) if m.group(2) is not None else m.group(3)
             # External and non-file schemes are out of scope on purpose.
             if re.match(r"^(https?:|mailto:|tel:|data:|//)", target):
                 continue
-            out.append((lineno, target))
+            out.append((lineno, target, is_image))
     return out
 
 
@@ -180,7 +232,7 @@ def main(argv: list[str]) -> int:
             continue
         base_dir = os.path.dirname(path)
 
-        for lineno, target in links_in(path):
+        for lineno, target, is_image in links_in(path):
             file_part, _, anchor = target.partition("#")
 
             if not file_part:
@@ -192,7 +244,17 @@ def main(argv: list[str]) -> int:
                 continue
 
             in_wiki = path.split(os.sep)[0] == WIKI_DIR
-            wiki_page = in_wiki and "/" not in file_part and "." not in file_part
+            # An image is never a wiki page reference, however bare its target
+            # looks. `![diagram](Home)` would otherwise be classified as a page,
+            # pass because wiki/Home.md exists, and publish an <img> pointing at
+            # a page of HTML — slipping past the wiki-images rule below, which
+            # only the non-page branch reaches.
+            wiki_page = (
+                in_wiki
+                and not is_image
+                and "/" not in file_part
+                and "." not in file_part
+            )
 
             if wiki_page:
                 if file_part in WIKI_GENERATED_PAGES:
@@ -209,6 +271,21 @@ def main(argv: list[str]) -> int:
                 if not os.path.exists(resolved):
                     problems.append(
                         f"{path}:{lineno}: link target not found: {file_part}"
+                    )
+                    continue
+
+                # An existing file is not enough for a wiki image: only
+                # wiki/images/ is published, so anything else is a broken
+                # image on the live wiki no matter what it resolves to here.
+                if (
+                    in_wiki
+                    and is_image
+                    and not resolved.startswith(WIKI_IMAGES_DIR + os.sep)
+                ):
+                    problems.append(
+                        f"{path}:{lineno}: wiki image '{file_part}' resolves "
+                        f"outside {WIKI_IMAGES_DIR}/, which setup-wiki.sh does "
+                        f"not publish"
                     )
                     continue
 
