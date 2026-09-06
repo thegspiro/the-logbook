@@ -16,6 +16,79 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Housekeeping, not a feature pass** — branch
+`claude/security-review-progress-note-2303`,
+[PR #2304](https://github.com/thegspiro/the-logbook/pull/2304). Docs-only:
+records that PR #2303 (feature 24, meetings & minutes, pass 3) merged
+fully green with no Codex findings, clears the stale "PR #2303 open"
+section, and marks rotation row 24 done. No feature is under review on
+this branch. Recorded here anyway so a `/security-review` iteration that
+reads this file before #2304 merges tends this PR rather than reading a
+premature "None" and starting feature 25 concurrently with it. Once #2304
+merges, clear this section — feature 25 is next.
+
+---
+
+### 2026-09-06 — Feature 24 (Meetings & minutes, pass 3) ✅ merged — PR #2303
+
+Feature 24 (Meetings & minutes)'s PR #2303 merged (`e8f6e2c`) after a
+single pass — CI went green (17/17) and Codex's review completed with no
+findings on the first push, so no fix-and-repush round was needed this
+time. Rotation row 24 -> ✅. Next: 25 Messaging & notifications.
+
+---
+
+### 2026-09-06 — Feature 24 (Meetings & minutes, pass 3) ✅ merged — PR #2303
+
+Fresh full re-read of `meetings.py`/`meetings_service.py`,
+`minutes.py`/`minute_service.py`/`quorum_service.py` (via two parallel
+background agents, ~340 L of growth since pass 2) plus
+`attendance_dashboard_service.py` (backs 3 `meetings.py` routes, a scope
+gap neither prior pass named). One new finding, **MM-14** (LOW, fixed):
+`AttendanceDashboardService.list_waivers` resolved the waiving member's
+and granting admin's names via `select(User).where(User.id == ...)` with
+no `organization_id` filter — not currently exploitable (both ids come off
+an already org-validated `MeetingAttendee` write) but fragile against a
+future write path that skipped that validation; both lookups now filter by
+org, with a guard test that (on its first draft) itself false-passed
+against the unfixed code by checking the full compiled statement rather
+than the `WHERE` clause — the `SELECT` column list always mentions
+`organization_id` by name regardless of any filter — caught and corrected
+before landing. **MM-9** (existing flagged finding) updated: the same
+missing `Meeting`-approval state-machine guard is also reachable through
+the generic `PATCH /meetings/{id}` route, not just the dedicated
+`/approve` route — folded into MM-9's existing product-decision flag
+rather than filed separately. Two items noted suspicious-but-not-fixed
+with reasoning recorded (an always-null `created_by`/`source` column with
+no writer; `set_meeting_quorum_config`'s missing finalization guard and
+unbounded threshold, unconfirmed exploitable, unchanged since pass 1).
+Full completion gate green: flake8/black/isort clean, migrations
+validated (431 revisions, single head, no schema change), 245/245 scoped
+and 11,470/11,470 full backend suite pass, frontend tsc/eslint/vitest
+clean. PR opened, CI went fully green (17/17) and Codex's review completed
+with no findings before the next watchdog check-in, so it was merged
+directly rather than left idle. Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md`. Rotation row 24 -> ✅.
+Open PR row cleared. Next: 25 Messaging & notifications.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies, pass 10) ✅ merged — PR #2301
+
+A 30-minute watchdog check found PR #2301 fully green and idle:
+`mergeable_state: clean`, all 17 CI checks passing, Codex review completed
+on the current head commit (`5d989ba`) with no unresolved blocking
+findings (MSUP-25 is an intentionally-scoped follow-up recorded in the
+findings doc, not a blocker). Merged it directly (`40cac247`) rather than
+leave a fully-green PR stalled, consistent with the departure recorded for
+PR #2251 above. Rotation row 23 → ✅. Next: 24 Meetings & minutes.
+
+---
+
+**Superseded — the pass-10 write-up below is preserved for history.**
+
+### Feature 23 (Medical supplies) — full history (PR #2301, merged)
+
 **Feature 23 (Medical supplies), pass 3** — branch
 `claude/security-review-medical-supplies`,
 [PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). Initial
@@ -9525,8 +9598,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
@@ -10569,3 +10642,46 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   8927/8927 full backend suite pass. Findings doc:
   `docs/security-review/SEC2-28-security-audit-ip.md`. PR #1911 opened and
   subscribed. Next: 29 reports & analytics, once #1911 merges.
+- **2026-09-06 — Feature 23 (Medical supplies) ✅ closed — PR #2301 merged**
+  (merge commit `40cac24`). Ten Codex review rounds over one PR — each
+  round found a real gap the previous round's own fix had left open, most
+  strikingly MSUP-13's correct security fix deterministically breaking two
+  already-shipped frontend controls (MSUP-26), caught only in round 10.
+  27 findings total: 18 fixed (3 of those superseding an earlier, less
+  complete fix on the same finding), 5 flagged (MSUP-4/11/15 as
+  cross-cutting/product decisions; MSUP-25 as a scoped follow-up covering
+  three concrete instances of one systemic TOCTOU shape that needs a
+  shared "validate domain under this mutation's own lock" design, not a
+  patch-per-instance). Full write-up:
+  `docs/security-review/MSUP-23-medical-supplies.md`. Rotation row 23 ->
+  ✅. Open PR row cleared. Next: 24 Meetings & minutes.
+- **2026-09-06 — Feature 24 (Meetings & minutes), pass 3 — PR #2303 opened**
+  Fresh full re-read of `meetings.py`/`meetings_service.py`,
+  `minutes.py`/`minute_service.py`/`quorum_service.py` (~340 lines of
+  growth since pass 2 — two parallel background agents, one per endpoint
+  pair, each briefed with the exact already-fixed/already-open findings
+  from pass 1/2 so as not to re-derive them), plus
+  `attendance_dashboard_service.py` (backs 3 `meetings.py` routes, a scope
+  gap neither prior pass named). **MM-14** (LOW, fixed): `list_waivers`
+  resolved member/grantor names with no `organization_id` filter on the
+  `User` lookup — not currently exploitable (both ids come off an
+  already org-validated `MeetingAttendee` write) but fragile against a
+  future write path that skipped that validation; both lookups now filter
+  by org, with a guard test whose first draft false-passed against the
+  unfixed code (it checked the full compiled statement, whose `SELECT`
+  column list always mentions `organization_id` regardless of any filter)
+  — caught and corrected before landing. **MM-9** updated: the same
+  missing `Meeting`-approval state-machine guard is also reachable through
+  the generic `PATCH /meetings/{id}` route, not just `/approve` — folded
+  into the existing flag rather than filed separately, since both need the
+  same product decision. Two items noted suspicious-but-not-fixed
+  (`meeting_action_items.created_by`/`source` has no writer;
+  `set_meeting_quorum_config` has no finalization guard or threshold
+  upper bound) with reasoning recorded rather than guessed at. Full local
+  completion gate green: flake8/black/isort clean against `app/`, `tests/`,
+  `alembic/`; migrations validated (431 revisions, single head, no schema
+  change this pass); 245/245 scoped and 11,470/11,470 full backend suite
+  pass; frontend `tsc`/`eslint`/`vitest run src/modules/minutes` all clean.
+  Findings doc: `docs/security-review/MM-24-meetings-minutes.md` (Pass 3).
+  Rotation row 24 -> ⏳. PR #2303 opened and subscribed. Next: tend #2303
+  until merged, then 25 Messaging & notifications.
