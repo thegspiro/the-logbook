@@ -767,12 +767,25 @@ client-supplied id is an IDOR / cross-tenant leak.
 # WRONG — any org can read/mutate this row by guessing/knowing the id
 result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
 
-# CORRECT — scope to the caller's org (or resolve via an org-scoped parent)
+# CORRECT (a) — the model carries organization_id: filter it
 result = await db.execute(
-    select(Candidate).where(
-        Candidate.id == candidate_id,
-        Candidate.organization_id == organization_id,
+    select(Apparatus).where(
+        Apparatus.id == apparatus_id,
+        Apparatus.organization_id == organization_id,
     )
+)
+
+# CORRECT (b) — the model does NOT carry one: resolve the parent in-org, then
+# constrain the child by its parent FK. 48 of the 263 mapped models are this
+# shape — Candidate, FormField, ApprovalChainStep, Motion — and for them (a) is
+# not merely discouraged, it raises AttributeError.
+election = await service.get_election(election_id, current_user.organization_id)
+if not election:
+    raise HTTPException(status_code=404, detail="Election not found")
+result = await db.execute(
+    select(Candidate)
+    .where(Candidate.id == str(candidate_id))
+    .where(Candidate.election_id == str(election_id))
 )
 ```
 
