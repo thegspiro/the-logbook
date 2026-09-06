@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events and Training record pages keep their trail in every state (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on nine Events and Training pages that had none.** #2314
+  gave the pages sitting _beside_ the two administration hubs their hub crumb;
+  these are the record and member-facing pages underneath, which it did not
+  reach. The event detail, edit, check-in monitoring and QR-analytics screens,
+  the cohort detail screen, and the training submit, programme-progress,
+  skill-test result and manual shift report screens now all show where they sit.
+- **A route away from a record that failed to load.** Every one of these pages
+  is reached by an id, and their loading and not-found branches had no
+  navigation at all — an event opened from a stale link left the browser's back
+  button as the only exit. The trail is defined once per page and rendered in
+  every branch, so it cannot go missing from one.
+
+**Fixed**
+
+- **The id-suffixed pages showed no trail at all, not merely a short one.**
+  `/events/:id` and its siblings skip the id when the trail is generated, which
+  leaves a single "Events" crumb — and a one-crumb generated trail suppresses
+  itself by design. These pages now pass explicit items naming the record, the
+  same repair `/elections/:electionId` needed.
+- **Two of them named a record they never load.** Check-in monitoring and the
+  QR analytics dashboard fetch statistics, not the event, so their middle crumb
+  links back to the record rather than inventing a title. The analytics page
+  renders no trail at all when it has no event id, because it also serves
+  platform-wide metrics where every crumb would be the page you are already on.
 ### Add Member asked a permission that gates the prospect pipeline (2026-09-06)
 
 **Fixed**

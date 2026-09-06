@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
@@ -258,11 +259,14 @@ const MyProgramProgressPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
-        <div
-          className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500"
-          aria-hidden="true"
-        />
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+        <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+          <div
+            className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500"
+            aria-hidden="true"
+          />
+        </div>
       </div>
     );
   }
@@ -275,6 +279,8 @@ const MyProgramProgressPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+
         <div className="mb-6 flex items-start gap-3">
           <button
             onClick={() => void navigate('/training')}

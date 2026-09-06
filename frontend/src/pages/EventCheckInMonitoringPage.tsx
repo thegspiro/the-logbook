@@ -5,6 +5,7 @@ import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { Breadcrumbs } from '../components/ux';
 import { formatShortDateTime, formatTime } from '../utils/dateFormatting';
 
 /**
@@ -91,10 +92,22 @@ const EventCheckInMonitoringPage: React.FC = () => {
     return `${diffDays} days ago`;
   };
 
+  // Explicit items: /events/:id/monitoring skips the id. This page never loads
+  // the event itself — `stats` carries no title — so the middle crumb is a plain
+  // link back to the record rather than a name this page cannot know.
+  const trail = [
+    { label: 'Events', path: '/events' },
+    { label: 'Event', path: `/events/${eventId ?? ''}` },
+    { label: 'Check-In Monitoring' },
+  ];
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-theme-text-secondary">Loading monitoring dashboard...</div>
+      <div className="mx-auto max-w-4xl p-6">
+        <Breadcrumbs items={trail} />
+        <div className="flex items-center justify-center py-24">
+          <div className="text-theme-text-secondary">Loading monitoring dashboard...</div>
+        </div>
       </div>
     );
   }
@@ -102,6 +115,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
   if (error) {
     return (
       <div className="mx-auto max-w-4xl p-6">
+        <Breadcrumbs items={trail} />
         <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
           <p className="text-red-700 dark:text-red-300">{error}</p>
         </div>
@@ -118,6 +132,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
   if (!stats) {
     return (
       <div className="mx-auto max-w-4xl p-6">
+        <Breadcrumbs items={trail} />
         <p className="text-theme-text-secondary">No monitoring data available</p>
         <Link
           to={`/events/${eventId}`}
@@ -137,6 +152,8 @@ const EventCheckInMonitoringPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
+      <Breadcrumbs items={trail} />
+
       {/* Header */}
       <div className="mb-6">
         <Link

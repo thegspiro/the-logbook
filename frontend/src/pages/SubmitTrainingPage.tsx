@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Info, Paperclip, Pencil, Send, Trash2, X } from 'lucide-react';
+import { Breadcrumbs } from '../components/ux';
 import {
   AttachmentField,
   Checklist,
@@ -1104,10 +1105,13 @@ const SubmitTrainingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500" />
-          <p className="text-theme-text-muted mt-4">Loading...</p>
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+        <div className="flex items-center justify-center py-24">
+          <div className="text-center">
+            <div className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500" />
+            <p className="text-theme-text-muted mt-4">Loading...</p>
+          </div>
         </div>
       </div>
     );
@@ -1115,17 +1119,20 @@ const SubmitTrainingPage: React.FC = () => {
 
   if (loadError || !config) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <p className="mb-4 text-red-500">{loadError || 'Unable to load configuration.'}</p>
-          <button
-            onClick={() => {
-              void loadData();
-            }}
-            className="btn-primary"
-          >
-            Try Again
-          </button>
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+        <div className="flex items-center justify-center py-24">
+          <div className="text-center">
+            <p className="mb-4 text-red-500">{loadError || 'Unable to load configuration.'}</p>
+            <button
+              onClick={() => {
+                void loadData();
+              }}
+              className="btn-primary"
+            >
+              Try Again
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1134,6 +1141,8 @@ const SubmitTrainingPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-4xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
+        <Breadcrumbs />
+
         <div className="mb-6 flex items-start gap-3.5">
           <button
             onClick={() => void navigate('/training')}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
+import { Breadcrumbs } from '../components/ux';
 import { formatTime } from '../utils/dateFormatting';
 
 /**
@@ -53,27 +54,44 @@ const AnalyticsDashboardPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Only when an event scopes this page. Without an id it renders platform-wide
+  // metrics reached from elsewhere, and a trail whose every crumb is the page
+  // you are already on offers nothing to follow.
+  const trail = eventId
+    ? [
+        { label: 'Events', path: '/events' },
+        { label: 'Event', path: `/events/${eventId}` },
+        { label: 'QR Code Analytics' },
+      ]
+    : undefined;
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-theme-text-secondary">Loading analytics...</div>
+      <div className="mx-auto max-w-7xl p-6">
+        {trail && <Breadcrumbs items={trail} />}
+        <div className="flex items-center justify-center py-24">
+          <div className="text-theme-text-secondary">Loading analytics...</div>
+        </div>
       </div>
     );
   }
 
   if (error || !metrics) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <p className="mb-4 text-red-700 dark:text-red-400">{error || 'No analytics data available'}</p>
-          <button
-            onClick={() => {
-              void loadMetrics();
-            }}
-            className="btn-primary rounded-md text-sm font-medium"
-          >
-            Retry
-          </button>
+      <div className="mx-auto max-w-7xl p-6">
+        {trail && <Breadcrumbs items={trail} />}
+        <div className="flex items-center justify-center py-24">
+          <div className="text-center">
+            <p className="mb-4 text-red-700 dark:text-red-400">{error || 'No analytics data available'}</p>
+            <button
+              onClick={() => {
+                void loadMetrics();
+              }}
+              className="btn-primary rounded-md text-sm font-medium"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -81,6 +99,8 @@ const AnalyticsDashboardPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-6">
+      {trail && <Breadcrumbs items={trail} />}
+
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
