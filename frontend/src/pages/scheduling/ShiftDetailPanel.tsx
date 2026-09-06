@@ -12,7 +12,7 @@
  * via a searchable member dropdown.
  */
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { DialogPortal } from '../../components/DialogPortal';
 import { DialogPanel } from '../../components/ux/DialogPanel';
@@ -114,6 +114,39 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
    * exists to avoid.
    */
   const isWideHeader = useMediaQuery('(min-width: 640px)');
+
+  /**
+   * Carry focus across the remount that crossing 640px causes.
+   *
+   * The two placements are different positions in the tree, so React mounts a
+   * new button rather than moving the old one — a `key` cannot change that
+   * across different parents. If the outgoing button held focus, focus falls to
+   * `document.body`, and `useFocusTrap` only intercepts Tab while
+   * `document.activeElement` is its first or last focusable element: from
+   * `body` it intercepts nothing and the next Tab leaves the dialog for the
+   * page behind it. Rotating a phone from portrait to landscape crosses this
+   * breakpoint (390 -> 844).
+   *
+   * Ownership is tracked by the button's own focus/blur rather than read off
+   * `document.activeElement` in an effect cleanup: React detaches the ref and
+   * removes the node in the same mutation phase, so by the time a cleanup runs
+   * there is nothing left to compare against. Removing a focused element fires
+   * no blur event, so the flag survives the unmount — which is exactly the case
+   * being recovered — while a real blur (the user moving to another control)
+   * clears it and correctly suppresses the restore.
+   *
+   * A layout effect rather than a passive one, so the restore lands before
+   * paint and no frame is drawn with focus on the body.
+   */
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const closeHadFocus = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!closeHadFocus.current) return;
+    // Only reclaim focus the remount dropped; anything else has a better claim.
+    if (document.activeElement !== document.body) return;
+    closeRef.current?.focus();
+  }, [isWideHeader]);
 
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
@@ -1176,7 +1209,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
    */
   const closeButton = (
     <button
+      ref={closeRef}
       onClick={onClose}
+      onFocus={() => {
+        closeHadFocus.current = true;
+      }}
+      onBlur={() => {
+        closeHadFocus.current = false;
+      }}
       className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2 transition-colors"
       aria-label="Close panel"
     >

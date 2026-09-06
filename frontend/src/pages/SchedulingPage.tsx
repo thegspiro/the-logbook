@@ -402,7 +402,27 @@ const SchedulingPage: React.FC = () => {
     setSelectedShift(shift);
   };
 
-  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateShift, onClose: () => setShowCreateShift(false) });
+  /**
+   * Create Shift withdraws while the shift-detail dialog is up.
+   *
+   * Both are body-level dialogs asserting `aria-modal`, and they can be open at
+   * once without either opening the other: a `?shift=` deep link resolves into
+   * `selectedShift` on its own schedule, which may land while this form is
+   * open. Two modal roots leave assistive technology to guess which is current,
+   * so only the topmost keeps its semantics.
+   *
+   * Withdrawing rather than closing: `shiftForm` is state on this page, not in
+   * the modal, so nothing typed is lost and the form returns exactly as it was
+   * once the detail dialog closes. Clearing `showCreateShift` would discard a
+   * half-filled form on an event the user did not initiate.
+   *
+   * The hook is gated as well as the markup — left on `showCreateShift` it
+   * would hold a registration in the dialog stack, and the body scroll lock
+   * with it, for a dialog that is not rendered.
+   */
+  const createShiftOpen = showCreateShift && !selectedShift;
+
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: createShiftOpen, onClose: () => setShowCreateShift(false) });
 
   return (
     <div className="min-h-screen">
@@ -545,7 +565,7 @@ const SchedulingPage: React.FC = () => {
         )}
 
         {/* Create Shift Modal */}
-        {showCreateShift && (
+        {createShiftOpen && (
           <div
             className="fixed inset-0 z-50 overflow-y-auto"
             role="dialog"
