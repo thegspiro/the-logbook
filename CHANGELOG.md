@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Minutes page advertised a feature members cannot use (2026-09-06)
+
+**Fixed**
+
+- **The empty state sold recording minutes to people who cannot record them.**
+  With nothing recorded, the page showed three cards pitching what the feature
+  gets you — templates, action items, archives and search — above a card
+  telling the reader to "Start recording meeting minutes". Creating minutes is
+  `minutes.manage`-gated on the server and the buttons beside that copy were
+  already withheld, so a member read an advertisement with no way in. The cards
+  and the instruction are now shown only to someone who can act on them.
+
+- **The Record Minutes dialog outlived the permission that opened it.** It
+  rendered on its own open state, so losing `minutes.manage` with it open left
+  the form on screen. It is now gated like the controls that open it.
+
+**Changed**
+
+- **The page still reports "No Meeting Minutes" to everyone.** A member opened
+  it deliberately and deserves the answer; it is the pitch and the instruction
+  that are withheld, not the fact.
+
+### A member's own uniform sizes no longer need a permission (2026-09-06)
+
+**Fixed**
+
+- **`GET`/`PUT /inventory/my/size-preferences` required `inventory.view`.**
+  Both handlers key the row on the caller, so neither reaches another member's
+  sizes — and every sibling endpoint behind "My Issued Gear" (issued gear,
+  equipment requests, return requests, loan extension) requires only
+  authentication. The June 2026 changelog recorded these two the same way,
+  "self, login required", so the grant had drifted from the documented
+  contract. They now require authentication only.
+
+  The practical effect was the My Sizes button: it sits on a route that needs
+  no permission and was rendered unconditionally, so a member whose position
+  lacked `inventory.view` got a button that 403'd. Dormant for a baseline
+  member, who holds that grant.
+
+  **This is a widening.** The officer-facing endpoints for _another_ member's
+  sizes are untouched and keep their stricter gates — `inventory.view` to
+  read, `inventory.manage` to write — and a test now pins both halves.
 ### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
 
 **Fixed**
