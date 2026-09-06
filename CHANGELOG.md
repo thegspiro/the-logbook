@@ -26,6 +26,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`_product_key` / `_variant_key` / `_variant_identity`), consumed by both the
   grouping and the fulfilment narrowing rather than restated on each side.
 
+### The inventory location panel agrees with the list beneath it (2026-09-06)
+
+**Fixed**
+
+- **Five of the items page's nine filters did nothing.** Location, size, colour,
+  style and the vendor scope were absent from the reload effect's dependencies,
+  so picking one changed the request the page _would_ send and never sent it.
+  The list stayed as it was until an unrelated reload — a websocket event, a
+  bulk status change — applied a filter nobody had touched since. This is what
+  made the location cards impossible to reconcile with the list: they are links
+  into a list that did not respond to them.
+- **The location cards counted medical stock the list excludes.**
+  `GET /inventory/summary/by-location` reported every domain while `GET /items`
+  carves EMS supplies out — they have their own page and their own permission.
+  A department running both saw a header of "82 items" and an "Unassigned" card
+  reading 52 units across 2 items, above a list of 6 items totalling 30; the
+  difference was medical stock with no location filed against it, counted in the
+  panel and unlistable on that page. The panel now takes the same carve-out the
+  listing is fetched with, so a location holding only medical stock gets no card
+  rather than a card whose rows the page cannot show.
+- **The "Unassigned" card could not filter to the items it counted.** It sent
+  the empty string, which is "All Locations", so clicking it cleared the filter
+  it appeared to apply and its highlight was on whenever nothing was selected.
+  `GET /items` gains an optional `unassigned_location` flag for the "no location
+  at all" population; the card, a new dropdown option and a second click to
+  clear all use it.
+- **The header counted a different thing from the list under it.** It read
+  `total_items`, which sums quantities across every domain including medical,
+  over a list that counts rows and excludes it. It now reads
+  `non_medical_items`, which exists for exactly this and which the inventory hub
+  already used.
+
 ### An inventory item's size is edited through a labelled picker (2026-09-06)
 
 **Fixed**
