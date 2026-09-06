@@ -13,6 +13,7 @@ import type { SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } fro
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { UserStatus } from '../../../constants/enums';
 import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
+import type { CallTypeOption } from '../types';
 
 interface MemberOption {
   id: string;
@@ -52,6 +53,15 @@ interface SchedulingState {
    * showing the storage key.
    */
   callTypeLabels: Record<string, string>;
+  /**
+   * The same types as an ordered list, with the `active` flag the map cannot
+   * carry. An editor offering them needs both: the department's own order, and
+   * which are still offered — a retired type stays configured so its history
+   * resolves, but is not something to newly pick. Set together with
+   * `callTypeLabels` from one response; kept as a separate field rather than
+   * derived in a selector, which would build a new object on every render.
+   */
+  callTypes: CallTypeOption[];
   /**
    * The department's signup window — how long before a shift starts members
    * stop being able to claim a seat, and how long past the start an officer
@@ -152,6 +162,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   requireEndOfShiftChecks: false,
   callTrackingMode: 'detailed',
   callTypeLabels: {},
+  callTypes: [],
   signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
   lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
   openEndedCushionHours: DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,
@@ -184,6 +195,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
           // A missing setting means today's behaviour, never 'off'.
           callTrackingMode: settings.call_tracking?.mode || 'detailed',
           callTypeLabels: Object.fromEntries((settings.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
+          callTypes: settings.call_tracking?.call_types ?? [],
           // `??`, not `||`: 0 is a meaningful value here — it is what "closes
           // exactly at the start" means — and `||` would silently replace it
           // with the default.
@@ -239,6 +251,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       requireEndOfShiftChecks: false,
       callTrackingMode: 'detailed',
       callTypeLabels: {},
+      callTypes: [],
       signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
       lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
       openEndedCushionHours: DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,

@@ -62,6 +62,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   certificate got neither, with no error. They're now forwarded to every
   transport this factory builds (direct and proxy-mounted alike).
 
+### The lightweight apparatus list hides what a member cannot do (2026-09-06)
+
+**Fixed**
+
+- **`/apparatus-basic` no longer offers Add, Edit and Delete to members without
+  `scheduling.manage`.** The lightweight fleet list a department gets when the
+  Apparatus module is off is deliberately readable by everyone — shift staffing
+  needs these unit definitions, so the route carries no permission gate and the
+  list endpoint is auth-only. Its writes are not: create, update and delete all
+  require `scheduling.manage`, so every one of those controls answered 403. The
+  navigation links this page for every member whenever the Apparatus module is
+  off, which made it a full CRUD surface shown to the whole department. Reading
+  the fleet is unchanged.
+
 ### A Create Shift form outlived the permission that opened it (2026-09-06)
 
 **Fixed**
@@ -1049,6 +1063,17 @@ which merged before a review of it came back.
   only where every stored value really is a type that department has
   configured, checked against the report itself rather than against records
   that can change underneath it.
+- **Editing a draft report's call types lost the department's names for them.**
+  The draft editor offered the shift-report settings' own free-text list
+  ("Structure Fire") even on a report filed against a count-only shift, whose
+  stored types are the department's own — so the stored type did not show as
+  selected, and any chip an officer tapped landed beside it. The saved list then
+  mixed the two, and what was stored stopped resolving to a name and stopped
+  counting as a reason not to delete its type. The editor now offers the
+  department's own call types on those reports, showing each by the name the
+  department gave it, including one that has been retired or removed from
+  settings so it can still be seen and taken off. An edit that keeps them keeps
+  their meaning.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
