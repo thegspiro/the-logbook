@@ -16,13 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 23 (Medical supplies)'s PR #2301 merged
-(`40cac24`) after 10 Codex review rounds — see the Log for the full
-round-by-round detail and `docs/security-review/MSUP-23-medical-supplies.md`
-for the findings write-up. Rotation row 23 -> ✅. Next: 24 Meetings &
-minutes.
+**None.** Feature 23 (Medical supplies)'s PR #2301 merged (`40cac24`) after
+10 Codex review rounds, and the follow-up docs-only correction, PR #2302,
+has also merged. Feature 24 (Meetings & minutes) pass 3 is now in progress
+on branch `claude/security-review-meetings-minutes` — see the Log for its
+findings once the PR opens. Rotation row 23 -> ✅.
 
 ---
+
+### 2026-09-06 — Feature 23 (Medical supplies, pass 10) ✅ merged — PR #2301
+
+A 30-minute watchdog check found PR #2301 fully green and idle:
+`mergeable_state: clean`, all 17 CI checks passing, Codex review completed
+on the current head commit (`5d989ba`) with no unresolved blocking
+findings (MSUP-25 is an intentionally-scoped follow-up recorded in the
+findings doc, not a blocker). Merged it directly (`40cac247`) rather than
+leave a fully-green PR stalled, consistent with the departure recorded for
+PR #2251 above. Rotation row 23 → ✅. Next: 24 Meetings & minutes.
+
+---
+
+**Superseded — the pass-10 write-up below is preserved for history.**
 
 ### Feature 23 (Medical supplies) — full history (PR #2301, merged)
 
