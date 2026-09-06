@@ -12,6 +12,7 @@ Run with:
 """
 
 import enum
+import re
 
 import pytest
 from sqlalchemy import BigInteger, Boolean, Integer, String, UniqueConstraint
@@ -790,12 +791,19 @@ class TestEnumConsistency:
         migration_files = sorted(versions_dir.glob("*.py"), reverse=True)
         assert migration_files, "No Alembic migration files found"
 
-        # Look for the most recent migration that defines ALL_TYPES or ALL_TEMPLATE_TYPES
+        # Look for the most recent migration that defines ALL_TYPES or
+        # ALL_TEMPLATE_TYPES. Matched as a module-level assignment, not as a
+        # substring anywhere in the file: "ALL_TYPES" is a suffix of
+        # DEFAULT_CALL_TYPES, so a migration merely mentioning that constant in
+        # a comment was selected instead, and its absent attribute then read as
+        # an empty tuple — which fails here, and would equally have hidden a
+        # real enum drift by comparing against nothing.
+        definition = re.compile(r"^(?:ALL_TYPES|ALL_TEMPLATE_TYPES)\s*=", re.MULTILINE)
         migration_values = None
         migration_name = None
         for mf in migration_files:
             text = mf.read_text()
-            if "ALL_TYPES" in text or "ALL_TEMPLATE_TYPES" in text:
+            if definition.search(text):
                 # Import the module dynamically to read the tuple.
                 # Migration files import `alembic.op` which is only available
                 # inside an Alembic context, so we mock it before importing.
@@ -811,11 +819,15 @@ class TestEnumConsistency:
                     },
                 ):
                     spec.loader.exec_module(mod)
-                migration_values = set(
-                    getattr(mod, "ALL_TYPES", None)
-                    or getattr(mod, "ALL_TEMPLATE_TYPES", None)
-                    or ()
+                declared = getattr(mod, "ALL_TYPES", None)
+                if declared is None:
+                    declared = getattr(mod, "ALL_TEMPLATE_TYPES", None)
+                assert declared is not None, (
+                    f"{mf.name} assigns ALL_TYPES/ALL_TEMPLATE_TYPES at module "
+                    "level but neither survives import; the comparison below "
+                    "would silently run against an empty set."
                 )
+                migration_values = set(declared)
                 migration_name = mf.name
                 break
 

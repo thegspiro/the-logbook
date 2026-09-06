@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Course Library hides what a member cannot do (2026-09-06)
+
+**Fixed**
+
+- **The Course Library no longer offers Add, Edit, Delete and Manage classes to
+  members without `training.manage`.** Every write behind those four controls —
+  create, update (which is how "Deactivate" is implemented) and the syllabus
+  builder — already required the permission on the backend, so a regular member
+  got a 403 from any of them. The controls are now gated on the same permission
+  the endpoints check. The gate is on the component, not the route, because the
+  same page is mounted inside the training admin hub where the officer does hold
+  it.
+
 ### Grants & Fundraising: list endpoints now page at the database (2026-09-05)
 
 **Fixed**
@@ -22,6 +35,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   query itself, so a page load only reads the rows it actually displays.
   No response shape or ordering changed for any request within the
   documented row limits.
+
+### Shift Details becomes a modal (2026-09-05)
+
+**Changed**
+
+- **The Shift Details surface is now a centred dialog rather than a right-edge
+  drawer.** It rendered through `drawer-panel` — pinned full-height to the
+  right of the screen, full-bleed on phones and capped at 32rem above 640px.
+  It is now centred and height-capped: 56rem on a laptop, a 1rem-inset box on a
+  phone, scrolling within itself. The wider desktop box gives the crew board and
+  the close-out checklist's per-member hours inputs room they did not have at
+  512px.
+
+**Fixed**
+
+- **Escape inside the driver-blocked dialog no longer closes the shift behind
+  it.** Shift Details hand-rolled Escape on a `document` listener that could not
+  see the dialog stack, so one key dismissed both. It now routes through the
+  shared dialog stack (`DialogPanel` / `useDialog`), which also gives it the
+  focus trap, body scroll lock and `role="dialog"` it never had. Escape still
+  cancels an open inline notes editor before it closes anything.
 
 ### Administration pages say where you are (2026-09-05)
 
@@ -560,6 +594,17 @@ which merged before a review of it came back.
   there, not a slug. Calls whose type had already been deleted from settings
   stay in the remainder — there is no label left to restore, and renaming them
   would replace "Not categorised" with a raw slug.
+- **A renamed call type could rewrite an officer's own words in an old report.**
+  A shift report records whether its call types are the department's slugs or
+  the incident text an officer typed; only the first may be relabelled when a
+  type is renamed. That marker was backfilled onto older reports from the
+  shift's current call records, which can be recreated after the fact — delete a
+  detailed shift's incident rows, switch the department to count-only and
+  re-finalize it, and an officer's "MVA w/ entrapment" was marked as a
+  department slug, to be relabelled by a later rename. The marker is now kept
+  only where every stored value really is a type that department has
+  configured, checked against the report itself rather than against records
+  that can change underneath it.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 

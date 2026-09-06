@@ -454,16 +454,72 @@ describe('EquipmentRequestsPage', () => {
 
     await user.click(screen.getByText('Fulfill'));
 
+    // No "— available —": the unremarkable status said nothing and consumed the
+    // width the requested-size marker and the count need.
     expect(
-      await screen.findByRole('option', { name: 'Polo — POLO-4417 — size L — requested size — available — 6 issuable' })
+      await screen.findByRole('option', { name: 'Polo — POLO-4417 — size L · requested size · 6 issuable' })
     ).toBeInTheDocument();
     // Marked, because under the override the list carries rows the request
     // does not cover and nothing else on screen distinguishes them.
     expect(
       screen.getByRole('option', {
-        name: 'Station Boot — size L — requested size — substitution — available — 2 issuable',
+        name: 'Station Boot — size L · requested size · substitution · 2 issuable',
       })
     ).toBeInTheDocument();
+  });
+
+  it('names a status only when it is not the unremarkable one', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({
+        options: [option('gloves', { name: 'Gloves', status: 'in_maintenance', available: 0 })],
+      })
+    );
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    // Readable, not the raw enum: the status is now the thing that draws the
+    // eye, so an underscore in it is what the reader is left looking at.
+    expect(
+      await screen.findByRole('option', { name: 'Gloves — size L · requested size · in maintenance · 0 issuable' })
+    ).toBeInTheDocument();
+  });
+
+  it('repeats the chosen row details where a select cannot clip them', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({ suggested_item_id: 'polo-l', options: [option('polo-l')] })
+    );
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    // A native select shows only the selected row, clipped to the control's
+    // width — on a phone that is the phone's width, and the tail it cuts is
+    // where the marker and the count live.
+    await waitFor(() => expect(screen.getByLabelText('Item to fulfill with')).toHaveValue('polo-l'));
+    expect(screen.getByText('size L · requested size · 6 issuable')).toBeInTheDocument();
+  });
+
+  it('shows no detail line until a row is chosen', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    mockGetFulfillmentOptions.mockResolvedValue(
+      fulfillmentOptions({ suggested_item_id: null, options: [option('polo-l')] })
+    );
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
+    // Describing a row nobody picked would read as a selection that was made.
+    expect(screen.queryByText('size L · requested size · 6 issuable')).not.toBeInTheDocument();
   });
 
   it('says when the option list was capped rather than exhausted', async () => {

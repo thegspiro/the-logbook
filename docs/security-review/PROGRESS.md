@@ -80,6 +80,25 @@ pulled in `main`'s new `a1c7e93b2d54` equipment-request-size migration),
 merge; no code or CI problem, just `main`'s pace outrunning `mergeable_state`
 recomputation between tend passes.
 
+2026-09-06 tend (round 5, watchdog): `main`'s independently-maintained copy
+of this section had drifted again — the same recurring shape as round 3 —
+describing the same PR's history in its own words (most recently two
+"watchdog" checks that pushed merge commits at `72c4cfc` and `7a6d841`).
+Both copies had already converged on the same actual branch head
+(`7a6d841`), so this was a documentation-only conflict, not a code
+divergence. Resolved the same way as round 3: kept this section's own
+continuously-updated narrative (rounds 1-4 above already cover the same
+merge/CI history `main`'s copy was independently describing) and dropped
+`main`'s duplicate copy. `CHANGELOG.md` carried the same recurring
+`[Unreleased]`-section conflict, this time against a newly-merged Course
+Library permissions entry; resolved by keeping both entries. Re-ran the
+full completion gate post-merge: `flake8`, `black --check`,
+`isort --check-only` on `app/`, `tests/`, `alembic/` clean;
+`scripts/validate_migrations.py --strict` single head; `pytest -k "grant or
+fundraising"` and the full backend suite green; `tsc --noEmit` 0 errors;
+`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge; no
+code or CI problem.
+
 ---
 
 ### 2026-09-05 — Feature 22 (Grants & fundraising), pass 3 — 1 fixed, 0 flagged

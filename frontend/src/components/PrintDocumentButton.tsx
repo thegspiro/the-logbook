@@ -28,6 +28,20 @@ interface PrintDocumentButtonProps {
   /** Button text; the icon is always shown. */
   label?: string;
   className?: string;
+  /**
+   * Notified as this button's print dialog opens and closes.
+   *
+   * For a caller that is itself a dialog carrying `aria-modal`: the print
+   * dialog portals to the body, so the two are DOM siblings and both would
+   * claim modality at once. The caller needs to go inert while this one is up,
+   * and cannot see that state otherwise.
+   *
+   * Called synchronously with the state change rather than from an effect, so
+   * the caller's update batches into the same commit. A commit later would
+   * leave the caller inert while the closing dialog's focus trap restores
+   * focus into it, and the browser would drop that focus request.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const PREVIEW_COLUMNS = 48;
@@ -54,6 +68,7 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
   recordId,
   label = 'Print',
   className,
+  onOpenChange,
 }) => {
   const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -61,6 +76,14 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
   const [loading, setLoading] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [selectedPrinterId, setSelectedPrinterId] = useState('');
+
+  const setOpen = useCallback(
+    (next: boolean) => {
+      setIsOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -84,18 +107,18 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
   }, []);
 
   const open = useCallback(async () => {
-    setIsOpen(true);
+    setOpen(true);
     setLoading(true);
     setPreview(null);
     try {
       setPreview(await stationDocumentService.preview(document, recordId));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not build the document'));
-      setIsOpen(false);
+      setOpen(false);
     } finally {
       setLoading(false);
     }
-  }, [document, recordId]);
+  }, [document, recordId, setOpen]);
 
   const send = async () => {
     setPrinting(true);
@@ -109,7 +132,7 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
       } else if (result.printer_warnings.length > 0) {
         toast(`${result.printer_name}: ${result.printer_warnings.join(', ')}`, { duration: 6000 });
       }
-      setIsOpen(false);
+      setOpen(false);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to print'));
     } finally {
@@ -134,7 +157,7 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
         {label}
       </button>
 
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Print to receipt printer" size="lg">
+      <Modal isOpen={isOpen} onClose={() => setOpen(false)} title="Print to receipt printer" size="lg">
         <div className="modal-body space-y-4">
           {loading ? (
             <div className="flex items-center gap-2 py-6" role="status" aria-live="polite">
@@ -195,7 +218,7 @@ export const PrintDocumentButton: React.FC<PrintDocumentButtonProps> = ({
 
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
-            onClick={() => setIsOpen(false)}
+            onClick={() => setOpen(false)}
             className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg border px-3 py-2 text-sm transition-colors"
           >
             Cancel
