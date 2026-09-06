@@ -34,6 +34,7 @@ import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormattin
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { EmptyState } from '../../../components/ux';
+import { useAuthStore } from '../../../stores/authStore';
 
 const TABS = [
   { id: 'checks', label: 'Checks' },
@@ -51,6 +52,11 @@ export const ApparatusDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
+  // This page admits `scheduling.manage`, the supply worklist does not — its
+  // endpoint takes `inventory.check_view` or `inventory.manage`. Linking it
+  // unconditionally sent a shift officer to a page that refused them.
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canOpenSupply = checkPermission('inventory.check_view') || checkPermission('inventory.manage');
 
   const tabParam = searchParams.get('tab');
   const activeTab: TabId = isTabId(tabParam) ? tabParam : 'checks';
@@ -327,13 +333,15 @@ export const ApparatusDetailPage: React.FC = () => {
                 ))}
               </div>
             )}
-            <Link
-              to="/inventory/admin/checklists/supply"
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
-            >
-              <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
-              Open the supply worklist
-            </Link>
+            {canOpenSupply && (
+              <Link
+                to="/inventory/admin/checklists/supply"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
+                Open the supply worklist
+              </Link>
+            )}
           </section>
         </div>
       )}

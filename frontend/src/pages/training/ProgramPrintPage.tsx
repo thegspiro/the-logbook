@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router';
 import { trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
-import type { ProgramWithDetails, ProgramEnrollment, ProgramRequirement } from '../../types/training';
+import type { ProgramWithDetails, ProgramEnrollmentWithUser, ProgramRequirement } from '../../types/training';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 
 const ProgramPrintPage: React.FC = () => {
@@ -20,8 +20,11 @@ const ProgramPrintPage: React.FC = () => {
   const programId = searchParams.get('id') || '';
   const tz = useTimezone();
 
-  const [program, setProgram] = useState<(ProgramWithDetails & { enrollments?: ProgramEnrollment[] }) | null>(null);
+  const [program, setProgram] = useState<ProgramWithDetails | null>(null);
   const [programRequirements, setProgramRequirements] = useState<ProgramRequirement[]>([]);
+  // null means the roster could not be read, which is not the same as nobody
+  // being enrolled — see the fetch below.
+  const [enrollments, setEnrollments] = useState<ProgramEnrollmentWithUser[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,10 +37,19 @@ const ProgramPrintPage: React.FC = () => {
     Promise.all([
       trainingProgramService.getProgram(programId),
       trainingProgramService.getProgramRequirements(programId).catch(() => []),
+      // The programme response carries phases, requirements and milestones but
+      // no enrollments, so the roster is a separate call. It needs
+      // training.view_all/training.manage while this route is gated on the
+      // module alone, so a member without it must still get the rest of the
+      // sheet — and withholding the roster from them is the right outcome, not
+      // merely a convenience. null distinguishes "could not read" from "nobody
+      // enrolled" so the header does not print a confident 0.
+      trainingProgramService.getProgramEnrollments(programId).catch(() => null),
     ])
-      .then(([p, reqs]) => {
+      .then(([p, reqs, enrolled]) => {
         setProgram(p);
         setProgramRequirements(reqs);
+        setEnrollments(enrolled);
       })
       .catch(() => setError('Failed to load program'))
       .finally(() => setLoading(false));
@@ -69,7 +81,6 @@ const ProgramPrintPage: React.FC = () => {
 
   const phases = program.phases || [];
   const requirements = programRequirements;
-  const enrollments = program.enrollments || [];
 
   const sectionHeading: React.CSSProperties = {
     fontSize: '11pt',
@@ -142,7 +153,7 @@ const ProgramPrintPage: React.FC = () => {
                   <strong>Time Limit:</strong> {program.time_limit_days ? `${program.time_limit_days} days` : 'None'}
                 </td>
                 <td style={cellStyle}>
-                  <strong>Enrolled:</strong> {enrollments.length}
+                  <strong>Enrolled:</strong> {enrollments === null ? '—' : enrollments.length}
                 </td>
               </tr>
             </tbody>
@@ -219,7 +230,7 @@ const ProgramPrintPage: React.FC = () => {
           )}
 
           {/* Enrolled Members */}
-          {enrollments.length > 0 && (
+          {enrollments !== null && enrollments.length > 0 && (
             <div style={{ pageBreakBefore: phases.length > 3 ? 'always' : 'auto' }}>
               <h2 style={sectionHeading}>Enrolled Members</h2>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -236,12 +247,16 @@ const ProgramPrintPage: React.FC = () => {
                 <tbody>
                   {enrollments.map((e) => (
                     <tr key={e.id}>
-                      <td style={cellStyle}>{(e as unknown as { user_name?: string }).user_name || e.user_id}</td>
+                      <td style={cellStyle}>{e.user_name || e.user_id}</td>
                       <td style={{ ...cellStyle, textTransform: 'capitalize' }}>{e.status}</td>
                       <td style={{ ...cellStyle, textAlign: 'center' }}>{Math.round(e.progress_percentage)}%</td>
                       <td style={cellStyle}>{fmtDate(e.enrolled_at)}</td>
                       <td style={cellStyle}>{fmtDate(e.target_completion_date)}</td>
-                      <td style={cellStyle}>{e.current_phase?.name || '—'}</td>
+                      {/* ProgramEnrollmentResponse serializes current_phase_id
+                          and no nested phase, so the name is resolved from the
+                          programme's own phases — the same way the requirements
+                          table above resolves its phase column. */}
+                      <td style={cellStyle}>{phases.find((p) => p.id === e.current_phase_id)?.name || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

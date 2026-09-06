@@ -13,6 +13,11 @@ RPT-29 addendum, three verified-but-narrow gaps found reviewing feature 29
 - `/analytics/track` copied `metadata.deviceType` straight into a
   `VARCHAR(20)` column with no type or length check.
 
+RPT5-29 addendum: `PATCH /reports/saved/{id}` used a bare `setattr` loop
+instead of `apply_updates`, so an explicit `null` on the NOT NULL `name`
+column reached `db.commit()` uncaught instead of a 400 (see
+`TestSavedReportUpdateExplicitNull`).
+
 DB mocked where needed; no MySQL.
 """
 
@@ -25,6 +30,7 @@ from pydantic import ValidationError
 
 from app.api.v1.endpoints import analytics as analytics_ep
 from app.api.v1.endpoints import reports as reports_ep
+from app.models.analytics import SavedReport
 from app.schemas.reports import SavedReportCreate, SavedReportUpdate
 
 
@@ -99,6 +105,86 @@ class TestSavedReportFieldBounds:
     def test_update_rejects_overlong_name(self):
         with pytest.raises(ValidationError):
             SavedReportUpdate(name="x" * 256)
+
+
+class TestSavedReportUpdateExplicitNull:
+    """PATCH /reports/saved/{id} used a bare `for key, value in
+    update_data.items(): setattr(report, key, value)` loop (pre-RPT5-29).
+    That drops the distinction Pitfall #1 requires: an explicit `null` for a
+    NOT NULL column (``name``) would reach ``db.commit()`` and raise an
+    uncaught ``IntegrityError`` instead of a 400 the caller can act on. A real
+    ``SavedReport`` instance (never added/committed) is used, not a
+    ``SimpleNamespace``, because ``apply_updates`` detects NOT NULL columns via
+    the SQLAlchemy mapper — a plain mock has none to introspect."""
+
+    @staticmethod
+    def _existing_report(**overrides):
+        defaults = dict(
+            id="rep-1",
+            organization_id="org-1",
+            name="Original",
+            description="desc",
+            report_type="call_volume",
+            filters={},
+            is_scheduled=False,
+            schedule_frequency=None,
+            schedule_day=None,
+            email_recipients=[],
+            created_by="mgr-1",
+            is_active=True,
+        )
+        defaults.update(overrides)
+        return SavedReport(**defaults)
+
+    @staticmethod
+    def _db_returning(report):
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = report
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        return db
+
+    async def test_explicit_null_on_required_field_is_400_not_a_crash(self):
+        report = self._existing_report()
+        db = self._db_returning(report)
+        request = SavedReportUpdate(name=None)
+
+        with pytest.raises(HTTPException) as exc:
+            await reports_ep.update_saved_report(
+                "rep-1", request, db=db, current_user=_manager()
+            )
+
+        assert exc.value.status_code == 400
+        db.commit.assert_not_awaited()
+        # The rejected write must not have partially applied either.
+        assert report.name == "Original"
+
+    async def test_partial_update_leaves_unsent_fields_untouched(self):
+        report = self._existing_report()
+        db = self._db_returning(report)
+        request = SavedReportUpdate(description="Updated description")
+
+        result = await reports_ep.update_saved_report(
+            "rep-1", request, db=db, current_user=_manager()
+        )
+
+        assert result.description == "Updated description"
+        assert result.name == "Original"  # not sent, must be untouched
+        db.commit.assert_awaited_once()
+
+    async def test_explicit_null_on_nullable_field_clears_it(self):
+        report = self._existing_report(description="Old description")
+        db = self._db_returning(report)
+        request = SavedReportUpdate(description=None)
+
+        result = await reports_ep.update_saved_report(
+            "rep-1", request, db=db, current_user=_manager()
+        )
+
+        assert result.description is None
+        db.commit.assert_awaited_once()
 
 
 class TestAnalyticsDeviceTypeSanitization:

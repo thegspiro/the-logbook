@@ -504,7 +504,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/inventory/admin/checklists/supply',
         label: 'Expiring supplies',
-        anyPermission: ['scheduling.manage', 'inventory.check_view', 'inventory.manage'],
+        anyPermission: ['inventory.check_view', 'inventory.manage'],
         module: 'inventory',
       },
       {

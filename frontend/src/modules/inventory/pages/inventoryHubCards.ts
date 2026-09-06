@@ -378,7 +378,11 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     icon: Clock,
     section: 'Readiness & Compliance',
     tone: 'amber',
-    anyPermission: ['scheduling.manage', 'inventory.check_view', 'inventory.manage'],
+    // Tracks the route, which tracks what the worklist's endpoint accepts.
+    // `scheduling.manage` used to appear in all three and in none of them
+    // meant anything: the endpoint refuses it, so the card only ever offered
+    // a shift officer a page that answered 403.
+    anyPermission: ['inventory.check_view', 'inventory.manage'],
     requiresModule: 'inventory',
   },
 
