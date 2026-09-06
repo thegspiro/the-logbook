@@ -116,3 +116,25 @@
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
 04-47-template-reminder-audience.png
+#
+# Ten, as of the two below, added 2026-09-06. Both arrived in the 424-capture
+# refresh (#2320) — shot against the running app that same day, on the build
+# that carries the root `background-color` fix — and were flagged anyway, which
+# is precisely what the paragraph above said would happen. Both were opened and
+# read: an Add Screening Record form and a Reset to Default dialog, each a light
+# page under a scrim with the pale 15px strip and nothing else wrong.
+#
+# Worth stating plainly because the arithmetic has turned: a screenshot pass
+# that re-captured 424 images produced exactly two findings, and both are the
+# known constant rather than anything about those images. The check is now
+# reporting its own blind spot at a rate proportional to how much honest work
+# gets done — every modal capture a guide gains lands here, and re-shooting
+# cannot clear one. Retiring the subtle light-page-under-scrim tier in
+# `check_unpainted_gutter` would take this list from ten entries to none and
+# lose no signal, since the STARK tier has covered the real defect since
+# 2026-08-24. Still not enacted here for the reason given above, and now for a
+# sharper one: this branch is a wiki-tooling change, and altering the check's
+# contract from it would be exactly the unrelated widening its own PR argues
+# against.
+08-22-screening-record-form.png
+08-57-template-reset-dialog.png
