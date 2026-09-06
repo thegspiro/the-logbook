@@ -27,7 +27,7 @@ import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWo
 import { useAuthStore } from '../stores/authStore';
 import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
-import { PromptDialog } from '../components/ux';
+import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
@@ -844,10 +844,19 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
+  // Explicit items rather than a generated trail: the URL is /elections/:id, and
+  // the generator skips the id, which would leave a single "Elections" crumb —
+  // and a one-crumb generated trail renders nothing at all. Defined once so it
+  // reaches the loading and not-found branches too; before this they offered no
+  // route away from the page whatsoever, not even the "Back to Elections" link
+  // the loaded branch carries.
+  const trail = [{ label: 'Elections', path: '/elections' }, { label: election?.title || 'Election' }];
+
   if (loading) {
     return (
       <div className="min-h-screen">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <Breadcrumbs items={trail} />
           <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
             <div className="text-theme-text-muted">Loading election...</div>
           </div>
@@ -860,6 +869,7 @@ export const ElectionDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <Breadcrumbs items={trail} />
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
           </div>
@@ -898,6 +908,8 @@ export const ElectionDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+
         {/* Header */}
         <div className="mb-6">
           <div className="mb-2 flex items-center">

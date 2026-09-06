@@ -216,6 +216,7 @@ const PurchaseRequestFormPage: React.FC = () => {
   if (isLoading && isEdit && !selectedPurchaseRequest) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <button
           type="button"
           onClick={() => void navigate('/finance/purchase-requests')}

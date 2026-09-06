@@ -90,6 +90,7 @@ const CheckRequestFormPage: React.FC = () => {
   if (isLoading && fiscalYears.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-96 w-full" rounded="lg" />
       </div>
