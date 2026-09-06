@@ -37,10 +37,16 @@ paginate or expect a partial result. A second Codex round caught 2 more:
 item's opening-balance lot under a concurrent quantity edit (an
 identity-map staleness bug, same class `_get_item_locked` already guards
 against elsewhere in this file); **MSUP-11** (LOW, flagged) — `list_lots`
-(an item's stock-lot history) has no row cap, same shape as MSUP-4.
-5 of 5 findings addressed (4 fixed, 1 flagged); full local gate green
-including the full backend suite (11,451 passed). See
-`docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
+(an item's stock-lot history) has no row cap, same shape as MSUP-4. A
+third Codex round then found MSUP-7's own fix insufficient — an unlocked
+check (a concurrent assign/checkout could still land before commit) and no
+status/condition sync (a "deactivated" item could still be assigned or
+checked out again, since those gate on `status` not `active`). **MSUP-12**
+(MED, fixed) supersedes MSUP-7's fix: `update_item` now rejects `active`
+outright rather than trying to replicate `retire_item`'s full contract
+inline — no frontend caller sends it through this path today.
+Full local gate green including the full backend suite (11,449 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
 
 ---
 
@@ -155,6 +161,56 @@ doc updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3,
 MSUP-10/11. `docs/KNOWN_LIMITATIONS.md` gained MSUP-11's row next to
 MSUP-4's. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
 Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — third Codex round: MSUP-7's own fix corrected
+
+A third Codex round, reviewing the commit that fixed MSUP-7, found the fix
+itself still had two gaps — not new findings against the router, but
+against the fix:
+
+- **Unlocked check, race intact.** `active` was never added to
+  `update_item`'s `needs_lock` trigger set, so the blocker check ran
+  against an unlocked `get_item_by_id` read. A concurrent
+  `assign_item_to_user`/`checkout_item` call — both of which lock the item
+  row before writing — could still land between this call's blocker check
+  and its own commit, leaving a newly-held item marked inactive anyway.
+- **No status/condition sync.** A successful deactivation through this
+  path left `status` unchanged (e.g. still `AVAILABLE`) instead of
+  `RETIRED` the way `retire_item` sets it — and `assign_item_to_user`/
+  `checkout_item` both gate on `status`, not `active`, so the
+  "deactivated" item could be assigned or checked out again immediately,
+  recreating the exact hidden-held state MSUP-7 exists to prevent, by a
+  different route.
+
+**MSUP-12 (MED, fixed), supersedes MSUP-7's original fix:** closing gap 1
+needs locking; closing gap 2 needs either replicating `retire_item`'s full
+status/condition/audit contract inline, or defining new "reactivation"
+semantics for the opposite direction that nothing in this codebase has
+today. Rather than build that inline, `update_item` now rejects `active`
+outright — `"active" in update_data` returns a clean error pointing to the
+retire action, before any other validation runs. No frontend screen sends
+`active` through this path today (confirmed by search), so this changes
+nothing for any existing caller; `retire_item` already closes both gaps
+atomically. `_deactivation_block_reason` remains, used only by
+`retire_item` now.
+
+Guard tests: `TestUpdateItemRejectsActive` (replaces
+`TestUpdateItemDeactivationGuard`) in `test_inventory_service.py` (4
+cases) — rejects clearing `active` regardless of whether anything would
+have blocked retiring, rejects setting it to `True` too, and confirms an
+update that never mentions `active` is unaffected. Verified
+fail-before/pass-after.
+
+Full gate re-run after all three rounds: flake8/black/isort clean,
+`validate_migrations.py --strict` (single head, no schema change), 134
+passed in the four directly-touched test files, 728 passed in the full
+`inventory or medical_supplies`-scoped run, and the full backend suite
+(11,449 passed, 21 pre-existing skips, 0 failed). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 3, MSUP-12
+(supersedes MSUP-7). Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

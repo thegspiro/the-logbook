@@ -1966,19 +1966,22 @@ class InventoryService:
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
-            # `active` is on this schema with no route dedicated to clearing
-            # it, so a generic PATCH is the only gate standing between a
-            # caller and hiding an item from active inventory. Route it
-            # through the same checks the dedicated retire endpoint enforces
-            # rather than letting apply_updates commit it unconditionally —
-            # otherwise an item still assigned or checked out could vanish
-            # from every active list while a member still has it.
-            if update_data.get("active") is False and item.active:
-                block_reason = await self._deactivation_block_reason(
-                    item, verb="deactivate"
-                )
-                if block_reason:
-                    return None, block_reason
+            # `active` is not a field this method accepts. A first attempt
+            # gated it on the same checks retire_item runs (assignment,
+            # checkout, pool issuance) directly in this unlocked method, but
+            # a Codex review caught two gaps that check alone could not
+            # close: the check ran against a read this method does not lock,
+            # so a concurrent assign/checkout could still land between the
+            # check and this call's own commit; and a caller could clear
+            # `active` while leaving `status` at AVAILABLE, which
+            # assign_item_to_user/checkout_item gate on rather than
+            # `active` — letting the "deactivated" item be handed out again
+            # immediately. retire_item already closes both, atomically,
+            # with its own audit trail; nothing in this codebase reactivates
+            # a retired item, so there is no legitimate use of this field
+            # here to preserve.
+            if "active" in update_data:
+                return None, "Use the item's retire action to deactivate it"
 
             # Validate resulting state
             new_status = (

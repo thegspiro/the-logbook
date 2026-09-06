@@ -504,22 +504,15 @@ both `medical_supplies.py` and the general `inventory.py` router — a
 cross-cutting gap in the shared service method, not medical-specific, but
 directly exercised by this feature's own `update_medical_item` route.
 
-**Fix:** extracted the three checks `retire_item` already ran
-(assignment, active checkout, unreturned pool issuance) into a shared
-`_deactivation_block_reason(item, verb)` helper, used by both
-`retire_item` (verb="retire", same error text as before) and `update_item`
-(verb="deactivate", new). `update_item` now runs the check whenever
-`update_data` sets `active` to `False` on a currently-active item, and
-returns the same kind of clean error string as every other validation
-failure on that method — no change for any update that leaves `active`
-alone, and no change to `retire_item`'s existing behavior or messages.
-
-**Guard tests:** `TestUpdateItemDeactivationGuard` in
-`test_inventory_service.py` (6 cases) — blocks deactivation when
-assigned/checked-out/pool-issued, allows it when nothing blocks it, skips
-the check entirely when the item is already inactive or when `active` is
-being set to `True`. Verified fail-before/pass-after by reverting the fix
-and confirming all three blocking cases regressed to a silent commit.
+**Fix (superseded by MSUP-12 below):** the first attempt extracted the
+three checks `retire_item` already ran (assignment, active checkout,
+unreturned pool issuance) into a shared `_deactivation_block_reason(item,
+verb)` helper and ran it in `update_item` whenever `active` was set to
+`False`. A further Codex round found this still-conditional check
+insufficient on its own — see MSUP-12 for the two remaining gaps and the
+final fix, which replaces the conditional check with an outright rejection
+of `active` in this method. `_deactivation_block_reason` remains, used
+only by `retire_item` now.
 
 ### MSUP-8 — LOW/MED — the single-item detail response never attached lot stock — ✅ FIXED
 
@@ -645,7 +638,57 @@ the rest to go, which is a product decision (a page-size control? a
 "showing latest N" note? a separate history view?), not a mechanical
 medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
 
-### Completion gate (pass 3, after both Codex rounds)
+A third Codex round, against the commit that fixed MSUP-7, found two
+further gaps in that fix specifically — not new findings against the
+router, but against the fix itself.
+
+### MSUP-12 — MED — MSUP-7's own fix still left a race and a status-desync gap — ✅ FIXED (supersedes MSUP-7's original fix)
+
+**What:** MSUP-7's first fix gated `update_item` clearing `active` on the
+same three checks `retire_item` runs, but two gaps survived:
+
+1. **Unlocked check, race intact.** `active` was never added to
+   `needs_lock`'s trigger set, so the blocker check ran against an
+   unlocked `get_item_by_id` read. A concurrent `assign_item_to_user` or
+   `checkout_item` call — both of which lock the item row before writing —
+   could acquire the lock, create the assignment/checkout, and commit in
+   the window between this call's blocker check and its own commit,
+   leaving a newly-held item marked inactive anyway.
+2. **No status/condition sync.** A successful deactivation through this
+   path left `status` at whatever it already was (e.g. `AVAILABLE`)
+   instead of `RETIRED` the way `retire_item` sets it. `assign_item_to_user`
+   and `checkout_item` both gate on `status`, not `active` — so a
+   "deactivated" item could be assigned or checked out again immediately
+   afterward, recreating the exact hidden-held state MSUP-7 exists to
+   prevent, just by a different route.
+
+**Where:** `app/services/inventory_service.py` — `update_item`.
+
+**Why the conditional check couldn't be patched further:** closing gap 1
+needs locking (routing through `_get_item_locked`); closing gap 2 needs
+either replicating `retire_item`'s full status/condition/audit contract
+inline, or defining a new "reactivation" semantics for the opposite
+direction — and nothing in this codebase reactivates a retired item today,
+so that direction has no existing behavior to preserve or extend.
+
+**Fix:** `update_item` now rejects `active` outright — `"active" in
+update_data` returns a clean error directing the caller to the retire
+action, before any other validation runs. No frontend screen currently
+sends `active` through this path (confirmed by search), so this changes
+nothing for any existing caller. `_deactivation_block_reason` remains,
+used only by `retire_item`, which already closes both gaps atomically
+(locked fetch, status/condition/active set together, dedicated audit
+event).
+
+**Guard tests:** `TestUpdateItemRejectsActive` (replaces
+`TestUpdateItemDeactivationGuard`) in `test_inventory_service.py` (4
+cases) — rejects clearing `active` regardless of whether anything would
+have blocked retiring, rejects setting it to `True` too, and confirms an
+update that never mentions `active` is unaffected. Verified
+fail-before/pass-after: reverted to a no-op and confirmed the first three
+cases regressed to a silent commit.
+
+### Completion gate (pass 3, after all three Codex rounds)
 
 | Check                                                                                                                                               | Result                               |
 | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -654,12 +697,12 @@ medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
 | `isort --check-only` (same files)                                                                                                                   | clean                                |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                   | PASSED — single head                 |
 | `tests/test_endpoint_auth_coverage.py`                                                                                                              | 1 passed                             |
-| `test_medical_supplies_domain.py` + `test_inventory_service.py` + `test_inventory_lot_stock_levels.py` + `test_inventory_identity_map_staleness.py` | 136 passed                           |
-| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                       | 730 passed, 1 pre-existing skip      |
-| `pytest tests/` (full backend suite)                                                                                                                | 11,451 passed, 21 pre-existing skips |
+| `test_medical_supplies_domain.py` + `test_inventory_service.py` + `test_inventory_lot_stock_levels.py` + `test_inventory_identity_map_staleness.py` | 134 passed                           |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                                       | 728 passed, 1 pre-existing skip      |
+| `pytest tests/` (full backend suite)                                                                                                                | 11,449 passed, 21 pre-existing skips |
 
 No migration, no schema change. MSUP-4 and MSUP-11 remain the only open,
 flagged items (both unchanged/new cross-cutting product decisions) —
-MSUP-7/8/9/10 above are new fixes, not re-verifications, and MSUP-1
-through MSUP-6 all re-verified intact as described earlier in this Pass 3
-section.
+MSUP-8/9/10 and the final MSUP-12 (which supersedes MSUP-7's first fix)
+are new fixes, not re-verifications, and MSUP-1 through MSUP-6 all
+re-verified intact as described earlier in this Pass 3 section.
