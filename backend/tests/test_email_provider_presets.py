@@ -2240,9 +2240,11 @@ def _clear_msal_cache():
     """The msal client cache is module state that outlives a test."""
     microsoft_oauth._app_cache.clear()
     microsoft_oauth._registrations.clear()
+    microsoft_oauth._recent_failures.clear()
     yield
     microsoft_oauth._app_cache.clear()
     microsoft_oauth._registrations.clear()
+    microsoft_oauth._recent_failures.clear()
 
 
 @pytest.mark.usefixtures("_clear_msal_cache")
@@ -2702,7 +2704,7 @@ class TestTransportFailuresBecomeActionable:
         )
 
         with patch("msal.ConfidentialClientApplication", return_value=app):
-            with pytest.raises(MicrosoftOAuthError, match="Could not reach Microsoft"):
+            with pytest.raises(MicrosoftOAuthError, match="did not respond within"):
                 microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
 
     def test_an_unreachable_authority_is_reported_as_one(self):
@@ -2712,7 +2714,7 @@ class TestTransportFailuresBecomeActionable:
             "msal.ConfidentialClientApplication",
             side_effect=requests.exceptions.ConnectTimeout("no route"),
         ):
-            with pytest.raises(MicrosoftOAuthError, match="Could not reach Microsoft"):
+            with pytest.raises(MicrosoftOAuthError, match="did not respond within"):
                 microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
 
     def test_the_message_names_the_deadline_and_the_host(self):
@@ -2737,7 +2739,7 @@ class TestTransportFailuresBecomeActionable:
             side_effect=requests.exceptions.ConnectTimeout("no route"),
         ):
             for _ in range(5):
-                with pytest.raises(MicrosoftOAuthError, match="Could not reach"):
+                with pytest.raises(MicrosoftOAuthError, match="login.microsoftonline"):
                     microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
 
         assert microsoft_oauth._registrations == {}
@@ -2814,3 +2816,175 @@ class TestOnlyARejectionPointsAtTheMailboxGrant:
 
         assert not success
         assert details["auth_rejected"] is True
+
+
+@pytest.mark.usefixtures("_clear_msal_cache")
+class TestAFailedFlightSpeaksForTheCallersBehindIt:
+    """Serializing acquisition means a queue forms during an outage.
+
+    Without coalescing, each waiter in turn spends the full timeout
+    discovering what the flight ahead already established — a burst becomes
+    minutes of executor time for one unreachable directory, and the
+    endpoint's asyncio timeout cannot cancel the worker threads.
+    """
+
+    def _timeout_client(self):
+        import requests
+
+        return patch(
+            "msal.ConfidentialClientApplication",
+            side_effect=requests.exceptions.ConnectTimeout("no route"),
+        )
+
+    def test_a_burst_costs_one_attempt_not_one_each(self):
+        with self._timeout_client() as client:
+            for _ in range(6):
+                with pytest.raises(MicrosoftOAuthError):
+                    microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert client.call_count == 1
+
+    def test_the_coalesced_callers_get_the_real_reason(self):
+        with self._timeout_client():
+            with pytest.raises(MicrosoftOAuthError) as first:
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+            with pytest.raises(MicrosoftOAuthError) as second:
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert str(first.value) == str(second.value)
+
+    def test_the_cooldown_lapses(self):
+        with self._timeout_client() as client:
+            with pytest.raises(MicrosoftOAuthError):
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+            key = microsoft_oauth._cache_key(_TENANT, _CLIENT, "s3cret")
+            stale = time.monotonic() - microsoft_oauth._FAILURE_COOLDOWN_SECONDS - 1
+            microsoft_oauth._recent_failures[key] = (
+                stale,
+                microsoft_oauth._recent_failures[key][1],
+            )
+
+            with pytest.raises(MicrosoftOAuthError):
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert client.call_count == 2
+
+    def test_a_rejected_credential_is_not_cooled_down(self):
+        # Entra ID answers a bad secret promptly, so there is no resource to
+        # protect — and holding the failure would delay a corrected secret.
+        app = MagicMock()
+        app.acquire_token_for_client.return_value = {
+            "error": "invalid_client",
+            "error_description": "AADSTS7000215: Invalid client secret.",
+        }
+
+        with patch("msal.ConfidentialClientApplication", return_value=app):
+            for _ in range(3):
+                with pytest.raises(
+                    MicrosoftOAuthError, match="application credentials"
+                ):
+                    microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert app.acquire_token_for_client.call_count == 3
+        assert microsoft_oauth._recent_failures == {}
+
+    def test_a_recovery_clears_the_cooldown(self):
+        key = microsoft_oauth._cache_key(_TENANT, _CLIENT, "s3cret")
+        microsoft_oauth._record_failure(key, "stale failure")
+
+        app = MagicMock()
+        app.acquire_token_for_client.return_value = {"access_token": "TOKEN"}
+        with patch("msal.ConfidentialClientApplication", return_value=app):
+            # Lapse the cooldown so the recovery attempt is actually made.
+            microsoft_oauth._recent_failures.clear()
+            assert (
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+                == "TOKEN"
+            )
+
+        assert microsoft_oauth._recent_failures == {}
+
+    def test_the_cooldown_registry_stays_bounded(self):
+        for i in range(microsoft_oauth._MAX_CACHED_APPS + 5):
+            microsoft_oauth._record_failure(
+                microsoft_oauth._cache_key(_TENANT, _CLIENT, f"secret-{i}"), "nope"
+            )
+
+        assert len(microsoft_oauth._recent_failures) == microsoft_oauth._MAX_CACHED_APPS
+
+
+@pytest.mark.usefixtures("_clear_msal_cache")
+class TestTransportFailuresAreNamedAccurately:
+    def _fail_with(self, exc):
+        with patch("msal.ConfidentialClientApplication", side_effect=exc):
+            with pytest.raises(MicrosoftOAuthError) as excinfo:
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+        return str(excinfo.value)
+
+    def test_a_timeout_names_the_deadline(self):
+        import requests
+
+        message = self._fail_with(requests.exceptions.ReadTimeout("slow"))
+
+        assert "did not respond within" in message
+        assert str(microsoft_oauth.MICROSOFT_TOKEN_TIMEOUT_SECONDS) in message
+
+    def test_an_inspecting_proxy_is_not_reported_as_slowness(self):
+        # An SSLError already identifies the problem; telling the admin to
+        # check latency and firewalls sends them somewhere else entirely.
+        import requests
+
+        message = self._fail_with(requests.exceptions.SSLError("bad certificate"))
+
+        assert "did not respond within" not in message
+        assert "TLS" in message
+
+    def test_a_refused_connection_keeps_a_generic_but_true_message(self):
+        import requests
+
+        message = self._fail_with(requests.exceptions.ConnectionError("refused"))
+
+        assert "did not respond within" not in message
+        assert "ConnectionError" in message
+
+
+class TestOnlyARefusedCredentialIsARejection:
+    """smtplib raises SMTPAuthenticationError for every AUTH status that is
+    not 235 or 503, so the exception type alone does not mean the server
+    looked at the credential and said no."""
+
+    def _authenticate_failure(self, code: int, text: bytes) -> dict:
+        server = MagicMock()
+        server.auth.side_effect = smtplib.SMTPAuthenticationError(code, text)
+        config = {
+            "smtpHost": "smtp.office365.com",
+            "smtpPort": 587,
+            "smtpEncryption": "tls",
+            "fromEmail": "alerts@dept.example",
+            "smtpUsername": "alerts@dept.example",
+            "smtpOAuthToken": "TOKEN",
+        }
+        with patch("app.api.v1.email_test_helper.smtplib") as smtplib_module:
+            smtplib_module.SMTPAuthenticationError = smtplib.SMTPAuthenticationError
+            smtplib_module.SMTP.return_value.__enter__.return_value = server
+            _, message, details = email_test_helper.test_smtp_connection(config)
+        return {"message": message, "details": details}
+
+    def test_a_refused_credential_is_a_rejection(self):
+        result = self._authenticate_failure(535, b"5.7.3 Authentication unsuccessful")
+
+        assert result["details"]["auth_rejected"] is True
+
+    def test_a_temporary_failure_is_not(self):
+        # 454 is "try again later"; a permissions diagnosis would be wrong.
+        result = self._authenticate_failure(454, b"4.7.0 Temporary server error")
+
+        assert result["details"].get("auth_rejected") is not True
+
+    def test_an_unsupported_mechanism_is_not(self):
+        # 534 already has a more accurate message about the auth method.
+        result = self._authenticate_failure(534, b"5.7.9 Authentication mechanism")
+
+        assert result["details"].get("auth_rejected") is not True
+        assert "method not supported" in result["message"]

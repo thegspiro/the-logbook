@@ -168,15 +168,24 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
 
     except smtplib.SMTPAuthenticationError as e:
         logger.error("SMTP authentication failed: {}", e)
-        # The server answered the handshake and refused the credential.
-        # Distinct from auth_attempted, which only says the handshake was
-        # reached: a connection that drops or times out mid-AUTH leaves that
-        # true while the real failure is the transport.
-        details["auth_rejected"] = True
         error_str = str(e).lower()
 
+        # smtplib raises this for every AUTH status that is not 235 or 503,
+        # so it covers a temporary failure (454) and an unsupported mechanism
+        # (534) as well as a refused credential. Only the last of those means
+        # the server looked at the credential and said no, and only that
+        # should let a caller replace this message with a permissions
+        # diagnosis — 534 already has a more accurate one below.
+        code = getattr(e, "smtp_code", None)
+        if code == 535 or "username and password not accepted" in error_str:
+            details["auth_rejected"] = True
+
         # Provide user-friendly authentication error messages
-        if "535" in error_str or "username and password not accepted" in error_str:
+        if (
+            code == 535
+            or "535" in error_str
+            or ("username and password not accepted" in error_str)
+        ):
             message = "SMTP authentication failed. Verify your username and password are correct. For Gmail or Outlook, you may need an app-specific password."
         elif "534" in error_str:
             message = (

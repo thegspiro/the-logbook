@@ -25,6 +25,7 @@ rebuilt: a fresh instance would re-authenticate on every message.
 import hashlib
 import re
 import threading
+import time
 from collections import OrderedDict
 from typing import Any, Optional
 
@@ -88,6 +89,74 @@ class _Registration:
 
 
 _registrations: "dict[tuple[str, str, str], _Registration]" = {}
+
+# How long one failed flight speaks for the callers behind it. Serializing
+# token acquisition means a queue forms during an authority outage, and
+# without this each waiter in turn would spend the full timeout discovering
+# what the flight ahead of it already established — turning a burst into
+# minutes of executor time for one unreachable directory. Recorded only for
+# transport failures, which are the slow ones: a credential Entra ID rejects
+# comes back promptly, and cooling that down would delay a corrected secret
+# from taking effect.
+_FAILURE_COOLDOWN_SECONDS = 30
+_recent_failures: "OrderedDict[tuple[str, str, str], tuple[float, str]]" = OrderedDict()
+
+
+def _recent_failure(key: tuple) -> Optional[str]:
+    """The message from a still-current failed flight, or None."""
+    with _app_cache_lock:
+        entry = _recent_failures.get(key)
+        if entry is None:
+            return None
+        failed_at, message = entry
+        if time.monotonic() - failed_at >= _FAILURE_COOLDOWN_SECONDS:
+            _recent_failures.pop(key, None)
+            return None
+        _recent_failures.move_to_end(key)
+        return message
+
+
+def _record_failure(key: tuple, message: str) -> None:
+    with _app_cache_lock:
+        _recent_failures[key] = (time.monotonic(), message)
+        _recent_failures.move_to_end(key)
+        # Capped like _app_cache: one more dict keyed by registration is one
+        # more thing that must not grow without bound.
+        while len(_recent_failures) > _MAX_CACHED_APPS:
+            _recent_failures.popitem(last=False)
+
+
+def _clear_failure(key: tuple) -> None:
+    with _app_cache_lock:
+        _recent_failures.pop(key, None)
+
+
+def _transport_failure_message(exc: Exception) -> str:
+    """Say which transport failure happened, not merely that one did.
+
+    A blanket timeout message sends an administrator after latency and
+    firewalls when the exception already identifies something else — an
+    inspecting proxy whose certificate the server does not trust, say.
+    """
+    import requests
+
+    if isinstance(exc, requests.exceptions.Timeout):
+        return (
+            "Microsoft did not respond within "
+            f"{MICROSOFT_TOKEN_TIMEOUT_SECONDS} seconds. Check outbound access "
+            "to login.microsoftonline.com and try again."
+        )
+    if isinstance(exc, requests.exceptions.SSLError):
+        return (
+            "The TLS connection to login.microsoftonline.com could not be "
+            "established. If this network inspects TLS traffic, its "
+            "certificate authority has to be trusted by the server."
+        )
+    return (
+        "Could not reach Microsoft to obtain an access token "
+        f"({type(exc).__name__}). Check outbound access to "
+        "login.microsoftonline.com."
+    )
 
 
 def _enter_registration(key: tuple) -> _Registration:
@@ -255,6 +324,14 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
         raise MicrosoftOAuthError("Microsoft 365 client secret is required")
 
     key = _cache_key(tenant, client, client_secret)
+
+    # A flight that just failed on the transport speaks for the callers
+    # behind it, so a burst against an unreachable directory costs one
+    # attempt rather than one per caller.
+    recent = _recent_failure(key)
+    if recent is not None:
+        raise MicrosoftOAuthError(recent)
+
     registration = _enter_registration(key)
     try:
         # Held across the build *and* the token request, not just the build.
@@ -266,6 +343,13 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
         # held only for an in-memory lookup, and a refresh single-flights the
         # same way.
         with registration.lock:
+            # Re-checked inside the lock: a caller that queued behind a
+            # flight which then failed should be released by that result,
+            # not start the same doomed attempt over again.
+            recent = _recent_failure(key)
+            if recent is not None:
+                raise MicrosoftOAuthError(recent)
+
             app = _client_app(tenant, client, client_secret)
             result = app.acquire_token_for_client(scopes=[MICROSOFT_OAUTH_SCOPE])
     except requests.exceptions.RequestException as e:
@@ -274,16 +358,17 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
         # raw it reaches the endpoint's generic handler and is reported as an
         # internal error, which tells an administrator nothing about their
         # mail configuration.
+        message = _transport_failure_message(e)
         logger.error("Microsoft 365 OAuth transport failure: {}", e)
-        raise MicrosoftOAuthError(
-            "Could not reach Microsoft to obtain an access token "
-            f"(no response within {MICROSOFT_TOKEN_TIMEOUT_SECONDS} seconds). "
-            "Check outbound access to login.microsoftonline.com and try again."
-        ) from e
+        _record_failure(key, message)
+        raise MicrosoftOAuthError(message) from e
     finally:
         _leave_registration(key, registration)
 
     token = (result or {}).get("access_token")
+    if token:
+        # The directory is reachable again; nothing should be held back.
+        _clear_failure(key)
     if not token:
         message = _describe_failure(result)
         logger.error(
