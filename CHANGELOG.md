@@ -181,6 +181,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attendance, calls and close-out without a department-wide grant, mirroring the
   backend, and that route is untouched.
 
+### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
+
+**Fixed**
+
+- **A form set to reject repeat submissions could still receive two from the
+  same member if they were submitted at nearly the same moment** (e.g. a
+  double-click, or two tabs/devices). The duplicate check looked for a prior
+  submission using a read that could miss one committed by the other
+  request a moment earlier; it's now a read that always sees the latest
+  data, closing the race.
+
+### Security: unbounded push-device registration, and an unescaped email subtitle (2026-09-06)
+
+**Fixed**
+
+- **A member could register an unlimited number of push-notification
+  devices.** Every future notification to that member would then fan out
+  to every registered device — an unbounded resource cost with no
+  legitimate reason a real person would ever approach. Registering a new
+  device is now capped at 20 per member (refreshing an existing device
+  isn't affected).
+- **An email subtitle was not escaped before being included in outgoing
+  mail.** No current sender passes anything but static text there, so this
+  had no live effect, but it's fixed so a future sender that does can't
+  reintroduce it.
+
+### Messaging: narrowing a published message's audience no longer erases acknowledgment history (2026-09-06)
+
+**Fixed**
+
+- **Editing who a department message goes out to after it's published
+  could silently erase the record of who had already read or formally
+  acknowledged it.** A member dropped from a corrected audience now keeps
+  their read/acknowledgment record — it's marked as no longer active
+  rather than deleted — so an acknowledgment report stays accurate even
+  after the audience is adjusted, and the member's access to the message
+  is still correctly withdrawn.
+
+### Security: a meeting attendance waiver's name lookup did not filter by organization (2026-09-06)
+
+**Fixed**
+
+- **The attendance dashboard's waiver list resolved member and grantor names
+  without an organization filter.** The lookup relied entirely on those ids
+  already having come from an org-scoped write elsewhere in the code —
+  true today, but a single future write path that skipped that validation
+  would have silently returned another organization's member's name. Both
+  lookups now filter by organization directly, matching the convention used
+  everywhere else in this feature.
+
+### Inventory: a generic item edit could deactivate equipment still checked out (2026-09-06)
+
+**Fixed**
+
+- **Editing an item could take it out of active inventory while a member
+  still held it.** The dedicated retire action blocks deactivation while an
+  item is assigned, checked out, or (for pooled stock) has an unreturned
+  issuance, and keeps the item's other fields consistent with being
+  retired — the general item-update path had none of that, so a plain edit
+  turning an item inactive (directly, or by setting its status and
+  condition to retired without touching that flag) could remove it from
+  every active list and picker with no safeguards, and (even when nothing
+  was blocking it) leave it in a state where it could still be handed out
+  again immediately afterward. Editing an item no longer accepts either
+  route at all; retiring an item is now the only way to deactivate one, and
+  the retire action itself now re-checks the item's current holder right
+  before deactivating it, closing a narrow window where a member could be
+  assigned the item in the instant before it was retired.
+- **A medical-supplies manager without broader inventory access lost the
+  ability to retire a medical item.** Closing the deactivation gap above
+  removed the only path such a manager had — the dedicated retire action
+  existed only on the general inventory permission. Medical supplies now
+  has its own retire action under the same medical-supplies permission
+  every other action on that screen already uses.
+- **An item's detail page could show stale stock for consumables tracked by
+  lot.** The list view already computed on-hand stock from dated lots for
+  any item stocked that way; the single-item detail page (medical supplies
+  and general inventory alike) did not, and could show the item's older
+  quantity figure instead.
+- **A department with a large category list could find some categories
+  missing from pickers.** Category pickers (medical supplies, general
+  inventory, and CSV import) only ever fetch a department's complete list,
+  with no lower page to reach — a low internal cap meant categories past
+  it were silently absent from every picker and filter. Raised well above
+  any realistic department's category count.
+- **Receiving an item's very first stock lot at the same moment as a
+  quantity correction could record the wrong opening count — including
+  losing it entirely if the item had nothing on hand yet.** The count
+  carried into that first lot could reflect the value from just before the
+  correction rather than the corrected one; if the item's count was zero
+  at that exact moment, the correction could be dropped altogether, in the
+  rare case both happened together.
+- **Retiring an item did not always catch a checkout or assignment that
+  was created in the same instant.** The retire action already blocked
+  retiring an item someone still holds; a very narrow timing window could
+  let it miss a hold that was recorded at almost the same moment.
+- **Assigning, checking out, or issuing an item during a batch scan could
+  land on an item retired in the same instant.** The same narrow timing
+  window as above, on the other three actions that hand an item to a
+  member.
+- **Retiring an item that had recently been switched from pooled to
+  individual tracking could go through over stock still checked out to a
+  member.** The check for outstanding checked-out units on a pooled item
+  only ran while the item was still marked as pooled; switching how an
+  item is tracked no longer skips it.
+- **Choosing "Retired" from the bulk status-change picker, or from an
+  item's Condition field, no longer saved.** Both controls have offered
+  Retired since before this release's item-deactivation safeguards were
+  added, and neither was updated when those safeguards started rejecting
+  that combination outright. Retiring an item is now only offered through
+  the dedicated Retire action already present on both screens.
+- **An item could be quietly returned to active status by editing it
+  directly, without going through Retire.** Only the two ways of marking
+  an item retired were blocked; changing a retired item's status or
+  condition back to something else went through unchecked, leaving it
+  hidden from active-inventory lists while distributable again.
+
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 
 **Fixed**
@@ -280,6 +397,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the endpoints check. The gate is on the component, not the route, because the
   same page is mounted inside the training admin hub where the officer does hold
   it.
+
+### Grants & Fundraising: list endpoints now page at the database (2026-09-05)
+
+**Fixed**
+
+- Every grants/fundraising list endpoint (opportunities, applications,
+  budget items, expenditures, compliance tasks, notes, campaigns, donors,
+  donations, pledges, fundraising events) previously fetched an org's
+  **entire** matching table from the database before selecting the
+  requested page in application memory. For a department with years of
+  donation, donor, or grant-application history, this meant every list page
+  view scanned and loaded the complete history regardless of how small the
+  requested page was. Pagination (`skip`/`limit`) is now applied in the SQL
+  query itself, so a page load only reads the rows it actually displays.
+  No response shape or ordering changed for any request within the
+  documented row limits.
 
 ### Shift Details becomes a modal (2026-09-05)
 

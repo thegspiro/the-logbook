@@ -1475,3 +1475,51 @@ Rows written before this have none, and that reads as blank rather than as
   (`DurationStepper`).
 - A revision request, a submission checklist and a receipt are distinct
   surfaces rather than one screen doing all three.
+
+## Management controls are gated where members can reach them _(2026-09-05 → 09-06)_
+
+Two training screens rendered their write affordances to every member. Every
+write behind them already required `training.manage` on the server, so the
+controls were an invitation to a 403 or to the access-denied page.
+
+### Course Library _(2026-09-06)_
+
+**Add, Edit, Delete and Manage classes are now gated on `training.manage`.**
+Every write behind those four — create, update (which is how "Deactivate" is
+implemented) and the syllabus builder — already required it.
+
+**The gate is on the component, not the route**, because the same page is
+mounted inside the training admin hub where the officer does hold the grant.
+
+### Training Programs _(2026-09-05)_
+
+- **Creating, importing and exporting a pipeline, adding a sample template, and
+  creating, importing or editing a requirement** now render only for training
+  managers. Tapping "New Pipeline" or "Create Your First Pipeline" used to land
+  a member on the access-denied page; a registry import returned 403.
+- **The Requirements tab was blank for anyone without `training.manage`.** It
+  loaded the registry list alongside the requirements in one batch, and that
+  endpoint is manager-only, so its 403 rejected the whole batch and the
+  requirements never rendered. Members no longer request it.
+- **The Requirements and Templates tabs are gone for members.** Both are
+  manager-only views, so the whole tab strip is hidden and a member sees the
+  Programs list on its own.
+- **With no programs to show, a member sees an empty panel** rather than a card
+  whose only content is a prompt to create the thing they cannot create. A
+  search that matched nothing still reports "No programs found" to everyone —
+  that is feedback on the term they typed.
+
+The lists themselves stay readable throughout. It is the write affordances that
+are withheld.
+
+## A stale due date on a requirement whose type changed _(2026-09-04)_
+
+`RequirementModal` seeded its `due_date` field from the existing row and only
+cleared or edited it on the `fixed_date` screen. Switching a requirement's
+`due_date_type` away from `fixed_date` — to `calendar_period`, `rolling` or
+`certification_period` — therefore still submitted the old `due_date` alongside
+the new type, leaving a stale value on a requirement whose deadline should come
+entirely from its period/anchor calculation.
+
+Migration `bbdaca0844df` clears the stale values already stored. It does not
+reverse: restoring them would re-break exactly what it fixed.

@@ -64,6 +64,7 @@ Some modules provide enhanced functionality when used together:
 - **Facilities vs Locations**: Facilities module replaces the lightweight Locations page
 - **Apparatus Full vs Basic**: When disabled, a lightweight Apparatus Basic page is available
 - **Elections + Meetings**: Elections can be linked to meeting records for procedural compliance
+- **Inventory gates equipment checklists** _(2026-08-31)_: equipment checklists moved out of Scheduling into Inventory, and the `/api/v1/equipment-checks` router moved to `module_gate("inventory")` with them. **A department that had Inventory switched off but uses equipment checks has it switched back on automatically** on upgrade (migration `7e2f11397849`) — otherwise it would lose the crew-facing half that still lives on the shift screen. If Inventory is switched off deliberately afterwards, the checklist entries disappear rather than erroring
 
 ---
 

@@ -302,7 +302,8 @@ A payment settles an order automatically only when **both** hold:
 1. The payment reference contains exactly one order number in `ORD-YYYY-NNNN` form — read from PayPal's `invoice_id`, `custom_id`, or note.
 2. The amount equals that order's outstanding balance **exactly**.
 
-Anything else is recorded and left for a person under **Store Admin > Payments**:
+Anything else is recorded and left for a person under **Department Store >
+Payments**:
 
 | Outcome               | Meaning                                                           |
 | --------------------- | ----------------------------------------------------------------- |
@@ -326,7 +327,8 @@ The matcher reads whatever reference the payer or the department attached:
 
 ### Working the Review Queue
 
-**Store Admin > Payments** lists everything unresolved. For each entry:
+**Department Store > Payments** (`/inventory/admin/store?tab=payments`) lists
+everything unresolved. For each entry:
 
 - **Apply to order** — settles the order. For an unmatched payment, enter the order to credit first. This writes through the normal payment path, so the order timeline, the member's receipt email, and the window rollups all behave as if it had been marked paid by hand.
 - **Dismiss** — for payments that aren't store orders at all (a donation, a dues payment, a refund). An applied payment cannot be dismissed.
@@ -760,3 +762,92 @@ Two permissions to grant alongside it — neither is granted by the upgrade:
 
 Full walkthrough:
 [Membership → Member ID Cards and the Check-In Station](./01-membership.md#member-id-cards-and-the-check-in-station-2026-08-23).
+
+## Claude (MCP) — asking questions of your Logbook _(2026-09-03)_
+
+`/api/mcp` is a Model Context Protocol endpoint served by the existing backend
+process, so Claude Code, the Messages API connector and (through a local bridge)
+Claude Desktop can ask questions of a department's Logbook.
+
+It appears in the integrations catalog as **Claude (MCP)**, category _AI
+Assistants_.
+
+> **It is off on every installation until an administrator connects it, and it
+> answers nothing until an IT administrator issues a service key.** Both steps
+> are deliberate and separate.
+
+> **Screenshot needed:**
+> _[Integrations → Claude (MCP): the connect form with the access mode and the
+> three data switches (finance, medical, schedule) visibly **off** — that is the
+> shipped default and the point of the shot — and a second capture of the
+> Service key panel in its shown-once state, with the key itself redacted.]_
+
+### What it can reach
+
+**51 read tools** over the roster, events, shifts, training and certifications,
+inventory, apparatus, facilities, meetings and published minutes, documents in
+unrestricted folders, and elections.
+
+**Three areas sit behind their own switches, all off by default:**
+
+| Switch   | What it adds                                                                                                                        |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Finance  | Finance totals                                                                                                                      |
+| Medical  | Medical-screening **status** only                                                                                                   |
+| Schedule | The full duty schedule. Without it, the shift tools list only shifts open to all members — what any eligible member can already see |
+
+**Three write tools** — draft an event, add a meeting action item, raise a
+reorder request — sit behind a read/write switch, also off by default.
+
+**Tools a department has not switched on are not even listed to the client.**
+
+### Personal information never leaves
+
+One redaction boundary is applied to **every** tool result. Stripped at every
+depth: phone, mobile, work and personal email, home address, date of birth,
+emergency contacts, photo, membership and certification numbers, login names,
+medical results, credentials and tokens.
+
+On top of that, **every string value is scrubbed of email addresses and phone
+numbers**, so free text — a note, a description — cannot carry them out either.
+
+### The service key
+
+- One active key per organization.
+- Stored as a **SHA-256 digest only**; the plaintext is shown in the UI exactly
+  once and cannot be retrieved afterwards.
+- Optional expiry or lifetime. **Rotation revokes the previous key.**
+- Issuing and revoking require the new **`integrations.mcp_keys`** permission,
+  which only the **IT Manager** position holds by default.
+- Every tool call, issue and revocation is audit-logged.
+
+### Setting it up
+
+1. **Integrations → Claude (MCP) → Connect.** Choose the access mode and leave
+   the three data switches off unless you want them.
+2. **Issue a service key** from the Service key panel. Copy it immediately — it
+   is shown once.
+3. Point the client at `/api/mcp` with that key.
+
+Full setup detail, including client configuration, is on the
+`Integration-Claude-MCP` wiki page.
+
+### Deployment notes
+
+Stateless, JSON-response transport: any worker or replica answers any request,
+and **no reverse-proxy change is needed** because it is served under `/api/`.
+
+> **Known limitation.** claude.ai custom connectors authenticate with OAuth 2.1,
+> and The Logbook is an OAuth _client_, not an authorization server — so those
+> clients cannot present a service key directly and use a local bridge for now.
+> Claude Code and the Messages API connector reach the endpoint without one.
+
+## Integration errors no longer leak internals _(2026-08-31)_
+
+Testing an integration's connection, or checking Salesforce sync readiness,
+could show a raw internal or connection error message if the underlying network
+call failed unexpectedly. Errors now show a generic message while the details
+are still logged for troubleshooting.
+
+The specific, intentional messages — "Salesforce rejected these credentials",
+and its siblings — are unaffected.

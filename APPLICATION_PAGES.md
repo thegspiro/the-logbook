@@ -756,11 +756,18 @@ to sign up as a driver with no EVOC certification behind it.
 
 ### Scheduling Settings Sections _(rebuilt 2026-08-09)_
 
-`/scheduling/settings` now uses the **shared settings layout**
+> **Address changed since this section was written** _(2026-09-05)_. These
+> sections now live at `/scheduling/admin/settings/<section>` — each one a
+> route in its own right rather than a `?tab=` on a single page — and the
+> original `/scheduling/settings` no longer resolves. The layout described
+> below is still current; only where it is reached has moved. See
+> **Scheduling Administration** above.
+
+`/scheduling/settings` used the **shared settings layout**
 (`components/settings/SettingsLayout.tsx`) — the same shell as Organization
 Settings and Event Settings: a section sidebar with descriptions on desktop, a
 scrollable tab strip on phones, and the section body in a surface card under a
-single header. It replaces the pill/segmented tab bar and the two stacked titles
+single header. It replaced the pill/segmented tab bar and the two stacked titles
 ("Scheduling Settings" from the page, then "Shift Settings" from the panel) it
 had before.
 

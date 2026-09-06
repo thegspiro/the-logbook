@@ -1,6 +1,129 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 3 (2026-09-06) — duplicate-submission check used a stale REPEATABLE READ snapshot
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes 1-2)
+before touching code. Confirmed file sizes are effectively unchanged since pass
+2: `endpoints/forms.py` 784 L (was 768 — the `+16` is `require_authentication`/
+`allow_multiple_submissions`/cross-org enforcement already recorded under
+FORM-5's "resolved 2026-08-27" note, not new code this pass),
+`public/forms.py` 236 L (unchanged), `forms_service.py` 2,628 L (was 2,601 — the
+`+27` is the same FORM-5 enforcement plus the event-request lead-time/timezone
+handling already covered by other reviews), `models/forms.py` 347 L and
+`schemas/forms.py` 424 L (both unchanged). All five files were re-read in full
+this pass rather than diffed, since `git log` on this branch's history does not
+cleanly show line-level provenance for a squash-merged file. Re-verified every
+prior finding (FORM-1/2/3/4/5/6/7/8/9, BXC-1) against the current code — all
+hold as previously recorded; nothing regressed.
+
+### FORM-10 — MEDIUM — The "one submission per member" duplicate check is a stale-snapshot race, not a real lock — ✅ FIXED
+
+**What:** `submit_public_form` enforces `allow_multiple_submissions=False` by
+locking the `Form` row (`with_for_update()`) and then querying for a prior
+`FormSubmission` from the same `submitted_by`. The row lock serializes the two
+requests correctly, but the duplicate-check query itself was a **plain**
+`SELECT` — and under InnoDB/MariaDB's default REPEATABLE READ, a plain SELECT
+always answers from the snapshot taken at the transaction's _first_ read, not
+from whatever is current when the statement runs. That first read is
+`get_form_by_slug()`, called both by the `public/forms.py` endpoint before
+`submit_public_form` is even invoked and again inside it — i.e. before the
+lock section runs at all. Acquiring the `Form` row lock afterward does not
+refresh that snapshot (this is precisely CLAUDE.md Pitfall #27's "the row is
+locked and the count is stale anyway").
+
+**Where:** `app/services/forms_service.py`, `submit_public_form` (the
+duplicate-check block immediately after the `with_for_update()` lock on
+`Form.id`).
+
+**Failure scenario:** an authenticated member double-clicks a "submit" button
+wired to a form with `allow_multiple_submissions=False` (or two devices/tabs
+submit within the same instant). Request A locks the `Form` row, finds no
+prior submission (correctly — none exists yet), inserts, and commits,
+releasing the lock. Request B then acquires the same lock, but its duplicate
+check runs against **B's own snapshot**, taken at B's `get_form_by_slug()`
+call before A ever committed — so B does not see A's row and also inserts,
+producing two submissions from one member on a form whose entire point is to
+forbid that (double a stipend claim, double an equipment self-assignment
+request, etc., depending on the form's integration).
+
+**Fix:** made the duplicate-check query itself a locking read
+(`.with_for_update()`), matching the FAC-45/MSG-13 precedent already
+established elsewhere in this codebase for exactly this class of bug — a
+locking read is guaranteed to see the latest committed data regardless of the
+transaction's own snapshot, unlike a plain SELECT.
+
+**Guard test:** `tests/test_forms_service.py::TestConcurrentDuplicateSubmissionCheck`
+— two genuinely independent sessions (`database_manager.session_factory()`,
+not the auto-rollback `db_session` fixture) submit to the same
+`allow_multiple_submissions=False` form as the same member via
+`asyncio.gather`, and asserts the winner-agnostic invariant that exactly one
+submission succeeds. Verified fail-before (reliably reproduces 2 successful
+submissions on the unpatched query, every run — the staleness is a guaranteed
+property of REPEATABLE READ semantics, not a timing coin-flip) / pass-after.
+
+**Note:** the equivalent authenticated (non-public) `submit_form` path enforces
+no `allow_multiple_submissions` check at all — only the public path does. This
+mirrors the existing FORM-5 scope (that finding, and its 2026-08-27 fix, both
+concern the public-submission policy specifically) and every prior pass has
+treated `allow_multiple_submissions` as a public-form policy. Whether it
+should also gate repeat submissions on the authenticated `/forms/{id}/submit`
+endpoint is a product-scope question (what does "multiple submissions" mean
+for an internal member form, e.g. a recurring training acknowledgment?), not a
+verifiable defect — flagged rather than guessed at.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-1/FORM-2** (`_entity_in_org` gates `member_id`/`item_id`/`event_id`
+  before every cross-module integration write) — read `_process_equipment_assignment`,
+  `_process_event_registration` in full; both still validate in-org before
+  the write, and event registration additionally checks `attendance_is_finalized`
+  before creating an RSVP.
+- **FORM-3** (`MULTISELECT` option-membership validation) — intact in
+  `_sanitize_submission_data`.
+- **FORM-4** (form-definition text stored unescaped) — still correctly left
+  unescaped at storage (the React renderer text-renders it; escaping at
+  storage would double-escape on display). No renderer change since pass 2.
+- **FORM-5** (`require_authentication`/`allow_multiple_submissions` enforced,
+  plus the cross-org 404 for an authenticated submitter from a different org)
+  — `public/forms.py:submit_public_form` and the service method both still
+  enforce this.
+- **FORM-6** (`_is_empty_value` — a required field needs a real value).
+- **FORM-7/FORM-9** (`safe_error_detail`/`sanitize_error_message` on every
+  client-facing error path, including `integration_result`) — re-read all
+  four integration processors and `_process_integrations`'s two exception
+  handlers; every one routes through `safe_error_detail` or
+  `sanitize_error_message`, never raw `str(e)`.
+- **FORM-8** (`apply_updates` on `update_form`/`update_field`/`update_integration`).
+- **BXC-1** (`FormField.condition_field_id` — soft reference, no FK, never
+  dereferenced server-side, org-scoped only via the parent form) — confirmed
+  unchanged in `models/forms.py`; still correctly left flagged, not fixed.
+- **Tenant isolation** — every by-id read/update/delete across forms, fields,
+  integrations, and submissions filters `organization_id` or resolves through
+  an org-scoped parent; `_entity_in_org` is the shared helper for
+  submitter-mapped FKs. No new endpoint or write path since pass 2.
+- **LIKE escaping** — `get_forms` and `search_members` both use
+  `like_pattern()` + `escape=LIKE_ESCAPE_CHAR` on every `ilike()` call,
+  including the `func.concat()` name matcher.
+- **`search_members` email disclosure** — gated on `ContactPolicy`, matching
+  the directory's own visibility rules; unconditional email matching only
+  when the policy discloses it unconditionally.
+
+### Completion gate (pass 3)
+
+| Check                                             | Result                                                    |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`              | ✅ clean (after reformatting the new test file)           |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict` | ✅ passed (no migration this pass)                        |
+| `pytest tests/ -q -k form`                        | ✅ 436 passed, 1 skipped (pywebpush, environment-only)    |
+| `pytest tests/` (full suite)                      | ✅ 11,472 passed, 21 skipped (environment-only), 0 failed |
+| `tsc --noEmit` / `eslint .`                       | n/a — no frontend file touched this pass                  |
 
 ---
 

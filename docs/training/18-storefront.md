@@ -39,11 +39,11 @@ settling up fast to record and hard to lose track of.
 Navigate to **Store** in the sidebar. The module must be enabled for your
 organization in Organization/Admin Settings > Modules (`enabled_modules`).
 
-| URL             | Page                                         | Permission          |
-| --------------- | -------------------------------------------- | ------------------- |
-| `/store`        | Browse the open window and place an order    | `storefront.view`   |
-| `/store/orders` | My Orders — status, balance, payment buttons | `storefront.view`   |
-| `/store/admin`  | Quartermaster console                        | `storefront.manage` |
+| URL                      | Page                                         | Permission          |
+| ------------------------ | -------------------------------------------- | ------------------- |
+| `/store`                 | Browse the open window and place an order    | `storefront.view`   |
+| `/store/orders`          | My Orders — status, balance, payment buttons | `storefront.view`   |
+| `/inventory/admin/store` | Quartermaster console — **Department Store** | `storefront.manage` |
 
 ### Permissions
 
@@ -63,7 +63,8 @@ There are two separate switches, and knowing why is worth thirty seconds.
 
 1. **The module** — Admin Settings > Modules. Controls whether "Store" appears
    in navigation at all.
-2. **The store itself** — Store Admin > Settings > "Store is live for members".
+2. **The store itself** — Department Store > Settings > "Store is live for
+   members".
 
 The second one exists so you can take the member-facing shop offline —
 mid-season, between windows, while you rebuild the catalog — **without** hiding
@@ -74,7 +75,7 @@ off, members see nothing; you keep everything.
 
 ## Store Settings
 
-**Store Admin (`/store/admin`) > Settings tab.**
+**Department Store (`/inventory/admin/store`) > Settings tab.**
 
 ### Identity
 
@@ -312,7 +313,7 @@ with an answer.
 
 ## Building the Catalog
 
-**Store Admin > Catalog tab > New item.**
+**Department Store > Catalog tab > New item.**
 
 (The UI calls catalog entries _items_ and their size/colour choices _options_.
 This guide uses the same words.)
@@ -382,7 +383,7 @@ Members shop by picture. A catalog of text rows sells nothing.
 
 ## Order Windows
 
-**Store Admin > Order Windows tab > New order window.**
+**Department Store > Order Windows tab > New order window.**
 
 A window is an ordering period — you open it, members order, you close it, you
 place one bulk order with the vendor.
@@ -470,7 +471,7 @@ Somebody confirms the money actually arrived.
 
 ## Working the Orders
 
-**Store Admin > Orders tab.** Filter by window, status, or payment status.
+**Department Store > Orders tab.** Filter by window, status, or payment status.
 
 Filters: window, order status, payment status, and **payment method**. That
 last one is how you reconcile — each app pays out separately, so "show me
@@ -551,7 +552,7 @@ A payment settles automatically only when **both** are true:
 1. The reference names exactly one order number (`ORD-2026-0042`).
 2. The amount equals that order's balance exactly.
 
-Anything else goes to **Store Admin > Payments** for you to decide:
+Anything else goes to **Department Store > Payments** for you to decide:
 
 | What you see          | What happened                                                     |
 | --------------------- | ----------------------------------------------------------------- |
@@ -821,3 +822,52 @@ the way a quartermaster reads them, not the way a computer sorts strings.
   person who placed an order is no longer the person who can mark it paid.
 - Store access grants were backfilled onto the member and corporate positions
   that were meant to have them.
+
+---
+
+## The console moved into Inventory Administration _(2026-09-03)_
+
+**The quartermaster console lives at `/inventory/admin/store` and its page
+title now reads "Department Store".** It was at `/store/admin`.
+
+**The sidebar entry is still labelled "Store Admin"**, in the Administration
+section — so that is what you tell someone to click, even though the page they
+land on is headed Department Store. Worth saying out loud in training, because
+the two names differ.
+
+Nothing inside it changed — the same six tabs (Overview, Order Windows, Catalog,
+Orders, Payments, Settings), the same `storefront.manage` permission, the same
+module flag. Only the name and the address moved, as part of the same tidy-up
+that renamed Gear Admin to Inventory Administration (see
+[Inventory](./05-inventory.md) and the
+[September release notes](./20-september-2026-release-changes.md)).
+
+**Reach it from Inventory Administration**, where the store now has its own
+section with four cards, each a deep link into the tab it names:
+
+| Card           | Goes to                               |
+| -------------- | ------------------------------------- |
+| Store Overview | `/inventory/admin/store`              |
+| Store Catalog  | `/inventory/admin/store?tab=catalog`  |
+| Store Orders   | `/inventory/admin/store?tab=orders`   |
+| Store Payments | `/inventory/admin/store?tab=payments` |
+
+**`/store/admin` still works** — it redirects to the new address, so existing
+bookmarks and any older printed handout do not break. The member-facing routes
+(`/store`, `/store/orders`, `/store/checkout`) did not move at all.
+
+**Why it moved:** uniforms and turnout gear are bought through the store and
+issued through inventory, so the officer doing one is usually doing the other.
+Putting the store under the same administration hub means the whole job is one
+screen away rather than two unrelated top-level areas. The store keeps its own
+permission and module flag, so a department can still run inventory without the
+store, or the store without inventory.
+
+> **[SCREENSHOT — REPLACE the store admin console capture (`18-02-store-admin`).**
+> The header now reads **Department Store** and the browser address is
+> `/inventory/admin/store`. The existing capture shows the old title and URL, so
+> it dates the whole guide. Capture from the Overview tab.**]**
+
+> **[SCREENSHOT — NEW: the Department Store section of the Inventory
+> Administration hub**, showing the four cards above. This is the entry point the
+> guide now tells readers to use, and nothing in the set shows it.**]**

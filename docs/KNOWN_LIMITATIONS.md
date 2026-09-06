@@ -397,6 +397,7 @@ Owner-decision items from the feature-by-feature review under
 | **Grants: the applications page loads at most 1,000 applications, in either view**                                                   | Open (LOW-MED, feature gap — needs real pagination)                       | `GrantApplicationsPage.tsx` (pipeline/kanban and table views) has no pagination control in either view — it's built to show the organization's complete application set at once, filtered or not. The fetch requests `limit: 1000` (the backend's own declared ceiling, `PaginationParams`'s `le=1000`), raised from the previous 100 (GF-33), but an organization with more than 1,000 applications overall, or more than 1,000 sharing one status when a status filter is applied, still silently truncates past that point — the newest 1,000 win, older ones are invisible with no indication anything was cut off. Closing it fully needs either real pagination (a page-size control, `skip`/`limit` wired to user paging) or a summary/streaming approach that doesn't load the full set into the browser at once. Found by Codex review, security-review PR #2073 (GF-22 pass 2, round 6); see `docs/security-review/GF-22-grants-fundraising.md` GF-33. (GF-33)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Grants: reporting sums money as `float`, not `Decimal`**                                                                           | Open (LOW, needs a Decimal-migration decision)                            | `GrantService.get_grant_report` and `FundraisingService.get_fundraising_report` accumulate `amount_requested`/`amount_awarded`/expenditure/donation totals with Python `sum(float(...) for ...)` rather than `Decimal`, so the reported totals are subject to binary-floating-point rounding error instead of being exact. The underlying columns are already `Numeric`/`Decimal` — this is a reporting-path-only issue, not a storage one. Re-confirmed unchanged across every prior pass, most recently security-review GF-22 pass 2 (2026-08-30). Closing it is a module-wide Decimal-arithmetic refactor across both report methods, a deliberate change rather than a drive-by fix. (GF-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Medical supplies: expiring-lot list has no row cap**                                                                               | Open (LOW, needs a product decision — shared across callers)              | `InventoryService.get_expiring_lots` (backs `GET /medical-supplies/lots/expiring`, the equivalent gear-side route, and the low-stock/expiring alert email) has no `limit`/pagination — a department that never clears old zero-or-positive-quantity expired lots gets every matching row back to the start of the `days_ahead` window, unbounded. Not a mechanical medical-supplies patch: the method is shared with the main inventory router and `scheduled_tasks.py`'s alert email, so a cap changes those callers' contracts too (would the alert silently omit rows past the cap?) — needs a decision on page size per caller, not a drive-by limit. Found by Codex review, security-review PR #2075 (MSUP-23 pass 2); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-4. (MSUP-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Medical/gear supplies: a single item's stock-lot list has no row cap**                                                             | Open (LOW, needs a product decision — same shape as MSUP-4)               | `InventoryService.list_lots` (backs `GET /medical-supplies/items/{id}/lots` and the equivalent gear-side route) returns every lot ever recorded against one item with no `limit`/pagination, and neither frontend screen pages through the result — both treat it as the item's complete lot history. An item restocked frequently over years without its depleted lots ever being deleted accumulates an unbounded row count. Not a mechanical patch: a cap changes what "the item's lots" means to both callers, with no pagination UI on either screen to receive a later page — needs the same kind of per-caller page-size decision MSUP-4 needed, not a drive-by limit. Found by Codex review, security-review PR #2301 (MSUP-23 pass 3); see `docs/security-review/MSUP-23-medical-supplies.md` MSUP-10. (MSUP-10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Reports: date-range filters use UTC, not the organization's local timezone**                                                       | Open (LOW-MED, cross-cutting; needs a reporting-context timezone default) | A report end date of "June 15" is interpreted as June 15 in UTC, not June 15 in the department's own timezone — for a non-UTC organization, a report can still include some of the following day's early records or exclude some of the selected day's late-evening records, depending on the org's UTC offset. Not a regression and not module-specific: `reports_service.py` alone has the identical hard-coded-UTC `datetime.combine(..., tzinfo=timezone.utc)` boundary at 5 separate call sites, and `grant_service.py`/`fundraising_service.py` matched that same established pattern when fixing a strictly worse bug (GF-24 — the boundary previously excluded the entire end date, in every timezone) rather than inventing a one-off fix. `app/utils/org_timezone.py`'s `resolve_scheduling_timezone` is not a drop-in general-purpose answer — its own docstring ties its `America/New_York` fallback specifically to scheduling's historical behavior ("changing it would move existing departments' shift times"), so a reporting-context default needs its own decision, not a borrowed assumption. Closing this needs a coordinated fix across every report date-range filter in the app, not a per-module patch. Found by Codex review on security-review PR #2069, round 2; see `docs/security-review/GF-22-grants-fundraising.md` GF-24a. (GF-24a)                                                                  |
 | **Inventory: storage-area barcodes are assigned but the scanner cannot resolve them**                                                | Open (LOW-MED, feature gap; UI copy currently overpromises)               | Since 2026-08-16 every storage area is assigned a sequential `SA-…` barcode, and the Storage Areas form tells the user it is assigned "so it can be scanned". Nothing resolves it: `/inventory/lookup` → `InventoryService.search_by_code` queries `InventoryItem.barcode` / `serial_number` / `asset_tag` / `name` / `size` / `color` only, and the sole query against `StorageArea.barcode` is the allocator's uniqueness check (`_storage_area_barcode_exists`). Scanning a shelf label in `InventoryScanModal` therefore returns nothing. Two ways to close it: extend the scan lookup (and `ScanLookupListResponse`) to return storage-area hits and navigate to the area, or reword the form to say the code is for printed labels only. Until one lands, the UI promises a capability the app does not have. Found by review on PR #1508 while documenting the feature. (INV-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Build: the linter's TypeScript is an npm-auto-installed peer, not a declaration**                                                  | ✅ Resolved (2026-08-24)                                                  | Re-pinned `typescript` to `5.9.3` in `frontend/package.json`, restoring the declared split: the plain name is the version typescript-eslint can load, and `typescript-native` (npm alias of `typescript@7.0.2`) stays the compiler `npm run typecheck` / `npm run build` use through `frontend/scripts/tsc-native.mjs`. Both halves are now declared — `package-lock.json` carries `node_modules/typescript@5.9.3` as a plain dev dependency rather than `"peer": true`, and the nested `frontend/node_modules/typescript@7.0.2` is gone because there is no longer a version conflict to nest around. This restores lockfile regenerability, which was the actual risk: with `typescript` declared at 7.0.2, `rm package-lock.json && npm install` failed with ERESOLVE against typescript-eslint's `>=4.8.4 <6.1.0` peer cap, so a Dependabot bump or any regeneration could not rebuild it. Verified after the change: clean regeneration, `npm ci`, and `--strict-peer-deps` resolution all succeed; typecheck runs on 7.0.2 and type-aware lint on 5.9.3; build, lint (0 warnings) and 4929 frontend tests pass. **A future Dependabot bump of the plain `typescript` past the linter's cap reopens this** — bump `typescript-native` instead. (BUILD-1)                                                                                                                                                                         |
@@ -2585,6 +2586,37 @@ count corrected by the training-extended pass,
 both re-verified in the training-extended pass 3 re-review, the latter
 following a Codex finding on that pass's own PR.)
 
+## Outbound Integration Requests — Response Size Is Unbounded (INT-7, 2026-09-06)
+
+`app/services/integration_services/base.py` declared a 10 MB
+`MAX_RESPONSE_SIZE` constant with a docstring claiming a response-size cap
+as one of the shared HTTP client's hardened defaults. Nothing enforces it —
+`create_integration_client()` returns a plain `httpx.AsyncClient`, and every
+connector (Salesforce, Cal.com, Documenso, the chat webhooks, PayPal) calls
+its non-streaming `.get()`/`.request()` then `.json()`/`.text`, which
+buffers the full response body into memory before any caller-side code
+could check it against the constant. An org-configured integration
+endpoint (self-hosted, compromised, or simply misbehaving) that returns an
+arbitrarily large or slow-drip body can drive unbounded per-request memory
+growth. Not directly reachable by an unprivileged member — every trigger
+requires `integrations.manage` — and inbound webhook bodies (the one
+unauthenticated-adjacent path) are already bounded by nginx's global
+`client_max_body_size 50M`, a separate control this does not change.
+
+**Not fixed — needs an owner decision on scope, not a one-line patch.**
+Enforcing it means every connector's response-reading call site switching
+from a non-streaming `.get(url).json()` to `client.stream(...)` plus a
+running-byte-count abort, since httpx has already fully buffered the body
+by the time a non-streaming call returns a `Response` to check. That is a
+behavior change across roughly ten connector files at once (some, like
+Salesforce's own paginated bulk pull, may legitimately need a higher cap
+than a webhook test-connection call), which is why this was flagged rather
+than force-fixed inside a single security-review pass.
+
+(Security review INT-27 pass 3, `docs/security-review/INT-27-integrations.md`;
+`docs/module-audit/integrations.md`'s "size cap" claim corrected in the same
+pass — it had never actually been true.)
+
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 
 `BulkTrainingRecordEntry.training_type`/`.status`,
@@ -2879,71 +2911,22 @@ today), which lowers today's exploitability but does not change that the API
 itself grants any `meetings.manage` holder an unconditional, unaudited-before-
 this-pass, untracked approval with no self-check.
 
-## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record; an Independent Audit Entry May Survive (2026-08-31)
+**Update (pass 3, 2026-09-06):** the same missing state-machine guard is also
+reachable through the generic `PATCH /meetings/{id}` route — `MeetingUpdate.
+status` accepts any legal enum value including `"approved"`, and
+`MeetingsService.update_meeting` applies it via `apply_updates` with no
+transition check, so a plain edit can flip a meeting straight to `APPROVED`
+while leaving `approved_by`/`approved_at` at whatever they already were
+(typically still `None`) — a more silent version of the same gap, since it
+records no approval actor or timestamp at all. Same permission
+(`meetings.manage`) gates both routes, so this doesn't widen who can reach
+the gap, only how. Whichever option is chosen for the sibling `/approve`
+route above should also close this path — most likely by having
+`update_meeting` reject a client-supplied `status` transition into
+`APPROVED` and requiring the dedicated route (or its replacement) for that
+transition specifically.
 
-`MessagingService.reconcile_recipients` rebuilds a published message's audience
-when an admin edits its targeting (e.g. switches from "by role" to a corrected
-role list). For every member the new audience no longer includes, it hard-
-deletes their `DepartmentMessageRecipient` row outright — including `read_at`
-and `acknowledged_at`, if they had already read or acknowledged the message.
-
-This is the same information `delete_message`'s own docstring calls
-"compliance evidence" and specifically soft-deletes the parent message to
-avoid losing (`app/services/messaging_service.py`, `delete_message`) — but
-`reconcile_recipients` (same file) discards it via a plain audience edit, no
-confirmation, no message deletion involved. A message that "requires
-acknowledgment," gets acknowledged by everyone, and then has its role list
-tweaked to fix a typo loses every acknowledgment row for anyone who falls
-outside the corrected set — `get_acknowledgment_report` would then show them
-as never having acknowledged it at all, and they'd drop out of its
-denominator entirely.
-
-**This does not necessarily erase all compliance evidence, but the backup is
-best-effort, not guaranteed.** `acknowledge_message`
-(`app/api/v1/endpoints/messages.py:425-436`) writes an independent
-`message_acknowledged` audit-log entry — user id, message id, timestamp —
-through the tamper-evident audit hash chain at the moment of acknowledgment,
-and `reconcile_recipients` never touches `audit_logs`. When that write
-succeeds, it survives the recipient-row deletion and could be used during
-remediation to reconstruct who had acknowledged before the audience was
-narrowed. But `AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is
-deliberately fail-open — it catches any exception on the write, logs it, and
-returns `None` rather than raising, "so audit log failures don't break the
-caller's operation" — and `acknowledge_message` never checks that return
-value, so the acknowledgment itself still succeeds either way. If the audit
-write silently failed (e.g. a transient DB error at flush/refresh), no
-`message_acknowledged` row exists, and a later `reconcile_recipients` on that
-member leaves nothing — report, inbox, or audit log — behind. What is
-reliably lost by the recipient-row deletion is the _report's_ live state
-(and, per the visibility mechanism below, the message's presence in that
-member's inbox); whether the underlying evidence of the acknowledgment
-survives depends on whether that audit write happened to succeed.
-
-Closing this needs a product decision, not a mechanical patch: keeping the
-recipient row for anyone with `read_at`/`acknowledged_at` set would preserve
-the history, but `get_inbox`/`_visible_message_or_none` currently derive
-_visibility_ from the same row (a `JOIN` on `DepartmentMessageRecipient`, no
-independent live re-check of `_is_targeted`) — so keeping the row also keeps
-the message visible in that member's inbox after they've been un-targeted,
-which may or may not be the intended behavior. The options are (a) keep
-resolved rows and accept that an already-engaged member keeps seeing a message
-they're no longer formally targeted by, (b) add a separate "still visible"
-flag so a resolved-but-untargeted row can be excluded from inbox visibility
-while its read/ack timestamps survive for reporting, or (c) accept the current
-behavior as correct — the audience is a live definition, not a historical one,
-and narrowing it is understood to also narrow who the report covers. None was
-chosen here.
-
-Found during `docs/security-review/MSG-25-messaging-notifications.md`
-(feature 25, pass 2) while reviewing the recipient-materialization
-architecture (`DepartmentMessageRecipient`, added since pass 1 by PR #1938).
-Not exploitable cross-tenant — `reconcile_recipients` only ever touches
-recipients within the message's own org — and requires an admin
-(`notifications.manage`) to edit an already-published message's targeting, so
-this is a data-integrity/compliance-record risk rather than a security
-vulnerability in the access-control sense.
-
-## MSG-12 — A Failed, Stranded, or Throttled Department-Message Delivery Is Never Retried (2026-08-31)
+## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
 `MessageDeliveryService._claim_delivery` commits a
 `DepartmentMessageDelivery` row with `status="pending"` before calling out to
@@ -2955,12 +2938,24 @@ department message is published exactly once — no future `deliver()` call
 for that message will come back around. There are three distinct ways a
 member ends up not receiving a channel they should have:
 
-- **Stranded `pending`.** If the worker process is killed, OOM-killed, or
-  loses its DB connection between the claim commit and `_finish_delivery`'s
-  follow-up commit, the row is left in `status="pending"` permanently.
-  Narrow blast radius: one recipient/channel/message, and only if a crash
-  lands in that exact window.
-- **`failed`, from an ordinary provider error.** `_finish_delivery(attempt,
+- **Stranded `pending` — FIXED (2026-09-06).** If the worker process is
+  killed, OOM-killed, or loses its DB connection between the claim commit
+  and `_finish_delivery`'s follow-up commit, the row was left in
+  `status="pending"` permanently. A new scheduled task,
+  `run_recover_stranded_message_deliveries` (`app/services/
+scheduled_tasks.py`, every 30 minutes, `_STRANDED_CLAIM_AFTER_MINUTES =
+35`), now sweeps `pending` rows older than the cutoff: it retires claims
+  whose message was deactivated/deleted or whose recipient dropped out of
+  the audience since (recorded as `failed` with a reason, not left
+  `pending` forever — otherwise one dead message would fill the bounded
+  scan window and starve recoverable claims behind it), and re-delivers the
+  rest via `MessageDeliveryService.deliver(message, only_user_ids=...)`,
+  which reclaims the stale claim (`_reclaim_stale_delivery`) rather than
+  duplicating it. Deliberately may occasionally re-send to a member whose
+  original worker was merely slow past the cutoff, not actually dead — the
+  chosen direction to err, since the alternative is a notice they never
+  get. Guard tests in `backend/tests/test_message_delivery_claim_recovery.py`.
+- **`failed`, from an ordinary provider error — still open.** `_finish_delivery(attempt,
 error)` commits the same row as `status="failed"` whenever the provider
   raises, or reports zero successes (`EmailService.send_email` returning
   `(sent, failed)`, `SMSService.send_bulk_sms` returning a count) — no
@@ -2988,26 +2983,133 @@ to miss, so any one of these three, on the one delivery attempt a message
 ever gets, permanently and silently drops that member from the channel of
 record for that message.
 
-Closing this needs a product decision, not a mechanical patch, and the
-decision has to cover all three paths together — a fix scoped to
-`DepartmentMessageDelivery` rows alone (`pending`/`failed`) leaves the
-throttled path, which creates no row, completely unaddressed. Open
-questions: what counts as eligible for retry (any `failed`/stale-`pending`
-row? a cap on attempts?), whether a throttled batch should be recorded
-somewhere retriable rather than just logged, whether retry is automatic
-via a new scheduled task or surfaced to an admin instead, and — since a
-crash could land either before or after the provider actually accepted the
-send — whether the department would rather risk an occasional duplicate
-delivery (retry unconditionally) or an occasional silent miss (leave it
-and alert). None was chosen here.
+The stranded-`pending` path above is now closed. The remaining two —
+`failed` and throttled — still need a product decision, not a mechanical
+patch, and it has to cover both together: a fix scoped to
+`DepartmentMessageDelivery` rows alone (i.e. a `failed`-row sweep) leaves
+the throttled path, which creates no row, completely unaddressed. Open
+questions: what counts as eligible for retry on a `failed` row (any
+failure? a cap on attempts, so a permanently-invalid address doesn't retry
+forever?), whether a throttled batch should be recorded somewhere
+retriable rather than just logged, whether retry is automatic via a new
+scheduled task or surfaced to an admin instead, and whether the department
+would rather risk an occasional duplicate delivery (retry unconditionally)
+or an occasional silent miss (leave it and alert) — the same tradeoff the
+stranded-`pending` fix already made in favor of the former. None was
+chosen here for the remaining two paths.
 
 Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
 25, pass 2, MSG-12); both the `failed`-status path and the throttled/
 no-row path were caught by two separate rounds of Codex's review of the PR
 recording this finding, broadening it from the `pending`-only scenario
-originally reported. No `SMSService`/`EmailService` allowlist or
+originally reported — and it was that same `pending`-only scenario that
+got the fix, per pass 3 (`docs/security-review/MSG-25-messaging-
+notifications.md`). No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
+
+## MSG-15 — Web Push's Send-Time DNS-Rebinding Pin Is Skipped Outside `ENVIRONMENT in ("production", "staging")` (2026-09-06)
+
+`PushService._send_one` only builds the IP-pinned `requests` session that
+closes the check/use DNS-rebinding window
+(`_pinned_session`/`_resolve_public_address`) when `settings.ENVIRONMENT`
+is exactly `"production"` or `"staging"`. `ENVIRONMENT` is a bare,
+unvalidated `str` (`core/config.py:32`, default `"development"`, no
+enum) — so a real deployment left at the default, or set to any value
+other than those two exact strings, sends every push through `webpush()`
+with no send-time pin, relying solely on `validate_push_endpoint`'s
+one-time, subscribe-time check.
+
+The gate is not an oversight: `tests/test_push_service.py` runs a real
+local HTTP server standing in for a browser push service (deliberately
+not mocked, so encryption/VAPID/DB constraints are genuinely exercised),
+reachable only at `http://127.0.0.1:<port>` — which `validate_push_endpoint`'s
+HTTPS-only, exact-vendor-hostname allowlist would reject outright if
+pinning/validation ran unconditionally in tests. `PushService.subscribe()`
+itself does not call `validate_push_endpoint` (by design, that check lives
+at the API boundary), so the test suite subscribes such endpoints
+directly and depends on the environment gate to reach them at all. The
+same `ENVIRONMENT in ("production", "staging")` idiom is also this
+codebase's established pattern for other prod-only checks
+(`core/config.py:460`), so a push-specific carve-out would be
+inconsistent with it.
+
+Closing this properly needs one of: a test-infrastructure change so the
+local test server does not depend on skipping validation (e.g. an
+explicit test-only bypass rather than an environment-string coincidence),
+or a more precise signal than `ENVIRONMENT` for "is this deployment
+internet-facing." Either is a design decision, not a one-line fix. The
+practical exposure today is narrow — `validate_push_endpoint`'s exact-
+hostname allowlist (~7 real vendor hosts) already means an attacker would
+need to compromise DNS for a major push vendor (`fcm.googleapis.com` et
+al.), not merely stand up an arbitrary host, so this is a defense-in-depth
+gap rather than an open path.
+
+Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
+25, pass 3, MSG-15). Not exploitable cross-tenant — this affects the send
+path for any recipient's push, regardless of org, and requires either a
+misconfigured `ENVIRONMENT` on a real deployment or DNS compromise of a
+push vendor to matter at all.
+
+## FORM-10-related — `allow_multiple_submissions` Is Enforced Only On The Public Submit Path (2026-09-06)
+
+`Form.allow_multiple_submissions` is a single, general-purpose column with no
+hint in the schema that it applies to one submission channel only, but only
+`public/forms.py`'s `submit_public_form` (and the service method behind it)
+actually enforces it. The authenticated, non-public path
+(`POST /forms/{form_id}/submit` → `FormsService.submit_form`) never checks it
+at all — a member can submit the same "one submission per person" form
+repeatedly through that endpoint regardless of the setting.
+
+This has stood since the setting was introduced and every prior review pass
+(module audit, app-review, and security-review passes 1-2) scoped FORM-5
+(the sibling finding about this same column) to the public path specifically,
+so it is a pre-existing scope question rather than a regression. Whether the
+authenticated path should also honor it depends on what "multiple
+submissions" is meant to mean for an internally-submitted form — e.g. a
+recurring training acknowledgment is presumably meant to be resubmittable,
+while a one-time equipment request is not — which needs a product decision
+(most likely a separate setting, since the two channels' correct defaults
+may differ), not a guess encoded as a fix.
+
+Found by `docs/security-review/FORM-26-forms.md` (feature 26, pass 3,
+FORM-10 note). Not a cross-tenant or disclosure issue — the only effect is
+that a form-specific business rule silently doesn't apply to one of its two
+submission channels.
+
+## FORM-10-related — `allow_multiple_submissions` Has No Control In The Form Builder (2026-09-06)
+
+Distinct from the scope question above, and found while documenting it rather
+than by the review pass: **nothing in the frontend writes
+`allow_multiple_submissions`.** `components/forms/FormBuilder.tsx` exposes no
+control for it, `pages/FormsPage.tsx` writes only `is_public`, and a grep of
+`frontend/src` finds the field in exactly three places — the type in
+`services/formTypes.ts`, test fixtures, and `pages/PublicFormPage.tsx:345`,
+which **reads** it to decide whether to offer _Submit Another Response_ after a
+successful submission.
+
+The column defaults to `True` (`models/form.py:127`, and `bool = True` on the
+create schema). So every form a department creates through the application
+allows multiple submissions, and there is **no path in the UI to change that** —
+only a caller hitting the API directly can set it `False`.
+
+The practical consequence is that the enforcement #2306 hardened is currently
+unreachable for any department using the application normally. Nothing is
+broken by this and no data is at risk; the fix was still correct, because the
+column is settable through the API and the race was real for anyone who had set
+it. But it means "set your form to one submission per person" must not be
+written into operator documentation as an available step, and it is why
+`docs/training/20-september-2026-release-changes.md` and the wiki handoff for
+this window say explicitly that the checkbox does not exist.
+
+This is the inverse of CLAUDE.md Pitfall #19 ("a config switch must have a
+reader before it has a UI"): here there is a reader, an enforcer and a stored
+column, and no writer. Closing it means either adding the control to the form
+builder — which needs the product decision in the entry above first, since a
+checkbox labelled "one submission per person" that silently governs only the
+public link would be its own defect — or removing the column and its
+enforcement. Recorded rather than fixed because both directions are product
+calls, not documentation ones.
 
 ## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
 

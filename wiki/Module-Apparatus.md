@@ -327,3 +327,62 @@ Submitter-scope swaps are now bounded by what is actually being replaced: the
 disposition path requires the replaced lot to be aboard the item, and the
 quantity is capped at the deployed quantity it replaces. The template-item row
 is selected `FOR UPDATE`, so two concurrent swaps cannot both pass the cap.
+
+## The fleet record becomes officer-only _(2026-09-05)_
+
+**Regular members no longer see the Apparatus pages.** `apparatus.view` was
+seeded to every rank-and-file position, so any member could open the fleet
+maintenance and compliance record — inspection expirations, out-of-service
+status, deficiency flags and driver qualifications.
+
+The grant is removed from the `member` position and from the shared
+line-member list behind the Firefighter and EMT ranks and positions. Migration
+`b6e4a0d17c93` takes it off the rows already stored, including the
+`apparatus.manage` and `apparatus.*` forms the setup screen's Manage checkbox
+could have written; `d5f2b8c04a19` covers the membership-standing positions
+(Probationary, Junior, Life, Administrative, Social, Exempt) a department may
+still hold.
+
+**The registry edit alone would have revoked nothing.**
+`DEFAULT_POSITIONS["firefighter"]["permissions"]` _is_
+`OPERATIONAL_RANKS["firefighter"]["default_permissions"]` — the same list
+object — so a rank's grants reach the database by way of a position, and only a
+migration rewrites those rows (CLAUDE.md pitfall #23).
+
+**Who keeps it:** officers, chiefs, administrators, and the **Engineer** rank —
+Engineer is the driver/operator and holds `apparatus.maintenance` beside it. A
+department that wants members to see the fleet can re-add the grant to its
+Member position on the positions screen.
+
+The Apparatus navigation entry is now gated on the same permissions as the
+route, so it disappears rather than leading to Access Denied. **The lightweight
+`/apparatus-basic` page, shown when the Apparatus module is off, is unaffected
+and stays open to everyone.**
+
+### Knock-on fix
+
+The crew-level **Apparatus Inventory** page
+(`/inventory/checklists/apparatus-inventory`) filled its apparatus picker from
+the Apparatus module's roster, which the same members are no longer permitted
+to read. It now reads the authentication-only scheduling endpoint that already
+backs the shift board, so recording a used item keeps working.
+
+### Also fixed _(2026-09-03)_
+
+- **The Archive button went to the dashboard.** It navigated to
+  `/apparatus/:id/archive` — the _API_ path, which matches no route, so it fell
+  through the router's catch-all and left the apparatus in service with no
+  error. Archiving now takes a disposal record (method, date, and buyer details
+  for a sale); sale fields are dropped for a truck that was scrapped or
+  donated, rather than filing a buyer nobody can explain later.
+- **Archiving would have failed with a 422 anyway.** `ApparatusArchive` and
+  `ApparatusStatusChange` were the only apparatus request schemas without
+  `alias_generator=to_camel`, so the camelCase payload the frontend sends
+  populated none of their fields. Both accept camelCase now; snake_case still
+  validates.
+- **Apparatus sub-folders were gated on _facilities_ permissions.** The
+  apparatus sub-folder writer had the facility ACL copy-pasted into it, so
+  Maintenance, Manuals and Inspections were gated on grants they have nothing
+  to do with — an apparatus officer holding the apparatus and document grants
+  but no facilities grant could not open a truck's own manuals. Migration
+  `e6f2a7c9d148` clears the stamp from the folders already on disk.

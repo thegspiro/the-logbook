@@ -13,6 +13,7 @@ is how a real push service reports that the browser has dropped the
 subscription.
 """
 
+import asyncio
 import base64
 import json
 import os
@@ -20,6 +21,7 @@ import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, List
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -37,6 +39,7 @@ Vapid02 = pytest.importorskip(
 ).Vapid02
 
 from app.core.config import settings
+from app.core.database import database_manager
 from app.services.push_service import (
     PYWEBPUSH_AVAILABLE,
     PushService,
@@ -163,6 +166,98 @@ async def _count(db, column: str, value: str) -> int:
     return result.scalar() or 0
 
 
+class TestDeadlockRetry:
+    """`subscribe()`'s lock ordering closes the specific two-party deadlock
+    shapes this rotation found (see TestConcurrentEndpointSwapDoesNotDeadlock
+    and TestConcurrentRefreshDuringTransferStaysConsistent below), but a
+    deeper interleaving among three or more concurrent callers can still
+    hit a real InnoDB deadlock (Codex, round 4) -- a deadlock is not a
+    correctness failure, just a transaction MySQL cleanly aborts and rolls
+    back, so the standard response is to retry the loser once."""
+
+    async def test_a_deadlock_is_retried_once_and_then_succeeds(self):
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.push_service import PushService
+
+        class _FakeOrig(Exception):
+            args = (1213, "Deadlock found when trying to get lock")
+
+        db = MagicMock()
+        db.rollback = AsyncMock()
+        svc = PushService(db)
+
+        calls = {"n": 0}
+
+        async def fake_once(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OperationalError("stmt", {}, _FakeOrig())
+            return "the-subscription"
+
+        svc._subscribe_once = fake_once
+        result = await svc.subscribe(
+            "org-1", "user-1", "https://push.example/x", "p", "a"
+        )
+
+        assert result == "the-subscription"
+        assert calls["n"] == 2
+        db.rollback.assert_awaited_once()
+
+    async def test_a_second_deadlock_is_not_retried_again(self):
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.push_service import PushService
+
+        class _FakeOrig(Exception):
+            args = (1213, "Deadlock found when trying to get lock")
+
+        db = MagicMock()
+        db.rollback = AsyncMock()
+        svc = PushService(db)
+
+        calls = {"n": 0}
+
+        async def always_deadlocks(*args, **kwargs):
+            calls["n"] += 1
+            raise OperationalError("stmt", {}, _FakeOrig())
+
+        svc._subscribe_once = always_deadlocks
+        with pytest.raises(OperationalError):
+            await svc.subscribe("org-1", "user-1", "https://push.example/x", "p", "a")
+
+        assert calls["n"] == 2
+
+    async def test_a_non_deadlock_operational_error_is_never_retried(self):
+        """A blanket retry-on-OperationalError would also retry a lost
+        connection, a lock-wait timeout, or a syntax error -- silently
+        masking failures that aren't the specific, always-safe-to-retry
+        deadlock case."""
+        from sqlalchemy.exc import OperationalError
+
+        from app.services.push_service import PushService
+
+        class _FakeOrig(Exception):
+            args = (2006, "MySQL server has gone away")
+
+        db = MagicMock()
+        db.rollback = AsyncMock()
+        svc = PushService(db)
+
+        calls = {"n": 0}
+
+        async def connection_lost(*args, **kwargs):
+            calls["n"] += 1
+            raise OperationalError("stmt", {}, _FakeOrig())
+
+        svc._subscribe_once = connection_lost
+        with pytest.raises(OperationalError):
+            await svc.subscribe("org-1", "user-1", "https://push.example/x", "p", "a")
+
+        assert calls["n"] == 1
+        db.rollback.assert_not_awaited()
+
+
 class TestSubscribe:
     async def test_subscribe_stores_hashed_endpoint(self, db_session, two_orgs):
         org_id, user_id = two_orgs["a"]
@@ -210,6 +305,87 @@ class TestSubscribe:
         assert moved.user_id == str(user_b)
         assert moved.organization_id == str(org_b)
         assert await _count(db_session, "user_id", user_a) == 0
+
+    async def test_a_user_cannot_register_unbounded_devices(self, db_session, two_orgs):
+        """With no cap, every future notification to this member becomes a
+        many-thousand-fold fan-out of real network sends (send_to_user loops
+        every stored subscription). A handful of real devices never
+        approaches the cap; only a scripted flood does."""
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_id, user_id = two_orgs["a"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER):
+            await svc.subscribe(
+                org_id, user_id, f"https://push.example/{i}", p256dh, auth
+            )
+
+        with pytest.raises(ValueError, match="Maximum"):
+            await svc.subscribe(
+                org_id,
+                user_id,
+                "https://push.example/one-too-many",
+                p256dh,
+                auth,
+            )
+        assert await _count(db_session, "user_id", user_id) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        )
+
+    async def test_reassigning_someone_elses_device_still_respects_the_cap(
+        self, db_session, two_orgs
+    ):
+        """Claiming a device currently registered to another member is a new
+        subscription for the claimant, not a refresh — two accounts trading
+        one endpoint back and forth must not be a way around the cap."""
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_a, user_a = two_orgs["a"]
+        org_b, user_b = two_orgs["b"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER):
+            await svc.subscribe(
+                org_a, user_a, f"https://push.example/{i}", p256dh, auth
+            )
+        await svc.subscribe(org_b, user_b, "https://push.example/shared", p256dh, auth)
+
+        with pytest.raises(ValueError, match="Maximum"):
+            await svc.subscribe(
+                org_a, user_a, "https://push.example/shared", p256dh, auth
+            )
+        assert await _count(db_session, "user_id", user_a) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        )
+        assert await _count(db_session, "user_id", user_b) == 1
+
+    async def test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap(
+        self, db_session, two_orgs
+    ):
+        """Re-pointing an already-stored endpoint (browser refresh) must not
+        count as a new device — otherwise a member at the cap could never
+        refresh an existing subscription."""
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_id, user_id = two_orgs["a"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER):
+            await svc.subscribe(
+                org_id, user_id, f"https://push.example/{i}", p256dh, auth
+            )
+
+        again = await svc.subscribe(
+            org_id, user_id, "https://push.example/0", p256dh, auth, "refreshed"
+        )
+        assert again.user_agent == "refreshed"
+        assert await _count(db_session, "user_id", user_id) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        )
 
 
 class TestSend:
@@ -295,6 +471,55 @@ class TestSend:
 
         assert sent == 2
         assert {r["path"] for r in received} == {"/phone", "/tablet"}
+
+    async def test_delivery_is_capped_for_an_account_that_predates_the_limit(
+        self, db_session, two_orgs, push_service_url, received, vapid_keys
+    ):
+        """MSG-13's cap in `subscribe()` only rejects *future* additions --
+        an account that already exceeded it before that fix shipped would
+        otherwise still fan every notification out to every legacy row.
+        Newest-first, so the devices actually reached are the ones a member
+        would expect to still be current."""
+        from datetime import datetime, timedelta, timezone
+
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_id, user_id = two_orgs["a"]
+        now = datetime.now(timezone.utc)
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER + 5):
+            p256dh, auth = _client_keys()
+            endpoint = f"{push_service_url}/device-{i}"
+            await db_session.execute(
+                text(
+                    "INSERT INTO push_subscriptions"
+                    " (id, organization_id, user_id, endpoint, endpoint_hash,"
+                    " p256dh, auth, created_at)"
+                    " VALUES (:id, :org, :user, :endpoint, :hash, :p256dh, :auth, :created)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "org": org_id,
+                    "user": user_id,
+                    "endpoint": endpoint,
+                    "hash": hash_endpoint(endpoint),
+                    "p256dh": p256dh,
+                    "auth": auth,
+                    # Oldest first (device-0 is oldest), so the newest
+                    # _MAX_PUSH_SUBSCRIPTIONS_PER_USER are device-5..24.
+                    "created": now + timedelta(seconds=i),
+                },
+            )
+        await db_session.commit()
+        assert await _count(db_session, "user_id", user_id) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER + 5
+        )
+
+        svc = PushService(db_session)
+        sent = await svc.send_to_user(org_id, user_id, "Drill", "1900")
+
+        assert sent == _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        reached = {r["path"] for r in received}
+        assert reached == {f"/device-{i}" for i in range(5, 25)}
 
     async def test_unconfigured_deployment_sends_nothing(
         self,
@@ -439,3 +664,214 @@ class TestCascade:
         await db_session.commit()
 
         assert await _count(db_session, "user_id", user_id) == 0
+
+
+async def _insert_org_and_user(session, org_id: str, user_id: str, label: str) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO organizations (id, name, organization_type, slug, timezone)"
+            " VALUES (:id, :name, :otype, :slug, :tz)"
+        ),
+        {
+            "id": org_id,
+            "name": f"Push Cap Deadlock Test Org {label}",
+            "otype": "fire_department",
+            "slug": f"pcdt-{org_id[:8]}",
+            "tz": "UTC",
+        },
+    )
+    await session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name,"
+            " last_name, email, password_hash, status)"
+            " VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+        ),
+        {
+            "id": user_id,
+            "org": org_id,
+            "un": f"member-{user_id[:8]}",
+            "fn": "Test",
+            "ln": "Member",
+            "em": f"member-{user_id[:8]}@test.com",
+            "pw": "hashed",
+        },
+    )
+
+
+async def _cleanup_users(*org_ids: str) -> None:
+    async with database_manager.session_factory() as session:
+        for org_id in org_ids:
+            await session.execute(
+                text("DELETE FROM push_subscriptions WHERE organization_id = :o"),
+                {"o": org_id},
+            )
+            await session.execute(
+                text("DELETE FROM users WHERE organization_id = :o"), {"o": org_id}
+            )
+            await session.execute(
+                text("DELETE FROM organizations WHERE id = :o"), {"o": org_id}
+            )
+        await session.commit()
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestConcurrentEndpointSwapDoesNotDeadlock:
+    async def test_two_users_swapping_endpoints_at_once_both_succeed(self):
+        """Codex round 1 on MSG-13: locking the *target* user's row to
+        serialize the cap check introduces a new deadlock if two callers
+        swap endpoints with each other at the same moment -- A claims B's
+        device while B claims A's. Each request would lock its own target
+        first and then block on the other's existing row: a textbook
+        AB/BA cycle. Locking every affected user (target and, when
+        reassigning, the previous owner) in a fixed sorted order -- not in
+        whichever order each request happens to reach them -- must make one
+        request's full lock set a strict subset of a consistent order, so
+        neither can hold half of a cycle. Both requests must complete
+        (whichever wins the race for the smaller id proceeds fully before
+        the other can start), not raise a deadlock error.
+
+        Real committed rows and two genuinely independent sessions running
+        concurrently via asyncio.gather -- a mocked session cannot
+        reproduce a real InnoDB lock-wait/deadlock detector outcome.
+        """
+        org_a, user_a = str(uuid.uuid4()), str(uuid.uuid4())
+        org_b, user_b = str(uuid.uuid4()), str(uuid.uuid4())
+        p256dh, auth = _client_keys()
+
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_user(setup, org_a, user_a, "A")
+            await _insert_org_and_user(setup, org_b, user_b, "B")
+            await setup.commit()
+
+        session_a = database_manager.session_factory()
+        session_b = database_manager.session_factory()
+        try:
+            # Each user starts by owning one endpoint, then both requests
+            # try to claim the OTHER's endpoint at the same time.
+            svc_a = PushService(session_a)
+            svc_b = PushService(session_b)
+            await svc_a.subscribe(
+                org_a, user_a, "https://push.example/dev-a", p256dh, auth
+            )
+            await session_a.commit()
+            await svc_b.subscribe(
+                org_b, user_b, "https://push.example/dev-b", p256dh, auth
+            )
+            await session_b.commit()
+
+            async def claim(svc, session, org_id, user_id, endpoint):
+                sub = await svc.subscribe(org_id, user_id, endpoint, p256dh, auth)
+                await session.commit()
+                return sub
+
+            result_a, result_b = await asyncio.gather(
+                claim(svc_a, session_a, org_a, user_a, "https://push.example/dev-b"),
+                claim(svc_b, session_b, org_b, user_b, "https://push.example/dev-a"),
+                return_exceptions=True,
+            )
+
+            for label, result in (("A", result_a), ("B", result_b)):
+                assert not isinstance(result, BaseException), (
+                    f"claim {label} raised {result!r} instead of completing -- "
+                    "the swap deadlocked"
+                )
+
+            assert result_a.user_id == str(user_a)
+            assert result_b.user_id == str(user_b)
+        finally:
+            await session_a.rollback()
+            await session_b.rollback()
+            await session_a.close()
+            await session_b.close()
+            await _cleanup_users(org_a, org_b)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestConcurrentRefreshDuringTransferStaysConsistent:
+    async def test_a_refresh_racing_a_transfer_never_splits_owner_from_keys(self):
+        """Codex round 3 on MSG-13: the self-refresh fast path decided
+        "I already own this" from a plain, unlocked read. If a transfer
+        away from the old owner committed in between that read and the
+        refresh's own commit, the refresh would still write its (old
+        owner's) encryption keys onto a row a transfer had just reassigned
+        to someone else -- leaving `user_id` pointing at the new owner
+        while `p256dh`/`auth` still belong to the old owner's browser. A
+        push meant for the new owner would then be encrypted with keys the
+        OLD owner's device holds the matching private key for, and
+        delivered there instead.
+
+        Real committed rows, two independent sessions, and asyncio.gather:
+        the old owner "refreshes" (re-subscribes with new keys, believing
+        they still own the endpoint) at the same moment a different user
+        claims that same endpoint. Whichever request the database
+        serializes first must fully decide the row -- user_id and its keys
+        must always agree on which request produced them, never a mix.
+        """
+        org_old, user_old = str(uuid.uuid4()), str(uuid.uuid4())
+        org_new, user_new = str(uuid.uuid4()), str(uuid.uuid4())
+        endpoint = "https://push.example/contested-device"
+        old_keys = _client_keys()
+        new_keys = _client_keys()
+
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_user(setup, org_old, user_old, "OLD")
+            await _insert_org_and_user(setup, org_new, user_new, "NEW")
+            await setup.commit()
+
+        session_old = database_manager.session_factory()
+        session_new = database_manager.session_factory()
+        try:
+            svc_old = PushService(session_old)
+            svc_new = PushService(session_new)
+            # OLD owns the endpoint to start.
+            await svc_old.subscribe(org_old, user_old, endpoint, *old_keys)
+            await session_old.commit()
+
+            async def act(svc, session, org_id, user_id, keys):
+                sub = await svc.subscribe(org_id, user_id, endpoint, *keys)
+                await session.commit()
+                return sub
+
+            result_old, result_new = await asyncio.gather(
+                act(svc_old, session_old, org_old, user_old, old_keys),
+                act(svc_new, session_new, org_new, user_new, new_keys),
+                return_exceptions=True,
+            )
+
+            for label, result in (
+                ("OLD's refresh", result_old),
+                ("NEW's transfer", result_new),
+            ):
+                assert not isinstance(
+                    result, BaseException
+                ), f"{label} raised {result!r}"
+
+            async with database_manager.session_factory() as check:
+                row = (
+                    await check.execute(
+                        text(
+                            "SELECT user_id, p256dh FROM push_subscriptions"
+                            " WHERE endpoint_hash = :h"
+                        ),
+                        {"h": hash_endpoint(endpoint)},
+                    )
+                ).one()
+            final_user_id, final_p256dh = row[0], row[1]
+
+            if final_user_id == str(user_old):
+                assert final_p256dh == old_keys[0], (
+                    "row belongs to OLD but carries NEW's encryption key -- "
+                    "a push meant for NEW would be decryptable on OLD's device"
+                )
+            else:
+                assert final_user_id == str(user_new)
+                assert final_p256dh == new_keys[0], (
+                    "row belongs to NEW but carries OLD's encryption key -- "
+                    "a push meant for NEW would be decryptable on OLD's device"
+                )
+        finally:
+            await session_old.rollback()
+            await session_new.rollback()
+            await session_old.close()
+            await session_new.close()
+            await _cleanup_users(org_old, org_new)

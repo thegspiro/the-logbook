@@ -441,16 +441,39 @@ Management"]**
 
 **[SCREEN: Show the email platform options]**
 
-> "You have several options. **Gmail** and **Microsoft 365** integrate via
-> OAuth or app passwords. **Self-Hosted SMTP** is the most universal — any
-> email provider with SMTP credentials. And if your domain is on
-> **Cloudflare**, you can use **Cloudflare Email Service** — it sends via
-> REST API, so you don't need an SMTP server at all. Cloudflare handles
-> SPF, DKIM, and DMARC automatically."
+**[EDITOR NOTE (2026-09-03): REWRITTEN. The previous take said Gmail and
+Microsoft 365 "integrate via OAuth or app passwords". There was no working OAuth
+path for either — the Client ID / Client Secret fields were decorative, no token
+was ever obtained, and the fields have now been removed. Worse, **both platforms
+could not send at all** until this window: the form stored credentials under
+keys the sender never read. Do not re-use the old footage; the fields it shows
+no longer exist.]**
+
+> "You have several options. **Gmail** and **Microsoft 365** send over ordinary
+> SMTP with an **app password** — the host, port and encryption are filled in
+> for you, so all you supply is the From address and the app password.
+> **Self-Hosted SMTP** is the most universal — any provider with SMTP
+> credentials. And if your domain is on **Cloudflare**, **Cloudflare Email
+> Service** sends via REST API, so you don't need an SMTP server at all;
+> Cloudflare handles SPF, DKIM and DMARC automatically."
 
 > "For most departments, Gmail or Microsoft 365 with an app password is the
-> easiest path. Cloudflare is a good option if you're already managing your
-> DNS there and want a simple setup."
+> easiest path. Cloudflare is a good option if you're already managing your DNS
+> there and want a simple setup."
+
+**[SCREEN: Microsoft 365 selected, showing App registration (OAuth) beside App
+Password]**
+
+> "Microsoft 365 has one extra choice, and it's worth taking. Exchange Online is
+> retiring Basic authentication for SMTP — an app password **is** Basic auth —
+> so there's now an **App registration** option that uses a proper Entra ID
+> app. If you're setting up Microsoft 365 fresh, start there."
+
+**[SCREEN: Test Connection button and a successful result]**
+
+> "Whichever you pick, finish with **Test Connection**. It signs in to the
+> provider without saving, so you find out here rather than the first time the
+> system tries to send somebody a password reset."
 
 **[SCREEN: Select SMTP and show the configuration fields]**
 

@@ -54,6 +54,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatHistoryDetails } from './itemHistoryDetails';
+import { onHandQuantity } from '../utils/onHand';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 
@@ -449,7 +450,12 @@ const ItemDetailPage: React.FC = () => {
         {/* Stock — uniform pool items */}
         {itemType === 'uniform' && item.tracking_type === 'pool' && (
           <Card title="Stock" icon={<Package className="h-4 w-4" />}>
-            <Field label="Qty On Hand" value={item.quantity} />
+            {/* Lots and `quantity` are separate ledgers -- receiving a lot
+                never touches the column, so an item stocked through lots
+                (see the Stock tab) has a stale/zero quantity here unless
+                this reads the same lot-derived total the list page and
+                low-stock alerts already do. */}
+            <Field label="Qty On Hand" value={onHandQuantity(item)} />
             <Field label="Qty Issued" value={item.quantity_issued} />
             <Field label="Unit" value={item.unit_of_measure || '--'} />
           </Card>

@@ -13,6 +13,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import {
   AlertTriangle,
+  Archive,
   ArrowLeft,
   CalendarClock,
   PackagePlus,
@@ -24,10 +25,12 @@ import {
   Tag,
   TrendingDown,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import type { MedicalSupplySummary } from '../../../services/medicalSuppliesService';
 import type { ExpiringLot, InventoryCategory, InventoryItem } from '../../../services/eventServices';
 import { useAuthStore } from '../../../stores/authStore';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -126,6 +129,7 @@ const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone }) => (
 
 const MedicalSuppliesPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
+  const { confirm } = useConfirm();
   // Either grant works: a department running one supply line holds the broad
   // one, a department that split the job holds the medical one.
   const canManage = checkPermission('inventory.manage_medical') || checkPermission('inventory.manage');
@@ -377,6 +381,22 @@ const MedicalSuppliesPage: React.FC = () => {
     setEditingItem(null);
     setShowDeliveryModal(false);
     void refresh();
+  };
+
+  const handleRetire = async (item: InventoryItem) => {
+    const confirmed = await confirm({
+      title: 'Retire supply',
+      message: `Retire ${item.name}? This cannot be undone.`,
+      confirmLabel: 'Retire',
+    });
+    if (!confirmed) return;
+    try {
+      await medicalSuppliesService.retireItem(item.id);
+      toast.success(`${item.name} retired`);
+      void refresh();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to retire supply'));
+    }
   };
 
   return (
@@ -737,6 +757,14 @@ const MedicalSuppliesPage: React.FC = () => {
                               aria-label={`Edit ${item.name}`}
                             >
                               <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleRetire(item)}
+                              className="btn-icon"
+                              aria-label={`Retire ${item.name}`}
+                            >
+                              <Archive className="h-4 w-4" />
                             </button>
                           </td>
                         )}

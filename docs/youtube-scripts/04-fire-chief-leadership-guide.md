@@ -510,7 +510,14 @@ who's swapping, which shifts, and the impact on coverage.]**
 
 ### SETTING SHIFT CLOSE-OUT RULES (19:45 – 20:15)
 
-**[SCREEN: Scheduling → Settings → Close-out rules card]**
+**[SCREEN: Administration → Scheduling → Settings → General → Close-out rules
+card]**
+
+**[EDITOR NOTE (2026-09-05): this used to be reached from a strip of "Officer
+tools" on the member-facing Scheduling page. Scheduling administration moved
+into the **Administration** section, and each settings section is now its own
+route — `/scheduling/admin/settings/general`. The old `/scheduling/settings`
+address lands on the dashboard with no error.]**
 
 > "Here's where you set your department's standards for closing out a shift. You
 > can require that end-of-shift equipment checks are done before an officer can

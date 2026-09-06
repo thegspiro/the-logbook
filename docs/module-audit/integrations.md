@@ -30,9 +30,15 @@ handling, OAuth, webhook verification).
   (`is_duplicate_webhook`) + rate limiting; org-scoped from the integration.
 - **Tenant isolation:** every by-id read/connect/disconnect/update/test filters
   `organization_id`; salesforce sync resolves via an org-scoped helper; base
-  HTTP client has hardened defaults (TLS verify, no redirect-following, timeouts,
-  size cap). Salesforce URLs are fixed constants / regex-locked to
+  HTTP client has hardened defaults (TLS verify, no redirect-following,
+  timeouts). Salesforce URLs are fixed constants / regex-locked to
   `*.salesforce.com`. flake8 clean; no TODO/FIXME.
+  **Correction (security-review INT-27, 2026-09-06):** this bullet previously
+  also claimed a response-size cap. It does not exist — `base.py`'s
+  `MAX_RESPONSE_SIZE` constant is declared but never read anywhere in the
+  codebase; every connector's non-streaming `client.get(...).json()` buffers
+  the full response into memory regardless of size. See INT-7 in
+  `docs/security-review/INT-27-integrations.md`.
 
 ## Findings
 

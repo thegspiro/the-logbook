@@ -756,7 +756,7 @@ Sarah taps **Check Out**, selects herself as the borrower (her name is pre-fille
 
 > **Corrected 2026-08-12.** The item detail page has **no Check Out button**.
 > Its actions are Back, Print Barcode and (for a manager) Edit. A checkout is
-> made against a _member_, from **Gear Admin > Members > Assign** — which
+> made against a _member_, from **Inventory Admin > Members > Assign** — which
 > is why the walkthrough above has Sarah select herself as the borrower.
 
 ### Part 3: Offline Training Submission (Afternoon — No Signal)
@@ -871,3 +871,76 @@ because a kiosk loses focus to the first stray tap on the screen and a station
 that has silently stopped reading is worse than one that was never armed.
 
 ![The station left running on a tablet: armed, waiting for the next card, with the previous tap recorded beneath it](./images/10-21-check-in-station-tablet.png)
+
+## Quick Add: two taps from anywhere _(2026-09-01)_
+
+**The centre of the phone bottom bar is an Add button.** It opens a short list of
+the things a member actually logs:
+
+- Training hours
+- A rig check
+- An action item
+- A shift report
+- Clocking in
+- Checking into a shift
+- Scanning a member ID
+- And for officers: requesting equipment, creating an event, adding a member
+
+Before this, every one of them was reached the same way: tap **More**, wait for
+the drawer, find the module, find the page, find its button. **Four taps and two
+page loads before the first field.**
+
+> **Screenshot needed:**
+> _[The phone bottom bar at 390px with the Add button in the centre, and the
+> Quick Add sheet open showing the entry rows. Capture as a member — the officer
+> rows are gated and should not appear in a member's sheet.]_
+
+**Quick Add adds no forms of its own.** Each row goes to the screen that already
+owns that entry, so there is no second path for the same data to drift down and
+nothing that can fall behind a form's own validation rules.
+
+**Rows appear only where the page behind them would actually open.** A row gated
+more widely than its route is a link to Access Denied placed there by the app
+itself, so every row is resolved against the real route definition: the route
+must exist, the row's permissions must be a subset of what the route accepts,
+and a route's module gate must be repeated on the row.
+
+### The bar keeps five items; configurable slots go from three to two
+
+Six items on a 390px phone is 65px each, and it puts the action at an edge
+rather than under the thumb.
+
+**A bar layout saved before this keeps its first two destinations** and is left
+intact — the third is still one tap away under **More**.
+
+## Settings screens are usable on a phone _(2026-08-31)_
+
+- The section row across the top of every settings screen — Organization,
+  Scheduling, Elections, Events, Email Templates, Checklist Settings and your own
+  account — rendered its pills at **36px tall**, under the 44px a finger reliably
+  hits. They grow to 44px on phones now.
+- On a screen with enough sections to overflow a phone (Organization Settings
+  has six), **the last pill sat off the right edge with no way to reach it.** The
+  row scrolled sideways, but nothing told the browser it was a scroll region, so
+  a keyboard could not reach it and the overflow read as a layout fault rather
+  than a strip. Both the section row and the sub-page rail beneath it now declare
+  themselves scrollable and are keyboard-reachable.
+- Organization Settings' **"Upload logo"** button was a 20px-tall text link.
+
+## Dialogs: Shift Details is now a centred modal _(2026-09-05)_
+
+The Shift Details surface was a right-edge drawer, full-bleed on phones. It is a
+**centred dialog** now — a 1rem-inset box on a phone, scrolling within itself,
+and 56rem on a laptop.
+
+Any existing capture or walkthrough showing it slide in from the right edge is
+wrong, not merely stale.
+
+## Offline drafts are no longer discarded on a bad connection _(2026-08-31)_
+
+- **Loading your profile after an offline or interrupted connection could
+  silently discard unsynced shift-report drafts and equipment-check
+  submissions.** Only a confirmed sign-out clears local data now.
+- **Entering a wrong or expired MFA code was treated as an expired session**:
+  the app purged local data and hard-redirected to the login screen instead of
+  showing "invalid code, try again."

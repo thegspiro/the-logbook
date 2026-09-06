@@ -1628,3 +1628,107 @@ that the profile is the viewer's own.
 
 The profile now **fetches nothing it may not show**: a viewer without the
 permission issues no request at all.
+
+## The member roster is a directory again _(2026-09-01)_
+
+`/members` carries no permission gate — it is the department directory, open to
+everyone — but it was rendering the membership coordinator's working screen to
+everyone too:
+
+- a username under each name
+- a hire date column
+- a per-row Actions column
+- bulk-selection checkboxes with **Print Badges** and **Export Selected**
+- a CSV export of the whole roster
+- the title _"Membership Management — Manage department members and records"_
+
+A firefighter looking up who is on B platoon was reading a personnel management
+table.
+
+**Those elements are now shown only to holders of `members.manage`** — the same
+grant that already gated Add Member, Import CSV and Delete on this page. **For a
+coordinator, nothing has changed.**
+
+Everyone still gets the status counters, the contact column their department has
+chosen to publish, search, filtering and pagination. For them the page is titled
+**Member Directory**.
+
+> **Screenshot needed:**
+> _[`/members` as a member without `members.manage`: titled "Member Directory",
+> with no usernames, no hire-date column, no Actions column and no bulk
+> selection. Pair it with the existing coordinator capture — the difference
+> between the two is the lesson.]_
+
+**Search no longer matches a username** for members who cannot see one. It is
+not displayed anywhere on their page, so a row returned for "ladams" had no
+visible reason to be there. Name, membership number and email — the three the
+search box has always advertised — are unchanged, for everyone.
+
+**Clicking a member's row opens their profile.** The only way in used to be the
+pencil in the Actions column, which is now gone for most of the department, so
+the row and the phone card carry it instead — for coordinators as well, who keep
+the pencil. The member's name is a real link rather than the row being a tab
+stop, so a screen reader gets one target per row instead of twenty-five, and the
+name can be middle-clicked or opened in a new tab. Clicks that land on a
+checkbox or an action button are still theirs.
+
+> **This is a change to what the page _shows_, not to what the server _sends_.**
+> The member list endpoint still returns usernames and hire dates to anyone with
+> `members.view`, so this declutters the screen — **it is not a confidentiality
+> boundary.** It is recorded as a known limitation for that reason.
+
+## A member chooses what colleagues see _(2026-09-02)_
+
+Until now the only control over who sees a member's contact details was the
+organisation-wide setting, which decides for every member at once — and the home
+address and personal email were hidden from other members unconditionally.
+
+Each member can now choose **per field**: email, personal email, phone, mobile
+and address.
+
+> **Screenshot needed:**
+> _[The profile-visibility controls on a member's own profile: the five field
+> toggles with a mix of on and off states.]_
+
+A member who has never chosen keeps exactly the behaviour they had — the
+defaults reproduce the previous rules, so the upgrade changes nothing until
+somebody opens the control.
+
+## The roster was dropping platoon assignments _(2026-09-02)_
+
+`GET /users` **declared** `platoon` on its response schema and never populated
+it from the real member record. The Platoon Roster Panel reads platoon straight
+from this endpoint to show each member's current assignment, so it always
+rendered **every member as unassigned** regardless of their real platoon.
+
+Fixed for `platoon`. Three sibling fields — member class, member status and
+compliance exemption — are declared on the same schema and remain unset pending
+a decision about which roster fields belong at which permission tier.
+
+## Membership Committee Chair → Membership Coordinator, finally _(2026-09-05)_
+
+The rename shipped months ago and **never ran on any department that upgraded**.
+The migration named a table `positions` at a point in the chain where it was
+still called `roles`; when that made a fresh install fail, an existence guard
+was added, which turned the crash into a silent no-op — and the table was
+renamed six days later without anyone revisiting it.
+
+Two other repairs were lost the same way: role-targeted department messages were
+never converted from position names to ids, and the default **Member** position
+never received the equipment-check submit grant, **so those members lost the
+checklist on upgrade**.
+
+A new migration performs all three. It is careful in three ways the original was
+not:
+
+- it **skips a department that already has a Membership Coordinator**, because
+  two rows with one slug would be rejected by the database;
+- it **leaves alone a position the department created for itself**;
+- it **converts message targeting before renaming** — otherwise a message
+  addressed to "Membership Committee Chair" would resolve to nothing and stay
+  undeliverable.
+
+> **A message targeting a name two positions share is left as-is.** Departments
+> may have two positions with the same display name, and replacing that name
+> with one position's id would silently drop the other's members from the
+> audience.
