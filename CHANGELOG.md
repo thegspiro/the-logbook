@@ -45,6 +45,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run on. The refresh is skipped while a close-out wizard is open, so it cannot
   unmount unsaved entries, and a failed refresh leaves the last good list on
   screen rather than blanking a working page.
+### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
+
+**Fixed**
+
+- **Building an equipment checklist on a phone, the blue "Add item" button
+  at the bottom of a location could not be tapped.** It was drawn
+  underneath the checklist's own bottom bar and the app's bottom
+  navigation, so taps landed on those instead. Adding an item has moved
+  onto the checklist's bottom bar, where it stays reachable, follows the
+  location you last opened, and scrolls to that location when you use it.
+  Adding a _location_ is still on the same bar, now labelled "Location",
+  and remains available from the buttons below the list as before.
+- **Several buttons were smaller than a fingertip on a phone.** Buttons on
+  My Issued Gear, My Equipment Checklists, Reorder Requests and the
+  checklist builder now meet the 44-pixel minimum touch size on phones.
+- **A stray scrollbar under the tabs on an inventory item's page** has been
+  removed.
+### Create Shift: the dialog's fields had no names (2026-09-06)
+
+**Fixed**
+
+- **Nothing in the Create Shift dialog was announced by name.** All nine of its
+  controls — Shift Template, Start Date, End Date, Apparatus, Start Time, End
+  Time, Shift Officer, Notes and the template search box — sat next to a label
+  that was never associated with them, so a screen reader read out nine
+  anonymous fields ("edit text", "combo box") and gave no way to tell which was
+  which. Clicking a label also focused nothing, which is the same defect as seen
+  with a mouse. Every field now carries its label.
+- "Custom Times" heads the Start Time / End Time pair rather than naming a
+  single field, so it is announced as the group it is instead of claiming to be
+  one of them.
+- **The two time fields were announced as a time, not as a field.** Each is
+  three dropdowns (hour, minute, AM/PM) that name themselves, and the start
+  field named itself after whatever time the chosen template starts at — so a
+  screen reader offered "08:00 hour" where it should have said "Start Time
+  hour", and the end field fell back to a bare "Time". All six now carry the
+  visible field name.
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
 
 **Fixed**

@@ -574,6 +574,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const isWideCanvas = useMediaQuery('(min-width: 1440px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
   const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
+  /**
+   * Which location the phone action bar's "Add item" opens.
+   *
+   * The per-compartment add bar this replaced was `sticky bottom-0`, so CSS
+   * gave it its target for free: whichever location was under the thumb owned
+   * the bar. It was also unreachable — the bar sat at `z-20` beneath both this
+   * action bar (`z-30`) and the 56px mobile bottom navigation (`z-50`), so the
+   * button it held could not be tapped. One bottom surface has to carry the
+   * action instead, and a viewport-fixed bar has no location of its own, so
+   * the target is tracked: the last location the author expanded or added to.
+   */
+  const [mobileAddTargetKey, setMobileAddTargetKey] = useState<string>('');
   const [highlightedItemKeys, setHighlightedItemKeys] = useState<Set<string>>(new Set());
 
   // Bulk selection: per-compartment set of selected item indices
@@ -748,16 +760,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Compartment helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Open one location, and point the phone action bar's Add item at it.
+   *
+   * Every path that opens a single location goes through here. Updating the
+   * target beside two hand-picked callers instead is what let `addCompartment`
+   * create a location, expand it, and leave the bar adding to the previous
+   * one — the same shape of defect twice, so the update belongs with the
+   * expansion rather than at each call site.
+   *
+   * Bulk expansion (load, staged import, Expand all) deliberately does not
+   * route through here: it opens no particular location, so there is nothing
+   * for the bar to follow and the derived fallback stays right.
+   */
+  const openCompartment = (key: string) => {
+    setExpandedCompartments((prev) => new Set(prev).add(key));
+    setMobileAddTargetKey(key);
+  };
+
   const toggleCompartmentExpanded = (key: string) => {
-    setExpandedCompartments((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
+    if (expandedCompartments.has(key)) {
+      setExpandedCompartments((prev) => {
+        const next = new Set(prev);
         next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
+        return next;
+      });
+      return;
+    }
+    openCompartment(key);
   };
 
   /**
@@ -769,9 +799,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * they cannot drift apart.
    */
   const openAddSurface = (key: string) => {
-    setExpandedCompartments((prev) => new Set(prev).add(key));
+    openCompartment(key);
     if (!isLaptop) {
       setMobileAddLocations((previous) => new Set(previous).add(key));
+      // Focus explicitly rather than leaning on the composer's `autoFocus`,
+      // which only fires on mount. Re-opening a location whose composer is
+      // already open leaves the tapped control holding focus, so the second
+      // tap of the action bar's Add item did nothing visible and the author
+      // had to find the field themselves.
+      window.setTimeout(() => document.getElementById(`quick-add-${key}`)?.focus(), 0);
       return;
     }
     window.setTimeout(() => document.getElementById(`compose-${key}`)?.focus(), 0);
@@ -784,7 +820,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const comp = emptyCompartment();
         comp.parentCompartmentId = parentCompartmentId;
         setCompartments((prev) => [...prev, comp]);
-        setExpandedCompartments((prev) => new Set(prev).add(comp.clientKey));
+        openCompartment(comp.clientKey);
         return;
       }
 
@@ -811,7 +847,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         };
         savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
-        setExpandedCompartments((prev) => new Set(prev).add(created.id));
+        openCompartment(created.id);
         toast.success('Compartment added');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add compartment'));
@@ -1038,7 +1074,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next.splice(idx + 1, 0, copy);
       return next;
     });
-    setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
+    // `id ?? clientKey`, matching getCompKey: a clone of a SAVED location comes
+    // back from compartmentFormFromResponse with a server id and a fresh
+    // clientKey, and the row renders under the id. Passing the clientKey names
+    // a location that does not exist, so the clone opened collapsed (that half
+    // predates the action bar) and the bar's target falls through to the last
+    // location instead of the copy just made.
+    openCompartment(copy.id ?? copy.clientKey);
     toast.success(comp.id ? `“${copy.name}” added` : 'Draft compartment duplicated');
     if (!comp.id) markDirty();
   };
@@ -3425,7 +3467,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => {
                   const job = quickAddJobs.current[item.clientKey ?? ''];
                   if (job) runQuickAdd(job);
@@ -3435,7 +3477,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 max-md:min-h-[44px] max-md:min-w-[44px] dark:text-red-400 dark:hover:bg-red-900/20"
                 onClick={() => {
                   delete quickAddJobs.current[item.clientKey ?? ''];
                   replaceQuickAddItem(compKey, item.clientKey ?? '', null);
@@ -4146,7 +4188,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               aria-label={`Add item to ${comp.name || 'location'}`}
               className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
-              onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+              // Through openAddSurface, not setMobileAddLocations directly: the
+              // action bar's Add item follows whichever location was last
+              // opened, and a handler that skips the funnel leaves it pointing
+              // at the previous one. That is the drift openAddSurface's own
+              // docstring says cannot happen, and this call site was it.
+              onClick={() => openAddSurface(key)}
             >
               <Plus className="h-4 w-4" aria-hidden="true" /> Add
             </button>
@@ -4214,7 +4261,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 className={mobileMenuItemClass}
                 onClick={() => {
-                  setExpandedCompartments((previous) => new Set(previous).add(key));
+                  openCompartment(key);
                   window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
                 }}
               >
@@ -4495,6 +4542,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       onAdd={(payload) => handleQuickAdd(idx, payload)}
                       canCreateInventory={canManageInventory}
                       autoFocus
+                      inputId={`quick-add-${key}`}
                       placeholder="Add or search items…"
                     />
                     <button
@@ -4531,21 +4579,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 created before anything is. No mode to choose — the text
                 decides, because a mode toggle is a question the author
                 already answered by typing. */}
-            {!isLaptop && (
-              <div
-                data-testid={`mobile-add-action-${key}`}
-                className="bg-theme-surface sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-              >
-                <button
-                  type="button"
-                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white shadow-lg"
-                  onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
-                >
-                  <Plus className="h-5 w-5" aria-hidden="true" /> Add item
-                </button>
-              </div>
-            )}
-
             {isLaptop && (
               <div className="flex items-start gap-2.5 pt-2 pb-3">
                 <Plus className="text-theme-text-muted mt-2.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
@@ -5120,7 +5153,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // A row inside a collapsed location is not in the DOM to scroll to, so the
     // jump has to open it first — and then wait a frame for it to render.
     if (expandKey && !expandedCompartments.has(expandKey)) {
-      setExpandedCompartments((prev) => new Set(prev).add(expandKey));
+      openCompartment(expandKey);
       window.setTimeout(() => goToBlocker(anchorId, undefined, focusId, editorTarget, addKey), 0);
       return;
     }
@@ -5149,6 +5182,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
     .find(({ key }) => mobileSelectionLocations.has(key));
   const mobileSelectedCount = mobileSelection ? (selectedItems[mobileSelection.key]?.size ?? 0) : 0;
+
+  /**
+   * The location the phone action bar's "Add item" opens.
+   *
+   * Falls back to the last item-bearing location rather than the first: a
+   * template is built top-down, so the end of the list is where the author
+   * just was. A section header holds no items, so it can never be the target,
+   * and a tracked key that has since been deleted resolves to the fallback
+   * rather than to nothing.
+   */
+  const mobileAddTarget = (() => {
+    const addable = compartments
+      .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
+      .filter(({ compartment }) => !compartment.isHeader);
+    return addable.find(({ key }) => key === mobileAddTargetKey) ?? addable[addable.length - 1];
+  })();
 
   // ---------------------------------------------------------------------------
   // Main render
@@ -5331,7 +5380,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11 max-md:min-w-11"
             >
               <CheckCircle2 className="h-4 w-4" /> Publish
             </button>
@@ -5909,27 +5958,72 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     Delete
                   </button>
                 </>
-              ) : autoSaveStatus === 'saving' || saving ? (
-                <button
-                  type="button"
-                  className="text-theme-accent-blue min-h-11"
-                  onClick={() => inlineInputRef.current?.blur()}
-                >
-                  Done
-                </button>
-              ) : blockingItems > 0 ? (
-                <button type="button" className="text-theme-accent-blue min-h-11" onClick={() => setShowPreview(true)}>
-                  Review
-                </button>
               ) : (
-                <button
-                  type="button"
-                  className="text-theme-accent-blue min-h-11"
-                  onClick={() => void addCompartment()}
-                  disabled={addingCompartment}
-                >
-                  Add
-                </button>
+                <>
+                  {/* The one bottom surface on this breakpoint, so it carries
+                      adding an item as well as the state's own next action —
+                      the per-location bar that used to is gone (it sat under
+                      this bar and under the mobile navigation, and could not
+                      be tapped). Outside the ternary below because a template
+                      mid-build almost always has blockers, and "Review" must
+                      not be what takes adding an item away.
+
+                      A viewport-fixed bar has no location of its own, so it
+                      scrolls to the one it targets: opening a panel on a
+                      location that is off-screen would look like nothing
+                      happened. The label names the target for a screen
+                      reader, and stays distinct from the location row's own
+                      "Add item to X" so the two are separable. */}
+                  {mobileAddTarget && (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      aria-label={`Add an item to ${mobileAddTarget.compartment.name || 'location'}`}
+                      onClick={() => {
+                        document.getElementById(`comp-row-${mobileAddTarget.key}`)?.scrollIntoView({
+                          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                          block: 'center',
+                        });
+                        openAddSurface(mobileAddTarget.key);
+                      }}
+                    >
+                      Add item
+                    </button>
+                  )}
+                  {autoSaveStatus === 'saving' || saving ? (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      onClick={() => inlineInputRef.current?.blur()}
+                    >
+                      Done
+                    </button>
+                  ) : blockingItems > 0 ? (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      onClick={() => setShowPreview(true)}
+                    >
+                      Review
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      /* The canvas toolbar's own button is already named
+                         "Location" and renders at every width, so a bare
+                         "Location" here would be a second control with the
+                         same name on the same phone screen. The label names
+                         the action, and parallels its sibling's "Add an item
+                         to X". */
+                      aria-label="Add a location"
+                      onClick={() => void addCompartment()}
+                      disabled={addingCompartment}
+                    >
+                      Location
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
