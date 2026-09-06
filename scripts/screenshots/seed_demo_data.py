@@ -240,11 +240,20 @@ POSITION_NOT_ELIGIBLE = re.compile(
 # contention path in `create_assignment`.
 SEAT_TAKEN = re.compile(r"was just claimed|filled after this request", re.IGNORECASE)
 
+# `_assignment_refusal` caps how many seats on one shift may go to
+# administrative members, counted under a locking read. The seeder's day pool
+# rotates every active member through the roster, so on a department with
+# several administrative members it reaches that cap by ordinary rotation —
+# the fifth way a seat is refused for a correct reason.
+ADMIN_SEATS_FULL = re.compile(
+    r"Administrative access seats were already filled", re.IGNORECASE
+)
+
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Four refusals are ordinary and must not fail the seed:
+    Five refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -262,8 +271,11 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
       short; if that top-up runs twice (a re-run interrupted and restarted, or
       a manual assignment made between runs), the second attempt on the same
       seat is refused, not double-booked.
+    * **The shift's administrative seats are full.** A shift caps how many of
+      its seats may go to administrative members. The day pool rotates every
+      active member through, so it reaches that cap on its own.
 
-    All four leave the shift a seat short, which is what the Open Shifts tab
+    All five leave the shift a seat short, which is what the Open Shifts tab
     exists to show. Treating any of them as fatal aborted the whole scheduling
     step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
@@ -276,6 +288,7 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
         or DRIVER_NOT_QUALIFIED.search(exc.detail)
         or POSITION_NOT_ELIGIBLE.search(exc.detail)
         or SEAT_TAKEN.search(exc.detail)
+        or ADMIN_SEATS_FULL.search(exc.detail)
     )
 
 
