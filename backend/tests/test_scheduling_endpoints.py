@@ -129,6 +129,42 @@ class TestEndpointPermissions:
         # Should use get_current_user, NOT require_permission
         assert any("get_current_user" in d for d in deps)
 
+    def test_answering_your_own_roster_needs_no_permission(self):
+        """Confirm and decline are both the member's own answer, so both are
+        reachable by any authenticated user and neither carries a permission
+        dependency.
+
+        Decline had no endpoint of its own: the screens reached for
+        ``PATCH /assignments/{id}``, which requires ``scheduling.assign`` or
+        being the shift's officer, so a plain member's Decline button answered
+        403 while Confirm beside it worked. Asserted as a pair because the
+        asymmetry is the bug — a decline route that drifts back behind a
+        permission fails here.
+        """
+        for path in (
+            "/assignments/{assignment_id}/confirm",
+            "/assignments/{assignment_id}/decline",
+        ):
+            deps = self._get_route_deps(path, "POST")
+            assert deps is not None, f"Route {path} POST not found"
+            assert any(
+                "get_current_user" in d for d in deps
+            ), f"POST {path} does not admit a plain authenticated member"
+            assert not any(
+                "PermissionChecker" in d for d in deps
+            ), f"POST {path} unexpectedly carries a permission gate"
+
+    def test_declining_on_someone_elses_behalf_stays_officer_only(self):
+        """The self-service decline does not widen the officer edit path.
+
+        ``PATCH /assignments/{id}`` is how an officer records a decline for a
+        member, and it carries edits (position, training slot) a member has no
+        business making — so it keeps its gate while the new route opens.
+        """
+        deps = self._get_route_deps("/assignments/{assignment_id}", "PATCH")
+        assert deps is not None, "Route /assignments/{assignment_id} PATCH not found"
+        assert any("get_current_user" in d for d in deps)
+
     def test_open_shifts_uses_get_current_user(self):
         deps = self._get_route_deps("/shifts/open", "GET")
         assert deps is not None, "Route /shifts/open GET not found"

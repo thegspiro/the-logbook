@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Declining your own shift no longer answers 403 (2026-09-06)
+
+**Added**
+
+- **`POST /scheduling/assignments/{id}/decline`** — the mirror of the existing
+  `confirm` route, self-scoped the same way: the assignment is resolved by
+  `user_id` as well as id, so a foreign id can never cross tenants. It clears
+  `confirmed_at` when a member withdraws an affirmation they had already given,
+  and only notifies the officer on the transition, so a retry after a dropped
+  response does not report the seat open twice.
+
+**Fixed**
+
+- **A member could not decline their own shift assignment.** Confirm and
+  Decline sit side by side on My Shifts and in the shift detail panel, and are
+  only ever offered on your own seat — but only Confirm had a route of its own.
+  Decline reached for `PATCH /assignments/{id}`, which requires
+  `scheduling.assign` or being the shift's officer, so a member holding neither
+  got a 403 from a button that was theirs to press. Both screens now call the
+  new endpoint. The PATCH route is unchanged and stays officer-only: it is how
+  an officer records a decline on somebody's behalf, and it carries edits a
+  member has no business making.
+
 ### Events and Training pages say which hub they belong to (2026-09-06)
 
 **Added**

@@ -706,6 +706,14 @@ export const schedulingService = {
     const response = await api.post<Assignment>(`/scheduling/assignments/${assignmentId}/confirm`);
     return response.data;
   },
+  // The mirror of confirmAssignment, and self-scoped the same way. Declining
+  // is NOT `updateAssignment({ assignment_status: 'declined' })`: that route
+  // requires scheduling.assign or being the shift's officer, so a member
+  // answering their own roster got a 403 from it.
+  async declineAssignment(assignmentId: string): Promise<Assignment> {
+    const response = await api.post<Assignment>(`/scheduling/assignments/${assignmentId}/decline`);
+    return response.data;
+  },
 
   // Attendance history
   async getMyAttendanceHistory(

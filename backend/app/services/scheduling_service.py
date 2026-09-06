@@ -4295,6 +4295,75 @@ class SchedulingService:
             await self.db.rollback()
             return None, str(e)
 
+    async def decline_assignment(
+        self,
+        assignment_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        actor: SignupActor = SignupActor.MANAGER,
+    ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
+        """Decline a shift assignment (by the assigned user).
+
+        The mirror of :meth:`confirm_assignment` and self-scoped for the same
+        reason: declining is the member's own answer to being rostered, so the
+        row is resolved by ``user_id`` as well as id and a foreign assignment
+        id can never cross tenants. The general ``update_assignment`` path
+        stays officer-only — it is how an officer records a decline on
+        somebody's behalf, and it carries edits a member has no business
+        making.
+        """
+        try:
+            query = (
+                select(ShiftAssignment)
+                .where(ShiftAssignment.id == str(assignment_id))
+                .where(ShiftAssignment.user_id == str(user_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
+            )
+            result = await self.db.execute(query)
+            assignment = result.scalar_one_or_none()
+            if not assignment:
+                return None, "Shift assignment not found or not assigned to you"
+
+            # Actor first, so the exempt path costs no extra query — the same
+            # reasoning as confirm_assignment above.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return None, locked
+
+            already_declined = assignment.assignment_status == AssignmentStatus.DECLINED
+            position = assignment.position
+
+            assignment.assignment_status = AssignmentStatus.DECLINED
+            # A member who confirmed and then declined must not keep the
+            # confirmation timestamp: it records an affirmation they have
+            # withdrawn, and the close-out roster reads it.
+            assignment.confirmed_at = None
+
+            await self.db.commit()
+            await self.db.refresh(assignment)
+
+            # Only on the transition, so a repeated tap — or a retry after a
+            # dropped response — does not tell the officer twice that this seat
+            # opened up. update_assignment guards the same notification the
+            # same way.
+            if not already_declined:
+                await self._notify_shift_decline(
+                    shift_id=assignment.shift_id,
+                    user_id=assignment.user_id,
+                    position=str(position or ""),
+                    organization_id=organization_id,
+                    action="declined",
+                )
+
+            return assignment, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
     # ============================================
     # Shift Decline / Drop Notifications
     # ============================================
