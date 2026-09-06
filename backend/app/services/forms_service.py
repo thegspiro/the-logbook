@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from loguru import logger
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,6 +39,23 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 if TYPE_CHECKING:
     from app.models.membership_pipeline import ProspectiveMember
+
+_DEADLOCK_MYSQL_CODE = 1213
+
+
+def _is_deadlock(exc: OperationalError) -> bool:
+    """Whether *exc* is InnoDB error 1213 (deadlock), not some other
+    operational failure a blanket retry would otherwise silently mask.
+
+    Same shape as ``push_service.py``'s helper of the same name; there is no
+    shared utility for this, so it is duplicated rather than imported across
+    services.
+    """
+    if exc.orig and hasattr(exc.orig, "args") and exc.orig.args:
+        code = exc.orig.args[0]
+        if isinstance(code, int):
+            return code == _DEADLOCK_MYSQL_CODE
+    return "deadlock" in str(exc).lower()
 
 
 class FormsService:
@@ -951,7 +970,62 @@ class FormsService:
         submitted_by: Optional[str] = None,
         enforce_daily_cap: bool = False,
     ) -> Tuple[Optional[FormSubmission], Optional[str]]:
-        """Submit a public form while enforcing its identity policy."""
+        """Submit a public form while enforcing its identity policy.
+
+        Retries once on a genuine InnoDB deadlock (MySQL error 1213) out of
+        the no-repeat duplicate-submission check below. That check's second
+        query can match zero rows (no prior submission yet), and a
+        ``FOR UPDATE`` probe that matches nothing takes an InnoDB *gap* lock
+        over the index range instead of a record lock; unlike a record lock,
+        a gap lock is compatible with another transaction's gap lock on the
+        same range. Two callers submitting the first-ever entry for two
+        *different* no-repeat forms can each acquire a compatible gap lock
+        and then each block on the other's insert-intention lock -- a
+        deadlock, not a correctness bug (same shape as FAC-45 in
+        ``documents_service.py`` and MSG-13 in ``push_service.py``).
+
+        The retry re-runs the whole attempt from a fresh ``get_form_by_slug``
+        rather than resuming the failed one: a deadlock's rollback expires
+        every attribute on the ``form`` loaded in the failed attempt, and
+        async SQLAlchemy cannot transparently re-fetch an expired
+        relationship (``form.fields``) without a lazy-load, which raises
+        outside a greenlet. Retrying the whole method sidesteps that
+        entirely by never touching the old, now-expired instance.
+        """
+        for attempt in (1, 2):
+            try:
+                return await self._submit_public_form_once(
+                    slug=slug,
+                    data=data,
+                    submitter_name=submitter_name,
+                    submitter_email=submitter_email,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    honeypot_value=honeypot_value,
+                    submitted_by=submitted_by,
+                    enforce_daily_cap=enforce_daily_cap,
+                )
+            except OperationalError as exc:
+                if attempt == 2 or not _is_deadlock(exc):
+                    return None, safe_error_detail(exc)
+                logger.warning(
+                    "Deadlock on public form submission for slug {}, retrying once",
+                    slug,
+                )
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    async def _submit_public_form_once(
+        self,
+        slug: str,
+        data: Dict[str, Any],
+        submitter_name: Optional[str] = None,
+        submitter_email: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        honeypot_value: Optional[str] = None,
+        submitted_by: Optional[str] = None,
+        enforce_daily_cap: bool = False,
+    ) -> Tuple[Optional[FormSubmission], Optional[str]]:
         try:
             # Honeypot bot detection - if the hidden field has a value, it's a bot
             if honeypot_value:
@@ -1040,6 +1114,14 @@ class FormsService:
             await self._process_integrations(submission, form)
 
             return submission, None
+        except OperationalError as exc:
+            await self.db.rollback()
+            if _is_deadlock(exc):
+                # Let submit_public_form's retry loop handle it -- see that
+                # method's docstring for why the retry re-runs from scratch
+                # rather than resuming here.
+                raise
+            return None, safe_error_detail(exc)
         except Exception as e:
             await self.db.rollback()
             return None, safe_error_detail(e)

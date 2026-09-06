@@ -1,6 +1,9 @@
 """
 Unit tests for pure helpers in the forms service
-(app/services/forms_service.py). DB-free.
+(app/services/forms_service.py). DB-free, except
+``TestConcurrentDuplicateSubmissionCheck`` (marked ``integration``), which
+needs two real, independently-committing database sessions to reproduce a
+REPEATABLE READ snapshot race and so cannot run in the no-DB unit job.
 
 Focus: FORM-6 — a required field is satisfied only by a non-empty value, not
 merely by the key being present.
@@ -453,6 +456,7 @@ async def _cleanup_org(org_id: str) -> None:
         await session.commit()
 
 
+@pytest.mark.integration
 @pytest.mark.usefixtures("_initialize_database")
 class TestConcurrentDuplicateSubmissionCheck:
     async def test_two_concurrent_submissions_from_the_same_member_never_both_succeed(
@@ -495,6 +499,20 @@ class TestConcurrentDuplicateSubmissionCheck:
         session_a = database_manager.session_factory()
         session_b = database_manager.session_factory()
         try:
+            # Pin both transactions' REPEATABLE READ snapshot *before* either
+            # coroutine starts: a snapshot is fixed at a transaction's first
+            # read, whichever statement that happens to be, so an innocuous
+            # throwaway read here has the same effect as the real first read
+            # inside submit_public_form(). asyncio.gather does not guarantee
+            # that both attempts reach their own first read before either
+            # commits -- without this, a scheduling quirk could let session
+            # A run to completion before session B's snapshot is taken, in
+            # which case B would see A's committed row and correctly reject
+            # it, passing the assertion below without ever exercising the
+            # staleness this test exists to catch.
+            await session_a.execute(text("SELECT 1"))
+            await session_b.execute(text("SELECT 1"))
+
             svc_a = FormsService(session_a)
             svc_b = FormsService(session_b)
 
