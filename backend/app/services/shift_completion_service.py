@@ -46,6 +46,9 @@ from app.models.training import (
     TrainingRequirement,
 )
 from app.services.call_tracking_service import CallTrackingService
+from app.services.shift_eligibility_service import (
+    ShiftEligibilityService,
+)
 from app.services.training_program_service import TrainingProgramService
 
 
@@ -153,6 +156,36 @@ class ShiftCompletionService:
             return await self._get_trainee_call_data_from_counts(shift_id, trainee_id)
 
         return calls_responded, call_types
+
+    async def _edit_preserves_org_slugs(self, report, call_types) -> bool:
+        """Whether an edited list still supports an ``org_calls`` marker.
+
+        The marker makes one claim — that ``call_types`` holds this
+        department's own type slugs — and readers act on it: the call-volume
+        report relabels those values when a type is renamed, and
+        ``slugs_locked_by_history`` treats them as a reason not to delete one.
+        So it survives an edit exactly when the claim still holds.
+
+        The same rule ``20260905_2200_d7c1b95e2a40`` settled the stored rows
+        with, applied at the write (pitfall #20). It differs in one respect,
+        deliberately: that migration compared against the built-in defaults as
+        well, because a report filed before its department materialized a list
+        was written under those. This is a live edit, so the department's
+        types **in force now** are what an officer can have picked.
+
+        Never promotes. A marker that was not already ``org_calls`` is not one
+        this can restore, and a list emptied outright describes no value at
+        all.
+        """
+        if (report.data_sources or {}).get("call_types") != CALL_TYPES_FROM_ORG_CALLS:
+            return False
+        values = list(call_types or [])
+        if not values:
+            return False
+        in_force = await ShiftEligibilityService(self.db).effective_call_type_slugs_for(
+            str(report.organization_id)
+        )
+        return all(isinstance(v, str) and v in in_force for v in values)
 
     async def _shift_has_incident_rows(self, shift_id: str) -> bool:
         """Whether this shift logged per-incident calls.
@@ -1254,22 +1287,31 @@ class ShiftCompletionService:
             if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
 
-        # An officer editing the auto-populated list is typing readable names,
-        # not org slugs, so the provenance recorded at creation no longer
-        # describes what is stored. Cleared rather than reassigned: what they
-        # typed is their own wording, and leaving the `org_calls` marker would
-        # let a later rename rewrite it and let it lock a type from deletion.
+        # An officer editing the auto-populated list is usually typing readable
+        # names, not org slugs, so the provenance recorded at creation no
+        # longer describes what is stored. Cleared rather than reassigned:
+        # what they typed is their own wording, and leaving the `org_calls`
+        # marker would let a later rename rewrite it and let it lock a type
+        # from deletion.
         #
         # Only on a real change. The report form resubmits `call_types`
         # whatever was edited, so clearing on presence alone dropped the
         # marker when an officer saved a narrative tweak — and those values
         # are still the slugs the marker describes.
+        #
+        # And only when the edit actually broke the claim. The draft editor
+        # now offers this department's own types on a report that carries
+        # slugs, so an edit there yields slugs again and the marker still
+        # describes what is stored — clearing it would cost that report its
+        # labels and its standing as a reason not to delete a type, for an
+        # edit that changed neither.
         if "call_types" in updates and list(updates["call_types"] or []) != (
             previous_call_types
         ):
-            sources = copy.deepcopy(report.data_sources or {})
-            if sources.pop("call_types", None) is not None:
-                report.data_sources = sources or None
+            if not await self._edit_preserves_org_slugs(report, updates["call_types"]):
+                sources = copy.deepcopy(report.data_sources or {})
+                if sources.pop("call_types", None) is not None:
+                    report.data_sources = sources or None
 
         # Training credit is earned only when an officer releases the report.
         # Pending review is still provisional and may be flagged or corrected.
