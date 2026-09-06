@@ -1,0 +1,20 @@
+# CHANGELOG.md is an append-only ledger, and that is exactly the shape a
+# textual merge handles worst. Every PR adds its entry at the top of
+# `## [Unreleased]`, so two concurrent PRs write different content at the same
+# offset and git reports a conflict on the pair -- not because they disagree,
+# but because neither can be placed relative to the other without a rule.
+#
+# `union` is that rule: keep both sides. It is correct here specifically
+# because entries are independent and additive -- no PR edits another's entry,
+# so there is no case where taking both loses an intended change. Resolving
+# these by hand is pure overhead, and on 2026-09-06 it was the sole remaining
+# conflict across every open PR in the repo (6 of 11 pairs).
+#
+# What it does NOT cover: two branches editing the *same* entry, where union
+# keeps both revisions as adjacent duplicate lines rather than conflicting.
+# That is visible in review and has not happened here, but it is the tradeoff.
+#
+# Deliberately not applied to scripts/screenshots/audit_baseline.txt, the other
+# file that was conflicting. Branches there *delete* lines (see #2330, which
+# empties the baseline) and union would resurrect every deleted entry silently.
+CHANGELOG.md merge=union
