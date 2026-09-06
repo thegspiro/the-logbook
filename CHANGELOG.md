@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every member even once the rows arrived. The name resolves from the
   programme's own phases, the way the requirements table above it already
   resolved its phase column.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
