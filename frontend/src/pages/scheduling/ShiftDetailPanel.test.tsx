@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
@@ -413,20 +413,43 @@ const VIEWPORT_WIDTHS = { phone: 390, laptop: 1440 } as const;
  * (pitfall #28a). Resolved against a real pixel width rather than one
  * hard-coded query, so it keeps working if the header gains another breakpoint.
  */
+let currentWidth: number = VIEWPORT_WIDTHS.phone;
+let mediaListeners: ((event: MediaQueryListEvent) => void)[] = [];
+
+const matches = (query: string) => {
+  const minWidth = /min-width:\s*(\d+)px/.exec(query);
+  return minWidth ? currentWidth >= Number(minWidth[1]) : false;
+};
+
 const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
+  currentWidth = VIEWPORT_WIDTHS[width];
   vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
-    matches: (() => {
-      const minWidth = /min-width:\s*(\d+)px/.exec(query);
-      return minWidth ? VIEWPORT_WIDTHS[width] >= Number(minWidth[1]) : false;
-    })(),
+    matches: matches(query),
     media: query,
     onchange: null,
     addListener: vi.fn(),
     removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
+    // Real listeners, so a test can cross the breakpoint rather than only
+    // choose one side of it: useMediaQuery re-reads on `change`, so a
+    // re-render alone would leave its state where it started.
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      mediaListeners.push(listener);
+    },
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      mediaListeners = mediaListeners.filter((registered) => registered !== listener);
+    },
     dispatchEvent: vi.fn(),
   }));
+};
+
+/** Cross the breakpoint the way a rotation does, and let React settle. */
+const resizeTo = async (width: keyof typeof VIEWPORT_WIDTHS) => {
+  mockViewport(width);
+  await act(async () => {
+    for (const listener of [...mediaListeners]) {
+      listener({ matches: matches('(min-width: 640px)') } as MediaQueryListEvent);
+    }
+  });
 };
 
 describe('ShiftDetailPanel dialog shell', () => {
@@ -461,6 +484,7 @@ describe('ShiftDetailPanel dialog shell', () => {
     // test calls signup next (pitfall #28).
     mockSignup.mockReset();
     mockSignup.mockResolvedValue({} as never);
+    mediaListeners = [];
     mockViewport('phone');
   });
 
@@ -599,6 +623,27 @@ describe('ShiftDetailPanel dialog shell', () => {
     await screen.findByRole('dialog', { name: 'Shift Details' });
 
     expect(screen.getAllByRole('button', { name: 'Close panel' })).toHaveLength(1);
+  });
+
+  it('keeps focus on the close button when the viewport crosses the breakpoint', async () => {
+    // The two placements are different positions in the tree, so the flip
+    // mounts a new button rather than moving the old one. Losing focus to the
+    // body would take the focus trap with it: it only intercepts Tab while
+    // focus is on its first or last element, so the next Tab would leave the
+    // dialog for the page behind it. Rotating a phone crosses this.
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+
+    const closeOnPhone = await screen.findByRole('button', { name: 'Close panel' });
+    await user.click(closeOnPhone);
+    closeOnPhone.focus();
+    expect(document.activeElement).toBe(closeOnPhone);
+
+    await resizeTo('laptop');
+
+    const closeOnLaptop = screen.getByRole('button', { name: 'Close panel' });
+    expect(document.activeElement).toBe(closeOnLaptop);
+    expect(document.activeElement).not.toBe(document.body);
   });
 
   it('closes on a backdrop click but not on a click inside the panel', async () => {

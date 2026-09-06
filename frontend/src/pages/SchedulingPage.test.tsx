@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
+import { schedulingService } from '../modules/scheduling/services/api';
 
 // Mock scheduling module API
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -21,7 +22,25 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getMyAssignments: vi.fn().mockResolvedValue([]),
     getMyShifts: vi.fn().mockResolvedValue([]),
     getOpenShifts: vi.fn().mockResolvedValue([]),
+    getShift: vi.fn(),
   },
+  // A pure helper the create form calls on the template list; the real one just
+  // flattens seats, so an empty list is a faithful stand-in for no template.
+  resolveTemplatePositions: () => [],
+}));
+
+vi.mock('./scheduling/ShiftDetailPanel', () => ({
+  __esModule: true,
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div role="dialog" aria-modal="true" aria-label="Shift Details">
+      <button onClick={onClose}>Dismiss detail</button>
+    </div>
+  ),
+  ShiftDetailPanel: ({ onClose }: { onClose: () => void }) => (
+    <div role="dialog" aria-modal="true" aria-label="Shift Details">
+      <button onClick={onClose}>Dismiss detail</button>
+    </div>
+  ),
 }));
 
 // The tab-switching tests below are about the tab bar, not about what any tab
@@ -269,6 +288,56 @@ describe('SchedulingPage', () => {
       // The component starts with loading=true, which shows a spinner
       // Since we mock the API to resolve, it should eventually load
       expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  /**
+   * Create Shift and Shift Details are both body-level `aria-modal` dialogs and
+   * neither opens the other: a `?shift=` deep link resolves on its own
+   * schedule, which can land while the create form is open. Two modal roots
+   * leave assistive technology to guess which is current.
+   */
+  describe('two dialogs at once', () => {
+    const mockGetShift = vi.mocked(schedulingService.getShift);
+
+    beforeEach(() => {
+      mockGetShift.mockReset();
+      // The Create Shift trigger is gated on scheduling.manage.
+      mockCheckPermission.mockReturnValue(true);
+    });
+
+    it('withdraws Create Shift while the detail dialog is up, and gives it back intact', async () => {
+      // Held open so the create form can be opened first, which is the order
+      // that produces the collision.
+      let resolveShift: (shift: unknown) => void = () => {};
+      mockGetShift.mockReturnValue(
+        new Promise((resolve) => {
+          resolveShift = resolve;
+        }) as never
+      );
+
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      expect(await screen.findByRole('heading', { name: 'Create Shift' })).toBeInTheDocument();
+
+      await act(async () => {
+        resolveShift({ id: 'shift-1', shift_date: '2099-01-01' });
+      });
+
+      const detail = await screen.findByRole('dialog', { name: 'Shift Details' });
+      expect(detail).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Create Shift' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+
+      // Withdrawn, not closed: `showCreateShift` is untouched, so the form
+      // comes back when the dialog above it goes away. Clearing the flag
+      // instead would drop a half-filled form on an event the user did not
+      // initiate.
+      await user.click(screen.getByRole('button', { name: 'Dismiss detail' }));
+      expect(await screen.findByRole('heading', { name: 'Create Shift' })).toBeInTheDocument();
     });
   });
 });
