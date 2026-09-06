@@ -1097,13 +1097,15 @@ Renders the department-wide compliance matrix (all members × all requirements) 
 - A **Completion** column carrying each member's percentage, coloured by value: green at 100%, amber above zero, red at zero
 - Per-requirement cells carrying `✓`, `◐` or `—` — **glyphs, not colour and not percentages**. The endpoint emits four statuses; only two get a glyph of their own, and everything else falls through to the dash:
 
-  | Cell | Means                                                             |
-  | ---- | ----------------------------------------------------------------- |
-  | `✓`  | `completed`                                                       |
-  | `◐`  | `in_progress`                                                     |
-  | `—`  | `expired`, `not_started`, **or no record for that member at all** |
+  | Cell | Means                                                           |
+  | ---- | --------------------------------------------------------------- |
+  | `✓`  | `completed`                                                     |
+  | `◐`  | `in_progress`                                                   |
+  | `—`  | `expired`, `not_started`, **or the requirement does not apply** |
 
-  **A lapsed certification and one never started print identically.** The dash is not "missing"; read it as "not currently satisfied" and go to the member's own record — or the on-screen matrix, which distinguishes them — before treating it as work never begun
+  **The dash carries three unrelated meanings, and one of them is not a deficiency.** Columns are every active requirement in the organization, but a member is graded only on the ones that apply to them — a compliance profile narrows the set, and a requirement carrying `required_membership_types` is skipped for anyone outside them. A requirement a member is not graded on has no entry to look up, so it prints as a dash exactly like a lapsed one.
+
+  So do not read a row of dashes as a member in trouble. A lapsed certification, one never started, and one that was never asked of them are indistinguishable on paper. Check the on-screen matrix or the member's own record before treating any dash as an open item — and note that the member's Completion percentage is calculated against **their** applicable requirements, so it stays consistent with the requirements they are actually held to even while the printed row shows dashes across columns that never applied
 
 - A signature block for the Training Officer and the Chief / Department Head
 - Letter landscape. Column headings repeat on each printed page because the grid uses a real `<thead>`, but nothing constrains the width: past roughly twenty requirements the columns run off the right edge of the sheet
