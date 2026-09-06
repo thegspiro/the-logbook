@@ -16,33 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 27 (Integrations), pass 3, Codex-round follow-up** — branch
-`claude/security-review-integrations-followup`,
-[PR #2311](https://github.com/thegspiro/the-logbook/pull/2311).
+**Feature 28 (Security, audit & IP), pass 3** — branch
+`claude/friendly-babbage-mxcgij`,
+[PR #2333](https://github.com/thegspiro/the-logbook/pull/2333). Subscribed;
+awaiting CI/review.
 
-**PR #2307 merged (by the repo owner) before a Codex review round on it
-landed**, so its 6 review-thread fixes could not go into that PR — a new
-branch/PR was opened per CLAUDE.md pitfall #24 (never reuse a branch name
-after its PR merges; `claude/security-review-integrations` already had). All
-6 threads replied to on #2307 (still valid there as a record of what was
-found), 5 resolved, and their fixes carried forward into #2311 against
-current `main`.
+---
 
-**INT-7 is now ✅ FIXED** (the Codex round found the original "flagged, not
-fixed" call in #2307 was based on a false premise): `create_integration_
-client()`'s transport now wraps every connector's response stream and
-aborts once `MAX_RESPONSE_SIZE` (10 MB) is exceeded, enforced centrally with
-no connector call site changed. All of INT-1 through INT-6 re-verified
-intact. A narrower related gap (no wall-clock request deadline) is tracked
-separately in `KNOWN_LIMITATIONS.md`. Route inventory corrected to 21
-endpoints across six files (two public webhook routers,
-`salesforce_webhook.py`/`paypal_webhook.py`, were missed in passes 2-3 and
-are now reviewed and clean). The inbound-webhook body-size claim was also
-corrected: nginx is deployment-conditional, but the pre-existing, ASGI-level
-`RequestSizeLimitMiddleware` caps bodies at 60 MB regardless — no new
-finding needed. Full completion gate green against current `main` — see the
-Log and `docs/security-review/INT-27-integrations.md` for detail.
-Subscribed to #2311; awaiting CI/review.
+### 2026-09-06 — Feature 28 (Security, audit & IP, pass 3)
+
+Re-verification pass: three parallel readers split by the same lines as
+pass 2 (audit chain/error logs; security monitoring/alerts; IP allowlist/
+geo-blocking). Every previously-FIXED item (SEC-1 through SEC-9, SEC2-28-1
+through SEC2-28-4) is intact; every previously-flagged, still-open item
+(SEC2-28-5 IP-allowlist enforcement gap, SEC2-28-6 TOCTOU, SEC2-28-7 alert
+visibility/severity) is unchanged, with SEC2-28-7's `Content-Length`
+exfiltration-detection gap now confirmed across all 16 `StreamingResponse`
+export call sites in the app (pass 2 had sampled 3 of 15). The 265-line
+growth in `services/security_monitoring.py` since pass 2 turned out to be
+three legitimate concurrency/correctness bug fixes (a read-before-evict
+race, a session-hijack rewrite) — re-verified, no regression. One new LOW
+finding: `analyze_request`/`_check_rate_limit`/`_check_injection_patterns`
+have zero production callers (flagged, not fixed). **Scope correction:**
+added `app/services/audit_ship_service.py` (off-host audit-log shipping)
+to this feature's file list — it had never been reviewed under this
+feature despite sharing the audit signing key/serializer with `core/
+audit.py`. Found and fixed **SEC2-28-9**: its singleton watermark read was
+a plain SELECT, not a locking read, so a scheduled run racing a manual
+`/scheduled/run-task?task=audit_log_ship` trigger could duplicate or
+regress the delivery watermark (CLAUDE.md pitfall #27's model, applied to
+a watermark rather than a capacity count) — fixed with `.with_for_update()`
+and a guard test proving both the failure (reverted, 5/5 runs) and the fix.
+Full completion gate green: flake8/black/isort clean across `app/`, `tests/`,
+`alembic/`; migrations validated (431 revisions, single head, no new
+migration); 335/335 scoped and 11,505/11,505 full backend suite pass;
+frontend n/a (no frontend file touched). Findings doc:
+`docs/security-review/SEC2-28-security-audit-ip.md` (Pass 3). Rotation row
+28 → ✅. Next: 29 Reports & analytics.
+
+---
+
+### 2026-09-06 — Feature 27 (Integrations, pass 3) ✅ merged — PR #2311
+
+Watchdog check found PR #2311 (the Codex-round follow-up recorded in this
+row) had merged at 2026-09-06T16:29:29Z — the "Open PR" note above was
+stale, still pointing at it as open. No new commits landed on `main` in the
+interim that would need re-verification against Feature 27's code. Rotation
+row 27 → ✅. Next: 28 Security, audit & IP.
 
 ---
 
@@ -9819,8 +9839,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |

@@ -1,7 +1,7 @@
 # Security Review — Security, Audit & IP
 
 **Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
-#1911), 2026-08-31 (pass 2) · **PR:** #1911 (pass 1)
+#1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -542,3 +542,173 @@ CLAUDE.md.
 | `node scripts/tsc-native.mjs --noEmit` (full project, per the wrapper CLAUDE.md documents)                          | 0 errors                   |
 | `npx eslint` (ip-security module + AuditLogPage/ErrorMonitoringPage/adminServices.ts, the files reviewed this pass) | 0 errors/warnings          |
 | `npx vitest run` (full frontend suite, after the route permission fix + its `testingRegistry.ts` update)            | 5520/5520 passed           |
+
+---
+
+## Pass 3 (2026-09-06)
+
+**Re-verification split across three parallel readers**, matching pass 2's
+split: (A) `core/audit.py` + `audit_logs.py` + `error_logs.py`, (B)
+`services/security_monitoring.py` + its endpoint file, (C) `ip_security.py` +
+`ip_security_service.py` + `geoip.py` + `security_middleware.py`'s
+`IPBlockingMiddleware`/`SecurityMonitoringMiddleware`. Each was briefed to
+re-verify prior findings against current code, not re-derive them, and to
+give extra scrutiny to anything that had grown or changed since pass 2.
+
+### Re-verified — all still hold, nothing regressed
+
+- **SEC-1** (in-memory tracking caps): still intact, and the growth in
+  `security_monitoring.py` (below) added a new tracker that is correctly
+  included in the capped set.
+- **SEC-2** (genesis-hash anchoring + tail-truncation checkpoint
+  cross-check): both intact, unchanged.
+- **SEC-4** (audit search LIKE escaping via the shared `like_pattern()`
+  helper): intact.
+- **SEC-6** (`security_alerts` org-scoping across all four methods): intact;
+  no new alert-handling method added since pass 2 bypasses it.
+- **SEC-7** (rehash fails closed on a keyed-row mismatch; break-glass
+  `AUDIT_ALLOW_CHAIN_REHASH` gate; `/checkpoint`/`/integrity` on
+  `audit.export`/`audit.view`): intact.
+- **SEC-8** (fail-closed geo-blocking behind `GEOIP_FAIL_CLOSED`; private/
+  reserved IPs checked before the country lookup; `CountryBlockRule`
+  mutation gated behind `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`): intact.
+- **SEC-9** (`_fingerprint_session_id` non-reversible, applied in
+  `/audit-log/export`): intact. Also confirmed why `audit_ship_service.py`
+  (new to this feature's scope — see below) doesn't need the same
+  treatment: its serializer (`AuditLogger.serialize_row`) doesn't include
+  `session_id` in the shipped payload at all, so there's no raw value to
+  redact there in the first place.
+- **SEC-3/SEC-5** (error-log per-item/total size caps; `error_type` schema
+  cap aligned to the DB column width): intact.
+- **SEC2-28-1** through **SEC2-28-4** (all previously FIXED): intact,
+  unchanged.
+- **SEC2-28-5** (HIGH, flagged, not fixed) — approved IP-allowlist
+  exceptions still have zero enforcement effect. Confirmed
+  `IPBlockingMiddleware.__call__` is still the only production call site of
+  `is_ip_blocked`, still with a hardcoded empty set. Still needs the owner
+  decision described in pass 1.
+- **SEC2-28-6** (LOW, flagged, not fixed) — the TOCTOU race in
+  `request_ip_exception`'s duplicate-pending-exception check is still
+  present, same shape.
+- **SEC2-28-7** (HIGH, flagged, not fixed) — re-verified in full, including
+  the exact severities (`detect_brute_force` HIGH-only,
+  `detect_data_exfiltration` HIGH/CRITICAL-on-cumulative with a still-dead
+  `destination`-escalation branch, `detect_session_hijack`/privilege-
+  escalation unconditionally CRITICAL), the still-open `organization_id=NULL`
+  brute-force-alert invisibility gap, and the still-zero frontend consumers
+  of `security_monitoring.py`'s endpoint surface. **Scope of the
+  `Content-Length`-gated exfiltration gap sharpened:** pass 2 sampled 3 of the
+  15 `EXPORT_ENDPOINTS` routes and found each returned `StreamingResponse`
+  with no `Content-Length`; this pass grepped every `StreamingResponse(` call
+  site across `app/api/v1/endpoints/` (16 call sites in 10 files, a superset
+  of `EXPORT_ENDPOINTS`) and confirmed **none** sets `Content-Length` — the
+  gap is effectively the entire export surface, not a sampled subset. Same
+  severity/ownership as pass 2 filed it; still needs the backend fix
+  (`Content-Length` computed for buffered-then-streamed exports, or a
+  size-tracking approach that doesn't depend on that header) rather than
+  anything in this feature's own files.
+
+### New — dead detector code (LOW, flagged, not fixed)
+
+`security_monitoring.py`'s `analyze_request`, `_check_rate_limit`, and
+`_check_injection_patterns` — the SQL-injection/XSS/path-traversal
+pattern-matching detector and the generic rate-limit-violation detector —
+have **zero production callers**. Grepped every call site across
+`app/core/security_middleware.py` and the rest of `backend/app`: the only
+callers are this file's own tests. This isn't a new vulnerability (inert
+code opens nothing), but the module's own docstring describes "comprehensive
+security monitoring" including pattern-based attack detection that, as
+wired, never inspects a real request. Same shape as SEC2-28-7's "detected but
+no UI" framing, just one layer earlier: "written but never invoked." Worth a
+product decision (wire it into `SecurityMonitoringMiddleware`, or remove it)
+rather than a drive-by change to code three passes have now read without
+flagging it — not fixed here.
+
+### Scope correction — `audit_ship_service.py` added to this feature's file list
+
+**What:** `app/services/audit_ship_service.py` (off-host audit-log shipping
+to `AUDIT_SHIP_WEBHOOK_URL`, an ISO/IEC 27001 A.8.15 control — HMAC-signed
+NDJSON batches, watermark-based delivery) shares the audit signing key and
+row serializer with `core/audit.py` and is squarely "audit logging" by any
+reasonable scope definition, but has never appeared in this feature's file
+list in the module audit or any of the three security-review passes. Added
+to the Rotation table's principal-code column and reviewed against all seven
+checklist dimensions for the first time.
+
+**Verified good:** gated behind `system.run_tasks` for its manual
+`/scheduled/run-task?task=audit_log_ship` trigger, same posture as
+`audit_log_archival`'s existing gate; `_MAX_BATCHES_PER_RUN = 20` bounds one
+run's work (Pitfall #9 spirit); the collector URL is re-validated via
+`assert_outbound_url_safe(allow_private=AUDIT_SHIP_ALLOW_PRIVATE_DESTINATION)`
+on every run, not just at config time; TLS certificate verification is on by
+default (no `verify=False`); shipping every org's audit trail to one
+platform-configured collector is a deliberate, documented design choice
+consistent with the existing platform-level audit-chain model (SEC-7's
+break-glass rehash is the same "no platform-super-admin role, so this is an
+env-gated platform op" shape) — not a new tenant-isolation gap. **Already
+tracked, not re-derived as new:** the outbound-request TOCTOU (the actual
+`httpx` connection resolves DNS independently of `assert_outbound_url_safe`'s
+own resolution, so a rebinding attacker can still win the race within a
+single call) is one of six sites listed in `docs/KNOWN_LIMITATIONS.md`'s
+"Outbound Integration Requests" entry, and `audit_ship_service.py` is
+correctly still on that list — this pass's per-run re-validation closes a
+narrower, different gap (a collector URL edited since the last run) and
+doesn't change that entry.
+
+**SEC2-28-9 — LOW/MEDIUM — watermark read was a plain SELECT, not a locking
+read — ✅ FIXED**
+
+**What:** `audit_log_ship` runs both on a schedule (every 30 minutes, per
+`scheduled_tasks.py`'s registry) and via a manual
+`/scheduled/run-task?task=audit_log_ship` trigger, so two runs can execute
+concurrently — the same "scheduled runner racing a manual trigger" shape
+pass 1 already raised as a tangential note for `audit_log_archival`, and
+which this pass now finds actually landed here with no lock in place.
+`_get_or_create_state`'s fetch of the singleton `AuditShipState` watermark
+row was a plain `SELECT`, so two concurrent runs could both read the same
+watermark, both ship an overlapping batch to the external collector, and
+race to advance it — whichever run's transaction commits last could regress
+the watermark, causing the next run to re-deliver rows already shipped.
+Reproduced directly (not inferred): with the fix reverted, a real two-session
+`asyncio.gather` test shipped one row's audit content twice to the collector
+in 5/5 runs. Not a data-loss or authorization bypass — worst case is
+duplicate off-host delivery, which the module's own design already tolerates
+for failed-delivery retries — so scoped LOW/MEDIUM rather than HIGH.
+**Where:** `app/services/audit_ship_service.py`, `_get_or_create_state`.
+**Fix:** added `.with_for_update()` to the watermark read, serializing the
+two runs — the second blocks until the first commits, then sees the
+advanced watermark and ships only what's left (CLAUDE.md pitfall #27's
+model, applied to a watermark advance rather than a capacity count). A
+narrower, one-time race is accepted rather than also fixed: if the
+`AuditShipState` row does not exist yet (only possible on the very first
+`audit_log_ship` run ever, on a fresh install), two concurrent first-runs
+could both attempt to insert `id=1` and one would hit a primary-key
+conflict — logged as a delivery failure and retried next run, not a security
+issue, and disproportionate to guard given it can only occur once in the
+row's entire lifetime. Guard test
+(`tests/test_audit_shipping.py::TestConcurrentShipRuns`) uses two real,
+independently-committing sessions and `asyncio.gather`, asserting the total
+delivered rows across both runs equals the actual new-row count (not
+doubled, not lost) and the final watermark matches the newest row — verified
+to fail reliably (5/5 runs) with the fix reverted and pass reliably (multiple
+runs) with it in place.
+
+### Guard tests added (Pass 3)
+
+- `tests/test_audit_shipping.py`: `TestConcurrentShipRuns::test_two_concurrent_runs_never_double_ship_or_regress_watermark`.
+
+### Completion gate (Pass 3)
+
+One fix this pass (`audit_ship_service.py`'s watermark lock); everything
+else is re-verification plus findings-only (the dead-detector note, the
+scope correction). Ran the gate against the full repo, matching CI's scope.
+
+| Check                                                                                               | Result                                                            |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                       | clean                                                             |
+| `black --check app/ tests/ alembic/`                                                                | clean (1,504 files)                                               |
+| `isort --check-only app/ tests/ alembic/`                                                           | clean                                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                   | PASSED — 431 revisions, single head (no migration this pass)      |
+| backend tests, scope (audit/security_monitoring/ip_security/error_log/privilege_ceiling/middleware) | 335/335 passed, 1 skipped (env-only)                              |
+| backend tests, full suite                                                                           | 11,505 passed, 21 skipped (env-only, all pre-existing/documented) |
+| frontend `tsc`/`eslint`/`vitest`                                                                    | n/a — no frontend file touched this pass                          |
