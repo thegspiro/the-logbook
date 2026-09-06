@@ -775,3 +775,24 @@ export const Standing = {
   NON_COMPLIANT: 'non_compliant',
 } as const;
 export type Standing = (typeof Standing)[keyof typeof Standing];
+
+// ============================================
+// Email Service
+// ============================================
+/**
+ * How a Microsoft 365 configuration authenticates to smtp.office365.com.
+ *
+ * Mirrors `MICROSOFT_AUTH_METHODS` in `app/utils/email_providers.py`. An
+ * absent value means `APP_PASSWORD` on both sides: every row written before
+ * OAuth existed signs in with a password, and reading absence as OAuth would
+ * take those departments off the air on upgrade.
+ *
+ * `APP_PASSWORD` is Basic authentication, which Exchange Online disables by
+ * default for existing tenants at the end of December 2026 and does not
+ * offer to tenants created after that.
+ */
+export const MicrosoftAuthMethod = {
+  APP_PASSWORD: 'app_password',
+  OAUTH: 'oauth',
+} as const;
+export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];

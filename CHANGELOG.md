@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
+
+Codex raised these on #2206 as it merged, so none were addressed there.
+
+**Fixed**
+
+- **A stalled Microsoft token request could hold a thread forever.** `msal`
+  defaults to no timeout, and nothing above it supplied a deadline: the
+  connection test's `asyncio.timeout` abandons the future but not the worker
+  running it, and a real send goes through `asyncio.to_thread` with no outer
+  timeout at all, so repeated sends against an unreachable authority would
+  consume the executor and stall unrelated threaded work. The client is now
+  built with a finite timeout, as msal's own documentation advises.
+- **A cold cache let concurrent sends each build their own msal client.** The
+  cache lock was released before construction, so every thread in a
+  notification fan-out missed, built its own client and went to Entra ID
+  separately — the throttling the shared token cache exists to avoid.
+  Construction now happens under a per-registration lock with a re-check;
+  the lock is per key rather than global so one slow directory cannot block
+  another tenant's.
+- **A Cloudflare account check that never completed was reported as a verdict.**
+  When the account-scoped request failed with a network error and the
+  fallback user endpoint answered 401 or 403 — which an account-owned token
+  does even when it is perfectly good — the test told the administrator the
+  token was invalid on the strength of a check that never ran. A network
+  failure on either request is now reported as one.
+- **A transport failure was diagnosed as a missing mailbox grant.** The
+  Microsoft OAuth test keyed its "Exchange Online refused the token" message
+  off `connected`, which is true from the moment the socket opens and so
+  stays true for STARTTLS, EHLO, timeout and disconnect failures. The
+  handshake now records whether it was actually reached, before it can
+  raise, and only a real authentication rejection gets that message.
+- **Onboarding could persist a Microsoft auth method the settings screen
+  cannot read.** The mapper stored `microsoftAuthMethod` verbatim while every
+  reader treats an unknown value as App Password, so an unsupported value
+  paired with an App Password passed the enabled check and was written — and
+  the settings schema, which every read rebuilds stored rows through, then
+  rejects it, locking the organization out of the screen that would fix it.
+  The method is validated at that write boundary.
+- **A malformed tenant or client ID could save green and then fail every
+  send.** `missing_for_enabled` only asks whether a value is present, so an
+  application _name_, or the secret's ID instead of the secret, saved
+  successfully with email enabled. `invalid_for_enabled` now applies the
+  existing GUID validation on the write paths — writes only, because
+  rejecting a malformed _stored_ value on read would lock an organization
+  out of the screen where they would correct it.
+
+**Changed**
+
+- **`MicrosoftAuthMethod` moved to `constants/enums.ts`**, where this
+  project's frontend enums live, and every call site now uses the constant
+  instead of a `'oauth'` / `'app_password'` literal. It had been declared
+  beside a response interface in `types/user.ts`, which made a second enum
+  location.
+- **Both Microsoft OAuth setup guides now include the Exchange service
+  principal.** The backend's own contract records that an Exchange
+  administrator must register the application's service principal, and the
+  onboarding and settings instructions omitted it — an Entra ID registration
+  alone is not visible to Exchange, so an administrator following the printed
+  steps would obtain a token and still fail to sign in.
+- **The stale-connection-test guard is covered by behaviour rather than by
+  its own source.** The previous test asserted against the page's source
+  text, so it could pass on a matching string in dead code and proved nothing
+  about a result arriving after an edit. The logic moved into
+  `useEmailConnectionTest`, tested through `renderHook` with a controllable
+  promise: a result that lands after the form changed is now demonstrated to
+  be discarded rather than asserted to be.
+
 ### A hand-written hook dependency array can no longer drift (2026-09-06)
 
 **Fixed**
