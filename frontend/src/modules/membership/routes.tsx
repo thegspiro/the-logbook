@@ -33,6 +33,10 @@ const Members = lazyWithRetry(() => import('../../pages/Members'));
 const MemberProfilePage = lazyWithRetry(() => import('../../pages/MemberProfilePage'));
 const MemberTrainingHistoryPage = lazyWithRetry(() => import('../../pages/MemberTrainingHistoryPage'));
 const MembersAdminHub = lazyWithRetry(() => import('../../pages/MembersAdminHub'));
+const MembersSettingsPage = lazyWithRetry(() => import('../../pages/members/admin/settings/MembersSettingsPage'));
+const MembersSettingsRedirect = lazyWithRetry(
+  () => import('../../pages/members/admin/settings/MembersSettingsRedirect')
+);
 const MemberAdminEditPage = lazyWithRetry(() => import('../../pages/MemberAdminEditPage'));
 const MemberAuditHistoryPage = lazyWithRetry(() => import('../../pages/MemberAuditHistoryPage'));
 const MemberIdCardPage = lazyWithRetry(() => import('../../pages/MemberIdCardPage'));
@@ -131,6 +135,46 @@ export const getMembershipRoutes = () => {
           <ProtectedRoute requiredPermission="members.manage">
             <Suspense fallback={null}>
               <MembersAdminHub />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Members settings, moved out of the global settings page.
+
+          Gated on `members.manage` like the rest of this area, but that is the
+          gate for *reaching* the screen only — neither setting here saves
+          through an endpoint that accepts it, so the page itself filters the
+          sections to the ones the officer's grants admit. See
+          `membersSettingsSections.ts`; putting the endpoint's own answer beside
+          the section is what stops a members officer meeting a 403 on every
+          toggle. */}
+      <Route
+        path="/members/admin/settings"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <Suspense fallback={null}>
+              <MembersSettingsRedirect />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members/admin/settings/visibility"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <Suspense fallback={null}>
+              <MembersSettingsPage section="visibility" />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members/admin/settings/ids"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <Suspense fallback={null}>
+              <MembersSettingsPage section="ids" />
             </Suspense>
           </ProtectedRoute>
         }

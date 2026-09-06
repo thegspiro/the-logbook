@@ -777,6 +777,26 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/members/admin/settings',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
+    path: '/members/admin/settings/visibility',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'first section of one SettingsLayout screen. Ratcheted at budget 0 it fails on a single 44x24 control: SettingsToggle, whose toggle-track is 44x24 at all 25 of its call sites app-wide. That is the same debt keeping the other six SettingsLayout section routes off the pass, and it is not this screen’s to carry — the toggles moved here unchanged from /settings?tab=members, where the general-section default meant the ratchet never measured them either. Shell, overflow and text coverage come from /members/admin; list this route the moment toggle-track is fixed.',
+  },
+  {
+    path: '/members/admin/settings/ids',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'second section of the same SettingsLayout screen as /members/admin/settings/visibility above, and blocked from the pass by the same toggle-track geometry',
+  },
+  {
     path: '/members/admin/waivers',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',

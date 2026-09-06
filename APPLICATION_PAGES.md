@@ -162,7 +162,24 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/members/admin/edit/:userId`    | Admin Member Edit    | `members.manage`   |
 | `/members/admin/history/:userId` | Member Audit History | `members.manage`   |
 | `/members/admin/waivers`         | Waiver Management    | `members.manage`   |
+| `/members/admin/settings`        | Members Settings     | `members.manage`   |
+| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage` |
+| `/members/admin/settings/ids`    | Members Settings — Membership IDs | `members.manage`   |
 | `/members/check-in-station`      | Check-In Station     | `members.check_in` |
+
+> _(2026-09-06)_ **Members Settings** holds Contact Visibility and Membership
+> IDs, moved here from the global settings page — they are decisions about the
+> roster, not platform configuration. `/members/admin/settings` redirects to the
+> first section; `/settings?tab=members` redirects here, carrying the sub-page.
+>
+> **The route's permission is not the endpoint's, and this is the one page in
+> the app where that gap is load-bearing.** `members.manage` opens the screen;
+> neither section's save accepts it. Contact Visibility writes through
+> `PATCH /organization/settings/contact-info` (`settings.manage`,
+> `settings.manage_contact_visibility` or `organization.update_settings`) and
+> Membership IDs through `PATCH /organization/settings/membership-id`
+> (`settings.edit` or `organization.update_settings`). The page lists only the
+> sections the officer's grants admit, and says so when it can offer none.
 
 > **Admin Edit** provides full member editing (all fields, rank/station dropdowns, status, roles). **Audit History** shows timestamped change log. **Waiver Management** is a unified page covering training, meeting, and shift waivers with Active/Create/History tabs.
 

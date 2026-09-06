@@ -9,12 +9,13 @@
  */
 
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ScanLine, Upload, UserPlus } from 'lucide-react';
 import { AdminHubFrame, AdminMetricsSettings } from '../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../components/admin';
 import { useAuthStore } from '../stores/authStore';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
+import { MEMBERS_SETTINGS_SECTIONS } from './members/admin/settings/membersSettingsSections';
 
 const MembersAdminPage = lazyWithRetry(() => import('./MembersAdminPage'));
 const AddMember = lazyWithRetry(() => import('./AddMember'));
@@ -118,7 +119,38 @@ export const MembersAdminHub: React.FC = () => {
         {activeTab === 'add' && <AddMember />}
         {activeTab === 'import' && <ImportMembers />}
         {activeTab === 'settings' && (
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+            {/* The roster settings, which moved here from the global settings
+                page. Links rather than an embedded panel: each section is its
+                own route so it can be bookmarked and linked to, and this tab
+                already owns a different subject — which metrics the hub shows.
+
+                Every officer here holds `members.manage`, but neither section's
+                endpoint accepts it, so the destination filters itself and says
+                so. Listing them unconditionally is deliberate: an officer who
+                cannot change them should still be able to see where they live
+                and who to ask, which a hidden card cannot tell them. */}
+            <section className="card p-4">
+              <h3 className="text-theme-text-primary text-sm font-semibold">Roster settings</h3>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Moved here from Settings. Changing them needs a settings grant, which is separate from managing the
+                roster.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {MEMBERS_SETTINGS_SECTIONS.map((entry) => (
+                  <li key={entry.key}>
+                    <Link
+                      to={entry.path}
+                      className="mobile-touch-target text-theme-text-primary flex items-center justify-between gap-3 px-1 text-sm hover:underline"
+                    >
+                      <span className="font-medium">{entry.label}</span>
+                      <span className="text-theme-text-muted text-xs">{entry.description}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
             <AdminMetricsSettings
               moduleKey="members"
               moduleLabel="Members"
