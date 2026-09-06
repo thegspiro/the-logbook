@@ -87,6 +87,7 @@ describe('InventoryItemsPage', () => {
     mockGetItems.mockResolvedValue({ items: [], total: 0 });
     mockGetSummary.mockResolvedValue({
       total_items: 42,
+      non_medical_items: 6,
       overdue_checkouts: 1,
       maintenance_due_count: 2,
       total_value: 0,
@@ -116,7 +117,10 @@ describe('InventoryItemsPage', () => {
     renderWithRouter(<InventoryItemsPage />);
     // Desktop table + mobile card both render the name.
     expect((await screen.findAllByText('Cordless Drill')).length).toBeGreaterThan(0);
-    expect(screen.getByText(/42 items/)).toBeInTheDocument();
+    // non_medical_items, not total_items: the header counts the population the
+    // list below it shows.
+    expect(screen.getByText(/6 items/)).toBeInTheDocument();
+    expect(screen.queryByText(/42 items/)).not.toBeInTheDocument();
   });
 
   it('shows lot stock as the quantity for a lot-stocked item', async () => {
@@ -257,6 +261,7 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
     mockGetSummary.mockReset();
     mockGetSummary.mockResolvedValue({
       total_items: 0,
+      non_medical_items: 0,
       overdue_checkouts: 0,
       maintenance_due_count: 0,
       total_value: 0,
@@ -346,6 +351,7 @@ describe('InventoryItemsPage — a bulk change that only half applies', () => {
     mockGetItems.mockResolvedValue({ items: two, total: 2 });
     mockGetSummary.mockResolvedValue({
       total_items: 2,
+      non_medical_items: 2,
       overdue_checkouts: 0,
       maintenance_due_count: 0,
       total_value: 0,
@@ -403,5 +409,114 @@ describe('InventoryItemsPage — a bulk change that only half applies', () => {
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
     expect(String(mockToastSuccess.mock.calls[0]?.[0])).toContain('1 item(s)');
     expect(String(mockToastError.mock.calls[0]?.[0])).toContain('1 item(s)');
+  });
+});
+
+describe('InventoryItemsPage — the location panel', () => {
+  // The cards above the list are links into it. A card that counts rows the
+  // list excludes, or that cannot filter to the rows it counts, is a number
+  // the department cannot reconcile with anything on screen.
+  const panel = [
+    {
+      location_id: 'loc-1',
+      location_name: "Quartermaster's Storage",
+      item_count: 6,
+      total_quantity: 30,
+      total_value: 100,
+    },
+    { location_id: null, location_name: 'Unassigned', item_count: 2, total_quantity: 8, total_value: 0 },
+  ];
+
+  beforeEach(() => {
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    mockGetSummary.mockReset();
+    mockGetSummary.mockResolvedValue({
+      total_items: 38,
+      non_medical_items: 8,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 100,
+    });
+    mockGetSummaryByLocation.mockReset();
+    mockGetSummaryByLocation.mockResolvedValue(panel);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockReset();
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const lastItemsCall = (): Record<string, unknown> =>
+    (mockGetItems.mock.calls[mockGetItems.mock.calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+
+  it('starts with no location card selected', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    const card = await screen.findByRole('button', { name: /Unassigned/ });
+
+    // `location_id: null` used to collapse onto the "All Locations" empty
+    // string, so the Unassigned card read as selected on an unfiltered page.
+    expect(card).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('filters the list to items with no location when Unassigned is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await user.click(await screen.findByRole('button', { name: /Unassigned/ }));
+
+    await waitFor(() => expect(lastItemsCall().unassigned_location).toBe(true));
+    expect(lastItemsCall().location_id).toBeUndefined();
+    expect(screen.getByRole('button', { name: /Unassigned/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('sends a location id, and no unassigned flag, for a real location', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await user.click(await screen.findByRole('button', { name: /Quartermaster/ }));
+
+    await waitFor(() => expect(lastItemsCall().location_id).toBe('loc-1'));
+    expect(lastItemsCall().unassigned_location).toBeUndefined();
+  });
+
+  it('clears the filter when the selected card is clicked again', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    const card = await screen.findByRole('button', { name: /Unassigned/ });
+    await user.click(card);
+    await waitFor(() => expect(lastItemsCall().unassigned_location).toBe(true));
+
+    await user.click(screen.getByRole('button', { name: /Unassigned/ }));
+
+    await waitFor(() => expect(lastItemsCall().unassigned_location).toBeUndefined());
+    expect(lastItemsCall().location_id).toBeUndefined();
+  });
+
+  it('offers Unassigned in the location dropdown too', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await user.selectOptions(await screen.findByRole('combobox', { name: /filter by location/i }), 'unassigned');
+
+    await waitFor(() => expect(lastItemsCall().unassigned_location).toBe(true));
+  });
+
+  it('re-fetches for every filter the request carries, not just the first four', async () => {
+    // Location, size, colour, style and the vendor scope were absent from the
+    // reload effect's dependencies, so picking one changed the request the
+    // page *would* send and never sent it. The list stayed as it was until an
+    // unrelated reload applied the filter nobody had touched since.
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByRole('combobox', { name: /filter by size/i });
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /filter by size/i }), 'l');
+    await waitFor(() => expect(lastItemsCall().size).toBe('l'));
+
+    await user.click(screen.getByRole('button', { name: /Quartermaster/ }));
+    await waitFor(() => expect(lastItemsCall().location_id).toBe('loc-1'));
+    // The size the user picked first is still on the request.
+    expect(lastItemsCall().size).toBe('l');
   });
 });

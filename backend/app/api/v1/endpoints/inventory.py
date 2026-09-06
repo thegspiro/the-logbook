@@ -599,6 +599,7 @@ async def list_items(
     item_type: str | None = None,
     assigned_to: UUID | None = None,
     location_id: UUID | None = None,
+    unassigned_location: bool = False,
     storage_area_id: UUID | None = None,
     vendor_id: UUID | None = None,
     search: str | None = None,
@@ -670,6 +671,7 @@ async def list_items(
         exclude_item_types=MEDICAL_ITEM_TYPES,
         assigned_to=assigned_to,
         location_id=location_id,
+        unassigned_location=unassigned_location,
         storage_area_id=storage_area_id,
         vendor_id=vendor_id,
         search=search,
@@ -2536,7 +2538,11 @@ async def get_summary_by_location(
 
     service = InventoryService(db)
     return await service.get_summary_by_location(
-        organization_id=current_user.organization_id
+        organization_id=current_user.organization_id,
+        # The same carve-out GET /items applies. This panel sits above that
+        # listing and each card filters it, so counting a domain the listing
+        # drops produces a card whose rows the page cannot show.
+        exclude_item_types=MEDICAL_ITEM_TYPES,
     )
 
 

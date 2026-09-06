@@ -203,6 +203,8 @@ export const inventoryService = {
     condition?: string | undefined;
     item_type?: string | undefined;
     location_id?: string | undefined;
+    /** Restrict to items filed under no location — the "Unassigned" bucket. */
+    unassigned_location?: boolean | undefined;
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
     search?: string | undefined;
