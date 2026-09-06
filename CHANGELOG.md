@@ -82,6 +82,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The programme detail no longer repeats the programme's name.** The trail
   ended with the name that the heading directly below it already carried.
 
+### Security: outbound integration requests had no response-size cap (2026-09-06)
+
+**Fixed**
+
+- **An integration endpoint (Salesforce, Cal.com, Documenso, or a chat
+  webhook) that returned an oversized or slow-drip response body could
+  drive unbounded memory growth per request.** A size limit was declared
+  in the shared integration HTTP client's code but nothing enforced it.
+  It is now enforced centrally for every connector using the shared
+  `create_integration_client()` helper — a response is aborted once it
+  exceeds the limit, before it can be buffered into memory — with no
+  change needed at most connectors' call sites. PayPal's two outbound
+  calls (`get_access_token`, `verify_webhook_signature`) built their own
+  bare `httpx.AsyncClient` instead of using the shared helper and were
+  not covered by the initial fix; they now go through
+  `create_integration_client()` too (with PayPal's own vendor-tuned
+  timeout preserved via a new `timeout=` override), so every **httpx-based**
+  integration connector's outbound calls are covered. **Named exception:**
+  Google Calendar's connector (`google_calendar_service.py`) builds its
+  client via `googleapiclient.discovery.build()`, which wires up its own
+  `httplib2`-based transport entirely outside `create_integration_client()`
+  — it is not covered by this fix. See
+  `docs/KNOWN_LIMITATIONS.md` ("Google Calendar's Connector Bypasses the
+  Shared HTTP Hardening") for why a safe fix wasn't forced through in this
+  pass and what it would take.
+- **`create_integration_client()`'s `**kwargs` interface silently dropped
+  `http2`, `http1`, and `cert`.** Because this factory always supplies an
+  explicit `transport=`, pinned httpx 0.28.1 never applied those kwargs to
+  the actual connection — a caller asking for `http2=True` or a client
+  certificate got neither, with no error. They're now forwarded to every
+  transport this factory builds (direct and proxy-mounted alike).
+
 ### The lightweight apparatus list hides what a member cannot do (2026-09-06)
 
 **Fixed**

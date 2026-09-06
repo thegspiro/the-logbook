@@ -16,19 +16,106 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 27 (Integrations), pass 3** — branch
-`claude/security-review-integrations`,
-[PR #2307](https://github.com/thegspiro/the-logbook/pull/2307). One
-new finding, **INT-7** (LOW-MED, flagged): `base.py`'s `MAX_RESPONSE_SIZE`
-constant was declared but never enforced by any connector — every outbound
-integration HTTP call buffers its full response into memory with no cap,
-contradicting `docs/module-audit/integrations.md`'s "size cap" claim
-(corrected in the same pass). Flagged rather than fixed: closing it means a
-behavior-changing streaming-read refactor across ~10 connector files at
-once, not a same-file patch. All of INT-1 through INT-6 re-verified intact.
-Full completion gate green — see the Log and
-`docs/security-review/INT-27-integrations.md` for detail. Subscribed;
-awaiting CI/review.
+**Feature 27 (Integrations), pass 3, Codex-round follow-up** — branch
+`claude/security-review-integrations-followup`,
+[PR #2311](https://github.com/thegspiro/the-logbook/pull/2311).
+
+**PR #2307 merged (by the repo owner) before a Codex review round on it
+landed**, so its 6 review-thread fixes could not go into that PR — a new
+branch/PR was opened per CLAUDE.md pitfall #24 (never reuse a branch name
+after its PR merges; `claude/security-review-integrations` already had). All
+6 threads replied to on #2307 (still valid there as a record of what was
+found), 5 resolved, and their fixes carried forward into #2311 against
+current `main`.
+
+**INT-7 is now ✅ FIXED** (the Codex round found the original "flagged, not
+fixed" call in #2307 was based on a false premise): `create_integration_
+client()`'s transport now wraps every connector's response stream and
+aborts once `MAX_RESPONSE_SIZE` (10 MB) is exceeded, enforced centrally with
+no connector call site changed. All of INT-1 through INT-6 re-verified
+intact. A narrower related gap (no wall-clock request deadline) is tracked
+separately in `KNOWN_LIMITATIONS.md`. Route inventory corrected to 21
+endpoints across six files (two public webhook routers,
+`salesforce_webhook.py`/`paypal_webhook.py`, were missed in passes 2-3 and
+are now reviewed and clean). The inbound-webhook body-size claim was also
+corrected: nginx is deployment-conditional, but the pre-existing, ASGI-level
+`RequestSizeLimitMiddleware` caps bodies at 60 MB regardless — no new
+finding needed. Full completion gate green against current `main` — see the
+Log and `docs/security-review/INT-27-integrations.md` for detail.
+Subscribed to #2311; awaiting CI/review.
+
+---
+
+### 2026-09-06 — Feature 27 (Integrations, pass 3) — Codex round on #2307 (merged before landing) → new PR #2311
+
+Tended PR #2307 to address 6 unresolved Codex review threads posted at
+2026-09-06T13:15:26Z (CI already green, no merge conflicts). Before the
+fixes could be pushed, **the repo owner merged #2307** — the branch's
+merge commit into `main` is `86660d1`, capturing head `792cf3e`, so none of
+this round's fixes reached `main` through that PR. Per CLAUDE.md pitfall
+#24 (never reuse a branch name after its PR merges), opened a new branch
+(`claude/security-review-integrations-followup`) from the fix commit and a
+new PR, #2311, rather than continuing to push to the now-merged
+`claude/security-review-integrations`.
+
+Investigated all 6 threads against the actual code rather than accepting or
+dismissing them on the comment text alone:
+
+- **Timeout semantics (P2):** confirmed against the pinned httpx 0.28.1's
+  own source — `Timeout(10.0, connect=5.0)` is a per-read timeout, not a
+  10s wall-clock total; a slow-drip response can hold a connection open
+  indefinitely. Fixed the doc/comment wording; raised INT-7's pre-fix
+  severity note accordingly; the still-open half (no total-duration cap)
+  moved to its own `KNOWN_LIMITATIONS.md` entry.
+- **Reachable population (P2):** confirmed `create_event`/`create_shift`/
+  `create_record` (permissions `events.manage`/`scheduling.manage`/
+  `training.manage`) all enqueue `notify_entity_created`, which fans out to
+  every enabled chat webhook the same as any `integrations.manage`-gated
+  connector call — corrected the finding's "Impact" section.
+- **Central enforcement (the important one, P2):** Codex was right, and
+  INT-7 was fixable in one file, not just flaggable. Verified end-to-end
+  against a real `httpx.AsyncHTTPTransport` over an actual socket before
+  committing to it: httpx's non-streaming `.get()`/`.request()` still fully
+  drains `response.stream` via `Response.aread()`, so a wrapping transport
+  (`_SizeLimitedTransport`/`_SizeLimitedAsyncStream` in `base.py`) that
+  counts bytes and aborts on the stream itself enforces the cap centrally,
+  with zero connector call sites changed. **INT-7 is now ✅ FIXED**, with 4
+  new guard tests (`test_integration_response_size_cap.py`), including an
+  end-to-end test through a real connector.
+- **Inbound body-size / nginx dependency (P2):** confirmed nginx is
+  deployment-conditional (`docker-compose.yml`'s `nginx` service is
+  `profiles: [production]`; the backend publishes directly otherwise) —
+  but also confirmed a pre-existing, ASGI-level `RequestSizeLimitMiddleware`
+  (outermost middleware, `main.py`) already caps every inbound request body
+  at 60 MB regardless of nginx. Net: the "arbitrarily large body" DoS
+  doesn't hold as described; corrected the doc's claim rather than opening
+  a new "INT-8" finding, since the existing control already closes the
+  unbounded case.
+- **Route inventory (P2):** confirmed `salesforce_webhook.py` and
+  `paypal_webhook.py` were mounted but never read in passes 2-3. Read both
+  in full against this pass's own checklist dimensions — both clean
+  (signature verification, replay protection, rate limiting, org
+  resolution via the id-matched row); one inaccurate docstring fixed in
+  `salesforce_webhook.py`; one new minor follow-up noted, not fixed
+  (`paypal_service.py`'s own two outbound calls to PayPal use a bare
+  `httpx.AsyncClient` rather than `create_integration_client()`, so they
+  don't inherit the INT-7 fix — low risk, since PayPal's API host is a
+  fixed constant, never client-supplied). Route inventory corrected to 21
+  endpoints across six files.
+- **ESLint warning dismissal (P1):** replied citing the PR #2305 (Feature 25) precedent for this exact disagreement — pre-existing, untouched-file,
+  under-threshold warnings are a policy question for the repo owner, not a
+  defect in this change. Left open, not resolved, matching that precedent.
+
+5 of 6 threads fixed and resolved on #2307 (replies stand there as the
+record); the 6th (ESLint) replied-only and left open. All 5 fixes carried
+into #2311. Completion gate re-run against current `main`: flake8/black/
+isort clean; migrations validated (431 revisions, single head, no schema
+change); 4/4 new guard tests, 2374/2374 scoped and 11476/11476 full backend
+suite pass. No frontend file touched. Findings doc, `docs/module-audit/
+integrations.md`, `docs/KNOWN_LIMITATIONS.md`, and `CHANGELOG.md` all
+updated to match. PR #2311 opened and subscribed. Rotation row 27 stays
+⏳ pending PR. Next: tend #2311 to green and merged, then 28 Security,
+audit & IP.
 
 ---
 
