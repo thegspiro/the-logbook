@@ -20,7 +20,9 @@ feature. The rotation cannot outrun its own review queue.
 `claude/security-review-reports-analytics-pass4`,
 [PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Extended with
 a second round rather than opened as a new PR — see the pass-5 log entry
-below. Subscribed; awaiting CI/review.
+below. `subscribe_pr_activity` returned "could not subscribe" both times it
+was tried this round (possibly another watcher already on the PR); awaiting
+CI/review either way.
 
 ---
 
