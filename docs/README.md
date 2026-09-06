@@ -620,6 +620,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Known limitations / open decisions            | [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md)                                                                                                           |
 | Claude Code skills / agent tooling            | [CLAUDE_SKILLS_REVIEW.md](./CLAUDE_SKILLS_REVIEW.md)                                                                                                     |
 | Alembic migration rules (full text)           | [rules/migrations.md](./rules/migrations.md)                                                                                                             |
+| Backend endpoint / service rules (full text)  | [rules/tenancy.md](./rules/tenancy.md)                                                                                                                   |
 
 ### By Error Message
 

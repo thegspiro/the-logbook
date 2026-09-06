@@ -192,7 +192,7 @@ Observe all repository-specific testing rules in `CLAUDE.md`, including the docu
 
 The Logbook is multi-tenant and handles operational/member information. Security and tenant isolation are correctness requirements.
 
-Before changing backend queries, relationships, foreign keys, exports, authentication, authorization, cookies, middleware, or user-controlled data handling, review the corresponding rules in `CLAUDE.md`.
+Before changing backend queries, relationships, foreign keys, exports, authentication, authorization, cookies, middleware, or user-controlled data handling, review the corresponding rules in `CLAUDE.md`. The endpoint and service rules in full — the `org_scoping` helper for validating client-supplied foreign keys, the repo-wide guards CI runs, the `LIKE`-escaping rule and the capacity-locking rule — are in [docs/rules/tenancy.md](docs/rules/tenancy.md). Organization scoping itself (CLAUDE.md pitfall #14) is **not** in that file: it has no repo-wide check, so it stays in `CLAUDE.md` and must be read there.
 
 In particular:
 

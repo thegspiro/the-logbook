@@ -4,7 +4,7 @@
 **Scope:** Which Claude Code skills would measurably improve how this
 repository is worked on — both the skills already available to this account and
 the project-local skills worth authoring.
-**Status:** Review complete. Steps 2, 3 and 6 of the sequencing below are implemented (see §7). One project skill exists: `repo-migrations`.
+**Status:** Review complete. Steps 2, 3 and 6 of the sequencing below are implemented, and step 4 is under way. Two project skills exist: `repo-migrations` and `repo-tenancy`.
 
 ---
 
@@ -462,3 +462,76 @@ skill actually triggers on real migration work. Run a few migrations through
 it before moving tenancy, forms or tests. If it does not trigger reliably, the
 pointer pattern is wrong here and ~12 k tokens of always-on rules is the
 correct price.
+
+---
+
+## 9. The tenancy skill, as built
+
+The second rule set (§4 item 2). Applying the §5 gate to it produced the most
+useful finding in this whole exercise, and it is not a good one.
+
+### The centrepiece could not move
+
+**Pitfall #14 — org-scope every by-id query and every client-supplied FK — has
+no repo-wide machine check.** It is the dominant finding class in the 2026-07
+module audit and the highest-severity rule in the backend, and nothing scans
+for a `select(Model).where(Model.id == x)` that forgot its `organization_id`
+filter.
+
+What exists is narrower than it looks:
+
+- `test_org_scoping.py` tests the **helper** (`assert_in_org` and friends) —
+  159 lines against a fake DB. It proves the helper fails closed. It says
+  nothing about whether any call site uses it.
+- `test_scheduling_org_scoping.py`, `test_audit_org_scoping.py`,
+  `test_event_attachment_org_scoping.py`, `test_external_training_org_scoping.py`
+  and their siblings cover the features they name, and only those.
+- `test_endpoint_auth_coverage.py` sweeps every v1 endpoint — for
+  **authentication**, not for org scoping. An authenticated handler that reads
+  another org's row passes it.
+
+So #14 stays in `CLAUDE.md` in full. A skill that quietly took the repository's
+worst-consequence rule out of always-on context in exchange for ~1 k tokens
+would be a bad trade, and the gate is what caught it.
+
+`docs/rules/tenancy.md` opens by saying so, rather than leaving a reader to
+infer that a file named after tenancy covers tenancy.
+
+### What did move
+
+| Rule                                                                                                    | Machine check                                                                                                                                                   | Outcome                                                                                        |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Pitfall #25 — `like_pattern` + `escape=LIKE_ESCAPE_CHAR`                                                | `test_like_escaping.py` — two repo-wide static sweeps (`test_every_like_call_declares_the_escape_character`, `test_wildcard_escaping_lives_only_in_sql_search`) | **Moved**                                                                                      |
+| Pitfall #27 — lock the parent **and** make the count a locking read                                     | `test_capacity_locking.py`, 499 lines: a static extractor plus per-site assertions at every known cap                                                           | **Moved**                                                                                      |
+| The `org_scoping` helper API                                                                            | `test_org_scoping.py`                                                                                                                                           | **Documented for the first time** — it is the tool #14c mandates and it was written up nowhere |
+| Endpoint auth coverage, permission-registry reachability, scheduled-task wiring, per-org loop isolation | `test_endpoint_auth_coverage.py`, `test_require_permission_registry.py`, `test_scheduled_task_coverage.py`, `test_cron_org_loop_isolation.py`                   | **Documented for the first time** — four enforced rules whose only written form was the test   |
+| Pitfall #14 — org scoping                                                                               | none, repo-wide                                                                                                                                                 | **Stayed**                                                                                     |
+| Pitfall #15 — `SafeCsvWriter`                                                                           | `test_csv_export.py` tests the writer, 50 lines; nothing scans for a bare `csv.writer`                                                                          | **Stayed**                                                                                     |
+| Pitfall #9 — unbounded caches                                                                           | none                                                                                                                                                            | **Stayed**                                                                                     |
+| Pitfall #18 — SMS behind `SmsAlert`                                                                     | resolver behaviour only; nothing flags a direct `SMSService` call                                                                                               | **Stayed**                                                                                     |
+| Pitfall #19 — a config switch needs a reader                                                            | one mechanism guarded, the general rule not                                                                                                                     | **Stayed**                                                                                     |
+
+Five of nine stayed. That ratio is the honest state of enforcement in this
+area, and it is worth more than the token saving: it is a list of the five
+places where a reviewer is the only thing standing between a rule and a
+regression.
+
+### The cheapest guard to add next
+
+A static sweep for `csv.writer` used outside `app/utils/csv_export.py` — a
+close cousin of `test_wildcard_escaping_lives_only_in_sql_search`, which
+already does exactly this shape for `sql_search`. That would let pitfall #15
+move and, more to the point, would catch the recurrence of a defect the audit
+found live in six exporters.
+
+### Files
+
+`docs/rules/tenancy.md`, `.claude/skills/repo-tenancy/SKILL.md`, pointers in
+`CLAUDE.md` (#25 and #27 keep their headings and numbers — **#27 alone is cited
+160 times** across services and tests), `AGENTS.md`, and `docs/README.md`.
+`backend/tests/test_claude_skill_pointers.py` needed no change: it walks
+`.claude/skills/*/SKILL.md`, so it picked the new skill up on its own, verified
+by breaking the new pointer and watching it fail.
+
+CLAUDE.md is now 89,026 bytes, from 97,985 before any of this — about 2.2 k
+tokens off every session, for two rule sets.

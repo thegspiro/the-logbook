@@ -1139,41 +1139,22 @@ a close-and-reopen.
 
 ### 25. A `LIKE` Pattern Is Built by `like_pattern`, and the `ESCAPE` Clause Is Not Optional _(2026-08-25)_
 
-A user's search string reaches SQL as a **pattern**, not a literal. SQLAlchemy
-parameterizes the value, so this is not injection — but `%` and `_` inside that
-parameter are still wildcards. A member who types `%` gets every row the org
-has, and the paginated list's count query scans all of it.
-
-Escaping the term is only half the fix. `.ilike(pattern)` with no `ESCAPE`
-clause leaves the escape character up to MySQL's `sql_mode`: under
-`NO_BACKSLASH_ESCAPES` the backslashes are literal and every wildcard comes
-back. The escaping _looks_ present in review and does nothing at runtime.
+**Rule:** a user's search string reaches SQL as a **pattern**, not a literal.
+SQLAlchemy parameterizes the value, so this is not injection — but `%` and `_`
+inside it are still wildcards, and a member who types `%` gets every row the
+org has. Build the pattern with `like_pattern()` from `app/utils/sql_search.py`
+and pass `escape=LIKE_ESCAPE_CHAR` on **every** `like`/`ilike`, including one
+whose pattern is system-generated. Without the kwarg the escaping is inert
+under MySQL's `NO_BACKSLASH_ESCAPES` and looks entirely correct in review.
 
 ```python
-# WRONG — the filter stops filtering the moment somebody types "%"
-pattern = f"%{search}%"
-q.where(Model.name.ilike(pattern))
-
-# WRONG — escaped, but the database was never told what the escape char is
-safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-q.where(Model.name.ilike(f"%{safe}%"))
-
-# CORRECT
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 q.where(Model.name.ilike(like_pattern(search), escape=LIKE_ESCAPE_CHAR))
 ```
 
-**Rule:** never hand-roll the transform — `app/utils/sql_search.py` owns it, and
-the fifteen copies that existed before 2026-08-25 are why forty-seven call sites
-forgot the kwarg. Pass `escape=LIKE_ESCAPE_CHAR` on **every** `like`/`ilike`,
-including one whose pattern is system-generated (`"ORD-2026-%"`): it is inert
-there, and covering it is what leaves the invariant with no exceptions to
-maintain. `tests/test_like_escaping.py` enforces both halves.
-
-**Related:** when a query escapes a term for SQL and then re-checks the result
-in Python, the Python side compares against the **raw** input. Comparing against
-the escaped form is how the inventory barcode search came to report the wrong
-`matched_field` for any code containing `%`, `_` or `\`.
+Full text, including the Python-side `matched_field` corollary, in
+**[docs/rules/tenancy.md](./docs/rules/tenancy.md#a-like-pattern-is-built-by-like_pattern-and-the-escape-clause-is-not-optional)**.
+`tests/test_like_escaping.py` enforces both halves across the repository.
 
 ### 26. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
 
@@ -1193,80 +1174,27 @@ written, so any failure is new.
 
 ### 27. A Capacity Check Is a Read-Then-Write, and Needs the Row Locked _(2026-08-25)_
 
-Anything with a limit — seats on a shift, `max_attendees` on an event, a role
-on an outreach signup sheet — is enforced by counting what is already there and
-then inserting. Two requests arriving together both read the count before
-either commits, both decide there is room, and the limit is exceeded by exactly
-the number of people who tapped at once. It is invisible in testing, because
-one request never races itself.
+**Rule:** anything with a limit — seats on a shift, `max_attendees`, a role on
+a signup sheet — is enforced by counting what is there and then inserting. Two
+requests arriving together both read before either commits, and the cap is
+exceeded by however many people tapped at once. It takes **two** changes, and
+the second is the one everybody misses:
 
-It takes **two** changes, and the second is the one everybody misses.
+1. **Lock the parent row** (`for_update=True`) to serialize the decision. Lock
+   the parent, not the rows being counted — the conflicting rows do not exist
+   yet.
+2. **Make the count itself a locking read** (`.with_for_update()`). Under
+   InnoDB's default REPEATABLE READ a plain `SELECT` answers from the snapshot
+   taken at the transaction's first read, and taking a row lock does not
+   refresh it. Every one of these checks runs behind an endpoint that already
+   loaded the parent, so the snapshot predates the lock: the second
+   transaction blocks, waits, acquires the lock, counts — and still sees the
+   tally from before the first one committed.
 
-**1. Lock the parent row**, to serialize the decision:
-
-```python
-# WRONG — two members both see the last seat
-shift = await self.get_shift_by_id(shift_id, organization_id)
-
-# CORRECT — serialize on the row everyone contends for
-shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
-```
-
-Lock the parent, not the rows being counted: the seats that would conflict do
-not exist yet, so there is nothing to lock; the shift/event/request row is the
-one thing both transactions already share.
-
-**2. Make the count itself a locking read**, or the lock buys nothing:
-
-```python
-# STILL WRONG — the row is locked and the count is stale anyway
-occupied = await self.db.execute(select(func.count()).where(...))
-
-# CORRECT
-occupied = await self.db.execute(select(func.count()).where(...).with_for_update())
-```
-
-Under InnoDB's default REPEATABLE READ — which is what this app runs, no
-`isolation_level` is set on the engine — a plain `SELECT` answers from the
-snapshot taken at the transaction's **first** read, and acquiring a row lock
-does not refresh it. Every one of these checks runs behind an endpoint that
-already loaded the shift or the event, so the snapshot predates the lock. The
-second transaction blocks, waits, acquires the lock, counts — and sees the
-tally from before the first one committed. Demonstrated on this schema:
-
-```
-T2 reads (snapshot taken)
-T1 locks parent, counts 0, inserts, commits
-T2 locks parent  ->  plain count: 0   locking count: 1   (truth: 1)
-```
-
-A locking read is defined to see the latest committed version, which is why it
-is the fix. `SELECT ... FOR UPDATE` on the count is not there for the lock.
-
-This is easy to get wrong and invisible in review, because the code reads as
-correct and the comment above it says so. `event_service` carried the comment
-"event row is locked, so this count is consistent" from the day it was written;
-the row was locked and the count was not consistent.
-
-**Enforce the lock wherever the limit is enforced.** Shift assignment briefly
-locked only for self-signup, on the reasoning that an officer may overfill a
-crew deliberately. Half true: the _headcount_ cap is waived for officers, the
-_named-seat_ cap is not — a seat on a crew is one seat whoever fills it — so
-two officers, or an officer racing a member, still raced for the last Driver
-seat. Check which caps actually run on each path before making the lock
-conditional on any of them.
-
-Found on 2026-08-24 in the outreach role seats and the outreach signup sheet
-(two coordinators each creating a shift, one orphaned), on 2026-08-25 in
-generic shift seat capacity, which had the same shape since it was written, and
-the same day in all five capacity counts, which were locking the right row and
-then reading a stale number.
-
-**Rule:** when adding a feature with a cap, a quota, or a one-per-thing
-invariant, ask what happens if two requests arrive in the same millisecond. If
-the answer involves a count followed by an insert, lock the parent row **and**
-make the count a locking read. `tests/test_capacity_locking.py` asserts both
-halves at every site.
+Full text, including the demonstrated trace and the officer-override subtlety
+that left named-seat caps racing, in
+**[docs/rules/tenancy.md](./docs/rules/tenancy.md#a-capacity-check-is-a-read-then-write-and-needs-the-row-locked)**.
+`tests/test_capacity_locking.py` asserts both halves at every site.
 
 ### 28. `vi.clearAllMocks()` Does Not Reset Implementations, So Mock Config Leaks Between `describe` Blocks _(2026-08-30)_
 
