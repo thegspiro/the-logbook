@@ -164,6 +164,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attendance, calls and close-out without a department-wide grant, mirroring the
   backend, and that route is untouched.
 
+### An inventory item's size is edited through a labelled picker (2026-09-06)
+
+**Fixed**
+
+- **The Edit Item dialog no longer shows an item's size as its stored code.**
+  The Size field was a free-text box over the legacy `size` column, which holds
+  a code — so a quartermaster editing a variant-generated shirt read `l` where
+  every other screen says `L`. It is now a picker over the whole standard-size
+  vocabulary (garment, boot/glove and waist), labelled the way the rest of the
+  module labels sizes. A boot width or a chest measurement still goes in
+  through a Custom option.
+- **Changing an item's size no longer leaves the rest of the module showing the
+  old one.** Two columns hold a size — the structured `standard_size` and the
+  legacy free-text `size` — and the form wrote only the second, so the detail
+  card, the variant capsules and the variant stock matrix kept reporting the
+  pre-edit size. One control now writes both.
+- **The item detail card and the variant capsules render `one_size` and `xxxl`
+  as One Size and 3XL** rather than upper-casing the stored code into ONE_SIZE
+  and XXXL.
+
 ### API errors answer in JSON, not the HTML 50x page (2026-09-06)
 
 **Fixed**
