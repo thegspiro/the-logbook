@@ -109,15 +109,6 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # DEMO_MEMBER_CREDENTIALS in manifest.mjs.
 DEMO_MEMBER_USERNAME = "nbelhaj"
 
-# EQUIPMENT_REQUESTS still describes each row by how the quartermaster hands the
-# item over, which is the useful thing to read. The API wants the member's side
-# of it: a radio goes back, gloves do not.
-REQUEST_DURATIONS = {
-    "checkout": "temporary",
-    "assignment": "ongoing",
-    "issuance": "ongoing",
-}
-
 # The visitor the guest sign-in seeds. Matched on email rather than name so a
 # re-run recognises its own guest instead of adding another every time.
 GUEST_EMAIL = "rosa.delgado@example.com"
@@ -240,20 +231,11 @@ POSITION_NOT_ELIGIBLE = re.compile(
 # contention path in `create_assignment`.
 SEAT_TAKEN = re.compile(r"was just claimed|filled after this request", re.IGNORECASE)
 
-# `_assignment_refusal` caps how many seats on one shift may go to
-# administrative members, counted under a locking read. The seeder's day pool
-# rotates every active member through the roster, so on a department with
-# several administrative members it reaches that cap by ordinary rotation —
-# the fifth way a seat is refused for a correct reason.
-ADMIN_SEATS_FULL = re.compile(
-    r"Administrative access seats were already filled", re.IGNORECASE
-)
-
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Five refusals are ordinary and must not fail the seed:
+    Four refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -271,11 +253,8 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
       short; if that top-up runs twice (a re-run interrupted and restarted, or
       a manual assignment made between runs), the second attempt on the same
       seat is refused, not double-booked.
-    * **The shift's administrative seats are full.** A shift caps how many of
-      its seats may go to administrative members. The day pool rotates every
-      active member through, so it reaches that cap on its own.
 
-    All five leave the shift a seat short, which is what the Open Shifts tab
+    All four leave the shift a seat short, which is what the Open Shifts tab
     exists to show. Treating any of them as fatal aborted the whole scheduling
     step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
@@ -288,7 +267,6 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
         or DRIVER_NOT_QUALIFIED.search(exc.detail)
         or POSITION_NOT_ELIGIBLE.search(exc.detail)
         or SEAT_TAKEN.search(exc.detail)
-        or ADMIN_SEATS_FULL.search(exc.detail)
     )
 
 
@@ -1053,38 +1031,33 @@ class Seeder:
 
     # -- organization ------------------------------------------------
 
-    # The QA checklist is a staff tool for walking the app page by page, not a
-    # department feature, and no training guide documents it. Everything else
-    # ships to a real department, so the demo org turns it on.
-    MODULES_LEFT_OFF = {"testing"}
-
     def enable_all_modules(self) -> None:
-        """Turn on every module the API knows about, bar the QA checklist.
-
-        Read the set from the API rather than listing it here. A hardcoded list
-        silently falls behind: this one carried 19 of the 23 modules the schema
-        defines, so finance, medical supplies and medical screening stayed off
-        and every call into them answered 403 — which the seeder then reported
-        as four failed steps, and the guides for those modules pictured nothing.
-        Deriving it means a module added later is enabled by the next run
-        instead of waiting for somebody to notice the gap.
-        """
-        current = self.api.get("/organization/modules")
-        settings = pick(current, "module_settings", "moduleSettings") or {}
-        wanted = {
-            name: True
-            for name, value in settings.items()
-            if isinstance(value, bool) and name not in self.MODULES_LEFT_OFF
-        }
-        if not wanted:
-            # An empty read means the response shape moved, not that there is
-            # nothing to enable. Fail loudly: seeding on top of a half-enabled
-            # org produces 403s in unrelated steps that are hard to trace back.
-            raise RuntimeError(
-                "GET /organization/modules returned no module flags — "
-                f"response keys: {sorted(current)}"
-            )
-        self.api.patch("/organization/modules", wanted)
+        # Screenshots cover every guide, including modules that ship disabled
+        # (grants, elections, storefront, …), so the demo org turns them all on.
+        self.api.patch(
+            "/organization/modules",
+            {
+                "training": True,
+                "inventory": True,
+                "scheduling": True,
+                "apparatus": True,
+                "communications": True,
+                "elections": True,
+                "minutes": True,
+                "reports": True,
+                "notifications": True,
+                "mobile": True,
+                "forms": True,
+                "integrations": True,
+                "facilities": True,
+                "incidents": True,
+                "hr_payroll": True,
+                "grants": True,
+                "storefront": True,
+                "prospective_members": True,
+                "public_info": True,
+            },
+        )
 
     # -- people ------------------------------------------------------
 
@@ -4456,12 +4429,7 @@ class Seeder:
                 "item_name": name,
                 "item_id": pick(item, "id"),
                 "quantity": 1,
-                # The create schema takes how long the member needs the item,
-                # not how it will be handed over. `request_type` was removed;
-                # fulfilment still routes by the item's own tracking type
-                # server-side, so the tuple's value only has to say whether the
-                # member gives the item back.
-                "requested_duration": REQUEST_DURATIONS[request_type],
+                "request_type": request_type,
                 "priority": "normal",
                 "reason": reason,
             }
@@ -6636,17 +6604,15 @@ class Seeder:
         # re-seed that reported success.
         existing = items(self.api.get("/training/shift-reports/all?limit=50"))
 
-        # `str()` around a miss yields the *string* "None", which is truthy —
-        # so the "did we find her?" guards downstream all passed and "None"
-        # went to the API as a user id, which it rejected as a bad UUID.
-        demo_member_raw = pick(
-            next(
-                (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
-                {},
-            ),
-            "id",
+        demo_member_id = str(
+            pick(
+                next(
+                    (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
+                    {},
+                ),
+                "id",
+            )
         )
-        demo_member_id = str(demo_member_raw) if demo_member_raw else ""
         recruit_ids = {
             str(pick(m, "id"))
             for m in members
