@@ -1,0 +1,128 @@
+# Unscoped by-id queries — frozen baseline for CLAUDE.md pitfall #14
+#
+# Generated 2026-09-06 by tests/test_org_scoping_ratchet.py, which owns the
+# format. Read that file's docstring before editing this one: it explains what
+# is in scope (bare-name ids, on models that carry organization_id) and — more
+# importantly — what is NOT, so a green run is not mistaken for coverage.
+#
+# ── What a line here means ───────────────────────────────────────────────────
+#
+# "This existed on 2026-09-06." NOT "this is safe." Most of these have never
+# been read. Presence in this file is a record of history, not a judgement.
+#
+# A line you ADD is different: that one is a security decision, so give it a
+# reason on the line above, the way test_endpoint_auth_coverage.py treats an
+# addition to ALLOWLISTED_PUBLIC.
+#
+# ── Burn-down order ──────────────────────────────────────────────────────────
+#
+# docs/ORG_SCOPING_SWEEP.md §4: the parameter-fed sites first — those are the
+# ones a client-supplied id can reach. Delete a line when you fix or clear the
+# query; a line that stops flagging fails the suite, so this list can only
+# shrink.
+#
+# Format: path::function::Model::id
+
+# Public webhook: there is no caller org.
+# The integration id IS the credential.
+app/api/public/integrations_webhook.py::_load_integration::Integration::integration_id
+
+# Public webhook: there is no caller org.
+# The integration id IS the credential.
+app/api/public/paypal_webhook.py::paypal_inbound_webhook::Integration::integration_id
+
+# Public webhook: there is no caller org.
+# The integration id IS the credential.
+app/api/public/salesforce_webhook.py::salesforce_inbound_webhook::Integration::integration_id
+
+# Not yet reviewed.
+app/api/v1/endpoints/external_training.py::perform_sync_task::ExternalTrainingProvider::provider_id
+
+# Not yet reviewed.
+app/services/admin_hours_service.py::bulk_approve::User::member_id
+app/services/admin_hours_service.py::clock_in::User::user_id
+app/services/admin_hours_service.py::create_manual_entry::User::user_id
+app/services/admin_hours_service.py::edit_pending_entry::User::owner_id
+
+# Not yet reviewed.
+app/services/apparatus_service.py::_reload_operator::ApparatusOperator::operator_id
+
+# Not yet reviewed.
+app/services/auth_service.py::get_user_from_token::User::user_id
+
+# Not yet reviewed.
+app/services/documents_service.py::_lock_destination_folder::DocumentFolder::folder_id
+app/services/documents_service.py::_lock_folder_by_id::DocumentFolder::folder_id
+
+# Not yet reviewed.
+app/services/election_service.py::_notify_leadership::User::performed_by
+app/services/election_service.py::check_voter_eligibility::User::user_id
+app/services/election_service.py::process_election_lifecycle::Election::election_id
+
+# Not yet reviewed.
+app/services/equipment_check_service.py::_send_check_failure_notification::EquipmentCheckTemplate::template_id
+app/services/equipment_check_service.py::_send_check_failure_notification::User::checked_by
+
+# Not yet reviewed.
+app/services/event_request_service.py::get_user_name::User::user_id
+
+# Not yet reviewed.
+app/services/finance_service.py::_entity_creator_email::User::requester_id
+
+# Not yet reviewed.
+app/services/inventory_notification_service.py::_get_user::User::user_id
+
+# Not yet reviewed.
+app/services/inventory_service.py::create_return_request::CheckOutRecord::checkout_id
+app/services/inventory_service.py::create_return_request::ItemAssignment::assignment_id
+app/services/inventory_service.py::create_return_request::ItemIssuance::issuance_id
+
+# Not yet reviewed.
+app/services/label_service.py::get_preset::Position::position_id
+
+# Not yet reviewed.
+app/services/member_archive_service.py::reactivate_member::User::reactivated_by
+
+# Not yet reviewed.
+app/services/member_leave_service.py::_deactivate_linked_waiver::TrainingWaiver::waiver_id
+app/services/member_leave_service.py::_update_linked_waiver::TrainingWaiver::waiver_id
+
+# Not yet reviewed.
+app/services/membership_pipeline_service.py::link_event::User::linked_by
+
+# Not yet reviewed.
+app/services/property_return_service.py::generate_report::User::performed_by
+app/services/property_return_service.py::generate_report::User::user_id
+
+# Not yet reviewed.
+app/services/push_service.py::_subscribe_once::PushSubscription::peeked_id
+app/services/push_service.py::_subscribe_once::User::uid
+
+# Not yet reviewed.
+app/services/role_service.py::set_user_roles::User::user_id
+
+# Not yet reviewed.
+app/services/scheduled_tasks.py::resolve_check_templates::Apparatus::apparatus_id
+app/services/scheduled_tasks.py::resolve_check_templates::ApparatusType::app_type_id
+app/services/scheduled_tasks.py::run_recover_stranded_message_deliveries::DepartmentMessage::message_id
+
+# Not yet reviewed.
+app/services/scheduling_service.py::_email_swap_expiry::User::recipient_id
+app/services/scheduling_service.py::_member_display_name::User::user_id
+app/services/scheduling_service.py::_notify_shift_assignment::Shift::shift_id
+app/services/scheduling_service.py::_notify_shift_decline::Shift::shift_id
+app/services/scheduling_service.py::_notify_shift_decline::User::user_id
+app/services/scheduling_service.py::_send_finalization_notification::User::officer_id
+
+# Not yet reviewed.
+app/services/shift_completion_service.py::get_report::ShiftCompletionReport::report_id
+
+# Not yet reviewed.
+app/services/skills_testing_service.py::lock_attempt_capacity::TrainingRequirement::requirement_id
+
+# Not yet reviewed.
+app/services/training_program_service.py::_maybe_auto_advance_phase::ProgramEnrollment::enrollment_id
+app/services/training_program_service.py::_recalculate_enrollment_progress::ProgramEnrollment::enrollment_id
+
+# Not yet reviewed.
+app/services/training_session_service.py::_notify_training_officers::User::finalized_by
