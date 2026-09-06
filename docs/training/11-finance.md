@@ -264,7 +264,7 @@ Click on any budget in the list to view its detail page at `/finance/budgets/:id
 > `finance.approve` gates all three approval endpoints and no shipped role
 > grants it, while the one account holding `*` is refused by separation of
 > duties for anything it raised. Both are recorded in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-can-approve-anything-2026-08-12).
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-could-approve-anything-2026-08-12-narrowed-2026-09-06).
 
 ### Budget Summary
 
