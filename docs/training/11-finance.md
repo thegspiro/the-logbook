@@ -253,18 +253,20 @@ Click on any budget in the list to view its detail page at `/finance/budgets/:id
 - List of all purchase requests, expense reports, and check requests charged against this budget
 - Budget utilization percentage
 
-> **Corrected 2026-08-12.** The page and its stacked progress bar are real,
-> but neither half of what this placeholder asks for can be shown.
+> **Corrected 2026-08-12, updated 2026-09-06.** The page and its stacked
+> progress bar are real; one half of what this placeholder asks for still
+> cannot be shown.
 >
 > The **transaction table** is an unconditional `<EmptyState>` stub — there is
 > no fetch behind it and no code path that ever displays a row.
 >
-> The **bar is permanently at 0%**. Spend and encumbrance accrue when a
-> purchase request or expense report is approved, and nothing can be approved:
-> `finance.approve` gates all three approval endpoints and no shipped role
-> grants it, while the one account holding `*` is refused by separation of
-> duties for anything it raised. Both are recorded in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-can-approve-anything-2026-08-12).
+> The **bar was permanently at 0%** until 2026-09-06. Spend and encumbrance
+> accrue when a purchase request or expense report is approved, and nothing
+> could be approved: `finance.approve` gates the approval endpoints and no
+> seeded position granted it, while the one account holding `*` is refused by
+> separation of duties for anything it raised. The Treasurer now holds it, so
+> the bar can move. Both are recorded in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#finance--nobody-could-approve-anything-2026-08-12-narrowed-2026-09-06).
 
 ### Budget Summary
 
