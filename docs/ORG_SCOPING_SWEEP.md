@@ -3,9 +3,9 @@
 **Date:** 2026-09-06
 **Question:** can org-scoping of by-id queries be enforced by a test, the way
 `test_like_escaping.py` and `test_csv_writer_sweep.py` enforce their rules?
-**Answer:** not as a hand-rolled AST test. As a **baseline ratchet**, yes.
-A taint-analysis engine (option A′) may manage the precise version and is worth
-a spike first — see §4.
+**Answer:** no — not as a hand-rolled AST test, and not with Semgrep taint
+mode either, which was tried and is recorded in §4. As a **baseline ratchet**,
+yes, and that is what is recommended.
 
 Pitfall #14 is the dominant finding class in the 2026-07 module audit and the
 only rule in the backend with both the highest severity and no machine check.
@@ -126,51 +126,109 @@ Applied here that gives, from day one: no new unscoped by-id query can land
 without someone writing a line into the baseline with a reason. That is the
 protection the rule needs and does not have.
 
-### A′. Semgrep taint mode — worth a spike before committing to B
+### A′. Semgrep taint mode — **spike run 2026-09-06; it does not work**
 
-_Added 2026-09-06, after surveying the wider skills ecosystem. It revises §3:
-the intractability argued there is specific to a **hand-rolled AST test**, and
-does not automatically extend to a tool built for this analysis._
+_Proposed and then tested. Recorded in full because the negative result is
+reusable: it rules out a whole tool class for this rule, for a reason that also
+predicts the paid tier will not rescue it._
 
-§3 concludes that separating a real IDOR from the four false-positive classes
-needs dataflow with a notion of "already validated in-org" that crosses a
-service-call boundary. That is a fair description of what a pytest AST sweep
-cannot do. It is also close to a literal description of what a taint-analysis
-engine is for:
+Semgrep 1.176.1, OSS engine. The rule reached a working state — sources are
+route-handler parameters without a `Depends(...)` default, the sink is
+`$DB.execute($CHAIN)` where the chain compares `$M.id` and carries no
+`organization_id`. On `app/api/v1/endpoints/elections.py` it cut 15 raw matches
+to 2. Then it was run over the whole API surface.
 
-| The analysis needs                                                         | Semgrep taint mode calls it |
-| -------------------------------------------------------------------------- | --------------------------- |
-| A client-supplied id (path/query/body parameter)                           | **source**                  |
-| `select(Model).where(Model.id == …)`                                       | **sink**                    |
-| An org filter, `assert_in_org`, or resolution through an org-scoped parent | **sanitizer**               |
+**All three acceptance criteria failed.**
 
-Expressed that way, all four false-positive classes in §3 are ids that never
-touch a source — they are read off an already-resolved row — so a taint rule
-should not raise them at all, without an allowlist.
+| Test                                                           | Result                                                                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1. The four §3 false-positive classes go quiet                 | **Fail.** 51 of 64 findings are exactly those classes.                                                                 |
+| 2. The `Candidate` parent-resolved shape is recognised as safe | **Fail.** `elections.py:2074` and `:2138` — the two correctly-written sites — are flagged.                             |
+| 3. Interprocedural reach into a service method                 | **Fail.** Zero findings in `app/services/`. Sources are declared in endpoint files and OSS taint does not cross files. |
 
-**This is a spike, not a plan.** What it would have to demonstrate:
+#### Why test 1 failed — the part worth keeping
 
-1. The four classes in §3 go quiet without exemptions.
-2. The `Candidate` shape — parent resolved in-org, child constrained by its
-   parent FK — is recognised as sanitized. This is the hard one: the sanitizer
-   is a _different query on a different model_ earlier in the function.
-3. Interprocedural reach through `self.db.execute(...)` inside a service
-   method whose `organization_id` came from the endpoint.
+The hypothesis was that the four classes are "ids that never touch a source".
+That is wrong, and the reason is structural:
 
-If (2) and (3) do not hold, fall back to option B. If they do, the result is
-the precise rule §3 says is out of reach, and #14 gets a real check rather than
-a ratchet.
+```python
+rsvp = await service.check_in_attendee(
+    event_id=event_id, user_id=body.user_id,
+    organization_id=current_user.organization_id,   # <- this is the safety
+)
+r = await db.execute(select(User).where(User.id == rsvp.user_id))
+```
 
-**Cost is lower than it looks.** `.github/workflows/ci.yml` already has a
-`backend-security` job running Bandit and pip-audit, so adding Semgrep is a
-step in an existing job rather than new CI surface. Bandit cannot do this
-itself — it has no taint analysis and no notion of tenancy.
+`body.user_id` is a source. Taint mode propagates taint from a call's
+arguments to its **return value**, so `rsvp` is tainted, so `rsvp.user_id` is
+tainted, and the query is reported. **The org-scoping call — the very thing
+that makes the code safe — is modelled as a propagator, not a sanitizer.**
 
-Trail of Bits publishes Claude Code skills for exactly this workflow —
-`semgrep-rule-creator` (writing custom rules), `fp-check` (false-positive
-verification, which is this problem's whole difficulty), and `variant-analysis`
-(finding the other instances of a bug you have one example of). Those are the
-tools for the spike.
+Declaring it as one does not help. `pattern-sanitizers` was added for
+`$S.$M(..., organization_id=..., ...)` and for the `await`-wrapped form, and
+for `assert_in_org` / `assert_all_in_org`. Findings went 64 → 64, unchanged, on
+both the full run and an isolated probe: sanitizing the call expression does
+not break a taint path that arrives through the arguments.
+
+**This also predicts that Semgrep Pro would make it worse, not better.** Pro
+buys cross-file taint, which is test 3 — but more reach means the same
+propagation through _more_ service calls, so class B grows. The defect is in
+how the rule must model org-scoping, not in how far the engine can see. Paying
+for the engine does not buy a different model.
+
+#### What the spike is worth keeping
+
+Restricting to sinks whose compared id is a **bare route parameter** — not read
+off any object — gives **11 findings across the whole API surface**, of which 2
+are the known-good `Candidate` sites and 1 is a JWT `payload["sub"]`. That
+leaves roughly 8 worth a human eye, in `equipment_check.py`, `inventory.py` and
+`users.py`.
+
+That is option C, automated, and it is a genuinely useful triage tool. It is
+**not** a gate: it sees nothing in `app/services/`, where 33 of the 43
+parameter-fed sites live.
+
+The rule is not checked in. A rule file with no job running it is a config
+switch with no reader (pitfall #19) — write the file when the job is written.
+
+```yaml
+rules:
+  - id: unscoped-by-id-query
+    languages: [python]
+    severity: ERROR
+    mode: taint
+    message: A client-supplied id reaches a by-id query with no organization_id filter.
+    pattern-sources:
+      - patterns:
+          - pattern-inside: |
+              @$R.$METHOD(...)
+              async def $F(..., $P: $T, ...):
+                  ...
+          - pattern: $P
+          - pattern-not-inside: |
+              async def $F(..., $P: $T = Depends(...), ...):
+                  ...
+    pattern-sinks:
+      - patterns:
+          - pattern: $DB.execute($CHAIN)
+          - metavariable-pattern:
+              metavariable: $CHAIN
+              pattern: <... $M.id == ... ...>
+          # A regex, not pattern-not: inside metavariable-pattern a pattern-not
+          # narrows to the id sub-expression and never sees a trailing
+          # .where(organization_id ...), so it excludes nothing.
+          - metavariable-regex:
+              metavariable: $CHAIN
+              regex: (?s)^(?!.*organization_id)(?!.*select\(Organization\)).*$
+```
+
+**Cost, for the record:** 3m21s for this one rule over `app/api/`, 3m27s over
+`app/`. Their CI already has a `backend-security` job, so that is affordable —
+but not for a rule that is 80% false positives.
+
+#### Verdict
+
+Option B. The ratchet is what ships.
 
 ### C. Narrow high-signal sweep — recommended as the triage order, not as the gate
 
