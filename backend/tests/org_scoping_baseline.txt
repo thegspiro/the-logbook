@@ -129,9 +129,6 @@ app/services/property_return_service.py::generate_report::User::user_id
 app/services/push_service.py::_subscribe_once::PushSubscription::peeked_id
 app/services/push_service.py::_subscribe_once::User::uid
 
-# Not yet reviewed.
-app/services/role_service.py::set_user_roles::User::user_id
-
 # Reviewed 2026-09-06 (services pass): safe.
 #   - resolve_check_templates::Apparatus::apparatus_id
 #     caller passes shift.apparatus_id from an org-scoped shift, alongside the same organization_id

@@ -118,6 +118,32 @@ def _mutation_db():
     return db
 
 
+def _mutation_db_with_user(role_ids=("new-role",), rank=None):
+    """A mutation db that also answers set_user_roles' two scoping reads.
+
+    set_user_roles now resolves the target user inside the org and runs
+    assert_all_in_org over the position ids before it writes anything, so a
+    bare AsyncMock is no longer enough: the user read must return a row, and
+    the in-org id lookup must report every requested id as present.
+    """
+    db = _mutation_db()
+    user = SimpleNamespace(id="user-1", organization_id="org-1", rank=rank)
+
+    user_result = MagicMock()
+    user_result.scalar_one_or_none = MagicMock(return_value=user)
+
+    # assert_all_in_org reads result.all() and takes row[0], not .scalars().
+    ids_result = MagicMock()
+    ids_result.all.return_value = [(str(r),) for r in role_ids]
+
+    generic = MagicMock()
+    generic.scalars.return_value.all.return_value = []
+    generic.scalar_one_or_none = MagicMock(return_value=None)
+
+    db.execute = AsyncMock(side_effect=[user_result, ids_result] + [generic] * 12)
+    return db
+
+
 class TestRoleMutationAuditing:
     async def test_member_system_position_display_name_can_change(self):
         db = _mutation_db()
@@ -263,7 +289,7 @@ class TestRoleMutationAuditing:
         db.rollback.assert_awaited_once()
 
     async def test_bulk_replacement_writes_only_its_canonical_audit(self):
-        db = _mutation_db()
+        db = _mutation_db_with_user()
         service = RoleManagementService()
         new_role = SimpleNamespace(id="new-role")
         service.get_user_roles = AsyncMock(side_effect=[[], [new_role]])
@@ -272,7 +298,9 @@ class TestRoleMutationAuditing:
             "app.services.role_service.log_audit_event",
             new=AsyncMock(return_value=object()),
         ) as audit:
-            roles = await service.set_user_roles(db, "user-1", ["new-role"], "admin-1")
+            roles = await service.set_user_roles(
+                db, "user-1", ["new-role"], "admin-1", organization_id="org-1"
+            )
 
         assert roles == [new_role]
         audit.assert_awaited_once()
@@ -280,7 +308,7 @@ class TestRoleMutationAuditing:
         db.commit.assert_awaited_once()
 
     async def test_bulk_audit_failure_rolls_back_all_assignment_changes(self):
-        db = _mutation_db()
+        db = _mutation_db_with_user()
         service = RoleManagementService()
         service.get_user_roles = AsyncMock(return_value=[])
 
@@ -289,7 +317,59 @@ class TestRoleMutationAuditing:
             new=AsyncMock(return_value=None),
         ):
             with pytest.raises(RuntimeError, match="replacement audit"):
-                await service.set_user_roles(db, "user-1", ["new-role"], "admin-1")
+                await service.set_user_roles(
+                    db, "user-1", ["new-role"], "admin-1", organization_id="org-1"
+                )
 
         db.commit.assert_not_awaited()
         db.rollback.assert_awaited_once()
+
+    async def test_a_user_outside_the_org_is_refused(self):
+        """The target is resolved inside organization_id, so a foreign user
+        simply does not exist as far as this method is concerned."""
+        db = _mutation_db()
+        no_user = MagicMock()
+        no_user.scalar_one_or_none = MagicMock(return_value=None)
+        db.execute = AsyncMock(return_value=no_user)
+
+        with pytest.raises(ValueError, match="User not found"):
+            await RoleManagementService().set_user_roles(
+                db,
+                "user-in-another-org",
+                ["new-role"],
+                "admin-1",
+                organization_id="org-1",
+            )
+
+        db.commit.assert_not_awaited()
+
+    async def test_a_position_outside_the_org_is_refused_before_any_write(self):
+        """XC-1: an unvalidated position id would persist a foreign position —
+        and positions carry permissions — so it is rejected before the insert,
+        not after."""
+        db = _mutation_db()
+        user = SimpleNamespace(id="user-1", organization_id="org-1", rank=None)
+        user_result = MagicMock()
+        user_result.scalar_one_or_none = MagicMock(return_value=user)
+        # assert_all_in_org resolves none of the requested ids in this org.
+        ids_result = MagicMock()
+        ids_result.all.return_value = []
+        db.execute = AsyncMock(side_effect=[user_result, ids_result])
+
+        with pytest.raises(ValueError, match="Invalid position"):
+            await RoleManagementService().set_user_roles(
+                db,
+                "user-1",
+                ["role-from-another-org"],
+                "admin-1",
+                organization_id="org-1",
+            )
+
+        db.commit.assert_not_awaited()
+
+    async def test_organization_id_is_keyword_only(self):
+        """So a future caller cannot supply it by accident of argument order."""
+        with pytest.raises(TypeError):
+            await RoleManagementService().set_user_roles(
+                _mutation_db(), "user-1", ["new-role"], "admin-1", "org-1"
+            )
