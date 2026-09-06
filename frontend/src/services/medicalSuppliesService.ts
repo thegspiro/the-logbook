@@ -154,6 +154,10 @@ export const medicalSuppliesService = {
     return response.data;
   },
 
+  async retireItem(itemId: string, notes?: string): Promise<void> {
+    await api.post(`/medical-supplies/items/${itemId}/retire`, { notes });
+  },
+
   async getItemLots(itemId: string): Promise<InventoryLot[]> {
     const response = await api.get<InventoryLot[]>(`/medical-supplies/items/${itemId}/lots`);
     return response.data;

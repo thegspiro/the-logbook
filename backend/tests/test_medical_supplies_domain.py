@@ -23,6 +23,7 @@ from app.schemas.inventory import (
     InventoryItemCreate,
     InventoryItemUpdate,
     InventoryLotBulkCreate,
+    ItemRetireRequest,
 )
 
 ORG = "org-1"
@@ -308,6 +309,64 @@ class TestItemDomainPinning:
         assert (
             ms.log_audit_event.await_args.kwargs["event_type"] == "medical_item_updated"
         )
+
+    async def test_retire_of_a_gear_item_is_not_found(self, svc):
+        """A caller holding only inventory.manage_medical has no route to a
+        gear item at all -- retirement is domain-pinned like every other
+        by-id write on this router."""
+        with pytest.raises(HTTPException) as err:
+            await ms.retire_medical_item(
+                GEAR_ITEM,
+                ItemRetireRequest(),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+        assert err.value.status_code == 404
+        svc.retire_item.assert_not_awaited()
+
+    async def test_retire_delegates_to_the_service_and_logs_an_audit_event(self, svc):
+        """The route that closes MSUP-15's regression: a medical-only manager
+        (inventory.manage_medical, no inventory.manage) had no way to retire
+        an item once the generic PATCH stopped accepting `active`/RETIRED --
+        the only retire route lived on the general inventory router behind
+        inventory.manage alone."""
+        svc.retire_item = AsyncMock(return_value=(True, None))
+
+        result = await ms.retire_medical_item(
+            MEDICAL_ITEM,
+            ItemRetireRequest(notes="Expired, discarded"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        svc.retire_item.assert_awaited_once()
+        assert svc.retire_item.await_args.kwargs["notes"] == "Expired, discarded"
+        assert svc.retire_item.await_args.kwargs["required_item_types"] == (
+            MEDICAL_ITEM_TYPES
+        )
+        assert result == {"message": "Item retired successfully"}
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"] == "medical_item_retired"
+        )
+
+    async def test_retire_surfaces_a_blocker_as_a_clean_400(self, svc):
+        """retire_item's blocker checks (assigned/checked-out/pool-issued)
+        still apply -- this route is a thin domain-pinned wrapper, not a
+        second implementation."""
+        svc.retire_item = AsyncMock(
+            return_value=(False, "Cannot retire: item is currently assigned.")
+        )
+
+        with pytest.raises(HTTPException) as err:
+            await ms.retire_medical_item(
+                MEDICAL_ITEM,
+                ItemRetireRequest(),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+        assert err.value.status_code == 400
+        ms.log_audit_event.assert_not_awaited()
 
 
 class TestSummaryCounts:

@@ -1551,6 +1551,7 @@ async def get_item(
     item = await service.get_item_by_id(
         item_id=item_id,
         organization_id=current_user.organization_id,
+        attach_lot_stock=True,
     )
 
     if not item:

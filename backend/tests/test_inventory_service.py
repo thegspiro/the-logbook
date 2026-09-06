@@ -589,9 +589,75 @@ class TestUpdateCategory:
         assert "cannot be cleared" in error.lower()
 
 
-# ============================================
-# Serial Number Uniqueness Tests
-# ============================================
+class TestGetCategoriesDefaultLimit:
+    """None of get_categories' three real callers (the medical and gear
+    category pickers, and the CSV-import name lookup) pass skip/limit —
+    each treats the result as the organization's complete category set,
+    with no pagination UI anywhere that could reach a later page. A
+    200-row default silently dropped every category past it. The default
+    must stay well above any realistic department's category count."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_default_limit_is_not_the_old_200_cap(self, service, mock_db, org_id):
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        mock_db.execute = AsyncMock(side_effect=cap)
+
+        await service.get_categories(organization_id=org_id)
+
+        sql = str(captured[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "LIMIT 200" not in sql
+        assert "LIMIT 5000" in sql
+
+
+class TestCategoryInDomainForUpdate:
+    """category_in_domain defaults to a plain read -- every caller besides
+    retire_item's post-lock domain re-check is a stateless preflight with
+    nothing of its own to lock. for_update=True is the one opt-in that
+    makes it a locking read (Pitfall #27), needed because locking the item
+    row does not lock a separate category row, and an earlier plain read
+    in the same transaction (the caller's own preflight) already opened
+    the REPEATABLE READ snapshot a plain read here would otherwise still
+    answer from."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_default_is_a_plain_read(self, service, mock_db, org_id):
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            return "cat-1"
+
+        mock_db.scalar = AsyncMock(side_effect=cap)
+
+        await service.category_in_domain("cat-1", org_id, ["medical"])
+
+        sql = str(captured[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "FOR UPDATE" not in sql
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_for_update_true_is_a_locking_read(self, service, mock_db, org_id):
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            return "cat-1"
+
+        mock_db.scalar = AsyncMock(side_effect=cap)
+
+        await service.category_in_domain("cat-1", org_id, ["medical"], for_update=True)
+
+        sql = str(captured[0].compile(compile_kwargs={"literal_binds": True}))
+        assert "FOR UPDATE" in sql
 
 
 class TestSerialNumberUniqueness:
@@ -807,6 +873,207 @@ class TestUpdateItem:
         assert "cannot be cleared" in err.lower()
 
 
+class TestUpdateItemRejectsActive:
+    """update_item accepts `active` on its own schema, with no route
+    dedicated to changing it through a plain edit. A first attempt gated a
+    clearing attempt on the same checks retire_item runs (assignment,
+    checkout, pool issuance), directly in this unlocked method — a Codex
+    review caught three gaps that check alone could not close: it ran
+    against a read this method does not lock, so a concurrent
+    assign/checkout could still land between the check and this call's own
+    commit; a caller could clear `active` while leaving `status` at
+    AVAILABLE, which assign_item_to_user/checkout_item gate on rather than
+    `active` — letting the "deactivated" item be handed out again
+    immediately; and a caller could skip `active` entirely and send a
+    `status`/`condition` pair of RETIRED directly, which passes
+    `_validate_item_state` with none of retire_item's checks. retire_item
+    already closes all three, atomically, with its own audit trail, so
+    update_item now rejects `active` and a RETIRED `status`/`condition`
+    outright rather than trying to replicate that contract inline."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_clearing_active(self, service, mock_db):
+        item = _make_item(active=True, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False},
+        )
+        assert result is None
+        assert "retire" in err.lower()
+        assert item.active is True
+        mock_db.commit.assert_not_awaited()
+        mock_db.execute.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_setting_active_even_when_nothing_would_block_retiring(
+        self, service, mock_db
+    ):
+        """Not conditional on assignment/checkout state — active is not a
+        field this method accepts at all, whichever direction it moves."""
+        item = _make_item(active=True, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": False, "notes": "trying anyway"},
+        )
+        assert result is None
+        assert item.active is True
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_reactivating_too(self, service, mock_db):
+        item = _make_item(active=False, assigned_to_user_id=None)
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"active": True},
+        )
+        assert result is None
+        assert item.active is False
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_unrelated_fields_are_unaffected(self, service, mock_db):
+        """The rejection is scoped to `active` specifically — an update
+        that never mentions it is unaffected."""
+        item = _make_item(active=True)
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": "Relabeled"},
+        )
+        assert err is None
+        assert result is item
+        assert item.name == "Relabeled"
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_the_retired_status_condition_pair_even_without_active(
+        self, service, mock_db
+    ):
+        """Skipping `active` and sending status/condition RETIRED directly
+        passes _validate_item_state on its own — RETIRED has no
+        assigned-user rule blocking it — so that pair must be rejected the
+        same way `active` is, or it bypasses the whole guard."""
+        item = _make_item(
+            active=True,
+            assigned_to_user_id=str(uuid4()),
+            status=ItemStatus.AVAILABLE,
+            condition=ItemCondition.GOOD,
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"status": "retired", "condition": "retired"},
+        )
+        assert result is None
+        assert "retire" in err.lower()
+        assert item.status == ItemStatus.AVAILABLE
+        assert item.active is True
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_retired_condition_alone(self, service, mock_db):
+        item = _make_item(active=True, assigned_to_user_id=None)
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"condition": "retired"},
+        )
+        assert result is None
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_a_non_retired_status_change_is_still_allowed(self, service, mock_db):
+        """The rejection targets RETIRED specifically — an ordinary status
+        change (e.g. to in_maintenance) is unaffected."""
+        item = _make_item(
+            active=True,
+            assigned_to_user_id=None,
+            status=ItemStatus.AVAILABLE,
+            condition=ItemCondition.DAMAGED,
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"status": "in_maintenance"},
+        )
+        assert err is None
+        assert item.status == ItemStatus.IN_MAINTENANCE
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_rejects_reopening_a_retired_items_status(self, service, mock_db):
+        """A caller could omit `active` and `status`/`condition: retired`
+        entirely and instead PATCH an already-retired item to
+        {"status": "available", "condition": "good"} -- neither destination
+        value is RETIRED, so the reject condition above lets it through.
+        Since `active` isn't touched, that leaves active=false while making
+        status distributable again: assign_item_to_user/checkout_item gate
+        on status, not active. Nothing in this codebase reactivates a
+        retired item, so this must be refused too."""
+        item = _make_item(
+            active=False,
+            status=ItemStatus.RETIRED,
+            condition=ItemCondition.RETIRED,
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"status": "available", "condition": "good"},
+        )
+        assert result is None
+        assert "retired" in (err or "").lower()
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_a_retired_items_unrelated_fields_stay_editable(
+        self, service, mock_db
+    ):
+        """The reopening guard targets status/condition specifically --
+        renaming or otherwise annotating an already-retired item (for
+        record-keeping) is unaffected."""
+        item = _make_item(
+            active=False, status=ItemStatus.RETIRED, condition=ItemCondition.RETIRED
+        )
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": "Renamed after retirement"},
+        )
+        assert err is None
+        assert item.name == "Renamed after retirement"
+        mock_db.commit.assert_awaited_once()
+
+
 # ============================================
 # Update Lot Tests
 # ============================================
@@ -884,7 +1151,7 @@ class TestRetireItem:
     @pytest.mark.asyncio
     async def test_retire_item_not_found(self, service, mock_db):
         """retire_item should return error if item does not exist."""
-        service.get_item_by_id = AsyncMock(return_value=None)
+        service._get_item_locked = AsyncMock(return_value=None)
 
         success, err = await service.retire_item(uuid4(), uuid4())
         assert success is False
@@ -895,7 +1162,7 @@ class TestRetireItem:
     async def test_retire_item_blocked_when_assigned(self, service, mock_db):
         """retire_item should block if item is currently assigned to a user."""
         item = _make_item(assigned_to_user_id=str(uuid4()))
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         success, err = await service.retire_item(
             UUID(item.id), UUID(item.organization_id)
@@ -908,7 +1175,7 @@ class TestRetireItem:
     async def test_retire_item_blocked_when_checked_out(self, service, mock_db):
         """retire_item should block if item has active checkouts."""
         item = _make_item(assigned_to_user_id=None)
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # db.execute returns count=1 for active checkouts
         mock_result = MagicMock()
@@ -928,7 +1195,36 @@ class TestRetireItem:
     ):
         """retire_item should block a POOL item that has unreturned issuances."""
         item = _make_item(assigned_to_user_id=None, tracking_type=TrackingType.POOL)
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
+
+        # First execute: active checkouts = 0; second: active issuances = 1
+        co_result = MagicMock()
+        co_result.scalar.return_value = 0
+        iss_result = MagicMock()
+        iss_result.scalar.return_value = 1
+        mock_db.execute = AsyncMock(side_effect=[co_result, iss_result])
+
+        success, err = await service.retire_item(
+            UUID(item.id), UUID(item.organization_id)
+        )
+        assert success is False
+        assert "issuance" in err.lower() or "pool" in err.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_blocked_by_a_pool_issuance_even_after_tracking_type_changed(
+        self, service, mock_db
+    ):
+        """tracking_type is editable through the generic update_item PATCH
+        with no check against outstanding holdings -- a caller could switch
+        a pool item to individual specifically to dodge the pool-issuance
+        check, then retire it over units still checked out to a member. An
+        ItemIssuance row must block retirement regardless of the item's
+        *current* tracking_type."""
+        item = _make_item(
+            assigned_to_user_id=None, tracking_type=TrackingType.INDIVIDUAL
+        )
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # First execute: active checkouts = 0; second: active issuances = 1
         co_result = MagicMock()
@@ -950,7 +1246,7 @@ class TestRetireItem:
         item = _make_item(
             assigned_to_user_id=None, tracking_type=TrackingType.INDIVIDUAL
         )
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # active checkouts count = 0
         mock_result = MagicMock()
@@ -975,7 +1271,7 @@ class TestRetireItem:
     async def test_retire_item_db_exception_rolls_back(self, service, mock_db):
         """retire_item should rollback on database error."""
         item = _make_item(assigned_to_user_id=None)
-        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
 
         # active checkouts count = 0
         mock_result = MagicMock()
@@ -991,6 +1287,80 @@ class TestRetireItem:
         assert success is False
         assert "DB error" in err
         mock_db.rollback.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_item_rechecks_domain_under_the_lock(self, service, mock_db):
+        """A domain-scoped caller (e.g. medical_supplies.py's
+        retire_medical_item, holding only inventory.manage_medical) can
+        pass required_item_types to re-validate domain membership against
+        the *locked* item -- closing a race where a concurrent
+        reclassification lands between that caller's own preflight check
+        and this method acquiring the lock."""
+        item = _make_item(assigned_to_user_id=None, category_id="cat-gear")
+        service._get_item_locked = AsyncMock(return_value=item)
+        service.category_in_domain = AsyncMock(return_value=False)
+
+        success, err = await service.retire_item(
+            UUID(item.id),
+            UUID(item.organization_id),
+            required_item_types=["medical"],
+        )
+
+        assert success is False
+        assert "not found" in err.lower()
+        service.category_in_domain.assert_awaited_once_with(
+            "cat-gear", str(item.organization_id), ["medical"], for_update=True
+        )
+        mock_db.commit.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_item_proceeds_when_domain_check_passes(
+        self, service, mock_db
+    ):
+        item = _make_item(assigned_to_user_id=None, category_id="cat-medical")
+        service._get_item_locked = AsyncMock(return_value=item)
+        service.category_in_domain = AsyncMock(return_value=True)
+
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 0
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("app.core.audit.log_audit_event", new_callable=AsyncMock):
+            success, err = await service.retire_item(
+                UUID(item.id),
+                UUID(item.organization_id),
+                required_item_types=["medical"],
+            )
+
+        assert success is True
+        assert err is None
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_retire_item_skips_the_domain_check_by_default(
+        self, service, mock_db
+    ):
+        """The general inventory.py retire route passes no
+        required_item_types -- it must not pay for or trip a check
+        medical_supplies.py's route alone needs."""
+        item = _make_item(assigned_to_user_id=None)
+        service._get_item_locked = AsyncMock(return_value=item)
+        service.category_in_domain = AsyncMock(return_value=False)
+
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = 0
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("app.core.audit.log_audit_event", new_callable=AsyncMock):
+            success, err = await service.retire_item(
+                UUID(item.id), UUID(item.organization_id)
+            )
+
+        assert success is True
+        assert err is None
+        service.category_in_domain.assert_not_awaited()
 
 
 # ============================================

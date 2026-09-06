@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: a generic item edit could deactivate equipment still checked out (2026-09-06)
+
+**Fixed**
+
+- **Editing an item could take it out of active inventory while a member
+  still held it.** The dedicated retire action blocks deactivation while an
+  item is assigned, checked out, or (for pooled stock) has an unreturned
+  issuance, and keeps the item's other fields consistent with being
+  retired — the general item-update path had none of that, so a plain edit
+  turning an item inactive (directly, or by setting its status and
+  condition to retired without touching that flag) could remove it from
+  every active list and picker with no safeguards, and (even when nothing
+  was blocking it) leave it in a state where it could still be handed out
+  again immediately afterward. Editing an item no longer accepts either
+  route at all; retiring an item is now the only way to deactivate one, and
+  the retire action itself now re-checks the item's current holder right
+  before deactivating it, closing a narrow window where a member could be
+  assigned the item in the instant before it was retired.
+- **A medical-supplies manager without broader inventory access lost the
+  ability to retire a medical item.** Closing the deactivation gap above
+  removed the only path such a manager had — the dedicated retire action
+  existed only on the general inventory permission. Medical supplies now
+  has its own retire action under the same medical-supplies permission
+  every other action on that screen already uses.
+- **An item's detail page could show stale stock for consumables tracked by
+  lot.** The list view already computed on-hand stock from dated lots for
+  any item stocked that way; the single-item detail page (medical supplies
+  and general inventory alike) did not, and could show the item's older
+  quantity figure instead.
+- **A department with a large category list could find some categories
+  missing from pickers.** Category pickers (medical supplies, general
+  inventory, and CSV import) only ever fetch a department's complete list,
+  with no lower page to reach — a low internal cap meant categories past
+  it were silently absent from every picker and filter. Raised well above
+  any realistic department's category count.
+- **Receiving an item's very first stock lot at the same moment as a
+  quantity correction could record the wrong opening count — including
+  losing it entirely if the item had nothing on hand yet.** The count
+  carried into that first lot could reflect the value from just before the
+  correction rather than the corrected one; if the item's count was zero
+  at that exact moment, the correction could be dropped altogether, in the
+  rare case both happened together.
+- **Retiring an item did not always catch a checkout or assignment that
+  was created in the same instant.** The retire action already blocked
+  retiring an item someone still holds; a very narrow timing window could
+  let it miss a hold that was recorded at almost the same moment.
+- **Assigning, checking out, or issuing an item during a batch scan could
+  land on an item retired in the same instant.** The same narrow timing
+  window as above, on the other three actions that hand an item to a
+  member.
+- **Retiring an item that had recently been switched from pooled to
+  individual tracking could go through over stock still checked out to a
+  member.** The check for outstanding checked-out units on a pooled item
+  only ran while the item was still marked as pooled; switching how an
+  item is tracked no longer skips it.
+- **Choosing "Retired" from the bulk status-change picker, or from an
+  item's Condition field, no longer saved.** Both controls have offered
+  Retired since before this release's item-deactivation safeguards were
+  added, and neither was updated when those safeguards started rejecting
+  that combination outright. Retiring an item is now only offered through
+  the dedicated Retire action already present on both screens.
+- **An item could be quietly returned to active status by editing it
+  directly, without going through Retire.** Only the two ways of marking
+  an item retired were blocked; changing a retired item's status or
+  condition back to something else went through unchecked, leaving it
+  hidden from active-inventory lists while distributable again.
+
 ### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
 
 **Fixed**

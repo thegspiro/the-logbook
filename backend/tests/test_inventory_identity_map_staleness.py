@@ -39,6 +39,8 @@ from sqlalchemy import select, text
 from app.core.database import database_manager
 from app.models.inventory import (
     CheckOutRecord,
+    InventoryItem,
+    InventoryLot,
     ItemCondition,
     ItemIssuance,
     ItemStatus,
@@ -83,8 +85,29 @@ async def _insert_org_and_user(session, org_id: str, user_id: str) -> None:
     )
 
 
-async def _cleanup(org_id: str) -> None:
+async def _cleanup(org_id: str, item_id: str | None = None) -> None:
     async with database_manager.session_factory() as session:
+        if item_id is not None:
+            # retire_item (and the transfer path) call log_audit_event and
+            # commit on success -- a real row in the shared audit_logs table
+            # that nothing else in this file's teardown touches. It doesn't
+            # even carry this test's organization_id (retire_item's call site
+            # stamps neither organization_id nor user_id), so org-scoped
+            # deletes above can't reach it either. Left behind, one such row
+            # corrupts every other test that assumes archive_expired_logs's
+            # unscoped `MIN(id)` "head" query owns the whole table -- exactly
+            # what happened here: a single leaked row from an earlier
+            # fail-before run of this test broke 8 unrelated audit retention/
+            # shipping/org-scoping tests. event_data->>'$.item_id' is this
+            # test's own fresh uuid4(), so this can't touch another test's
+            # concurrently-written rows.
+            await session.execute(
+                text(
+                    "DELETE FROM audit_logs "
+                    "WHERE JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.item_id')) = :item_id"
+                ),
+                {"item_id": item_id},
+            )
         # inventory_notification_queue.performed_by/user_id FK the users this
         # test creates -- _queue_inventory_notification (best-effort, wrapped
         # in try/except in the service) queues a row on every successful
@@ -303,3 +326,284 @@ async def test_checkin_item_sees_a_concurrent_checkin_not_its_own_stale_cache():
         await session_a.close()
         await session_b.close()
         await _cleanup(org_id)
+
+
+async def _cleanup_lots(org_id: str) -> None:
+    async with database_manager.session_factory() as session:
+        await session.execute(
+            text("DELETE FROM inventory_lots WHERE organization_id = :org"),
+            {"org": org_id},
+        )
+        await session.commit()
+    await _cleanup(org_id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache():
+    """add_lot's own unlocked ``_get_item`` read populates this session's
+    identity map with the item before ``_carry_forward_column_stock`` runs
+    its locked re-select for the exact same row. Session A mirrors that:
+    an unlocked read first (standing in for ``_get_item``'s own read inside
+    ``add_lot``), then a fully independent session B commits a quantity
+    edit before A's ``add_lot`` call reaches the carry-forward step. The
+    opening-balance lot ``add_lot`` creates must reflect B's committed
+    quantity — not the value A's identity map cached before B ever ran,
+    which would invent or lose units in the very first lot recorded
+    against this item.
+    """
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    item_id = str(uuid.uuid4())
+
+    async with database_manager.session_factory() as setup:
+        await _insert_org_and_user(setup, org_id, user_id)
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_items "
+                "(id, organization_id, name, tracking_type, quantity, "
+                "`condition`, status) "
+                "VALUES (:id, :org, :name, :tt, :qty, :cond, :status)"
+            ),
+            {
+                "id": item_id,
+                "org": org_id,
+                "name": "4x4 Gauze",
+                "tt": TrackingType.POOL.value,
+                "qty": 10,
+                "cond": ItemCondition.GOOD.value,
+                "status": ItemStatus.AVAILABLE.value,
+            },
+        )
+        await setup.commit()
+
+    session_a = database_manager.session_factory()
+    session_b = database_manager.session_factory()
+    try:
+        # Session A: the unlocked full-row read add_lot's own _get_item
+        # performs before calling _carry_forward_column_stock -- this is
+        # what puts the pre-race quantity=10 object in A's identity map.
+        peek = await session_a.execute(
+            select(InventoryItem).where(InventoryItem.id == item_id)
+        )
+        cached_item = peek.scalar_one()
+        assert cached_item.quantity == 10
+
+        # Session B: an independent, already-committed quantity correction
+        # -- a hand count catching up the column before this item's first
+        # lot is ever recorded.
+        await session_b.execute(
+            text("UPDATE inventory_items SET quantity = 3 WHERE id = :id"),
+            {"id": item_id},
+        )
+        await session_b.commit()
+
+        # Session A: add_lot for the same item, in the same session that
+        # already cached the pre-race object. This is the assertion that
+        # matters: the opening-balance lot it creates must carry B's
+        # committed 3, not A's stale cached 10.
+        service_a = InventoryService(session_a)
+        lot = await service_a.add_lot(
+            item_id=item_id,
+            organization_id=org_id,
+            data={"lot_number": "LOT-NEW", "quantity": 20},
+            created_by=user_id,
+        )
+        assert lot is not None
+        assert lot.lot_number == "LOT-NEW"
+        assert lot.quantity == 20
+
+        opening_balance = await session_a.execute(
+            select(InventoryLot).where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.lot_number.is_(None),
+            )
+        )
+        carried = opening_balance.scalar_one()
+        assert carried.quantity == 3, (
+            "opening-balance lot carried the stale quantity=10 cached before "
+            "session B's commit, not B's committed quantity=3 -- identity-map "
+            "staleness in _carry_forward_column_stock"
+        )
+
+        refreshed = await session_a.execute(
+            select(InventoryItem.quantity).where(InventoryItem.id == item_id)
+        )
+        assert refreshed.scalar_one() == 0
+    finally:
+        await session_a.rollback()
+        await session_b.rollback()
+        await session_a.close()
+        await session_b.close()
+        await _cleanup_lots(org_id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_retire_item_sees_a_concurrent_assignment_not_its_own_stale_cache():
+    """retire_item used an unlocked ``get_item_by_id`` read before its
+    blocker checks, so under REPEATABLE READ a transaction that had already
+    read anything could still see the pre-race snapshot for its own
+    subsequent blocker check even after a concurrent assignment committed
+    (CLAUDE.md pitfall #27) -- retirement could go through over a now-held
+    item. Session A establishes a snapshot with an early unlocked peek
+    (standing in for whatever read started A's transaction in a real
+    request); session B independently assigns the item and commits; A's own
+    retire_item call must see B's committed assignment and refuse, not the
+    unassigned state cached before B ever ran.
+    """
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    item_id = str(uuid.uuid4())
+
+    async with database_manager.session_factory() as setup:
+        await _insert_org_and_user(setup, org_id, user_id)
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_items "
+                "(id, organization_id, name, tracking_type, `condition`, status) "
+                "VALUES (:id, :org, :name, :tt, :cond, :status)"
+            ),
+            {
+                "id": item_id,
+                "org": org_id,
+                "name": "Thermal Imager",
+                "tt": TrackingType.INDIVIDUAL.value,
+                "cond": ItemCondition.GOOD.value,
+                "status": ItemStatus.AVAILABLE.value,
+            },
+        )
+        await setup.commit()
+
+    session_a = database_manager.session_factory()
+    session_b = database_manager.session_factory()
+    try:
+        # Session A: an early unlocked read establishes this transaction's
+        # REPEATABLE READ snapshot before B ever runs.
+        peek = await session_a.execute(
+            select(InventoryItem).where(InventoryItem.id == item_id)
+        )
+        assert peek.scalar_one().assigned_to_user_id is None
+
+        # Session B: an independent, already-committed assignment -- the
+        # race retire_item's locked re-read exists to catch.
+        service_b = InventoryService(session_b)
+        assignment, err_b = await service_b.assign_item_to_user(
+            item_id=uuid.UUID(item_id),
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            assigned_by=uuid.UUID(user_id),
+        )
+        assert assignment is not None, err_b
+        await session_b.commit()
+
+        # Session A: retire the same item, in the same session/transaction
+        # that already read it unassigned above. This is the assertion that
+        # matters: it must observe B's committed assignment, not the
+        # pre-race snapshot.
+        service_a = InventoryService(session_a)
+        success_a, err_a = await service_a.retire_item(
+            item_id=uuid.UUID(item_id), organization_id=uuid.UUID(org_id)
+        )
+        assert success_a is False, (
+            "retire_item succeeded over a concurrently-assigned item -- it "
+            "read its own session's stale, pre-race cached copy instead of "
+            "B's committed assignment (identity-map/snapshot staleness)"
+        )
+        assert "assigned" in (err_a or "").lower()
+    finally:
+        await session_a.rollback()
+        await session_b.rollback()
+        await session_a.close()
+        await session_b.close()
+        await _cleanup(org_id, item_id=item_id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+async def test_checkout_item_sees_a_concurrent_retirement_not_its_own_stale_cache():
+    """checkout_item (and assign_item_to_user, issue_from_pool -- same
+    shape) used to lock the item with its own inline SELECT instead of
+    _get_item_locked, missing populate_existing. distribute_items (the
+    scan/distribution batch flow) reads a candidate item unlocked before
+    calling any of these, in the same session/transaction, so without
+    populate_existing the identity map would hand back that stale,
+    pre-race object even after the locking re-select ran -- checking an
+    item out over a retirement committed in the same window it was
+    waiting on the lock, recreating the hidden-held state this whole PR
+    exists to prevent, just from the opposite direction. Session A mirrors
+    distribute_items's own unlocked peek; session B independently retires
+    the item and commits; session A's own checkout_item call must see B's
+    committed RETIRED status and refuse, not the pre-race AVAILABLE
+    snapshot.
+    """
+    org_id = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    item_id = str(uuid.uuid4())
+
+    async with database_manager.session_factory() as setup:
+        await _insert_org_and_user(setup, org_id, user_id)
+        await setup.execute(
+            text(
+                "INSERT INTO inventory_items "
+                "(id, organization_id, name, tracking_type, `condition`, status) "
+                "VALUES (:id, :org, :name, :tt, :cond, :status)"
+            ),
+            {
+                "id": item_id,
+                "org": org_id,
+                "name": "Thermal Imager",
+                "tt": TrackingType.INDIVIDUAL.value,
+                "cond": ItemCondition.GOOD.value,
+                "status": ItemStatus.AVAILABLE.value,
+            },
+        )
+        await setup.commit()
+
+    session_a = database_manager.session_factory()
+    session_b = database_manager.session_factory()
+    try:
+        # Session A: an early unlocked read -- distribute_items's own
+        # candidate-item lookup -- puts this item in A's identity map before
+        # B ever runs. Bound to a variable and kept alive (not just
+        # asserted inline): SQLAlchemy's identity map holds this object by
+        # weak reference, so an unreferenced peek is garbage-collected
+        # immediately and the next query would rebuild a fresh object
+        # regardless of populate_existing, masking the exact bug
+        # distribute_items can hit (it keeps `item` bound across the whole
+        # scan iteration, including the call into checkout_item below).
+        peek = await session_a.execute(
+            select(InventoryItem).where(InventoryItem.id == item_id)
+        )
+        cached_item = peek.scalar_one()
+        assert cached_item.status == ItemStatus.AVAILABLE
+
+        # Session B: an independent, already-committed retirement -- the
+        # race checkout_item's locked re-read exists to catch.
+        service_b = InventoryService(session_b)
+        success_b, err_b = await service_b.retire_item(
+            item_id=uuid.UUID(item_id), organization_id=uuid.UUID(org_id)
+        )
+        assert success_b is True, err_b
+        await session_b.commit()
+
+        # Session A: check the same item out, in the same session/
+        # transaction that already read it AVAILABLE above. This is the
+        # assertion that matters: it must observe B's committed
+        # retirement, not the pre-race snapshot.
+        service_a = InventoryService(session_a)
+        checkout, err_a = await service_a.checkout_item(
+            item_id=uuid.UUID(item_id),
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            checked_out_by=uuid.UUID(user_id),
+        )
+        assert checkout is None, (
+            "checkout_item succeeded over a concurrently-retired item -- it "
+            "read its own session's stale, pre-race cached copy instead of "
+            "B's committed retirement (identity-map/snapshot staleness)"
+        )
+        assert "available" in (err_a or "").lower()
+    finally:
+        await session_a.rollback()
+        await session_b.rollback()
+        await session_a.close()
+        await session_b.close()
+        await _cleanup(org_id, item_id=item_id)
