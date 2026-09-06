@@ -95,8 +95,18 @@ transaction's snapshot. **MSUP-21** (LOW/MED, fixed, supersedes MSUP-20):
 `category_in_domain` gained an opt-in `for_update` parameter (default
 unchanged for its other, stateless-preflight callers); `retire_item`'s
 domain re-check now passes `for_update=True`.
-Full local gate green including the full scoped test run (740 passed).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 7.
+An eighth Codex round then found MSUP-16's backend retire route had no
+frontend consumer: `medicalSuppliesService.ts` had no `retireItem` method
+and the medical supplies page offered only Edit per row, so a medical-only
+manager still had no path to retire an item through the shipped app — the
+regression MSUP-16 exists to close was still present from that manager's
+actual vantage point. **MSUP-22** (MED, fixed): added
+`medicalSuppliesService.retireItem` and a Retire action next to Edit,
+behind a `useConfirm()` dialog, matching this module's existing toast
+pattern.
+Full local gate green including the full scoped test run (740 passed
+backend, 49 passed on the medical supplies page).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 8.
 
 ---
 
@@ -511,6 +521,43 @@ passed, 1 pre-existing skip). Findings doc updated:
 `docs/security-review/MSUP-23-medical-supplies.md` → Pass 7, MSUP-21.
 Rotation row 23 still ⏳ — awaiting owner merge of PR #2301. Next: 24
 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 8 — eighth Codex round: MSUP-16's backend fix had no frontend consumer
+
+An eighth Codex round, reviewing the commit that fixed MSUP-21, found that
+MSUP-16's backend retire route had no frontend caller — the capability it
+exists to restore was still unreachable through the shipped app:
+
+- `medicalSuppliesService.ts` had no `retireItem` method, and
+  `MedicalSuppliesPage.tsx`'s per-row actions offered only Edit.
+- The existing `inventoryService.retireItem` calls the _general_
+  `/inventory/items/{id}/retire` route, which still requires the broader
+  `inventory.manage` — so a medical-only manager using the shipped SPA
+  still had no path to retire an item, even with MSUP-16's backend route
+  in place.
+
+**MSUP-22 (MED, fixed):** added `medicalSuppliesService.retireItem(itemId,
+notes?)`, posting to the medical-domain route MSUP-16 added, and a Retire
+action next to Edit in the medical supplies table (same `canManage` gate
+as Edit), behind a `useConfirm()` dialog (retirement cannot be undone),
+with the `react-hot-toast` success/error pattern this module's own item
+form modal already uses.
+
+Guard tests: `MedicalSuppliesPage.test.tsx` gained 2 cases — a Retire
+button is offered per row to a manager, and confirming it calls
+`medicalSuppliesService.retireItem` with the item's id (the medical-domain
+route, not the general one).
+
+Full gate: `npm run typecheck` clean, `eslint` clean on all three touched
+frontend files, `MedicalSuppliesPage.test.tsx` (49 passed: 47 existing + 2
+new), `vitest run src/modules/medical-supplies` (65 passed). No backend
+files touched this round, so the backend suite is unaffected. Findings
+doc updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 8,
+MSUP-22. This completes MSUP-16's originally-intended capability end to
+end. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301. Next:
+24 Meetings & minutes, once this PR merges.
 
 ---
 

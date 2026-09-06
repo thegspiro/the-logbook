@@ -1159,3 +1159,54 @@ fail-before (failed against the plain read) / pass-after.
 MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-21
 is a new fix (supersedes MSUP-20); MSUP-1 through MSUP-20 all re-verified
 intact.
+
+## Pass 8 — 2026-09-06
+
+An eighth Codex round, reviewing the commit that fixed MSUP-21, found that
+MSUP-16's backend retire route had no frontend consumer — the capability
+it exists to restore was still unreachable through the shipped app.
+
+### MSUP-22 — MED — the medical retire route MSUP-16 added had no frontend caller, so a medical-only manager still had no way to retire an item through the app — ✅ FIXED
+
+**What:** MSUP-16 added `POST /medical-supplies/items/{id}/retire` because
+closing the `active`/RETIRED bypass (MSUP-7→13) left a caller holding only
+`inventory.manage_medical` with no way to retire a medical item at all.
+But `medicalSuppliesService.ts` had no `retireItem` method, and
+`MedicalSuppliesPage.tsx`'s per-row actions offered only Edit. The
+existing `inventoryService.retireItem` calls the _general_ inventory
+route, which still requires the broader `inventory.manage` — so a
+medical-only manager using the shipped SPA still had no path to retire an
+item. The backend fix was real but invisible: the regression MSUP-16
+exists to close was still present from that manager's actual vantage
+point, the app.
+
+**Where:** `frontend/src/services/medicalSuppliesService.ts`,
+`frontend/src/modules/medical-supplies/pages/MedicalSuppliesPage.tsx`.
+
+**Fix:** added `medicalSuppliesService.retireItem(itemId, notes?)`,
+posting to the medical-domain route MSUP-16 added. Added a Retire action
+next to Edit in the medical supplies table (same `canManage` gate as
+Edit), behind a `useConfirm()` dialog (Pitfall #16 — never
+`window.confirm`) since retirement cannot be undone, with the existing
+`react-hot-toast` success/error pattern this module's own item form modal
+already uses.
+
+**Guard tests:** `MedicalSuppliesPage.test.tsx` gained 2 cases — a Retire
+button is offered per row to a manager, and confirming it calls
+`medicalSuppliesService.retireItem` with the item's id (posting to the
+medical-domain route, not the general one `inventoryService.retireItem`
+would have hit).
+
+### Completion gate (pass 8)
+
+| Check                                                                                | Result                          |
+| ------------------------------------------------------------------------------------ | ------------------------------- |
+| Frontend: `npm run typecheck`                                                        | clean                           |
+| Frontend: `eslint` (medicalSuppliesService.ts, MedicalSuppliesPage.tsx and its test) | clean                           |
+| `MedicalSuppliesPage.test.tsx`                                                       | 49 passed (47 existing + 2 new) |
+| `vitest run src/modules/medical-supplies`                                            | 65 passed                       |
+
+MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-22
+is a new fix, completing MSUP-16's originally-intended capability end to
+end; MSUP-1 through MSUP-21 are backend-only and unaffected by this
+frontend-only change.

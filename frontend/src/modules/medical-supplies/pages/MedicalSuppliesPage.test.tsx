@@ -7,6 +7,7 @@ const mockGetSummary = vi.fn();
 const mockGetItems = vi.fn();
 const mockGetCategories = vi.fn();
 const mockGetExpiringLots = vi.fn();
+const mockRetireItem = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
@@ -15,6 +16,7 @@ vi.mock('../../../services/medicalSuppliesService', () => ({
     getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
     getExpiringLots: (...args: unknown[]) => mockGetExpiringLots(...args) as unknown,
+    retireItem: (...args: unknown[]) => mockRetireItem(...args) as unknown,
   },
 }));
 
@@ -104,14 +106,15 @@ describe('MedicalSuppliesPage', () => {
     // but leaves implementations and queued *Once values in place, so an
     // unconsumed rejection from a failure-path test would be handed to
     // whichever test called the mock next (CLAUDE.md pitfall #28).
-    [mockCheckPermission, mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots].forEach((mock) =>
-      mock.mockReset()
+    [mockCheckPermission, mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots, mockRetireItem].forEach(
+      (mock) => mock.mockReset()
     );
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
     mockGetCategories.mockResolvedValue([]);
     mockGetExpiringLots.mockResolvedValue([expiringLot()]);
+    mockRetireItem.mockResolvedValue(undefined);
   });
 
   it('names the page for the domain it holds', async () => {
@@ -307,6 +310,41 @@ describe('MedicalSuppliesPage', () => {
 
     await screen.findByText('4x4 Gauze');
     expect(screen.queryByRole('button', { name: 'Edit 4x4 Gauze' })).not.toBeInTheDocument();
+  });
+
+  it('offers a retire action per supply to a manager', async () => {
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: '4x4 Gauze', quantity: 5 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    expect(await screen.findByRole('button', { name: 'Retire 4x4 Gauze' })).toBeInTheDocument();
+  });
+
+  it('retires a supply through the medical-domain route after confirmation', async () => {
+    // MSUP-16/22: the backend gained a domain-pinned retire route because
+    // the general one requires inventory.manage, which a medical-only
+    // manager does not hold -- this is the client side of that fix.
+    mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.manage_medical');
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: '4x4 Gauze', quantity: 5 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Retire 4x4 Gauze' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Retire' }));
+
+    await waitFor(() => expect(mockRetireItem).toHaveBeenCalledWith('item-1'));
   });
 
   it('does not offer an editable On hand for a lot-stocked supply', async () => {
