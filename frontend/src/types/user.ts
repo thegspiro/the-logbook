@@ -2,7 +2,7 @@
  * User type definitions
  */
 
-import type { ConsentStatus, UserStatus } from '../constants/enums';
+import type { ConsentStatus, MicrosoftAuthMethod, UserStatus } from '../constants/enums';
 
 export interface User {
   id: string;
@@ -101,12 +101,6 @@ export interface EmailConnectionTestResult {
   message: string;
   details: Record<string, unknown>;
 }
-
-export const MicrosoftAuthMethod = {
-  APP_PASSWORD: 'app_password',
-  OAUTH: 'oauth',
-} as const;
-export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];
 
 export interface EmailServiceSettings {
   enabled: boolean;
