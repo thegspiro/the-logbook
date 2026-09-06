@@ -19,6 +19,24 @@
 #   - Do not add a line to silence a new finding without saying why. A new
 #     finding means something changed that nobody looked at.
 #
+# ADDED 2026-09-06 — 08-22-screening-record-form, 08-57-template-reset-dialog
+#
+# These two do NOT predate the 2026-08-15 canvas move, and that is the point:
+# they came out of the 424-image re-capture in #2320, shot against the current
+# app. Both were verified by eye to be light-mode modal dialogs with a dimming
+# overlay, and both show the pale 15px strip at the right edge.
+#
+# That is the second case the note above already describes, and it was never
+# something the canvas move could fix. Moving the themed canvas from `body` to
+# `html` repainted the gutter for the *page*; a modal overlay is painted inside
+# `body`, so it dims the viewport and stops short of a gutter that belongs to
+# `html`. Any fresh capture of a light-mode modal will do this until the
+# overlay is lifted to `html` or given its own gutter treatment.
+#
+# So these are listed rather than re-shot: re-capturing reproduces the strip.
+# Removing them needs the overlay fixed, not a new screenshot — and at that
+# point every light-mode modal entry above comes off this list together.
+#
 # See scripts/screenshots/README.md → "When something outside the guides
 # invalidates a shot", and docs/training/SCREENSHOT_CURRENCY.md.
 
@@ -48,6 +66,8 @@
 07-03-upload-documents.png
 07-05-form-sharing.png
 07-10-create-rule-modal.png
+08-22-screening-record-form.png
+08-57-template-reset-dialog.png
 10-15-mobile-menu-notifications.png
 11-03-budget-categories.png
 13-05-add-requirement.png
