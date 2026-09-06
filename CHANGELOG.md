@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory and Members pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Inventory and Members pages that sit beside their
+  administration hub rather than under it.** Most of these two modules' admin
+  pages do nest under `/inventory/admin` and `/members/admin` and already
+  reached their hub by the URL alone. Five did not: Temporary Loans, Storage
+  Areas and Import sit at `/inventory/…`, and the member ID scanner and the
+  Check-In Station at `/members/…`, so their trail stopped at the module landing
+  page — which for Inventory is the items catalogue, a different page from the
+  hub that links to them. Temporary Loans, Import, the scanner and the Check-In
+  Station had no trail at all.
+- **A derived check that an Inventory Administration card outside the hub's URL
+  space names its hub.** The hub crumb is opt-in per page, so a page that should
+  show it and does not simply will not, in silence. Inventory declares its cards
+  as data, which makes the obligation checkable: every card route not already
+  under `/inventory/admin` must carry the hub, and the test names any that does
+  not.
+
+**Fixed**
+
+- **The Inventory hub no longer offers an export the page it opens cannot
+  do.** The "Import / Export" card ("Bulk import from CSV or export inventory
+  data") pointed at `/inventory/import`, which only imports — export is a button
+  on the items list. The card now says "Import" and describes only that.
+- **Three pages no longer carry a second name in their trail.** The crumb for
+  `/inventory/checkouts` read "Checkouts" while the hub card and the page's own
+  heading both said "Temporary Loans"; `/members/check-in-station` title-cased to
+  "Check In Station" against a heading that hyphenates it. The hub-card
+  agreement test now covers Inventory as well as Scheduling, so a card and a
+  crumb naming one page differently fails rather than shipping.
+
 ### Events and Training pages say which hub they belong to (2026-09-06)
 
 **Added**

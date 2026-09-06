@@ -6,6 +6,7 @@ import { inventoryService } from '../services/api';
 import type { InventoryImportResult } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
+import { Breadcrumbs } from '@/components/ux';
 
 interface PreviewRow {
   name: string;
@@ -136,6 +137,8 @@ const ImportInventory: React.FC = () => {
       {/* Header */}
       <header className="bg-theme-input-bg border-theme-surface-border border-b px-6 py-4 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl">
+          <Breadcrumbs underHub="/inventory/admin" />
+
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center space-x-3">
               <div className="shrink-0 rounded-lg bg-blue-600 p-2">
