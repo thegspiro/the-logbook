@@ -80,19 +80,20 @@ def _mean_luma(image: Image.Image, sample: int = 32) -> float:
 
 
 def check_unpainted_gutter(image: Image.Image) -> str | None:
-    """Flag a light strip at the right edge sitting against dark content.
+    """Flag an unpainted scrollbar gutter on a dark-mode capture.
 
-    The trigger is **dark content at the right edge, not a dark page.** Most of
-    what this catches is light-mode pages under a dark *modal overlay*: the
-    overlay dims the viewport but sits inside `body`, so the gutter — reserved on
-    `html`, outside the body box — stayed white behind it.
+    Detection triggers on **dark content at the right edge, not a dark page** —
+    the edge is compared with the content just inside it, never with the page
+    average. That distinction is the whole reason this is a script. The first
+    pass pre-filtered on **whole-image** brightness, assuming only dark-mode
+    captures could be affected, and reported three images. The real number was
+    39: every modal shot is bright overall and dark exactly where it matters. A
+    filter that encodes the assumption you are testing will confirm it.
 
-    That distinction is the whole reason this is a script. The first pass at this
-    audit pre-filtered on **whole-image** brightness, on the assumption that only
-    dark-mode captures could be affected, and reported three images. The real
-    number was 39: every modal shot is bright overall and dark exactly where it
-    matters. A filter that encodes the assumption you are testing will confirm it.
-    Compare the edge with the content beside it, never with the page average.
+    Detection is deliberately kept that way even though the *report* is now
+    narrowed to dark pages — see the note beside the `page >= 90` return, which
+    explains why classifying after the fact is not the same mistake, and what
+    the narrowing gives up.
     """
     width, height = image.size
     if width < 200 or height < 200:
@@ -130,15 +131,42 @@ def check_unpainted_gutter(image: Image.Image) -> str | None:
     # white strip became a dark gradient (obvious), on a light page it became a
     # pale one (a 15px difference nobody will notice). Only the first tier is
     # worth a re-shoot on its own account.
+    # Only a dark page is reported. This used to be a severity *label* on a
+    # finding that was reported either way, and the light-page half of it was
+    # retired on 2026-09-06 because it had stopped carrying information.
+    #
+    # On a light page the strip is structural, not a defect. A dialog's scrim is
+    # `position: fixed; inset: 0`, and a fixed box is laid out against the
+    # initial containing block, which excludes the gutter that
+    # `scrollbar-gutter: stable` reserves on the root. The scrim stops 15px
+    # short of the window edge *by definition*, so the gutter keeps showing the
+    # root gradient beside a dimmed page. No re-capture can clear it, and every
+    # modal screenshot a guide gains lands here: the baseline reached 42
+    # entries, all of them this one case, none actionable. The last screenshot
+    # pass re-captured 424 images and produced exactly two findings, both of
+    # them this.
+    #
+    # **This is the page-brightness predicate the docstring warns about, used
+    # for the opposite purpose**, which is worth stating plainly rather than
+    # leaving for someone to notice. There it was a *pre-filter* deciding which
+    # images to examine, and it hid 36 real defects. Here detection is
+    # untouched — the edge-versus-inner comparison still runs on every image —
+    # and brightness only classifies what was already found.
+    #
+    # What this gives up: a gutter that went genuinely white on a *light* page
+    # would now be silent. That cannot happen on its own. The cause was the root
+    # carrying a background image and no background colour, so the reserved
+    # gutter fell back to the browser's white — a property of the canvas, not of
+    # any one page. A regression paints every dark-mode capture the same way,
+    # and those still report here.
     page = _mean_luma(image)
-    tier = (
-        "STARK — dark page, white strip becomes dark gradient"
-        if page < 90
-        else (
-            "subtle — light page (likely a modal overlay); white becomes pale gradient"
-        )
+    if page >= 90:
+        return None
+
+    return (
+        f"{strip}px strip at right edge, page luma {page:.0f} — "
+        "dark page, gutter unpainted against dark content"
     )
-    return f"{strip}px strip at right edge, page luma {page:.0f} — {tier}"
 
 
 CHECKS = {
