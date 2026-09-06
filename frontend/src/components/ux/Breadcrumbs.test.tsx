@@ -186,6 +186,57 @@ describe('Breadcrumbs', () => {
 
       expect(crumbLinks()).toEqual(['/training']);
     });
+
+    it('reaches Inventory Administration from a page outside its URL space', () => {
+      // Most of Inventory's admin pages sit under /inventory/admin and reach
+      // the hub by the URL alone. Temporary Loans, Storage Areas and Import do
+      // not, and their generated trail stopped at /inventory — the items
+      // catalogue, which is a different page from the hub that links to them.
+      grant('inventory.manage');
+      renderAt('/inventory/checkouts', <Breadcrumbs underHub="/inventory/admin" />);
+
+      expect(crumbLinks()).toEqual(['/inventory', '/inventory/admin']);
+      expect(within(trail()).getByRole('link', { name: 'Inventory Administration' })).toBeInTheDocument();
+    });
+
+    it('names the loans page the way the hub card and its heading do', () => {
+      // The segment is "checkouts" while the card and the <h1> both say
+      // "Temporary Loans" — the drift the registry entry exists to close.
+      grant('inventory.manage');
+      renderAt('/inventory/checkouts', <Breadcrumbs underHub="/inventory/admin" />);
+
+      expect(currentCrumbs()[0]).toHaveTextContent('Temporary Loans');
+      expect(within(trail()).queryByText('Checkouts')).not.toBeInTheDocument();
+    });
+
+    it('reaches Members Administration from the scanner', () => {
+      grant('members.manage');
+      renderAt('/members/scan', <Breadcrumbs underHub="/members/admin" />);
+
+      expect(crumbLinks()).toEqual(['/members', '/members/admin']);
+      expect(currentCrumbs()[0]).toHaveTextContent('Scan Member ID');
+    });
+
+    it('omits the hub for a scanner user whose grant does not open it', () => {
+      // The asymmetry is specific to this page and runs the opposite way to the
+      // usual one: users.view opens the scanner but is deliberately NOT an
+      // administrative grant, so a quartermaster reaches a page whose hub is
+      // closed to them. The gate is the hub's, not the page's.
+      grant('users.view');
+      renderAt('/members/scan', <Breadcrumbs underHub="/members/admin" />);
+
+      expect(within(trail()).queryByText('Members Administration')).not.toBeInTheDocument();
+      expect(currentCrumbs()[0]).toHaveTextContent('Scan Member ID');
+    });
+
+    it('hyphenates the check-in station the way its heading does', () => {
+      // Title-casing the segment gives "Check In Station", which is a second
+      // name for one page.
+      grant('members.manage');
+      renderAt('/members/check-in-station', <Breadcrumbs underHub="/members/admin" />);
+
+      expect(currentCrumbs()[0]).toHaveTextContent('Check-In Station');
+    });
   });
 
   describe('omitCurrentPage', () => {

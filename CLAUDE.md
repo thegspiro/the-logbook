@@ -231,7 +231,33 @@ Consequences worth knowing:
 - **Config:** `asyncio_mode = auto` in `pytest.ini` — no need for `@pytest.mark.asyncio` on individual tests. `addopts` enables `--strict-markers` and `--strict-config` (an undefined marker fails the run, so register new markers in `pytest.ini` before using them) and `--timeout=30` (each test has a 30s timeout; mark genuinely long tests with `slow`). Registered markers: `asyncio`, `integration`, `unit`, `slow`, `onboarding`, `docker`
 - **Fixtures:** `conftest.py` provides `db_session` (auto-rolled-back transaction per test), `sample_org_data`, `sample_admin_data`, `sample_roles_data`, `sample_stations_data`
 
-### Frontend Test Patterns
+### Match the Verification to the Change
+
+Run the suites that can actually fail because of what you changed. The full
+backend and frontend runs together take the better part of ten minutes, and
+spending that on a change no test can observe is time taken from the person
+waiting on the work.
+
+**Documentation-only changes need no local suite at all.** `CHANGELOG.md`,
+`README.md`, `docs/**` and `wiki/**` are prose: nothing imports them, no test
+asserts on them, and no migration reads them. Resolve, commit and push — CI
+still runs everything, so the safety net is intact either way. This applies
+squarely to the merge conflict these files produce constantly, where both
+branches appended under `## [Unreleased]`: keep both sets and move on.
+
+The exceptions are the two docs a job does parse, and they are cheap to check
+on their own rather than by running everything:
+
+| Changed                        | Run                                                  |
+| ------------------------------ | ---------------------------------------------------- |
+| Any `.md` with links           | the Docs Link Check job's own script, if links moved |
+| `docs/endpoint-permissions.md` | its own contract check                               |
+| Prose only, otherwise          | nothing                                              |
+
+For code, scale it the same way: the tests covering the changed module first,
+then the wider suite when the change is broad, a schema or a shared utility.
+A merge that only brings in commits already tested on `main` is not itself a
+reason to run everything — CI re-tests the combination, which is its job.
 
 The test setup (`src/test/setup.ts`) automatically mocks `window.matchMedia`, `IntersectionObserver`, `ResizeObserver`, and `window.print`. Test utilities (`src/test/utils.tsx`) provide:
 

@@ -180,6 +180,9 @@ const PATH_LABELS: Record<string, string> = {
   errors: 'Error Monitor',
   waivers: 'Waivers',
   scan: 'Scan Member ID',
+  // Not title-cased from the segment: that yields "Check In Station", and the
+  // page's own heading hyphenates it.
+  'check-in-station': 'Check-In Station',
   history: 'History',
   'id-card': 'ID Card',
 };
