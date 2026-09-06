@@ -112,7 +112,7 @@ Click the **Edit** button (pencil icon) on the relevant section to make changes.
 
 ## Adding Members
 
-**Required Permission:** `members.create`
+**Required Permission:** `users.create`
 
 Navigate to **Administration > Members > Member Management**, then click the **Add Member** tab.
 
@@ -140,7 +140,7 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 
 ## Importing Members from CSV
 
-**Required Permission:** `members.create`
+**Required Permission:** `users.create`
 
 For bulk onboarding, you can import members from a CSV file:
 

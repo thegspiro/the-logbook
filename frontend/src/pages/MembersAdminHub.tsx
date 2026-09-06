@@ -25,12 +25,21 @@ type AdminTab = 'manage' | 'add' | 'import' | 'settings';
 /**
  * Settings is always last — the frame's rule, on every module. Adding and
  * importing are their own permission: members.manage lets an officer edit the
- * roster, members.create is what puts a new person on it.
+ * roster, users.create is what puts a new person on it.
+ *
+ * users.create, not members.create, despite the latter's name _(2026-09-06)_.
+ * Both tabs submit through `userService.createMember`, which posts to
+ * `POST /users`, and that endpoint requires `users.create`. `members.create`
+ * reads like the right grant and is not: nothing that creates a member
+ * enforces it — it gates the prospect pipeline (`POST /prospects` and
+ * `/prospects/check-existing`), and its registry description said "Create new
+ * members", which is what led these tabs to it. The two grants are held by the
+ * same seeded positions, so this corrects the name rather than anyone's access.
  */
 const ALL_TABS: (AdminHubTab<AdminTab> & { permission?: string })[] = [
   { id: 'manage', label: 'Member Management' },
-  { id: 'add', label: 'Add Member', permission: 'members.create' },
-  { id: 'import', label: 'Import Members', permission: 'members.create' },
+  { id: 'add', label: 'Add Member', permission: 'users.create' },
+  { id: 'import', label: 'Import Members', permission: 'users.create' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -44,10 +53,10 @@ export const MembersAdminHub: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const checkPermission = useAuthStore((state) => state.checkPermission);
-  const canCreate = checkPermission('members.create');
+  const canCreate = checkPermission('users.create');
   const tabs = ALL_TABS.filter((tab) => !tab.permission || canCreate);
   // Validated against the tabs this member can actually open, not the full
-  // list. A bookmarked ?tab=add for someone without members.create would
+  // list. A bookmarked ?tab=add for someone without users.create would
   // otherwise select a tab that is neither in the bar nor allowed to render
   // its body, leaving the hub showing a header and nothing under it.
   const isOpenable = (tab: string | null): tab is AdminTab => tabs.some((t) => t.id === tab);

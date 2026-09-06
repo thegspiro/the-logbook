@@ -10,7 +10,7 @@
  * than the calendar does.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { AlertTriangle, CalendarRange, Loader2, RefreshCw, Users } from 'lucide-react';
 import { schedulingService } from '../../../../modules/scheduling/services/api';
@@ -18,7 +18,8 @@ import type { ShiftRecord } from '../../../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../../../modules/scheduling/store/schedulingStore';
 import { staffingGaps, totalOpenSeats, type StaffingGap } from '../../../../modules/scheduling/utils/staffingGaps';
 import { positionLabel } from '../../../../modules/scheduling/utils/positionLabels';
-import { formatCalendarDate, formatTime } from '../../../../utils/dateFormatting';
+import { addCalendarDays, formatCalendarDate, formatTime, getTodayLocalDate } from '../../../../utils/dateFormatting';
+import { useSchedulingClock } from '../../../../modules/scheduling/hooks/useSignupWindow';
 import { useTimezone } from '../../../../hooks/useTimezone';
 import { getErrorMessage, toAppError } from '../../../../utils/errorHandling';
 import { EmptyState } from '../../../../components/ux/EmptyState';
@@ -32,17 +33,6 @@ const DEFAULT_HORIZON_DAYS = 14;
 
 /** Shifts fetched per request. The endpoint pages; a planning range is not a year. */
 const FETCH_LIMIT = 200;
-
-const isoDay = (date: Date): string => {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-};
-
-const addDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-};
 
 /** A seat an officer can put somebody in: its position token, or null for an unnamed one. */
 interface SeatChoice {
@@ -67,11 +57,25 @@ const StaffingGapsSection: React.FC = () => {
   const membersLoaded = useSchedulingStore((s) => s.membersLoaded);
   const loadMembers = useSchedulingStore((s) => s.loadMembers);
 
-  const [from, setFrom] = useState(() => isoDay(new Date()));
-  const [to, setTo] = useState(() => isoDay(addDays(new Date(), DEFAULT_HORIZON_DAYS)));
+  // The department's calendar day, not the browser's. A UTC browser looking at
+  // an America/Los_Angeles department late in its evening would otherwise open
+  // the range on tomorrow, and the opposite offset drops the department's own
+  // current day out of it — hiding a shift that is short *today*, which is the
+  // one this page exists to surface.
+  const [from, setFrom] = useState(() => getTodayLocalDate(timezone));
+  const [to, setTo] = useState(() => addCalendarDays(getTodayLocalDate(timezone), DEFAULT_HORIZON_DAYS));
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // What the endpoint says the range holds, which is not always what it
+  // returned. One page is the cap, and a cap nobody is told about reads as the
+  // whole answer — here that answer is "every shift has the crew it asks for".
+  const [truncated, setTruncated] = useState(false);
+  // The tick, not just the subscription. `staffingGaps` defaults its `today` to
+  // `new Date()` at call time, so a memo keyed on `shifts` alone froze this list
+  // at first render: a shift that became past while the page stayed open never
+  // left it, and the count above stayed at the number first drawn.
+  const clock = useSchedulingClock();
   const [assigning, setAssigning] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, { userId: string; seat: string }>>({});
   const [driverBlock, setDriverBlock] = useState<{
@@ -85,27 +89,60 @@ const StaffingGapsSection: React.FC = () => {
     if (!membersLoaded) void loadMembers();
   }, [membersLoaded, loadMembers]);
 
+  // Changing From and then To fires two requests, and the first can land last.
+  // Without this the date controls describe one range while the list below them
+  // describes another, and nothing on screen says so.
+  const requestId = useRef(0);
+
+  // `To` earlier than `From` is not an empty range, it is a range nobody meant.
+  // The endpoint applies both bounds without cross-field validation and returns
+  // zero rows, which this screen would present as "every shift has the crew it
+  // asks for" — an invalid input turned into a staffing assurance.
+  const rangeReversed = Boolean(from && to && from > to);
+
   const load = useCallback(async () => {
+    const mine = ++requestId.current;
+    if (rangeReversed) {
+      setShifts([]);
+      setFailed(false);
+      setTruncated(false);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFailed(false);
+    setTruncated(false);
     try {
       const result = await schedulingService.getShifts({ start_date: from, end_date: to, limit: FETCH_LIMIT });
+      if (mine !== requestId.current) return;
       setShifts(result.shifts);
+      // Coerced rather than trusted: an absent `total` compared against a length
+      // silently answers false, and this is the branch that decides whether the
+      // officer is told the range was cut short.
+      setTruncated((result.total ?? 0) > result.shifts.length);
     } catch {
       // Said rather than swallowed: an empty list and "nothing is short" are the
       // same picture, and one of them is a lie an officer would act on.
+      if (mine !== requestId.current) return;
       setFailed(true);
       setShifts([]);
     } finally {
-      setLoading(false);
+      if (mine === requestId.current) setLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, rangeReversed]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const gaps = useMemo(() => staffingGaps(shifts), [shifts]);
+  const gaps = useMemo(
+    () => staffingGaps(shifts),
+    // `clock` is the dependency that matters and is deliberately not used in the
+    // body: it advances every 30 seconds and is what re-reads the current day
+    // inside `staffingGaps`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shifts, clock]
+  );
   const openSeats = totalOpenSeats(gaps);
 
   const memberName = (userId: string) => members.find((m) => m.id === userId)?.label ?? 'This member';
@@ -176,34 +213,58 @@ const StaffingGapsSection: React.FC = () => {
           Refresh
         </button>
         <p className="text-theme-text-muted min-w-0 flex-1 text-right text-sm" role="status" aria-live="polite">
-          {loading
-            ? 'Checking…'
-            : failed
-              ? ''
-              : `${gaps.length} shift${gaps.length === 1 ? '' : 's'} short · ${openSeats} seat${
-                  openSeats === 1 ? '' : 's'
-                } open`}
+          {rangeReversed
+            ? ''
+            : loading
+              ? 'Checking…'
+              : failed
+                ? ''
+                : `${gaps.length} shift${gaps.length === 1 ? '' : 's'} short · ${openSeats} seat${
+                    openSeats === 1 ? '' : 's'
+                  } open`}
         </p>
       </div>
+
+      {rangeReversed && (
+        <div className="alert-warning text-sm" role="alert">
+          The <strong>To</strong> date is earlier than <strong>From</strong>, so this range holds no days at all.
+          Nothing has been checked.
+        </div>
+      )}
 
       {failed && (
         <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
           <span className="flex-1">
             The schedule for this range did not load, so nothing below is a complete answer.
           </span>
-          <button type="button" className="font-semibold underline" onClick={() => void load()}>
+          <button
+            type="button"
+            className="mobile-touch-target px-2 font-semibold underline"
+            onClick={() => void load()}
+          >
             Retry
           </button>
         </div>
       )}
 
-      {loading && (
+      {/* Better a stated bound than a silent one. The rows below are the start
+          of the range, which is the right part to work first — but "every shift
+          has the crew it asks for" would not be true of the rest, and that is
+          the claim the empty state makes. */}
+      {!loading && !failed && !rangeReversed && truncated && (
+        <div className="alert-warning text-sm" role="alert">
+          This range holds more shifts than one screen reads. The first {FETCH_LIMIT} are listed; narrow the range to
+          see the rest.
+        </div>
+      )}
+
+      {loading && !rangeReversed && (
         <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       )}
 
-      {!loading && !failed && gaps.length === 0 && (
+      {!loading && !failed && !rangeReversed && !truncated && gaps.length === 0 && (
         <EmptyState
           icon={CalendarRange}
           title="Every shift in this range has the crew it asks for"

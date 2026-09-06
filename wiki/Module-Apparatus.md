@@ -91,7 +91,7 @@ The Equipment Check system provides structured vehicle and equipment inspections
 | `/inventory/admin/checklists/templates/new`         | Template Builder                        | `inventory.check_manage`                                                  |
 | `/inventory/admin/checklists/templates/:templateId` | Edit Template                           | `inventory.check_manage`                                                  |
 | `/inventory/admin/checklists/reports`               | Reports Dashboard                       | `scheduling.manage`                                                       |
-| `/inventory/admin/checklists/supply`                | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.view`      |
+| `/inventory/admin/checklists/supply`                | Expiring on Apparatus (supply worklist) | any of `inventory.check_view`, `inventory.manage`                         |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 ### API Endpoints — Equipment Checks

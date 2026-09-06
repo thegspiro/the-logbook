@@ -246,6 +246,15 @@ const SchedulingPage: React.FC = () => {
 
   // Shift detail panel
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
+  // The deep link's own failure state. Nothing else on this page can report it:
+  // the board draws the range it fetched, so a shift that would not load simply
+  // is not there, and an officer sent here by a link lands on a generic board
+  // with no sign anything went wrong.
+  const [deepLinkFailed, setDeepLinkFailed] = useState<string | null>(null);
+  // Bumped by Retry. The effect keys on the search params, and the whole point
+  // of the fix is that a failure *keeps* them — so without this there is no
+  // change for it to react to.
+  const [deepLinkAttempt, setDeepLinkAttempt] = useState(0);
 
   // Deep-link: open shift detail panel when ?shift=<id> is in the URL.
   // Skip if a specific tab is targeted (e.g. shift-reports from a notification)
@@ -260,21 +269,28 @@ const SchedulingPage: React.FC = () => {
     const openShift = async () => {
       try {
         const shift = await schedulingService.getShift(shiftId);
-        if (!cancelled) {
-          setSelectedShift(shift);
-          searchParams.delete('shift');
-          setSearchParams(searchParams, { replace: true });
-        }
-      } catch {
+        if (cancelled) return;
+        setDeepLinkFailed(null);
+        setSelectedShift(shift);
+        // Stripped only on success. The parameter is the request; dropping it
+        // on failure discards what the officer asked for and leaves the URL
+        // describing a page they did not ask to be on.
         searchParams.delete('shift');
         setSearchParams(searchParams, { replace: true });
+      } catch {
+        // Said, not swallowed. This is the destination of the close-out queue's
+        // "Open the shift to close it", so the failure lands on an officer who
+        // was sent here to do something specific — and the old behaviour put
+        // them on the generic board with no error and no way back to the shift.
+        if (cancelled) return;
+        setDeepLinkFailed(shiftId);
       }
     };
     void openShift();
     return () => {
       cancelled = true;
     };
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, deepLinkAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effective templates: backend if available, otherwise fallbacks
   const effectiveTemplates = useMemo(() => {
@@ -433,6 +449,31 @@ const SchedulingPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        {deepLinkFailed && (
+          <div className="alert-warning mb-4 flex flex-wrap items-center gap-2 text-sm" role="alert">
+            <span className="min-w-0 flex-1">
+              That shift could not be opened. The board below shows the schedule, not the shift you followed a link to.
+            </span>
+            <button
+              type="button"
+              className="mobile-touch-target px-2 font-semibold underline"
+              onClick={() => setDeepLinkAttempt((n) => n + 1)}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="mobile-touch-target px-2 font-semibold underline"
+              onClick={() => {
+                setDeepLinkFailed(null);
+                searchParams.delete('shift');
+                setSearchParams(searchParams, { replace: true });
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <SchedulingHeader
           actions={
             canManage && activeTab === 'schedule' ? (

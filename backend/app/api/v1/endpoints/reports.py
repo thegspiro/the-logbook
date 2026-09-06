@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
 from app.core.database import get_db
-from app.core.utils import ensure_found
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.analytics import SavedReport
 from app.models.user import User
 from app.schemas.reports import (
@@ -24,6 +24,7 @@ from app.schemas.reports import (
     SavedReportUpdate,
 )
 from app.services.reports_service import ReportsService
+from app.utils.model_updates import apply_updates
 
 router = APIRouter()
 
@@ -241,8 +242,10 @@ async def update_saved_report(
     report = ensure_found(result.scalar_one_or_none(), "Saved report")
 
     update_data = request.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(report, key, value)
+    try:
+        apply_updates(report, update_data, skip={"organization_id", "id"})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     await db.commit()
     await db.refresh(report)

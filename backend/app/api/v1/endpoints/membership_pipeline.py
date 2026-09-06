@@ -1530,7 +1530,7 @@ async def transfer_prospect(
     # surface as granting one directly -- a bare members.manage/
     # prospective_members.manage holder must not transfer a prospect in at a
     # rank that outranks their own permissions. Same check, same helper,
-    # users.create_member enforces on the other path that creates a User row.
+    # users.create enforces on the other path that creates a User row.
     canonical_rank = await _canonical_rank_or_400(
         data.rank, str(current_user.organization_id), db
     )

@@ -35,6 +35,202 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   links back to the record rather than inventing a title. The analytics page
   renders no trail at all when it has no event id, because it also serves
   platform-wide metrics where every crumb would be the page you are already on.
+### Add Member asked a permission that gates the prospect pipeline (2026-09-06)
+
+**Fixed**
+
+- **`members.create` does not gate creating a member, despite its name.**
+  Nothing that creates a member enforces it: `POST /users` requires
+  `users.create`, and the prospect-transfer path that also mints a user row
+  requires `members.manage` or `prospective_members.manage`. `members.create`
+  is enforced only on the prospect pipeline — `POST /prospects` and
+  `/prospects/check-existing`. Its registry description read "Create new
+  members", which is how the members admin hub came to gate its Add Member and
+  Import tabs on it; both tabs submit through `userService.createMember`, which
+  posts to `POST /users`. All four entry points — the hub's two tabs, the
+  roster toolbar and empty-state prompt, and the command palette's Add Member
+  action — now ask `users.create`. The two grants are held by the same seeded
+  positions and ranks, so no one's access changes; the affordances now name the
+  gate that decides them. The permission itself is unchanged: renaming it would
+  be a breaking config change for any department that granted it, so its
+  description moved instead.
+- **A comment in the membership pipeline cited `users.create_member`**, a
+  permission that has never existed, and the membership training guide named
+  `members.create` as the requirement for adding and importing members. Both
+  now name `users.create`.
+
+### Add Member was offered to three positions it did not work for (2026-09-06)
+
+**Fixed**
+
+- **The roster's Add Member and Import CSV buttons asked the wrong
+  permission.** They were gated on `members.manage`, but both navigate to tabs
+  on the members admin hub that are gated on `members.create` — and the hub
+  falls back to Member Management rather than erroring when a tab is not
+  openable. The Captain, Vice President and Assistant Secretary positions (and
+  the Captain rank) hold manage without create, so a captain tapping Add Member
+  landed on the management list with no error and no explanation. All three
+  entry points to that tab — the roster toolbar, the empty-state prompt and the
+  command palette's Add Member action — now ask `members.create`, the gate on
+  the tab they select. The management affordances those positions do hold, the
+  Hire Date column and the CSV export among them, are unchanged.
+- **The members administration screen's Add Member button** asked
+  `users.create`, a third name for the same action. It now matches the tab it
+  selects as well. The two grants are held by the same positions in every
+  seeded position and rank, so this changes no one's access today; it removes
+  the second name.
+### Staffing gaps inherits the fixes the close-out queue got (2026-09-06)
+
+**Fixed**
+
+- **The gaps list no longer answers for a range it did not read.** It fetched
+  one page of 200 shifts and reported the rest as staffed; a range with more now
+  says it was cut short rather than claiming every shift has the crew it asks
+  for. A **To** date earlier than **From** is refused instead of returning zero
+  rows and reading as a staffing assurance, and two overlapping range changes
+  can no longer leave the date controls describing one range while the list
+  describes another.
+- **The default range is the department's calendar day, not the browser's.** A
+  UTC browser viewing an America/Los_Angeles department late in its evening
+  opened on tomorrow; the opposite offset dropped the department's own current
+  day, hiding a shift that is short today.
+- **The list re-reads the clock.** A shift that became past while the page
+  stayed open never left it, and the count above stayed at the number first
+  drawn.
+- **Shift Planning's settings mirror says when it has not read anything.** A
+  failed load fell through to the built-in defaults — 12 hours, 4 people — and
+  rendered them as the department's own configuration, in a card whose every row
+  links to the page that edits it. It now says the values may be defaults and
+  offers a retry.
+
+### The mobile checks on Scheduling Administration were measuring nothing (2026-09-06)
+
+**Fixed**
+
+- **Three defects the mobile ratchet could not see.** Every route under
+  `/scheduling/admin` is gated on `scheduling.manage`, which the test fixture did
+  not hold, so all four measured the Access Denied screen — passing every budget
+  while testing nothing. With the grant in place: the administration hub was
+  white-screening on a summary that carried no attention list (`AdminHubFrame`
+  defaulted `metrics` but not `attention`); the scheduling reports tab bar pushed
+  **Call Volume** 85px off the right of a 375px screen, undeclared as a scroll
+  region and so not keyboard-reachable either; and Shift Planning's settings
+  mirror carried five 14px-tall links where a thumb needs 44.
+- **The close-out queue's row is now in the fixture.** Without a shift that has
+  ended and was never closed, that route's check measured the filter bar and the
+  empty state, never a queue row or its close-out control.
+
+### Two close-out failures that showed an officer nothing (2026-09-06)
+
+**Fixed**
+
+- **A shift's equipment check status now says when it could not be read.** The
+  checklist endpoint wants an Inventory grant that `scheduling.manage` does not
+  imply, so it refuses an ordinary scheduling officer — and the shift panel
+  substituted an empty list, which reads as "nothing outstanding". The warning
+  and the override control both disappeared, while a department that blocks
+  close-out on those checks had the server refuse every finalize with nothing on
+  screen to explain it. The panel now distinguishes unknown from none, offers
+  the override without demanding it, and will not send an override with no
+  reason attached whatever made the officer tick the box.
+- **A `?shift=` link that fails says so instead of vanishing.** The deep-link
+  handler caught the failure, stripped the parameter and rendered nothing,
+  dropping the officer on the generic schedule with no error and no way back to
+  the shift — the destination of the close-out queue's **Open the shift to close
+  it**. The parameter is now kept on failure, so Retry has something to retry,
+  and is stripped only once the shift has actually opened or the officer
+  dismisses the message.
+### Security: clearing a saved report's name could 500 instead of returning a clear error (2026-09-06)
+
+**Fixed**
+
+- **`PATCH /reports/saved/{id}` used a bare `setattr` loop instead of
+  `apply_updates`**, so an explicit `"name": null` — a valid value for the
+  request schema's `Optional[str]` field — reached `db.commit()` against the
+  NOT NULL `name` column and raised an uncaught `IntegrityError` (an
+  unhandled 500) instead of the 400 every other rejected value on this
+  endpoint returns. Switched to `apply_updates`, matching the sibling
+  `label_printer_service.update_printer`.
+- **Flagged, not fixed:** the "Compliance Status" report and the training
+  summary's per-requirement breakdown compute member compliance from
+  training-_program_ enrollment progress, while the dashboard and the
+  training compliance-matrix compute it from the shared, profile/waiver/
+  date-window-aware evaluator in `training_compliance.py` — two different
+  answers to "is this member compliant?" from the same `TrainingRequirement`
+  rows. See `docs/KNOWN_LIMITATIONS.md` (RPT5-29-1).
+- See `docs/security-review/RPT5-29-reports-analytics.md` for the full
+  writeup.
+### Nobody could run a finance approval chain (2026-09-06)
+
+**Fixed**
+
+- **The Treasurer can now reach the approval workflow.** `finance.approve` and
+  `finance.configure_approvals` gate nine endpoints — the approval queue and
+  the whole approval-chain settings screen — and no seeded position held
+  either. The only account that could reach them held the `*` wildcard, i.e.
+  the IT administrator. With no chain configured, `submit_purchase_request`
+  skips approval entirely, so requests quietly bypassed the workflow; configure
+  a chain, which needed that same unreachable screen, and every submitted
+  request landed in `pending_approval` with nobody able to action it. The
+  `treasurer` position now carries both grants, and a migration carries them to
+  departments that already onboarded — gated on the stored row still holding
+  exactly the finance grants the registry seeded, so a position an
+  administrator curated is left alone. `assert_different_person` still refuses
+  self-approval whoever holds the permission, so a Treasurer cannot walk their
+  own request through a chain.
+
+### Two permission gates that pointed at nothing (2026-09-06)
+
+**Fixed**
+
+- **The supply worklist no longer admits a grant its own endpoint refuses.**
+  `/inventory/admin/checklists/supply` was gated on `scheduling.manage`,
+  `inventory.check_view` or `inventory.manage`, but
+  `GET /equipment-check/supply/expiring-items` accepts only the latter two. A
+  shift officer holding just `scheduling.manage` passed the route guard and met
+  a 403 on load, reaching a page that rendered nothing but its failure state.
+  The route, the administration hub card and the two inbound links (the fleet
+  board and the apparatus detail page) now all match the endpoint. Narrowed
+  rather than widened deliberately: the worklist is fleet-wide item stock and
+  expiry, so the fix is to stop admitting a purely scheduling grant rather than
+  to disclose inventory data to one.
+- **The API contract suite's generated email addresses are now all addresses
+  Pydantic accepts.** The strategy behind OpenAPI's `email` format allowed a
+  hyphen anywhere inside a domain label, so it could emit `fa--jm.bfd` —
+  email-validator refuses two letters followed by two dashes at a label's third
+  and fourth characters, since IDNA reserves that shape for punycode's `xn--`.
+  Schemathesis reported the resulting 422 as "API rejected schema-compliant
+  request", which surfaced as a one-off red months after the strategy landed,
+  on an unrelated pull request. The pattern no longer emits two adjacent
+  hyphens; single hyphens still generate.
+### The program print sheet's Enrolled Members table could never render (2026-09-06)
+
+**Fixed**
+
+- **The printable training programme now loads its roster from
+  `GET /training/programs/programs/{id}/enrollments`.** It read
+  `program.enrollments`, and the programme response
+  (`ProgramWithPhasesAndRequirements`) carries phases, requirements and
+  milestones and no enrollments field — so the Enrolled Members section was
+  always skipped and the header always printed `Enrolled: 0`, on every sheet.
+  Nothing was missing on the backend: that endpoint already exists, is
+  org-scoped and permission-gated, and returns exactly the enriched shape the
+  table was written against, which is why the table already carried a cast for
+  `user_name`.
+
+- **A member who cannot read the roster gets an em dash, not a confident `0`.**
+  The route is gated on the training module alone while the endpoint needs
+  `training.view_all` or `training.manage`, so the call degrades — correctly,
+  since withholding the roster is the right privacy outcome. But degrading to an
+  empty list would have printed `Enrolled: 0` on paper for a programme with
+  twenty members on it. "Could not read" and "nobody enrolled" are now distinct.
+
+- **The Current Phase column shows the phase.**
+  `ProgramEnrollmentResponse` serializes `current_phase_id` and no nested phase
+  object, so reading `current_phase.name` would have printed an em dash for
+  every member even once the rows arrived. The name resolves from the
+  programme's own phases, the way the requirements table above it already
+  resolved its phase column.
 
 ### Finance and Elections pages keep their trail in every state (2026-09-06)
 
