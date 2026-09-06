@@ -326,6 +326,11 @@ Tell your officers about these:
 - **Session-hijack detection silenced itself after firing once**, because its
   own earlier fix promoted the attacker's IP to trusted. An ongoing hijack was
   detected exactly once and then went quiet.
+- **A meeting attendance waiver resolved member and grantor names without an
+  organization filter.** Not a live leak — the ids always came from an
+  org-scoped write elsewhere — but it relied on that staying true, and the
+  first write path to skip the validation would have returned another
+  department's member name. Both lookups filter directly now.
 - **A denied purchase request, expense report or check request could still be
   approved and paid** — the rest of the approval chain stayed pending, and
   approving the last step reversed the denial and charged the budget.
