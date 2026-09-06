@@ -25,7 +25,7 @@ import { AlertTriangle, CheckCircle2, ClipboardCheck, Clock, ExternalLink, Loade
 import { schedulingService } from '../../../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../../../modules/scheduling/store/schedulingStore';
-import { useSignupWindow } from '../../../../modules/scheduling/hooks/useSignupWindow';
+import { useSchedulingClock, useSignupWindow } from '../../../../modules/scheduling/hooks/useSignupWindow';
 import {
   closeoutQueue,
   waitingLabel,
@@ -59,6 +59,12 @@ const unitLabel = (shift: ShiftRecord): string =>
 const CloseoutQueueSection: React.FC = () => {
   const timezone = useTimezone();
   const window_ = useSignupWindow();
+  // The tick, not just the subscription. `useSignupWindow` re-renders on the
+  // clock but returns one identity across ticks, so a `useMemo` keyed on it
+  // alone froze this queue at first render: a shift whose end passed, or an
+  // open-ended one whose cushion expired, never appeared while the page stayed
+  // open, and every waiting label stayed at the age it was first drawn.
+  const clock = useSchedulingClock();
   const callTrackingMode = useSchedulingStore((s) => s.callTrackingMode);
   const requireEndOfShiftChecks = useSchedulingStore((s) => s.requireEndOfShiftChecks);
   const settingsLoaded = useSchedulingStore((s) => s.settingsLoaded);
@@ -101,6 +107,11 @@ const CloseoutQueueSection: React.FC = () => {
   // Without this the date controls describe one range while the queue below
   // them describes another, and nothing on screen says so.
   const requestId = useRef(0);
+  // The same hazard one control over: `preparing` disables only the row that
+  // was clicked, so a second row can be started while the first is still
+  // fetching, and the slower answer would otherwise replace the wizard the
+  // officer most recently opened.
+  const openId = useRef(0);
 
   // `To` earlier than `From` is not an empty range, it is a range nobody meant.
   // The endpoint applies both bounds without cross-field validation and returns
@@ -166,8 +177,11 @@ const CloseoutQueueSection: React.FC = () => {
   // the queue waits for the settings rather than listing against the default
   // and re-listing a moment later.
   const queue = useMemo(
-    () => (settingsLoaded ? closeoutQueue(shifts, window_) : []),
-    [shifts, window_, settingsLoaded]
+    () => (settingsLoaded ? closeoutQueue(shifts, window_, Date.now()) : []),
+    // `clock` is the dependency that matters and is deliberately not used in
+    // the body: it advances every 30 seconds and is what re-reads `Date.now()`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shifts, window_, settingsLoaded, clock]
   );
 
   const openCloseout = async (entry: CloseoutQueueEntry) => {
@@ -185,12 +199,15 @@ const CloseoutQueueSection: React.FC = () => {
     // check is outstanding, waits for the crew to finish it, and reopens the
     // row was otherwise shown the same stale answer and made to record an
     // override for work that had since been done.
+    const mine = ++openId.current;
     setPreparing(entry.shift.id);
     setChecksFailed(null);
     try {
       const summaries = await equipmentCheckService.getShiftChecklists(entry.shift.id);
+      if (mine !== openId.current) return;
       setChecks((current) => ({ ...current, [entry.shift.id]: summaries }));
     } catch {
+      if (mine !== openId.current) return;
       // A failure is a failure, never an empty list: the endpoint wants
       // `inventory.check_view` or `inventory.check_submit`, neither of which
       // `scheduling.manage` implies, so it refuses an ordinary scheduling

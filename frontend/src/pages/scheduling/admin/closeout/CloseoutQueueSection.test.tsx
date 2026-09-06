@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../../test/utils';
 
@@ -146,6 +146,82 @@ describe('CloseoutQueueSection', () => {
 
     expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('0 outstanding');
     expect(mockGetShiftChecklists).toHaveBeenCalledTimes(2);
+  });
+
+  // `preparing` disables only the row that was clicked, so a second row can be
+  // started while the first is still fetching — and the slower answer would
+  // otherwise replace the wizard the officer most recently opened.
+  it('does not let a slower row open replace the wizard the officer just opened', async () => {
+    let releaseFirst: (value: unknown) => void = () => {};
+    mockGetShifts.mockResolvedValue({
+      shifts: [unclosedShift, { ...unclosedShift, id: 'shift-2', apparatus_unit_number: 'Engine 2' }],
+      total: 2,
+      skip: 0,
+      limit: 200,
+    });
+    mockGetShiftChecklists
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseFirst = resolve;
+        })
+      )
+      .mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    const rows = screen.getAllByRole('button', { name: /Close out/ });
+    await user.click(rows[0] as HTMLElement);
+    await user.click(rows[1] as HTMLElement);
+    expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('wizard for shift-2');
+
+    // Released inside act so the late continuation actually runs before the
+    // assertion; without that this passes whether or not the guard is there.
+    await act(async () => {
+      releaseFirst([
+        { templateId: 't1', templateName: 'End of shift', checkTiming: 'end_of_shift', isCompleted: false },
+      ]);
+    });
+
+    // Still the second row's wizard, not the first's arriving late.
+    expect(screen.getByTestId('closeout-wizard')).toHaveTextContent('wizard for shift-2');
+    expect(screen.getByTestId('closeout-wizard')).toHaveTextContent('0 outstanding');
+  });
+
+  // `useSignupWindow` re-renders on the clock but returns one identity across
+  // ticks, so a useMemo keyed on it alone froze the queue at first render: a
+  // shift whose end passed while the page stayed open never appeared.
+  it('picks up a shift whose end passes while the page is open', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const start = Date.parse('2026-09-06T04:00:00Z');
+    vi.setSystemTime(start);
+    // Ends two minutes from now — after the first render, before the tick.
+    mockGetShifts.mockResolvedValue({
+      shifts: [
+        {
+          ...unclosedShift,
+          shift_date: '2026-09-06',
+          start_time: '2026-09-05T20:00:00Z',
+          end_time: '2026-09-06T04:02:00Z',
+        },
+      ],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<CloseoutQueueSection />);
+    expect(await screen.findByText(/Every shift in this range is closed out/)).toBeInTheDocument();
+
+    await act(async () => {
+      vi.setSystemTime(start + 3 * 60_000);
+      // Past the clock's own 30-second bucket, so the tick fires.
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(screen.getByText(/1 shift waiting to be closed out/)).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   // A reversed range is not an empty range. The endpoint applies both bounds

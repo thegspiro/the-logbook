@@ -119,12 +119,20 @@ const CloseoutSettingsSummary: React.FC = () => {
       href: canOpenChecklistTiming ? CHECKLIST_TIMING : null,
       hint: 'Derived from Inventory · Checklist Timing — how long past its start a shift with no recorded end still counts as running',
     },
-    {
-      label: 'Call types',
-      value: feature ? `${feature.call_tracking?.call_types?.length ?? 0} configured` : '—',
-      href: GENERAL,
-      hint: 'The breakdown the close-out wizard asks for',
-    },
+    // Only count-only close-out asks for a breakdown: `ShiftDetailPanel` renders
+    // the wizard for that mode alone, so telling a detailed or off department
+    // that these are "the breakdown the close-out wizard asks for" describes a
+    // screen they never see.
+    ...(mode === 'count_only'
+      ? [
+          {
+            label: 'Call types',
+            value: `${feature?.call_tracking?.call_types?.length ?? 0} configured`,
+            href: GENERAL,
+            hint: 'The breakdown the close-out wizard asks for',
+          },
+        ]
+      : []),
     {
       label: 'End-of-shift report',
       value: 'Shift Reports section',

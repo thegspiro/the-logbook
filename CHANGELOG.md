@@ -122,6 +122,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   row is indistinguishable from the initial loading state, so a transient
   failure left the panel permanently blank and its editing links unreachable,
   recoverable only by navigating away and back.
+- **The queue keeps up with the clock.** `useSignupWindow` re-renders on a
+  30-second tick but returns one identity across ticks, so a `useMemo` keyed on
+  it alone froze the queue at first render: a shift whose end passed, or an
+  open-ended one whose cushion expired, never appeared while the page stayed
+  open, and every waiting label stayed at the age it was first drawn.
+- **A slower row cannot replace the wizard you just opened.** Only the clicked
+  row was disabled while its checklists loaded, so a second row could be started
+  first and then displaced by the first click's late answer.
+- **Call types are described only where close-out asks for them.** The wizard
+  renders for count-only departments alone, so naming the types "the breakdown
+  the close-out wizard asks for" described a screen a detailed or off department
+  never sees.
 - **The close-out settings mirror meets the 44px touch minimum.** Its five value
   links were 14px of text, which is what the mobile ratchet found the moment it
   started measuring the page instead of an Access Denied screen. Every inline

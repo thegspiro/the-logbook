@@ -89,6 +89,25 @@ describe('CloseoutSettingsSummary', () => {
     expect(await screen.findByText('Individual call records')).toBeInTheDocument();
   });
 
+  // ShiftDetailPanel renders the wizard for count-only alone, so describing the
+  // types as "the breakdown the close-out wizard asks for" to a detailed or off
+  // department describes a screen they never see.
+  it('offers the call-types row only where close-out actually asks for a breakdown', async () => {
+    const { unmount } = renderWithRouter(<CloseoutSettingsSummary />);
+    expect(await screen.findByText('1 configured')).toBeInTheDocument();
+    unmount();
+
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: true,
+      open_ended_shift_cushion_hours: 12,
+      call_tracking: { mode: 'detailed', call_types: [{ slug: 'fire', label: 'Fire' }] },
+    });
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByText('Individual call records')).toBeInTheDocument();
+    expect(screen.queryByText('Call types')).not.toBeInTheDocument();
+  });
+
   // The cushion is derived from Inventory's checklist timing, not from any
   // scheduling setting: Scheduling General exposes no control for it, so a link
   // there lands on a screen where the number shown does not appear.
