@@ -33,6 +33,7 @@ import { enumLabel } from '../../utils/displayValue';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { DEFAULT_CALL_TYPE_OPTIONS } from '../../modules/scheduling/constants/shiftReportConstants';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
+import { Breadcrumbs } from '../../components/ux';
 import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
 import type { User } from '../../types/user';
 
@@ -266,6 +267,8 @@ export const ManualShiftReportPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+      <Breadcrumbs />
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-theme-text-primary text-xl font-bold">Log Shift Report</h1>

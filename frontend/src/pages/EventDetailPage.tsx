@@ -44,7 +44,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { PromptDialog } from '../components/ux';
+import { Breadcrumbs, PromptDialog } from '../components/ux';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
@@ -670,13 +670,25 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
+  // Explicit items, not a generated trail: the URL is /events/:id, the
+  // generator skips the id, and a one-crumb generated trail suppresses itself —
+  // so this page showed none at all. Defined once so the loading and not-found
+  // branches carry it too.
+  const trail = [{ label: 'Events', path: '/events' }, { label: event?.title || 'Event' }];
+
   if (loading) {
-    return <LoadingSpinner message="Loading event details..." />;
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+        <LoadingSpinner message="Loading event details..." />
+      </div>
+    );
   }
 
   if (error || !event) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error || 'Event not found'}</p>
           <button
@@ -770,6 +782,8 @@ export const EventDetailPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs items={trail} />
+
         {/* Header */}
         <div className="mb-6">
           <Link
