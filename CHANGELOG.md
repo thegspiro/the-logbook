@@ -68,6 +68,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it**. The parameter is now kept on failure, so Retry has something to retry,
   and is stripped only once the shift has actually opened or the officer
   dismisses the message.
+### Security: clearing a saved report's name could 500 instead of returning a clear error (2026-09-06)
+
+**Fixed**
+
+- **`PATCH /reports/saved/{id}` used a bare `setattr` loop instead of
+  `apply_updates`**, so an explicit `"name": null` — a valid value for the
+  request schema's `Optional[str]` field — reached `db.commit()` against the
+  NOT NULL `name` column and raised an uncaught `IntegrityError` (an
+  unhandled 500) instead of the 400 every other rejected value on this
+  endpoint returns. Switched to `apply_updates`, matching the sibling
+  `label_printer_service.update_printer`.
+- **Flagged, not fixed:** the "Compliance Status" report and the training
+  summary's per-requirement breakdown compute member compliance from
+  training-_program_ enrollment progress, while the dashboard and the
+  training compliance-matrix compute it from the shared, profile/waiver/
+  date-window-aware evaluator in `training_compliance.py` — two different
+  answers to "is this member compliant?" from the same `TrainingRequirement`
+  rows. See `docs/KNOWN_LIMITATIONS.md` (RPT5-29-1).
+- See `docs/security-review/RPT5-29-reports-analytics.md` for the full
+  writeup.
+### Nobody could run a finance approval chain (2026-09-06)
+
+**Fixed**
+
+- **The Treasurer can now reach the approval workflow.** `finance.approve` and
+  `finance.configure_approvals` gate nine endpoints — the approval queue and
+  the whole approval-chain settings screen — and no seeded position held
+  either. The only account that could reach them held the `*` wildcard, i.e.
+  the IT administrator. With no chain configured, `submit_purchase_request`
+  skips approval entirely, so requests quietly bypassed the workflow; configure
+  a chain, which needed that same unreachable screen, and every submitted
+  request landed in `pending_approval` with nobody able to action it. The
+  `treasurer` position now carries both grants, and a migration carries them to
+  departments that already onboarded — gated on the stored row still holding
+  exactly the finance grants the registry seeded, so a position an
+  administrator curated is left alone. `assert_different_person` still refuses
+  self-approval whoever holds the permission, so a Treasurer cannot walk their
+  own request through a chain.
+
+### Two permission gates that pointed at nothing (2026-09-06)
+
+**Fixed**
+
+- **The supply worklist no longer admits a grant its own endpoint refuses.**
+  `/inventory/admin/checklists/supply` was gated on `scheduling.manage`,
+  `inventory.check_view` or `inventory.manage`, but
+  `GET /equipment-check/supply/expiring-items` accepts only the latter two. A
+  shift officer holding just `scheduling.manage` passed the route guard and met
+  a 403 on load, reaching a page that rendered nothing but its failure state.
+  The route, the administration hub card and the two inbound links (the fleet
+  board and the apparatus detail page) now all match the endpoint. Narrowed
+  rather than widened deliberately: the worklist is fleet-wide item stock and
+  expiry, so the fix is to stop admitting a purely scheduling grant rather than
+  to disclose inventory data to one.
+- **The API contract suite's generated email addresses are now all addresses
+  Pydantic accepts.** The strategy behind OpenAPI's `email` format allowed a
+  hyphen anywhere inside a domain label, so it could emit `fa--jm.bfd` —
+  email-validator refuses two letters followed by two dashes at a label's third
+  and fourth characters, since IDNA reserves that shape for punycode's `xn--`.
+  Schemathesis reported the resulting 422 as "API rejected schema-compliant
+  request", which surfaced as a one-off red months after the strategy landed,
+  on an unrelated pull request. The pattern no longer emits two adjacent
+  hyphens; single hyphens still generate.
+### The program print sheet's Enrolled Members table could never render (2026-09-06)
+
+**Fixed**
+
+- **The printable training programme now loads its roster from
+  `GET /training/programs/programs/{id}/enrollments`.** It read
+  `program.enrollments`, and the programme response
+  (`ProgramWithPhasesAndRequirements`) carries phases, requirements and
+  milestones and no enrollments field — so the Enrolled Members section was
+  always skipped and the header always printed `Enrolled: 0`, on every sheet.
+  Nothing was missing on the backend: that endpoint already exists, is
+  org-scoped and permission-gated, and returns exactly the enriched shape the
+  table was written against, which is why the table already carried a cast for
+  `user_name`.
+
+- **A member who cannot read the roster gets an em dash, not a confident `0`.**
+  The route is gated on the training module alone while the endpoint needs
+  `training.view_all` or `training.manage`, so the call degrades — correctly,
+  since withholding the roster is the right privacy outcome. But degrading to an
+  empty list would have printed `Enrolled: 0` on paper for a programme with
+  twenty members on it. "Could not read" and "nobody enrolled" are now distinct.
+
+- **The Current Phase column shows the phase.**
+  `ProgramEnrollmentResponse` serializes `current_phase_id` and no nested phase
+  object, so reading `current_phase.name` would have printed an em dash for
+  every member even once the rows arrived. The name resolves from the
+  programme's own phases, the way the requirements table above it already
+  resolved its phase column.
+
 ### Finance and Elections pages keep their trail in every state (2026-09-06)
 
 **Added**
@@ -102,6 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect and was blind to the second by construction, which is how four pages
   kept a trail-less loading branch. Both directions are now covered, and the
   failure names the branch index.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
@@ -331,6 +424,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visible field name.
 
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
 ### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**

@@ -1700,6 +1700,15 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FUNDRAISING_MANAGE.name,
             FINANCE_VIEW.name,
             FINANCE_MANAGE.name,
+            # The approval chain is the treasurer's to run: without these two
+            # the feature has a model, endpoints and a settings screen that no
+            # seeded position could reach, so a department that built a chain
+            # had every submitted request strand in PENDING_APPROVAL. Granting
+            # approve does not let the treasurer wave through their own
+            # spending -- `assert_different_person` in FinanceService refuses
+            # self-approval whoever holds the permission (SEC FIN-4).
+            FINANCE_APPROVE.name,
+            FINANCE_CONFIGURE_APPROVALS.name,
             # Utility accounts, insurance policies, and capital-project
             # budgets are financial records the treasurer must read without
             # holding facility write access.
