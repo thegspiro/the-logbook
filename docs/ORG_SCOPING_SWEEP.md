@@ -37,6 +37,10 @@ an org filter would be demanding code that raises `AttributeError`.
 Over `backend/app/`, counting statements containing a `select(...)` and a
 `Model.id == …` comparison:
 
+Produced twice, by two implementations that extract statement source differently
+(`ast.get_source_segment` and line slicing). They agree on every figure below,
+so these are not one script's artefact.
+
 |                                                      |   Count |   Share |
 | ---------------------------------------------------- | ------: | ------: |
 | **By-id select statements**                          | **975** |    100% |
