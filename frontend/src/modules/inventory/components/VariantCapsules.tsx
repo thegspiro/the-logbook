@@ -1,6 +1,6 @@
 import React from 'react';
 import type { InventoryItem } from '../types';
-import { sizeLabel, standardSizeCode } from '../types';
+import { sizeLabel, standardSizeCode, styleAttributesLabel } from '../types';
 
 const SIZE_COLORS = 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
 const COLOR_COLORS = 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30';
@@ -36,19 +36,19 @@ export const VariantCapsules: React.FC<VariantCapsulesProps> = ({ item, showLabe
   const rawSize = item.standard_size || item.size;
   const size = standardSizeCode(rawSize) ? sizeLabel(rawSize) : (rawSize ?? '').toUpperCase();
   const color = item.color;
-  const style = item.style;
+  // The whole garment, not just the primary attribute: a men's long-sleeve
+  // polo stores `style = "polo"` and would otherwise read as plain "Polo".
+  // One shared formatter rather than a local one, which is how this capsule
+  // came to render "Mens" and "V Neck" (CLAUDE.md pitfall #29).
+  const style = styleAttributesLabel(item.style_attributes, item.style);
 
   if (!size && !color && !style) return null;
-
-  const formatStyle = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
       {size && <Capsule label={showLabels ? `Size: ${size}` : size} colorClass={SIZE_COLORS} />}
       {color && <Capsule label={showLabels ? `Color: ${color}` : color} colorClass={COLOR_COLORS} />}
-      {style && (
-        <Capsule label={showLabels ? `Style: ${formatStyle(style)}` : formatStyle(style)} colorClass={STYLE_COLORS} />
-      )}
+      {style && <Capsule label={showLabels ? `Style: ${style}` : style} colorClass={STYLE_COLORS} />}
     </span>
   );
 };

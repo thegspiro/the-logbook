@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { ItemVariantGroup, ItemVariantGroupCreate, InventoryCategory, InventoryItem } from '../types';
-import { STANDARD_SIZES } from '../types';
+import { STANDARD_SIZES, styleAttributesLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
@@ -75,7 +75,10 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
     for (const it of items) {
       const sz = it.standard_size || it.size || '';
       if (sz) sizes.add(sz);
-      const col = it.color || it.style?.replace(/_/g, ' ') || '';
+      // The whole garment: two items in a group can share the primary
+      // `style` ("polo") and differ by fit, which would otherwise collapse two
+      // stock cells into one and double-count the on-hand number.
+      const col = it.color || styleAttributesLabel(it.style_attributes, it.style);
       if (col) columns.add(col);
     }
 
@@ -96,7 +99,7 @@ const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
     for (const it of items) {
       const sz = it.standard_size || it.size || '';
       if (!sz) continue;
-      const cl = it.color || it.style?.replace(/_/g, ' ') || '';
+      const cl = it.color || styleAttributesLabel(it.style_attributes, it.style);
       const key = colList.includes(cl) ? cl : (colList[0] ?? '');
       const cell = grid[sz]?.[key];
       if (cell) {

@@ -12,6 +12,10 @@ import {
   standardSizeCode,
   SIZE_PICKER_GROUPS,
   CUSTOM_SIZE_OPTION,
+  GARMENT_STYLES,
+  GARMENT_STYLE_AXES,
+  styleAttributesLabel,
+  styleCombinationCount,
 } from './index';
 
 describe('ITEM_TYPES', () => {
@@ -294,5 +298,63 @@ describe('getStatusLabel', () => {
     // A status stored before it was added to the list is still better shown
     // than swallowed.
     expect(getStatusLabel('pending_disposal')).toBe('pending disposal');
+  });
+});
+
+describe('garment style axes', () => {
+  it('derives the flat vocabulary from the axes', () => {
+    // GARMENT_STYLES is consumed by the filter select and the size-preferences
+    // picker. Deriving it is what keeps those two from drifting from the axes.
+    expect(GARMENT_STYLES).toEqual(GARMENT_STYLE_AXES.flatMap((a) => [...a.options]));
+    expect(GARMENT_STYLES).toHaveLength(10);
+  });
+
+  it('assigns every style to exactly one axis', () => {
+    const values = GARMENT_STYLE_AXES.flatMap((a) => a.options.map((o) => o.value));
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  describe('styleCombinationCount', () => {
+    it('counts one pick per axis as one garment', () => {
+      // The reported bug: this returned 3.
+      expect(styleCombinationCount(['long_sleeve', 'mens', 'polo'])).toBe(1);
+    });
+
+    it('multiplies two picks within one axis', () => {
+      expect(styleCombinationCount(['long_sleeve', 'mens', 'womens', 'polo'])).toBe(2);
+    });
+
+    it('treats a crew neck quarter zip as one garment', () => {
+      expect(styleCombinationCount(['crew_neck', 'quarter_zip'])).toBe(1);
+    });
+
+    it('multiplies across several axes at once', () => {
+      expect(styleCombinationCount(['short_sleeve', 'long_sleeve', 'mens', 'womens'])).toBe(4);
+    });
+
+    it('counts an empty selection as one style-less garment', () => {
+      expect(styleCombinationCount([])).toBe(1);
+    });
+  });
+
+  describe('styleAttributesLabel', () => {
+    it('reads as English regardless of stored order', () => {
+      expect(styleAttributesLabel(['long_sleeve', 'mens', 'polo'])).toBe("Men's Long Sleeve Polo");
+      expect(styleAttributesLabel(['polo', 'mens', 'long_sleeve'])).toBe("Men's Long Sleeve Polo");
+    });
+
+    it('falls back to the scalar style for a row the backfill never reached', () => {
+      expect(styleAttributesLabel(null, 'v_neck')).toBe('V-Neck');
+      expect(styleAttributesLabel([], 'polo')).toBe('Polo');
+    });
+
+    it('is empty when there is no style at all', () => {
+      expect(styleAttributesLabel(null, null)).toBe('');
+      expect(styleAttributesLabel(undefined)).toBe('');
+    });
+
+    it('shows an unrecognised value rather than swallowing it', () => {
+      expect(styleAttributesLabel(['mens', 'cardigan'])).toBe("Men's cardigan");
+    });
   });
 });

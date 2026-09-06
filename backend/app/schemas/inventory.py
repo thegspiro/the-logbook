@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from app.schemas.base import UTCResponseBase
+from app.utils.garment_styles import first_conflicting_axis
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -531,7 +532,28 @@ class InventoryItemBase(BaseModel):
     attachments: Optional[List[str]] = None
     standard_size: Optional[StandardSizeLiteral] = None
     style: Optional[GarmentStyleLiteral] = None
+    # The garment's full style. The ten GarmentStyle values are four orthogonal
+    # axes (sleeve / fit / neckline / closure), so one shirt carries several;
+    # `style` above is the derived primary, kept for readers that predate this.
+    style_attributes: Optional[List[GarmentStyleLiteral]] = None
     variant_group_id: Optional[UUID] = None
+
+    @field_validator("style_attributes")
+    @classmethod
+    def _one_style_per_axis(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        """Reject two attributes from one axis at the boundary, not silently.
+
+        "Short Sleeve AND Long Sleeve" is not a garment. Dropping one quietly
+        would store something the caller never asked for, so this answers 422
+        naming the axis instead. The variant builder cannot produce this — it
+        emits one per axis by construction — but a hand-written API call can.
+        """
+        if value is None:
+            return None
+        conflict = first_conflicting_axis(value)
+        if conflict:
+            raise ValueError(f"Only one {conflict} style may be set on an item")
+        return value
 
 
 class InventoryItemCreate(InventoryItemBase):
@@ -615,8 +637,20 @@ class InventoryItemUpdate(BaseModel):
     attachments: Optional[List[str]] = None
     standard_size: Optional[StandardSizeLiteral] = None
     style: Optional[GarmentStyleLiteral] = None
+    style_attributes: Optional[List[GarmentStyleLiteral]] = None
     variant_group_id: Optional[UUID] = None
     active: Optional[bool] = None
+
+    @field_validator("style_attributes")
+    @classmethod
+    def _one_style_per_axis(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        """See InventoryItemBase._one_style_per_axis."""
+        if value is None:
+            return None
+        conflict = first_conflicting_axis(value)
+        if conflict:
+            raise ValueError(f"Only one {conflict} style may be set on an item")
+        return value
 
 
 class InventoryItemResponse(InventoryItemBase):
@@ -1483,6 +1517,8 @@ class RequestableVariant(BaseModel):
     size_label: Optional[str] = None
     color: Optional[str] = None
     style: Optional[str] = None
+    style_attributes: Optional[List[str]] = None
+    style_label: Optional[str] = None
     available: int = 0
 
 

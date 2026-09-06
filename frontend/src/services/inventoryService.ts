@@ -207,6 +207,11 @@ export const inventoryService = {
     unassigned_location?: boolean | undefined;
     storage_area_id?: string | undefined;
     vendor_id?: string | undefined;
+    /** These three reached the API untyped: the caller spreads a filter object,
+     *  which slips past TS's excess-property check (CLAUDE.md pitfall #5). */
+    size?: string | undefined;
+    color?: string | undefined;
+    style?: string | undefined;
     search?: string | undefined;
     active_only?: boolean | undefined;
     sort_by?: string | undefined;

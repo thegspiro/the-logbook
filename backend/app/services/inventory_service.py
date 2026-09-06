@@ -6,6 +6,7 @@ assignments, checkouts, maintenance, and reporting.
 """
 
 import copy
+import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
@@ -13,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy import and_, case, func, literal, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -72,6 +73,12 @@ from app.models.user import (
     user_positions,
 )
 from app.schemas.user import resolve_profile_visibility
+from app.utils.garment_styles import (
+    format_style_attributes,
+    normalize_style_attributes,
+    primary_style,
+    style_combinations,
+)
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
 from app.utils.model_updates import apply_updates
@@ -1542,6 +1549,43 @@ class InventoryService:
                     label=label,
                 )
 
+    @staticmethod
+    def _settle_style_fields(data: Dict[str, Any]) -> None:
+        """Make ``style`` and ``style_attributes`` one control rather than two.
+
+        The ten ``GarmentStyle`` values are four orthogonal axes, so a garment
+        carries several. ``style_attributes`` holds the whole list and ``style``
+        the derived primary, and whichever the caller supplied settles both —
+        the pair cannot drift, and every reader predating the axis model (the
+        list filter, the capsules, the stock matrix) keeps working untouched.
+
+        Returns early when the payload mentions neither key. That guard is
+        load-bearing on the update path: ``update_item`` dumps with
+        ``exclude_unset``, so writing ``style=None`` here would turn a PATCH
+        that only moves an item's location into one that also clears its style
+        (CLAUDE.md pitfall #1).
+        """
+        from app.models.inventory import GarmentStyle
+
+        has_attrs = "style_attributes" in data
+        has_style = "style" in data
+        if not (has_attrs or has_style):
+            return
+
+        if has_attrs:
+            source: Optional[List[str]] = data["style_attributes"]
+        else:
+            raw = data["style"]
+            source = [getattr(raw, "value", raw)] if raw else None
+
+        attributes = normalize_style_attributes(source)
+        # A new list object every time: plain Column(JSON) does not track
+        # in-place mutation, so an edit-in-place would be a silent no-op
+        # (CLAUDE.md pitfall #12).
+        data["style_attributes"] = list(attributes) if attributes else None
+        primary = primary_style(attributes)
+        data["style"] = GarmentStyle(primary) if primary else None
+
     async def create_item(
         self, organization_id: UUID, item_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
@@ -1591,6 +1635,8 @@ class InventoryService:
                 item_data["barcode"] = await self._next_sequential_barcode(
                     organization_id
                 )
+
+            self._settle_style_fields(item_data)
 
             item = InventoryItem(
                 organization_id=organization_id, created_by=created_by, **item_data
@@ -1764,7 +1810,31 @@ class InventoryService:
             query = query.where(InventoryItem.color == color)
 
         if style:
-            query = query.where(InventoryItem.style == style)
+            # Both halves are load-bearing. `style_attributes` is the authority:
+            # filtering by "Long Sleeve" has to find a men's long-sleeve polo,
+            # whose legacy `style` column says "polo". The scalar comparison
+            # covers rows the backfill never reached — `alembic upgrade head`
+            # alone does not produce a working schema (CLAUDE.md pitfall #26),
+            # so an installation whose column arrived through startup's column
+            # repair has it present and every row NULL.
+            #
+            # JSON_CONTAINS is portable across both engines CI runs (MySQL 8.0
+            # and MariaDB 10.11, which has had it since 10.2.3) and was verified
+            # against MariaDB 10.11 before being relied on here. It also avoids
+            # the trap a string match would walk into: `mens` is a substring of
+            # `womens`, but the quoted JSON candidates are not. It answers NULL
+            # against a NULL document rather than false, which is why the OR
+            # covers those rows instead of an explicit IS NULL branch.
+            query = query.where(
+                or_(
+                    InventoryItem.style == style,
+                    func.json_contains(
+                        InventoryItem.style_attributes,
+                        literal(json.dumps(style)),
+                    )
+                    == 1,
+                )
+            )
 
         if search:
             search_term = like_pattern(search)
@@ -2035,6 +2105,8 @@ class InventoryService:
             # INV-4 (XC-1): a re-pointed location/storage/variant-group/assignee
             # must be in the caller's org.
             await self._assert_item_fks_in_org(update_data, organization_id)
+
+            self._settle_style_fields(update_data)
 
             apply_updates(item, update_data, skip={"id", "organization_id"})
 
@@ -5712,18 +5784,25 @@ class InventoryService:
 
         Returns a tuple of (items_created, variant_group_id_or_None).
         """
-        from app.models.inventory import GarmentStyle, StandardSize
+        from app.models.inventory import StandardSize
 
-        # Build the combination matrix: (size, color|None, style|None)
-        combos: List[Tuple[str, Optional[str], Optional[str]]] = []
+        # Build the combination matrix: (size, color|None, style attributes).
+        #
+        # The style product runs ACROSS axes, never over the flat chip list.
+        # Long Sleeve + Men's + Polo is a sleeve, a fit and a neckline — one
+        # men's long-sleeve polo — and the old flat product turned that single
+        # intent into three unrelated items nobody ordered. Two picks inside one
+        # axis (short AND long sleeve) still multiply, which is the case the
+        # flat product happened to get right.
+        combos: List[Tuple[str, Optional[str], Optional[List[str]]]] = []
 
-        style_list = styles or [None]  # type: ignore[list-item]
+        style_combos = style_combinations(styles)
         color_list = colors or [None]  # type: ignore[list-item]
 
         for size in sizes:
             for color in color_list:
-                for style in style_list:
-                    combos.append((size, color, style))
+                for attributes in style_combos:
+                    combos.append((size, color, attributes))
 
         # INV-4 (XC-1): the category/location/storage applied to every generated
         # item must belong to the caller's org (each is optional).
@@ -5773,7 +5852,7 @@ class InventoryService:
 
         items_created: List[InventoryItem] = []
 
-        for size, color, style in combos:
+        for size, color, attributes in combos:
             # Sizes arrive as the stored codes ("l", "xxl", "one_size") because
             # that is what the size picker submits. Styles were already being
             # humanised here; sizes were not, so a coat came out named
@@ -5781,11 +5860,14 @@ class InventoryService:
             name_parts = [base_name, _size_label(size)]
             if color:
                 name_parts.append(color)
-            if style:
-                # Human-readable style label for the name
-                style_label = style.replace("_", " ").title()
-                name_parts.append(style_label)
-            item_name = " — ".join(name_parts)
+            if attributes:
+                # All attributes of one garment go in ONE trailing segment:
+                # they describe a single shirt, and a segment each would read
+                # "… — Long Sleeve — Men's — Polo" and push a long base name
+                # toward the 255-char cap. `_product_base_name` splits on the
+                # FIRST " — ", so the product name behind this is unaffected.
+                name_parts.append(format_style_attributes(attributes) or "")
+            item_name = " — ".join(part for part in name_parts if part)
 
             # Map size string to StandardSize enum if it matches
             std_size = None
@@ -5795,13 +5877,10 @@ class InventoryService:
                     std_size = member
                     break
 
-            # Map style string to GarmentStyle enum if it matches
-            garment_style = None
-            if style:
-                for member in GarmentStyle:
-                    if member.value == style:
-                        garment_style = member
-                        break
+            # One authority for the style pair, shared with create_item and
+            # update_item so this path cannot drift from those.
+            style_fields: Dict[str, Any] = {"style_attributes": attributes}
+            self._settle_style_fields(style_fields)
 
             barcode = await self._next_sequential_barcode(organization_id)
 
@@ -5812,7 +5891,8 @@ class InventoryService:
                 size=size,
                 standard_size=std_size,
                 color=color,
-                style=garment_style,
+                style=style_fields["style"],
+                style_attributes=style_fields["style_attributes"],
                 tracking_type=TrackingType.POOL,
                 quantity=kwargs.get("quantity_per_variant", 0),
                 quantity_issued=0,
@@ -7910,7 +7990,11 @@ class InventoryService:
         """
         name = (item.name or "").strip()
         carries_variant_axis = bool(
-            item.size or item.standard_size or item.color or item.style
+            item.size
+            or item.standard_size
+            or item.color
+            or item.style
+            or item.style_attributes
         )
         if carries_variant_axis and " — " in name:
             return name.split(" — ")[0].strip() or name
@@ -8432,6 +8516,24 @@ class InventoryService:
         return f"nm:{item.category_id or ''}:{base_name.casefold()}"
 
     @classmethod
+    def _style_identity(cls, item: InventoryItem) -> str:
+        """The garment's full style, as one comparable string.
+
+        The primary ``style`` alone is not an identity: a men's polo and a
+        women's polo both store ``polo``, so keying on it would collapse two
+        different garments into one catalog line, sum their stock, and let a
+        request raised against one be answered from the other (CLAUDE.md
+        pitfall #29). Falls back to the scalar column for rows written before
+        ``style_attributes`` existed, which makes this identical to the old key
+        for every pre-existing row.
+        """
+        attributes = normalize_style_attributes(item.style_attributes)
+        if not attributes:
+            scalar = cls._enum_value(item.style)
+            attributes = [scalar] if scalar else []
+        return ",".join(attributes)
+
+    @classmethod
     def _variant_key(cls, item: InventoryItem) -> Tuple[str, str, str]:
         """The variant a catalog row collapses into, within its product.
 
@@ -8442,7 +8544,7 @@ class InventoryService:
         return (
             cls._normalize_size_key(cls._item_stock_size_value(item)),
             (item.color or "").casefold(),
-            cls._enum_value(item.style) or "",
+            cls._style_identity(item),
         )
 
     @classmethod
@@ -8513,6 +8615,19 @@ class InventoryService:
                     "size_label": _size_label(size_value) if size_value else None,
                     "color": item.color,
                     "style": cls._enum_value(item.style),
+                    # The full attribute list and its label, so a member picking
+                    # between a men's and a women's polo can tell them apart —
+                    # both carry the primary `style` "polo".
+                    "style_attributes": (
+                        normalize_style_attributes(item.style_attributes)
+                        or ([cls._enum_value(item.style)] if item.style else None)
+                    ),
+                    "style_label": (
+                        format_style_attributes(
+                            normalize_style_attributes(item.style_attributes)
+                            or ([cls._enum_value(item.style)] if item.style else None)
+                        )
+                    ),
                     "available": 0,
                 }
                 product["_variants"][variant_key] = variant
@@ -8533,7 +8648,9 @@ class InventoryService:
                 key=lambda variant: (
                     cls._variant_sort_key(variant["size"]),
                     (variant["color"] or ""),
-                    (variant["style"] or ""),
+                    # Sort on the whole garment, matching _style_identity: two
+                    # variants can share a primary style and differ by fit.
+                    ",".join(variant["style_attributes"] or []),
                 ),
             )
             product["variants"] = variants

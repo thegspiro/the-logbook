@@ -62,7 +62,7 @@ import {
   STATUS_OPTIONS,
   ITEM_TYPES,
   STANDARD_SIZES,
-  GARMENT_STYLES,
+  GARMENT_STYLE_AXES,
   getStatusStyle,
   getConditionColor,
 } from '../types';
@@ -991,10 +991,16 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFStyle(e.target.value)}
           >
             <option value="">All Styles</option>
-            {GARMENT_STYLES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+            {/* Grouped by axis, so "Long Sleeve" reads as a sleeve choice
+                rather than as a garment type. The posted value is unchanged. */}
+            {GARMENT_STYLE_AXES.map((axis) => (
+              <optgroup key={axis.key} label={axis.label}>
+                {axis.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

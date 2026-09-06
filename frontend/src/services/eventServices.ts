@@ -901,7 +901,10 @@ export interface InventoryItem {
   restricted_to_positions?: string[] | null;
   notes?: string;
   standard_size?: string;
+  /** The primary garment attribute, derived from `style_attributes`. */
   style?: string;
+  /** The garment's full style: sleeve / fit / neckline / closure. */
+  style_attributes?: string[] | null;
   variant_group_id?: string;
   active: boolean;
   created_at: string;
@@ -1049,6 +1052,9 @@ export interface RequestableVariant {
   size_label?: string | null;
   color?: string | null;
   style?: string | null;
+  style_attributes?: string[] | null;
+  /** Server-rendered composite label, e.g. "Men's Long Sleeve Polo". */
+  style_label?: string | null;
   available: number;
 }
 
@@ -1196,6 +1202,9 @@ export interface InventoryItemCreate {
    *  rather than omitting the key, which `exclude_unset` reads as "leave alone". */
   standard_size?: string | null | undefined;
   style?: string | undefined;
+  /** Nullable for the same reason as `standard_size`: clearing the style on an
+   *  edit has to send an explicit null, not omit the key. */
+  style_attributes?: string[] | null | undefined;
   variant_group_id?: string | undefined;
 }
 

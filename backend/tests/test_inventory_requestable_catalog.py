@@ -486,3 +486,82 @@ class TestRequestableCatalogRestrictions:
         categories = await svc.get_requestable_categories(uuid.UUID(org_id), user)
 
         assert [c["name"] for c in categories] == ["Gloves"]
+
+
+class TestGarmentStyleVariants:
+    """Two garments that share a primary style are still two garments."""
+
+    @pytest.mark.asyncio
+    async def test_a_mens_and_a_womens_polo_stay_separate_variants(
+        self, db_session, org_and_member
+    ):
+        """The catalog keys a variant on the whole style, not the primary.
+
+        A men's long-sleeve polo and a women's one both store
+        ``style = "polo"``. Keying on that alone collapsed them into a single
+        line whose count was the sum of both — a member would see "Polo · 4
+        available", pick it, and the quartermaster would be handed a row of
+        whichever fit happened to sort first (CLAUDE.md pitfall #29).
+        """
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Uniform Shirts", "item_type": "uniform"},
+            created_by=uuid.UUID(user.id),
+        )
+        await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user.id),
+            base_name="Dept Polo",
+            sizes=["m"],
+            styles=["long_sleeve", "mens", "womens", "polo"],
+            create_variant_group=True,
+            category_id=cat.id,
+            tracking_type="pool",
+            quantity_per_variant=2,
+        )
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        variants = products[0]["variants"]
+        assert len(variants) == 2
+        assert {v["available"] for v in variants} == {2}
+        assert {v["style_label"] for v in variants} == {
+            "Men's Long Sleeve Polo",
+            "Women's Long Sleeve Polo",
+        }
+
+    @pytest.mark.asyncio
+    async def test_style_axes_do_not_split_a_single_garment(
+        self, db_session, org_and_member
+    ):
+        """One pick per axis is one product line, not three."""
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Uniform Shirts", "item_type": "uniform"},
+            created_by=uuid.UUID(user.id),
+        )
+        await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user.id),
+            base_name="Dept Polo",
+            sizes=["m"],
+            styles=["long_sleeve", "mens", "polo"],
+            create_variant_group=True,
+            category_id=cat.id,
+            tracking_type="pool",
+            quantity_per_variant=3,
+        )
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        assert len(products[0]["variants"]) == 1
+        assert products[0]["variants"][0]["style_label"] == "Men's Long Sleeve Polo"
+        assert products[0]["total_available"] == 3

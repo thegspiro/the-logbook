@@ -520,10 +520,24 @@ class InventoryItem(Base):
         nullable=True,
     )  # Controlled vocabulary for sizes when applicable
     color = Column(String(50))
+    # The ten GarmentStyle values are four orthogonal descriptors (sleeve, fit,
+    # neckline, closure), so one garment carries several of them: a men's
+    # long-sleeve polo is one item, not three. ``style_attributes`` holds the
+    # full canonical list and ``style`` the derived primary — see
+    # app/utils/garment_styles.py, which owns both the taxonomy and the
+    # normalizer every write path goes through.
+    #
+    # ``style`` is kept in step with the list rather than deprecated: filters,
+    # badges and the requestable catalog all read it, and a single value is
+    # still the right answer to "what kind of shirt is this".
     style = Column(
         Enum(GarmentStyle, values_callable=_enum_values),
         nullable=True,
-    )  # Garment style (long_sleeve, short_sleeve, etc.)
+    )  # Primary garment style, derived from style_attributes
+    # Plain JSON is safe here only because the list is always REPLACED
+    # wholesale by the normalizer. Code that ever edits it element-wise needs
+    # flag_modified(), or SQLAlchemy skips the UPDATE (CLAUDE.md pitfall #12).
+    style_attributes = Column(JSON, nullable=True)
     weight = Column(Float)  # Weight in pounds or kg
 
     # Location

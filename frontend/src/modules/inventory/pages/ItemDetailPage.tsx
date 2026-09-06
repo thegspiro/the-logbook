@@ -40,7 +40,7 @@ import type {
   StorageAreaResponse,
   Location,
 } from '../types';
-import { getStatusStyle, getStatusLabel, getConditionColor, sizeLabel } from '../types';
+import { getStatusStyle, getStatusLabel, getConditionColor, sizeLabel, styleAttributesLabel } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
@@ -441,7 +441,7 @@ const ItemDetailPage: React.FC = () => {
                 upper-casing it renders `one_size` as ONE_SIZE and `xxxl` as
                 XXXL where every picker in the app says One Size and 3XL. */}
             <Field label="Standard Size" value={sizeLabel(item.standard_size) || '--'} />
-            <Field label="Style" value={item.style ? item.style.replace(/_/g, ' ') : '--'} />
+            <Field label="Style" value={styleAttributesLabel(item.style_attributes, item.style) || '--'} />
             <Field label="Size (legacy)" value={sizeLabel(item.size) || '--'} />
             <Field label="Color" value={item.color || '--'} />
           </Card>

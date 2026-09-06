@@ -23,13 +23,15 @@ import type {
   Location,
   SizeVariantCreate,
 } from '../types';
+import SettingsToggle from '../../../components/settings/SettingsToggle';
 import {
   ITEM_TYPE_FIELDS,
   getItemTypeFromCategory,
   CUSTOM_SIZE_OPTION,
   SIZE_PICKER_GROUPS,
   STANDARD_SIZES,
-  GARMENT_STYLES,
+  GARMENT_STYLE_AXES,
+  styleCombinationCount,
   standardSizeCode,
 } from '../types';
 
@@ -276,8 +278,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       .map((c) => c.trim())
       .filter(Boolean);
     const colorMult = colorList.length || 1;
-    const styleMult = selectedStyles.length || 1;
-    return selectedSizes.length * colorMult * styleMult;
+    // Across axes, not over the flat chip list: Long Sleeve + Men's + Polo is
+    // one men's long-sleeve polo, which this used to report as three items.
+    return selectedSizes.length * colorMult * styleCombinationCount(selectedStyles);
   }, [generateVariants, selectedSizes, selectedStyles, variantColors]);
 
   const submit = async (e: React.FormEvent) => {
@@ -315,7 +318,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           create_variant_group: true,
         };
         const result = await inventoryService.createSizeVariants(data);
-        toast.success(`Created ${result.created_count} variant items`);
+        toast.success(`Created ${result.created_count} variant item${result.created_count !== 1 ? 's' : ''}`);
         onSaved();
         onClose();
       } catch (err: unknown) {
@@ -547,22 +550,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Generate Sizes & Styles toggle (new uniform/PPE items only) */}
         {supportsVariants && (
           <fieldset>
-            <div className="mb-2">
-              <label className="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={generateVariants}
-                  onChange={(e) => setGenerateVariants(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <div className="bg-theme-surface-secondary peer border-theme-surface-border h-5 w-9 rounded-full border peer-checked:bg-blue-500 after:absolute after:top-0.5 after:left-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full dark:after:bg-gray-200" />
-                <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
-              </label>
+            {/* The shared switch, not a hand-rolled one. The copy that lived
+                here put its knob in an `::after` on a track that was not
+                `relative`, so the knob positioned against the 44px label
+                instead of the 20px track and floated above it. */}
+            <div className="mb-2 flex min-h-[44px] items-center gap-2">
+              <SettingsToggle
+                checked={generateVariants}
+                onChange={setGenerateVariants}
+                label="Generate Sizes & Styles"
+              />
+              <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
             </div>
             {generateVariants && (
               <p className="text-theme-text-muted mb-3 text-xs">
-                Select the sizes and styles below. One pool item will be created for each combination and grouped
-                together automatically.
+                Pick the sizes and styles below. Each style row describes a different property of the same garment, so
+                one pick per row creates one item; picking two in a row creates one item for each.
               </p>
             )}
           </fieldset>
@@ -596,28 +599,34 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               )}
             </div>
 
-            {/* Styles */}
-            <div>
-              <span className={lbl} id="item-styles-label">
-                Styles
-              </span>
-              <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="item-styles-label">
-                {GARMENT_STYLES.map((s) => (
-                  <button
-                    key={s.value}
-                    type="button"
-                    className={`${chipBase} ${selectedStyles.includes(s.value) ? chipOn : chipOff}`}
-                    onClick={() => toggleStyle(s.value)}
+            {/* Styles — one labelled group per axis. A flat row of ten chips
+                read as ten alternatives and hid the rule that a sleeve, a fit
+                and a neckline describe one garment rather than three. */}
+            <div className="space-y-3">
+              <span className={lbl}>Styles</span>
+              {GARMENT_STYLE_AXES.map((axis) => (
+                <div key={axis.key}>
+                  <span className="text-theme-text-muted text-xs font-medium" id={`item-style-${axis.key}-label`}>
+                    {axis.label}
+                  </span>
+                  <div
+                    className="mt-1 flex flex-wrap gap-1.5"
+                    role="group"
+                    aria-labelledby={`item-style-${axis.key}-label`}
                   >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              {selectedStyles.length > 0 && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  {selectedStyles.length} style{selectedStyles.length !== 1 ? 's' : ''} selected
-                </p>
-              )}
+                    {axis.options.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        className={`${chipBase} ${selectedStyles.includes(o.value) ? chipOn : chipOff}`}
+                        onClick={() => toggleStyle(o.value)}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Colors (comma-separated text) */}
@@ -642,8 +651,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 </p>
                 <p className="text-theme-text-muted mt-0.5 text-xs">
                   {selectedSizes.length} size{selectedSizes.length !== 1 ? 's' : ''}
-                  {selectedStyles.length > 0 &&
-                    ` × ${selectedStyles.length} style${selectedStyles.length !== 1 ? 's' : ''}`}
+                  {GARMENT_STYLE_AXES.map((axis) => {
+                    const n = selectedStyles.filter((v) => axis.options.some((o) => o.value === v)).length;
+                    return n > 1 ? ` × ${n} ${axis.label.toLowerCase()} options` : '';
+                  }).join('')}
                   {(() => {
                     const n = variantColors.split(',').filter((c) => c.trim()).length;
                     return n > 0 ? ` × ${n} color${n !== 1 ? 's' : ''}` : '';
