@@ -16,10 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 28 (Security, audit & IP), pass 3** — branch
-`claude/friendly-babbage-mxcgij`,
-[PR #2333](https://github.com/thegspiro/the-logbook/pull/2333). Subscribed;
+**Feature 29 (Reports & analytics), pass 4** — branch
+`claude/security-review-reports-analytics-pass4`, PR pending. Subscribed;
 awaiting CI/review.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics, pass 4)
+
+Feature 28's PR #2333 merged at 18:24:13Z (main is its merge commit
+`f7a9ad8d`), so the stale Open PR row above it was cleared and the rotation
+advanced. Pass 4 over Reports & analytics, **delta-focused by design**: pass 3
+(PR #2091, `b6c283a7`) read all ten files end to end one commit-range ago, so
+this pass read the full diff since it — 141 insertions across 5 files — plus a
+fresh enumeration of all 30 routes, the new `hidden_prospect_ids` surface, and
+targeted whole-feature sweeps. The bodies of `reports_service.py`,
+`dashboard.py` and `label_service.py` outside that delta were **not** re-read;
+that limit is stated in the findings doc rather than papered over.
+
+**No new findings, and no code changed.** Eight verified-good claims, each
+naming its mechanism. The three that took real work: (1) the
+`equipment_check.manage` → `inventory.check_manage` swap on the operations
+dashboard does **not** reach the baseline — resolved `DEFAULT_POSITIONS` and
+`OPERATIONAL_RANKS` live, `member` holds `check_submit`/`view` and
+`firefighter` holds `view`, neither holds `check_manage` nor the `inventory.*`
+wildcard that would grant it (Pitfall #23 clear); (2) the new
+`call_type_labels` in both call-volume reports resolves through
+`ShiftEligibilityService._get_org(org_id)` off `current_user.organization_id`,
+so it cannot cross tenants; (3) `PII_REPORT_PERMISSIONS` is complete for the
+current 13 generators — enumerated every ungated generator's output keys and
+confirmed the `"name"` fields in `apparatus_status`/`inventory_status` are
+asset names, not member names. An unbounded `awk` first suggested
+`event_attendance` carried `member_name`; bounding each function to its next
+`def` showed that hit belonged elsewhere, and the doc records the correction.
+
+Also verified: the label preset's new UNSET semantics keep the in-org FK check
+on `printer_id` (Pitfalls #1 and #14c both satisfied), and prospect
+self-access filtering reaches **all three** label paths including `print`,
+with `_filter_ids` normalizing both sides against the re-cased-UUID bypass.
+
+Full gate green on `f7a9ad8d`: flake8/black/isort clean across `app/`,
+`tests/`, `alembic/` at CI's pinned versions (verified rather than assumed —
+a missing `isort` passes silently); migrations PASSED; 816/816 scoped tests
+pass, 1 skipped (pywebpush, env-only); frontend typecheck 0 errors, eslint 0
+errors. Findings doc:
+`docs/security-review/RPT4-29-reports-analytics.md`. Rotation row 29 → ✅
+(pending PR merge). Next: 30 Onboarding.
 
 ---
 
@@ -9841,7 +9883,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
