@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
+
+**Fixed**
+
+- **The fulfil picker now offers every row the member's chosen variant was
+  counted from.** The request catalog deliberately collapses rows that share a
+  product and a size/colour/style into one line and sums their availability —
+  that is what turns ten serialized radios into "Portable Radio — 7 available"
+  instead of ten indistinguishable rows. The request then stored a single
+  `item_id` out of that line, and fulfilment narrowed to exactly that row, so a
+  member could ask for ten against a line advertising ten and leave the
+  quartermaster looking at the one row holding one. Fulfilment now resolves the
+  request to the variant and offers its sibling rows, so the options match the
+  availability the member was shown. Rows outside that variant — a different
+  size, colour, style, product or organization — stay excluded, unchanged.
+- The product and variant identity the catalog groups by is now one definition
+  (`_product_key` / `_variant_key` / `_variant_identity`), consumed by both the
+  grouping and the fulfilment narrowing rather than restated on each side.
+
 ### API errors answer in JSON, not the HTML 50x page (2026-09-06)
 
 **Fixed**
