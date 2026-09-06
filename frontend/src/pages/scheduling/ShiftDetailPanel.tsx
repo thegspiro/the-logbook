@@ -614,6 +614,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     }
   };
 
+  // Declining is only ever offered on your own seat (AssignmentActions renders
+  // it under `isCurrentUser`; an officer acting on someone else uses Remove),
+  // so it goes through the self-scoped decline endpoint. `updateAssignment`
+  // requires scheduling.assign or being the shift's officer and 403s for a
+  // plain member answering their own roster.
   const handleDecline = async (assignmentId: string) => {
     if (pending.declining) return;
     setPendingFlag('declining', true);
@@ -622,7 +627,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a))
     );
     try {
-      await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
+      await schedulingService.declineAssignment(assignmentId);
       toast.success('Assignment declined');
       await refreshAssignments();
     } catch (err) {

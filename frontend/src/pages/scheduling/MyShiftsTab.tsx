@@ -123,7 +123,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   const handleDecline = async (assignmentId: string) => {
     try {
-      await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
+      await schedulingService.declineAssignment(assignmentId);
       toast.success('Shift declined');
       setConfirmingDecline(null);
       void loadData();
@@ -317,7 +317,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     let failed = 0;
     for (const id of selectedIds) {
       try {
-        await schedulingService.updateAssignment(id, { assignment_status: 'declined' });
+        await schedulingService.declineAssignment(id);
         count++;
       } catch {
         failed++;
