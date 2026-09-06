@@ -1,0 +1,200 @@
+/**
+ * The close-out settings mirror.
+ *
+ * The point of the file is the word "mirror": every value on it is a link to
+ * the section that owns it, and nothing here writes. A second screen writing
+ * the same settings object means whichever saved last silently reverts the
+ * other, which is the failure that moved checklist timing to one home in
+ * Inventory.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { renderWithRouter } from '../../../../test/utils';
+
+const mockGetFeatureSettings = vi.fn();
+vi.mock('../../../../modules/scheduling/services/api', () => ({
+  schedulingService: {
+    getFeatureSettings: (...args: unknown[]) => mockGetFeatureSettings(...args) as unknown,
+  },
+}));
+
+let granted: string[] = [];
+vi.mock('../../../../stores/authStore', () => ({
+  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
+    selector({ checkPermission: (permission: string) => granted.includes(permission) }),
+}));
+
+let modulesOn: string[] = [];
+vi.mock('../../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({ isModuleOn: (key: string) => modulesOn.includes(key), isLoading: false }),
+}));
+
+import CloseoutSettingsSummary from './CloseoutSettingsSummary';
+
+describe('CloseoutSettingsSummary', () => {
+  beforeEach(() => {
+    granted = ['scheduling.manage', 'settings.manage'];
+    modulesOn = ['scheduling', 'inventory'];
+    mockGetFeatureSettings.mockReset();
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: true,
+      open_ended_shift_cushion_hours: 12,
+      call_tracking: { mode: 'count_only', call_types: [{ slug: 'fire', label: 'Fire' }] },
+    });
+  });
+
+  it('shows the rules that govern close-out', async () => {
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByText('Block close-out')).toBeInTheDocument();
+    expect(screen.getByText('A count at close-out')).toBeInTheDocument();
+    expect(screen.getByText('12 hours')).toBeInTheDocument();
+    expect(screen.getByText('1 configured')).toBeInTheDocument();
+  });
+
+  it('offers no control that writes — every value links to where it is edited', async () => {
+    renderWithRouter(<CloseoutSettingsSummary />);
+    await screen.findByText('Block close-out');
+
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getByRole('link', { name: 'Block close-out' })).toHaveAttribute(
+      'href',
+      '/scheduling/admin/settings/general'
+    );
+    expect(screen.getByRole('link', { name: 'Shift Reports section' })).toHaveAttribute(
+      'href',
+      '/scheduling/admin/settings/shift-reports'
+    );
+  });
+
+  // Three modes, not two. `off` means the department has said it does not want
+  // to be asked about calls at all; reporting "Individual call records" for it
+  // states the opposite of what was configured.
+  it('names all three call-tracking modes, not two', async () => {
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: false,
+      call_tracking: { mode: 'off', call_types: [] },
+    });
+    const { unmount } = renderWithRouter(<CloseoutSettingsSummary />);
+    expect(await screen.findByText('Not recorded')).toBeInTheDocument();
+    unmount();
+
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: false,
+      call_tracking: { mode: 'detailed', call_types: [] },
+    });
+    renderWithRouter(<CloseoutSettingsSummary />);
+    expect(await screen.findByText('Individual call records')).toBeInTheDocument();
+  });
+
+  // ShiftDetailPanel renders the wizard for count-only alone, so describing the
+  // types as "the breakdown the close-out wizard asks for" to a detailed or off
+  // department describes a screen they never see.
+  it('offers the call-types row only where close-out actually asks for a breakdown', async () => {
+    const { unmount } = renderWithRouter(<CloseoutSettingsSummary />);
+    expect(await screen.findByText('1 configured')).toBeInTheDocument();
+    unmount();
+
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: true,
+      open_ended_shift_cushion_hours: 12,
+      call_tracking: { mode: 'detailed', call_types: [{ slug: 'fire', label: 'Fire' }] },
+    });
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByText('Individual call records')).toBeInTheDocument();
+    expect(screen.queryByText('Call types')).not.toBeInTheDocument();
+  });
+
+  // The cushion is derived from Inventory's checklist timing, not from any
+  // scheduling setting: Scheduling General exposes no control for it, so a link
+  // there lands on a screen where the number shown does not appear.
+  it('points the cushion at the screen that actually owns it', async () => {
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByRole('link', { name: '12 hours' })).toHaveAttribute(
+      'href',
+      '/inventory/admin/checklists/settings'
+    );
+  });
+
+  // That screen is behind Inventory's module gate and its settings grants,
+  // neither implied by scheduling.manage. Offering the link anyway is the app
+  // handing an officer a door onto Access Denied.
+  it('shows the cushion as plain text for a viewer who cannot open its screen', async () => {
+    granted = ['scheduling.manage'];
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByText('12 hours')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '12 hours' })).not.toBeInTheDocument();
+  });
+
+  // The value rendered a dash while the hint underneath asserted "calls are
+  // logged per incident" — a concrete rule, false for a count-only or off
+  // department, stated exactly when nothing had read the setting. The guard had
+  // been dropped to satisfy exactOptionalPropertyTypes.
+  it('claims nothing about how calls are recorded until the settings load', async () => {
+    let release: (value: unknown) => void = () => {};
+    mockGetFeatureSettings.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      })
+    );
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    await screen.findByText('What close-out asks for');
+    expect(screen.queryByText(/logged per incident/)).not.toBeInTheDocument();
+    expect(screen.getByText(/did not load/)).toBeInTheDocument();
+
+    await act(async () => {
+      release({
+        require_end_of_shift_checks: false,
+        call_tracking: { mode: 'count_only', call_types: [] },
+      });
+    });
+
+    expect(screen.getByText('A count at close-out')).toBeInTheDocument();
+  });
+
+  it('claims nothing about how calls are recorded when the settings fail', async () => {
+    mockGetFeatureSettings.mockRejectedValue(new Error('nope'));
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    await screen.findByRole('alert');
+    expect(screen.queryByText(/logged per incident/)).not.toBeInTheDocument();
+  });
+
+  // A dash reads as "not loaded"; a fabricated default reads as a value
+  // somebody chose, and an officer would act on it.
+  it('shows a dash rather than a made-up default when the settings do not load', async () => {
+    mockGetFeatureSettings.mockRejectedValue(new Error('nope'));
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByText('What close-out asks for')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Block close-out')).not.toBeInTheDocument();
+  });
+
+  // A dash on every row is indistinguishable from the initial loading state, so
+  // a silent failure left this panel permanently blank with no way back except
+  // navigating away and returning — which is not an instruction anybody gave.
+  it('says the settings did not load, and recovers on retry', async () => {
+    mockGetFeatureSettings.mockRejectedValueOnce(new Error('nope'));
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/did not load/);
+
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: true,
+      open_ended_shift_cushion_hours: 12,
+      call_tracking: { mode: 'count_only', call_types: [] },
+    });
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Block close-out')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});

@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useAuthStore } from '../stores/authStore';
 import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 interface BasicApparatus {
   id: string;
@@ -247,6 +248,13 @@ export default function ApparatusBasicPage() {
 
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: showModal, onClose: () => setShowModal(false) });
 
+  // Reading the fleet is auth-only on purpose — a department without the
+  // Apparatus module still needs these unit definitions for shift staffing,
+  // which is why the route carries no permission gate. Writing is not: the
+  // create/update/delete endpoints all require `scheduling.manage`, so the
+  // controls for them are gated on it rather than left to 403.
+  const canManage = useAuthStore((state) => state.checkPermission('scheduling.manage'));
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -257,9 +265,11 @@ export default function ApparatusBasicPage() {
             Define your department's vehicles and crew positions for shift scheduling
           </p>
         </div>
-        <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
-          <Plus className="h-4 w-4" /> Add Apparatus
-        </button>
+        {canManage && (
+          <button onClick={openCreate} className="btn-primary flex shrink-0 items-center gap-2 py-2.5">
+            <Plus className="h-4 w-4" /> Add Apparatus
+          </button>
+        )}
       </div>
 
       {/* Info Banner */}
@@ -297,11 +307,15 @@ export default function ApparatusBasicPage() {
           <Truck className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No apparatus defined</h3>
           <p className="text-theme-text-muted mb-4">
-            Add your department's vehicles to start building shift assignments with crew positions.
+            {canManage
+              ? "Add your department's vehicles to start building shift assignments with crew positions."
+              : 'A scheduling officer defines the vehicles and crew positions used for shift assignments.'}
           </p>
-          <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2 py-2.5">
-            <Plus className="h-4 w-4" /> Add First Apparatus
-          </button>
+          {canManage && (
+            <button onClick={openCreate} className="btn-primary inline-flex items-center gap-2 py-2.5">
+              <Plus className="h-4 w-4" /> Add First Apparatus
+            </button>
+          )}
         </div>
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center">
@@ -323,26 +337,28 @@ export default function ApparatusBasicPage() {
                       <p className="text-theme-text-secondary text-sm">{apparatus.unit_number}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    <button
-                      onClick={() => openEdit(apparatus)}
-                      title="Edit"
-                      aria-label="Edit apparatus"
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleDelete(apparatus);
-                      }}
-                      title="Delete"
-                      aria-label="Delete apparatus"
-                      className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                      <button
+                        onClick={() => openEdit(apparatus)}
+                        title="Edit"
+                        aria-label="Edit apparatus"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          void handleDelete(apparatus);
+                        }}
+                        title="Delete"
+                        aria-label="Delete apparatus"
+                        className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -373,7 +389,7 @@ export default function ApparatusBasicPage() {
       )}
 
       {/* Create/Edit Modal */}
-      {showModal && (
+      {canManage && showModal && (
         <div
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"

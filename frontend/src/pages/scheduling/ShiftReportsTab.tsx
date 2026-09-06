@@ -64,6 +64,12 @@ import {
   shiftHoursForOneMember,
 } from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
+import {
+  CallTypeChips,
+  orgCallTypeChoices,
+  textCallTypeChoices,
+} from '../../modules/scheduling/components/CallTypeChips';
+import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
 import {
@@ -195,6 +201,24 @@ export const ShiftReportsTab: React.FC = () => {
   const callTypeOptions = config?.shift_review_call_types?.length
     ? config.shift_review_call_types
     : DEFAULT_CALL_TYPE_OPTIONS;
+
+  const orgCallTypes = useOrgCallTypes();
+
+  /**
+   * Which vocabulary the draft editor offers for a given report.
+   *
+   * A report filed against a count-only shift stores this department's own
+   * type slugs; everything else stores what an officer typed. Offering the
+   * free-text list on the first kind is what let an edit mix the two, leaving
+   * the stored slug unselected on screen and unresolvable afterwards.
+   */
+  const draftCallTypeChoices = useCallback(
+    (report: ShiftCompletionReport) =>
+      callTypesAreOrgSlugs(report)
+        ? orgCallTypeChoices(orgCallTypes, report.call_types || [])
+        : textCallTypeChoices(callTypeOptions),
+    [orgCallTypes, callTypeOptions]
+  );
 
   const skillOptions = useMemo(() => {
     if (shiftApparatusType && config?.apparatus_type_skills) {
@@ -1261,25 +1285,11 @@ export const ShiftReportsTab: React.FC = () => {
 
                 <div>
                   <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Call Types</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {callTypeOptions.map((type) => {
-                      const isSelected = (draftForm.call_types || []).includes(type);
-                      return (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => toggleCallType(setDraftForm, type)}
-                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                            isSelected
-                              ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400'
-                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
-                          }`}
-                        >
-                          {type}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <CallTypeChips
+                    choices={draftCallTypeChoices(report)}
+                    selected={draftForm.call_types || []}
+                    onToggle={(value) => toggleCallType(setDraftForm, value)}
+                  />
                 </div>
 
                 <div>
