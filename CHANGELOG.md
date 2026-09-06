@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Course Library hides what a member cannot do (2026-09-06)
+
+**Fixed**
+
+- **The Course Library no longer offers Add, Edit, Delete and Manage classes to
+  members without `training.manage`.** Every write behind those four controls —
+  create, update (which is how "Deactivate" is implemented) and the syllabus
+  builder — already required the permission on the backend, so a regular member
+  got a 403 from any of them. The controls are now gated on the same permission
+  the endpoints check. The gate is on the component, not the route, because the
+  same page is mounted inside the training admin hub where the officer does hold
+  it.
+
 ### Shift Details becomes a modal (2026-09-05)
 
 **Changed**
