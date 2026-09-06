@@ -15,10 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   webhook) that returned an oversized or slow-drip response body could
   drive unbounded memory growth per request.** A size limit was declared
   in the shared integration HTTP client's code but nothing enforced it.
-  It is now enforced centrally for every integration connector — a
-  response is aborted once it exceeds the limit, before it can be
-  buffered into memory — with no change needed at any connector's call
-  site.
+  It is now enforced centrally for every connector using the shared
+  `create_integration_client()` helper — a response is aborted once it
+  exceeds the limit, before it can be buffered into memory — with no
+  change needed at most connectors' call sites. PayPal's two outbound
+  calls (`get_access_token`, `verify_webhook_signature`) built their own
+  bare `httpx.AsyncClient` instead of using the shared helper and were
+  not covered by the initial fix; they now go through
+  `create_integration_client()` too (with PayPal's own vendor-tuned
+  timeout preserved via a new `timeout=` override), so every integration
+  connector's outbound calls are covered.
 
 ### A Create Shift form outlived the permission that opened it (2026-09-06)
 

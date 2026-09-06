@@ -233,6 +233,158 @@ async def test_environment_proxy_mounts_wraps_the_proxy_transport():
         assert isinstance(http_transport._transport, httpx.AsyncHTTPTransport)
 
 
+async def test_create_integration_client_timeout_override_preserves_hardening():
+    """A caller-supplied timeout= (e.g. paypal_service.py's vendor-tuned
+    Timeout(15.0, connect=10.0)) must not bypass any other hardening —
+    the size-limited transport, redirect suppression, and identity encoding
+    request must all still apply."""
+    custom_timeout = httpx.Timeout(15.0, connect=10.0)
+    client = create_integration_client(timeout=custom_timeout)
+    try:
+        assert client.timeout == custom_timeout
+        assert isinstance(client._transport, _SizeLimitedTransport)
+        assert client.follow_redirects is False
+        assert client.headers.get("accept-encoding") == "identity"
+    finally:
+        await client.aclose()
+
+
+async def test_environment_proxy_mounts_trust_env_false_returns_no_mounts():
+    """INT-27/Codex follow-up, 2026-09-06: trust_env=False must skip the env
+    lookup outright, mirroring stock httpx's `allow_env_proxies = trust_env
+    and transport is None` — trust_env alone short-circuits that expression
+    regardless of transport."""
+    with patch.dict(
+        os.environ,
+        {
+            "HTTP_PROXY": "http://proxy.example:8080",
+            "HTTPS_PROXY": "http://proxy.example:8080",
+        },
+        clear=False,
+    ):
+        assert _environment_proxy_mounts(MAX_RESPONSE_SIZE, trust_env=False) == {}
+
+
+async def test_create_integration_client_trust_env_false_ignores_env_proxies():
+    """A caller opting out of ambient proxy env vars via trust_env=False must
+    get a client with no env-derived proxy mounts at all."""
+    with patch.dict(
+        os.environ,
+        {
+            "HTTP_PROXY": "http://proxy.example:8080",
+            "HTTPS_PROXY": "http://proxy.example:8080",
+        },
+        clear=False,
+    ):
+        client = create_integration_client(trust_env=False)
+        try:
+            assert client._mounts == {}
+        finally:
+            await client.aclose()
+
+
+async def test_create_integration_client_explicit_proxy_wins_over_env_proxies():
+    """INT-27/Codex follow-up, 2026-09-06: an explicit proxy= must take
+    effect and must not be shadowed by more-specific environment-derived
+    scheme mounts (http://, https://) — matching stock httpx's
+    _get_proxy_map, which never consults env vars once proxy is given."""
+    with patch.dict(
+        os.environ,
+        {"HTTP_PROXY": "http://env-proxy.example:8080"},
+        clear=False,
+    ):
+        client = create_integration_client(proxy="http://explicit-proxy.example:9000")
+        try:
+            patterns = {str(p.pattern) for p in client._mounts}
+            assert patterns == {"all://"}
+            (mount,) = client._mounts.values()
+            assert isinstance(mount, _SizeLimitedTransport)
+            assert mount._max_bytes == MAX_RESPONSE_SIZE
+            pool = mount._transport._pool
+            assert pool._proxy_url.host == b"explicit-proxy.example"
+            assert pool._proxy_url.port == 9000
+        finally:
+            await client.aclose()
+
+
+async def test_paypal_service_uses_shared_integration_client():
+    """Structural guard (INT-27/Codex follow-up, 2026-09-06): paypal_service.py's
+    two outbound calls must go through create_integration_client(), not a bare
+    httpx.AsyncClient() — otherwise they silently stop inheriting the
+    response-size cap and other hardening centralized there, the exact gap
+    this follow-up closes."""
+    import inspect
+
+    from app.services.integration_services import paypal_service
+
+    source = inspect.getsource(paypal_service)
+    assert "httpx.AsyncClient(" not in source
+    assert source.count("create_integration_client(") == 2
+
+
+async def test_paypal_get_access_token_enforces_response_size_cap():
+    """End-to-end: PayPal's get_access_token now routes through
+    create_integration_client() and must inherit the same response-size cap
+    as every other connector, with only the network-facing
+    httpx.AsyncHTTPTransport replaced (same shape as
+    test_real_connector_call_aborts_on_an_oversized_response)."""
+    from app.services.integration_services.paypal_service import get_access_token
+
+    oversized_body = b"z" * (MAX_RESPONSE_SIZE + 1024)
+
+    class _FakeNetworkTransport(httpx.AsyncBaseTransport):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._inner = httpx.MockTransport(_streaming_dispatch(oversized_body))
+
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            return await self._inner.handle_async_request(request)
+
+    with patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport):
+        with pytest.raises(ResponseTooLargeError):
+            await get_access_token(
+                "https://api-m.sandbox.paypal.com", "client-id", "client-secret"
+            )
+
+
+async def test_paypal_verify_webhook_signature_fails_closed_on_oversized_response():
+    """verify_webhook_signature must not let an oversized response propagate
+    as an unhandled exception — like any other transport failure, it must be
+    treated as "do not trust this payload" and return False."""
+    from app.services.integration_services.paypal_service import (
+        verify_webhook_signature,
+    )
+
+    oversized_body = b"z" * (MAX_RESPONSE_SIZE + 1024)
+
+    class _FakeNetworkTransport(httpx.AsyncBaseTransport):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._inner = httpx.MockTransport(_streaming_dispatch(oversized_body))
+
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            return await self._inner.handle_async_request(request)
+
+    class _Integration:
+        config = {"environment": "sandbox", "webhook_id": "WH-1"}
+
+        def get_secret(self, key):
+            return {"client_id": "cid", "client_secret": "csec"}.get(key)
+
+    headers = {
+        "paypal-auth-algo": "SHA256withRSA",
+        "paypal-cert-url": "https://api-m.paypal.com/cert",
+        "paypal-transmission-id": "tid",
+        "paypal-transmission-sig": "sig",
+        "paypal-transmission-time": "2026-09-06T00:00:00Z",
+    }
+
+    with patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport):
+        # get_access_token itself hits the oversized response first; either
+        # way the surrounding try/except in verify_webhook_signature must
+        # catch it and fail closed rather than raising past the caller.
+        result = await verify_webhook_signature(_Integration(), headers, {})
+    assert result is False
+
+
 async def test_create_integration_client_mounts_match_stock_httpx_resolution():
     """Parity check: given the same environment, the mounts
     create_integration_client() builds via _environment_proxy_mounts() must

@@ -71,19 +71,26 @@ signature`), which fails closed (returns `False`, never raises past the
   caller) on a missing `webhook_id`, missing signature headers, or a
   transport failure; rate limited (60/min/IP); replay-protected the same
   way; the acting org again comes from the id-matched `Integration` row.
-  One inconsistency noted, not fixed here: `paypal_service.py`'s own two
-  outbound calls to PayPal (`get_access_token`, `verify_webhook_signature`)
-  use a bare `httpx.AsyncClient(timeout=_TIMEOUT)` rather than
-  `create_integration_client()`, so they don't inherit the INT-7 fix below.
-  Low risk — `base_url` is one of two hardcoded PayPal API hosts
-  (`_API_HOSTS`), never client/org-supplied, so there's no SSRF or
-  cross-tenant exposure, only the same class of unbounded-response memory
-  risk INT-7 covers, against a single trusted vendor host rather than an
-  arbitrary admin-configured endpoint. Flagged as a follow-up rather than
-  changed in this pass, since swapping clients here would also silently
-  change the timeout from PayPal's own tuned `Timeout(15.0, connect=10.0)`
-  to `INTEGRATION_TIMEOUT`'s `Timeout(10.0, connect=5.0)` — a second
-  behavior change bundled into what should be a one-line consistency fix.
+  **Fixed (Codex follow-up round, 2026-09-06):** `paypal_service.py`'s own
+  two outbound calls to PayPal (`get_access_token`,
+  `verify_webhook_signature`) used a bare `httpx.AsyncClient(timeout=
+_TIMEOUT)` rather than `create_integration_client()`, so they did not
+  inherit the INT-7 fix below — flagged as low risk when first noted
+  (`base_url` is one of two hardcoded PayPal API hosts, never
+  client/org-supplied, so there's no SSRF or cross-tenant exposure, only
+  the same class of unbounded-response memory risk INT-7 covers, against a
+  single trusted vendor host) but still a real gap, and a CHANGELOG entry
+  claiming the fix covered "every integration connector" while this one
+  didn't was itself a second finding on this same round. Rather than leave
+  the inconsistency and only correct the CHANGELOG's wording,
+  `create_integration_client()` gained a `timeout=` override (defaulting to
+  `INTEGRATION_TIMEOUT`, so every other call site is unaffected) and both
+  PayPal call sites now pass their own tuned `Timeout(15.0, connect=10.0)`
+  through it — closing the gap without the timeout regression that made
+  bundling this into the original INT-7 pass undesirable. See
+  `backend/tests/test_integration_response_size_cap.py`'s
+  `test_create_integration_client_timeout_override_preserves_hardening` and
+  the PayPal-specific size-cap tests added alongside it.
 
 **Inbound webhook body size — nginx is deployment-conditional, but the
 backend has its own cap regardless (Codex round, 2026-09-06).** Both files'

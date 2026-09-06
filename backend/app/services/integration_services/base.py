@@ -141,6 +141,8 @@ class _SizeLimitedTransport(httpx.AsyncBaseTransport):
 
 def _environment_proxy_mounts(
     max_bytes: int,
+    *,
+    trust_env: bool = True,
 ) -> dict[str, httpx.AsyncBaseTransport | None]:
     """Rebuild the proxy mounts httpx.AsyncClient would have built itself.
 
@@ -163,7 +165,17 @@ def _environment_proxy_mounts(
     `Client._transport_for_url` already treats a `None` mount as "use the
     client's own `self._transport`", which here is the size-limited transport
     with no proxy, the correct behavior for a NO_PROXY match.
+
+    `trust_env` mirrors the same flag on stock `httpx.AsyncClient`: when a
+    caller explicitly passes `trust_env=False`, `_get_proxy_map()` would
+    return `{}` regardless of what `transport=` was given (`allow_env_proxies
+    = trust_env and transport is None` is short-circuited by `trust_env`
+    alone). Skip the environment lookup entirely in that case — an opt-out of
+    ambient proxy env vars must not be defeated by this replay existing only
+    to work around the *other* half of that expression.
     """
+    if not trust_env:
+        return {}
     mounts: dict[str, httpx.AsyncBaseTransport | None] = {}
     for pattern, proxy_url in get_environment_proxies().items():
         if proxy_url is None:
@@ -180,8 +192,21 @@ def _environment_proxy_mounts(
     return mounts
 
 
-def create_integration_client(**kwargs: object) -> httpx.AsyncClient:
+def create_integration_client(
+    *,
+    trust_env: bool = True,
+    proxy: httpx.Proxy | httpx.URL | str | None = None,
+    timeout: httpx.Timeout = INTEGRATION_TIMEOUT,
+    **kwargs: object,
+) -> httpx.AsyncClient:
     """Create a security-hardened httpx client for external API calls.
+
+    `timeout` defaults to the shared `INTEGRATION_TIMEOUT`, but can be
+    overridden per call site (e.g. `paypal_service.py` passes its own
+    vendor-tuned `Timeout(15.0, connect=10.0)`) without losing any of the
+    other hardening this function applies — the response-size cap, redirect
+    suppression, TLS verification, and proxy handling are all independent of
+    which timeout is in effect.
 
     `verify`/`limits` are applied to the transport explicitly (rather than
     passed to `httpx.AsyncClient`) because passing an explicit `transport=`
@@ -195,8 +220,34 @@ def create_integration_client(**kwargs: object) -> httpx.AsyncClient:
 
     Passing an explicit `transport=` also makes httpx.AsyncClient skip its
     own environment-proxy resolution (see `_environment_proxy_mounts`'s
-    docstring), so `mounts=` is supplied explicitly here to restore it. As
-    with `transport=`, no current caller passes its own `mounts=`.
+    docstring), so `mounts=` is supplied explicitly here to restore it.
+
+    `trust_env` and `proxy` are pulled out as named parameters (rather than
+    left to flow through `**kwargs` to `httpx.AsyncClient`) so this function
+    can honor them the same way stock `httpx.AsyncClient.__init__` does
+    (INT-27/Codex, 2026-09-06):
+
+    - `trust_env=False` disables env-based proxy resolution outright —
+      `_environment_proxy_mounts()` is not even called in that case (see its
+      docstring). Passed through to `httpx.AsyncClient` too, so it also
+      governs the other things `trust_env` controls there (e.g. `.netrc`).
+    - An explicit `proxy=` is converted straight into an `{"all://": ...}`
+      mount, exactly like stock httpx's `_get_proxy_map` — it is not merged
+      with any env-derived mounts. Doing so as a `mounts=` merge instead (the
+      naive approach) would leave HTTP_PROXY/HTTPS_PROXY-derived scheme
+      mounts (`"http://"`, `"https://"`) in place alongside it, and those are
+      more specific than `"all://"` in httpx's URL-pattern matching — so the
+      explicit proxy would silently lose to the environment one on every
+      real request even though it appears in `self._mounts`. Ignoring env
+      vars entirely once a proxy is given (rather than trust_env-gating it)
+      also matches stock httpx: `_get_proxy_map` never calls
+      `get_environment_proxies()` when `proxy is not None`.
+
+    No current caller passes either kwarg (`create_integration_client(`
+    has no call sites under `integration_services/` that supply them), but
+    this is a shared, security-relevant helper — a future caller must be
+    able to opt out of, or override, ambient proxy env vars rather than
+    silently inheriting them regardless of what it asked for.
 
     `Accept-Encoding: identity` asks the remote server not to compress its
     response at all. It is a request, not an enforced guarantee — a
@@ -209,11 +260,27 @@ def create_integration_client(**kwargs: object) -> httpx.AsyncClient:
         httpx.AsyncHTTPTransport(verify=True, limits=INTEGRATION_LIMITS),
         MAX_RESPONSE_SIZE,
     )
+    if proxy is not None:
+        proxy_obj = (
+            httpx.Proxy(url=proxy) if isinstance(proxy, (str, httpx.URL)) else proxy
+        )
+        mounts: dict[str, httpx.AsyncBaseTransport | None] = {
+            "all://": _SizeLimitedTransport(
+                httpx.AsyncHTTPTransport(
+                    verify=True, limits=INTEGRATION_LIMITS, proxy=proxy_obj
+                ),
+                MAX_RESPONSE_SIZE,
+            )
+        }
+    else:
+        mounts = _environment_proxy_mounts(MAX_RESPONSE_SIZE, trust_env=trust_env)
+
     return httpx.AsyncClient(
-        timeout=INTEGRATION_TIMEOUT,
+        timeout=timeout,
         follow_redirects=False,
         transport=transport,
-        mounts=_environment_proxy_mounts(MAX_RESPONSE_SIZE),
+        mounts=mounts,
         headers={"Accept-Encoding": "identity"},
+        trust_env=trust_env,
         **kwargs,
     )
