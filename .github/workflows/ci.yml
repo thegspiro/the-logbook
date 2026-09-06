@@ -209,10 +209,18 @@ jobs:
       # which guards the `ci-success` gate against silently dropping a job.
       # The checker itself runs as a step of `ci-success` (it has to — see the
       # comment on that job); this is the regression suite for its logic, and
-      # it imports the checker, which is the one dependency this suite needs.
-      - name: Install script-test dependency
+      # it imports the checker, which is where PyYAML comes from.
+      #
+      # Pillow is here for test_audit_images.py, which pins the reporting
+      # contract of scripts/screenshots/audit_images.py — narrowed on
+      # 2026-09-06 to dark pages only. That script runs in the Docs Link Check
+      # job, where Pillow is installed for it, but its *tests* belong with every
+      # other script test rather than split across jobs. Without this line they
+      # would fail here on the import, which is the correct failure: a test that
+      # skips when its dependency is missing is a test that never runs.
+      - name: Install script-test dependencies
         if: "!cancelled()"
-        run: pip install 'PyYAML==6.0.2'
+        run: pip install 'PyYAML==6.0.2' 'Pillow==12.3.0'
 
       - name: Run repo-root script tests
         if: "!cancelled()"
