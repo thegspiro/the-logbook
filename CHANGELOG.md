@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Add Member asked a permission that gates the prospect pipeline (2026-09-06)
+
+**Fixed**
+
+- **`members.create` does not gate creating a member, despite its name.**
+  Nothing that creates a member enforces it: `POST /users` requires
+  `users.create`, and the prospect-transfer path that also mints a user row
+  requires `members.manage` or `prospective_members.manage`. `members.create`
+  is enforced only on the prospect pipeline — `POST /prospects` and
+  `/prospects/check-existing`. Its registry description read "Create new
+  members", which is how the members admin hub came to gate its Add Member and
+  Import tabs on it; both tabs submit through `userService.createMember`, which
+  posts to `POST /users`. All four entry points — the hub's two tabs, the
+  roster toolbar and empty-state prompt, and the command palette's Add Member
+  action — now ask `users.create`. The two grants are held by the same seeded
+  positions and ranks, so no one's access changes; the affordances now name the
+  gate that decides them. The permission itself is unchanged: renaming it would
+  be a breaking config change for any department that granted it, so its
+  description moved instead.
+- **A comment in the membership pipeline cited `users.create_member`**, a
+  permission that has never existed, and the membership training guide named
+  `members.create` as the requirement for adding and importing members. Both
+  now name `users.create`.
+
+### Add Member was offered to three positions it did not work for (2026-09-06)
+
+**Fixed**
+
+- **The roster's Add Member and Import CSV buttons asked the wrong
+  permission.** They were gated on `members.manage`, but both navigate to tabs
+  on the members admin hub that are gated on `members.create` — and the hub
+  falls back to Member Management rather than erroring when a tab is not
+  openable. The Captain, Vice President and Assistant Secretary positions (and
+  the Captain rank) hold manage without create, so a captain tapping Add Member
+  landed on the management list with no error and no explanation. All three
+  entry points to that tab — the roster toolbar, the empty-state prompt and the
+  command palette's Add Member action — now ask `members.create`, the gate on
+  the tab they select. The management affordances those positions do hold, the
+  Hire Date column and the CSV export among them, are unchanged.
+- **The members administration screen's Add Member button** asked
+  `users.create`, a third name for the same action. It now matches the tab it
+  selects as well. The two grants are held by the same positions in every
+  seeded position and rank, so this changes no one's access today; it removes
+  the second name.
 ### Staffing gaps inherits the fixes the close-out queue got (2026-09-06)
 
 **Fixed**

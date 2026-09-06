@@ -590,8 +590,21 @@ REPORTS_MANAGE = Permission(
 )
 
 # Members (additional)
+#
+# Despite the name, this does NOT gate creating a member: POST /users requires
+# users.create, and the prospect-transfer path that also mints a User row
+# requires members.manage or prospective_members.manage. members.create is
+# enforced only on the prospect pipeline (POST /prospects and
+# /prospects/check-existing). The description said "Create new members", and the
+# members admin hub gated its Add Member and Import tabs on it for exactly that
+# reason -- the tabs post to POST /users, so they were reading the name rather
+# than the enforcement (corrected 2026-09-06). Renaming it to match would be a
+# breaking config change for any department that granted it, so the description
+# is what moved.
 MEMBERS_CREATE = Permission(
-    "members.create", "Create new members", PermissionCategory.MEMBERS
+    "members.create",
+    "Add prospective members to the recruitment pipeline",
+    PermissionCategory.MEMBERS,
 )
 
 # Training (additional)
