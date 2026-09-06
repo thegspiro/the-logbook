@@ -1015,3 +1015,60 @@ variant capsules and the variant stock matrix kept reporting the pre-edit size.
 One control now writes both. The detail card and variant capsules also render
 `one_size` and `xxxl` as **One Size** and **3XL** rather than upper-casing the
 stored code.
+
+## The items page's location panel agrees with its list _(2026-09-06)_
+
+**Five of the items page's nine filters did nothing.** Location, size, colour,
+style and the vendor scope were absent from the reload effect's dependencies,
+so picking one changed the request the page _would_ send and never sent it. The
+list stayed as it was until an unrelated reload — a websocket event, a bulk
+status change — applied a filter nobody had touched since.
+
+That is the root of the reconciliation complaint: the location cards are links
+into a list that did not respond to them.
+
+Three counting mismatches were fixed with it:
+
+- **The cards counted medical stock the list excludes.**
+  `GET /inventory/summary/by-location` reported every domain while `GET /items`
+  carves EMS supplies out — they have their own page and their own permission.
+  A department running both saw a header of "82 items" and an "Unassigned" card
+  reading 52 units across 2 items, above a list of 6 items totalling 30. The
+  panel now takes the same carve-out the listing is fetched with, so **a
+  location holding only medical stock gets no card** rather than a card whose
+  rows the page cannot show.
+- **The "Unassigned" card could not filter to the items it counted.** It sent
+  the empty string, which is _All Locations_ — so clicking it cleared the filter
+  it appeared to apply, and its highlight was on whenever nothing was selected.
+  `GET /items` gains an optional **`unassigned_location`** flag for the "no
+  location at all" population; the card, a new dropdown option and a second
+  click to clear all use it.
+- **The header counted a different thing from the list under it.** It read
+  `total_items`, which sums quantities across every domain including medical,
+  over a list that counts rows and excludes it. It now reads
+  `non_medical_items` — which exists for exactly this, and which the inventory
+  hub already used.
+
+## A request is fulfilled from the variant it named, not one row of it _(2026-09-06)_
+
+Follow-up to the request-form rebuild above, and a direct consequence of it.
+
+The request catalog deliberately collapses rows that share a product and a
+size/colour/style into one line and **sums their availability** — that is what
+turns ten serialized radios into "Portable Radio — 7 available" instead of ten
+indistinguishable rows.
+
+The request then stored a single `item_id` out of that line, and fulfilment
+narrowed to exactly that row. **So a member could ask for ten against a line
+advertising ten, and leave the quartermaster looking at the one row holding
+one.**
+
+Fulfilment now resolves the request to the **variant** and offers its sibling
+rows, so the options match the availability the member was shown. Rows outside
+that variant — a different size, colour, style, product or organization — stay
+excluded, unchanged.
+
+The product and variant identity the catalog groups by is now one definition
+(`_product_key` / `_variant_key` / `_variant_identity`), consumed by both the
+grouping and the fulfilment narrowing rather than restated on each side — which
+is what let the two drift apart in the first place.

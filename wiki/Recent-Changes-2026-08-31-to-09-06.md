@@ -120,7 +120,9 @@ the old behaviour.
 non-current year against a quarterly-graded profile, instead of a 200 quietly
 missing an item.
 `GET /scheduling/eligibility/roster` **no longer accepts the training grants** —
-it requires `scheduling.manage`. Everything else this window is additive:
+it requires `scheduling.manage`.
+`GET /items` gains an optional `unassigned_location` flag for the "no location
+at all" population. Everything else this window is additive:
 `GET /training/compliance-matrix`, `GET /inventory/summary`,
 `GET /store/orders`, `GET /inventory/members-summary` and
 `GET /api/v1/scheduling/my-hours-history` all gained fields or optional
@@ -377,3 +379,62 @@ override inherits the organization default — which ships as managers-only.
 - **Leave the Claude (MCP) integration off** unless you want it. It is off, it
   needs a key before it answers anything, and its three data switches are off
   independently of that.
+
+## Late additions to this window
+
+Three changes merged after the first draft of this page and fall inside the
+same window.
+
+### The inventory items page's location panel agrees with its list _(2026-09-06)_
+
+**Five of the items page's nine filters did nothing.** Location, size, colour,
+style and the vendor scope were absent from the reload effect's dependencies,
+so picking one changed the request the page _would_ send and never sent it. The
+list stayed as it was until an unrelated reload — a websocket event, a bulk
+status change — applied a filter nobody had touched since.
+
+That is what made the location cards impossible to reconcile with the list:
+they are links into a list that did not respond to them.
+
+Three counting mismatches went with it:
+
+- **The cards counted medical stock the list excludes.** A department running
+  both saw a header of "82 items" and an "Unassigned" card reading 52 units
+  across 2 items, above a list of 6 items totalling 30 — the difference being
+  medical stock with no location filed, counted in the panel and unlistable on
+  that page. A location holding only medical stock now gets no card at all.
+- **The "Unassigned" card could not filter to what it counted.** It sent the
+  empty string, which means _All Locations_ — so clicking it cleared the filter
+  it appeared to apply, and its highlight was on whenever nothing was selected.
+- **The header counted a different thing from the list.** It summed quantities
+  across every domain including medical, over a list that counts rows and
+  excludes it.
+
+### A gear request is fulfilled from the variant it named _(2026-09-06)_
+
+A direct consequence of the request-form rebuild earlier in this window. The
+catalog collapses rows sharing a product and size/colour/style into one line
+and **sums their availability** — that is what turns ten serialized radios into
+"Portable Radio — 7 available" rather than ten indistinguishable rows.
+
+The request then stored a single item row out of that line, and fulfilment
+narrowed to exactly that row — so **a member could ask for ten against a line
+advertising ten and leave the quartermaster looking at the one row holding
+one.** Fulfilment now offers the variant's sibling rows, so the options match
+the availability the member was shown. A different size, colour, style, product
+or organization stays excluded, unchanged.
+
+### Grants & fundraising lists page at the database _(2026-09-05)_
+
+Eleven list endpoints — opportunities, applications, budget items,
+expenditures, compliance tasks, notes, campaigns, donors, donations, pledges
+and fundraising events — fetched an organization's **entire** matching table
+before selecting the requested page in application memory. For a department
+with years of donation, donor or grant-application history, every list page
+view scanned and loaded the complete history regardless of how small the
+requested page was.
+
+Pagination now applies in the SQL query itself. **No response shape or ordering
+changed** for any request within the documented row limits, so nothing needs
+re-checking after the upgrade — pages simply stop getting slower as history
+accumulates.

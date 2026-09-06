@@ -2708,3 +2708,53 @@ looking, and for anyone without the inventory grant every one was refused, so
 the page listed all ten as unavailable. The figures are now requested only for
 the people they describe, and a viewer no card is open to is told so rather than
 being shown a heading over blank space.
+
+## The location panel and the list finally agree _(2026-09-06)_
+
+If you have ever tried to reconcile the location cards on `/inventory/admin/items`
+with the list beneath them and given up, this is why.
+
+**Five of the page's nine filters did nothing.** Location, size, colour, style
+and the vendor scope never made it into the code that decides when to reload, so
+picking one changed the request the page _would_ send and never sent it. The
+list stayed as it was until something unrelated triggered a reload — a websocket
+event, a bulk status change — at which point it applied a filter nobody had
+touched in a while.
+
+The location cards are links into that list, so they could not possibly agree
+with it.
+
+Three counting mismatches were fixed at the same time:
+
+- **The cards counted medical stock the list excludes.** EMS supplies have their
+  own page and their own permission, so the items list carves them out — but the
+  location summary counted every domain. A department running both saw a header
+  of "82 items" and an "Unassigned" card reading 52 units across 2 items, above
+  a list of 6 items totalling 30. **A location holding only medical stock now
+  gets no card at all**, rather than a card whose rows that page cannot show.
+- **The "Unassigned" card could not filter to the items it counted.** It sent
+  the empty value, which the page reads as _All Locations_ — so clicking it
+  cleared the filter it appeared to apply, and it looked selected whenever
+  nothing was. There is now a real "no location at all" filter behind it, with a
+  matching dropdown option.
+- **The header counted a different thing from the list.** It summed quantities
+  across every domain including medical, over a list that counts rows and
+  excludes it.
+
+## A request is fulfilled from the variant it named _(2026-09-06)_
+
+A follow-up to the request-form rebuild above, and a direct consequence of it.
+
+The request catalog collapses rows that share a product and a
+size/colour/style into one line and **adds up their availability** — that is
+what turns ten serialized radios into "Portable Radio — 7 available" instead of
+ten identical-looking rows.
+
+But the request stored one specific item row out of that line, and fulfilment
+narrowed to exactly that row. **So a member could ask for ten against a line
+advertising ten, and the quartermaster would open it to find one.**
+
+Fulfilment now resolves the request to the **variant** and offers all of its
+sibling rows, so what you can fulfil from matches the availability the member
+was shown when they asked. Rows outside that variant — a different size, colour,
+style or product — stay excluded, exactly as before.
