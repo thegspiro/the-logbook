@@ -36,6 +36,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect ran 11. A suppression is still the right call for those; what is
   banned is the array that is trying to be exhaustive by hand.
 
+### Events and Training pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Events and Training pages that sit beside their
+  administration hub rather than under it.** Both hubs are tab-based and live at
+  `/events/admin` and `/training/admin`, while their pages are siblings —
+  `/training/programs`, not `/training/admin/programs` — so no amount of walking
+  the URL reaches the hub. Shift Templates, Event Analytics, Programs, the
+  programme detail, Course Library, Skills Testing, Cohorts and the compliance
+  configuration now show the way back to Administration, and only to a viewer
+  whose grants open it.
+
+**Fixed**
+
+- **The training trail no longer calls the hub something the hub does not call
+  itself.** Programs and the programme detail hand-built their trail and labelled
+  it "Admin", while the hub page, the navigation entry and the breadcrumb
+  registry all called it "Training Administration" — one page under two names.
+  The hub crumb is now taken from the registry, so it cannot drift again.
+- **The programme detail no longer repeats the programme's name.** The trail
+  ended with the name that the heading directly below it already carried.
+
 ### A Create Shift form outlived the permission that opened it (2026-09-06)
 
 **Fixed**

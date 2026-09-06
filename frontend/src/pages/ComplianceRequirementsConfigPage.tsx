@@ -48,6 +48,7 @@ import type {
   ComplianceReportGenerate,
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { Breadcrumbs } from '../components/ux';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -471,14 +472,18 @@ export default function ComplianceRequirementsConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
-        <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
+      <div className="mx-auto max-w-6xl space-y-6 p-6">
+        <Breadcrumbs underHub="/training/admin" />
+        <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
+          <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <Breadcrumbs underHub="/training/admin" />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

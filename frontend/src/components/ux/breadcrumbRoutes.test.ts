@@ -26,6 +26,20 @@ import { BREADCRUMB_ROUTES } from './breadcrumbRoutes';
 import { SCHEDULING_HUB_CARDS } from '../../pages/scheduling/admin/schedulingHubCards';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** Every source file that could name a hub, in the manner of `routeIntegrity`. */
+const collectSourceFiles = (dir: string): string[] => {
+  const found: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== 'e2e') found.push(...collectSourceFiles(full));
+    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+      found.push(full);
+    }
+  }
+  return found;
+};
 const sources = routeSources();
 
 const declaredRoutes = [
@@ -142,6 +156,30 @@ describe('breadcrumb route registry', () => {
     });
 
     expect(crossModule).toEqual(['/inventory/admin/store']);
+  });
+
+  it('registers every hub a page names with underHub', () => {
+    // `underHub` inserts nothing for a path the registry does not carry, so a
+    // typo costs that page its hub crumb in silence. The value is a literal in
+    // source, so it is checkable; this is the only thing standing between a
+    // mistyped hub and a trail that quietly stops reaching Administration.
+    const used = [
+      ...new Set(
+        collectSourceFiles(SRC)
+          .flatMap((file) => [...fs.readFileSync(file, 'utf8').matchAll(/underHub="([^"]+)"/g)])
+          .map((match) => match[1] as string)
+      ),
+    ].sort();
+
+    expect(used.length, 'no page uses underHub, so this checks nothing').toBeGreaterThan(0);
+
+    const unregistered = used.filter((hubPath) => !(hubPath in BREADCRUMB_ROUTES));
+    expect(unregistered, 'a page names a hub the registry does not carry').toEqual([]);
+
+    // A hub is only worth splicing if it is labelled; otherwise the crumb falls
+    // back to title-casing its URL segment and reads "Admin".
+    const unlabelled = used.filter((hubPath) => BREADCRUMB_ROUTES[hubPath]?.label === undefined);
+    expect(unlabelled, 'a hub is spliced in with no label of its own').toEqual([]);
   });
 
   it('names a page the same way its hub card does', () => {
