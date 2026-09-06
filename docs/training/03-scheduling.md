@@ -3375,10 +3375,7 @@ Until now a member could see the hours on each past shift but had no total for a
 month or a year, so *"how many hours do I have this year?"* was a question only
 an officer with the department-wide report could answer.
 
-> **Screenshot needed:**
-> _[The Hours view in My Shifts: the three cards reading this month, this year
-> and all time, above the month-by-month table with its "vs. busiest month" bar
-> column.]_
+![The Hours view in My Shifts: this month / this year / all time above the month-by-month table and its vs.-busiest-month bar column](./images/03-100-my-shifts-hours.png)
 
 - **It needs no permission beyond being signed in.** It reports the caller's own
   attendance; the department-wide member-hours report, which names every member,
