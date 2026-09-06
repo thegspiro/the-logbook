@@ -977,60 +977,28 @@ class FormsService:
                 # Silently reject but return success to not tip off the bot
                 return None, None
 
-            form, lock_error = await self._get_form_and_lock_for_no_repeat(
-                slug, submitted_by
-            )
-            if lock_error:
-                return None, lock_error
-            assert form is not None  # guaranteed whenever lock_error is None
-
-            # Validate required fields (FORM-6: presence AND a non-empty value —
-            # a key holding "" / whitespace / [] does not satisfy "required").
-            for field in form.fields:
-                if field.required and (
-                    str(field.id) not in data
-                    or self._is_empty_value(data[str(field.id)])
-                ):
-                    return None, f"Required field '{field.label}' is missing"
-
-            # Sanitize and validate all submitted values
-            sanitized_data, sanitize_error = self._sanitize_submission_data(
-                data, form.fields
-            )
-            if sanitize_error:
-                return None, sanitize_error
-
-            # Sanitize submitter info
-            clean_name, clean_email, info_error = self._sanitize_submitter_info(
-                submitter_name, submitter_email
-            )
-            if info_error:
-                return None, info_error
-
-            # Reserve daily capacity only after the request has passed every
-            # rejection path. Invalid and honeypot requests must not be able
-            # to consume the quota and deny service to legitimate submitters.
-            if enforce_daily_cap and await daily_cap_exceeded(
-                f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT
-            ):
-                return None, self.PUBLIC_DAILY_CAP_ERROR
-
-            submission = FormSubmission(
-                organization_id=form.organization_id,
-                form_id=form.id,
-                data=sanitized_data,
-                submitter_name=clean_name,
-                submitter_email=clean_email,
-                is_public_submission=True,
+            submission, form, error = await self._create_public_submission(
+                slug=slug,
+                data=data,
+                submitter_name=submitter_name,
+                submitter_email=submitter_email,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 submitted_by=submitted_by,
+                enforce_daily_cap=enforce_daily_cap,
             )
-            self.db.add(submission)
-            await self.db.commit()
-            await self.db.refresh(submission)
+            if error:
+                return None, error
+            # Guaranteed by _create_public_submission whenever error is None.
+            assert submission is not None
+            assert form is not None
 
-            # Process integrations
+            # Process integrations only once a commit has definitely
+            # succeeded -- this call is never inside the retry loop above,
+            # so a deadlock here (e.g. from an integration's own writes)
+            # surfaces as an ordinary error instead of re-running intake
+            # against a submission that already exists (Codex, pass-3
+            # follow-up).
             await self._process_integrations(submission, form)
 
             return submission, None
@@ -1038,55 +1006,75 @@ class FormsService:
             await self.db.rollback()
             return None, safe_error_detail(e)
 
-    async def _get_form_and_lock_for_no_repeat(
-        self, slug: str, submitted_by: Optional[str]
-    ) -> Tuple[Optional[Form], Optional[str]]:
-        """Fetch *slug*'s form and, for a no-repeat form, prove no prior
-        submission exists from *submitted_by*.
+    async def _create_public_submission(
+        self,
+        slug: str,
+        data: Dict[str, Any],
+        submitter_name: Optional[str],
+        submitter_email: Optional[str],
+        ip_address: Optional[str],
+        user_agent: Optional[str],
+        submitted_by: Optional[str],
+        enforce_daily_cap: bool,
+    ) -> Tuple[Optional[FormSubmission], Optional[Form], Optional[str]]:
+        """Validate, lock-check, and insert a public form submission.
 
-        Returns ``(form, None)`` on success, or ``(form_or_None, error)`` to
-        reject the submission with *error*.
+        Returns ``(submission, form, None)`` on success, or
+        ``(None, None, error)`` to reject the submission with *error*.
 
         Retries once on a genuine InnoDB deadlock (MySQL error 1213). The
-        duplicate-check query below can match zero rows (no prior submission
-        yet), and a ``FOR UPDATE`` probe that matches nothing takes an
-        InnoDB *gap* lock over the index range instead of a record lock;
-        unlike a record lock, a gap lock is compatible with another
+        no-repeat duplicate-check query below can match zero rows (no prior
+        submission yet), and a ``FOR UPDATE`` probe that matches nothing
+        takes an InnoDB *gap* lock over the index range instead of a record
+        lock; unlike a record lock, a gap lock is compatible with another
         transaction's gap lock on the same range. Two callers submitting
         the first-ever entry for two *different* no-repeat forms can each
         acquire a compatible gap lock and then each block on the other's
-        insert-intention lock -- a deadlock, not a correctness bug (same
+        insert-intention lock when *their* ``INSERT`` reaches this method's
+        own ``commit()`` below -- a deadlock, not a correctness bug (same
         shape as FAC-45 in ``documents_service.py`` and MSG-13 in
-        ``push_service.py``).
+        ``push_service.py``). The deadlock is only ever raised at that
+        ``INSERT``, never at the earlier locking reads themselves, so the
+        retry has to cover the insert and its commit, not just the lock
+        checks that precede them.
 
-        Deliberately isolated from the rest of ``submit_public_form``:
-        nothing after this point (daily-cap reservation, the insert, its
-        commit, integration processing) may run twice. Retrying the whole
-        submission after a commit had already succeeded would double-spend
-        the daily-cap counter and, if the duplicate check is what would find
-        the just-committed row, misreport a successful first attempt as a
-        duplicate (Codex, pass-3 follow-up).
+        The retry stops short of two things on purpose:
 
-        The retry re-runs from a fresh ``get_form_by_slug`` rather than
+        - Integration processing (``_process_integrations``) is the
+          caller's job, run only once this method returns a committed
+          submission. Retrying it would re-run intake against a submission
+          that already exists: an allow-multiple form would insert and
+          reprocess a second time, and a no-repeat form would find its own
+          just-committed row on the re-run and misreport success as
+          "You have already submitted this form" (Codex, pass-3 follow-up).
+        - The daily-cap reservation's Redis ``INCR`` is not part of the SQL
+          transaction a deadlock rolls back, so a retry must not repeat it.
+          ``cap_reserved`` remembers whether this call already spent it, so
+          a deadlock on the *insert* (i.e. after the cap was reserved on a
+          prior attempt) does not spend it twice.
+
+        Each retry re-runs from a fresh ``get_form_by_slug`` rather than
         resuming the failed attempt: a deadlock's rollback expires every
         attribute on the ``form`` loaded before it, and async SQLAlchemy
         cannot transparently re-fetch an expired relationship
         (``form.fields``) without a lazy-load, which raises outside a
         greenlet.
         """
+        cap_reserved = False
         for attempt in (1, 2):
             try:
                 form = await self.get_form_by_slug(slug)
                 if not form:
-                    return None, "Form not found or not available"
+                    return None, None, "Form not found or not available"
 
                 if form.require_authentication and not submitted_by:
-                    return form, "Authentication is required to submit this form"
+                    return None, None, "Authentication is required to submit this form"
 
                 if not form.allow_multiple_submissions:
                     if not submitted_by:
                         return (
-                            form,
+                            None,
+                            None,
                             "Authentication is required to submit this form",
                         )
                     # Serialize same-form submissions before checking. Locking
@@ -1109,15 +1097,63 @@ class FormsService:
                         .with_for_update()
                     )
                     if prior.scalar_one_or_none() is not None:
-                        return form, "You have already submitted this form"
+                        return None, None, "You have already submitted this form"
 
-                return form, None
+                # Validate required fields (FORM-6: presence AND a non-empty
+                # value -- a key holding "" / whitespace / [] does not
+                # satisfy "required").
+                for field in form.fields:
+                    if field.required and (
+                        str(field.id) not in data
+                        or self._is_empty_value(data[str(field.id)])
+                    ):
+                        return None, None, f"Required field '{field.label}' is missing"
+
+                # Sanitize and validate all submitted values
+                sanitized_data, sanitize_error = self._sanitize_submission_data(
+                    data, form.fields
+                )
+                if sanitize_error:
+                    return None, None, sanitize_error
+
+                # Sanitize submitter info
+                clean_name, clean_email, info_error = self._sanitize_submitter_info(
+                    submitter_name, submitter_email
+                )
+                if info_error:
+                    return None, None, info_error
+
+                # Reserve daily capacity only after the request has passed
+                # every rejection path, and only once across retries -- see
+                # cap_reserved in this method's docstring.
+                if enforce_daily_cap and not cap_reserved:
+                    if await daily_cap_exceeded(
+                        f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT
+                    ):
+                        return None, None, self.PUBLIC_DAILY_CAP_ERROR
+                    cap_reserved = True
+
+                submission = FormSubmission(
+                    organization_id=form.organization_id,
+                    form_id=form.id,
+                    data=sanitized_data,
+                    submitter_name=clean_name,
+                    submitter_email=clean_email,
+                    is_public_submission=True,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    submitted_by=submitted_by,
+                )
+                self.db.add(submission)
+                await self.db.commit()
+                await self.db.refresh(submission)
+                return submission, form, None
             except OperationalError as exc:
                 await self.db.rollback()
                 if attempt == 2 or not _is_deadlock(exc):
                     raise
                 logger.warning(
-                    "Deadlock on no-repeat check for form slug {}, retrying once",
+                    "Deadlock on public form submission for slug {}, retrying once",
                     slug,
                 )
         raise AssertionError("unreachable")  # pragma: no cover
