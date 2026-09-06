@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Minutes page advertised a feature members cannot use (2026-09-06)
+
+**Fixed**
+
+- **The empty state sold recording minutes to people who cannot record them.**
+  With nothing recorded, the page showed three cards pitching what the feature
+  gets you — templates, action items, archives and search — above a card
+  telling the reader to "Start recording meeting minutes". Creating minutes is
+  `minutes.manage`-gated on the server and the buttons beside that copy were
+  already withheld, so a member read an advertisement with no way in. The cards
+  and the instruction are now shown only to someone who can act on them.
+
+- **The Record Minutes dialog outlived the permission that opened it.** It
+  rendered on its own open state, so losing `minutes.manage` with it open left
+  the form on screen. It is now gated like the controls that open it.
+
+**Changed**
+
+- **The page still reports "No Meeting Minutes" to everyone.** A member opened
+  it deliberately and deserves the answer; it is the pitch and the instruction
+  that are withheld, not the fact.
+
 ### A member's own uniform sizes no longer need a permission (2026-09-06)
 
 **Fixed**
