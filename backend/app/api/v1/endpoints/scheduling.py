@@ -2305,6 +2305,37 @@ async def confirm_assignment(
     return enriched[0]
 
 
+@router.post(
+    "/assignments/{assignment_id}/decline", response_model=ShiftAssignmentResponse
+)
+async def decline_assignment(
+    assignment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Decline own shift assignment.
+
+    The mirror of ``confirm``: answering a roster is the member's own decision
+    either way, so both are self-scoped rather than permission-gated. Declining
+    on somebody else's behalf is an officer edit and goes through
+    ``PATCH /assignments/{assignment_id}``, which requires scheduling.assign or
+    being the shift's officer.
+    """
+    service = SchedulingService(db)
+    result, error = await service.decline_assignment(
+        assignment_id,
+        current_user.id,
+        current_user.organization_id,
+        actor=_roster_actor(current_user),
+    )
+    if error:
+        raise HTTPException(
+            status_code=400, detail=_safe_detail("Unable to decline assignment.", error)
+        )
+    enriched = await service.enrich_assignments([result])
+    return enriched[0]
+
+
 # ============================================
 # Shift Swap Request Endpoints
 # ============================================
