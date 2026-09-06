@@ -30,6 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The programme detail no longer repeats the programme's name.** The trail
   ended with the name that the heading directly below it already carried.
 
+### The lightweight apparatus list hides what a member cannot do (2026-09-06)
+
+**Fixed**
+
+- **`/apparatus-basic` no longer offers Add, Edit and Delete to members without
+  `scheduling.manage`.** The lightweight fleet list a department gets when the
+  Apparatus module is off is deliberately readable by everyone — shift staffing
+  needs these unit definitions, so the route carries no permission gate and the
+  list endpoint is auth-only. Its writes are not: create, update and delete all
+  require `scheduling.manage`, so every one of those controls answered 403. The
+  navigation links this page for every member whenever the Apparatus module is
+  off, which made it a full CRUD surface shown to the whole department. Reading
+  the fleet is unchanged.
+
 ### A Create Shift form outlived the permission that opened it (2026-09-06)
 
 **Fixed**
