@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A hand-written hook dependency array can no longer drift (2026-09-06)
+
+**Fixed**
+
+- **The inventory items page keys its reload on `filterParams`, not on a copy
+  of the filters.** Nine filters were maintained in two places — the
+  `filterParams` callback ESLint checks, and a hand-written array beside it
+  that listed six. The five missing entries (location, size, colour, style and
+  the vendor scope) are why those controls did nothing until an unrelated
+  reload applied them; adding them back left the copy in place for the next
+  filter to fall out of. One effect now depends on `filterParams` itself, so a
+  filter added there reaches the reload with no second list to remember.
+- **Every filter takes the same debounced path.** The dropdowns reloaded
+  immediately and the search box after 350ms, which is what made two effects
+  necessary in the first place. One path costs a third of a second on a
+  dropdown and lets changes across several controls coalesce into one request
+  rather than race.
+
+**Added**
+
+- **`effectDepsIntegrity.test.ts` fails on a long hand-maintained dependency
+  array under an `exhaustive-deps` suppression.** In the manner of
+  `routeIntegrity` and `dialogScrollIntegrity`, it walks the source. The
+  threshold is measured rather than chosen: of the 40 suppressions in the tree,
+  the legitimate ones run 0–4 entries — mount-only effects and route-param keys
+  that omit a function identity, where there is no list to drift — and the one
+  defect ran 11. A suppression is still the right call for those; what is
+  banned is the array that is trying to be exhaustive by hand.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**
