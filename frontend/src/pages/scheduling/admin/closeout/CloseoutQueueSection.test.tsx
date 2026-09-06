@@ -224,6 +224,49 @@ describe('CloseoutQueueSection', () => {
     vi.useRealTimers();
   });
 
+  // The wizard renders nothing when its own state request fails — it reports the
+  // error and returns null — and the row has already hidden the button that
+  // opened it. Without this the officer is left an empty card whose only escape
+  // is a range-level Refresh that does not look related to it.
+  it('leaves an open row a way out even when the wizard renders nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getByRole('button', { name: /Close out/ }));
+    await screen.findByTestId('closeout-wizard');
+
+    const escape = screen.getByRole('button', { name: 'Close this row' });
+    await user.click(escape);
+
+    expect(screen.queryByTestId('closeout-wizard')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Close out/ })).toBeInTheDocument();
+  });
+
+  // A checklist request still in flight would otherwise stay current and reopen
+  // its wizard on top of the refreshed list.
+  it('does not reopen a row whose preparation was still running when the range reloaded', async () => {
+    let release: (value: unknown) => void = () => {};
+    mockGetShiftChecklists.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getByRole('button', { name: /Close out/ }));
+    await user.click(screen.getByRole('button', { name: /Refresh/ }));
+    await screen.findByText(/Engine 1/);
+
+    await act(async () => {
+      release([]);
+    });
+
+    expect(screen.queryByTestId('closeout-wizard')).not.toBeInTheDocument();
+  });
+
   // A reversed range is not an empty range. The endpoint applies both bounds
   // and returns nothing, which this screen would present as an audit result.
   it('refuses to read a reversed range rather than calling it clear', async () => {

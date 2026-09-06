@@ -122,7 +122,13 @@ const CloseoutQueueSection: React.FC = () => {
 
   const load = useCallback(async () => {
     const mine = ++requestId.current;
+    // A checklist request still in flight would otherwise stay current and
+    // reopen its wizard on top of the refreshed list — the row the officer
+    // closed by refreshing, coming back on its own a moment later.
+    openId.current += 1;
     setOpenRow(null);
+    setPreparing(null);
+    setChecksFailed(null);
     if (rangeReversed) {
       setShifts([]);
       setFailed(false);
@@ -402,6 +408,21 @@ const CloseoutQueueSection: React.FC = () => {
                     Retry
                   </button>
                 </div>
+              )}
+
+              {/* The wizard renders nothing at all when its own state request
+                  fails — it reports the error and returns null — and this row
+                  has already hidden the button that opened it. Without a
+                  row-level way out that leaves an empty card whose only escape
+                  is the range-level Refresh, which does not look related to it. */}
+              {isOpen && (
+                <button
+                  type="button"
+                  onClick={() => setOpenRow(null)}
+                  className="btn-secondary mobile-touch-target inline-flex items-center gap-2 px-4 text-sm font-medium"
+                >
+                  Close this row
+                </button>
               )}
 
               {!isOpen && (

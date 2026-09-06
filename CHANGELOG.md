@@ -140,6 +140,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders for count-only departments alone, so naming the types "the breakdown
   the close-out wizard asks for" described a screen a detailed or off department
   never sees.
+- **An open row always has a way out.** The wizard renders nothing at all when
+  its own state request fails — it reports the error and returns null — and the
+  row had already hidden the button that opened it, leaving an empty card whose
+  only escape was a range-level Refresh that does not look related to it.
+- **Refreshing the range cancels a preparation still in flight.** A checklist
+  request left running stayed current and would reopen its wizard on top of the
+  refreshed list: the row an officer closed by refreshing, coming back on its
+  own a moment later.
 - **The close-out settings mirror meets the 44px touch minimum.** Its five value
   links were 14px of text, which is what the mobile ratchet found the moment it
   started measuring the page instead of an Access Denied screen. Every inline
