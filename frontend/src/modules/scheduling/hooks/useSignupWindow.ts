@@ -60,6 +60,17 @@ const subscribeToClock = (onChange: () => void): (() => void) => {
 // change on every read and loop forever.
 const clockSnapshot = (): number => Math.floor(Date.now() / SIGNUP_CLOCK_INTERVAL_MS);
 
+/**
+ * The same bucketed clock the signup window re-renders on, as a value.
+ *
+ * `useSignupWindow` already subscribes every consumer to it, but its return
+ * value is memoized on the settings alone and keeps one identity across ticks —
+ * correct, since the window itself does not change. A screen whose answer
+ * depends on *now* rather than on the window needs the tick itself, or its
+ * `useMemo` never re-runs and its view of the clock freezes at first render.
+ */
+export const useSchedulingClock = (): number => useSyncExternalStore(subscribeToClock, clockSnapshot, clockSnapshot);
+
 export const useSignupWindow = (): SignupWindow => {
   const settingsLoaded = useSchedulingStore((s) => s.settingsLoaded);
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
