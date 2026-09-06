@@ -28,6 +28,7 @@ import type { InventoryLotCreate } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { useAuthStore } from '../../../stores/authStore';
 import { Breadcrumbs } from '../../../components/ux';
 
 const WINDOW_OPTIONS = [30, 60, 90];
@@ -47,6 +48,12 @@ function emptyLotForm(): InventoryLotCreate {
 }
 
 const SupplyExpiringPage: React.FC = () => {
+  // Reading this worklist takes `inventory.check_view` (or `inventory.manage`),
+  // and the hub card offers it on the narrower grant on purpose — knowing what
+  // is about to expire is the checklist officer's business. Adding stock is
+  // not: `POST /inventory/items/{id}/lots` is `inventory.manage`, so the
+  // control is gated on that rather than on whatever opened the page.
+  const canManageStock = useAuthStore((state) => state.checkPermission)('inventory.manage');
   const [daysAhead, setDaysAhead] = useState(30);
   const [items, setItems] = useState<SupplyExpiringItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +109,7 @@ const SupplyExpiringPage: React.FC = () => {
   }, [items, filter, sortBy]);
 
   const openAddStock = (item: SupplyExpiringItem) => {
+    if (!canManageStock) return;
     setStockTarget(item);
     setLotForm({
       ...emptyLotForm(),
@@ -111,6 +119,7 @@ const SupplyExpiringPage: React.FC = () => {
   };
 
   const submitAddStock = async () => {
+    if (!canManageStock) return;
     if (!stockTarget?.inventoryItemId) return;
     if (lotForm.quantity == null || lotForm.quantity < 1) {
       toast.error('Enter a quantity of at least 1');
@@ -308,10 +317,17 @@ const SupplyExpiringPage: React.FC = () => {
                     )}
                     {item.inventoryItemId ? (
                       <div className="flex items-center gap-3">
+                        {/* Disabled rather than hidden, as on the apparatus
+                            inventory screen: this worklist exists to say what
+                            needs restocking, so a viewer who cannot do it is
+                            better told who does than left looking for a
+                            control that is not there. */}
                         <button
                           type="button"
+                          disabled={!canManageStock}
                           onClick={() => openAddStock(item)}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                          title={canManageStock ? undefined : 'Replacement stock is added by the quartermaster'}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <PackagePlus className="h-3.5 w-3.5" /> Add stock
                         </button>

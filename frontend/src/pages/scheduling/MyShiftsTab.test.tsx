@@ -8,6 +8,8 @@ import { MyShiftsTab } from './MyShiftsTab';
 const mockGetMyAssignments = vi.fn();
 const mockGetMyShifts = vi.fn();
 const mockConfirmAssignment = vi.fn();
+const mockDeclineAssignment = vi.fn();
+const mockUpdateAssignment = vi.fn();
 const mockGetOpenShifts = vi.fn();
 const mockGetMyHoursHistory = vi.fn();
 
@@ -16,8 +18,13 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getMyAssignments: (...args: unknown[]) => mockGetMyAssignments(...args) as unknown,
     getMyShifts: (...args: unknown[]) => mockGetMyShifts(...args) as unknown,
     confirmAssignment: (...args: unknown[]) => mockConfirmAssignment(...args) as unknown,
+    declineAssignment: (...args: unknown[]) => mockDeclineAssignment(...args) as unknown,
+    updateAssignment: (...args: unknown[]) => mockUpdateAssignment(...args) as unknown,
     getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args) as unknown,
     getMyHoursHistory: (...args: unknown[]) => mockGetMyHoursHistory(...args) as unknown,
+    // loadData awaits this alongside getMyAssignments; without it the call
+    // throws and the whole load falls into its catch, leaving an empty list.
+    getMyAttendanceHistory: vi.fn().mockResolvedValue([]),
     getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0 }),
     createSwapRequest: vi.fn().mockResolvedValue({}),
     createTimeOff: vi.fn().mockResolvedValue({}),
@@ -25,15 +32,19 @@ vi.mock('../../modules/scheduling/services/api', () => ({
 }));
 
 // Mock auth store
-vi.mock('../../stores/authStore', () => ({
-  useAuthStore: (selector?: (state: unknown) => unknown) => {
-    const state = {
-      checkPermission: () => false,
-      user: { id: 'user-1', first_name: 'Test', last_name: 'User', platoon: 'A' },
-    };
-    return selector ? selector(state) : state;
-  },
-}));
+vi.mock('../../stores/authStore', () => {
+  // A member with no scheduling grants at all — the viewer whose Decline used
+  // to 403.
+  const state = {
+    checkPermission: () => false,
+    user: { id: 'user-1', first_name: 'Test', last_name: 'User', platoon: 'A' },
+  };
+  const useAuthStore = (selector?: (s: unknown) => unknown) => (selector ? selector(state) : state);
+  // Rendering an assignment row reaches the store outside React via
+  // getState(); without it the row throws and the list silently renders empty.
+  useAuthStore.getState = () => state;
+  return { useAuthStore };
+});
 
 vi.mock('../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -68,6 +79,62 @@ describe('MyShiftsTab', () => {
       all_time: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
       current_month: { year: 2026, month: 2, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
       previous_month: { year: 2026, month: 1, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+    });
+  });
+
+  describe('declining your own assignment', () => {
+    const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // This block runs on a member with no scheduling grants at all
+    // (checkPermission is mocked false above), which is the whole point:
+    // Decline used to go through updateAssignment, whose route requires
+    // scheduling.assign or being the shift's officer, so it answered 403 for
+    // exactly this viewer while Confirm beside it worked.
+    const assignment = {
+      id: 'assign-1',
+      user_id: 'user-1',
+      shift_id: 'shift-1',
+      position: 'firefighter',
+      assignment_status: 'assigned',
+      status: 'assigned',
+      shift: {
+        id: 'shift-1',
+        // Relative to now: the tab lists Upcoming, so a fixed date would
+        // quietly stop rendering the row the day it went past and the test
+        // would pass against an empty list.
+        shift_date: futureDate.slice(0, 10),
+        start_time: `${futureDate.slice(0, 10)}T07:00:00Z`,
+        end_time: `${futureDate.slice(0, 10)}T19:00:00Z`,
+        attendee_count: 4,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        organization_id: '1',
+      },
+    };
+
+    beforeEach(() => {
+      mockDeclineAssignment.mockReset();
+      mockDeclineAssignment.mockResolvedValue({ ...assignment, assignment_status: 'declined' });
+      mockUpdateAssignment.mockReset();
+      mockGetMyAssignments.mockResolvedValue([assignment]);
+    });
+
+    it('calls the self-scoped decline endpoint, not the officer update path', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
+      });
+
+      // Two steps: the row's Decline arms the confirmation, "Yes" commits it.
+      await user.click(await screen.findByRole('button', { name: 'Decline shift assignment' }));
+      await user.click(await screen.findByRole('button', { name: 'Confirm decline' }));
+
+      await waitFor(() => {
+        expect(mockDeclineAssignment).toHaveBeenCalledWith('assign-1');
+      });
+      expect(mockUpdateAssignment).not.toHaveBeenCalled();
     });
   });
 

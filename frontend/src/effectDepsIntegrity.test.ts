@@ -65,48 +65,73 @@ const collectSourceFiles = (dir: string): string[] => {
   return found;
 };
 
+/** How far past the directive to look for the array's OPENING bracket. */
+const OPEN_BRACKET_LOOKAHEAD = 400;
+
 /**
  * The dependency array that the directive at `from` governs.
  *
  * Read as balanced brackets rather than by line, because the array is written
  * both inline (`}, [a, b]);`) and on a line of its own (a `useMemo`'s second
- * argument). Returns null when no array follows within a few lines — a
- * directive on something other than a dependency array, which this does not
- * police.
+ * argument). Returns null when no array follows — a directive on something
+ * other than a dependency array, which this does not police.
+ *
+ * The lookahead bounds the search for the *opening* bracket only; the scan for
+ * the matching close then runs to the end of the file. Bounding that scan too
+ * is what an earlier version did, and it failed open on precisely the arrays
+ * this file exists to catch: Prettier expands a long array one entry per line,
+ * so nine entries of ordinary length already push the closing bracket past 400
+ * characters, `readDepsArray` returned null, and `findOffenders` skipped the
+ * suppression as though it governed no array at all. The longer the array, the
+ * likelier it was to escape — the exact inverse of what the rule wants.
  */
 const readDepsArray = (source: string, from: number): string | null => {
-  const window = source.slice(from, from + 400);
-  const open = window.indexOf('[');
+  const lookahead = source.slice(from, from + OPEN_BRACKET_LOOKAHEAD);
+  const open = lookahead.indexOf('[');
   if (open === -1) return null;
   // Anything before the array that is not whitespace, a closing brace/paren or
   // a comma means the directive governs something else entirely.
-  if (/[^\s})\],;]/.test(window.slice(0, open))) return null;
+  if (/[^\s})\],;]/.test(lookahead.slice(0, open))) return null;
 
   let depth = 0;
-  for (let i = open; i < window.length; i++) {
-    const ch = window[i];
+  for (let i = from + open; i < source.length; i++) {
+    const ch = source[i];
     if (ch === '[') depth++;
     else if (ch === ']') {
       depth--;
-      if (depth === 0) return window.slice(open + 1, i);
+      if (depth === 0) return source.slice(from + open + 1, i);
     }
   }
   return null;
 };
 
-/** Top-level entries, so `[a.b, f(c, d), e]` counts three rather than four. */
+/**
+ * Top-level entries, so `[a.b, f(c, d), e]` counts three rather than four.
+ *
+ * Non-empty segments rather than commas-plus-one: Prettier leaves a trailing
+ * comma when it expands an array across lines, and counting commas read that
+ * as one more entry than the array holds — so a legal five-entry array was
+ * reported as six and failed CI on a limit that explicitly permits five.
+ */
 const countEntries = (deps: string): number => {
   const withoutComments = deps.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  if (withoutComments.trim() === '') return 0;
 
+  const segments: string[] = [];
   let depth = 0;
-  let entries = 1;
+  let current = '';
   for (const ch of withoutComments) {
     if ('([{'.includes(ch)) depth++;
     else if (')]}'.includes(ch)) depth--;
-    else if (ch === ',' && depth === 0) entries++;
+    if (ch === ',' && depth === 0) {
+      segments.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
   }
-  return entries;
+  segments.push(current);
+
+  return segments.filter((segment) => segment.trim() !== '').length;
 };
 
 interface Offender {
@@ -178,6 +203,32 @@ describe('effect dependency integrity', () => {
 
     // A directive governing something that is not a dependency array.
     expect(readDepsArray(`\n  const x = foo();\n`, 0)).toBeNull();
+  });
+
+  it('reads an array whose closing bracket is far past the suppression', () => {
+    // Bounding the scan for the CLOSING bracket made the check fail open on
+    // exactly the arrays it exists to catch. Prettier puts one entry per line
+    // once an array is long, so nine ordinary names already carry the bracket
+    // past 400 characters; the array was then skipped as "not a dependency
+    // array" and its nine entries never counted. Longer meant safer, which is
+    // backwards.
+    const expanded = `\n  }, [\n${Array.from(
+      { length: 9 },
+      (_, i) => `    someReasonablyLongFilterStateName${i}Value,`
+    ).join('\n')}\n  ]);`;
+
+    expect(expanded.length).toBeGreaterThan(400);
+    expect(countEntries(readDepsArray(expanded, 0) ?? '')).toBe(9);
+  });
+
+  it("does not count Prettier's trailing comma as an entry", () => {
+    // The limit permits five. Counting commas and adding one reported six for
+    // an expanded five-entry array, failing CI on something the rule allows.
+    const expanded = `\n  }, [\n    alpha,\n    beta,\n    gamma,\n    delta,\n    epsilon,\n  ]);`;
+    expect(countEntries(readDepsArray(expanded, 0) ?? '')).toBe(5);
+
+    // And the inline form, which has no trailing comma, still counts the same.
+    expect(countEntries(readDepsArray(`\n  }, [alpha, beta, gamma, delta, epsilon]);`, 0) ?? '')).toBe(5);
   });
 
   it('never hand-maintains a long dependency array under a suppression', () => {
