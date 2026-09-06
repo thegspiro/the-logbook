@@ -259,6 +259,39 @@ test — and it is the right order to burn down the baseline in.
 
 ---
 
+## 4a. First burn-down pass — 8 sites read, 0 defects
+
+Read 2026-09-06: the parameter-fed sites the Semgrep spike surfaced, being the
+group where a client-supplied id can reach a query without passing through
+something already resolved.
+
+| Site                                                                                                                           | Verdict                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `equipment_check.py:633` `add_item`                                                                                            | Safe. `service.add_item(compartment_id, org, …)` runs first and the handler 404s if it returns nothing, so the id is validated. `CheckTemplateCompartment` has no `organization_id`, so parent resolution is the only legal shape and this is it. |
+| `equipment_check.py:747` `delete_item`                                                                                         | Safe, and already carries an `EC-8` audit comment saying so: `item_comp_id` is read off an item fetched by the org-scoped `service._get_item`.                                                                                                    |
+| `inventory.py:5764` `update_issuance_charge`                                                                                   | Safe. Checked the service, not just its signature: `InventoryService.update_issuance_charge` filters `ItemIssuance.organization_id` and returns "not found" otherwise; the endpoint raises 400 on that.                                           |
+| `users.py` ×5 — `assign_user_roles`, `add_role_to_user`, `remove_role_from_user`, `update_contact_info`, `update_user_profile` | Safe, all five. Each fetches the user with an `organization_id` filter and raises 404 before doing anything, then re-reads unscoped for eager-loaded serialization. Read individually this time rather than inferred from one handler.            |
+
+**No defects.** Not a disappointing result: the 78% figure in §2 said the rule is
+largely obeyed, and this is what that looks like at close range.
+
+**Every one of the eight is the same shape** — an org-scoped validation followed
+by an unscoped re-read for serialization, which is the re-fetch CLAUDE.md
+pitfall #11 mandates. Two of this repository's rules meet here, and #11 wins,
+correctly.
+
+That suggests a cheap structural fix rather than eight individual ones: **carry
+the org filter on the re-read too.** The row is in-org by construction, so the
+added clause cannot change behaviour — it is defence in depth, and it would
+delete this whole class from every detector permanently, shrinking the baseline
+by six. Worth doing as its own change; it is not a defect fix and should not be
+filed as one.
+
+**Two of the eight are not in the ratchet's baseline at all** — the
+`equipment_check` pair, because `CheckTemplateCompartment` carries no
+`organization_id`. That is the blind spot §4b documents, met in the wild on the
+first pass.
+
 ## 5. Effort
 
 | Piece                            | Estimate       | Notes                                                                                                                                                                               |
