@@ -133,6 +133,22 @@ class AngleBracketedDestinations(unittest.TestCase):
         assert targets("[a](<>)\n") == [""]
 
 
+class BalancedParenthesesInDestinations(unittest.TestCase):
+    """`images/pump(1).png` is a filename a screenshot tool produces on its
+    own. Truncating it at the first `)` reported a file that exists as
+    missing, which would block the docs job over a correct page — a false
+    positive being worse than the miss it sits beside."""
+
+    def test_balanced_parens_are_kept(self):
+        assert targets("![shot](images/pump(1).png)\n") == ["images/pump(1).png"]
+
+    def test_a_parenthesised_title_is_still_a_title(self):
+        assert targets("[Guide](Module-Training (Training))\n") == ["Module-Training"]
+
+    def test_angle_brackets_still_win_for_deeper_nesting(self):
+        assert targets("![a](<images/a(b(c)).png>)\n") == ["images/a(b(c)).png"]
+
+
 class ImagesAreNeverWikiPages(unittest.TestCase):
     """A bare target inside wiki/ is a page reference — unless it is an image.
     `![diagram](Home)` would otherwise resolve against wiki/Home.md, pass, and
