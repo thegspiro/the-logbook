@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Staffing gaps inherits the fixes the close-out queue got (2026-09-06)
+
+**Fixed**
+
+- **The gaps list no longer answers for a range it did not read.** It fetched
+  one page of 200 shifts and reported the rest as staffed; a range with more now
+  says it was cut short rather than claiming every shift has the crew it asks
+  for. A **To** date earlier than **From** is refused instead of returning zero
+  rows and reading as a staffing assurance, and two overlapping range changes
+  can no longer leave the date controls describing one range while the list
+  describes another.
+- **The default range is the department's calendar day, not the browser's.** A
+  UTC browser viewing an America/Los_Angeles department late in its evening
+  opened on tomorrow; the opposite offset dropped the department's own current
+  day, hiding a shift that is short today.
+- **The list re-reads the clock.** A shift that became past while the page
+  stayed open never left it, and the count above stayed at the number first
+  drawn.
+- **Shift Planning's settings mirror says when it has not read anything.** A
+  failed load fell through to the built-in defaults — 12 hours, 4 people — and
+  rendered them as the department's own configuration, in a card whose every row
+  links to the page that edits it. It now says the values may be defaults and
+  offers a retry.
+
 ### The mobile checks on Scheduling Administration were measuring nothing (2026-09-06)
 
 **Fixed**
