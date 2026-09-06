@@ -2586,36 +2586,115 @@ count corrected by the training-extended pass,
 both re-verified in the training-extended pass 3 re-review, the latter
 following a Codex finding on that pass's own PR.)
 
-## Outbound Integration Requests — Response Size Is Unbounded (INT-7, 2026-09-06)
+## Outbound Integration Requests — No Wall-Clock Deadline (INT-7 follow-up, 2026-09-06)
 
-`app/services/integration_services/base.py` declared a 10 MB
-`MAX_RESPONSE_SIZE` constant with a docstring claiming a response-size cap
-as one of the shared HTTP client's hardened defaults. Nothing enforces it —
-`create_integration_client()` returns a plain `httpx.AsyncClient`, and every
-connector (Salesforce, Cal.com, Documenso, the chat webhooks, PayPal) calls
-its non-streaming `.get()`/`.request()` then `.json()`/`.text`, which
-buffers the full response body into memory before any caller-side code
-could check it against the constant. An org-configured integration
-endpoint (self-hosted, compromised, or simply misbehaving) that returns an
-arbitrarily large or slow-drip body can drive unbounded per-request memory
-growth. Not directly reachable by an unprivileged member — every trigger
-requires `integrations.manage` — and inbound webhook bodies (the one
-unauthenticated-adjacent path) are already bounded by nginx's global
-`client_max_body_size 50M`, a separate control this does not change.
+**INT-7 (outbound integration response size was unbounded) is fixed** —
+`app/services/integration_services/base.py`'s `create_integration_client()`
+now wraps its transport with `_SizeLimitedTransport`, which aborts a
+response once `MAX_RESPONSE_SIZE` (10 MB) bytes have been read, centrally,
+with no connector call site changed. See
+`docs/security-review/INT-27-integrations.md` (INT-7) for the fix and its
+guard tests.
 
-**Not fixed — needs an owner decision on scope, not a one-line patch.**
-Enforcing it means every connector's response-reading call site switching
-from a non-streaming `.get(url).json()` to `client.stream(...)` plus a
-running-byte-count abort, since httpx has already fully buffered the body
-by the time a non-streaming call returns a `Response` to check. That is a
-behavior change across roughly ten connector files at once (some, like
-Salesforce's own paginated bulk pull, may legitimately need a higher cap
-than a webhook test-connection call), which is why this was flagged rather
-than force-fixed inside a single security-review pass.
+**A narrower, related gap remains, discovered while fixing INT-7.**
+`INTEGRATION_TIMEOUT = httpx.Timeout(10.0, connect=5.0)` does not impose a
+10-second wall-clock cap on a request's total duration — httpx's `Timeout`
+has no "total" concept; the `10.0` sets a **read** timeout that applies to
+each individual socket read, restarted on every chunk received. A remote
+integration endpoint (self-hosted, compromised, or simply misbehaving) that
+sends one chunk every 9 seconds can hold the connection open indefinitely
+while never tripping the read timeout — the response-size fix above stops
+this from consuming unbounded _memory_, but the _time_ a request can run for
+is still unbounded. Same reachability as INT-7 before its fix: any of
+`events.manage`/`scheduling.manage`/`training.manage` (not just
+`integrations.manage`) can trigger an outbound chat-webhook call through
+`notify_entity_created`, and an org admin can trigger any connector
+directly.
 
-(Security review INT-27 pass 3, `docs/security-review/INT-27-integrations.md`;
-`docs/module-audit/integrations.md`'s "size cap" claim corrected in the same
-pass — it had never actually been true.)
+**Not fixed — a genuine per-request deadline needs an `asyncio.timeout()`-
+style wrapper around the whole request/response cycle, not a `Timeout`
+tweak** (no combination of httpx's `connect`/`read`/`write`/`pool` timeout
+knobs produces a total-duration cap). This does **not** need every
+connector call site touched: every **httpx-based** connector already gets
+its client from `create_integration_client()`, so the fix is centralized
+the same way INT-7's `_SizeLimitedTransport` was — a small
+`httpx.AsyncClient` subclass constructed there whose `send()` wraps
+`super().send()` in `asyncio.timeout(N)`, covering connect, every read, and
+the full non-streaming body drain (`Response.aread()`) in one place.
+(Confirmed locally: wrapping `send()` this way raises `TimeoutError` and
+unwinds a slow `MockTransport` request cleanly at the deadline.) **This
+centralization would still miss Google Calendar** — see the dedicated entry
+below; that connector never reaches `create_integration_client()` at all,
+so a future deadline fix built this way needs to name that exception
+explicitly rather than repeat the "every connector" overclaim this entry
+itself once corrected.
+
+(Security review INT-27 pass 3, Codex round, 2026-09-06:
+`docs/security-review/INT-27-integrations.md`.)
+
+## Google Calendar's Connector Bypasses the Shared HTTP Hardening (INT-9, 2026-09-06)
+
+`GoogleCalendarService._build_service()`
+(`app/services/integration_services/google_calendar_service.py`) calls
+`googleapiclient.discovery.build("calendar", "v3", credentials=creds)` with
+no `http=` argument. Every other connector in this codebase is httpx-based
+and gets its response-size cap (INT-7), redirect suppression, and TLS
+verification from `create_integration_client()` — Google Calendar's
+`push_event`/`update_event`/`delete_event`/`test_connection` never call it,
+so none of that hardening applies to this one connector.
+
+**What it actually uses, traced rather than assumed:** `build()` with no
+`http=` resolves through `googleapiclient._auth.authorized_http()`, which
+returns `google_auth_httplib2.AuthorizedHttp(credentials,
+http=build_http())` — `build_http()` is a plain `httplib2.Http()`.
+`httplib2.Http._conn_request()` (pinned `httplib2==0.32.0`, read directly)
+unconditionally does `content = response.read()` on the raw stdlib
+`http.client.HTTPResponse` — no size limit, no streaming, and `httplib2`
+exposes no configuration knob for either. There is no `MAX_RESPONSE_SIZE`-
+style constant this connector silently fails to enforce; it has no
+enforcement mechanism available to it at all short of a custom
+`connection_type`.
+
+**Why this wasn't fixed in the same pass as INT-7/INT-8:** every other fix
+in this rotation for this feature was a change to `httpx`-based code — a
+custom `httpx.AsyncBaseTransport` wrapper, or (PayPal) a one-line swap onto
+the existing shared factory. Capping `httplib2`'s response size requires a
+custom `httplib2.Http` `connection_type` whose `getresponse()` wraps the
+returned connection object to intercept `.read()` — reaching into two
+layers of wrapping (`google_auth_httplib2.AuthorizedHttp` around
+`httplib2.Http`) plus private `httplib2`/`http.client` internals, a
+materially deeper and more version-fragile change than anything else this
+rotation touched, attempted under review-loop time pressure. Forcing an
+unverified fix here risks the exact failure mode CLAUDE.md's completion
+gate exists to prevent — code that compiles and passes a shallow test while
+not actually capping anything, which for a size-cap fix is worse than no
+fix at all if it creates false confidence.
+
+**Impact:** same reachable population as INT-7 pre-fix (an org admin
+holding `integrations.manage` who connects Google Calendar), but the
+destination is Google's own API and OAuth token endpoint — not an
+arbitrary, admin-configured host — so unlike the general integrations case
+there is no SSRF angle; the residual risk is an oversized or slow-drip
+response from Google's own infrastructure (or a compromised/MITM'd path to
+it) driving unbounded memory growth or an unbounded-duration request, the
+same failure shape INT-7 and its wall-clock-deadline follow-up close for
+every other connector.
+
+**Not fixed — tracked for a dedicated pass.** A real fix needs: (1) a
+custom `httplib2.Http` subclass (or `connection_type`) that caps bytes read
+per response, verified against a real streamed response the way
+`test_integration_response_size_cap.py` verifies the httpx-based transport
+— asserting the size cap actually aborts a call, not merely that
+`_build_service()` still returns an object — and (2) the equivalent for a
+wall-clock deadline once that lands for the httpx-based connectors, since
+`google_auth_httplib2`/`httplib2` have no async story to hang
+`asyncio.timeout()` off of the way the httpx subclass approach does (Google
+API calls here run synchronously inside an `async def` method with no
+`await` on the network call itself — a separate, pre-existing question this
+entry does not attempt to resolve).
+
+(Security review INT-27, follow-up round 5, 2026-09-06:
+`docs/security-review/INT-27-integrations.md`.)
 
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 

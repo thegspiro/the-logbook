@@ -24,6 +24,7 @@ import httpx
 from loguru import logger
 
 from app.models.integration import Integration
+from app.services.integration_services.base import create_integration_client
 
 # PayPal publishes one host per environment; there is no per-tenant endpoint.
 _API_HOSTS = {
@@ -80,7 +81,7 @@ async def get_access_token(base_url: str, client_id: str, client_secret: str) ->
     if not client_id or not client_secret:
         raise PayPalError("PayPal client ID and secret are required")
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with create_integration_client(timeout=_TIMEOUT) as client:
         response = await client.post(
             f"{base_url}/v1/oauth2/token",
             auth=(client_id, client_secret),
@@ -147,7 +148,7 @@ async def verify_webhook_signature(
 
     try:
         token = await get_access_token(base_url, client_id, client_secret)
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        async with create_integration_client(timeout=_TIMEOUT) as client:
             response = await client.post(
                 f"{base_url}/v1/notifications/verify-webhook-signature",
                 headers={
