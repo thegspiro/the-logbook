@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The program print sheet's Enrolled Members table could never render (2026-09-06)
+
+**Fixed**
+
+- **The printable training programme now loads its roster from
+  `GET /training/programs/programs/{id}/enrollments`.** It read
+  `program.enrollments`, and the programme response
+  (`ProgramWithPhasesAndRequirements`) carries phases, requirements and
+  milestones and no enrollments field — so the Enrolled Members section was
+  always skipped and the header always printed `Enrolled: 0`, on every sheet.
+  Nothing was missing on the backend: that endpoint already exists, is
+  org-scoped and permission-gated, and returns exactly the enriched shape the
+  table was written against, which is why the table already carried a cast for
+  `user_name`.
+
+- **A member who cannot read the roster gets an em dash, not a confident `0`.**
+  The route is gated on the training module alone while the endpoint needs
+  `training.view_all` or `training.manage`, so the call degrades — correctly,
+  since withholding the roster is the right privacy outcome. But degrading to an
+  empty list would have printed `Enrolled: 0` on paper for a programme with
+  twenty members on it. "Could not read" and "nobody enrolled" are now distinct.
+
+- **The Current Phase column shows the phase.**
+  `ProgramEnrollmentResponse` serializes `current_phase_id` and no nested phase
+  object, so reading `current_phase.name` would have printed an em dash for
+  every member even once the rows arrived. The name resolves from the
+  programme's own phases, the way the requirements table above it already
+  resolved its phase column.
+
 ### Finance and Elections pages keep their trail in every state (2026-09-06)
 
 **Added**
@@ -41,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defect and was blind to the second by construction, which is how four pages
   kept a trail-less loading branch. Both directions are now covered, and the
   failure names the branch index.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
@@ -270,6 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visible field name.
 
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
 ### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**
