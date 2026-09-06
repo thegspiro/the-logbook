@@ -2307,6 +2307,36 @@ class TestMsalClientIsBoundedAndShared:
 
         assert first is not second
 
+    def test_a_failed_build_does_not_strand_its_lock(self):
+        # Construction reaches the network, so it can raise — and the key
+        # would then sit in _build_locks forever. Retrying with fresh
+        # credentials adds another, outside the cap that bounds _app_cache.
+        with patch(
+            "msal.ConfidentialClientApplication",
+            side_effect=OSError("authority unreachable"),
+        ):
+            for i in range(5):
+                with pytest.raises(OSError, match="authority unreachable"):
+                    microsoft_oauth._client_app(_TENANT, _CLIENT, f"secret-{i}")
+
+        assert microsoft_oauth._build_locks == {}
+        assert microsoft_oauth._app_cache == {}
+
+    def test_a_retry_after_a_failure_still_builds_and_caches(self):
+        with patch(
+            "msal.ConfidentialClientApplication",
+            side_effect=OSError("authority unreachable"),
+        ):
+            with pytest.raises(OSError, match="authority unreachable"):
+                microsoft_oauth._client_app(_TENANT, _CLIENT, "s3cret")
+
+        built = MagicMock()
+        with patch("msal.ConfidentialClientApplication", return_value=built):
+            assert microsoft_oauth._client_app(_TENANT, _CLIENT, "s3cret") is built
+        # Served from the cache on the next call, not rebuilt.
+        assert microsoft_oauth._client_app(_TENANT, _CLIENT, "s3cret") is built
+        assert microsoft_oauth._build_locks == {}
+
     def test_the_cache_and_its_build_locks_stay_bounded(self):
         with patch(
             "msal.ConfidentialClientApplication",
@@ -2439,6 +2469,55 @@ class TestUnusableIdentifiersAreRefusedAtTheWriteBoundary:
                     )
                 },
             )
+
+
+class TestOnboardingRefusesAnUnusableIdentifierAtEverySavePath:
+    """`invalid_for_enabled` runs wherever its companion does.
+
+    Applied only at completion, a malformed identifier would be accepted
+    while the admin was looking at the field and rejected once they had
+    worked through the remaining steps — sending them back to a screen they
+    had already finished.
+    """
+
+    def _oauth_config(self, **overrides) -> dict:
+        config = {
+            "fromEmail": "alerts@dept.example",
+            "microsoftAuthMethod": "oauth",
+            "microsoftTenantId": _TENANT,
+            "microsoftClientId": _CLIENT,
+            "microsoftClientSecret": "s3cret",
+        }
+        config.update(overrides)
+        return config
+
+    def test_the_session_check_reports_a_malformed_tenant(self):
+        problem = _incomplete_session_email(
+            _session_email(
+                "microsoft",
+                self._oauth_config(microsoftTenantId="https://evil.example"),
+            )
+        )
+
+        assert problem is not None
+        assert "tenant" in problem
+
+    def test_the_persist_path_stores_an_unusable_config_disabled(self):
+        # This path cannot reject, so the invariant it enforces for a
+        # missing field has to hold for an unusable one too.
+        mapped = _email_settings_from_onboarding(
+            "microsoft", self._oauth_config(microsoftClientId="The Logbook Mailer")
+        )
+
+        assert missing_for_enabled(mapped) is None
+        assert invalid_for_enabled(mapped) is not None
+
+    def test_a_well_formed_config_is_untouched_by_either_check(self):
+        mapped = _email_settings_from_onboarding("microsoft", self._oauth_config())
+
+        assert missing_for_enabled(mapped) is None
+        assert invalid_for_enabled(mapped) is None
+        assert mapped["enabled"] is True
 
 
 class TestOnboardingRefusesAnUnreadableAuthMethod:

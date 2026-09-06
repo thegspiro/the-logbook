@@ -142,29 +142,40 @@ def _client_app(tenant_id: str, client_id: str, client_secret: str) -> Any:
     with _app_cache_lock:
         build_lock = _build_locks.setdefault(key, threading.Lock())
 
-    with build_lock:
-        # Another thread may have built it while this one waited.
-        cached = _cached_app(key)
-        if cached is not None:
-            return cached
+    # The entry exists only while a build is in flight, so the dict cannot
+    # outgrow the work actually happening. Dropped in a finally because
+    # construction reaches the network — authority discovery, now under a
+    # timeout — and a raise on the success path's cleanup would strand the
+    # key forever. Retrying with fresh credentials would then add another,
+    # outside the cap that bounds _app_cache (CLAUDE.md pitfall 9).
+    try:
+        with build_lock:
+            # Another thread may have built it while this one waited.
+            cached = _cached_app(key)
+            if cached is not None:
+                return cached
 
-        app = msal.ConfidentialClientApplication(
-            client_id,
-            authority=_AUTHORITY_TEMPLATE.format(tenant=tenant_id),
-            client_credential=client_secret,
-            timeout=MICROSOFT_TOKEN_TIMEOUT_SECONDS,
-        )
+            app = msal.ConfidentialClientApplication(
+                client_id,
+                authority=_AUTHORITY_TEMPLATE.format(tenant=tenant_id),
+                client_credential=client_secret,
+                timeout=MICROSOFT_TOKEN_TIMEOUT_SECONDS,
+            )
 
+            with _app_cache_lock:
+                _app_cache[key] = app
+                _app_cache.move_to_end(key)
+                while len(_app_cache) > _MAX_CACHED_APPS:
+                    evicted, _ = _app_cache.popitem(last=False)
+                    _build_locks.pop(evicted, None)
+            return app
+    finally:
+        # A thread already waiting holds this lock object and still
+        # serializes against the builder; one arriving later takes a fresh
+        # lock and finds the cache populated, or rebuilds after a failure,
+        # which is the outcome either way.
         with _app_cache_lock:
-            _app_cache[key] = app
-            _app_cache.move_to_end(key)
-            while len(_app_cache) > _MAX_CACHED_APPS:
-                evicted, _ = _app_cache.popitem(last=False)
-                _build_locks.pop(evicted, None)
-            # Held only for the build; a waiter past this point re-checks the
-            # cache and finds the app rather than the lock.
             _build_locks.pop(key, None)
-    return app
 
 
 def _describe_failure(result: Optional[dict]) -> str:

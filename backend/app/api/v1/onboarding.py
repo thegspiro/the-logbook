@@ -850,6 +850,17 @@ async def _persist_session_data_to_org(
                     missing,
                 )
                 email_settings["enabled"] = False
+            # A malformed identifier is as unsendable as an absent one, and
+            # this is the path that cannot reject. Without it the comment
+            # above describes an invariant the code only half enforces.
+            invalid = invalid_for_enabled(email_settings)
+            if invalid:
+                logger.warning(
+                    "Onboarding email config for {} is unusable ({}); stored disabled",
+                    platform,
+                    invalid,
+                )
+                email_settings["enabled"] = False
             org_settings["email_service"] = email_settings
 
             # Encrypt secret fields before persisting
@@ -1645,6 +1656,12 @@ async def save_email_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=required_field_message(data.platform, missing),
         )
+    # Judged here rather than only at completion: an identifier that cannot
+    # be used is refused while the admin is still looking at the field, not
+    # after they have worked through the remaining steps and been sent back.
+    invalid = invalid_for_enabled(mapped)
+    if invalid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=invalid)
 
     # Encrypt sensitive config data (contains passwords, API keys, etc.)
     import json
