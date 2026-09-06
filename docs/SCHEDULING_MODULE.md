@@ -2170,7 +2170,7 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 
 | URL                                         | Page                                                                | Permission                                                                |
 | ------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `/inventory/admin/checklists/supply`        | Expiring on Apparatus — the supply worklist                         | any of `scheduling.manage`, `inventory.check_view`, `inventory.view`      |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus — the supply worklist                         | any of `inventory.check_view`, `inventory.manage`                         |
 | `/inventory/checklists/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which

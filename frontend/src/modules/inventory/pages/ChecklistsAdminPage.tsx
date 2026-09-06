@@ -54,7 +54,9 @@ const RELATED: RelatedLink[] = [
     description: 'What is running out on the trucks, and the stock behind it',
     path: '/inventory/admin/checklists/supply',
     icon: Clock,
-    anyPermission: ['scheduling.manage', 'inventory.check_view', 'inventory.manage'],
+    // Tracks the route, which tracks what the worklist's endpoint accepts.
+    // `scheduling.manage` is not among them.
+    anyPermission: ['inventory.check_view', 'inventory.manage'],
   },
   {
     label: 'Checklist settings',

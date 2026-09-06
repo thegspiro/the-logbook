@@ -65,6 +65,10 @@ export const FleetBoardPage: React.FC = () => {
   // link that refused them, and now would mean a scheduling officer without it
   // is. A control is offered to whoever its destination admits, and nobody else.
   const canManage = checkPermission('inventory.check_manage');
+  // This board admits `scheduling.manage`, the supply worklist does not — its
+  // endpoint takes `inventory.check_view` or `inventory.manage`. Linking it
+  // unconditionally sent a shift officer to a page that refused them.
+  const canOpenSupply = checkPermission('inventory.check_view') || checkPermission('inventory.manage');
 
   const [fleet, setFleet] = useState<FleetReadinessResponse | null>(null);
   const [mine, setMine] = useState<ActiveChecklistRecord[]>([]);
@@ -134,13 +138,15 @@ export const FleetBoardPage: React.FC = () => {
             <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
             Check log
           </Link>
-          <Link
-            to="/inventory/admin/checklists/supply"
-            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-          >
-            <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
-            Supply
-          </Link>
+          {canOpenSupply && (
+            <Link
+              to="/inventory/admin/checklists/supply"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+            >
+              <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
+              Supply
+            </Link>
+          )}
           {canManage && (
             <Link
               to="/inventory/admin/checklists"

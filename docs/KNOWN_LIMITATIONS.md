@@ -625,42 +625,48 @@ check requests were all charged against the budgets and the panel still said
 Verified 2026-08-09 by counting non-test call sites for each store action and
 service method, and by reading the render bodies.
 
-## Finance — Nobody Can Approve Anything (2026-08-12)
+## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
-`finance.approve` is defined in `app/core/permissions.py`, gates all three
-approval endpoints (`GET /finance/approvals/pending`,
-`POST /finance/approvals/{id}/approve`, `.../deny`), and is granted by **no
-role in the shipped catalogue** — 27 roles, none of them include it.
+`finance.approve` and `finance.configure_approvals` gate nine endpoints — the
+approval queue (`GET /finance/approvals/pending`,
+`POST /finance/approvals/{id}/approve`, `.../deny`) and the whole
+approval-chain settings screen — and until 2026-09-06 **no seeded position held
+either**. The only account that could reach them was one holding the `*`
+wildcard, i.e. the IT administrator.
 
-| Role           | Finance permissions              |
-| -------------- | -------------------------------- |
-| Treasurer      | `finance.view`, `finance.manage` |
-| Fire Chief     | none                             |
-| President      | none                             |
-| Vice President | none                             |
-| IT Manager     | `*`                              |
+That produced two states, and the second is the one that stranded records:
 
-So the only account that can reach the approval queue is one holding the `*`
-wildcard. And that account is then refused by separation of duties —
-_"You cannot approve your own purchase request. Separation of duties requires
-a second person"_ — for anything it raised itself. In a department using the
-shipped roles, every purchase request, expense report and check request stays
-in `pending_approval` for ever.
+- With no chain configured, `submit_purchase_request` takes the
+  `if chain and chain.steps:` branch and skips approval entirely, so requests
+  quietly bypassed the workflow rather than failing visibly.
+- Configure a chain — which required the same unreachable settings screen — and
+  every submitted request landed in `pending_approval` with nobody able to
+  action it.
 
-**Needs an owner decision, not a patch.** The fix is to grant
-`FINANCE_APPROVE` to whichever roles a department expects to sign off
-spending — Treasurer alone is not enough, because the Treasurer is usually the
-one raising the request and separation of duties would then block them.
-Widening who can authorise money is an authorisation decision and is
-deliberately not being made from a documentation pass.
+**Resolved for the Treasurer.** `treasurer` now carries both grants in
+`DEFAULT_POSITIONS`, and `20260906_2141_ee7390dcdf47` carries them to
+departments that already onboarded (gated on the row still holding exactly the
+finance grants the registry seeded, per CLAUDE.md pitfall #23).
 
-This is also why **budget detail can never show a filled progress bar**: spend
-and encumbrance accrue on approval, and no approval can happen. That compounds
-the transaction-table stub recorded in the section above — the bar is real code
-that is permanently stuck at 0%, and the table below it is not wired at all.
+| Position   | Finance permissions                                                                |
+| ---------- | ---------------------------------------------------------------------------------- |
+| Treasurer  | `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals` |
+| IT Manager | `*`                                                                                |
+
+**What remains, and it is a configuration matter rather than a defect.**
+`assert_different_person` (SEC FIN-4) refuses self-approval whoever holds the
+permission, so a department whose _only_ approver is the Treasurer still cannot
+clear a request the Treasurer raised. A chain that must survive that needs a
+second approver step — a `POSITION` or `SPECIFIC_USER` step naming somebody
+else, which the settings screen can now actually create. Widening
+`finance.approve` to further seeded positions is still an authorisation
+decision, and is still deliberately not made from a documentation pass.
 
 Found 2026-08-12 while trying to seed a budget with charges for
-`11-05-budget-detail`.
+`11-05-budget-detail`. The budget-detail consequence recorded above — spend and
+encumbrance accruing on approval, so the progress bar was permanently stuck at
+0% — is unblocked by this; the transaction-table stub in the section above is
+not, and remains unwired.
 
 ## Two Migrations Claimed 20260808_0002 — and What It Left Behind (2026-08-09)
 
