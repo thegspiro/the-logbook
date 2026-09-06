@@ -46,6 +46,11 @@ interface CatalogQuickAddProps {
   canCreateInventory: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
+  /**
+   * DOM id for the text input. `autoFocus` only fires on mount, so a caller
+   * that re-opens an already-open composer needs something to focus.
+   */
+  inputId?: string;
   placeholder?: string;
 }
 
@@ -56,6 +61,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   canCreateInventory,
   disabled = false,
   autoFocus = false,
+  inputId,
   placeholder = 'Search inventory or type a new item name…',
 }) => {
   const [results, setResults] = useState<CatalogResult[]>([]);
@@ -302,6 +308,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
           <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
           <input
             ref={inputRef}
+            {...(inputId ? { id: inputId } : {})}
             type="text"
             autoFocus={autoFocus}
             autoCapitalize="none"

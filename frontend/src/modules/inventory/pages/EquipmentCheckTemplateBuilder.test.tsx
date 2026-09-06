@@ -404,6 +404,24 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(bar).getByRole('button', { name: 'Add an item to Cab (copy)' })).toBeVisible();
   });
 
+  it('refocuses a composer that is already open', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+    await user.click(within(bar).getByRole('button', { name: 'Add an item to Medical bag' }));
+    const input = screen.getByPlaceholderText('Add or search items…');
+    expect(input).toHaveFocus();
+
+    // Tapping the bar again is how an author returns to the composer after
+    // scrolling away. The panel is already open, so it does not remount and
+    // its mount-time autoFocus never fires; without an explicit focus the
+    // tapped button keeps it and the tap appears to do nothing.
+    await user.click(within(bar).getByRole('button', { name: 'Add an item to Medical bag' }));
+
+    await waitFor(() => expect(screen.getByPlaceholderText('Add or search items…')).toHaveFocus());
+  });
+
   it('keeps adding an item available while the template still has blockers', async () => {
     // A count item with no par is an item-level blocker, which is what puts
     // the bar into its Review state — the state a template spends most of its

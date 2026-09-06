@@ -802,6 +802,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     openCompartment(key);
     if (!isLaptop) {
       setMobileAddLocations((previous) => new Set(previous).add(key));
+      // Focus explicitly rather than leaning on the composer's `autoFocus`,
+      // which only fires on mount. Re-opening a location whose composer is
+      // already open leaves the tapped control holding focus, so the second
+      // tap of the action bar's Add item did nothing visible and the author
+      // had to find the field themselves.
+      window.setTimeout(() => document.getElementById(`quick-add-${key}`)?.focus(), 0);
       return;
     }
     window.setTimeout(() => document.getElementById(`compose-${key}`)?.focus(), 0);
@@ -4536,6 +4542,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       onAdd={(payload) => handleQuickAdd(idx, payload)}
                       canCreateInventory={canManageInventory}
                       autoFocus
+                      inputId={`quick-add-${key}`}
                       placeholder="Add or search items…"
                     />
                     <button
