@@ -802,29 +802,23 @@ don't grant.
 
 ### 15. CSV / Spreadsheet Exports: Always Use `SafeCsvWriter`, Never Raw `csv.writer`
 
-Exported CSVs are opened in Excel / Google Sheets, which **execute** any cell
-whose value begins with `=`, `+`, `-`, `@` (or a leading tab/CR) as a formula.
-Free-text fields written to an export — member names, notes, item descriptions,
-memos — are attacker-influenceable, so a member named `=cmd|…` runs a formula on
-whatever staff member opens the export (formula/CSV injection). The
-2026-07 module audit found this live in six separate exporters that used raw
-`csv.writer`.
+**Rule:** exported CSVs are opened in Excel / Google Sheets, which **execute**
+any cell whose value begins with `=`, `+`, `-`, `@` (or a leading tab/CR). The
+free-text fields in an export are attacker-influenceable, so a member named
+`=cmd|…` runs a formula on whatever staff member opens the file. Any CSV that
+leaves the system MUST be written with `SafeCsvWriter` / `SafeDictCsvWriter`
+from `app/utils/csv_export.py` — never bare `csv.writer`. They are drop-in and
+take the same arguments. Reading (`csv.reader`, `csv.DictReader`) is fine.
 
 ```python
-# WRONG — a cell starting with = / + / - / @ executes in Excel/Sheets
-import csv
-writer = csv.writer(output)
-
-# CORRECT — SafeCsvWriter neutralizes every cell (drop-in, same interface)
 from app.utils.csv_export import SafeCsvWriter
 writer = SafeCsvWriter(output)
 ```
 
-**Rule:** Any CSV that leaves the system (member exports, compliance reports,
-finance/QuickBooks exports, audit hand-offs) MUST be written with
-`SafeCsvWriter` from `app/utils/csv_export.py` — never bare `csv.writer`. It
-prefixes formula-trigger cells with a `'`, transparent to the reader. The same
-applies to any other spreadsheet-bound output.
+Full text in
+**[docs/rules/tenancy.md](./docs/rules/tenancy.md#csv--spreadsheet-exports-always-use-safecsvwriter-never-raw-csvwriter)**.
+`tests/test_csv_writer_sweep.py` enforces it with an AST sweep over `app/` and
+`scripts/`.
 
 ### 16. Never Use `window.confirm` / `window.alert` / `window.prompt` _(2026-08-09)_
 

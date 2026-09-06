@@ -4,7 +4,7 @@
 **Scope:** Which Claude Code skills would measurably improve how this
 repository is worked on — both the skills already available to this account and
 the project-local skills worth authoring.
-**Status:** Review complete. Steps 2, 3 and 6 of the sequencing below are implemented, and step 4 is under way. Two project skills exist: `repo-migrations` and `repo-tenancy`.
+**Status:** Review complete. Steps 2, 3 and 6 of the sequencing below are implemented, and step 4 is under way. Two project skills exist: `repo-migrations` and `repo-tenancy`. One rule has since been moved by writing the guard it lacked (§10).
 
 ---
 
@@ -516,13 +516,11 @@ area, and it is worth more than the token saving: it is a list of the five
 places where a reviewer is the only thing standing between a rule and a
 regression.
 
-### The cheapest guard to add next
+### The cheapest guard to add next — since written
 
-A static sweep for `csv.writer` used outside `app/utils/csv_export.py` — a
-close cousin of `test_wildcard_escaping_lives_only_in_sql_search`, which
-already does exactly this shape for `sql_search`. That would let pitfall #15
-move and, more to the point, would catch the recurrence of a defect the audit
-found live in six exporters.
+A static sweep for `csv.writer` used outside `app/utils/csv_export.py`. This
+was written the same day; see §10. Pitfall #15 moved out of the table above as
+a direct result, which is the pattern behaving as intended.
 
 ### Files
 
@@ -535,3 +533,71 @@ by breaking the new pointer and watching it fail.
 
 CLAUDE.md is now 89,026 bytes, from 97,985 before any of this — about 2.2 k
 tokens off every session, for two rule sets.
+
+---
+
+## 10. Closing a gap instead of relaxing the gate
+
+§9 left a list of five rules that could not move because nothing enforced them,
+and named the cheapest to fix. `backend/tests/test_csv_writer_sweep.py` is that
+fix, and pitfall #15 moved into `docs/rules/tenancy.md` the same day.
+
+This is the part of the arrangement worth keeping. The gate is not a filing
+rule about where prose lives — it is a standing list of the places where a
+reviewer is the only thing between a rule and a regression, and the way to
+shorten it is to write the missing check.
+
+### What the sweep does
+
+An AST sweep over `backend/app/` and `backend/scripts/` failing on any
+`csv.writer` or `csv.DictWriter` outside `app/utils/csv_export.py`, plus the
+`from csv import writer` form that would otherwise walk around it. Readers are
+untouched: `csv.reader` and `csv.DictReader` parse input and cannot inject a
+formula.
+
+**AST, not grep, and that is not a style preference.** The correct guidance
+names the banned call — `csv_export.py`'s own docstring says "use this instead
+of `csv.writer`", and so do comments at half the call sites. A line-based sweep
+would flag the documentation telling you to comply, and the usual fix for that
+is an allowlist, which is how a guard stops guarding.
+
+`scripts/` is in scope alongside `app/` because an ops script that dumps a CSV
+someone opens in Excel carries exactly the risk an endpoint export does. There
+are no violations in either today, so including it cost nothing.
+
+### Why it is 10 tests and not 1
+
+A sweep that finds nothing looks identical to a sweep that has stopped
+looking. Two things guard against that, both borrowed from
+`test_migration_create_all_tables.py` and `test_capacity_locking.py`, which
+already carry `TestTheDetectionItself` / `TestTheExtractionItself` for the same
+reason:
+
+- `TestTheDetectionItself` — eight cases proving the detector fires on the
+  attribute call, the `DictWriter`, the import form and an unbound
+  `w = csv.writer` reference, and does **not** fire on readers, on the safe
+  wrappers, on an unrelated `self.writer`, or on prose naming the banned call.
+- `test_the_sweep_actually_looks_at_the_exporters` — asserts four known
+  exporters are still within the sweep's reach, so a `_python_sources()` that
+  stopped covering them fails rather than passing silently. Anchored on named
+  files, not a count, so adding an exporter does not fail it.
+
+Verified end to end as well as at unit level: replacing a real
+`SafeCsvWriter(output)` in `admin_hours_service.py` with `csv.writer(output)`
+failed exactly one test, naming `app/services/admin_hours_service.py:1187`.
+
+### Where that leaves the table
+
+Four rules still have no machine check and stay in `CLAUDE.md`: **#14** (org
+scoping — repo-wide, and the highest-severity of the lot), **#9** (unbounded
+caches), **#18** (SMS behind the allowlist) and **#19** (a config switch needs
+a reader).
+
+**#14 is the one worth attacking next, and it is not cheap.** The others are
+narrow; #14 needs a sweep that can tell an org-scoped query from an unscoped
+one across 111 services, distinguish a client-supplied id from an internal one,
+and recognise resolution through an already-scoped parent. A naive version
+would be noisy enough to get allowlisted into uselessness. It is worth scoping
+as its own piece of work rather than bolting on to this one.
+
+CLAUDE.md is now 88,780 bytes, from 97,985.

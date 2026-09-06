@@ -39,8 +39,9 @@ repo-wide machine check**, so its full text stays in `CLAUDE.md` as pitfall
 - A cap or quota locks the **parent row** and makes the count itself a
   **locking read**. Under REPEATABLE READ a plain `SELECT` behind a lock still
   answers from a stale snapshot; the lock alone buys nothing.
-- A CSV that leaves the system is written with `SafeCsvWriter`
-  (CLAUDE.md pitfall #15 — no static guard, so this one is on you).
+- A CSV that leaves the system is written with `SafeCsvWriter` or
+  `SafeDictCsvWriter`, never bare `csv.writer` — a cell starting `=` executes
+  when staff open the export.
 - Run the guards:
 
   ```bash
@@ -50,15 +51,15 @@ repo-wide machine check**, so its full text stays in `CLAUDE.md` as pitfall
     tests/test_scheduled_task_coverage.py \
     tests/test_cron_org_loop_isolation.py \
     tests/test_like_escaping.py \
-    tests/test_capacity_locking.py
+    tests/test_capacity_locking.py \
+    tests/test_csv_writer_sweep.py
   ```
 
 ## Full text
 
 - [docs/rules/tenancy.md](../../../docs/rules/tenancy.md) — the `org_scoping`
   helper API, the four repo-wide guards CI runs, the `LIKE` rule (#25) and the
-  capacity-locking rule (#27) in full.
-- `CLAUDE.md` pitfalls **#14** (org scoping), **#15** (`SafeCsvWriter`), **#9**
-  (unbounded caches), **#18** (email-first notifications) and **#19** (a config
-  switch needs a reader) stay in CLAUDE.md — none has a machine check, so none
-  is behind this skill.
+  capacity-locking rule (#27) in full, and the `SafeCsvWriter` rule (#15).
+- `CLAUDE.md` pitfalls **#14** (org scoping), **#9** (unbounded caches), **#18**
+  (email-first notifications) and **#19** (a config switch needs a reader) stay
+  in CLAUDE.md — none has a machine check, so none is behind this skill.

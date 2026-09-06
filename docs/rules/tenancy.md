@@ -16,6 +16,7 @@ the other agents acting on them cannot read `.claude/skills/`.
 - [The guards CI already runs](#the-guards-ci-already-runs)
 - [A `LIKE` Pattern Is Built by `like_pattern`, and the `ESCAPE` Clause Is Not Optional](#a-like-pattern-is-built-by-like_pattern-and-the-escape-clause-is-not-optional)
 - [A Capacity Check Is a Read-Then-Write, and Needs the Row Locked](#a-capacity-check-is-a-read-then-write-and-needs-the-row-locked)
+- [CSV / Spreadsheet Exports: Always Use `SafeCsvWriter`, Never Raw `csv.writer`](#csv--spreadsheet-exports-always-use-safecsvwriter-never-raw-csvwriter)
 - [What stayed in CLAUDE.md](#what-stayed-in-claudemd)
 
 ---
@@ -84,6 +85,7 @@ exists because the gap it closes had already shipped.
 | Endpoint auth coverage           | A handler under `app/api/v1/endpoints` with no auth dependency (`get_current_user`, `require_permission`, …) that is not on the reviewed public allowlist. Adding to that allowlist is a deliberate security decision, not a formality.                                                           | `test_endpoint_auth_coverage.py`      |
 | Permission registry reachability | A `require_permission("x.y")` whose permissions are **all** unregistered — the endpoint is then reachable only by a `*` superadmin and no role can ever be granted it. This is how the entire medical-screening feature became unreachable. A legacy name left in an OR with a valid one is fine. | `test_require_permission_registry.py` |
 | Scheduled task wiring            | A task in `TASK_RUNNERS` that is in neither `TASK_INTERVALS_SECONDS` nor the manual-only set — documented, manually triggerable, and never auto-fired in production. Five tasks were in that state.                                                                                               | `test_scheduled_task_coverage.py`     |
+| Raw CSV writers                  | A `csv.writer` or `csv.DictWriter` outside `app/utils/csv_export.py` — an export whose cells reach Excel unneutralized. The 2026-07 audit found six at once.                                                                                                                                      | `test_csv_writer_sweep.py`            |
 | Per-org loop isolation           | A per-org scheduled runner that does not commit each org's work and roll back a failed org, letting one org's failure poison the rest.                                                                                                                                                            | `test_cron_org_loop_isolation.py`     |
 
 Run them together when you touch an endpoint, a permission gate, or a
@@ -96,7 +98,8 @@ cd backend && python3 -m pytest \
   tests/test_scheduled_task_coverage.py \
   tests/test_cron_org_loop_isolation.py \
   tests/test_like_escaping.py \
-  tests/test_capacity_locking.py
+  tests/test_capacity_locking.py \
+  tests/test_csv_writer_sweep.py
 ```
 
 ---
@@ -224,21 +227,57 @@ halves at every site.
 
 ---
 
+## CSV / Spreadsheet Exports: Always Use `SafeCsvWriter`, Never Raw `csv.writer`
+
+_CLAUDE.md pitfall #15._
+
+Exported CSVs are opened in Excel / Google Sheets, which **execute** any cell
+whose value begins with `=`, `+`, `-`, `@` (or a leading tab/CR) as a formula.
+Free-text fields written to an export — member names, notes, item descriptions,
+memos — are attacker-influenceable, so a member named `=cmd|…` runs a formula on
+whatever staff member opens the export (formula/CSV injection). The
+2026-07 module audit found this live in six separate exporters that used raw
+`csv.writer`.
+
+```python
+# WRONG — a cell starting with = / + / - / @ executes in Excel/Sheets
+import csv
+writer = csv.writer(output)
+
+# CORRECT — SafeCsvWriter neutralizes every cell (drop-in, same interface)
+from app.utils.csv_export import SafeCsvWriter
+writer = SafeCsvWriter(output)
+```
+
+**Rule:** Any CSV that leaves the system (member exports, compliance reports,
+finance/QuickBooks exports, audit hand-offs) MUST be written with
+`SafeCsvWriter` from `app/utils/csv_export.py` — never bare `csv.writer`. It
+prefixes formula-trigger cells with a `'`, transparent to the reader. The same
+applies to any other spreadsheet-bound output.
+
+`tests/test_csv_writer_sweep.py` enforces this: an AST sweep over `app/` and
+`scripts/` failing on any `csv.writer` / `csv.DictWriter` outside
+`app/utils/csv_export.py`, plus the import form (`from csv import writer`) that
+would otherwise walk around it. Readers are untouched — `csv.reader` and
+`csv.DictReader` parse input and cannot inject a formula into anything.
+
+---
+
 ## What stayed in CLAUDE.md
 
 The gate is that a rule may only be reached on demand if a missed trigger costs
 a red build rather than a shipped defect. Four rules in this domain fail it and
 stay always-on:
 
-| Rule                                                                | Why it stayed                                                                                                                                                                       |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Pitfall #14** — org-scope every by-id query and FK                | No repo-wide check exists, and it is the highest-severity class here. See above.                                                                                                    |
-| **Pitfall #15** — `SafeCsvWriter`, never bare `csv.writer`          | `test_csv_export.py` tests the writer itself in 50 lines. Nothing scans for a bare `csv.writer`, which is the failure it needs to catch — the audit found it live in six exporters. |
-| **Pitfall #9** — unbounded in-memory caches                         | No guard. `test_onboarding_rate_limit_scopes.py` covers one feature's scoping, not the size-cap rule.                                                                               |
-| **Pitfall #18** — email-first, SMS behind the `SmsAlert` allowlist  | `test_notification_channels.py` covers the resolver's negative space, but nothing flags a new direct `SMSService` call at a feature call site, which is the shape the rule bans.    |
-| **Pitfall #19** — a config switch needs a reader before it has a UI | `test_notification_rules_gate_senders.py` asserts the senders consult `notification_rules`. That is one mechanism; the general rule has no general guard.                           |
+| Rule                                                                | Why it stayed                                                                                                                                                                    |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pitfall #14** — org-scope every by-id query and FK                | No repo-wide check exists, and it is the highest-severity class here. See above.                                                                                                 |
+| **Pitfall #9** — unbounded in-memory caches                         | No guard. `test_onboarding_rate_limit_scopes.py` covers one feature's scoping, not the size-cap rule.                                                                            |
+| **Pitfall #18** — email-first, SMS behind the `SmsAlert` allowlist  | `test_notification_channels.py` covers the resolver's negative space, but nothing flags a new direct `SMSService` call at a feature call site, which is the shape the rule bans. |
+| **Pitfall #19** — a config switch needs a reader before it has a UI | `test_notification_rules_gate_senders.py` asserts the senders consult `notification_rules`. That is one mechanism; the general rule has no general guard.                        |
 
-Each of these becomes movable the day it gets a check. A static sweep for
-`csv.writer` outside `app/utils/csv_export.py` would be a close cousin of
-`test_like_escaping.py::test_wildcard_escaping_lives_only_in_sql_search` and is
-the cheapest of the five to write.
+Each of these becomes movable the day it gets a check. **Pitfall #15 already
+did**: it sat in this table until `test_csv_writer_sweep.py` was written, and the
+rule moved up into this file the same day. That is the pattern working as
+intended — the way to shorten this table is to write the guard, not to relax the
+gate.
