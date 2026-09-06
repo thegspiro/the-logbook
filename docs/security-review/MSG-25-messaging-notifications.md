@@ -998,7 +998,7 @@ test_subtitle_is_escaped` (MSG-14). Verified to fail against the
 | `isort --check-only app/ tests/ alembic/`                                              | clean                                                         |
 | `python3 scripts/validate_migrations.py --strict`                                      | PASSED — 431 revisions, single head                           |
 | backend tests, scope (`-k "push_service or email_theme or messaging or notification"`) | 747 passed, 1 skipped (pre-existing, py_vapid/http-ece)       |
-| backend tests, full suite                                                              | pending (re-running after the round-2 deadlock fix)           |
+| backend tests, full suite                                                              | 11,471 passed, 21 skipped (environment-only), 0 failed        |
 | `npx tsc --noEmit` (frontend)                                                          | 0 errors                                                      |
 | `npx eslint .` (frontend)                                                              | 0 errors, 3 pre-existing warnings (unrelated file, untouched) |
 
