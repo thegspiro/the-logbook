@@ -16,16 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Housekeeping, not a feature pass** — branch
-`claude/security-review-progress-note-2303`,
-[PR #2304](https://github.com/thegspiro/the-logbook/pull/2304). Docs-only:
-records that PR #2303 (feature 24, meetings & minutes, pass 3) merged
-fully green with no Codex findings, clears the stale "PR #2303 open"
-section, and marks rotation row 24 done. No feature is under review on
-this branch. Recorded here anyway so a `/security-review` iteration that
-reads this file before #2304 merges tends this PR rather than reading a
-premature "None" and starting feature 25 concurrently with it. Once #2304
-merges, clear this section — feature 25 is next.
+**Feature 25 (Messaging & notifications), pass 3** — branch
+`claude/security-review-messaging-notifications`,
+[PR #2305](https://github.com/thegspiro/the-logbook/pull/2305). Two new
+findings fixed (MSG-13: unbounded push-device registration; MSG-14:
+unescaped email subtitle), one flagged (MSG-15: push's send-time
+DNS-rebinding pin is skipped outside `ENVIRONMENT in (production,
+staging)`, deliberate for test infra, needs a design decision to close
+properly), and a doc correction (MSG-10 was already fixed on `main` —
+`KNOWN_LIMITATIONS.md` still described the old behavior). Full completion
+gate green — see the Log and
+`docs/security-review/MSG-25-messaging-notifications.md` for detail.
+Subscribed; awaiting CI/review.
 
 ---
 
@@ -9600,7 +9602,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
@@ -10685,3 +10687,46 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   Findings doc: `docs/security-review/MM-24-meetings-minutes.md` (Pass 3).
   Rotation row 24 -> ⏳. PR #2303 opened and subscribed. Next: tend #2303
   until merged, then 25 Messaging & notifications.
+- **2026-09-06 — Feature 23's PR #2301 merged directly by a 30-minute
+  watchdog check** (fully green, idle, Codex clean), a docs-only PR #2302
+  recorded it, PR #2303 (Feature 24, Meetings & minutes, pass 3) opened,
+  went fully green (17/17) with no Codex findings, and was merged directly
+  rather than left idle, and a docs-only PR #2304 recorded that merge and
+  opened rotation row 25. All three tracked here for continuity since they
+  landed in quick succession within one watchdog session; see each PR's
+  own history above for full detail.
+- **2026-09-06 — Feature 25 (Messaging & notifications), pass 3.** This is
+  the most heavily pre-audited feature in the rotation (pass 1/2 already
+  covered 16 backend files across messaging, notifications, and email
+  templates); pass 3 re-read the whole surface fresh via two parallel
+  background agents, plus `message_delivery_service.py` and
+  `scheduled_tasks.py`'s messaging tasks directly (largest growth since
+  pass 2: 296 → 547 lines). Two new findings fixed: **MSG-13** (LOW-MED) —
+  `PushService.subscribe()` had no cap on push-device registrations per
+  user, so `send_to_user()`'s per-device fan-out was an unbounded
+  resource-exhaustion vector; capped at 20/user, refreshing an existing
+  device exempted. **MSG-14** (LOW) — `build_shell`'s `subtitle` parameter
+  was never HTML-escaped, unlike `title`; not currently reachable (every
+  caller passes static text) but fixed for the next caller that doesn't.
+  One flagged: **MSG-15** (LOW) — Web Push's send-time DNS-rebinding pin
+  is skipped outside `ENVIRONMENT in (production, staging)`, which is
+  deliberate (the local test push server depends on the gate to be
+  reachable at all) but leaves a misconfigured real deployment unpinned;
+  needs a design decision (a more precise "is this internet-facing"
+  signal, or a test-infra change), not a one-line fix. A significant doc
+  correction: **MSG-10** — the audience-narrowing acknowledgment-erasure
+  gap pass 2 flagged had already been fixed on `main` (a `revoked_at`
+  soft-delete column, migrated and tested) with no corresponding update to
+  `KNOWN_LIMITATIONS.md` or `CHANGELOG.md` — corrected both. **MSG-12**
+  updated: its "stranded pending" delivery sub-case now has a real,
+  tested, scheduled-task fix (`run_recover_stranded_message_deliveries`);
+  the `failed`/throttled sub-cases remain open. Full completion gate
+  green: flake8/black/isort clean; migrations validated (431 revisions,
+  single head, no new migration this pass); 747/747 scoped and
+  11,471/11,471 full backend suite pass (push_service's own suite skips in
+  this sandbox for a pre-existing, documented pywebpush/http-ece build
+  limitation — not this pass's doing); frontend `tsc`/`eslint` clean (no
+  frontend file touched). Findings doc:
+  `docs/security-review/MSG-25-messaging-notifications.md` (Pass 3).
+  Rotation row 25 -> ⏳ pending PR. Next: open the PR, tend it to green,
+  then 26 Forms.

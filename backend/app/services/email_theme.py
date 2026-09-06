@@ -316,6 +316,11 @@ def build_shell(
     an empty chip would otherwise render as a bare tinted pill, and an empty
     subline as 8px of dead space under the title.
 
+    *subtitle* is HTML-escaped here, unlike *title* — every current caller
+    passes *title* as either a trusted literal or already escapes it before
+    calling in (``wrap_email_body``), but *subtitle* has no such caller-side
+    guarantee, so it is escaped at the one place every caller goes through.
+
     *brand* is the lockup's name cell. The store passes ``{{store_name}}``;
     everything else takes the department.
 
@@ -371,7 +376,11 @@ def build_shell(
         "        <h1>" + title + "</h1>",
     ]
     if subtitle:
-        head.append('        <p style="color: {{header_accent}};">' + subtitle + "</p>")
+        head.append(
+            '        <p style="color: {{header_accent}};">'
+            + _html.escape(subtitle)
+            + "</p>"
+        )
 
     shell = "\n".join(
         [

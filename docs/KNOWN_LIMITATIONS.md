@@ -2895,71 +2895,7 @@ route above should also close this path — most likely by having
 `APPROVED` and requiring the dedicated route (or its replacement) for that
 transition specifically.
 
-## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record; an Independent Audit Entry May Survive (2026-08-31)
-
-`MessagingService.reconcile_recipients` rebuilds a published message's audience
-when an admin edits its targeting (e.g. switches from "by role" to a corrected
-role list). For every member the new audience no longer includes, it hard-
-deletes their `DepartmentMessageRecipient` row outright — including `read_at`
-and `acknowledged_at`, if they had already read or acknowledged the message.
-
-This is the same information `delete_message`'s own docstring calls
-"compliance evidence" and specifically soft-deletes the parent message to
-avoid losing (`app/services/messaging_service.py`, `delete_message`) — but
-`reconcile_recipients` (same file) discards it via a plain audience edit, no
-confirmation, no message deletion involved. A message that "requires
-acknowledgment," gets acknowledged by everyone, and then has its role list
-tweaked to fix a typo loses every acknowledgment row for anyone who falls
-outside the corrected set — `get_acknowledgment_report` would then show them
-as never having acknowledged it at all, and they'd drop out of its
-denominator entirely.
-
-**This does not necessarily erase all compliance evidence, but the backup is
-best-effort, not guaranteed.** `acknowledge_message`
-(`app/api/v1/endpoints/messages.py:425-436`) writes an independent
-`message_acknowledged` audit-log entry — user id, message id, timestamp —
-through the tamper-evident audit hash chain at the moment of acknowledgment,
-and `reconcile_recipients` never touches `audit_logs`. When that write
-succeeds, it survives the recipient-row deletion and could be used during
-remediation to reconstruct who had acknowledged before the audience was
-narrowed. But `AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is
-deliberately fail-open — it catches any exception on the write, logs it, and
-returns `None` rather than raising, "so audit log failures don't break the
-caller's operation" — and `acknowledge_message` never checks that return
-value, so the acknowledgment itself still succeeds either way. If the audit
-write silently failed (e.g. a transient DB error at flush/refresh), no
-`message_acknowledged` row exists, and a later `reconcile_recipients` on that
-member leaves nothing — report, inbox, or audit log — behind. What is
-reliably lost by the recipient-row deletion is the _report's_ live state
-(and, per the visibility mechanism below, the message's presence in that
-member's inbox); whether the underlying evidence of the acknowledgment
-survives depends on whether that audit write happened to succeed.
-
-Closing this needs a product decision, not a mechanical patch: keeping the
-recipient row for anyone with `read_at`/`acknowledged_at` set would preserve
-the history, but `get_inbox`/`_visible_message_or_none` currently derive
-_visibility_ from the same row (a `JOIN` on `DepartmentMessageRecipient`, no
-independent live re-check of `_is_targeted`) — so keeping the row also keeps
-the message visible in that member's inbox after they've been un-targeted,
-which may or may not be the intended behavior. The options are (a) keep
-resolved rows and accept that an already-engaged member keeps seeing a message
-they're no longer formally targeted by, (b) add a separate "still visible"
-flag so a resolved-but-untargeted row can be excluded from inbox visibility
-while its read/ack timestamps survive for reporting, or (c) accept the current
-behavior as correct — the audience is a live definition, not a historical one,
-and narrowing it is understood to also narrow who the report covers. None was
-chosen here.
-
-Found during `docs/security-review/MSG-25-messaging-notifications.md`
-(feature 25, pass 2) while reviewing the recipient-materialization
-architecture (`DepartmentMessageRecipient`, added since pass 1 by PR #1938).
-Not exploitable cross-tenant — `reconcile_recipients` only ever touches
-recipients within the message's own org — and requires an admin
-(`notifications.manage`) to edit an already-published message's targeting, so
-this is a data-integrity/compliance-record risk rather than a security
-vulnerability in the access-control sense.
-
-## MSG-12 — A Failed, Stranded, or Throttled Department-Message Delivery Is Never Retried (2026-08-31)
+## MSG-12 — A Failed or Throttled Department-Message Delivery Is Never Retried (2026-08-31, stranded-pending sub-case fixed 2026-09-06)
 
 `MessageDeliveryService._claim_delivery` commits a
 `DepartmentMessageDelivery` row with `status="pending"` before calling out to
@@ -2971,12 +2907,24 @@ department message is published exactly once — no future `deliver()` call
 for that message will come back around. There are three distinct ways a
 member ends up not receiving a channel they should have:
 
-- **Stranded `pending`.** If the worker process is killed, OOM-killed, or
-  loses its DB connection between the claim commit and `_finish_delivery`'s
-  follow-up commit, the row is left in `status="pending"` permanently.
-  Narrow blast radius: one recipient/channel/message, and only if a crash
-  lands in that exact window.
-- **`failed`, from an ordinary provider error.** `_finish_delivery(attempt,
+- **Stranded `pending` — FIXED (2026-09-06).** If the worker process is
+  killed, OOM-killed, or loses its DB connection between the claim commit
+  and `_finish_delivery`'s follow-up commit, the row was left in
+  `status="pending"` permanently. A new scheduled task,
+  `run_recover_stranded_message_deliveries` (`app/services/
+scheduled_tasks.py`, every 30 minutes, `_STRANDED_CLAIM_AFTER_MINUTES =
+35`), now sweeps `pending` rows older than the cutoff: it retires claims
+  whose message was deactivated/deleted or whose recipient dropped out of
+  the audience since (recorded as `failed` with a reason, not left
+  `pending` forever — otherwise one dead message would fill the bounded
+  scan window and starve recoverable claims behind it), and re-delivers the
+  rest via `MessageDeliveryService.deliver(message, only_user_ids=...)`,
+  which reclaims the stale claim (`_reclaim_stale_delivery`) rather than
+  duplicating it. Deliberately may occasionally re-send to a member whose
+  original worker was merely slow past the cutoff, not actually dead — the
+  chosen direction to err, since the alternative is a notice they never
+  get. Guard tests in `backend/tests/test_message_delivery_claim_recovery.py`.
+- **`failed`, from an ordinary provider error — still open.** `_finish_delivery(attempt,
 error)` commits the same row as `status="failed"` whenever the provider
   raises, or reports zero successes (`EmailService.send_email` returning
   `(sent, failed)`, `SMSService.send_bulk_sms` returning a count) — no
@@ -3004,26 +2952,73 @@ to miss, so any one of these three, on the one delivery attempt a message
 ever gets, permanently and silently drops that member from the channel of
 record for that message.
 
-Closing this needs a product decision, not a mechanical patch, and the
-decision has to cover all three paths together — a fix scoped to
-`DepartmentMessageDelivery` rows alone (`pending`/`failed`) leaves the
-throttled path, which creates no row, completely unaddressed. Open
-questions: what counts as eligible for retry (any `failed`/stale-`pending`
-row? a cap on attempts?), whether a throttled batch should be recorded
-somewhere retriable rather than just logged, whether retry is automatic
-via a new scheduled task or surfaced to an admin instead, and — since a
-crash could land either before or after the provider actually accepted the
-send — whether the department would rather risk an occasional duplicate
-delivery (retry unconditionally) or an occasional silent miss (leave it
-and alert). None was chosen here.
+The stranded-`pending` path above is now closed. The remaining two —
+`failed` and throttled — still need a product decision, not a mechanical
+patch, and it has to cover both together: a fix scoped to
+`DepartmentMessageDelivery` rows alone (i.e. a `failed`-row sweep) leaves
+the throttled path, which creates no row, completely unaddressed. Open
+questions: what counts as eligible for retry on a `failed` row (any
+failure? a cap on attempts, so a permanently-invalid address doesn't retry
+forever?), whether a throttled batch should be recorded somewhere
+retriable rather than just logged, whether retry is automatic via a new
+scheduled task or surfaced to an admin instead, and whether the department
+would rather risk an occasional duplicate delivery (retry unconditionally)
+or an occasional silent miss (leave it and alert) — the same tradeoff the
+stranded-`pending` fix already made in favor of the former. None was
+chosen here for the remaining two paths.
 
 Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
 25, pass 2, MSG-12); both the `failed`-status path and the throttled/
 no-row path were caught by two separate rounds of Codex's review of the PR
 recording this finding, broadening it from the `pending`-only scenario
-originally reported. No `SMSService`/`EmailService` allowlist or
+originally reported — and it was that same `pending`-only scenario that
+got the fix, per pass 3 (`docs/security-review/MSG-25-messaging-
+notifications.md`). No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
+
+## MSG-15 — Web Push's Send-Time DNS-Rebinding Pin Is Skipped Outside `ENVIRONMENT in ("production", "staging")` (2026-09-06)
+
+`PushService._send_one` only builds the IP-pinned `requests` session that
+closes the check/use DNS-rebinding window
+(`_pinned_session`/`_resolve_public_address`) when `settings.ENVIRONMENT`
+is exactly `"production"` or `"staging"`. `ENVIRONMENT` is a bare,
+unvalidated `str` (`core/config.py:32`, default `"development"`, no
+enum) — so a real deployment left at the default, or set to any value
+other than those two exact strings, sends every push through `webpush()`
+with no send-time pin, relying solely on `validate_push_endpoint`'s
+one-time, subscribe-time check.
+
+The gate is not an oversight: `tests/test_push_service.py` runs a real
+local HTTP server standing in for a browser push service (deliberately
+not mocked, so encryption/VAPID/DB constraints are genuinely exercised),
+reachable only at `http://127.0.0.1:<port>` — which `validate_push_endpoint`'s
+HTTPS-only, exact-vendor-hostname allowlist would reject outright if
+pinning/validation ran unconditionally in tests. `PushService.subscribe()`
+itself does not call `validate_push_endpoint` (by design, that check lives
+at the API boundary), so the test suite subscribes such endpoints
+directly and depends on the environment gate to reach them at all. The
+same `ENVIRONMENT in ("production", "staging")` idiom is also this
+codebase's established pattern for other prod-only checks
+(`core/config.py:460`), so a push-specific carve-out would be
+inconsistent with it.
+
+Closing this properly needs one of: a test-infrastructure change so the
+local test server does not depend on skipping validation (e.g. an
+explicit test-only bypass rather than an environment-string coincidence),
+or a more precise signal than `ENVIRONMENT` for "is this deployment
+internet-facing." Either is a design decision, not a one-line fix. The
+practical exposure today is narrow — `validate_push_endpoint`'s exact-
+hostname allowlist (~7 real vendor hosts) already means an attacker would
+need to compromise DNS for a major push vendor (`fcm.googleapis.com` et
+al.), not merely stand up an arbitrary host, so this is a defense-in-depth
+gap rather than an open path.
+
+Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
+25, pass 3, MSG-15). Not exploitable cross-tenant — this affects the send
+path for any recipient's push, regardless of org, and requires either a
+misconfigured `ENVIRONMENT` on a real deployment or DNS compromise of a
+push vendor to matter at all.
 
 ## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
 
