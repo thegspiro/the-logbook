@@ -2615,12 +2615,7 @@ ordered worst-first, and stepped through one at a time, with the numbers behind
 each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
 26 days"_.
 
-> **Screenshot needed:**
-> _[The redesigned Compliance Matrix triage rail: members grouped by standing
-> with the worst first, one member's detail open showing the per-requirement
-> figures, and the status chip from a dashboard deep link visible above it.
-> Every existing capture of this screen shows the icon grid, which no longer
-> exists — this is a replacement, not an addition.]_
+![The redesigned Compliance Matrix: a triage rail of members grouped by standing, worst first, with one member's per-requirement detail open and the non-compliant status chip from a dashboard deep link above the queue](./images/02-107-compliance-matrix-triage.png)
 
 ### ⚠️ Your compliance percentages may move
 

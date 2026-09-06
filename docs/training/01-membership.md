@@ -1682,9 +1682,7 @@ address and personal email were hidden from other members unconditionally.
 Each member can now choose **per field**: email, personal email, phone, mobile
 and address.
 
-> **Screenshot needed:**
-> _[The profile-visibility controls on a member's own profile: the five field
-> toggles with a mix of on and off states.]_
+![The five profile-visibility toggles on My Account -> Privacy: email, phone and mobile visible to members by default, personal email and mailing address not](./images/01-41-profile-visibility.png)
 
 A member who has never chosen keeps exactly the behaviour they had — the
 defaults reproduce the previous rules, so the upgrade changes nothing until
