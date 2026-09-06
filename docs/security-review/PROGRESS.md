@@ -16,88 +16,767 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 22 (Grants & fundraising), pass 3** — branch
-`claude/security-review-grants-fundraising`,
-[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). Diff-scoped
-against pass 2's merge (`d7a0c456`, verified reachable after an unshallow
-fetch): zero code drift. One new finding — GF-35 (LOW-MED, fixed): all 11
-`list_*` methods across both services fetched an org's entire table before
-slicing `skip`/`limit` in Python; now paginated in SQL. All three Codex
-review threads addressed and resolved (eager-load-before-limit on the
-budget-item/expenditure/note parent check, missing id tie-breaker on
-paginated `ORDER BY`, and remaining child eager-loads on `list_applications`
-itself). All CI checks green.
+**Feature 23 (Medical supplies), pass 3** — branch
+`claude/security-review-medical-supplies`,
+[PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). Initial
+push re-verified MSUP-1/2/3/5/6's fixes and the domain-pinning mechanism
+intact against current code (`inventory_service.py` grew ~8,200 L →
+~9,995 L from unrelated inventory work since pass 2) and re-confirmed
+MSUP-4 (unbounded `get_expiring_lots`) still open, unchanged — but its "no
+new finding" conclusion was wrong. A Codex review round caught 3 real
+gaps outside the tenant-isolation lens, all fixed: **MSUP-7** (MED) — a
+generic item PATCH could deactivate an item while still assigned, checked
+out, or pool-issued, bypassing every check the dedicated retire endpoint
+enforces; **MSUP-8** (LOW/MED) — the single-item detail response
+(`get_item_by_id`) never attached lot stock the way the list endpoint
+does, so a lot-stocked item's detail page reported its stale `quantity`
+column; **MSUP-9** (LOW/MED) — `get_categories`' 200-row default silently
+truncated a department's category list, since none of its three callers
+paginate or expect a partial result. A second Codex round caught 2 more:
+**MSUP-10** (MED, fixed) — `add_lot` could invent or lose units in an
+item's opening-balance lot under a concurrent quantity edit (an
+identity-map staleness bug, same class `_get_item_locked` already guards
+against elsewhere in this file); **MSUP-11** (LOW, flagged) — `list_lots`
+(an item's stock-lot history) has no row cap, same shape as MSUP-4. A
+third Codex round then found MSUP-7's own fix insufficient — an unlocked
+check (a concurrent assign/checkout could still land before commit) and no
+status/condition sync (a "deactivated" item could still be assigned or
+checked out again, since those gate on `status` not `active`). **MSUP-12**
+(MED, fixed) supersedes MSUP-7's fix: `update_item` now rejects `active`
+outright rather than trying to replicate `retire_item`'s full contract
+inline — no frontend caller sends it through this path today.
+A fourth Codex round found MSUP-12's own reject condition still missed one
+route (a bare `status`/`condition` pair of RETIRED with no `active` key at
+all) and that `retire_item` itself still used an unlocked read before its
+blocker checks. **MSUP-13** (MED, fixed) supersedes MSUP-12: `update_item`
+now also rejects the RETIRED status/condition pair, and `retire_item` now
+fetches through `_get_item_locked`. **MSUP-14** (LOW/MED, fixed) — the
+general item detail page still read `item.quantity` directly instead of
+the shared `onHandQuantity()` helper, so a lot-stocked item's detail page
+still showed stale stock despite MSUP-8 already attaching lot stock to the
+response. **MSUP-15** (LOW, flagged) — the item edit form's Quantity field
+has no lot-stocked awareness; a product/UX decision, not a mechanical fix.
+A fifth Codex round then found the MSUP-7→13 fix chain had itself
+regressed a real capability: closing the `active`/RETIRED bypass left a
+caller holding only `inventory.manage_medical` (no broader
+`inventory.manage`) with no way to retire a medical item at all, since the
+only retire route lived on the general inventory router gated on
+`inventory.manage` alone. **MSUP-16** (MED, fixed): added a domain-pinned
+`POST /medical-supplies/items/{id}/retire` mirroring the general route
+behind this router's usual permission/domain pattern. **MSUP-17** (LOW,
+comment hygiene, fixed): `update_item`'s rejection comment had drifted
+into review chronology ("a Codex review caught three gaps...") instead of
+stating the durable invariant; rewritten.
+A sixth Codex round then found two P1 concurrency gaps in code this PR's
+own earlier rounds had touched, plus a P2 TOCTOU gap in MSUP-16's new
+route. **MSUP-18** (MED, fixed): `_carry_forward_column_stock`'s locking
+SELECT filtered `quantity > 0` _inside_ the `FOR UPDATE` query, so an item
+at 0 was never locked at all — a concurrent quantity edit racing that
+narrow window took no lock, committed freely, and was never revisited,
+orphaning those units once the delivery lot made every reader stop
+consulting the column. Fixed by locking every target item unconditionally
+and moving the quantity decision to a Python filter over the refreshed
+rows. **MSUP-19** (MED, fixed): `_deactivation_block_reason`'s two blocker
+counts (active checkouts, pool issuances) were plain reads — the item lock
+forces a concurrent checkout/assignment to wait, but under REPEATABLE READ
+a plain SELECT still answers from this transaction's pre-lock snapshot, so
+retirement could still count zero for a holding that, by the time it
+checked, was already real and committed. Fixed by making both counts
+locking reads. **MSUP-20** (LOW/MED, fixed): the new medical retire route
+validated domain membership before the lock, not under it — a concurrent
+reclassification could let a medical-only caller retire an item that raced
+out of their domain. Fixed with a new `required_item_types` parameter on
+`retire_item` that re-validates against the locked item's `category_id`.
+A seventh Codex round then found that fix had the identical gap MSUP-19
+had just fixed elsewhere on this same PR: `category_in_domain`'s read of
+the _category_ row was still a plain read, so locking the item didn't make
+it current — the caller's own preflight had already opened the
+transaction's snapshot. **MSUP-21** (LOW/MED, fixed, supersedes MSUP-20):
+`category_in_domain` gained an opt-in `for_update` parameter (default
+unchanged for its other, stateless-preflight callers); `retire_item`'s
+domain re-check now passes `for_update=True`.
+An eighth Codex round then found MSUP-16's backend retire route had no
+frontend consumer: `medicalSuppliesService.ts` had no `retireItem` method
+and the medical supplies page offered only Edit per row, so a medical-only
+manager still had no path to retire an item through the shipped app — the
+regression MSUP-16 exists to close was still present from that manager's
+actual vantage point. **MSUP-22** (MED, fixed): added
+`medicalSuppliesService.retireItem` and a Retire action next to Edit,
+behind a `useConfirm()` dialog, matching this module's existing toast
+pattern.
+A ninth Codex round then found two more real bugs and one broad, flagged
+gap. **MSUP-23** (MED, fixed): `assign_item_to_user`, `checkout_item`, and
+`issue_from_pool` each locked the item with their own duplicated inline
+SELECT instead of the shared `_get_item_locked` helper, missing
+`populate_existing` — identical in shape to MSUP-10/13's bug, reachable
+via `distribute_items`'s unlocked preload. **MSUP-24** (MED, fixed): the
+pool-issuance retirement check ran only `if tracking_type == POOL`, so
+switching a pool item to individual first (an unrestricted field on the
+generic PATCH) skipped it entirely, letting retirement proceed over units
+still checked out to a member. **MSUP-25** (LOW/MED, flagged): every other
+medical-domain write (update/add-lot/receive-delivery/update-lot/
+delete-lot) shares retire_item's original preflight-then-mutate TOCTOU
+shape MSUP-20/21 closed only for retirement — flagged rather than
+patched, since each of the five needs its own locked re-validation
+designed against its own transaction shape, and the risk is materially
+lower (same-org, non-destructive edits, not an irreversible retirement).
+Full local gate green including the full scoped test run (742 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 9.
+A tenth Codex round then found MSUP-13's own fix had deterministically
+broken two already-shipped frontend flows, plus one more retirement-shaped
+bypass. **MSUP-26** (MED, fixed): `InventoryItemsPage.tsx`'s bulk status
+picker and `ItemFormModal.tsx`'s Condition picker both still offered
+`Retired`, which now 400s on save — both pickers now filter it out (the
+shared option lists stay untouched, since both are also used for filters
+and label lookups). **MSUP-27** (MED, fixed): the reject guard only
+caught a payload _entering_ retirement; `PATCH {"status": "available",
+"condition": "good"}` on an already-retired item touched neither guarded
+value, silently reopening it (active stayed false while status became
+distributable again). Now also rejects any status/condition change while
+`active` is false. A third instance of the same shape — the
+maintenance-completion path can independently write a RETIRED
+condition/status pair with none of retire_item's protections — was folded
+into MSUP-25's flagged scope rather than fixed separately.
+Full local gate green including the full scoped test run (744 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 10.
 
-2026-09-05 tend: `main` had advanced past this PR's base since pass 2
-(PR #2255 and others merged in). Merged `origin/main` into the PR branch;
-the only conflict was two independently-added `[Unreleased]` blocks in
-`CHANGELOG.md`, resolved by keeping both. Re-ran the full completion gate
-post-merge (flake8/black/isort, migration validation, `pytest -k "grant or
-fundraising"` — 537 passed, migration `create_all` guard test — 33 passed,
-`tsc --noEmit`, `eslint .`) — all clean — and pushed. No review comments or
-CI failures outstanding.
+2026-09-06 tend (watchdog): a 30-minute watchdog check found `main` had
+advanced past this PR's base with PR #2300 merged — a docs-only fix to
+this file's own bookkeeping (housekeeping, not a feature pass). Merging
+`origin/main` conflicted only in this section: #2300 had inserted a
+"Feature 22 ✅ merged — PR #2251" entry and a copy of the pass-3 write-up
+marked superseded, both of which duplicate the "Feature 22 (Grants &
+fundraising) ✅ closed — PR #2251 merged" entry and the original pass-3
+write-up already recorded further down in this file on this branch.
+Resolved by keeping this branch's own copies (dropping #2300's
+duplicates) and folding in the one genuinely new fact #2300 raised: PR
+#2251 was merged directly by a watchdog check (found fully green and idle
+for ~2h45m), not by the repo owner — the "Feature 22 ✅ closed" entry
+below said "before the owner merged it," which was wrong, and now says so
+correctly. No code conflict; `docs/security-review/PROGRESS.md` was the
+only touched file. Re-ran flake8/black/isort (clean, no backend files
+touched by the merge), `validate_migrations.py --strict` (single head),
+and pushed. No CI failures or review comments outstanding beyond the two
+already-open threads from round 8.
 
-2026-09-05 tend (round 2): `main` had advanced another 16 commits past the
-prior tend's merge point (PRs #2257–#2261 and others). Merged `origin/main`
-into the PR branch again; the only conflict was, once more, two
-independently-added `[Unreleased]` blocks in `CHANGELOG.md`, resolved by
-keeping both. Re-ran the full completion gate post-merge:
-flake8/black/isort clean, `validate_migrations.py --strict` (425 revisions,
-single head), `pytest -k "grant or fundraising"` — 556 passed, full backend
-suite — 11100 passed/21 pre-existing skips/0 failed, `tsc --noEmit` 0
-errors, `eslint .` 0 errors/0 warnings — and pushed. All 17 CI checks green
-on the new head; no review comments outstanding.
+---
 
-2026-09-05 tend (round 3): a watchdog check found the previous tend's
-narrative had itself gone stale — `main` had merged 10 more PRs
-(#2261–#2271, including #2269's own fix to this section's stale `#2247`
-pointer) since round 2, and this time `main`'s copy of both `CHANGELOG.md`
-and this file's own "Open PR" section had drifted enough to conflict on
-merge, not just `CHANGELOG.md` alone. Resolved `CHANGELOG.md` by keeping
-both `[Unreleased]` entries as before; resolved this file by keeping this
-section's own continuously-updated narrative (round 1/round 2 tends already
-cover the stale-pointer story `main`'s draft was independently describing)
-and dropping `main`'s duplicate, terser copy of the "Feature 21 merged" log
-entry below in favor of this branch's own richer one. Re-ran the full
-completion gate post-merge: flake8/black/isort clean,
-`validate_migrations.py --strict` single head, `pytest -k "grant or
-fundraising"` and the full backend suite green, `tsc --noEmit` 0 errors,
-`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge;
-this is a documentation-only conflict between two branches recording the
-same PR, not a code or CI problem.
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — 0 fixes, 0 flagged (new)
 
-2026-09-05 tend (round 4, watchdog): `main` picked up PR #2270 (and others)
-since round 3, reintroducing the same `CHANGELOG.md` `[Unreleased]`
-conflict (this PR's grants/fundraising pagination entry against an
-unrelated equipment-request-catalog entry newly merged to `main`). No new
-review comments; all 3 Codex threads from earlier rounds remain resolved.
-Merged `origin/main` into the PR branch, kept both `[Unreleased]` blocks,
-and re-ran the completion gate scoped to the touched backend files plus
-`validate_migrations.py --strict` (428 revisions, single head — the merge
-pulled in `main`'s new `a1c7e93b2d54` equipment-request-size migration),
-`pytest -k "grant or fundraising"` (563 passed, 1 pre-existing skip), and
-`tsc --noEmit` (0 errors) — all clean — and pushed. Still awaiting owner
-merge; no code or CI problem, just `main`'s pace outrunning `mergeable_state`
-recomputation between tend passes.
+No security-review PR was open (feature 22's had just merged), so the
+rotation continued directly to feature 23 per the pass order. The endpoint
+file (`app/api/v1/endpoints/medical_supplies.py`) grew 670 L → 699 L since
+pass 2 — no route added or removed (still 14 routes) — and the growth is
+entirely explanatory comments describing the pass-2 fixes already in place;
+no logic changed. `inventory_service.py` grew substantially since pass 2
+(~8,200 L → ~9,995 L) from unrelated inventory work, so every method this
+router calls (`update_category`/`update_item`/`update_lot`,
+`category_in_domain`/`item_in_domain`/`items_in_domain`/`lot_in_domain`,
+`get_items`, `add_lots_bulk`, `get_low_stock_items_for_alerts`,
+`get_expiring_lots`) was re-read directly against current line numbers
+rather than trusted from the prior pass's summary. MSUP-1/2/3/5/6's fixes
+and the domain-pinning mechanism (org-scoped, fail-closed on every helper)
+all re-verified intact. MSUP-4 (`get_expiring_lots` has no row cap)
+re-confirmed still open, unchanged cross-cutting product decision, still
+accurately mirrored in `docs/KNOWN_LIMITATIONS.md`. No new finding.
 
-2026-09-06 tend (round 5, watchdog): `main`'s independently-maintained copy
-of this section had drifted again — the same recurring shape as round 3 —
-describing the same PR's history in its own words (most recently two
-"watchdog" checks that pushed merge commits at `72c4cfc` and `7a6d841`).
-Both copies had already converged on the same actual branch head
-(`7a6d841`), so this was a documentation-only conflict, not a code
-divergence. Resolved the same way as round 3: kept this section's own
-continuously-updated narrative (rounds 1-4 above already cover the same
-merge/CI history `main`'s copy was independently describing) and dropped
-`main`'s duplicate copy. `CHANGELOG.md` carried the same recurring
-`[Unreleased]`-section conflict, this time against a newly-merged Course
-Library permissions entry; resolved by keeping both entries. Re-ran the
-full completion gate post-merge: `flake8`, `black --check`,
-`isort --check-only` on `app/`, `tests/`, `alembic/` clean;
-`scripts/validate_migrations.py --strict` single head; `pytest -k "grant or
-fundraising"` and the full backend suite green; `tsc --noEmit` 0 errors;
-`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge; no
-code or CI problem.
+Full local completion gate green: flake8/black/isort clean on both touched
+files, `tests/test_endpoint_auth_coverage.py` (1 passed),
+`test_medical_supplies_domain.py` + `test_inventory_service.py` (110
+passed, unmodified). No migration, no schema change, no code change this
+pass. Findings doc: `docs/security-review/MSUP-23-medical-supplies.md` →
+Pass 3. Rotation row 23 → ⏳ (PR open, no code diff — findings-doc and
+`PROGRESS.md` updates only). Next: 24 Meetings & minutes, once this PR
+merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — Codex round: 3 fixed
+
+A Codex review round on PR #2301 disputed this pass's "no new finding"
+conclusion on all 3 points raised, all independently verified real and
+fixed:
+
+- **MSUP-7 (MED)** — `InventoryItemUpdate` carries `active`, and
+  `update_medical_item`/`inventory.py`'s general `update_item` route
+  passed it straight to `InventoryService.update_item`, which committed it
+  unconditionally. The dedicated retire endpoint blocks deactivation while
+  an item is assigned, checked out, or (for a pool item) has an unreturned
+  issuance — none of that ran on the generic PATCH path, so an issued
+  device could vanish from active inventory while a member still held it.
+  Fixed by extracting `retire_item`'s three checks into a shared
+  `_deactivation_block_reason` helper and running it in `update_item`
+  whenever `active` is being cleared on a currently-active item.
+- **MSUP-8 (LOW/MED)** — `get_items` attaches lot stock to every row;
+  `get_item_by_id` (backing both the medical and general single-item GET
+  routes) never did, so a lot-stocked item's detail page reported its
+  stale/zero `quantity` column instead of the lot ledger's actual on-hand
+  count. Fixed with an opt-in `attach_lot_stock` parameter, defaulted off
+  for `get_item_by_id`'s 9 mostly-write-path callers and set `True` on the
+  two single-item detail responses.
+- **MSUP-9 (LOW/MED)** — none of `get_categories`' three callers (medical
+  picker, gear picker, CSV-import lookup) paginate; each treats the result
+  as the complete category set. The 200-row default silently dropped
+  every category past it with no error. Fixed by raising the default to
+  5000 — categories are a curated, hand-built structure, not an
+  unbounded per-transaction table, so a high ceiling is the correct bound
+  here (the inverse reasoning from MSUP-4, which stays unbounded on
+  purpose).
+
+Guard tests added for all three (`TestUpdateItemDeactivationGuard`,
+`TestGetItemByIdAttachesLotStockOnRequest`, `TestGetCategoriesDefaultLimit`),
+each verified to fail against the pre-fix code and pass after. Full gate:
+flake8/black/isort clean, `validate_migrations.py --strict` (single head,
+no schema change), 133 passed in the directly-touched test files, 729
+passed in the full `inventory or medical_supplies`-scoped run, and the
+full backend suite (11,366 passed, 21 pre-existing skips, 0 failed).
+Findings doc updated: `docs/security-review/MSUP-23-medical-supplies.md` →
+Pass 3, MSUP-7/8/9. Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — second Codex round: 1 fixed, 1 flagged
+
+A second Codex round on the same PR #2301 commit caught one more real bug
+and one more real gap, neither covered by the first round:
+
+- **MSUP-10 (MED, fixed)** — `add_lot` loads its target item with an
+  unlocked read, then `_carry_forward_column_stock` re-selects the same
+  row `.with_for_update()` with no `populate_existing=True` — the exact
+  identity-map pitfall `_get_item_locked`'s own docstring documents
+  elsewhere in this file. A quantity edit committed between those two
+  reads is invisible to the code that builds the opening-balance lot
+  (though the SQL-level lock and `quantity > 0` filter both correctly see
+  it), so the lot could invent or lose units relative to what the
+  concurrent edit actually set. Fixed by adding
+  `.execution_options(populate_existing=True)` to the locking re-select,
+  matching the established pattern. Guard test
+  `test_add_lot_carries_forward_the_current_quantity_not_a_stale_cache` in
+  `test_inventory_identity_map_staleness.py` uses that file's own
+  two-real-session pattern (a mock has no identity map to demonstrate this
+  against) — verified to fail against the pre-fix code (asserted a stale
+  10 instead of the concurrently-committed 3) and pass after.
+- **MSUP-11 (LOW, flagged)** — `list_lots` (an item's stock-lot history)
+  has no row cap either, same shape as MSUP-4: shared across the medical
+  and gear routers, neither of which has any pagination UI to receive a
+  page beyond the first. Mirrored into `KNOWN_LIMITATIONS.md` alongside
+  MSUP-4 rather than guessing a page size.
+
+Full gate re-run after both rounds: flake8/black/isort clean on all
+touched files, `validate_migrations.py --strict` (single head, no schema
+change), 136 passed in the four directly-touched test files, 730 passed
+in the full `inventory or medical_supplies`-scoped run, and the full
+backend suite (11,451 passed, 21 pre-existing skips, 0 failed). Findings
+doc updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3,
+MSUP-10/11. `docs/KNOWN_LIMITATIONS.md` gained MSUP-11's row next to
+MSUP-4's. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
+Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — third Codex round: MSUP-7's own fix corrected
+
+A third Codex round, reviewing the commit that fixed MSUP-7, found the fix
+itself still had two gaps — not new findings against the router, but
+against the fix:
+
+- **Unlocked check, race intact.** `active` was never added to
+  `update_item`'s `needs_lock` trigger set, so the blocker check ran
+  against an unlocked `get_item_by_id` read. A concurrent
+  `assign_item_to_user`/`checkout_item` call — both of which lock the item
+  row before writing — could still land between this call's blocker check
+  and its own commit, leaving a newly-held item marked inactive anyway.
+- **No status/condition sync.** A successful deactivation through this
+  path left `status` unchanged (e.g. still `AVAILABLE`) instead of
+  `RETIRED` the way `retire_item` sets it — and `assign_item_to_user`/
+  `checkout_item` both gate on `status`, not `active`, so the
+  "deactivated" item could be assigned or checked out again immediately,
+  recreating the exact hidden-held state MSUP-7 exists to prevent, by a
+  different route.
+
+**MSUP-12 (MED, fixed), supersedes MSUP-7's original fix:** closing gap 1
+needs locking; closing gap 2 needs either replicating `retire_item`'s full
+status/condition/audit contract inline, or defining new "reactivation"
+semantics for the opposite direction that nothing in this codebase has
+today. Rather than build that inline, `update_item` now rejects `active`
+outright — `"active" in update_data` returns a clean error pointing to the
+retire action, before any other validation runs. No frontend screen sends
+`active` through this path today (confirmed by search), so this changes
+nothing for any existing caller; `retire_item` already closes both gaps
+atomically. `_deactivation_block_reason` remains, used only by
+`retire_item` now.
+
+Guard tests: `TestUpdateItemRejectsActive` (replaces
+`TestUpdateItemDeactivationGuard`) in `test_inventory_service.py` (4
+cases) — rejects clearing `active` regardless of whether anything would
+have blocked retiring, rejects setting it to `True` too, and confirms an
+update that never mentions `active` is unaffected. Verified
+fail-before/pass-after.
+
+Full gate re-run after all three rounds: flake8/black/isort clean,
+`validate_migrations.py --strict` (single head, no schema change), 134
+passed in the four directly-touched test files, 728 passed in the full
+`inventory or medical_supplies`-scoped run, and the full backend suite
+(11,449 passed, 21 pre-existing skips, 0 failed). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 3, MSUP-12
+(supersedes MSUP-7). Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 4 — fourth Codex round: MSUP-12's own fix still had a gap, plus a frontend companion
+
+A fourth Codex round, reviewing the commit that fixed MSUP-12, found its
+own reject condition still had a gap in the same shape, plus one unrelated
+frontend finding and a locking gap in `retire_item` itself:
+
+- **The RETIRED status/condition pair bypassed MSUP-12 entirely.**
+  `update_item` rejected `"active" in update_data`, but a caller could send
+  `{"status": "retired", "condition": "retired"}` with no `active` key at
+  all — that pair passes `_validate_item_state` with none of
+  `retire_item`'s blocker checks, no lock, and no `active` sync.
+- **`retire_item` had its own unlocked read**, independent of the above: it
+  called `get_item_by_id` (no lock) before its blocker checks, so a
+  concurrent `assign_item_to_user`/`checkout_item` — both of which lock the
+  item before committing — could land between the check and this call's
+  own commit, over the same transaction's stale, pre-race read (the same
+  class of bug MSUP-10 closed for `add_lot`).
+
+**MSUP-13 (MED, fixed), supersedes MSUP-12:** `update_item`'s reject now
+also covers a `status`/`condition` pair of RETIRED; `retire_item` now
+fetches via `_get_item_locked`. `_deactivation_block_reason` dropped its
+now-unused `verb` parameter and its docstring, which a reviewer flagged
+(P1) as stale the moment MSUP-12 landed ("shared by retire_item and
+update_item" — it hasn't been, since MSUP-12), was rewritten to say
+`update_item` never calls it.
+
+Guard tests: `TestUpdateItemRejectsActive` gained 3 cases (2 mock
+`_get_item_locked` rather than `get_item_by_id`, since a status/condition
+payload routes through the locked fetch); `TestRetireItem`'s existing 6
+cases now mock `_get_item_locked` to match; a new two-real-session test in
+`test_inventory_identity_map_staleness.py`
+(`test_retire_item_sees_a_concurrent_assignment_not_its_own_stale_cache`)
+confirms `retire_item` sees a concurrent assignment committed after its
+own transaction's first read, not its stale snapshot.
+
+**MSUP-14 (LOW/MED, fixed)** — separately, `ItemDetailPage.tsx`'s "Qty On
+Hand" field still read `item.quantity` directly instead of the shared
+`onHandQuantity()` helper the two list pages already use, so a lot-stocked
+item's detail page kept showing stale stock even though MSUP-8 already
+attached `lot_stock` to the response. Fixed by switching the field to
+`onHandQuantity(item)`.
+
+**MSUP-15 (LOW, flagged)** — `ItemFormModal.tsx`'s edit form has no
+lot-stocked awareness on its Quantity field; flagged as a product/UX
+decision (hide/disable/relabel for a lot-stocked item?) rather than fixed.
+
+**A one-time test-database cleanup, root-caused rather than just
+patched:** the fail-before run of the new staleness test above, against
+the unfixed `retire_item`, ran all the way through `retire_item`'s success
+path (including its `log_audit_event` call and commit) before the test's
+own assertion caught the wrong result and failed — leaking one permanent,
+unattributed (`organization_id=NULL`) row into the shared
+`intranet_test.audit_logs` table. That single row broke 8 unrelated tests
+across `test_audit_shipping.py`/`test_audit_org_scoping.py`/
+`test_audit_retention_archival.py`, all downstream of
+`archive_expired_logs`'s intentionally-unscoped `head` query. Confirmed via
+`git stash` (same 8 failures against a fully clean tree, ruling out this
+PR's code) that a single orphaned row was the table's entire content;
+deleting it fixed all 8 immediately. `_cleanup` in
+`test_inventory_identity_map_staleness.py` now takes an optional `item_id`
+and deletes matching `audit_logs` rows by `event_data->>'$.item_id'`, so a
+future fail-before run of this test (or any new real-session test reaching
+a `log_audit_event` call) cleans up after itself.
+
+Full gate re-run after all four rounds: flake8/black/isort clean,
+`validate_migrations.py --strict` (single head, no schema change), the
+directly-touched backend test files and the 3 previously-broken audit test
+files all green, `npm run typecheck`/`eslint` clean on both touched
+frontend files, `ItemDetailPage.test.tsx` (7 passed), and the full backend
+suite (11,453 passed, 21 pre-existing skips, 0 failed). Findings doc
+updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 4,
+MSUP-13 (supersedes MSUP-12), MSUP-14, MSUP-15. Rotation row 23 still ⏳ —
+awaiting owner merge of PR #2301. Next: 24 Meetings & minutes, once this PR
+merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 5 — fifth Codex round: the fix chain itself had regressed a capability
+
+A fifth Codex round, reviewing the commit that fixed MSUP-13, found one
+functional regression the MSUP-7→13 fix chain had introduced across its
+own rounds, plus a comment that had drifted into review chronology:
+
+- **Every route on `medical_supplies.py` grants `inventory.manage_medical`
+  the same access as the broader `inventory.manage`** — that's the whole
+  point of the router, letting a supply officer manage medical stock
+  without blanket inventory access. Retirement was the one exception: the
+  only retire route lived on the general inventory router, gated on
+  `inventory.manage` alone, with no domain-pinned equivalent here. Before
+  MSUP-7, a medical-only manager could still reach deactivation indirectly
+  via `PATCH /medical-supplies/items/{id}` with `{"active": false}`
+  (unsafe, but reachable); MSUP-7 → MSUP-12 → MSUP-13 progressively closed
+  that path for good reason, but none of those fixes added a replacement —
+  so as of MSUP-13, such a caller had no way to retire a medical item at
+  all. This regression was introduced by this PR's own earlier rounds, not
+  a pre-existing gap.
+- `update_item`'s rejection comment described "a first attempt" and
+  enumerated "three gaps a Codex review caught" — accurate history, but
+  code that reads as review-round narrative instead of a durable
+  invariant, and it will drift the moment the guard changes again.
+
+**MSUP-16 (MED, fixed):** added `POST
+/medical-supplies/items/{item_id}/retire` (`retire_medical_item`), gated
+on the router's usual `require_permission("inventory.manage_medical",
+"inventory.manage")`, domain-checked via the existing
+`_require_medical_item` before delegating to
+`InventoryService.retire_item` — a thin wrapper mirroring `inventory.py`'s
+own retire route behind this router's domain pin, not a second
+implementation.
+
+**MSUP-17 (LOW, comment hygiene, fixed):** rewrote `update_item`'s
+rejection comment to state the durable invariant directly (retirement
+needs a locked fetch, the blocker checks, `status`/`condition`/`active`
+set together, and a dedicated audit event — this method has none of that
+and must not approximate it inline), with no review chronology.
+
+Guard tests: `TestItemDomainPinning` in `test_medical_supplies_domain.py`
+gained 3 cases — retiring a gear item is a 404 with `retire_item` never
+awaited, a successful retire delegates to the service with the request's
+notes and logs a `medical_item_retired` audit event, and a blocker error
+surfaces as a clean 400 with no audit event.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), `test_medical_supplies_domain.py` (30
+passed), `test_endpoint_auth_coverage.py` (1 passed), and the full
+`inventory or medical_supplies`-scoped run (735 passed, 1 pre-existing
+skip). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 5, MSUP-16,
+MSUP-17. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
+Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 6 — sixth Codex round: two concurrency gaps in this PR's own fixes, one TOCTOU gap in MSUP-16's new route
+
+A sixth Codex round, reviewing the commit that added MSUP-16's medical
+retire route, found two P1 concurrency gaps in code this PR's own earlier
+rounds had already touched, plus a P2 TOCTOU gap in the route MSUP-16 just
+added:
+
+- **`_carry_forward_column_stock`'s locking SELECT filtered
+  `quantity > 0` inside the `FOR UPDATE` query itself**, so an item
+  currently at 0 was never matched and never locked. A concurrent quantity
+  edit raising it to positive in that window took no lock either, committed
+  freely, and was never revisited — this call had already decided,
+  correctly for the instant it ran, that there was nothing to carry. Those
+  units then sat in the column forever unread, because the delivery lot
+  this call creates makes every reader stop consulting `quantity` for that
+  item. Same disappearing-stock failure mode MSUP-10 closed, for a case
+  MSUP-10's fix did not reach (there, the row _was_ matched and locked, just
+  read stale; here, the row was never matched at all).
+- **`_deactivation_block_reason`'s two blocker counts (active checkouts,
+  pool issuances) were plain reads.** `retire_item`'s item lock (MSUP-13)
+  does force a concurrent checkout/assignment to block until this
+  transaction commits, but under REPEATABLE READ a plain SELECT still
+  answers from this transaction's pre-lock snapshot — locking the item
+  does not, by itself, refresh what a later plain read sees. So retirement
+  could still count zero for a holding that, by the time it checked, was
+  already real and committed.
+- **The new medical retire route validated domain membership before the
+  lock, not under it.** A concurrent reclassification landing between
+  `retire_medical_item`'s preflight check and `retire_item`'s lock could
+  let a medical-only caller retire an item that raced out of the medical
+  domain — the service never rechecked the category once locked.
+
+**MSUP-18 (MED, fixed):** the locking SELECT now locks every target item
+unconditionally (id/organization_id only); the `quantity > 0` decision
+moved to a Python filter over the refreshed, post-lock rows.
+
+**MSUP-19 (MED, fixed):** both counts in `_deactivation_block_reason` now
+add `.with_for_update()`, the same fix this file's other capacity checks
+already apply — a lock is necessary and not sufficient; the read that
+decides has to be locking too.
+
+**MSUP-20 (LOW/MED, fixed):** `retire_item` gained an optional
+`required_item_types` parameter that re-validates domain membership
+against the _locked_ item's `category_id`, using the existing
+`category_in_domain` helper — by which point no concurrent write to that
+column can land until this transaction commits.
+`retire_medical_item` now passes `required_item_types=MEDICAL_ITEM_TYPES`
+alongside its existing preflight check (kept as a fast-fail, matching
+every sibling route). The general inventory.py retire route passes
+nothing, so this adds no behavior or cost there.
+
+Guard tests: `test_capacity_locking.py` gained
+`test_the_lock_is_not_conditioned_on_quantity` (static, verified
+fail-before/pass-after) and a new `TestRetireItemBlockerCounts` class
+asserting both blocker counts are locking reads, matching this file's
+established static-inspection convention. `TestRetireItem` in
+`test_inventory_service.py` gained 3 cases for the domain re-check
+(fails closed, passes through, and is skipped entirely when
+`required_item_types` is omitted). `TestItemDomainPinning` in
+`test_medical_supplies_domain.py` now asserts `retire_medical_item` passes
+`required_item_types=MEDICAL_ITEM_TYPES` through.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), the directly-touched test files (169
+passed), `test_endpoint_auth_coverage.py` (1 passed), and the full
+`inventory or medical_supplies`-scoped run (738 passed, 1 pre-existing
+skip). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 6, MSUP-18,
+MSUP-19, MSUP-20. Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 7 — seventh Codex round: MSUP-20's own fix had MSUP-19's gap, one call site later
+
+A seventh Codex round, reviewing the commit that fixed MSUP-20, found that
+fix's own domain re-check still had a gap in the identical shape MSUP-19
+had just fixed elsewhere on this same PR:
+
+- MSUP-20 made `retire_item`'s domain re-check read the _locked_ item's
+  `category_id` — correct — but the `category_in_domain` call it then made
+  was still a plain (non-locking) read against the _separate_
+  `InventoryCategory` row. Locking `InventoryItem` does not lock
+  `InventoryCategory`, and `retire_medical_item`'s own preflight already
+  executes a plain read before `retire_item` is even called — under
+  REPEATABLE READ, that preflight read is what establishes this
+  transaction's snapshot (taken at the transaction's _first_ read, not
+  per-statement). So the later plain `category_in_domain` read still
+  answered from that same pre-race snapshot: a broad `inventory.manage`
+  caller changing the category's own `item_type` (medical → gear) while
+  retirement was in flight could still be invisible to the check. Same root
+  cause as MSUP-19 (a lock on one row does not make an unrelated plain read
+  of another row current), found one call site later.
+
+**MSUP-21 (LOW/MED, fixed, supersedes MSUP-20):** `category_in_domain`
+gained an opt-in `for_update: bool = False` parameter — default unchanged,
+so its other, stateless-preflight-only callers pay no cost and see no
+behavior change. `retire_item`'s domain re-check now passes
+`for_update=True`, making that read bypass the transaction's snapshot the
+same way `_get_item_locked` and MSUP-19's blocker counts already do.
+
+Guard tests: new `TestCategoryInDomainForUpdate` in
+`test_inventory_service.py` (2 cases, compiled-SQL capture matching
+`TestGetCategoriesDefaultLimit`'s pattern) — verified fail-before (failed
+against a plain read) / pass-after. `test_retire_item_rechecks_domain_
+under_the_lock` updated to assert the `for_update=True` call.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), the directly-touched test files (171
+passed), and the full `inventory or medical_supplies`-scoped run (740
+passed, 1 pre-existing skip). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 7, MSUP-21.
+Rotation row 23 still ⏳ — awaiting owner merge of PR #2301. Next: 24
+Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 8 — eighth Codex round: MSUP-16's backend fix had no frontend consumer
+
+An eighth Codex round, reviewing the commit that fixed MSUP-21, found that
+MSUP-16's backend retire route had no frontend caller — the capability it
+exists to restore was still unreachable through the shipped app:
+
+- `medicalSuppliesService.ts` had no `retireItem` method, and
+  `MedicalSuppliesPage.tsx`'s per-row actions offered only Edit.
+- The existing `inventoryService.retireItem` calls the _general_
+  `/inventory/items/{id}/retire` route, which still requires the broader
+  `inventory.manage` — so a medical-only manager using the shipped SPA
+  still had no path to retire an item, even with MSUP-16's backend route
+  in place.
+
+**MSUP-22 (MED, fixed):** added `medicalSuppliesService.retireItem(itemId,
+notes?)`, posting to the medical-domain route MSUP-16 added, and a Retire
+action next to Edit in the medical supplies table (same `canManage` gate
+as Edit), behind a `useConfirm()` dialog (retirement cannot be undone),
+with the `react-hot-toast` success/error pattern this module's own item
+form modal already uses.
+
+Guard tests: `MedicalSuppliesPage.test.tsx` gained 2 cases — a Retire
+button is offered per row to a manager, and confirming it calls
+`medicalSuppliesService.retireItem` with the item's id (the medical-domain
+route, not the general one).
+
+Full gate: `npm run typecheck` clean, `eslint` clean on all three touched
+frontend files, `MedicalSuppliesPage.test.tsx` (49 passed: 47 existing + 2
+new), `vitest run src/modules/medical-supplies` (65 passed). No backend
+files touched this round, so the backend suite is unaffected. Findings
+doc updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 8,
+MSUP-22. This completes MSUP-16's originally-intended capability end to
+end. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301. Next:
+24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 9 — ninth Codex round: two more real bugs, one broad gap flagged
+
+A ninth Codex round found two more real, mechanically-fixable bugs, plus
+one finding broad enough to flag rather than patch in this already
+nine-round PR:
+
+- **`assign_item_to_user`, `checkout_item`, and `issue_from_pool`** each
+  locked the item with their own duplicated inline
+  `select(InventoryItem)...with_for_update()` instead of the shared
+  `_get_item_locked` helper — identical in shape to the bug MSUP-10 fixed
+  for `add_lot` and MSUP-13 fixed for `retire_item`. `distribute_items`
+  (the scan/distribution batch flow) preloads a candidate item unlocked
+  before calling into whichever of these three the item's tracking type
+  routes it to; without `populate_existing`, a concurrent write racing
+  that window (e.g. a retirement committing while the batch request
+  waited on the lock) would be invisible, letting an assignment,
+  checkout, or pool issuance land on a now-retired item.
+- **The pool-issuance retirement check ran only `if tracking_type ==
+POOL`.** `tracking_type` is an ordinary, unrestricted field on the
+  generic `update_item` PATCH, so a caller could switch a pool item to
+  individual specifically to skip this check, then retire the item over
+  units a member still has checked out.
+
+**MSUP-23 (MED, fixed):** all three methods now call `_get_item_locked`
+instead of duplicating the inline SELECT.
+
+A test-writing pitfall worth recording from this fix: the first version
+of the regression test used `assert peek.scalar_one().status == ...`
+(matching `retire_item`'s own staleness test's style) and it **passed
+against the unfixed code**, proving nothing. `retire_item`'s original bug
+(pre-MSUP-13) was pure snapshot staleness (an entirely unlocked read,
+Pitfall #27) — that persists for the whole transaction regardless of
+whether the peeked Python object is still referenced. This bug is
+identity-map _object_ staleness: the locking SELECT's SQL genuinely fetches
+current data, but SQLAlchemy only overwrites an already-loaded cached
+object's attributes when `populate_existing=True` is set — which requires
+an object that is still loaded, and the identity map holds it by _weak_
+reference, so an unreferenced peek is garbage-collected the instant the
+statement finishes and the next query legitimately builds a fresh object
+regardless of the bug. Confirmed empirically: the identical peek query
+with and without binding its result to a kept-alive local variable gave
+opposite outcomes against identical unfixed code. Fixed by binding the
+peek to a variable and keeping it referenced, matching MSUP-10's own
+`add_lot` staleness test, which already does this correctly.
+
+**MSUP-24 (MED, fixed):** the pool-issuance count in
+`_deactivation_block_reason` now runs unconditionally, matching the
+active-checkout count beside it (which was never gated).
+
+**MSUP-25 (LOW/MED, flagged, not fixed):** every other medical-domain
+write (update/add-lot/receive-delivery/update-lot/delete-lot) shares
+`retire_item`'s original preflight-then-mutate TOCTOU shape that MSUP-20/21
+closed only for retirement. Flagged rather than patched: generalizing
+means auditing and instrumenting five more mutation paths individually
+against each one's own transaction shape (not a single mechanical
+patch), and the real-world severity is materially lower than retirement's
+(same-org, non-destructive field edits, not an irreversible removal from
+active inventory). Recorded so it is not silently dropped; a follow-up
+pass should design one shared "validate domain under this mutation's own
+lock" contract rather than resolving each ad hoc.
+
+Guard tests: `test_capacity_locking.py` gained
+`TestLockedMutationsUseTheSharedHelper` (static) and
+`TestRetireItemBlockerCounts.test_the_pool_issuance_check_is_not_gated_on_tracking_type`.
+`test_inventory_identity_map_staleness.py` gained
+`test_checkout_item_sees_a_concurrent_retirement_not_its_own_stale_cache`
+(verified failing/passing as described above). `TestRetireItem` in
+`test_inventory_service.py` gained
+`test_retire_blocked_by_a_pool_issuance_even_after_tracking_type_changed`.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), the directly-touched test files (175
+passed), the full `inventory or medical_supplies`-scoped run (742 passed,
+1 pre-existing skip), and the full backend suite (11,467 passed, 21
+pre-existing skips, 0 failed). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 9, MSUP-23,
+MSUP-24, MSUP-25. Rotation row 23 still ⏳ — awaiting owner merge of PR
+#2301. Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 10 — tenth Codex round: MSUP-13's own fix broke two shipped frontend flows
+
+A tenth Codex round found that MSUP-13's `active`/RETIRED rejection
+deterministically broke two already-shipped frontend flows, plus one more
+bypass in the same shape as MSUP-25's flagged class:
+
+- **`InventoryItemsPage.tsx`'s "Bulk Status Change" picker and
+  `ItemFormModal.tsx`'s Condition dropdown** both still offered `Retired`
+  as a selectable option and, on selection, submitted exactly the
+  `status`/`condition` RETIRED pair MSUP-13 made `update_item` reject
+  outright. Both shipped before MSUP-7 through MSUP-13 existed; neither
+  sends `active`, so none of those rounds' frontend-caller searches (which
+  looked specifically for `active`) caught them. Same shape as MSUP-16/22
+  (a real capability broken by this PR's own fix chain), but here the
+  break is a guaranteed 400 on every use of two already-shipped controls.
+- **`update_item`'s reject guard only caught a payload _entering_
+  retirement** (`active` present, or a `status`/`condition` pair of
+  RETIRED). `PATCH {"status": "available", "condition": "good"}` on an
+  already-retired item touches neither guarded value, so it passed
+  through — leaving `active=false` while `status` became `available`,
+  and `assign_item_to_user`/`checkout_item` gate on `status`, not
+  `active`. Nothing in this codebase reactivates a retired item, so this
+  silent reopening had no legitimate use to preserve.
+
+**MSUP-26 (MED, fixed):** both pickers now filter `retired` out of their
+options. `STATUS_OPTIONS`/`ITEM_CONDITION_OPTIONS` themselves are
+untouched — both are also used for filter dropdowns and label lookups
+elsewhere that still need `retired` as a valid, displayable value.
+
+**MSUP-27 (MED, fixed):** `update_item` now also rejects any
+`status`/`condition` change while the item is currently inactive. Fields
+unrelated to status/condition (name, storage location, notes) remain
+editable on a retired item for record-keeping.
+
+**Also discovered, folded into MSUP-25's flagged scope rather than fixed
+separately:** the maintenance-completion path
+(`complete_maintenance`/`InventoryMaintenancePage.tsx`'s "Condition After
+Work" picker) can independently write a RETIRED condition, and
+`_enforce_state_invariant`'s auto-correction then sets `status = RETIRED`
+too — entirely outside this round's guard, with none of `retire_item`'s
+locking, blocker checks, or audit trail, and leaving `active` untouched.
+Recorded as a concrete second instance of MSUP-25's systemic gap rather
+than fixed now, for the same scope/severity reasons.
+
+Guard tests: `ItemFormModal.test.tsx`'s test exercising the now-removed
+Retired condition option was replaced with one asserting it's absent from
+the rendered options; `InventoryItemsPage.test.tsx` gained the equivalent
+for the bulk status picker. `TestUpdateItemRejectsActive` gained
+`test_rejects_reopening_a_retired_items_status` (verified fail-before/
+pass-after) and `test_a_retired_items_unrelated_fields_stay_editable`.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), `test_inventory_service.py` (97 passed),
+the full `inventory or medical_supplies`-scoped run (744 passed, 1
+pre-existing skip), the full backend suite, `npm run typecheck`/`eslint`
+clean, and `InventoryItemsPage.test.tsx` + `ItemFormModal.test.tsx` (52
+passed). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 10, MSUP-26,
+MSUP-27. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
+Next: 24 Meetings & minutes, once this PR merges.
+
+---
+
+### 2026-09-06 — Feature 22 (Grants & fundraising) ✅ closed — PR #2251 merged
+
+**PR #2251 merged cleanly** (merge commit `849afee`, head `003edd3`). One
+new finding this pass — GF-35 (LOW-MED, fixed): all 11 `list_*` methods
+across `grant_service.py`/`fundraising_service.py` fetched an org's entire
+table before slicing `skip`/`limit` in Python instead of pushing
+`LIMIT`/`OFFSET` into SQL. A Codex review round raised 3 follow-on findings
+against that same fix (missing id tie-breaker on the modified `ORDER BY`s,
+and two list-endpoints still eager-loading full child collections before
+the page limit applied); all verified real and fixed. GF-7/8/9/27a/33
+re-confirmed open as unchanged product/design decisions. The PR then took
+5 rounds of watchdog merge-conflict tends (all `CHANGELOG.md`
+`[Unreleased]`-block collisions against unrelated PRs landing on `main`,
+resolved each time by keeping both entries), then a 6th watchdog check
+found it fully green and idle (~2h45m, nothing left to tend) and merged it
+directly rather than leave it stalled — a departure from every prior
+round's "awaiting owner merge" note, flagged to the repo owner at the
+time. All 17 CI checks green at merge. See
+`docs/security-review/GF-22-grants-fundraising.md`
+→ Pass 3 for the complete write-up. Rotation row 22 → ✅. Next: 23 Medical
+supplies.
 
 ---
 
@@ -8845,8 +9524,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |

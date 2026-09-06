@@ -97,6 +97,73 @@ describe('ItemDetailPage', () => {
     expect(mockGetItem).toHaveBeenCalledWith('it-1');
   });
 
+  it('shows the lot ledger total, not the stale quantity column, for a lot-stocked uniform pool item', async () => {
+    // Lots and `quantity` are separate ledgers -- receiving a lot never
+    // touches the column, so a lot-stocked item's `quantity` is stale/zero.
+    // The backend attaches `lot_stock`/`is_lot_stocked` on the detail
+    // response for exactly this reason; this card must read them.
+    mockGetItem.mockResolvedValue(
+      makeItem({
+        category_id: 'cat-uniform',
+        tracking_type: 'pool',
+        quantity: 0,
+        is_lot_stocked: true,
+        lot_stock: 12,
+      })
+    );
+    mockGetCategories.mockResolvedValue([
+      {
+        id: 'cat-uniform',
+        organization_id: 'org-1',
+        name: 'Uniforms',
+        item_type: 'uniform',
+        requires_assignment: false,
+        requires_serial_number: false,
+        requires_maintenance: false,
+        nfpa_tracking_enabled: false,
+        active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText('Qty On Hand')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+  });
+
+  it('falls back to the quantity column for an item with no lots', async () => {
+    mockGetItem.mockResolvedValue(
+      makeItem({
+        category_id: 'cat-uniform',
+        tracking_type: 'pool',
+        quantity: 7,
+        is_lot_stocked: false,
+      })
+    );
+    mockGetCategories.mockResolvedValue([
+      {
+        id: 'cat-uniform',
+        organization_id: 'org-1',
+        name: 'Uniforms',
+        item_type: 'uniform',
+        requires_assignment: false,
+        requires_serial_number: false,
+        requires_maintenance: false,
+        nfpa_tracking_enabled: false,
+        active: true,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText('Qty On Hand')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+  });
+
   it('shows an error state when the item fails to load', async () => {
     mockGetItem.mockRejectedValue(new Error('boom'));
     renderPage();

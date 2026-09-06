@@ -45,6 +45,7 @@ from app.schemas.inventory import (
     InventoryLotCreate,
     InventoryLotResponse,
     InventoryLotUpdate,
+    ItemRetireRequest,
     ItemsListResponse,
 )
 from app.services.inventory_service import InventoryService
@@ -329,7 +330,9 @@ async def get_medical_item(
     org_id = str(current_user.organization_id)
     await _require_medical_item(service, str(item_id), org_id)
 
-    item = await service.get_item_by_id(item_id, current_user.organization_id)
+    item = await service.get_item_by_id(
+        item_id, current_user.organization_id, attach_lot_stock=True
+    )
     if not item:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return item
@@ -450,6 +453,67 @@ async def update_medical_item(
         username=current_user.username,
     )
     return updated
+
+
+@router.post("/items/{item_id}/retire", status_code=status.HTTP_200_OK)
+async def retire_medical_item(
+    item_id: UUID,
+    retire_data: ItemRetireRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("inventory.manage_medical", "inventory.manage")
+    ),
+):
+    """
+    Retire a medical supply item (soft delete)
+
+    Every other write route on this router grants `inventory.manage_medical`
+    the same access as the broader `inventory.manage`, but the only retire
+    route lived on the general inventory router gated on `inventory.manage`
+    alone -- so once the generic item PATCH stopped accepting `active` (it
+    now rejects that field outright; retirement is `retire_item`'s job
+    alone), a caller holding only `inventory.manage_medical` had no way to
+    retire a medical item at all. This mirrors `inventory.py`'s retire route
+    behind this router's own domain check, closing that gap.
+
+    **Authentication required**
+    **Requires permission: inventory.manage_medical or inventory.manage**
+    """
+    service = InventoryService(db)
+    org_id = str(current_user.organization_id)
+    # A fast-fail preflight matching every other route on this router, plus
+    # the authoritative check: `required_item_types` re-validates domain
+    # membership against the item's *locked* category_id, so a concurrent
+    # reclassification between this preflight and retire_item's lock can't
+    # let a medical-only manager retire an item that raced out of the
+    # medical domain.
+    await _require_medical_item(service, str(item_id), org_id)
+
+    _, error = await service.retire_item(
+        item_id=item_id,
+        organization_id=current_user.organization_id,
+        notes=retire_data.notes,
+        required_item_types=MEDICAL_ITEM_TYPES,
+    )
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_item_retired",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "item_id": str(item_id),
+            "action": "retired",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return {"message": "Item retired successfully"}
 
 
 # ============================================

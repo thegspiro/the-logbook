@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { InventoryItem } from '../types';
@@ -409,6 +409,20 @@ describe('InventoryItemsPage — a bulk change that only half applies', () => {
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
     expect(String(mockToastSuccess.mock.calls[0]?.[0])).toContain('1 item(s)');
     expect(String(mockToastError.mock.calls[0]?.[0])).toContain('1 item(s)');
+  });
+
+  it('does not offer Retired in the bulk status picker — the backend rejects that pair through this path', async () => {
+    // Retiring is the dedicated Retire action's job alone; update_item
+    // rejects a status/condition pair of retired outright, so offering it
+    // in this generic picker would deterministically 400 for every item.
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectBoth(user);
+
+    await user.click(screen.getByRole('button', { name: /Change Status/ }));
+    const picker = await screen.findByRole('combobox', { name: /new status/i });
+
+    expect(within(picker).queryByRole('option', { name: 'Retired' })).not.toBeInTheDocument();
   });
 });
 

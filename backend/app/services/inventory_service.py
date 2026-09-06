@@ -807,13 +807,24 @@ class InventoryService:
         exclude_item_types: Optional[Iterable[ItemType]] = None,
         active_only: bool = True,
         skip: int = 0,
-        limit: int = 200,
+        limit: int = 5000,
     ) -> List[InventoryCategory]:
         """Get categories for an organization with pagination.
 
         ``item_types`` / ``exclude_item_types`` scope the result to a domain,
         so the medical-supply page's category picker never offers a uniform
         category and the gear page's never offers a medical one.
+
+        None of this method's three callers (the medical and gear category
+        pickers, and the CSV-import name lookup) pass ``skip``/``limit`` —
+        each treats the result as the organization's complete category set,
+        with no pagination UI anywhere that could ask for a later page. A
+        200-row default silently dropped every category past it, with no
+        error and no way for the picker to reach them. Categories are a
+        curated, hand-built structure (closer to positions than to
+        donations or line items), so a high ceiling that will not realistically
+        be hit is the correct bound here, not real pagination — unlike an
+        actually-unbounded per-transaction table.
         """
         query = select(InventoryCategory).where(
             InventoryCategory.organization_id == str(organization_id)
@@ -1829,9 +1840,22 @@ class InventoryService:
             item.lot_stock = totals.get(item.id)
 
     async def get_item_by_id(
-        self, item_id: UUID, organization_id: UUID
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        attach_lot_stock: bool = False,
     ) -> Optional[InventoryItem]:
-        """Get item by ID with all relationships"""
+        """Get item by ID with all relationships.
+
+        ``attach_lot_stock`` runs the same lot-total lookup ``get_items``
+        already does for every row of a list response — off by default,
+        since most callers here are write paths (``update_item``,
+        ``retire_item``, assignment/checkout flows) that have no use for it
+        and would otherwise pay for an unneeded query. Only a single-item
+        detail response should pass ``True``: without it, an item stocked
+        purely through dated lots reports its stale/zero ``quantity``
+        column instead of the lot ledger's actual on-hand count.
+        """
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.id == str(item_id))
@@ -1846,7 +1870,10 @@ class InventoryService:
                 selectinload(InventoryItem.assignment_history),
             )
         )
-        return result.scalar_one_or_none()
+        item = result.scalar_one_or_none()
+        if item and attach_lot_stock:
+            await self._attach_lot_stock(str(organization_id), [item])
+        return item
 
     async def _get_item_locked(
         self, item_id: UUID, organization_id: UUID
@@ -1939,6 +1966,43 @@ class InventoryService:
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
+            # Taking an item out of active inventory is retire_item's job
+            # alone, never this method's — whether requested directly
+            # (`active: false`) or via the equivalent `status`/`condition`
+            # pair (`{"status": "retired", "condition": "retired"}`, which
+            # `_validate_item_state` otherwise allows on its own). Retirement
+            # requires a locked fetch (so a concurrent assign/checkout can't
+            # land between the blocker check and the commit), the same
+            # blocker checks (assignment, active checkout, unreturned pool
+            # issuance), `status`/`condition`/`active` set together (a
+            # partial change leaves `assign_item_to_user`/`checkout_item` —
+            # which gate on `status`, not `active` — free to hand the item
+            # out again), and a dedicated audit event. This method has none
+            # of that machinery and must not approximate it inline; nothing
+            # in this codebase reactivates a retired item, so there is no
+            # legitimate use of either route here to preserve.
+            if (
+                "active" in update_data
+                or update_data.get("status") == ItemStatus.RETIRED.value
+                or update_data.get("condition") == ItemCondition.RETIRED.value
+            ):
+                return None, "Use the item's retire action to deactivate it"
+
+            # The guard above only catches *entering* retirement through
+            # this path; it says nothing about an already-retired item's
+            # status/condition being changed to something else. Since
+            # `active` isn't in update_data, that would leave `active=false`
+            # while making `status` distributable again — assign_item_to_user
+            # and checkout_item gate on `status`, not `active`, so the item
+            # could be handed to a member while still hidden from active
+            # inventory. Nothing in this codebase reactivates a retired
+            # item, so there is no legitimate status/condition change to
+            # allow here while the item is inactive.
+            if not item.active and (
+                "status" in update_data or "condition" in update_data
+            ):
+                return None, "Item is retired; status and condition cannot be changed"
+
             # Validate resulting state
             new_status = (
                 ItemStatus(update_data["status"])
@@ -1985,43 +2049,104 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    async def _deactivation_block_reason(self, item: InventoryItem) -> Optional[str]:
+        """Why ``item`` cannot be retired right now, or ``None`` if it can be.
+
+        Used only by ``retire_item``. ``update_item`` (the generic item
+        PATCH) does not call this — it rejects `active`, and a `status`/
+        `condition` pair of RETIRED, outright, rather than trying to
+        replicate retire_item's locked/blocker-checked/status-synced/
+        audited contract inline. retire_item is the only place an item can
+        be taken out of active inventory.
+
+        Both counts below are locking reads (Pitfall #27): retire_item's
+        item-row lock forces a concurrent checkout/assignment to block until
+        this transaction commits, but under REPEATABLE READ a *plain* SELECT
+        here would still answer from this transaction's first-read snapshot
+        — predating that lock — so it would not see a checkout or issuance
+        the other side committed while waiting on the lock. ``FOR UPDATE``
+        is what makes the read itself current, not the item lock alone.
+        """
+        if item.assigned_to_user_id:
+            return "Cannot retire: item is currently assigned. Unassign it first."
+
+        active_co = await self.db.execute(
+            select(func.count(CheckOutRecord.id))
+            .where(CheckOutRecord.item_id == str(item.id))
+            .where(CheckOutRecord.is_returned.is_(False))
+            .with_for_update()
+        )
+        if active_co.scalar():
+            return "Cannot retire: item has active checkouts. Check it in first."
+
+        # Not gated on the item's *current* tracking_type: that field is
+        # editable through the generic update_item PATCH with no check
+        # against outstanding holdings, so a caller could switch a pool item
+        # to individual specifically to skip this check, then retire it
+        # over units still checked out to a member. An ItemIssuance row
+        # persists independently of whatever tracking_type the item is
+        # relabeled to later, so this must too.
+        active_iss = await self.db.execute(
+            select(func.count(ItemIssuance.id))
+            .where(ItemIssuance.item_id == str(item.id))
+            .where(ItemIssuance.is_returned.is_(False))
+            .with_for_update()
+        )
+        if active_iss.scalar():
+            return "Cannot retire: item has unreturned pool issuances."
+
+        return None
+
     async def retire_item(
-        self, item_id: UUID, organization_id: UUID, notes: Optional[str] = None
+        self,
+        item_id: UUID,
+        organization_id: UUID,
+        notes: Optional[str] = None,
+        required_item_types: Optional[Iterable[ItemType]] = None,
     ) -> Tuple[bool, Optional[str]]:
-        """Retire an item (soft delete). Blocks if item has active checkouts or assignments."""
+        """Retire an item (soft delete). Blocks if item has active checkouts or assignments.
+
+        Locks the row before checking blockers, not just around the eventual
+        write: an unlocked read here let a concurrent assign_item_to_user or
+        checkout_item — both of which lock the item before committing — land
+        between this method's blocker check and its own commit, so retirement
+        could still go through over a now-held item using this transaction's
+        stale, pre-race read.
+
+        ``required_item_types``, when given, re-validates domain membership
+        against the *locked* item's ``category_id`` rather than trusting a
+        caller's own preflight check (e.g. medical_supplies.py's
+        ``_require_medical_item``): a domain-scoped caller (holding
+        ``inventory.manage_medical`` but not the broader ``inventory.manage``)
+        that checked domain membership before this call, racing a concurrent
+        reclassification, would otherwise retire an item outside the domain
+        their permission grants them. Once the row is locked here, no
+        concurrent write to this item's own ``category_id`` can land until
+        this transaction commits -- but the category *row itself* is a
+        separate object the item lock does not protect, and the caller's own
+        preflight already opened this transaction's REPEATABLE READ
+        snapshot, so a plain read of the category here would still answer
+        from before a concurrent reclassification of the category (its
+        ``item_type``, not the item's ``category_id``) commits. The
+        ``category_in_domain(..., for_update=True)`` call below is what
+        makes this check current rather than the item lock alone.
+        """
         try:
-            item = await self.get_item_by_id(item_id, organization_id)
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return False, "Item not found"
 
-            # Block retirement if item has active assignments
-            if item.assigned_to_user_id:
-                return (
-                    False,
-                    "Cannot retire: item is currently assigned. Unassign it first.",
-                )
+            if required_item_types is not None and not await self.category_in_domain(
+                item.category_id,
+                str(organization_id),
+                required_item_types,
+                for_update=True,
+            ):
+                return False, "Item not found"
 
-            # Block if item has active (unreturned) checkouts
-            active_co = await self.db.execute(
-                select(func.count(CheckOutRecord.id))
-                .where(CheckOutRecord.item_id == str(item_id))
-                .where(CheckOutRecord.is_returned.is_(False))
-            )
-            if active_co.scalar():
-                return (
-                    False,
-                    "Cannot retire: item has active checkouts. Check it in first.",
-                )
-
-            # Block if pool item has unreturned issuances
-            if item.tracking_type == TrackingType.POOL:
-                active_iss = await self.db.execute(
-                    select(func.count(ItemIssuance.id))
-                    .where(ItemIssuance.item_id == str(item_id))
-                    .where(ItemIssuance.is_returned.is_(False))
-                )
-                if active_iss.scalar():
-                    return False, "Cannot retire: item has unreturned pool issuances."
+            block_reason = await self._deactivation_block_reason(item)
+            if block_reason:
+                return False, block_reason
 
             item.status = ItemStatus.RETIRED
             item.condition = ItemCondition.RETIRED
@@ -2063,14 +2188,13 @@ class InventoryService:
     ) -> Tuple[Optional[ItemAssignment], Optional[str]]:
         """Assign an item to a user"""
         try:
-            # Lock the item row to prevent concurrent modifications
-            lock_result = await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.id == str(item_id))
-                .where(InventoryItem.organization_id == str(organization_id))
-                .with_for_update()
-            )
-            item = lock_result.scalar_one_or_none()
+            # Lock the item row to prevent concurrent modifications.
+            # _get_item_locked, not an inline SELECT: a batch caller
+            # (distribute_items) can load this same item unlocked first, and
+            # without populate_existing this session's identity map would
+            # hand back that stale, pre-lock object instead of the current
+            # row (see _get_item_locked's own docstring).
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
@@ -2489,14 +2613,12 @@ class InventoryService:
         quartermaster intentionally exceed the cap.
         """
         try:
-            # Lock the item row to prevent concurrent issuance race conditions
-            lock_result = await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.id == str(item_id))
-                .where(InventoryItem.organization_id == str(organization_id))
-                .with_for_update()
-            )
-            item = lock_result.scalar_one_or_none()
+            # Lock the item row to prevent concurrent issuance race
+            # conditions. _get_item_locked, not an inline SELECT: see
+            # assign_item_to_user for why (a preloading batch caller like
+            # distribute_items needs populate_existing to see this, not a
+            # stale identity-map copy).
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
@@ -2808,14 +2930,11 @@ class InventoryService:
     ) -> Tuple[Optional[CheckOutRecord], Optional[str]]:
         """Check out an item to a user"""
         try:
-            # Lock the item row to prevent concurrent checkouts
-            lock_result = await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.id == str(item_id))
-                .where(InventoryItem.organization_id == str(organization_id))
-                .with_for_update()
-            )
-            item = lock_result.scalar_one_or_none()
+            # Lock the item row to prevent concurrent checkouts.
+            # _get_item_locked, not an inline SELECT: see assign_item_to_user
+            # for why (a preloading batch caller like distribute_items needs
+            # populate_existing to see this, not a stale identity-map copy).
+            item = await self._get_item_locked(item_id, organization_id)
             if not item:
                 return None, "Item not found"
 
@@ -6362,22 +6481,35 @@ class InventoryService:
         category_id: Optional[str],
         organization_id: str,
         item_types: Iterable[ItemType],
+        for_update: bool = False,
     ) -> bool:
         """Is this category one of ``item_types``, in this organization?
 
         Fails closed: an unresolvable or uncategorized id is not in the
         domain. A medical-only officer reaching for a uniform category must be
         refused, and so must one reaching for a category that does not exist.
+
+        ``for_update``, off by default, makes this a locking read (Pitfall
+        #27) for the one caller that needs it: retire_item's post-lock
+        domain re-check. Locking the item row does not lock this category
+        row, and the caller's own earlier preflight check already opened
+        this transaction's REPEATABLE READ snapshot -- so a plain read here
+        would still answer from before a concurrent reclassification of the
+        *category itself* (as opposed to the item's category_id, which the
+        item lock does protect), no matter how late in the transaction it
+        runs. Every other caller is a stateless preflight with nothing of
+        its own to lock, so a plain read stays the default.
         """
         if not category_id:
             return False
-        found = await self.db.scalar(
-            select(InventoryCategory.id).where(
-                InventoryCategory.id == str(category_id),
-                InventoryCategory.organization_id == organization_id,
-                InventoryCategory.item_type.in_(list(item_types)),
-            )
+        stmt = select(InventoryCategory.id).where(
+            InventoryCategory.id == str(category_id),
+            InventoryCategory.organization_id == organization_id,
+            InventoryCategory.item_type.in_(list(item_types)),
         )
+        if for_update:
+            stmt = stmt.with_for_update()
+        found = await self.db.scalar(stmt)
         return found is not None
 
     async def name_in_domain(
@@ -6542,22 +6674,40 @@ class InventoryService:
         # it into an opening-balance lot — doubling the stock on hand and
         # letting the department issue units that are not there.
         #
-        # Lock the item rows: they are the thing both requests already share,
-        # and the lots that would conflict do not exist yet, so there is
-        # nothing there to lock. The `quantity > 0` filter then does the rest
-        # of the work, because a locking read sees the latest committed
-        # version — the loser of the race re-reads the zero the winner wrote
-        # and carries nothing forward.
+        # Lock every target item first, unconditionally, and decide from the
+        # refreshed quantity only after the lock is held — not the other way
+        # around. Filtering `quantity > 0` in the locking SELECT's WHERE
+        # clause (an earlier version of this method did) locks nothing for a
+        # row that reads 0 *at that instant*: a concurrent quantity edit
+        # raising it to a positive value moments later takes no lock,
+        # commits freely, and is never revisited here (this call already
+        # decided, correctly at the time, that the item had nothing to
+        # carry). The edit's units then sit in `quantity` forever unread,
+        # because the lot this call creates for the *other* items makes
+        # every reader stop consulting the column for lot-stocked items in
+        # the same request — orphaning a positive balance no reader will
+        # ever look at again.
+        #
+        # populate_existing=True is required, not cosmetic — see
+        # _get_item_locked's docstring for the mechanism. add_lot loads this
+        # same item, unlocked, immediately before calling this method (its
+        # only caller that does); without this, a quantity edit committed in
+        # that window is invisible here even though the WHERE clause itself
+        # sees it.
         result = await self.db.execute(
             select(InventoryItem)
             .where(
                 InventoryItem.id.in_(item_ids),
                 InventoryItem.organization_id == organization_id,
-                InventoryItem.quantity > 0,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        items = list(result.scalars().all())
+        items = [
+            item
+            for item in result.scalars().all()
+            if item.quantity and item.quantity > 0
+        ]
         if not items:
             return
 

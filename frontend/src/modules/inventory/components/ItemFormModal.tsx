@@ -952,7 +952,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   value={f.condition}
                   onChange={(e) => up('condition', e.target.value)}
                 >
-                  {ITEM_CONDITION_OPTIONS.map((c) => (
+                  {/* Retiring is the dedicated Retire action's job alone --
+                      the backend rejects a status/condition pair of retired
+                      through this generic PATCH path, so offering it here
+                      would deterministically 400 on save. */}
+                  {ITEM_CONDITION_OPTIONS.filter((c) => c.value !== 'retired').map((c) => (
                     <option key={c.value} value={c.value}>
                       {c.label}
                     </option>
