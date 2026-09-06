@@ -7,6 +7,186 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
+
+**Fixed**
+
+- **`effectDepsIntegrity` failed open on the arrays it exists to catch.** The
+  scan for a dependency array's closing bracket stopped 400 characters past the
+  suppression. Prettier puts one entry per line once an array is long, so nine
+  ordinary names already carry the bracket past that — and the array was then
+  skipped as though the suppression governed no dependency array at all. Longer
+  meant likelier to escape, the exact inverse of the rule's intent. The
+  lookahead now bounds the search for the _opening_ bracket only; the match for
+  the close runs to the end of the file. No suppression in the tree was being
+  skipped today, so the gap was latent rather than active.
+- **A legal five-entry array no longer fails the check.** Entries were counted
+  as top-level commas plus one, and Prettier leaves a trailing comma on an
+  expanded array — so five dependencies were reported as six, against a limit
+  that explicitly permits five. Non-empty top-level segments are counted
+  instead.
+### The Minutes page advertised a feature members cannot use (2026-09-06)
+
+**Fixed**
+
+- **The empty state sold recording minutes to people who cannot record them.**
+  With nothing recorded, the page showed three cards pitching what the feature
+  gets you — templates, action items, archives and search — above a card
+  telling the reader to "Start recording meeting minutes". Creating minutes is
+  `minutes.manage`-gated on the server and the buttons beside that copy were
+  already withheld, so a member read an advertisement with no way in. The cards
+  and the instruction are now shown only to someone who can act on them.
+
+- **The Record Minutes dialog outlived the permission that opened it.** It
+  rendered on its own open state, so losing `minutes.manage` with it open left
+  the form on screen. It is now gated like the controls that open it.
+
+**Changed**
+
+- **The page still reports "No Meeting Minutes" to everyone.** A member opened
+  it deliberately and deserves the answer; it is the pitch and the instruction
+  that are withheld, not the fact.
+
+### A member's own uniform sizes no longer need a permission (2026-09-06)
+
+**Fixed**
+
+- **`GET`/`PUT /inventory/my/size-preferences` required `inventory.view`.**
+  Both handlers key the row on the caller, so neither reaches another member's
+  sizes — and every sibling endpoint behind "My Issued Gear" (issued gear,
+  equipment requests, return requests, loan extension) requires only
+  authentication. The June 2026 changelog recorded these two the same way,
+  "self, login required", so the grant had drifted from the documented
+  contract. They now require authentication only.
+
+  The practical effect was the My Sizes button: it sits on a route that needs
+  no permission and was rendered unconditionally, so a member whose position
+  lacked `inventory.view` got a button that 403'd. Dormant for a baseline
+  member, who holds that grant.
+
+  **This is a widening.** The officer-facing endpoints for _another_ member's
+  sizes are untouched and keep their stricter gates — `inventory.view` to
+  read, `inventory.manage` to write — and a test now pins both halves.
+### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
+
+**Fixed**
+
+- **"Add stock" on the supply worklist is now gated on `inventory.manage`.**
+  Reading the worklist takes `inventory.check_view`, and the administration hub
+  offers it on that grant deliberately — knowing what is about to expire is the
+  checklist officer's business. Adding replacement stock is not:
+  `POST /inventory/items/{id}/lots` requires `inventory.manage`, so a
+  check_view holder got a 403 from a button the page had just offered them. The
+  control is now disabled rather than hidden, with a title naming who does it,
+  matching the Swap control on the apparatus inventory screen — the same
+  manage-gated stock write. Reading the worklist is unchanged.
+### Inventory and Members pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Inventory and Members pages that sit beside their
+  administration hub rather than under it.** Most of these two modules' admin
+  pages do nest under `/inventory/admin` and `/members/admin` and already
+  reached their hub by the URL alone. Five did not: Temporary Loans, Storage
+  Areas and Import sit at `/inventory/…`, and the member ID scanner and the
+  Check-In Station at `/members/…`, so their trail stopped at the module landing
+  page — which for Inventory is the items catalogue, a different page from the
+  hub that links to them. Temporary Loans, Import, the scanner and the Check-In
+  Station had no trail at all.
+- **A derived check that an Inventory Administration card outside the hub's URL
+  space names its hub.** The hub crumb is opt-in per page, so a page that should
+  show it and does not simply will not, in silence. Inventory declares its cards
+  as data, which makes the obligation checkable: every card route not already
+  under `/inventory/admin` must carry the hub, and the test names any that does
+  not.
+
+**Fixed**
+
+- **The Inventory hub no longer offers an export the page it opens cannot
+  do.** The "Import / Export" card ("Bulk import from CSV or export inventory
+  data") pointed at `/inventory/import`, which only imports — export is a button
+  on the items list. The card now says "Import" and describes only that.
+- **Three pages no longer carry a second name in their trail.** The crumb for
+  `/inventory/checkouts` read "Checkouts" while the hub card and the page's own
+  heading both said "Temporary Loans"; `/members/check-in-station` title-cased to
+  "Check In Station" against a heading that hyphenates it. The hub-card
+  agreement test now covers Inventory as well as Scheduling, so a card and a
+  crumb naming one page differently fails rather than shipping.
+### The close-out queue and the number above it are one list now (2026-09-06)
+
+**Added**
+
+- **`GET /scheduling/shifts/needing-closeout`.** The shifts that have ended and
+  were never closed out, oldest first, gated on `scheduling.manage`. Ordered by
+  when each shift was actually over — `end_time`, or `start_time` plus the
+  department's open-ended cushion — because a shift with no recorded end was
+  over a cushion after it began, and ordering by the start interleaves it with
+  shifts that finished hours earlier. Unlike `GET /scheduling/shifts` it takes
+  `scheduling.manage` alone: it is the whole department's backlog with no
+  member filter applied.
+
+**Changed**
+
+- **The close-out queue reads the server's population instead of deriving its
+  own.** `/scheduling/admin/closeout` and the administration hub's **To close
+  out** card now read one predicate, `closeout_backlog_criteria`. They were two:
+  the metric has no earliest date while the page re-derived the set from a date
+  range it chose, so a shift left unclosed before that range began was counted
+  on the card and missing from the list it linked to.
+- **The queue's From and To controls are gone.** This page is the backlog, not
+  a query over it, and a range is what let it and the card describe different
+  populations. Three workarounds go with them: the six-month default, the
+  reversed-range guard, and the ten-page fetch loop that existed only because
+  the generic shifts endpoint returned mostly closed-out shifts and the unclosed
+  ones could sit on page three. The list is capped at one page of 200 and says
+  so when the backlog is longer, rather than letting a cap read as the end of
+  the work.
+- **The queue refreshes itself as shifts become eligible.** The page no longer
+  re-tests the server's answer against its own cached cushion — an officer who
+  lowered the cushion elsewhere made every other open tab drop rows the server
+  had just declared overdue, and the page then read "Every shift is closed out"
+  with a positive total beside it. Membership is the server's answer alone, so
+  the queue is re-read on the thirty-second clock the waiting badges already
+  run on. The refresh is skipped while a close-out wizard is open, so it cannot
+  unmount unsaved entries, and a failed refresh leaves the last good list on
+  screen rather than blanking a working page.
+### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
+
+**Fixed**
+
+- **Building an equipment checklist on a phone, the blue "Add item" button
+  at the bottom of a location could not be tapped.** It was drawn
+  underneath the checklist's own bottom bar and the app's bottom
+  navigation, so taps landed on those instead. Adding an item has moved
+  onto the checklist's bottom bar, where it stays reachable, follows the
+  location you last opened, and scrolls to that location when you use it.
+  Adding a _location_ is still on the same bar, now labelled "Location",
+  and remains available from the buttons below the list as before.
+- **Several buttons were smaller than a fingertip on a phone.** Buttons on
+  My Issued Gear, My Equipment Checklists, Reorder Requests and the
+  checklist builder now meet the 44-pixel minimum touch size on phones.
+- **A stray scrollbar under the tabs on an inventory item's page** has been
+  removed.
+### Create Shift: the dialog's fields had no names (2026-09-06)
+
+**Fixed**
+
+- **Nothing in the Create Shift dialog was announced by name.** All nine of its
+  controls — Shift Template, Start Date, End Date, Apparatus, Start Time, End
+  Time, Shift Officer, Notes and the template search box — sat next to a label
+  that was never associated with them, so a screen reader read out nine
+  anonymous fields ("edit text", "combo box") and gave no way to tell which was
+  which. Clicking a label also focused nothing, which is the same defect as seen
+  with a mouse. Every field now carries its label.
+- "Custom Times" heads the Start Time / End Time pair rather than naming a
+  single field, so it is announced as the group it is instead of claiming to be
+  one of them.
+- **The two time fields were announced as a time, not as a field.** Each is
+  three dropdowns (hour, minute, AM/PM) that name themselves, and the start
+  field named itself after whatever time the chosen template starts at — so a
+  screen reader offered "08:00 hour" where it should have said "Start Time
+  hour", and the end field fell back to a bare "Time". All six now carry the
+  visible field name.
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
 
 **Fixed**
@@ -125,6 +305,29 @@ Codex raised these on #2206 as it merged, so none were addressed there.
   that omit a function identity, where there is no list to drift — and the one
   defect ran 11. A suppression is still the right call for those; what is
   banned is the array that is trying to be exhaustive by hand.
+
+### Declining your own shift no longer answers 403 (2026-09-06)
+
+**Added**
+
+- **`POST /scheduling/assignments/{id}/decline`** — the mirror of the existing
+  `confirm` route, self-scoped the same way: the assignment is resolved by
+  `user_id` as well as id, so a foreign id can never cross tenants. It clears
+  `confirmed_at` when a member withdraws an affirmation they had already given,
+  and only notifies the officer on the transition, so a retry after a dropped
+  response does not report the seat open twice.
+
+**Fixed**
+
+- **A member could not decline their own shift assignment.** Confirm and
+  Decline sit side by side on My Shifts and in the shift detail panel, and are
+  only ever offered on your own seat — but only Confirm had a route of its own.
+  Decline reached for `PATCH /assignments/{id}`, which requires
+  `scheduling.assign` or being the shift's officer, so a member holding neither
+  got a 403 from a button that was theirs to press. Both screens now call the
+  new endpoint. The PATCH route is unchanged and stays officer-only: it is how
+  an officer records a decline on somebody's behalf, and it carries edits a
+  member has no business making.
 
 ### Events and Training pages say which hub they belong to (2026-09-06)
 

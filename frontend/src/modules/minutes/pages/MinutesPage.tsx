@@ -519,55 +519,63 @@ const MinutesPage: React.FC = () => {
           </div>
         )}
 
-        {/* Empty State - Feature Cards (shown when no meetings exist and not loading) */}
+        {/* Empty State - Feature Cards (shown when no meetings exist and not loading).
+            The three cards pitch what recording minutes gets you, so they are
+            shown only to someone who can record them. The card beneath still
+            reports the emptiness to everyone — a member opened this page and
+            deserves the answer — but drops the instruction to start. */}
         {!loading && meetings.length === 0 && !error && (
           <>
-            <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="card p-6">
-                <ClipboardList className="mb-4 h-8 w-8 text-cyan-700" />
-                <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Record Minutes</h3>
-                <p className="text-theme-text-secondary mb-3 text-sm">
-                  Structured templates for recording meeting minutes with attendees, motions, and votes.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Roll Call</span>
-                  <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Motions</span>
-                  <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Votes</span>
+            {canManage && (
+              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="card p-6">
+                  <ClipboardList className="mb-4 h-8 w-8 text-cyan-700" />
+                  <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Record Minutes</h3>
+                  <p className="text-theme-text-secondary mb-3 text-sm">
+                    Structured templates for recording meeting minutes with attendees, motions, and votes.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Roll Call</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Motions</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-700">Votes</span>
+                  </div>
+                </div>
+                <div className="card p-6">
+                  <CheckSquare className="mb-4 h-8 w-8 text-green-700" />
+                  <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Action Items</h3>
+                  <p className="text-theme-text-secondary mb-3 text-sm">
+                    Track action items from meetings with assignees, due dates, and completion status.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Assignees</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Due Dates</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Follow-up</span>
+                  </div>
+                </div>
+                <div className="card p-6">
+                  <Archive className="mb-4 h-8 w-8 text-amber-700" />
+                  <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Archives & Search</h3>
+                  <p className="text-theme-text-secondary mb-3 text-sm">
+                    Full-text search across all meeting minutes for compliance and quick reference.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">
+                      Full-text Search
+                    </span>
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">PDF Export</span>
+                  </div>
                 </div>
               </div>
-              <div className="card p-6">
-                <CheckSquare className="mb-4 h-8 w-8 text-green-700" />
-                <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Action Items</h3>
-                <p className="text-theme-text-secondary mb-3 text-sm">
-                  Track action items from meetings with assignees, due dates, and completion status.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Assignees</span>
-                  <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Due Dates</span>
-                  <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-700">Follow-up</span>
-                </div>
-              </div>
-              <div className="card p-6">
-                <Archive className="mb-4 h-8 w-8 text-amber-700" />
-                <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">Archives & Search</h3>
-                <p className="text-theme-text-secondary mb-3 text-sm">
-                  Full-text search across all meeting minutes for compliance and quick reference.
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">
-                    Full-text Search
-                  </span>
-                  <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">PDF Export</span>
-                </div>
-              </div>
-            </div>
+            )}
 
             <div className="card p-12 text-center">
               <FileSearch className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
               <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Meeting Minutes</h3>
-              <p className="text-theme-text-secondary mb-6">
-                Start recording meeting minutes to maintain your organization's history.
-              </p>
+              {canManage && (
+                <p className="text-theme-text-secondary mb-6">
+                  Start recording meeting minutes to maintain your organization's history.
+                </p>
+              )}
               {canManage && (
                 <button
                   onClick={() => setShowCreateModal(true)}
@@ -582,7 +590,7 @@ const MinutesPage: React.FC = () => {
         )}
 
         {/* Create Minutes Modal */}
-        {showCreateModal && (
+        {canManage && showCreateModal && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" onClick={() => setShowCreateModal(false)} aria-hidden="true" />

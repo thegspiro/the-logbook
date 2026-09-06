@@ -16,6 +16,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import { formatDateCustom, getTodayLocalDate } from '../utils/dateFormatting';
+import { Breadcrumbs } from '../components/ux';
 
 type TabView = 'active' | 'overdue';
 
@@ -154,6 +155,8 @@ export const InventoryCheckoutsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <Breadcrumbs underHub="/inventory/admin" />
+
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div className="flex min-w-0 items-center space-x-3">

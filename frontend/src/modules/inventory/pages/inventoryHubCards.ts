@@ -448,8 +448,11 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'import',
-    label: 'Import / Export',
-    description: 'Bulk import from CSV or export inventory data',
+    // Import only. Export is a button on the items list, not on this route, so
+    // the old "Import / Export" label sent an officer looking for their export
+    // to the one page that cannot produce it.
+    label: 'Import',
+    description: 'Bulk import inventory items from a CSV file',
     path: '/inventory/import',
     icon: Upload,
     section: 'Setup & Tools',

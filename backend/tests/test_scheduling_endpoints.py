@@ -117,6 +117,37 @@ class TestEndpointPermissions:
                 "PermissionChecker(scheduling.view)" in deps
             ), f"GET {path} unexpectedly widened"
 
+    def test_closeout_backlog_stays_on_scheduling_manage(self):
+        """The one scheduling read that is *not* widened to `view`.
+
+        `/shifts` returns a member their own visible shifts when they hold only
+        `scheduling.view`; this returns the whole department's unclosed backlog
+        with no member filter at all. It is reached from a page already gated on
+        `manage`, so pairing it with `view` the way the reads above are paired
+        would hand every member a department-wide list. Pinned so the pairing is
+        not applied here by habit.
+        """
+        deps = self._get_route_deps("/shifts/needing-closeout", "GET")
+        assert deps is not None, "Route /shifts/needing-closeout GET not found"
+        assert "PermissionChecker(scheduling.manage)" in deps
+
+    def test_closeout_backlog_is_registered_before_the_shift_detail_route(self):
+        """Otherwise `/shifts/{shift_id}` swallows it and the path parses as an id.
+
+        FastAPI matches in declaration order, so a literal segment added after a
+        path parameter is unreachable — and the failure is a 422 about an
+        invalid UUID, which reads like a client bug rather than a routing one.
+        `/shifts/open` carries the same note for the same reason.
+        """
+        paths = [
+            route.path
+            for route in router.routes
+            if "GET" in getattr(route, "methods", set())
+        ]
+        assert paths.index("/shifts/needing-closeout") < paths.index(
+            "/shifts/{shift_id}"
+        )
+
     def test_create_shift_requires_scheduling_manage(self):
         deps = self._get_route_deps("/shifts", "POST")
         assert deps is not None, "Route /shifts POST not found"
@@ -127,6 +158,42 @@ class TestEndpointPermissions:
         deps = self._get_route_deps("/shifts/{shift_id}/signup", "POST")
         assert deps is not None, "Route /shifts/{shift_id}/signup POST not found"
         # Should use get_current_user, NOT require_permission
+        assert any("get_current_user" in d for d in deps)
+
+    def test_answering_your_own_roster_needs_no_permission(self):
+        """Confirm and decline are both the member's own answer, so both are
+        reachable by any authenticated user and neither carries a permission
+        dependency.
+
+        Decline had no endpoint of its own: the screens reached for
+        ``PATCH /assignments/{id}``, which requires ``scheduling.assign`` or
+        being the shift's officer, so a plain member's Decline button answered
+        403 while Confirm beside it worked. Asserted as a pair because the
+        asymmetry is the bug — a decline route that drifts back behind a
+        permission fails here.
+        """
+        for path in (
+            "/assignments/{assignment_id}/confirm",
+            "/assignments/{assignment_id}/decline",
+        ):
+            deps = self._get_route_deps(path, "POST")
+            assert deps is not None, f"Route {path} POST not found"
+            assert any(
+                "get_current_user" in d for d in deps
+            ), f"POST {path} does not admit a plain authenticated member"
+            assert not any(
+                "PermissionChecker" in d for d in deps
+            ), f"POST {path} unexpectedly carries a permission gate"
+
+    def test_declining_on_someone_elses_behalf_stays_officer_only(self):
+        """The self-service decline does not widen the officer edit path.
+
+        ``PATCH /assignments/{id}`` is how an officer records a decline for a
+        member, and it carries edits (position, training slot) a member has no
+        business making — so it keeps its gate while the new route opens.
+        """
+        deps = self._get_route_deps("/assignments/{assignment_id}", "PATCH")
+        assert deps is not None, "Route /assignments/{assignment_id} PATCH not found"
         assert any("get_current_user" in d for d in deps)
 
     def test_open_shifts_uses_get_current_user(self):
