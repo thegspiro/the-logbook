@@ -269,13 +269,21 @@ image can live — nothing else in this directory is published but `*.md`.
 
 Three things follow from that, worth knowing before adding one:
 
-- **The path is checked.** `scripts/check_docs_links.py` resolves image targets
-  as files, so a reference to something not in `wiki/images/` fails CI rather
-  than publishing a broken image. That check is the reason to prefer a relative
-  path over an absolute `raw.githubusercontent.com` URL, which it cannot verify.
-- **Deleting an image here deletes it from the published wiki.** The publish
-  removes the destination directory before copying, so the live wiki matches
-  this one rather than accumulating every image ever published.
+- **The path is checked, and so is its location.** `scripts/check_docs_links.py`
+  resolves image targets as files and additionally rejects a wiki image that
+  lands outside `images/` — pointing at `../docs/training/images/…` would
+  resolve fine in this repository and still publish broken, since that
+  directory is not copied. Those checks are the reason to prefer a relative
+  path over an absolute `raw.githubusercontent.com` URL, which cannot be
+  verified.
+- **Only committed files are published.** The publish copies tracked files
+  only, so a scratch capture or editor artifact sitting in `images/` is left
+  behind and named in the output rather than pushed to a public wiki
+  unreviewed. Commit an image before expecting it to appear.
+- **Deleting an image here deletes it from the published wiki.** The
+  destination is cleared before every copy — including when you delete the
+  last image and the directory goes with it — so the live wiki matches this
+  one rather than accumulating every image ever published.
 - **Images are committed to this repository**, where they are reviewable in a
   pull request alongside the page that uses them. Keep them reasonably sized —
   `docs/training/images/` is 44 MB across 516 captures, and the wiki does not

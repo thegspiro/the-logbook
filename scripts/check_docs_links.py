@@ -78,8 +78,14 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 # An explicit anchor: <a name="..."> or <a id="...">, which several older docs
 # use to keep a stable target across heading rewrites.
 EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
-# Matches both `[label](target)` and `![alt](target)`, capturing the same
-# target group either way.
+# Matches both `[label](target)` and `![alt](target)`, capturing the leading
+# `!` so an image can be told from a link, and tolerating Markdown's optional
+# title — `[a](b.md "Title")`, `'Title'` or `(Title)`.
+#
+# Without the title branch the whole reference silently does not match, so a
+# broken target wearing a title is not reported at all. Nothing in the tree uses
+# the form today, which is exactly why it would have gone unnoticed: the first
+# person to write one would get no check on it.
 #
 # Images were excluded by a `(?<!\!)` lookbehind until 2026-09-06. That left
 # the one link class with no safety net anywhere: a dead `[page](Page)` is
@@ -93,7 +99,19 @@ EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
 # references. The three that a naive scan flags are `![alt](./images/....png)`
 # syntax examples inside fenced blocks and inline code spans, which `links_in`
 # strips before matching.
-LINK_RE = re.compile(r"\[[^\]]*\]\(\s*([^)\s]+?)\s*\)")
+LINK_RE = re.compile(
+    r"(!?)\[[^\]]*\]\("
+    r"\s*([^)\s]+?)\s*"
+    r"""(?:"[^"]*"|'[^']*'|\([^)]*\))?\s*"""
+    r"\)"
+)
+
+# A wiki page's images must resolve inside this directory: wiki/setup-wiki.sh
+# publishes wiki/images/ and nothing else, so an image anywhere else in the
+# repository exists here, passes a plain file check, and is still a broken image
+# on the published wiki. That is the failure this checker exists to stop, so it
+# is checked rather than left to the README's word.
+WIKI_IMAGES_DIR = os.path.join(WIKI_DIR, "images")
 
 
 def slugify(heading: str) -> str:
@@ -155,9 +173,13 @@ def anchors_for(path: str, cache: dict[str, set[str]]) -> set[str]:
     return found
 
 
-def links_in(path: str) -> list[tuple[int, str]]:
-    """Every internal link target in a file, with its line number."""
-    out: list[tuple[int, str]] = []
+def links_in(path: str) -> list[tuple[int, str, bool]]:
+    """Every internal link target in a file: line number, target, is-image.
+
+    The is-image flag is carried rather than discarded because a wiki page's
+    images have a stricter rule than its links — see WIKI_IMAGES_DIR.
+    """
+    out: list[tuple[int, str, bool]] = []
     in_fence = False
     with open(path, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
@@ -171,11 +193,12 @@ def links_in(path: str) -> list[tuple[int, str]]:
         # the docs describe their own cross-reference syntax that way.
         line = re.sub(r"`[^`]*`", lambda m: " " * len(m.group(0)), line)
         for m in LINK_RE.finditer(line):
-            target = m.group(1)
+            is_image = bool(m.group(1))
+            target = m.group(2)
             # External and non-file schemes are out of scope on purpose.
             if re.match(r"^(https?:|mailto:|tel:|data:|//)", target):
                 continue
-            out.append((lineno, target))
+            out.append((lineno, target, is_image))
     return out
 
 
@@ -196,7 +219,7 @@ def main(argv: list[str]) -> int:
             continue
         base_dir = os.path.dirname(path)
 
-        for lineno, target in links_in(path):
+        for lineno, target, is_image in links_in(path):
             file_part, _, anchor = target.partition("#")
 
             if not file_part:
@@ -225,6 +248,21 @@ def main(argv: list[str]) -> int:
                 if not os.path.exists(resolved):
                     problems.append(
                         f"{path}:{lineno}: link target not found: {file_part}"
+                    )
+                    continue
+
+                # An existing file is not enough for a wiki image: only
+                # wiki/images/ is published, so anything else is a broken
+                # image on the live wiki no matter what it resolves to here.
+                if (
+                    in_wiki
+                    and is_image
+                    and not resolved.startswith(WIKI_IMAGES_DIR + os.sep)
+                ):
+                    problems.append(
+                        f"{path}:{lineno}: wiki image '{file_part}' resolves "
+                        f"outside {WIKI_IMAGES_DIR}/, which setup-wiki.sh does "
+                        f"not publish"
                     )
                     continue
 

@@ -27,7 +27,7 @@ def targets(markdown: str) -> list[str]:
         path = os.path.join(tmp, "page.md")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(markdown)
-        return [target for _lineno, target in links_in(path)]
+        return [target for _lineno, target, _is_image in links_in(path)]
 
 
 class ImageTargetsAreChecked(unittest.TestCase):
@@ -46,7 +46,7 @@ class ImageTargetsAreChecked(unittest.TestCase):
             path = os.path.join(tmp, "page.md")
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write("# Title\n\ntext\n\n![shot](images/x.png)\n")
-            assert links_in(path) == [(5, "images/x.png")]
+            assert links_in(path) == [(5, "images/x.png", True)]
 
 
 class ExamplesAreNotFindings(unittest.TestCase):
@@ -62,6 +62,41 @@ class ExamplesAreNotFindings(unittest.TestCase):
 
     def test_tilde_fence_is_honoured_too(self):
         assert targets("~~~\n![example](images/example.png)\n~~~\n") == []
+
+
+class OptionalTitlesAreParsed(unittest.TestCase):
+    """Markdown allows a title after the destination. The earlier pattern only
+    permitted whitespace there, so the whole reference failed to match and a
+    broken target wearing a title was reported as nothing at all. No file in
+    the tree uses the form yet — which is why the gap would have surfaced as
+    the first author of one silently getting no check."""
+
+    def test_double_quoted_title(self):
+        assert targets('![shot](images/a.png "Dashboard")\n') == ["images/a.png"]
+
+    def test_single_quoted_title(self):
+        assert targets("[Guide](Module-Training 'Training')\n") == ["Module-Training"]
+
+    def test_parenthesised_title(self):
+        assert targets("[Guide](Module-Training (Training))\n") == ["Module-Training"]
+
+    def test_title_containing_a_close_paren(self):
+        assert targets('![a](images/a.png "Ladder (aerial)")\n') == ["images/a.png"]
+
+
+class ImageFlagIsCarried(unittest.TestCase):
+    """`main` needs to tell an image from a link, because a wiki page's images
+    have a stricter rule than its links: only wiki/images/ is published."""
+
+    def test_image_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "page.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("![a](images/a.png)\n[b](Module-Events)\n")
+            assert links_in(path) == [
+                (1, "images/a.png", True),
+                (2, "Module-Events", False),
+            ]
 
 
 class ExternalImagesAreOutOfScope(unittest.TestCase):
