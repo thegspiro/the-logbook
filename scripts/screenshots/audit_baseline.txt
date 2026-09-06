@@ -116,3 +116,9 @@
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
 04-47-template-reminder-audience.png
+# Ported from #2329, which fixes this on main: #2320's re-capture pass added
+# two modal shots on light pages, so the audit flagged the 15px gutter this
+# section describes and Docs Link Check went red for every open PR. Both are
+# ordinary usable captures. These two lines no-op once main carries the fix.
+08-22-screening-record-form.png
+08-57-template-reset-dialog.png
