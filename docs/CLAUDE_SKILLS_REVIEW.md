@@ -4,7 +4,7 @@
 **Scope:** Which Claude Code skills would measurably improve how this
 repository is worked on — both the skills already available to this account and
 the project-local skills worth authoring.
-**Status:** Review only. No skills were created; see "Recommended sequencing".
+**Status:** Review complete. Steps 2 and 6 of the sequencing below are implemented (see §7); no skills were created.
 
 ---
 
@@ -326,3 +326,71 @@ Steps 1, 2 and 6 are reversible in minutes and carry no risk to the
 cross-agent contract. Step 3 is the first one that changes where a rule lives,
 and it is deliberately scoped to a single rule set so the pattern can be judged
 on evidence.
+
+---
+
+## 7. What was implemented
+
+Steps 2 and 6 only — the two that are reversible in minutes and touch nothing
+about where a repository rule lives. Steps 1, 3, 4 and 5 remain open.
+
+### `permissions.allow` in `.claude/settings.json`
+
+156 rules covering read-only and verification commands: the npm scripts
+(`lint`, `typecheck`, `validate`, `build`, `test`), `npx tsc` / `eslint` /
+`prettier --check` / `vitest run`, the Python checkers (`flake8`,
+`black --check`, `isort --check-only`, `mypy`, `pytest`), the read-only
+`alembic` subcommands, `scripts/check_docs_links.py`,
+`scripts/check_ci_gate.py`, inspection-only git verbs, and a short list of
+shell reads.
+
+Two deliberate exclusions:
+
+- **Nothing that writes.** `find` (`-delete`, `-exec`), `awk` (redirection),
+  `sort` (`-o FILE`) and `uniq` (`uniq IN OUT`) are all capable of writing a
+  file, so none of them is in a list whose premise is that it is read-only.
+  `alembic upgrade` / `downgrade`, `git push`, `git commit` and
+  `prettier --write` are absent for the same reason — those should keep
+  prompting.
+- **Three spellings per command.** The accepted prefix syntax has differed
+  across Claude Code versions (`Bash(git status *)` vs `Bash(git status:*)`),
+  and this was not verifiable from inside the session. A rule that does not
+  match simply never fires, so carrying the exact form plus both wildcard
+  forms is inert where one is unsupported and is what makes the list work
+  either way. Once `/permissions` confirms which form this CLI parses, the
+  other two can be dropped.
+
+### `Stop` hook — `.claude/hooks/completion-gate.sh`
+
+Runs the completion gate when a turn ends and returns
+`{"decision": "block", "reason": ...}` while it is red, so the turn cannot end
+over a failing check. The gate stops depending on an agent remembering it at
+the one moment they are least likely to.
+
+How it decides what to run:
+
+| Behaviour                                                                                  | Why                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exits immediately when `stop_hook_active` is true                                          | A blocked stop re-enters the model, which stops again. Without this the pair loops.                                                                                                                                                       |
+| Scope is **unpushed** work (working tree + commits not on any remote), not the branch diff | A clone with a stale `origin/main` reports its whole recent history as the branch diff — 396 files here — which would run a full frontend typecheck at the end of every docs-only turn. Commits already on a remote have been through CI. |
+| Runs only the checks whose file types changed                                              | A docs-only turn costs 0.03s.                                                                                                                                                                                                             |
+| `npm run typecheck`, never a bare `tsc`                                                    | The wrapper resolves the aliased TypeScript 7 the project builds with; `tsc` on `PATH` is the 5.9.3 typescript-eslint pins. See CLAUDE.md § "Two TypeScript installs".                                                                    |
+| `eslint` on changed files; `flake8` / `black --check` on changed files                     | `npm run lint` over the whole project took minutes — an unacceptable per-turn tax. CI still lints the full tree, and `--max-warnings 10` on a subset is stricter than CI, never looser.                                                   |
+| Caches a pass, keyed on a hash of **file content**                                         | `git status --porcelain` prints the same line (`?? file`) for two different edits to one file, so a status-only key would treat a second, broken edit as the tree that already passed.                                                    |
+| A missing tool reports and does **not** write the pass marker                              | CLAUDE.md is explicit that an unavailable tool is reported, never silently passed. It does not block: a missing interpreter is not something the model can fix by working longer.                                                         |
+
+Measured on this repository: ~10s when frontend files changed (whole-project
+typecheck plus scoped lint), ~2s for backend-only changes, 0.03s when neither
+changed, 0.05s on a cached pass.
+
+Verified by piping synthetic Stop payloads through the hook: the loop guard,
+the no-op path, a green pass and its cache, cache invalidation on a
+same-filename content change, a `flake8`/`black` failure, a `tsc` failure, an
+`eslint` failure (the pitfall-16 `window.confirm` ban), and the
+missing-tooling path.
+
+**Two caveats for whoever picks this up.** The hook fires outside the turn
+that installs it, so it could not be proven live from the session that wrote
+it — open `/hooks` once, or restart, if it does not fire. And it is committed
+to project settings, so it applies to every contributor using Claude Code on
+this repository, not just one machine.
