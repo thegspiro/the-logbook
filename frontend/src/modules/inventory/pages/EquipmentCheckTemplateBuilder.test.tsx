@@ -298,7 +298,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
   });
 
-  it('opens a focused mobile add flow from the location header and keeps a safe-area action visible', async () => {
+  it('opens a focused mobile add flow from the location header', async () => {
     const user = userEvent.setup();
     renderBuilder();
 
@@ -308,7 +308,61 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(input).toHaveFocus();
     expect(screen.getByText(/Choose a result to link inventory/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add several' })).toBeVisible();
-    expect(screen.getByTestId('mobile-add-action-cab')).toHaveClass('pb-[max(0.75rem,env(safe-area-inset-bottom))]');
+  });
+
+  /**
+   * The per-location add bar this replaced was `sticky bottom-0 z-20`, beneath
+   * both the action bar (z-30) and the 56px mobile bottom navigation (z-50) —
+   * unreachable, while the test that guarded it asserted only that its
+   * hand-written padding class was present, which jsdom is happy to confirm
+   * about a button nobody can tap. Assert the surface instead: adding an item
+   * lives on the bar that carries the clearance utility.
+   */
+  it('carries adding an item on the phone action bar, clear of the bottom navigation', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+    expect(bar).toHaveClass('action-bar-safe');
+    expect(screen.queryByTestId('mobile-add-action-cab')).not.toBeInTheDocument();
+
+    // Nothing has been expanded, so the target is the fallback: the last
+    // location that can hold items, which is where a top-down build left off.
+    await user.click(within(bar).getByRole('button', { name: 'Add an item to Medical bag' }));
+
+    expect(screen.getByPlaceholderText('Add or search items…')).toHaveFocus();
+  });
+
+  it('follows the last location the author opened', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+    expect(within(bar).getByRole('button', { name: 'Add an item to Medical bag' })).toBeVisible();
+
+    await user.click(await screen.findByRole('button', { name: 'Collapse Cab' }));
+    await user.click(screen.getByRole('button', { name: 'Expand Cab' }));
+
+    expect(within(bar).getByRole('button', { name: 'Add an item to Cab' })).toBeVisible();
+  });
+
+  it('keeps adding an item available while the template still has blockers', async () => {
+    // A count item with no par is an item-level blocker, which is what puts
+    // the bar into its Review state — the state a template spends most of its
+    // build in, and the one that must not take adding an item away.
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: structuredClone(template.compartments).map((compartment) =>
+        compartment.id === 'cab'
+          ? { ...compartment, items: compartment.items.map((item) => ({ ...item, checkType: 'count' })) }
+          : compartment
+      ),
+    });
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+    expect(within(bar).getByRole('button', { name: 'Review' })).toBeVisible();
+    expect(within(bar).getByRole('button', { name: /^Add an item to/ })).toBeVisible();
   });
 
   it('adds plain text to an empty mobile location and retains focus for rapid entry', async () => {

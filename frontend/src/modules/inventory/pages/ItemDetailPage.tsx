@@ -513,7 +513,7 @@ const ItemDetailPage: React.FC = () => {
       {/*  Tabs                                                         */}
       {/* ============================================================ */}
       <div>
-        <div className="border-theme-surface-border scrollbar-hide -mx-4 flex gap-4 overflow-x-auto border-b px-4 sm:mx-0 sm:px-0">
+        <div className="border-theme-surface-border hscroll -mx-4 flex gap-4 border-b px-4 sm:mx-0 sm:px-0">
           {visibleTabs.map((t) => (
             <button
               key={t.key}

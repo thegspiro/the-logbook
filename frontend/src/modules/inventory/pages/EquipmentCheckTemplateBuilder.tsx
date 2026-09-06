@@ -574,6 +574,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const isWideCanvas = useMediaQuery('(min-width: 1440px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
   const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
+  /**
+   * Which location the phone action bar's "Add item" opens.
+   *
+   * The per-compartment add bar this replaced was `sticky bottom-0`, so CSS
+   * gave it its target for free: whichever location was under the thumb owned
+   * the bar. It was also unreachable — the bar sat at `z-20` beneath both this
+   * action bar (`z-30`) and the 56px mobile bottom navigation (`z-50`), so the
+   * button it held could not be tapped. One bottom surface has to carry the
+   * action instead, and a viewport-fixed bar has no location of its own, so
+   * the target is tracked: the last location the author expanded or added to.
+   */
+  const [mobileAddTargetKey, setMobileAddTargetKey] = useState<string>('');
   const [highlightedItemKeys, setHighlightedItemKeys] = useState<Set<string>>(new Set());
 
   // Bulk selection: per-compartment set of selected item indices
@@ -749,6 +761,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const toggleCompartmentExpanded = (key: string) => {
+    const willExpand = !expandedCompartments.has(key);
     setExpandedCompartments((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -758,6 +771,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       return next;
     });
+    // Opening a location is the author saying that is where they are working,
+    // which is the signal the action bar's Add item follows.
+    if (willExpand) setMobileAddTargetKey(key);
   };
 
   /**
@@ -770,6 +786,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    */
   const openAddSurface = (key: string) => {
     setExpandedCompartments((prev) => new Set(prev).add(key));
+    setMobileAddTargetKey(key);
     if (!isLaptop) {
       setMobileAddLocations((previous) => new Set(previous).add(key));
       return;
@@ -3425,7 +3442,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 max-md:min-h-[44px] dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => {
                   const job = quickAddJobs.current[item.clientKey ?? ''];
                   if (job) runQuickAdd(job);
@@ -3435,7 +3452,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 max-md:min-h-[44px] dark:text-red-400 dark:hover:bg-red-900/20"
                 onClick={() => {
                   delete quickAddJobs.current[item.clientKey ?? ''];
                   replaceQuickAddItem(compKey, item.clientKey ?? '', null);
@@ -4531,21 +4548,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 created before anything is. No mode to choose — the text
                 decides, because a mode toggle is a question the author
                 already answered by typing. */}
-            {!isLaptop && (
-              <div
-                data-testid={`mobile-add-action-${key}`}
-                className="bg-theme-surface sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-              >
-                <button
-                  type="button"
-                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white shadow-lg"
-                  onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
-                >
-                  <Plus className="h-5 w-5" aria-hidden="true" /> Add item
-                </button>
-              </div>
-            )}
-
             {isLaptop && (
               <div className="flex items-start gap-2.5 pt-2 pb-3">
                 <Plus className="text-theme-text-muted mt-2.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
@@ -5150,6 +5152,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     .find(({ key }) => mobileSelectionLocations.has(key));
   const mobileSelectedCount = mobileSelection ? (selectedItems[mobileSelection.key]?.size ?? 0) : 0;
 
+  /**
+   * The location the phone action bar's "Add item" opens.
+   *
+   * Falls back to the last item-bearing location rather than the first: a
+   * template is built top-down, so the end of the list is where the author
+   * just was. A section header holds no items, so it can never be the target,
+   * and a tracked key that has since been deleted resolves to the fallback
+   * rather than to nothing.
+   */
+  const mobileAddTarget = (() => {
+    const addable = compartments
+      .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
+      .filter(({ compartment }) => !compartment.isHeader);
+    return addable.find(({ key }) => key === mobileAddTargetKey) ?? addable[addable.length - 1];
+  })();
+
   // ---------------------------------------------------------------------------
   // Main render
   // ---------------------------------------------------------------------------
@@ -5331,7 +5349,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(true)}
               disabled={saving || !publishReady}
-              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:min-h-11"
             >
               <CheckCircle2 className="h-4 w-4" /> Publish
             </button>
@@ -5909,27 +5927,65 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     Delete
                   </button>
                 </>
-              ) : autoSaveStatus === 'saving' || saving ? (
-                <button
-                  type="button"
-                  className="text-theme-accent-blue min-h-11"
-                  onClick={() => inlineInputRef.current?.blur()}
-                >
-                  Done
-                </button>
-              ) : blockingItems > 0 ? (
-                <button type="button" className="text-theme-accent-blue min-h-11" onClick={() => setShowPreview(true)}>
-                  Review
-                </button>
               ) : (
-                <button
-                  type="button"
-                  className="text-theme-accent-blue min-h-11"
-                  onClick={() => void addCompartment()}
-                  disabled={addingCompartment}
-                >
-                  Add
-                </button>
+                <>
+                  {/* The one bottom surface on this breakpoint, so it carries
+                      adding an item as well as the state's own next action —
+                      the per-location bar that used to is gone (it sat under
+                      this bar and under the mobile navigation, and could not
+                      be tapped). Outside the ternary below because a template
+                      mid-build almost always has blockers, and "Review" must
+                      not be what takes adding an item away.
+
+                      A viewport-fixed bar has no location of its own, so it
+                      scrolls to the one it targets: opening a panel on a
+                      location that is off-screen would look like nothing
+                      happened. The label names the target for a screen
+                      reader, and stays distinct from the location row's own
+                      "Add item to X" so the two are separable. */}
+                  {mobileAddTarget && (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      aria-label={`Add an item to ${mobileAddTarget.compartment.name || 'location'}`}
+                      onClick={() => {
+                        document.getElementById(`comp-row-${mobileAddTarget.key}`)?.scrollIntoView({
+                          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+                          block: 'center',
+                        });
+                        openAddSurface(mobileAddTarget.key);
+                      }}
+                    >
+                      Add item
+                    </button>
+                  )}
+                  {autoSaveStatus === 'saving' || saving ? (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      onClick={() => inlineInputRef.current?.blur()}
+                    >
+                      Done
+                    </button>
+                  ) : blockingItems > 0 ? (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      onClick={() => setShowPreview(true)}
+                    >
+                      Review
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-theme-accent-blue min-h-11"
+                      onClick={() => void addCompartment()}
+                      disabled={addingCompartment}
+                    >
+                      Location
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
