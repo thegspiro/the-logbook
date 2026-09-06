@@ -16,14 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 24 (Meetings & minutes), pass 3** — branch
-`claude/security-review-meetings-minutes`,
-[PR #2303](https://github.com/thegspiro/the-logbook/pull/2303). One real
-finding (MM-14, LOW, fixed), one existing flagged finding (MM-9) updated
-with a related gap found this pass, two items noted as suspicious but not
-fixed. Full completion gate green — see the Log and
-`docs/security-review/MM-24-meetings-minutes.md` for detail. Subscribed;
-awaiting CI/review.
+**Housekeeping, not a feature pass** — branch
+`claude/security-review-progress-note-2303`,
+[PR #2304](https://github.com/thegspiro/the-logbook/pull/2304). Docs-only:
+records that PR #2303 (feature 24, meetings & minutes, pass 3) merged
+fully green with no Codex findings, clears the stale "PR #2303 open"
+section, and marks rotation row 24 done. No feature is under review on
+this branch. Recorded here anyway so a `/security-review` iteration that
+reads this file before #2304 merges tends this PR rather than reading a
+premature "None" and starting feature 25 concurrently with it. Once #2304
+merges, clear this section — feature 25 is next.
+
+---
+
+### 2026-09-06 — Feature 24 (Meetings & minutes, pass 3) ✅ merged — PR #2303
+
+Feature 24 (Meetings & minutes)'s PR #2303 merged (`e8f6e2c`) after a
+single pass — CI went green (17/17) and Codex's review completed with no
+findings on the first push, so no fix-and-repush round was needed this
+time. Rotation row 24 -> ✅. Next: 25 Messaging & notifications.
+
+---
+
+### 2026-09-06 — Feature 24 (Meetings & minutes, pass 3) ✅ merged — PR #2303
+
+Fresh full re-read of `meetings.py`/`meetings_service.py`,
+`minutes.py`/`minute_service.py`/`quorum_service.py` (via two parallel
+background agents, ~340 L of growth since pass 2) plus
+`attendance_dashboard_service.py` (backs 3 `meetings.py` routes, a scope
+gap neither prior pass named). One new finding, **MM-14** (LOW, fixed):
+`AttendanceDashboardService.list_waivers` resolved the waiving member's
+and granting admin's names via `select(User).where(User.id == ...)` with
+no `organization_id` filter — not currently exploitable (both ids come off
+an already org-validated `MeetingAttendee` write) but fragile against a
+future write path that skipped that validation; both lookups now filter by
+org, with a guard test that (on its first draft) itself false-passed
+against the unfixed code by checking the full compiled statement rather
+than the `WHERE` clause — the `SELECT` column list always mentions
+`organization_id` by name regardless of any filter — caught and corrected
+before landing. **MM-9** (existing flagged finding) updated: the same
+missing `Meeting`-approval state-machine guard is also reachable through
+the generic `PATCH /meetings/{id}` route, not just the dedicated
+`/approve` route — folded into MM-9's existing product-decision flag
+rather than filed separately. Two items noted suspicious-but-not-fixed
+with reasoning recorded (an always-null `created_by`/`source` column with
+no writer; `set_meeting_quorum_config`'s missing finalization guard and
+unbounded threshold, unconfirmed exploitable, unchanged since pass 1).
+Full completion gate green: flake8/black/isort clean, migrations
+validated (431 revisions, single head, no schema change), 245/245 scoped
+and 11,470/11,470 full backend suite pass, frontend tsc/eslint/vitest
+clean. PR opened, CI went fully green (17/17) and Codex's review completed
+with no findings before the next watchdog check-in, so it was merged
+directly rather than left idle. Full write-up:
+`docs/security-review/MM-24-meetings-minutes.md`. Rotation row 24 -> ✅.
+Open PR row cleared. Next: 25 Messaging & notifications.
 
 ---
 
@@ -9553,7 +9599,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⏳     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
