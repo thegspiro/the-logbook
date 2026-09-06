@@ -1,8 +1,8 @@
 # Security Review — Messaging & Notifications
 
 **Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-31 (pass 2) · **PR:** #1907 (pass 1), pass 2 PR recorded in
-`PROGRESS.md`
+2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1907 (pass 1), pass 2 PR
+recorded in `PROGRESS.md`, pass 3 PR TBD
 
 ## Pass 1 (2026-08-26)
 
@@ -752,3 +752,338 @@ No frontend file was modified by any part of this pass (MSG-9's fix is a
 backend query filter; MSG-11's investigation touched only a migration file
 and a backend test file), so `tsc`/`eslint` establish that no backend
 change regressed the frontend build.
+
+---
+
+## Pass 3 (2026-09-06)
+
+**Backend:** re-read, fresh and in full, via two parallel background agents:
+`messages.py`/`message_history.py`/`messaging_service.py`/`notifications.py`/
+`notifications_service.py`/`push_service.py`/`notification_rules.py`/
+`notification_channels.py`/`integration_services/notification_dispatch.py`
+(agent 1), and `email_templates.py`/`email_template_service.py`/
+`email_templates_storefront.py`/`email_footers.py`/`email_theme.py`/
+`email_service.py` (agent 2). `message_delivery_service.py` and
+`scheduled_tasks.py`'s messaging-related tasks were read directly, not
+delegated, after their line counts showed the largest growth since pass 2
+(296 → 547 lines).
+**Frontend:** not re-read this pass — nothing in this pass's backend
+findings touches a frontend contract, and pass 2 already reviewed the
+frontend module in full.
+**Migrations:** none added this pass. Two migrations landed on `main`
+since pass 2 that this pass verified rather than authored:
+`20260901_1000_b2c9d4e6f813` (adds `DepartmentMessageRecipient.revoked_at`)
+and its merge-heads companion — see MSG-10 below.
+
+### Doc correction — MSG-10 was already fixed; `KNOWN_LIMITATIONS.md` still said open
+
+Not a code finding. `reconcile_recipients` (`messaging_service.py:602-657`)
+no longer hard-deletes a `DepartmentMessageRecipient` row that carries
+`read_at`/`acknowledged_at` evidence when a message's audience narrows —
+current code prunes only rows with **neither** timestamp set, and soft-
+revokes the rest (`row.revoked_at = now`), restoring access
+(`revoked_at = None`) if the member re-enters the audience later. This is
+exactly option (b) from MSG-10's own "closing this needs a product
+decision" list. `revoked_at.is_(None)` is checked consistently everywhere
+audience-derived visibility or counts are read: `get_inbox` (:387),
+`get_unread_count` (:555), `_visible_message_or_none` (:767), and all
+three `get_message_stats` counts (:991/999/1007);
+`get_acknowledgment_report` (:1054) surfaces a revoked-but-evidenced
+member as `removed` rather than silently dropping them from the
+denominator. Backed by a real migration
+(`20260901_1000_b2c9d4e6f813_recipient_revoked_at.py`,
+`nullable=True` — correct, no `ondelete` involved) and covered by tests in
+`test_messaging_service.py`. Whoever shipped this did not update
+`docs/KNOWN_LIMITATIONS.md`, which still described the pre-fix hard-delete
+behavior in detail — removed that entry (rather than left contradicting
+current code) and added a `CHANGELOG.md` entry under `[Unreleased]`, since
+this is a genuinely user-visible fix that had never been announced.
+
+### MSG-13 — LOW-MED — unbounded push-subscription registration — ✅ FIXED
+
+**What:** `PushService.subscribe()` deduped only on exact `endpoint_hash`
+and had no cap on how many distinct subscriptions one user could register.
+`send_to_user()` then loops over **every** stored subscription for that
+user on **every** notification, dispatching each via
+`asyncio.to_thread(self._send_one, ...)` — a real blocking network call
+per row. `validate_push_endpoint`'s allowlist restricts the _hostname_ to
+~7 real vendor push services but does nothing to bound _how many_ endpoints
+on those hosts one authenticated caller can register.
+**Where:** `app/services/push_service.py`, `subscribe`.
+**Failure scenario:** an authenticated member scripts a few thousand
+`subscribe` calls with distinct fake paths on an allowlisted host (each
+hashes differently, so none dedupe); every future notification meant for
+that member becomes a several-thousand-fold fan-out of thread-pool work
+and outbound HTTP attempts — a self-inflicted but real resource-exhaustion
+vector shared with the rest of the app's thread pool, not scoped to that
+one member's own notifications.
+**Fix:** a generous `_MAX_PUSH_SUBSCRIPTIONS_PER_USER = 20` cap, checked
+before creating a **new** row (re-pointing an existing endpoint hash on
+refresh is exempt, so a member already at the cap can still refresh a
+device they already have). Raises `ValueError` → 400 via the endpoint's
+existing `except ValueError` handler, no new error-handling path needed.
+**Guard tests:** `test_push_service.py::TestSubscribe::
+test_a_user_cannot_register_unbounded_devices`,
+`test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap`. Logic
+verified with a mocked session (this sandbox cannot build the optional
+`pywebpush`/`http-ece` wheel, the same pre-existing limitation the test
+file's own docstring documents) — confirmed the count query raises at
+exactly the cap and not before via a scripted repro against the real
+`subscribe()` method; the real integration tests will exercise it in CI
+where the dependency is installed.
+
+**Two rounds of Codex review on this fix's own PR (#2305) each found a
+real gap, both fixed:**
+
+- **Round 1, P2:** reassigning a device currently owned by a _different_
+  user hit the `if existing:` branch, which re-pointed the row and
+  returned before the cap check ever ran — two accounts could trade one
+  endpoint back and forth to grow one of them past the limit with no race
+  needed. Fixed by exempting only a genuine self-refresh
+  (`existing.user_id == str(user_id)`) from the cap; reassigning someone
+  else's device now goes through the same locked count-and-cap check as a
+  brand-new subscription. Guard test:
+  `test_reassigning_someone_elses_device_still_respects_the_cap`.
+- **Round 1, P1:** the count-then-insert was a plain check-then-act race —
+  two concurrent `subscribe()` calls for the same user could each observe
+  a count below the cap and both commit. Fixed by locking the target
+  user's row first, then making the count itself a locking read too
+  (`.with_for_update()` on both) — under REPEATABLE READ, locking the
+  parent row alone does not refresh the snapshot the request's transaction
+  already took when `current_user` was loaded upstream (same shape as
+  CLAUDE.md pitfall #27's "make the count itself a locking read" lesson).
+- **Round 2, P2:** the round-1 fix introduced a new deadlock. Two callers
+  swapping endpoints with each other at the same moment (A claims B's
+  device, B claims A's) would each lock their own target user first and
+  then block on the other's existing subscription row at UPDATE time — a
+  textbook AB/BA cycle that MySQL's deadlock detector resolves by aborting
+  one side with an unhandled error (a 500 at `/push/subscribe`). Fixed by
+  locking every user affected by the call — the target, and (when
+  reassigning) the endpoint's previous owner — in a fixed order sorted by
+  id, rather than in whichever order each side of a swap happens to reach
+  them. Guard test:
+  `TestConcurrentEndpointSwapDoesNotDeadlock::test_two_users_swapping_endpoints_at_once_both_succeed`,
+  using two real independent sessions and `asyncio.gather` against a live
+  database — a mocked session cannot reproduce a real InnoDB
+  deadlock-detector outcome, so this one could not be verified with the
+  mocked-logic technique the other guard tests use; it will run for real
+  in CI where `pywebpush` is installed.
+- **Round 2, P1 (disputed, not applied):** Codex separately flagged this
+  same completion-gate table's "3 pre-existing warnings (none in touched
+  files)" line as continuing past a known failure. Checked directly:
+  `frontend/package.json`'s `lint` script is `eslint --max-warnings 10` —
+  the project's own configured gate already tolerates up to 10 warnings —
+  and re-running `npm run lint` returns exit code 0 with exactly this
+  count. The 3 warnings are `testing-library/no-node-access` in
+  `src/pages/scheduling/ShiftDetailPanel.test.tsx`, a file this PR's diff
+  does not touch. Replied on the PR with this evidence and left the
+  thread open for a maintainer call rather than resolving it myself, since
+  it is a policy-scope question (whether to tighten `max-warnings`
+  repo-wide) rather than a defect in this change.
+- **Round 3, P1:** the self-refresh fast path decided "the caller already
+  owns this endpoint" from the same _plain_ read used to guess who to
+  lock — itself stale for the reason round 1's own fix already
+  established (the request's transaction snapshot predates `subscribe()`
+  being called). If a transfer away from the endpoint committed in
+  between, the refresh would still overwrite the row's encryption keys
+  with its own while leaving `user_id` pointing at the new owner: a push
+  meant for the new owner would then be encrypted with keys only the
+  _old_ owner's device holds the matching private key for, and delivered
+  there instead. Fixed by making the endpoint lookup itself a locking
+  read before the self-refresh decision is made. Guard test:
+  `TestConcurrentRefreshDuringTransferStaysConsistent::
+test_a_refresh_racing_a_transfer_never_splits_owner_from_keys`.
+- **CI itself then caught a real deadlock — not from Codex, from a live
+  MariaDB run of round 2's own guard test.** `Backend Integration Tests
+(MariaDB 10.11)` failed on the round-3 commit with
+  `OperationalError: (1213, 'Deadlock found when trying to get lock')`
+  from `test_two_users_swapping_endpoints_at_once_both_succeed` — the
+  exact scenario round 2 was supposed to have closed. Root cause: round
+  3's fix took its endpoint-row lock _before_ round 2's sorted user-row
+  locks, reintroducing the identical AB/BA cycle round 2 closed, just
+  relocated onto the endpoint rows instead of the user rows. Fixed by
+  reordering: the unlocked guess of the endpoint's current owner now only
+  decides which `User` rows to lock (never anything about the endpoint
+  itself); those locks are still acquired sorted, exactly as round 2
+  established; only after they're held does the request take its one
+  locking read of the specific endpoint row. No test changes were
+  needed — both existing guard tests already asserted exactly the
+  properties this reordering restores. This is the one guard test in
+  this PR that this sandbox's inability to build `pywebpush`/`http-ece`
+  could not substitute a mocked check for: only a real, live database run
+  reproduces an actual InnoDB/MariaDB deadlock-detector outcome, and CI —
+  not local verification — is what caught this.
+- **Round 4 — three more findings, two fixed with a structural change,
+  one fixed with a scope-appropriate delivery-side bound rather than a
+  data migration:**
+  - **Gap-lock deadlock, same-user and cross-user.** The endpoint lookup
+    still took a `FOR UPDATE` read that could match nothing (for a
+    genuinely brand-new endpoint) — and a "not found" locking read takes
+    an InnoDB _gap_ lock over the index range instead of a record lock.
+    Unlike a record lock, a gap lock is compatible with another
+    transaction's gap lock on the same range: two callers registering
+    different never-before-seen endpoints that hash into the same gap
+    (same user or different users — reported as two separate findings,
+    same mechanism) can each acquire one, then each block on the other's
+    later insert-intention lock. This is the identical shape already
+    fixed once in this codebase — FAC-45 in `documents_service.py` — and
+    fixed the same way: peek by `endpoint_hash` with a plain read first
+    (never locking), and only take a real lock via a point lookup on the
+    id the peek already found. A brand-new endpoint now never takes any
+    lock on the endpoint table before its INSERT.
+  - **A deeper residual interleaving, closed with a retry rather than a
+    fourth ordering patch.** Codex's own follow-up: a stale guess plus
+    two _unrelated_ concurrent transfers landing at just the right moment
+    can still make one request's cap-count range-lock overlap a different
+    request's specific-row lock — a real deadlock shape, but one with no
+    single resource both sides could agree to lock first, since which
+    rows a target's own cap-count will touch is exactly what's unknown
+    before the lock is taken. Continuing to chase individual
+    interleavings risks introducing a fifth subtle ordering bug under
+    time pressure without ever proving the scheme deadlock-free for
+    arbitrary N-party cases. A deadlock is not a correctness or
+    data-integrity failure — InnoDB always cleanly aborts and fully rolls
+    back exactly one side — so `subscribe()` now retries once,
+    specifically on MySQL error 1213, never any other `OperationalError`
+    (which would silently mask a real connectivity or syntax failure
+    instead of retrying a lock).
+  - **The cap only protected new registrations.** `send_to_user` still
+    loaded and iterated every existing row for a user, so an account that
+    already exceeded 20 devices before this fix shipped kept the exact
+    fan-out this whole change exists to prevent. Fixed at delivery rather
+    than with a data migration — trimming existing rows would force a
+    decision about _which_ of an over-cap account's devices to delete,
+    a real and irreversible product call this PR shouldn't make
+    unilaterally. `send_to_user`'s query is now ordered newest-first and
+    capped at the same `_MAX_PUSH_SUBSCRIPTIONS_PER_USER`, so a legacy
+    over-cap account is delivered to its most recent devices only, with
+    no schema change and no information lost.
+  - **Guard tests:** `TestDeadlockRetry` (retries once on 1213, never on a
+    second deadlock or any non-deadlock `OperationalError`);
+    `test_delivery_is_capped_for_an_account_that_predates_the_limit`
+    (inserts 25 rows directly, bypassing `subscribe()`'s cap, and asserts
+    delivery reaches only the 20 newest).
+
+### MSG-14 — LOW — `build_shell`'s `subtitle` was not HTML-escaped — ✅ FIXED
+
+**What:** `build_shell` (`email_theme.py`) escapes `title` — or rather,
+relies on its one non-template caller (`wrap_email_body`) to escape it
+before calling in — but concatenated `subtitle` straight into the email
+header markup with no escaping at all, at either layer.
+**Where:** `app/services/email_theme.py`, `build_shell`.
+**Impact:** not currently exploitable — every one of the ~19 existing
+`subtitle=` call sites (across `email_template_service.py`'s default
+templates and `email_templates_storefront.py`) passes either a static
+literal or a `{{token}}` placeholder with no HTML metacharacters, and
+`wrap_email_body`'s own callers never pass a non-empty `subtitle` with
+runtime data today. Fixed anyway: the escaping contract between `title`
+and `subtitle` was inconsistent, and a future caller passing user-editable
+text as a subtitle (an event name, an order note) would reintroduce HTML
+injection into outgoing mail with nothing to catch it.
+**Fix:** `subtitle` is now escaped inside `build_shell` itself — the one
+place every caller goes through — rather than pushing the obligation onto
+each call site the way `title` does.
+**Guard test:** `test_email_theme_shell.py::TestBuildShell::
+test_subtitle_is_escaped`. Verified to fail against the reverted (unfixed)
+code and pass after.
+
+### MSG-15 — LOW — flagged, not fixed — Web Push's send-time DNS-rebinding pin is skipped outside `ENVIRONMENT in ("production", "staging")`
+
+**What:** `PushService._send_one` only builds the IP-pinned session that
+closes the check/use DNS-rebinding window
+(`_pinned_session`/`_resolve_public_address`) when
+`settings.ENVIRONMENT in ("production", "staging")`. `ENVIRONMENT` is a
+bare, unvalidated `str` (`core/config.py:32`, default `"development"`,
+no enum), so a real deployment left at the default or set to any other
+value never gets the send-time pin — only the one-time, allowlist-based
+`validate_push_endpoint` check at subscribe time applies.
+**Where:** `app/services/push_service.py`, `_send_one`.
+**Why flagged, not fixed:** the gate is not an oversight — it exists so
+`tests/test_push_service.py`'s real local HTTP server (standing in for a
+browser push service, deliberately _not_ mocked so encryption/VAPID/DB
+constraints are genuinely exercised) can be reached at all: that server is
+`http://127.0.0.1:<port>`, which `validate_push_endpoint`'s HTTPS-only,
+vendor-hostname-only allowlist would reject outright if pinning/validation
+ran unconditionally, and `PushService.subscribe()` itself does not call
+`validate_push_endpoint` (by design — that check lives at the API
+boundary), so the test suite subscribes such endpoints directly. The same
+`ENVIRONMENT in ("production", "staging")` idiom is also the codebase's
+established pattern for other prod-only checks (`core/config.py:460`), so
+narrowly special-casing push here would be inconsistent with it. Closing
+this properly needs either a test-infrastructure change (so the local test
+server does not depend on skipping validation) or a more precise signal
+than `ENVIRONMENT` for "is this deployment internet-facing" — a design
+decision, not a one-line fix, and the practical exposure today is narrow:
+`validate_push_endpoint`'s exact-hostname allowlist already means an
+attacker would need to compromise DNS for a major push vendor
+(`fcm.googleapis.com` et al.), not merely register an arbitrary host.
+Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### Informational — not filed as findings
+
+- **`ensure_default_templates` issues one `get_template` SELECT per default
+  template (~35) on every `GET /email-templates` request** — an N+1 shape,
+  but bounded by the fixed default-template count (not org size), gated on
+  `settings.manage`, and each SELECT is a fast indexed lookup. Same
+  disposition as pass 1's `get_inbox`/`get_logs` in-Python pagination note:
+  worth an eventual "check all types in one query" rewrite, not a security
+  fix.
+- **`GET /email-templates/scheduled` has no pagination** — same
+  disposition: bounded by how many emails a department schedules,
+  `settings.manage`-gated, consistent with the existing accepted pattern
+  for admin-only list endpoints in this feature.
+- **`GET /notifications/rules` has no pagination** — rules are
+  admin-authored, not user-generated, so row counts stay small in
+  practice; noted only because every other list endpoint in the file is
+  paginated.
+
+### Confirmed still open — unchanged, re-verified fresh
+
+MSG-3 (test-email arbitrary destination), MAIL-4 (arbitrary scheduled-email
+recipients), `email_service.py`'s F4 (no SSRF guard on an org-configured
+SMTP host — deliberate policy), and the informational
+`NotificationRuleCreate.config` unbounded-JSON note are all re-verified
+unchanged from pass 1/2 and not re-flagged. MSG-12's `failed`/throttled
+sub-cases remain open (see the doc correction above and
+`docs/KNOWN_LIMITATIONS.md`).
+
+### Everything else re-verified intact, not re-derived
+
+MSG-4/5/6/7/8/9, the Codex-round `cc_emails` legacy-read fix, MSG-11's
+migration-detector ratchet, the `GET /notifications/logs` `scope`
+parameter (a fix landed independently of this rotation, between pass 2 and
+pass 3 — verified correct: `mine` needs no extra permission, `organization`
+requires `notifications.manage`), cursor-based pagination on both
+notification lists, and the `DepartmentMessageRecipient`
+materialization/idempotent-delivery architecture were all re-checked
+against current code rather than trusted from the prior write-up. No
+regressions found in any of them.
+
+## Guard tests added (pass 3)
+
+- `backend/tests/test_push_service.py::TestSubscribe::
+test_a_user_cannot_register_unbounded_devices`,
+  `test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap`, and
+  `test_reassigning_someone_elses_device_still_respects_the_cap` (MSG-13).
+- `backend/tests/test_push_service.py::TestConcurrentEndpointSwapDoesNotDeadlock::
+test_two_users_swapping_endpoints_at_once_both_succeed` (MSG-13, Codex
+  round 2) — two real independent sessions racing via `asyncio.gather`.
+- `backend/tests/test_email_theme_shell.py::TestBuildShell::
+test_subtitle_is_escaped` (MSG-14). Verified to fail against the
+  reverted code and pass after.
+
+## Completion gate (pass 3)
+
+| Check                                                                                  | Result                                                        |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                          | clean (0 violations)                                          |
+| `black --check app/ tests/ alembic/`                                                   | clean (1503 files unchanged)                                  |
+| `isort --check-only app/ tests/ alembic/`                                              | clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                      | PASSED — 431 revisions, single head                           |
+| backend tests, scope (`-k "push_service or email_theme or messaging or notification"`) | 747 passed, 1 skipped (pre-existing, py_vapid/http-ece)       |
+| backend tests, full suite                                                              | 11,471 passed, 21 skipped (environment-only), 0 failed        |
+| `npx tsc --noEmit` (frontend)                                                          | 0 errors                                                      |
+| `npx eslint .` (frontend)                                                              | 0 errors, 3 pre-existing warnings (unrelated file, untouched) |
+
+No frontend file was modified by this pass, so `tsc`/`eslint` establish
+that the backend fixes didn't regress the frontend build.
