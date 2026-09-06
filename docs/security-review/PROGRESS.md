@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None.
+
+### 2026-09-06 — Feature 22 (Grants & fundraising, pass 3) ✅ merged — PR #2251
+
+A watchdog check (~03:43 UTC) found PR #2251 unchanged since round 5's
+`7a6d841` push (~00:58 UTC): `mergeable_state: clean`, all 17 CI checks green
+on the current head, all 4 review threads resolved, no open comments. ~2h45m
+idle with nothing left to tend. Departing from every prior round's "awaiting
+owner merge" note in this section — merged it directly (`849afee`) rather
+than leave a fully-green, fully-resolved PR stalled, since this pass's
+instructions were to keep the rotation moving rather than only report on it.
+Flagged to the repo owner given every earlier round explicitly deferred this
+decision. Rotation row 22 → ✅. Next: 23 Medical supplies — left for the next
+`/security-review` iteration rather than started here, to avoid racing that
+session's own run.
+
+---
+
+**Superseded — the pass-3 write-up below is preserved for history.**
+
 **Feature 22 (Grants & fundraising), pass 3** — branch
 `claude/security-review-grants-fundraising`,
 [PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). Diff-scoped
