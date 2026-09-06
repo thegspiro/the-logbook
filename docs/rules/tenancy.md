@@ -55,16 +55,23 @@ Pitfall #14c says to validate that a client-supplied foreign key belongs to the
 caller's organization before storing it. This is the helper that does it, and
 it is documented nowhere else.
 
-| Function                                                     | Use                                                                              |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `await assert_in_org(db, Model, entity_id, organization_id)` | The default. Raises `ValueError` (→ 400) at the top of a service create/update.  |
-| `await is_in_org(db, Model, entity_id, organization_id)`     | When you need the boolean — e.g. an optional FK that may legitimately be `None`. |
-| `await assert_all_in_org(db, Model, ids, organization_id)`   | A list of ids in one call.                                                       |
+| Function                                                                                      | Use                                                                              |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `await assert_in_org(db, Model, entity_id, organization_id, *, allow_none=False, label=None)` | The default. Raises `ValueError` (→ 400) at the top of a service create/update.  |
+| `await is_in_org(db, Model, entity_id, organization_id)`                                      | When you need the boolean — e.g. an optional FK that may legitimately be `None`. |
+| `await assert_all_in_org(db, Model, ids, organization_id)`                                    | A list of ids in one call.                                                       |
 
-It **fails closed**: a falsy `entity_id`, a falsy `organization_id`, a row that
-does not exist, and a row in another org all resolve the same way — not
-in-org. A caller that wants "unset is allowed" passes through on `None` before
-calling, rather than relying on the helper to be permissive.
+It **fails closed**, but read the two failure modes separately:
+
+- `is_in_org` returns `False` for a falsy `entity_id`, a falsy
+  `organization_id`, a row that does not exist, and a row in another org
+  alike.
+- `assert_in_org` distinguishes them. A `None` or empty id raises
+  `"<Model> is required"` — the FK is missing, not foreign. A present but
+  foreign id raises `"Invalid <Model>"`, worded so it cannot be used as a
+  cross-tenant existence oracle. Pass `allow_none=True` for a genuinely
+  optional FK rather than pre-checking `None` at the call site, and `label=`
+  to name the reference in the message.
 
 `model` must expose `id` and `organization_id`. Ids are compared as strings, to
 match the `String(36)` UUID primary keys the models use.

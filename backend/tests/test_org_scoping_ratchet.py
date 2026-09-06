@@ -28,6 +28,12 @@ Scope, and its limits — read these before trusting a green run:
   ``ApprovalChainStep`` and their kind are **not covered here at all**.
 * **Line numbers are not part of the key.** An edit anywhere above a query
   would otherwise rewrite the baseline and hide a real change inside the churn.
+* **Only ``select(...)`` statements that name the model inline.** The
+  builder form — ``query = select(M)`` then ``query = query.where(M.id == x)``
+  in a later statement — is invisible, and there are ~460 reassignments of
+  that shape in ``app/``. So is ``db.get(Model, id)``, of which there are 10.
+  Neither is covered; both would need a different analysis than one statement
+  at a time.
 
 Burn the baseline down in the order given in ``docs/ORG_SCOPING_SWEEP.md``:
 the parameter-fed sites first, since those are the ones a client-supplied id
@@ -36,14 +42,61 @@ can reach.
 
 import ast
 import pathlib
-import re
 
 BACKEND = pathlib.Path(__file__).resolve().parents[1]
 APP = BACKEND / "app"
 BASELINE = pathlib.Path(__file__).with_name("org_scoping_baseline.txt")
 
-#: ``Model.id == <rhs>``, with the rhs taken up to the first comma or paren.
-ID_COMPARISON = re.compile(r"\b([A-Z]\w+)\.id\s*==\s*([^)\n,]+)")
+
+def _is_org_scoped(node):
+    """True if the statement constrains ``organization_id`` anywhere.
+
+    Walks the AST rather than searching the source text. A substring test on
+    the raw statement is suppressed by any *comment* or *string literal* that
+    happens to contain the word — including a comment explaining why the org
+    filter is handled elsewhere, which is exactly the comment such a query
+    attracts.
+    """
+    for child in ast.walk(node):
+        if isinstance(child, ast.Attribute) and child.attr == "organization_id":
+            return True
+        if isinstance(child, ast.keyword) and child.arg == "organization_id":
+            return True
+    return False
+
+
+def _bare_name_id_comparisons(node):
+    """Yield ``(Model, identifier)`` for ``Model.id == <bare name>`` compares.
+
+    AST rather than a regex, for the same reason as above, and because it can
+    tell ``Model.id == other.field`` (out of scope — the id came off a row the
+    caller already resolved) from ``Model.id == some_param`` reliably, instead
+    of by looking for a dot in a slice of text.
+    """
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Compare):
+            continue
+        if len(child.ops) != 1 or not isinstance(child.ops[0], ast.Eq):
+            continue
+        left = child.left
+        if not (
+            isinstance(left, ast.Attribute)
+            and left.attr == "id"
+            and isinstance(left.value, ast.Name)
+            and left.value.id[:1].isupper()
+        ):
+            continue
+        rhs = child.comparators[0]
+        # ``str(x)`` is the common wrapper and carries no meaning here.
+        if (
+            isinstance(rhs, ast.Call)
+            and isinstance(rhs.func, ast.Name)
+            and rhs.func.id == "str"
+            and len(rhs.args) == 1
+        ):
+            rhs = rhs.args[0]
+        if isinstance(rhs, ast.Name):
+            yield left.value.id, rhs.id
 
 
 def _models_with_organization_id():
@@ -83,29 +136,36 @@ def scan_source(text, rel_path, org_models):
     tree = ast.parse(text)
     functions = _enclosing_functions(tree)
 
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.Assign, ast.Expr, ast.Return, ast.AnnAssign)):
-            continue
+    statements = sorted(
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Assign, ast.Expr, ast.Return, ast.AnnAssign))
+        ),
+        key=lambda n: (n.lineno, n.col_offset),
+    )
+
+    seen = {}
+    for node in statements:
         statement = "\n".join(lines[node.lineno - 1 : (node.end_lineno or node.lineno)])
         if "select(" not in statement:
             continue
         # An org filter anywhere in the statement is what makes it safe; the
         # chained .where() forms all land inside the same statement.
-        if "organization_id" in statement:
-            continue
-        match = ID_COMPARISON.search(statement)
-        if not match:
-            continue
-        model, raw_rhs = match.group(1), match.group(2).strip()
-        if model not in org_models:
-            continue
-        identifier = re.sub(r"^str\(", "", raw_rhs).rstrip(")").strip()
-        # Read off another object, or subscripted: the id came from a row the
-        # caller already resolved. Out of scope — see the module docstring.
-        if "." in identifier or "[" in identifier or not identifier.isidentifier():
+        if _is_org_scoped(node):
             continue
         function = functions.get(node.lineno, "<module>")
-        keys.append(f"{rel_path}::{function}::{model}::{identifier}")
+        for model, identifier in _bare_name_id_comparisons(node):
+            if model not in org_models:
+                continue
+            key = f"{rel_path}::{function}::{model}::{identifier}"
+            # Two identical unscoped queries in one function are two findings.
+            # Without this a second one added beside a baselined one would be
+            # invisible, and fixing one of them would never read as stale.
+            seen[key] = seen.get(key, 0) + 1
+            if seen[key] > 1:
+                key = f"{key}#{seen[key]}"
+            keys.append(key)
     return keys
 
 
@@ -215,6 +275,43 @@ class TestTheDetectionItself:
             "    return inner\n"
         )
         assert keys == ["probe.py::inner::Apparatus::apparatus_id"]
+
+    def test_a_comment_naming_organization_id_does_not_suppress(self):
+        """The org check is on the AST, not the source text.
+
+        A statement whose only mention of organization_id is in a comment or a
+        string is NOT scoped — and a comment saying the filter lives elsewhere
+        is exactly what such a query attracts.
+        """
+        assert self._scan(
+            "async def f(db, apparatus_id):\n"
+            "    r = await db.execute(\n"
+            "        select(Apparatus)\n"
+            "        # organization_id is enforced by the caller\n"
+            "        .where(Apparatus.id == apparatus_id)\n"
+            "    )\n"
+        ) == ["probe.py::f::Apparatus::apparatus_id"]
+
+    def test_a_string_literal_naming_organization_id_does_not_suppress(self):
+        assert self._scan(
+            "async def f(db, apparatus_id):\n"
+            "    r = await db.execute(select(Apparatus)"
+            ".where(Apparatus.id == apparatus_id).params(note='organization_id'))\n"
+        ) == ["probe.py::f::Apparatus::apparatus_id"]
+
+    def test_two_unscoped_queries_in_one_function_are_two_findings(self):
+        """Otherwise a second one added beside a baselined one is invisible."""
+        keys = self._scan(
+            "async def f(db, apparatus_id):\n"
+            "    a = await db.execute(select(Apparatus)"
+            ".where(Apparatus.id == apparatus_id))\n"
+            "    b = await db.execute(select(Apparatus)"
+            ".where(Apparatus.id == apparatus_id))\n"
+        )
+        assert keys == [
+            "probe.py::f::Apparatus::apparatus_id",
+            "probe.py::f::Apparatus::apparatus_id#2",
+        ]
 
     def test_the_key_has_no_line_number(self):
         """Otherwise an edit above a query rewrites the baseline."""

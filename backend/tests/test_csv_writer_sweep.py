@@ -46,17 +46,34 @@ def _python_sources():
     )
 
 
+def _csv_module_names(tree):
+    """Local names bound to the ``csv`` module.
+
+    ``import csv as c`` binds it to ``c``, and checking only for the literal
+    name ``csv`` would let ``c.writer(out)`` through.
+    """
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "csv":
+                    names.add(alias.asname or "csv")
+    return names
+
+
 def _raw_csv_writers(tree):
     """Yield ``(lineno, rendering)`` for each raw csv writer reference.
 
-    Catches the attribute form (``csv.writer(...)``) and the import form
-    (``from csv import writer``), which is the way round the first one.
+    Three ways in, all covered: the attribute form (``csv.writer(...)``), the
+    same through an alias (``import csv as c`` then ``c.writer(...)``), and
+    the import form (``from csv import writer``) that sidesteps both.
     """
+    module_names = _csv_module_names(tree) or {"csv"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr in BANNED:
             value = node.value
-            if isinstance(value, ast.Name) and value.id == "csv":
-                yield node.lineno, f"csv.{node.attr}"
+            if isinstance(value, ast.Name) and value.id in module_names:
+                yield node.lineno, f"{value.id}.{node.attr}"
         elif isinstance(node, ast.ImportFrom) and node.module == "csv":
             for alias in node.names:
                 if alias.name in BANNED:
@@ -119,6 +136,13 @@ class TestTheDetectionItself:
 
     def test_a_dictwriter_is_flagged(self):
         assert self._offenders("import csv\nw = csv.DictWriter(out, fieldnames=f)\n")
+
+    def test_an_aliased_import_is_flagged(self):
+        """``import csv as c`` then ``c.writer(out)`` is the same call."""
+        assert self._offenders("import csv as c\nw = c.writer(out)\n")
+
+    def test_an_unrelated_module_aliased_to_c_is_not_flagged(self):
+        assert not self._offenders("import io as c\nw = c.writer(out)\n")
 
     def test_the_import_form_is_flagged(self):
         assert self._offenders("from csv import writer\nw = writer(out)\n")

@@ -17,10 +17,29 @@ set -uo pipefail
 
 INPUT=$(cat 2>/dev/null || true)
 
+# Every decision this hook reports is JSON built by jq. Without jq the `jq -n`
+# calls below fail and the script exits 0 — a red gate passing in silence,
+# which is precisely the failure this hook exists to prevent. Exit code 2 with
+# the reason on stderr is the other channel Claude Code accepts for a Stop
+# hook, and it needs no JSON at all.
+#
+# The probe RUNS jq rather than asking `command -v` whether it exists: a jq
+# that is present but broken or incompatible passes a existence check and then
+# fails at the point of use, which lands back in the silent-pass this guards.
+HAVE_JQ=1
+printf '{}' | jq -e . >/dev/null 2>&1 || HAVE_JQ=0
+
 # A blocked stop re-enters the model, which stops again. Claude Code sets
 # stop_hook_active on that second stop; without this the pair would loop until
 # the gate happened to go green.
-if [ "$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)" = "true" ]; then
+if [ "$HAVE_JQ" -eq 1 ]; then
+  ACTIVE=$(printf '%s' "$INPUT" | jq -r '.stop_hook_active // false' 2>/dev/null)
+else
+  # Good enough for a boolean field, and only used when jq is unavailable.
+  ACTIVE=$(printf '%s' "$INPUT" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true' \
+    && echo true || echo false)
+fi
+if [ "$ACTIVE" = "true" ]; then
   exit 0
 fi
 
@@ -45,7 +64,11 @@ if [ -n "$OLDEST_UNPUSHED" ]; then
 fi
 
 changed_files() {
-  git status --porcelain=v1 2>/dev/null | awk '{ print $NF }'
+  # -z, not awk: porcelain paths can contain spaces, and `awk '{print $NF}'`
+  # keeps only the last word, silently excluding such a file from the gate.
+  # With -z each path is its own NUL-terminated record (a rename emits both
+  # sides; the existence checks below drop the stale one).
+  git status --porcelain=v1 -z 2>/dev/null | tr '\0' '\n' | sed 's/^..[[:space:]]//'
   if [ -n "$BASE_COMMIT" ]; then
     git diff --name-only "$BASE_COMMIT" HEAD 2>/dev/null
   elif [ -n "$OLDEST_UNPUSHED" ]; then
@@ -170,6 +193,11 @@ NOTE=""
 # from the block decision would put two objects on the stream and neither
 # would parse.
 if [ -n "$FAILURES" ]; then
+  if [ "$HAVE_JQ" -eq 0 ]; then
+    printf 'The completion gate is red. Fix these at their root cause:\n%s\n' \
+      "$FAILURES" >&2
+    exit 2
+  fi
   jq -n --arg r "The completion gate is red. CLAUDE.md requires every error to be fixed at its root cause before a task is complete - no # noqa, no @ts-ignore, no cast to any, no deleted test. Fix these, including any that predate this turn, then finish.
 $FAILURES" --arg m "$NOTE" \
     '{decision: "block", reason: $r} + (if $m == "" then {} else {systemMessage: $m} end)'
@@ -179,6 +207,10 @@ fi
 if [ -n "$NOTE" ]; then
   # No marker written: a gate that did not fully run has not proven anything,
   # so the next turn must try again rather than inherit a pass.
+  if [ "$HAVE_JQ" -eq 0 ]; then
+    printf '%s\n' "$NOTE" >&2
+    exit 0
+  fi
   jq -n --arg m "$NOTE" '{systemMessage: $m}'
   exit 0
 fi

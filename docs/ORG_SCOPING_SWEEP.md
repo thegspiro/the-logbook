@@ -243,7 +243,7 @@ virtualenv, or the pinned GitHub Action — never alongside `requirements.txt`.
 Option B. The ratchet is what ships.
 
 **Built:** `backend/tests/test_org_scoping_ratchet.py` plus
-`backend/tests/org_scoping_baseline.txt` — **53 entries across 29 files**, the
+`backend/tests/org_scoping_baseline.txt` — **47 entries across 27 files**, the
 bare-name ids on org-bearing models. It runs in the ordinary backend suite, in
 about 6 seconds, needing no CI change.
 
@@ -352,7 +352,9 @@ baseline ratchet satisfies that for _new_ code, which is the case a skill's
 trigger governs — a session writing a new endpoint cannot land an unscoped
 query whether or not the skill fired.
 
-It does not satisfy it for the 218 sites already in the baseline. So the
+It does not satisfy it for the 47 sites already in the baseline, nor for the
+wider 218 unscoped statements §2 measured, of which the baseline covers only
+the reviewable subset. So the
 recommendation is to ship option B, burn the 43 down, and revisit whether #14
 moves once the baseline is small enough that it describes exceptions rather
 than a backlog. Until then #14 stays in `CLAUDE.md`, in full, always on.
