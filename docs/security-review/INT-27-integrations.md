@@ -55,8 +55,21 @@ checklist dimensions the rest of this pass used —
 
 - **`salesforce_webhook.py`:** HMAC-SHA256 verified with
   `hmac.compare_digest`; an integration with no `webhook_secret` configured
-  is rejected (401), not silently trusted; rate limited (30/min/IP,
-  5-minute lockout); replay-protected (`is_duplicate_webhook`, correctly
+  is rejected (401), not silently trusted; rate limited (30/min/IP) — but
+  **correction (Codex round, 2026-09-06): the 5-minute lockout an earlier
+  version of this entry claimed does not exist.** `_rate_limit_webhook()`
+  calls `public_rate_limit(..., window_seconds=60)` with no
+  `lockout_seconds`, which defaults to `0`. On the Redis path (the common
+  case) this is moot regardless: `app.core.security.is_rate_limited` — what
+  `public_rate_limit` actually calls for the distributed, Redis-backed
+  check — has no `lockout_seconds` parameter at all, only a sliding window;
+  it is a pure `limit`-per-`window_seconds` check with nothing to add a
+  lockout to. `lockout_seconds` only reaches the in-memory fallback used
+  when Redis is unavailable, and there it is `0` too, so that path also has
+  no additional lockout beyond the 60-second window. In both cases, a
+  request that hits the limit simply resumes once its own timestamp ages
+  out of the 60-second sliding window, not after an extra 5-minute block;
+  replay-protected (`is_duplicate_webhook`, correctly
   ordered _after_ shape validation so a rejected payload's fingerprint
   can't be poisoned — see the file's own comment); a `records` array is
   capped at 500 per request; the acting org comes from

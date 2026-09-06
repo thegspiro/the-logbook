@@ -385,6 +385,54 @@ async def test_paypal_verify_webhook_signature_fails_closed_on_oversized_respons
     assert result is False
 
 
+async def test_create_integration_client_trust_env_false_transport_ignores_env_ssl_vars():
+    """Codex, 2026-09-06: trust_env=False must reach the transport(s) too,
+    not just gate the _environment_proxy_mounts() decision. In pinned httpx
+    0.28.1, AsyncHTTPTransport.__init__ defaults its own trust_env to True
+    independently of the client it's mounted on, and that default is what
+    reads SSL_CERT_FILE/SSL_CERT_DIR at construction time — so an
+    unreachable SSL_CERT_FILE must not break a client built with
+    trust_env=False, exactly like stock httpx.AsyncClient(trust_env=False)."""
+    with patch.dict(
+        os.environ, {"SSL_CERT_FILE": "/nonexistent/path/to/cert.pem"}, clear=False
+    ):
+        # Sanity check: stock httpx.AsyncClient(trust_env=False) is
+        # unaffected by the bogus SSL_CERT_FILE, proving the environment is
+        # actually exercising the bug this test guards against.
+        stock_client = httpx.AsyncClient(trust_env=False)
+        await stock_client.aclose()
+
+        client = create_integration_client(trust_env=False)
+        try:
+            assert isinstance(client._transport, _SizeLimitedTransport)
+        finally:
+            await client.aclose()
+
+
+async def test_create_integration_client_headers_merge_with_caller_headers():
+    """Codex, 2026-09-06: an explicit headers= kwarg used to collide with
+    the mandatory Accept-Encoding: identity header this function passes to
+    httpx.AsyncClient, raising 'got multiple values for keyword argument
+    headers' before any request was made. A caller-supplied header mapping
+    must merge with, not collide with, the mandatory identity encoding."""
+    client = create_integration_client(headers={"Authorization": "Bearer token"})
+    try:
+        assert client.headers.get("authorization") == "Bearer token"
+        assert client.headers.get("accept-encoding") == "identity"
+    finally:
+        await client.aclose()
+
+
+async def test_create_integration_client_headers_identity_wins_on_collision():
+    """A caller-supplied Accept-Encoding (any casing) must not defeat the
+    gzip-bomb backstop — the mandatory identity value always wins."""
+    client = create_integration_client(headers={"Accept-Encoding": "gzip"})
+    try:
+        assert client.headers.get("accept-encoding") == "identity"
+    finally:
+        await client.aclose()
+
+
 async def test_create_integration_client_mounts_match_stock_httpx_resolution():
     """Parity check: given the same environment, the mounts
     create_integration_client() builds via _environment_proxy_mounts() must

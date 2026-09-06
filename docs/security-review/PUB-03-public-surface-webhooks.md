@@ -154,18 +154,18 @@ webhook signature, API key, or "truly public, nothing to protect")?
 
 ## Route inventory — newly-reviewed files
 
-| File                    | Route                                             | Compensating control                                                   | Org-scoped                           | Notes                             |
-| ----------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------ | --------------------------------- |
-| `finance_approvals.py`  | `GET /approvals/{token}`                          | 256-bit token, 30/min/IP                                               | via token→record                     | step name/status only, no amount  |
-| `finance_approvals.py`  | `POST /approvals/{token}/approve`                 | same + `.with_for_update()` locking read                               | via token→record                     | only `notes` client-writable      |
-| `finance_approvals.py`  | `POST /approvals/{token}/deny`                    | same                                                                   | via token→record                     | same                              |
-| `salesforce_webhook.py` | `POST /webhooks/salesforce/{integration_id}`      | HMAC-SHA256, fail-closed if unconfigured, 30/min+lockout, replay guard | via `integration.organization_id`    | see PUB-1                         |
-| `legal.py`              | `GET /legal`                                      | 30/min/IP; single-tenant-only guard                                    | n/a (anonymous)                      | see PUB-2 (doc only)              |
-| `responses.py`          | n/a — shared OpenAPI response shapes, no route    | n/a                                                                    | n/a                                  | no runtime effect                 |
-| `security_txt.py`       | `GET /.well-known/security.txt`                   | none needed — server config only, no request input consumed            | n/a                                  | RFC 9116                          |
-| `display.py`            | `GET /display/{code}`                             | 60/min/IP, ASCII code regex                                            | via `location.organization_id`       | unchanged from prior audit        |
-| `display.py`            | `GET /display/{code}/events/{id}/guest`           | same                                                                   | via location org **and** location id | new                               |
-| `display.py`            | `POST /display/{code}/events/{id}/guest-check-in` | 10/min+lockout, honeypot, per-event daily cap                          | same                                 | new — full guest check-in feature |
+| File                    | Route                                             | Compensating control                                                                                                | Org-scoped                           | Notes                             |
+| ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | --------------------------------- |
+| `finance_approvals.py`  | `GET /approvals/{token}`                          | 256-bit token, 30/min/IP                                                                                            | via token→record                     | step name/status only, no amount  |
+| `finance_approvals.py`  | `POST /approvals/{token}/approve`                 | same + `.with_for_update()` locking read                                                                            | via token→record                     | only `notes` client-writable      |
+| `finance_approvals.py`  | `POST /approvals/{token}/deny`                    | same                                                                                                                | via token→record                     | same                              |
+| `salesforce_webhook.py` | `POST /webhooks/salesforce/{integration_id}`      | HMAC-SHA256, fail-closed if unconfigured, 30/min (60s window, no added lockout — corrected in INT-27), replay guard | via `integration.organization_id`    | see PUB-1                         |
+| `legal.py`              | `GET /legal`                                      | 30/min/IP; single-tenant-only guard                                                                                 | n/a (anonymous)                      | see PUB-2 (doc only)              |
+| `responses.py`          | n/a — shared OpenAPI response shapes, no route    | n/a                                                                                                                 | n/a                                  | no runtime effect                 |
+| `security_txt.py`       | `GET /.well-known/security.txt`                   | none needed — server config only, no request input consumed                                                         | n/a                                  | RFC 9116                          |
+| `display.py`            | `GET /display/{code}`                             | 60/min/IP, ASCII code regex                                                                                         | via `location.organization_id`       | unchanged from prior audit        |
+| `display.py`            | `GET /display/{code}/events/{id}/guest`           | same                                                                                                                | via location org **and** location id | new                               |
+| `display.py`            | `POST /display/{code}/events/{id}/guest-check-in` | 10/min+lockout, honeypot, per-event daily cap                                                                       | same                                 | new — full guest check-in feature |
 
 ## Verified good ✅
 

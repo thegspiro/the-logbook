@@ -6,7 +6,8 @@ Outbound Messages or Platform Events.  Requests are verified using
 HMAC-SHA256 signatures with the per-integration webhook secret.
 
 Security:
-- Rate limited per IP (30 requests/minute, 5-minute lockout)
+- Rate limited per IP (30 requests/minute, 60-second sliding window; no
+  additional lockout is applied beyond the window — see _rate_limit_webhook)
 - HMAC-SHA256 signature verification
 - Payload size capped by `RequestSizeLimitMiddleware` (ASGI, applies
   regardless of whether nginx is in front of this deployment) and, when
@@ -47,7 +48,15 @@ MAX_RECORDS_PER_WEBHOOK = 500
 
 
 async def _rate_limit_webhook(request: Request) -> None:
-    """Rate limit inbound webhooks: 30/minute per IP, 5-minute lockout."""
+    """Rate limit inbound webhooks: 30/minute per IP, 60-second sliding
+    window. No `lockout_seconds` is passed, so a request that hits the
+    limit resumes as soon as its own timestamp ages out of the window —
+    there is no additional lockout beyond it. (`public_rate_limit`'s
+    `lockout_seconds` only ever reaches its in-memory fallback path in the
+    first place; the Redis-backed sliding-window check it prefers has no
+    lockout concept at all, so a real distributed lockout isn't a one-line
+    kwarg addition here — see docs/security-review/INT-27-integrations.md.)
+    """
     client_ip = get_client_ip(request)
     is_limited, reason = await public_rate_limit(
         f"sf_webhook:{client_ip}", max_requests=30, window_seconds=60

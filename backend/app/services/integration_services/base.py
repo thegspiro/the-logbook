@@ -186,6 +186,13 @@ def _environment_proxy_mounts(
                 verify=True,
                 limits=INTEGRATION_LIMITS,
                 proxy=httpx.Proxy(url=proxy_url),
+                # trust_env is always True here (the `if not trust_env`
+                # guard above already returned {} otherwise), but passed
+                # explicitly rather than relying on AsyncHTTPTransport's own
+                # default — see create_integration_client's docstring for
+                # why every transport this module builds takes trust_env
+                # explicitly instead of trusting httpx's default of True.
+                trust_env=trust_env,
             ),
             max_bytes,
         )
@@ -197,6 +204,7 @@ def create_integration_client(
     trust_env: bool = True,
     proxy: httpx.Proxy | httpx.URL | str | None = None,
     timeout: httpx.Timeout = INTEGRATION_TIMEOUT,
+    headers: typing.Mapping[str, str] | None = None,
     **kwargs: object,
 ) -> httpx.AsyncClient:
     """Create a security-hardened httpx client for external API calls.
@@ -231,6 +239,22 @@ def create_integration_client(
       `_environment_proxy_mounts()` is not even called in that case (see its
       docstring). Passed through to `httpx.AsyncClient` too, so it also
       governs the other things `trust_env` controls there (e.g. `.netrc`).
+      It is *also* passed to every `httpx.AsyncHTTPTransport(...)` this
+      function constructs (the default transport below and the explicit-
+      `proxy=` mount) — not just used to gate the `_environment_proxy_mounts`
+      decision (Codex, 2026-09-06). `AsyncHTTPTransport.__init__` defaults
+      its own `trust_env` to `True` independently of the client it's mounted
+      on; in pinned httpx 0.28.1 that default is what reads
+      `SSL_CERT_FILE`/`SSL_CERT_DIR` from the environment at construction
+      time. Passing `transport=` to `AsyncClient` (as this function always
+      does) does not propagate the client's `trust_env` down to that
+      transport — they're independent constructor arguments — so a caller
+      that opted out via `trust_env=False` was still getting an
+      environment-trusting transport underneath: `SSL_CERT_FILE` pointing at
+      a missing file made this factory raise `FileNotFoundError` even with
+      `trust_env=False`, while stock `httpx.AsyncClient(trust_env=False)`
+      initializes fine in the same environment. See
+      `test_create_integration_client_trust_env_false_transport_ignores_env_ssl_vars`.
     - An explicit `proxy=` is converted straight into an `{"all://": ...}`
       mount, exactly like stock httpx's `_get_proxy_map` — it is not merged
       with any env-derived mounts. Doing so as a `mounts=` merge instead (the
@@ -255,9 +279,21 @@ def create_integration_client(
     — but `_SizeLimitedTransport` rejects any response that does anyway (see
     its docstring), so this exists only to avoid that rejection firing
     against a well-behaved API that would otherwise compress by default.
+
+    `headers` is a named parameter (rather than left to flow through
+    `**kwargs`) because that mandatory `Accept-Encoding: identity` is passed
+    to `httpx.AsyncClient` as this function's own `headers=` — a caller that
+    also supplied `headers=` via `**kwargs` would collide with it as a
+    duplicate keyword argument and raise `TypeError` before any request is
+    made (Codex, 2026-09-06). The two are merged instead, case-insensitively
+    (`httpx.Headers` normalizes keys), with the mandatory identity encoding
+    always winning: a caller-supplied `Accept-Encoding` (of any casing) is
+    overwritten, every other caller header passes through unchanged.
     """
     transport = _SizeLimitedTransport(
-        httpx.AsyncHTTPTransport(verify=True, limits=INTEGRATION_LIMITS),
+        httpx.AsyncHTTPTransport(
+            verify=True, limits=INTEGRATION_LIMITS, trust_env=trust_env
+        ),
         MAX_RESPONSE_SIZE,
     )
     if proxy is not None:
@@ -267,7 +303,10 @@ def create_integration_client(
         mounts: dict[str, httpx.AsyncBaseTransport | None] = {
             "all://": _SizeLimitedTransport(
                 httpx.AsyncHTTPTransport(
-                    verify=True, limits=INTEGRATION_LIMITS, proxy=proxy_obj
+                    verify=True,
+                    limits=INTEGRATION_LIMITS,
+                    proxy=proxy_obj,
+                    trust_env=trust_env,
                 ),
                 MAX_RESPONSE_SIZE,
             )
@@ -275,12 +314,15 @@ def create_integration_client(
     else:
         mounts = _environment_proxy_mounts(MAX_RESPONSE_SIZE, trust_env=trust_env)
 
+    merged_headers = httpx.Headers(headers) if headers else httpx.Headers()
+    merged_headers["Accept-Encoding"] = "identity"
+
     return httpx.AsyncClient(
         timeout=timeout,
         follow_redirects=False,
         transport=transport,
         mounts=mounts,
-        headers={"Accept-Encoding": "identity"},
+        headers=merged_headers,
         trust_env=trust_env,
         **kwargs,
     )
