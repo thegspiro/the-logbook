@@ -1,5 +1,103 @@
 # Screenshot currency
 
+## Disposition for August 31 – September 6, 2026 — two modules changed address
+
+Audit: [`CHANGE_AUDIT_2026-08-31_TO_09-06.md`](../CHANGE_AUDIT_2026-08-31_TO_09-06.md).
+Nothing below has been shot yet; this is the queue.
+
+**The manifest was repointed first, and it had to be.** Nineteen `route`
+entries still named addresses that stopped resolving on 2026-08-31 —
+`/scheduling/equipment-check-templates` and its `/new` and `/${id}` children,
+`/scheduling/equipment-check-reports`, `/scheduling/supply/expiring`,
+`/scheduling/apparatus-inventory`, and four at `/store/admin`. **A retired route
+does not fail the capture**; it falls through the router's catch-all to the
+dashboard, and the shot succeeds against the wrong page. That is the same trap
+the 2026-09-05 scheduling repoint hit — 22 entries then, this is the set that
+pass missed. Verified after the edit by importing the module: 515 entries, zero
+remaining stale routes, 11 now pointing into the checklist console.
+
+`/store/admin` still redirects, so those four would have captured correctly —
+they are repointed anyway, because a redirect is a fact about today's router and
+not something a manifest should depend on.
+
+### Three changes invalidate captures in bulk
+
+These are worth handling as sweeps rather than one image at a time.
+
+1. **Every navigation capture.** Two modules changed address and one changed
+   name. The sidebar now carries **My Checklists** and **Fleet Readiness** under
+   Operations, an **Inventory Admin** entry where it read "Gear Admin", and a
+   **Scheduling** row inside the Administration section. The phone bottom bar
+   has an **Add** button in the middle and two configurable slots rather than
+   three. These are wrong, not stale — a viewer following one cannot find the
+   control.
+
+2. **Every table with a right-aligned column**, across 37 files. Headings that
+   sat hard left over right-aligned figures now sit over their own columns.
+   Worst affected: the scheduling reports (19 headers), the compliance officer
+   dashboard (13), and the finance, grants and inventory tables. **This one is
+   dangerous precisely because it is subtle** — a reviewer will not notice a
+   stale capture, so work from the list in
+   `frontend/src/styles/tableHeaderAlignment.test.ts` rather than by eye.
+
+3. **Anything showing a rank-and-file member's navigation, or the Apparatus
+   pages.** `reports.view` and `apparatus.view` were revoked from the seeded
+   rank-and-file, so the Administration section and the Apparatus entry are gone
+   for a member account. **Caption the capturing account's grants** on every
+   re-shoot — the seeder's member and officer fixtures now differ here in ways
+   they did not.
+
+### New — screens never captured
+
+| Image area | Note |
+| --- | --- |
+| `/inventory/admin/checklists` and its four children | The checklist console has never been shot at its own address |
+| `/inventory/checklists` (Fleet Readiness) | New crew-facing address |
+| `/inventory/checklists/my` (My Checklists) | Replaces the Equipment Checks tab, which no longer exists |
+| `/scheduling/admin` hub | Card grid, five headline metrics, Needs attention queue |
+| `/scheduling/admin/planning` — staffing gaps | The screen this window was built around |
+| `/scheduling/admin/settings/general` → Call types editor | Shoot one type **retired** and the delete control **unavailable** on a type with history — that pair is the lesson |
+| `/scheduling/admin/positions` | Renamed from `/scheduling/qualifications` |
+| `/inventory/admin/store` on the shared admin frame | The store console gained the header, metrics row and attention queue |
+| Integrations → Claude (MCP) connect form | Shoot with the three data switches visibly **off** — that is the shipped default and the point of the shot |
+| Integrations → Claude (MCP) service-key panel | The shown-once state. **Redact the key in the capture** |
+| Settings → Email, Microsoft 365 with **App registration (OAuth)** selected | Get the App Password option and its dated retirement notice in the same frame |
+| Settings → Email, Test Connection result | New control |
+| Shift template → equipment checklists picker | New control under the vehicle picker |
+| Member profile → profile visibility controls | Five field toggles; shoot a mix of on and off |
+| Event detail → who's going + waitlist position | **Shoot the member view, not the organizer view** — what a member can now see is the whole point |
+| Phone bottom bar → Quick Add sheet | 390px viewport, member account (officer rows are gated and must not appear) |
+| My Shifts → Hours view | Three cards (this month / this year / all time) above the month table |
+| Gear request form — product step and size step | Two shots: category filters with one row per product; then the size step with the member's size preselected and an out-of-stock size labelled |
+
+### Replace — the screen changed under the existing capture
+
+| Image area | Why |
+| --- | --- |
+| Shift Details | Was a **right-edge drawer**, is now a centred modal — 56rem laptop, 1rem-inset phone. Shoot both widths; the drawer no longer exists |
+| Compliance Matrix | The member × requirement **icon grid is gone**; it is a triage rail grouped by standing |
+| `/members` as a member | Now "Member Directory" — no usernames, no hire-date column, no Actions column, no bulk selection. Keep the coordinator capture and pair them |
+| `/inventory/my-equipment` | "Permanent Assignments" and "Issued Items" are one **Issued to Me** list; four tiles collapse to three |
+| Dashboard — timeline card | "Next 7 Days" is **Next 30 Days**; the control reads **All Shifts**, not "Full Schedule" |
+| Dashboard — gear widget | Labels are **Issued to me** / **Temporary loans**, and the count now matches the page |
+| Dashboard — hours card | The duplicate header chip is gone, and Administrative hours reads a figure rather than "Unavailable" — **three changes in one frame** |
+| `03-15-scheduling-settings.png` | Already queued for the shared-settings rebuild; it also needs the new address, `/scheduling/admin/settings/general` |
+| Scheduling settings — Equipment section | Four dead settings removed; it is a signpost to Inventory **with no Save button** |
+| Documents, empty state as a member | Blank, rather than an upload invitation |
+| Events list, empty state as a member | Blank, rather than a create invitation |
+| Training Programs as a member | Requirements and Templates tabs gone; the whole tab strip is hidden |
+| Course Library as a member | Add / Edit / Delete / Manage classes withheld |
+| Any settings screen on a phone | Section pills are 44px now, and the overflow row is a real scroll strip |
+
+### Do not capture
+
+| Image area | Why |
+| --- | --- |
+| Equipment check crew **"Sweep"** | **Shipped behind a prop and not switched on for crews.** It is visible only in the template builder's preview. Capturing it as the member experience would document a screen no crew can reach |
+| Equipment check **lap** | Still built and unwired; the live check screen renders the previous flat compartment list |
+| **Member qualifications** entry | Still no direct entry screen (QUAL-1) — a qualification is written only as a side effect of a training record against a course whose **Certifies** field is set |
+
+
 ## Captured 2026-09-01 — the dashboard timeline at thirty days, and the manifest that pointed at the old heading
 
 Two shots re-taken against the running application:

@@ -615,7 +615,7 @@ members that the rest of the schedule does not.
 
 | Screen                                                                                           | Who sees it                                                                      |
 | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| **Platoon Management** (`/scheduling/platoons`) — the department-wide roster and bulk assignment | `scheduling.manage` only                                                         |
+| **Platoon Management** (`/scheduling/admin/platoons`) — the department-wide roster and bulk assignment | `scheduling.manage` only                                                         |
 | **Shift detail → hold-over / availability roster**                                               | `scheduling.assign`, `scheduling.manage`, or **the officer named on that shift** |
 | Everything else on a shift — time, apparatus, who is assigned, check-in state                    | Any member                                                                       |
 
@@ -636,7 +636,7 @@ members that the rest of the schedule does not.
 
 _Shot as the member, because the refusal is the subject — an administrator's
 capture would show the working page and teach the opposite. The refusal is the
-page-level one, not an empty roster: nothing on `/scheduling/platoons` renders._
+page-level one, not an empty roster: nothing on `/scheduling/admin/platoons` renders._
 
 ### The roster, and who sees it
 
@@ -1092,28 +1092,103 @@ which positions are open to everyone regardless of rank.
 > press Sign Up and be told they are not eligible. This is a known rough edge —
 > see [Known Limitations](../KNOWN_LIMITATIONS.md).
 
-### Scheduling Admin Pages
+### Scheduling Administration _(moved 2026-09-05)_
 
-Admin functionality has been extracted into dedicated pages for better navigation:
+Everything an officer administers about the schedule lives at
+`/scheduling/admin`, in the **Administration** section of the navigation beside
+Training Admin and Inventory Admin. It used to be reached from a strip of
+"Officer tools" on the member-facing scheduling page — so an administrator
+opened the schedule to find the settings. That strip is gone.
 
-| URL                     | Page      | What It Does                                 |
-| ----------------------- | --------- | -------------------------------------------- |
-| `/scheduling/templates` | Templates | Manage shift templates                       |
-| `/scheduling/patterns`  | Patterns  | Create and manage shift patterns             |
-| `/scheduling/reports`   | Reports   | View hours, coverage, and compliance reports |
-| `/scheduling/settings`  | Settings  | Configure scheduling rules and preferences   |
+| URL                                    | Page                    | What It Does                                                       |
+| -------------------------------------- | ----------------------- | ------------------------------------------------------------------ |
+| `/scheduling/admin`                    | Hub                     | Card grid with headline metrics and a Needs attention queue        |
+| `/scheduling/admin/planning`           | Shift Planning          | Every upcoming short shift, with the assignment on the row         |
+| `/scheduling/admin/planning/templates` | Shift Templates         | Manage shift templates                                             |
+| `/scheduling/admin/planning/patterns`  | Shift Patterns          | Create and manage shift patterns                                   |
+| `/scheduling/admin/reports`            | Scheduling Reports      | Hours, coverage and compliance reports                             |
+| `/scheduling/admin/platoons`           | Platoons                | Department-wide roster and bulk assignment                         |
+| `/scheduling/admin/positions`          | Who Can Fill What       | Position eligibility roster                                        |
+| `/scheduling/admin/settings/<section>` | Settings (six sections) | `general`, `apparatus`, `platoons`, `eligibility`, `notifications`, `shift-reports` |
 
-Each page has back navigation to the main scheduling hub. Access requires `scheduling.manage` permission.
+Every page here requires `scheduling.manage` — the hub, the settings sections
+and the position roster alike.
+
+> **⚠️ Six old URLs no longer resolve, and there is no redirect.**
+> `/scheduling/settings`, `/scheduling/templates`, `/scheduling/patterns`,
+> `/scheduling/reports`, `/scheduling/platoons` and
+> `/scheduling/qualifications` all land on the dashboard — silently, because
+> the catch-all redirect succeeds. Update any bookmark or SOP link.
+>
+> `/scheduling/admin/settings?tab=…` **does** still resolve: it forwards to the
+> section its parameter names, and to General if it names nothing recognisable.
+
+**Each settings section is its own route**, so it can be linked to, bookmarked,
+refreshed into and reached with the back button. This is deliberately unlike
+Organization and Events settings, which mirror the section into `?tab=` — a
+section inside an administration hub is a destination, and a `?tab=` only the
+page's own state reads cannot be linked to.
+
+**Shift Planning** is the screen the rest was reorganised around. It lists every
+upcoming shift carrying fewer people than it asks for, over a date range, with
+the assignment control on the row — filling ten gaps used to be ten trips
+through the month grid, the day, the shift drawer and back. Templates and
+patterns are sections of that screen rather than screens beside it, because the
+reason to open a template is a shift that keeps coming up short.
+
+> **One thing to know about the numbers.** The gaps list is built from the same
+> rules the shift board uses, so it cannot answer differently about a shift than
+> the calendar does. A shift naming **neither positions nor a minimum crew
+> size** has never said how big its crew is, reads as "crew size not set" on the
+> board, and is **not listed** here — while the hub's Short-staffed metric does
+> count it. The hub number can exceed the rows on this screen for a department
+> that states no crew size anywhere; the fix is to state one.
 
 ![A scheduling admin sub-page with its back arrow and page header](./images/03-51-admin-subpage-header.png)
 
 ### Equipment Check System
 
+> **⚠️ Equipment checklists moved to the Inventory module on 2026-08-31.** A
+> checklist is a list of inventory items — a checklist position already pointed
+> at an item in the catalog, and the lots aboard a truck are drawn from the same
+> stock — so authoring, reporting and the fleet views now live in
+> [Inventory](./05-inventory.md#equipment-checklists-moved-here-2026-08-31). **Scheduling hosts none
+> of it, and the Equipment Checks tab is gone from the shift screen.**
+>
+> **From a shift, nothing changes in practice**: check-in and the shift detail
+> panel still offer **Start checklist**, and shift finalization still refuses to
+> close on outstanding end-of-shift checks. This section is kept for that
+> shift-side behaviour and for the workflow, which is unchanged — only the
+> addresses moved.
+>
+> | Was | Is now |
+> | --- | --- |
+> | `/scheduling/equipment-check-templates/…` | `/inventory/admin/checklists/templates/…` |
+> | `/scheduling/equipment-check-reports` | `/inventory/admin/checklists/reports` |
+> | `/scheduling/supply/expiring` | `/inventory/admin/checklists/supply` |
+> | `/scheduling/equipment` | `/inventory/checklists` |
+> | `/scheduling/equipment/checks` | `/inventory/checklists/log` |
+> | `/scheduling/equipment/{id}` | `/inventory/checklists/apparatus/{id}` |
+> | `/scheduling/apparatus-inventory` | `/inventory/checklists/apparatus-inventory` |
+> | `/scheduling?tab=equipment-checks` | `/inventory/checklists/my` |
+>
+> **The permissions were renamed too**, from `equipment_check.view` / `.manage`
+> / `.submit` to `inventory.check_view` / `.check_manage` / `.check_submit`.
+> Every position keeps the authority it had. One consequence: a position holding
+> the `inventory.*` wildcard now also grants all three.
+
 The Equipment Check system allows structured, shift-based vehicle and equipment inspections. It consists of three parts: template building, check submission, and reporting.
+
+**New in this window:** a shift template can now **name the equipment checklists
+its shifts carry**, instead of every shift working them out from its vehicle.
+Naming them replaces the vehicle's own; leaving them unticked keeps today's
+behaviour, so nothing changes until a department uses it. Edit them on the shift
+template, under the vehicle picker. Crews see them in the order the officer
+arranged them, which the shift reminder also follows.
 
 #### For Administrators: Building Templates
 
-Navigate to **Scheduling > Settings > Equipment** to see the template list, then click **Create Template** to open the template builder.
+Navigate to **Inventory Admin > Equipment Checklists** to see the template list, then click **Create Template** to open the template builder.
 
 1. Set the template name, timing (start or end of shift), and type (equipment, vehicle, or combined)
 2. Optionally assign to a specific apparatus or apparatus type
@@ -1152,7 +1227,9 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 
 #### For Members: Submitting Equipment Checks
 
-During a shift, members see pending equipment checks on their dashboard or on **My Equipment Checklists**, which is the Equipment Checks tab of Scheduling as a member sees it.
+During a shift, members see pending equipment checks on their dashboard or on **My Checklists** (Operations → My Checklists, `/inventory/checklists/my`). That navigation row is new — before the move, a member's only route to the checks they owed was a tab inside Shift Scheduling. Officers get **Fleet Readiness** beside it.
+
+> **Reminder notifications already in members' bells carry the old address** and will land on the dashboard. New ones are correct, and these age out within a few days.
 
 1. Open the checklist for your current shift. **You do not need one** —
    **Unscheduled checklist**, at the top of the page, offers every active
@@ -1190,7 +1267,7 @@ that never had it.
 
 #### For Officers: Reports
 
-Navigate to **Scheduling > Equipment Check Reports** to view three report tabs:
+Navigate to **Inventory Admin > Equipment Checklists > Check Reports** to view three report tabs:
 
 | Tab                        | What It Shows                                                                  |
 | -------------------------- | ------------------------------------------------------------------------------ |
@@ -1285,7 +1362,7 @@ stocks.
 #### Expiring on Apparatus — the supply officer's worklist
 
 Open **Scheduling → Supply** (the tile carries a count badge when there is
-anything on it), or reach it from the **Gear Admin hub**.
+anything on it), or reach it from the **Inventory Admin hub**.
 
 The page lists checklist positions that need attention **together with the ready
 replacement stock for each**, because "swap it" and "order it" are different jobs
@@ -1665,7 +1742,7 @@ Sections**; earlier versions of this guide called it "Report Form Sections".)
 
 This section used to sit here, as an eighth. Equipment checklists are an
 Inventory feature, so the settings that govern them moved with the rest: they
-are now at **Gear Admin > Equipment Checklists > Checklist settings**. See
+are now at **Inventory Admin > Equipment Checklists > Checklist settings**. See
 [Inventory](./05-inventory.md). What they control is unchanged — whether crews
 are prompted at shift start and shift end, and how long the check-in link stays
 usable.
@@ -3162,3 +3239,190 @@ the questions it is scored against.
 **Walking a check as a lap** remains built and unwired, unchanged by this
 rebuild. The builder is the *authoring* side; the live check screen still shows
 the flat compartment list. Do not teach it, screenshot it, or promise it.
+
+## A past shift no longer offers its live controls _(2026-09-04 → 09-05)_
+
+**"Reopen for 15 min" was offered on a shift three weeks gone, and it worked.**
+The banner reads *"Reopen it if you are a body short and somebody can still get
+here"* — a sentence about a shift under way — but nothing bounded it by the
+shift's age. Taking it was not cosmetic: a member could sign themselves onto a
+shift they had never worked and draw hours for it. Reproduced at ninety days.
+
+Confirm, decline and remove outlived the shift too. A member looking at a shift
+they had worked a fortnight earlier — with twelve hours already recorded against
+it — was still offered a button to decline the assignment those hours hang off,
+and an officer was still offered **Remove** beside every name. Withdraw sat
+directly beneath the line reporting those hours.
+
+**The lock is now enforced, not just displayed.** Hiding a control is not
+enforcing a rule: confirm, the assignment update and delete, and self-withdraw
+were all still reachable by a direct request. All of them now carry the same
+bound the screen does.
+
+### What the lock is
+
+The roster locks at **the shift's end plus the department's late-signup grace
+period** — the same number the officer's own signup deadline uses, so the two
+move together when you change the setting.
+
+It is the shift's **end**, not its date. An overnight crew keeps every control
+through the night; a day-granular rule would have taken them away at midnight,
+mid-shift.
+
+**`scheduling.manage` is never locked out.** Correcting a months-old roster is
+records work, and that is where a change to a shift this old belongs.
+
+### A shift with no end time was exempt entirely
+
+`end_time` is genuinely optional — a shift without one is open-ended rather than
+malformed — so the deadline returned nothing and the age bound simply did not
+apply.
+
+An open-ended shift is now treated as running for **twelve hours after it
+starts**, plus the grace period. Twelve because that is already the cushion
+check-in allows a shift with no recorded end, so the two rules agree on how long
+"still out" can plausibly last. Standing the start in at *grace* scale would
+have been the overcorrection — a false lock an hour after the shift began, with
+the crew still working.
+
+**The cushion follows your `checkin_closes_hours_after`, floored at twelve.** A
+department that widened check-in to seventy-two hours was getting a roster that
+locked sixty hours before check-in did. It does not follow the setting *down*:
+check-in closing early says nothing about a crew still being out.
+
+> **Unknown now means unlocked.** The signup window falls back to a built-in
+> sixty minutes until the department's settings arrive — a default chosen to be
+> permissive for a claim button, and exactly wrong for a lock. A department
+> running a longer grace watched controls vanish on a shift the server still
+> accepts, and a failed settings fetch left them gone for the life of the panel.
+
+## Name your own call types _(2026-09-05)_
+
+The nine call types on the shift close-out screen have been per-department data
+since call tracking shipped — stored in your organization's settings and
+writable through the API — but **nothing in the UI could reach them**. A
+department that does not run EMS, or one that calls them "Alarm Activation"
+rather than "Alarm / Good Intent", had no way to say so.
+
+**Administration → Scheduling Admin → General → Call types** renames, reorders,
+adds, retires and deletes them.
+
+> **Screenshot needed:**
+> _[The Call types editor in Scheduling Admin → General: the department's list
+> with rename and reorder controls, one type shown as retired, and the delete
+> control visibly unavailable on a type that has calls behind it.]_
+
+**Retire, don't delete, anything with history behind it.** The stored value on
+every call ever filed is the type's permanent slug, so deleting a type in use
+would leave that history pointing at something nothing can label. A type with
+calls or a filed shift report behind it can only be turned off — which takes it
+off the close-out screen and leaves every report that names it intact. Delete
+stays available for a type nothing refers to.
+
+**Retiring every type** is how a department asks close-out for a bare total with
+no breakdown.
+
+Reports, the CSV export, the shift-report call-type badges, the printable report
+and the end-of-shift summary email now use your own names — **retired types
+included**, so a report covering last year still reads properly.
+
+> **A report written under per-incident tracking keeps the officer's own
+> wording.** A shift report records whether its call types are the department's
+> slugs or the incident text an officer typed, and only the first may be
+> relabelled when a type is renamed — otherwise renaming a type would rewrite an
+> officer's "MVA w/ entrapment" the day a slug happened to match.
+
+> **If your department ever named a type "unclassified", the upgrade repairs
+> it.** That slug is the synthetic bucket a call with *no* type falls into on a
+> breakdown, so a configured type sharing it was indistinguishable from the
+> remainder: the call-volume report merged your calls with the untyped ones and
+> labelled the total "Not categorised" — a figure that reconciles to neither
+> quantity — while the type's own name vanished from every screen. The settings
+> editor could not fix it either, because the slug is refused on write. A
+> migration renames it, deriving the new slug from your own label, and moves the
+> calls and filed reports that point at it.
+
+## Shift Details is a centred modal _(2026-09-05)_
+
+The Shift Details surface was a right-edge drawer — pinned full-height, full
+bleed on phones and capped at 32rem above that. It is now a **centred dialog**:
+56rem on a laptop, a 1rem-inset box on a phone, scrolling within itself.
+
+The wider desktop box gives the crew board and the close-out checklist's
+per-member hours inputs room they did not have at 512px.
+
+> **Screenshot needed:**
+> _[The Shift Details modal at laptop width with the crew board visible, and a
+> second capture at 390px phone width. Every existing capture of this surface
+> shows a right-edge drawer, which no longer exists — these are replacements,
+> not additions.]_
+
+**Escape inside the driver-blocked dialog no longer closes the shift behind
+it.** Shift Details hand-rolled Escape on a listener that could not see the
+dialog stack, so one key dismissed both. It now routes through the shared dialog
+stack, which also gives it the focus trap, body scroll lock and dialog role it
+never had. Escape still cancels an open inline notes editor before it closes
+anything.
+
+## A member can see their own hours and calls for the year _(2026-09-04)_
+
+**My Shifts has a third view: Hours.** It opens on last month, this month and
+the year to date, then lists every month of the selected year with the shifts
+worked, hours credited and calls responded to.
+
+Until now a member could see the hours on each past shift but had no total for a
+month or a year, so *"how many hours do I have this year?"* was a question only
+an officer with the department-wide report could answer.
+
+> **Screenshot needed:**
+> _[The Hours view in My Shifts: the three cards reading this month, this year
+> and all time, above the month-by-month table with its "vs. busiest month" bar
+> column.]_
+
+- **It needs no permission beyond being signed in.** It reports the caller's own
+  attendance; the department-wide member-hours report, which names every member,
+  stays behind `scheduling.report`.
+- **Credited and pending hours are reported separately.** Hours count once an
+  officer finalizes the shift — the rule the department's report already applies,
+  so a member's number and their officer's number agree. Time on a shift still
+  awaiting close-out is its own line rather than folded into the total, so a
+  figure never drops without explanation.
+- **The previous month is reported whatever year is being viewed**, because
+  every January the month that just ended is in the previous year.
+- **The calls column is dropped entirely** for a department whose call tracking
+  is off, rather than showing a column of zeros that reads as a broken counter.
+
+The three cards read **this month, this year and all time** — replacing last
+month / this month / year to date. "Last month" answered a narrower question
+than the table beneath it already answered month by month, while the one figure
+the table could never show — what a member has done over their whole time with
+the department — was not reported anywhere. The middle card follows the year
+picker and retitles itself, so it cannot claim "this year" over a table showing
+a different one.
+
+## A crew seat is named by its label, not its stored token _(2026-09-01)_
+
+A shift built from a template with two EMT seats listed them as **"EMS"** on the
+schedule.
+
+The seat's stored token and its name on screen are two different things: the
+token is canonical and lowercase because it is what the signup API grants
+against, and the label is what a firefighter reads — which everywhere the seat
+is *chosen* (the template form, the eligibility settings, the rank editor) is
+"EMT". The board, the phone day sheet, My Shifts, the shift report crew list and
+both template summaries printed the token, so the same seat had two names
+depending on which screen you were standing on. "EMS" reads as a different seat
+rather than the same one spelled another way.
+
+**It reached print and email too**: a printed roster's right-hand column, the
+shift-reminder emails' crew list, and an assignment notification telling a member
+they had been assigned to the "ems position".
+
+**A seat your department defined itself** now resolves to its admin-chosen label
+on the board and the roster, rather than showing there as its slug.
+
+On a 32-character receipt a label wider than the seat column drops the
+alternative after a slash — "Driver/Operator" is two names for one seat, and a
+mid-word cut ("DRIVER/OPERA") reads as a printer fault — and is otherwise
+truncated rather than reduced to its first word, which would print a
+department's "Assistant Chief" and "Assistant Driver" identically.

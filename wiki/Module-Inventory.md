@@ -885,3 +885,133 @@ test asserts the baseline Member position holds `inventory.view` but not
 gated its inventory section on `inventory.view`, handing every member
 department-wide item counts, low-stock lines and overdue-checkout totals. It
 now requires `inventory.manage` or `settings.manage`.
+
+## Inventory Administration _(2026-09-03)_
+
+The gear admin hub is now **Inventory Administration**. The area had four
+different names — "Gear & Uniforms Administration" on the hub, "Gear Admin" in
+the navigation, "Gear & Uniforms" in the module registry, "Inventory" in the
+command palette, and "Back to Logistics Admin" on the store's back-link.
+
+**Labels only. No route, permission key, module key or API value changed**, so
+no link, bookmark or integration breaks. Screens that really are about gear
+keep the quartermaster's vocabulary: My Issued Gear, Gear Requests, Gear Kits.
+
+The hub opens on the three supply lines a department staffs — PPE & Turnout
+Gear, Uniforms, and **EMS Supplies**, which the hub previously did not link to
+at all despite gear, uniforms and EMS stock sharing one catalog partitioned by
+`inventory_categories.item_type`. Below them the cards are grouped by what the
+officer is doing: Catalog, Issuance & Members, Requests & Approvals, Readiness
+& Compliance, Department Store, Setup & Tools.
+
+### The store console moved inside the hub
+
+| Was            | Is now                                       |
+| -------------- | -------------------------------------------- |
+| `/store/admin` | `/inventory/admin/store` (redirect in place) |
+
+It also stopped being the one administration page outside the shared frame — it
+now renders the same header, metrics row and attention queue as Members,
+Training, Events and Inventory. Its six tabs are selected by `?tab=`, so the
+hub can link at Catalog, Orders or Payments directly. No migration.
+
+### Cards no longer promise pages the viewer cannot open
+
+Every card carries the gate of the route it targets, and a section with no
+visible cards is not rendered. `checkPermission` is exact match plus module
+wildcard, so **`inventory.manage` implies neither `inventory.view_medical` nor
+`inventory.check_*`** — which is why the seeded Quartermaster was being shown
+Equipment Checklists and Check Reports and refused by both.
+
+The hub also admits checklist officers and store managers, whose consoles it
+links to; each card still resolves its own permission, so widening the door did
+not widen what is behind it. Previously the hub asked for ten sets of inventory
+figures on every visit regardless of who was looking, and for anyone without
+the inventory grant every one was refused — the page then listed all ten as
+unavailable, telling an officer the system was failing when it was working as
+configured.
+
+### API additions (all additive and defaulted)
+
+| Endpoint                         | Added                                | Note                                                                                                                                                               |
+| -------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /inventory/summary`         | `items_by_type`, `non_medical_items` | Counted as **rows**, deliberately unlike `total_items`, which sums quantities — so a supply-line card matches the list it opens                                    |
+| `GET /store/orders`              | `exclude_cancelled`                  | Narrower than `open_only`, which would also hide a fulfilled order still awaiting verification — money the department is still owed                                |
+| `GET /inventory/members-summary` | `userId`                             | Keeps a named member in the result whatever their status; a departure clearance is created _after_ the drop makes the member inactive, and the list is active-only |
+
+## Requesting gear no longer requires knowing the department's name for it _(2026-09-05)_
+
+The request form was a search box over an empty state. A member who did not
+know what the department calls a thing had nowhere to start.
+
+- **It browses.** The department's gear loads the moment the form opens, with
+  the real category names as filters. Search matches the category and
+  product-group names as well as the item's own, so typing "shirt" now finds a
+  garment the catalog files as "Long Sleeve".
+- **One row per product, not one per stocked size.** A shirt kept in seven
+  sizes and two colours was fourteen near-identical lines; it is one line now,
+  with sizes as their own step after the product is chosen. Serialized gear
+  collapses the same way — ten radios read as "Portable Radio — 7 on hand".
+- **The size step starts from the sizes you have on file**, matched through the
+  same alias table the impact planner uses, so "Large" on a member's record
+  selects the row the quartermaster stored as "L".
+- **You can ask for gear that is out of stock, or not carried at all.** The
+  form was pinned to items marked available, so the one need a quartermaster
+  has no other way to learn about could not be recorded. Out-of-stock sizes
+  stay selectable and are labelled as such, and a free-text line covers gear
+  that is not in the catalog. `equipment_requests.requested_size` carries the
+  size as its own field, so a request with no matching catalog row still tells
+  the quartermaster exactly what was wanted.
+
+**Rank- and position-restricted gear is filtered by the server**, not by the
+browser after the fact. The old form listed restricted items, disclosed their
+existence to everyone, and let the member submit a request the API then
+refused.
+
+Two fulfilment fixes went with it: _"Nothing on hand is size L"_ was suppressed
+by any item in the requested size, so a rack of size-L trousers silenced the
+notice on a request for a size-L shirt; and the fulfil picker judged
+availability from **the first 500 rows it had loaded**, so on a larger catalog
+"nothing on hand is that size" could mean "not on this page". Both are decided
+by the server now.
+
+## My Issued Gear is one list _(2026-09-05)_
+
+"Permanent Assignments" and "Issued Items" are now one **Issued to Me**
+section. The split was the stockroom's, not the member's: an assignment is one
+serialized unit out of `item_assignments`, an issuance is N units drawn from
+bulk stock in `item_issuances`, and a member holds both open-endedly with
+nothing to do differently about either.
+
+Both render in one list sorted by when the gear was received, with each row
+still showing what its record type actually carries — serial, asset tag and
+condition for an assignment; quantity and size for an issuance. The four
+quick-stat tiles collapse to three.
+
+**Active Temporary Loans stays its own section**, because a due date is the one
+distinction a member has to act on, and folding it in would have buried the
+overdue badge.
+
+**Nothing changed on the wire.** The two record types remain separate tables
+with separate return endpoints, and a row's "Notify quartermaster of return"
+still posts `return_type: assignment` or `issuance` against the right reference
+id. The quartermaster's member view and the dashboard gear widget are
+untouched — though the widget's **labels** now match the page ("Issued to me",
+"Temporary loans") and it now counts entries rather than units, which is what
+the page always did. The two used to disagree: 7 on the dashboard rail, 4 on
+the page, for one locker.
+
+## An item's size is edited through a labelled picker _(2026-09-06)_
+
+The Edit Item dialog's Size field was a free-text box over the legacy `size`
+column, which holds a code — so a quartermaster editing a variant-generated
+shirt read `l` where every other screen says `L`. It is now a picker over the
+whole standard-size vocabulary (garment, boot/glove and waist), with a Custom
+option for a boot width or a chest measurement.
+
+**Two columns hold a size** — the structured `standard_size` and the legacy
+free-text `size` — and the form wrote only the second, so the detail card, the
+variant capsules and the variant stock matrix kept reporting the pre-edit size.
+One control now writes both. The detail card and variant capsules also render
+`one_size` and `xxxl` as **One Size** and **3XL** rather than upper-casing the
+stored code.

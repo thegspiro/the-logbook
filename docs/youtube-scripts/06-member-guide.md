@@ -536,7 +536,13 @@ the two into one flow.]**
 
 ### RECORDING WHAT YOU USED (15:30 – 17:30)
 
-**[SCREEN: A phone. Scheduling → Equipment Checks tab.]**
+**[SCREEN: A phone. Operations → My Checklists.]**
+
+**[EDITOR NOTE (2026-08-31): this used to be the Equipment Checks tab inside
+Scheduling. Equipment checklists moved to the Inventory module, and members now
+reach them from a navigation row of their own — Operations → My Checklists.
+The old `/scheduling/equipment*` addresses land on the dashboard with no error,
+so a take shot from the Scheduling page will silently show the wrong screen.]**
 
 > "That's your gear. This next bit is the truck's — and it's the part of the
 > system most people never get shown, so stay with me."

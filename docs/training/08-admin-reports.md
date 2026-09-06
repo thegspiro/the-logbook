@@ -1225,49 +1225,49 @@ compliance figure.
 
 ## Troubleshooting
 
-| Issue                                                 | Solution                                                                                                                                                                                                     |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Cannot access admin settings                          | Verify you have the `settings.manage` permission. Only IT Manager and certain officer positions have this by default.                                                                                        |
-| Module toggle not saving                              | Refresh the page and try again. Check for any error messages in the notification area.                                                                                                                       |
-| Report showing no data                                | Verify the date range includes the period you are interested in. Some reports require specific data to exist (e.g., training records, event attendance).                                                     |
-| Cannot assign a position to a member                  | Verify you have `positions.manage_permissions` permission. The IT Manager position can always assign roles.                                                                                                  |
-| Scheduled task not running                            | Check that the task is enabled. If the system was recently restarted, tasks may take one cycle to resume.                                                                                                    |
-| Public portal not accessible                          | Verify the public portal is enabled and the domain/URL is configured correctly. Check that API keys are active.                                                                                              |
-| Error monitor showing many errors                     | Some errors are expected (failed login attempts, rate limiting). Focus on Critical and Error severity items.                                                                                                 |
-| Email templates page not visible                      | Navigate to **Administration > Email Templates**. Requires `settings.manage` permission.                                                                                                                     |
-| "Data truncated" error on email template              | Run `alembic upgrade head` to sync the MySQL ENUM with the new template types.                                                                                                                               |
-| Email template preview shows placeholder data         | As of 2026-03-02, template preview loads live organization data. Clear browser cache to get the updated preview.                                                                                             |
-| Cannot send test email to specific member             | Use the member dropdown in the preview panel to select a recipient for test emails.                                                                                                                          |
-| Email scheduling not available                        | Email scheduling was added 2026-03-02. Ensure you are on the latest version.                                                                                                                                 |
-| Standard modules missing after fresh install          | Standard modules now default to enabled. If missing, check **Settings > Modules** and enable them. The Settings UI has been redesigned with module cards.                                                    |
-| OrganizationSettings page crashes                     | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed.                                                                                                    |
-| Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here.        |
-| Admin hours summary categories showing "undefined"    | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild.                                                                                   |
-| Admin hours clock-in shows "already clocked in"       | You have an active session in the same category. Clock out first, or check the dashboard for your active session.                                                                                            |
-| Admin hours clock-in fails with "active session"      | You have an active session in a different category. The system allows only one active clock-in at a time across all categories. Clock out of the current session first.                                      |
-| Admin hours category shows "no longer active"         | The category has been deactivated by an administrator. You cannot clock into inactive categories. Contact your admin.                                                                                        |
-| Admin hours manual entry rejected                     | Manual entries are validated: clock-out must be after clock-in, clock-in cannot be in the future, and duration must be at least 1 minute.                                                                    |
-| Admin hours pending entry rejected without reason     | Rejection requires a reason. The reviewer must provide a rejection reason when denying a pending entry.                                                                                                      |
-| Email templates return 500 error                      | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart.                                                                                        |
-| Email templates missing CC/BCC fields                 | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration.                                                                                      |
-| Onboarding redirects to /login after Step 7           | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart.                                                                                            |
-| Events Settings page layout changed                   | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections.                                                |
-| Reports page only shows basic views                   | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience.                                              |
-| Medical Screening module not visible                  | Enable Medical Screening for your organization in **Organization/Admin Settings > Modules** (`enabled_modules`). _(added 2026-03-13)_                                                                        |
-| Compliance shows 0% with requirements defined         | Verify screening records exist for the member and that the requirement is active. Check that the member's role matches the requirement's `applies_to_roles` configuration.                                   |
-| Compliance report generation fails                    | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery.                                               |
-| Scheduled emails not sending                          | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. _(fixed 2026-03-13)_ |
-| Compliance config "already exists" error              | Use the update endpoint (PUT) instead of initialize (POST) after first-time setup. The initialization endpoint is for first-time configuration only.                                                         |
-| Date/time displays show UTC instead of local time     | Fixed 2026-03-14 — a SQLAlchemy `load` event listener now stamps all naive datetimes with UTC tzinfo. ESLint rules enforce use of `dateFormatting.ts` utilities. Pull latest and restart.                    |
-| Pipeline overview report missing                      | Added 2026-03-15 — new `PipelineOverviewRenderer` in Reports module. Configure stage grouping in Pipeline Settings > Report Stage Groups.                                                                    |
-| Pipeline report stage groups                          | Configure in Pipeline Settings. Groups combine multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview) for the pipeline overview report.                                        |
-| Modal cannot be closed by clicking backdrop           | Fixed 2026-03-14 — all modals across the app now have correct backdrop click-to-dismiss and z-index stacking. Pull latest frontend code.                                                                     |
-| Dark mode backgrounds bleeding through                | Fixed 2026-03-18 — overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode. Pull latest frontend.                                                                    |
-| High-contrast mode missing styles                     | Fixed 2026-03-18 — high-contrast variants added across 25+ files. Pull latest frontend.                                                                                                                      |
-| API datetime fields missing timezone                  | Fixed 2026-03-16 — all API response schemas now inherit from `UTCResponseBase` which stamps naive datetimes with `+00:00`. Pull latest backend.                                                              |
-| Equipment check reports not showing                   | Navigate to `/inventory/admin/checklists/reports`. Requires `inventory.check_manage` permission. At least one check must be submitted. _(added 2026-03-19)_                                                  |
-| Operational ranks eligible positions not saving       | Ensure you are on the latest migration. The `eligible_positions` JSON column was added 2026-03-19. Run `alembic upgrade head`.                                                                               |
-| Scheduling admin pages return 404                     | Admin tabs were extracted into dedicated routes (`/scheduling/templates`, `/scheduling/patterns`, etc.) in 2026-03-19. Pull latest frontend.                                                                 |
+| Issue                                                 | Solution                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cannot access admin settings                          | Verify you have the `settings.manage` permission. Only IT Manager and certain officer positions have this by default.                                                                                                                                                                                                                                                                                                |
+| Module toggle not saving                              | Refresh the page and try again. Check for any error messages in the notification area.                                                                                                                                                                                                                                                                                                                               |
+| Report showing no data                                | Verify the date range includes the period you are interested in. Some reports require specific data to exist (e.g., training records, event attendance).                                                                                                                                                                                                                                                             |
+| Cannot assign a position to a member                  | Verify you have `positions.manage_permissions` permission. The IT Manager position can always assign roles.                                                                                                                                                                                                                                                                                                          |
+| Scheduled task not running                            | Check that the task is enabled. If the system was recently restarted, tasks may take one cycle to resume.                                                                                                                                                                                                                                                                                                            |
+| Public portal not accessible                          | Verify the public portal is enabled and the domain/URL is configured correctly. Check that API keys are active.                                                                                                                                                                                                                                                                                                      |
+| Error monitor showing many errors                     | Some errors are expected (failed login attempts, rate limiting). Focus on Critical and Error severity items.                                                                                                                                                                                                                                                                                                         |
+| Email templates page not visible                      | Navigate to **Administration > Email Templates**. Requires `settings.manage` permission.                                                                                                                                                                                                                                                                                                                             |
+| "Data truncated" error on email template              | Run `alembic upgrade head` to sync the MySQL ENUM with the new template types.                                                                                                                                                                                                                                                                                                                                       |
+| Email template preview shows placeholder data         | As of 2026-03-02, template preview loads live organization data. Clear browser cache to get the updated preview.                                                                                                                                                                                                                                                                                                     |
+| Cannot send test email to specific member             | Use the member dropdown in the preview panel to select a recipient for test emails.                                                                                                                                                                                                                                                                                                                                  |
+| Email scheduling not available                        | Email scheduling was added 2026-03-02. Ensure you are on the latest version.                                                                                                                                                                                                                                                                                                                                         |
+| Standard modules missing after fresh install          | Standard modules now default to enabled. If missing, check **Settings > Modules** and enable them. The Settings UI has been redesigned with module cards.                                                                                                                                                                                                                                                            |
+| OrganizationSettings page crashes                     | Update to the latest version. A crash in the `redacted()` method and an auth secret leak have been fixed.                                                                                                                                                                                                                                                                                                            |
+| Physical Address not visible in Organization Settings | As of 2026-03-04, Organization Settings > General includes a Physical Address section with a "Same as mailing address" toggle. Physical address data entered during onboarding is now displayed here.                                                                                                                                                                                                                |
+| Admin hours summary categories showing "undefined"    | Fixed in March 2026 — type mismatch between snake_case frontend types and camelCase API response. Pull latest and rebuild.                                                                                                                                                                                                                                                                                           |
+| Admin hours clock-in shows "already clocked in"       | You have an active session in the same category. Clock out first, or check the dashboard for your active session.                                                                                                                                                                                                                                                                                                    |
+| Admin hours clock-in fails with "active session"      | You have an active session in a different category. The system allows only one active clock-in at a time across all categories. Clock out of the current session first.                                                                                                                                                                                                                                              |
+| Admin hours category shows "no longer active"         | The category has been deactivated by an administrator. You cannot clock into inactive categories. Contact your admin.                                                                                                                                                                                                                                                                                                |
+| Admin hours manual entry rejected                     | Manual entries are validated: clock-out must be after clock-in, clock-in cannot be in the future, and duration must be at least 1 minute.                                                                                                                                                                                                                                                                            |
+| Admin hours pending entry rejected without reason     | Rejection requires a reason. The reviewer must provide a rejection reason when denying a pending entry.                                                                                                                                                                                                                                                                                                              |
+| Email templates return 500 error                      | Fixed in March 2026 — missing `duplicate_application` enum value in database. Run `alembic upgrade head` and restart.                                                                                                                                                                                                                                                                                                |
+| Email templates missing CC/BCC fields                 | As of 2026-03-04, each template supports default CC/BCC. BCC also available for scheduled emails. Run latest migration.                                                                                                                                                                                                                                                                                              |
+| Onboarding redirects to /login after Step 7           | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart.                                                                                                                                                                                                                                                                                                    |
+| Events Settings page layout changed                   | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections.                                                                                                                                                                                                                                                        |
+| Reports page only shows basic views                   | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience.                                                                                                                                                                                                                                                      |
+| Medical Screening module not visible                  | Enable Medical Screening for your organization in **Organization/Admin Settings > Modules** (`enabled_modules`). _(added 2026-03-13)_                                                                                                                                                                                                                                                                                |
+| Compliance shows 0% with requirements defined         | Verify screening records exist for the member and that the requirement is active. Check that the member's role matches the requirement's `applies_to_roles` configuration.                                                                                                                                                                                                                                           |
+| Compliance report generation fails                    | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery.                                                                                                                                                                                                                                                       |
+| Scheduled emails not sending                          | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. _(fixed 2026-03-13)_                                                                                                                                                                                                         |
+| Compliance config "already exists" error              | Use the update endpoint (PUT) instead of initialize (POST) after first-time setup. The initialization endpoint is for first-time configuration only.                                                                                                                                                                                                                                                                 |
+| Date/time displays show UTC instead of local time     | Fixed 2026-03-14 — a SQLAlchemy `load` event listener now stamps all naive datetimes with UTC tzinfo. ESLint rules enforce use of `dateFormatting.ts` utilities. Pull latest and restart.                                                                                                                                                                                                                            |
+| Pipeline overview report missing                      | Added 2026-03-15 — new `PipelineOverviewRenderer` in Reports module. Configure stage grouping in Pipeline Settings > Report Stage Groups.                                                                                                                                                                                                                                                                            |
+| Pipeline report stage groups                          | Configure in Pipeline Settings. Groups combine multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview) for the pipeline overview report.                                                                                                                                                                                                                                                |
+| Modal cannot be closed by clicking backdrop           | Fixed 2026-03-14 — all modals across the app now have correct backdrop click-to-dismiss and z-index stacking. Pull latest frontend code.                                                                                                                                                                                                                                                                             |
+| Dark mode backgrounds bleeding through                | Fixed 2026-03-18 — overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode. Pull latest frontend.                                                                                                                                                                                                                                                                            |
+| High-contrast mode missing styles                     | Fixed 2026-03-18 — high-contrast variants added across 25+ files. Pull latest frontend.                                                                                                                                                                                                                                                                                                                              |
+| API datetime fields missing timezone                  | Fixed 2026-03-16 — all API response schemas now inherit from `UTCResponseBase` which stamps naive datetimes with `+00:00`. Pull latest backend.                                                                                                                                                                                                                                                                      |
+| Equipment check reports not showing                   | Navigate to `/inventory/admin/checklists/reports`. Requires `inventory.check_manage` permission. At least one check must be submitted. _(added 2026-03-19)_                                                                                                                                                                                                                                                          |
+| Operational ranks eligible positions not saving       | Ensure you are on the latest migration. The `eligible_positions` JSON column was added 2026-03-19. Run `alembic upgrade head`.                                                                                                                                                                                                                                                                                       |
+| Scheduling admin pages land on the dashboard          | They moved to `/scheduling/admin/*` on 2026-09-05 and **the old URLs have no redirect** — `/scheduling/settings`, `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons` and `/scheduling/qualifications` all fall through the catch-all silently. Open **Administration → Scheduling** instead, and update the bookmark. `/scheduling/admin/settings?tab=…` still resolves. |
 
 ---
 
@@ -2485,3 +2485,144 @@ only seeded (`is_system`) ones move.
 **Also:** `User.rank` is **cleared on every administrative member**, and does
 not come back on downgrade. See
 [Membership Management](./01-membership.md#member-class-and-member-status-changed-2026-08-26).
+
+## Administration changes _(August 31 – September 6, 2026)_
+
+### Scheduling joined the Administration section
+
+`/scheduling/admin` sits beside Training Admin and Inventory Admin now, on the
+same shared frame: a card grid, headline metrics and a Needs attention queue.
+Its metrics are **To close out**, **Short-staffed**, **Hours this month**,
+**Shifts ahead** and **Requests waiting**.
+
+**One grant runs the whole area: `scheduling.manage`** — the hub, every page
+behind it, and the navigation rows. `scheduling.manage` was added to the
+permission set that opens the Administration section at all, because without it
+a scheduling officer holding nothing else administrative would never have seen
+the section open.
+
+> **This widens who sees the section open — not what anyone can do inside it**,
+> which is still decided card by card and route by route.
+
+Four metric fixes landed with it, each worth knowing because they changed
+numbers officers were already reading:
+
+- **A shift with a pending assignment was counted as staffed.** Every other
+  staffing calculation counts only assigned and confirmed; "pending" answers
+  _what am I on_, not _is this shift covered_ — so the metric reported a shift
+  as staffed while the coverage report beside it still showed the seat open.
+- **A crew still working read as a close-out backlog.** A shift with no recorded
+  end was treated as having ended the instant it started, so an open-ended shift
+  sat in "To close out" from the moment it began. It now uses the department's
+  own open-ended cushion, and its **age** is measured from the end of that
+  cushion — dated from the shift's start, a department running a seventy-two
+  hour cushion saw a shift announced as three days overdue the moment it
+  appeared.
+- **Short-staffing counted bodies rather than filled seats.** A three-seat brush
+  truck carrying one person read as fully staffed, and a two-seat
+  Officer/Driver shift carrying two firefighters read as covered while both
+  named seats sat empty. It now matches each **required** slot against a held
+  position — so it also stops counting slots the department marked optional.
+- **"Hours this month" counted next month.** The query had only a lower bound,
+  so attendance recorded against a later-dated shift inflated it — a figure that
+  went up when somebody planned ahead.
+
+### Breadcrumbs on every hub and the pages beneath it
+
+Nothing under `/scheduling/admin` had one: its sub-pages offered a single
+unlabelled back arrow whose destination was only in its accessibility label, and
+each page was headed "Shift Scheduling" with its real name demoted to a prefix
+on the description.
+
+Three rules the trail follows, each because the naive version was wrong:
+
+- **On a hub the trail stops at the parent**, rather than repeating the page's
+  own heading — which the header already states twice.
+- **A crumb that cannot be opened is plain text, not a link.** A generated trail
+  is built from URL prefixes, and a prefix is often either not a route at all or
+  one the viewer lacks the grant for. Both used to render as working links,
+  landing on the dashboard and on Access Denied respectively.
+- **A detail page keeps its link back to the list.** Where a URL ends in a
+  record id the id is not shown, so the crumb before it names the collection —
+  _Applications_ on a grant application, not the record itself.
+
+### A regular member could open Administration → Reports
+
+**The rank and file could reach department-wide reporting.** Every gate on the
+Reports page asks for `reports.view`, and the permission registry seeds it to no
+rank-and-file position — but the grant was in the stored row, and a member's
+permissions are the union of their positions' stored lists. Holding it also
+opened the Administration section itself, so the whole admin area appeared for
+anyone affected.
+
+The cause, and why it took four migrations to repair, is explained in
+[20 — September release changes](./20-september-2026-release-changes.md#why-your-members-could-see-reports).
+
+> **⚠️ `reports.view` is now revoked wherever it is found on a seeded
+> rank-and-file position, including where a department granted it deliberately.**
+> Nothing in a stored row distinguishes the two, and the grant exposes every
+> member's aggregated hours, training and roster data. **If your department
+> deliberately gave its members Reports, grant it again on the positions
+> screen.** A position the department created itself is not touched.
+
+### The Inventory admin hub admits the officers whose consoles it links to
+
+The hub carries cards for the equipment-check console and the department store,
+and those pages accept grants the hub itself did not — so a checklist officer or
+a store manager was turned away from the only page that links to the console
+they run. The hub now admits any of the three, and each card still resolves its
+own permission.
+
+The checklist console previously had **no way in at all**: its grant appeared in
+no navigation entry, so the officer who held it and nothing else could reach
+their own console only by typing the address.
+
+## Dashboard fixes _(2026-09-01 → 09-05)_
+
+- **Administrative hours read "Unavailable" to every ordinary member.**
+  "Unavailable" is a claim the figure is unknown; the figure was simply never
+  fetched — on a row sitting beside a control that navigates to a page the
+  member can in fact open. A member who has logged no administrative time this
+  month now reads `0`.
+- **An officer's "My Hours" card totalled the whole department.** The summary
+  endpoint only falls back to the caller's own id for someone _without_ the
+  manage grant, and the service applies no user filter when none is supplied.
+- **Everything logged today fell outside the month**, and the month started at
+  UTC midnight rather than the department's — pulling the tail of the previous
+  month in for any department west of UTC.
+- **The month's hours are stated once.** The header's "N hrs in Month" chip
+  duplicated the total on the hours card directly below it, with none of the
+  per-source split behind it.
+- **The seven-day list is now thirty days**, titled **Next 30 Days**, and its
+  control reads **All Shifts** and opens the month view. It used to read "Full
+  Schedule" and open a page that holds shifts only — so a member who saw
+  Thursday's drill on the card and followed a promise of the _full_ schedule
+  arrived somewhere it could not be.
+- **Drills stopped being crowded off the list.** The card's events and own-shifts
+  requests were capped at five records each, and the cap applied _before_ the
+  window filter — so five socials spread across the next six months were enough
+  to hide every drill in the coming month, on a card whose own subtitle promises
+  drills.
+- **Acting on a message or notification could be silently undone by a refresh
+  that was already running.** An acknowledgement could be reverted and the member
+  asked to acknowledge the same message again; a notification marked read could
+  return to the feed, taking the unread count back up with it.
+
+> **Screenshot needed:**
+> _[The dashboard timeline card titled "Next 30 Days" with its All Shifts
+> control, and the hours card below it showing Administrative hours as a figure
+> rather than "Unavailable". The duplicate "N hrs in Month" chip is gone from
+> the header, so an old capture of this area is wrong in three places at once.]_
+
+## Table headings finally sit over their own columns _(2026-09-05)_
+
+108 table headers across 37 files ignored the alignment they were written with,
+leaving a heading hard left over figures at the far right of the column — on a
+wide table, a number roughly 170px from its own label.
+
+Worst affected were **the scheduling reports (19 headers)**, **the compliance
+officer dashboard (13)**, and the finance, grants and inventory tables. Nothing
+failed and no test could catch it: the markup was correct and only the browser's
+cascade disagreed.
+
+Any screenshot of a right-aligned table predates this and should be re-shot.

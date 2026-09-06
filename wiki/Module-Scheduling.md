@@ -869,7 +869,12 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 | `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`   |
 
 ¹ These four moved under `/scheduling/admin` on 2026-09-05 and the original
-URLs no longer resolve — see **Scheduling Administration** above.
+URLs no longer resolve — see **Scheduling Administration** above for the current
+addresses. Note that Templates and Patterns landed a level deeper than the other
+two, under `/scheduling/admin/planning/`, when shift planning became one screen
+later the same day: `/scheduling/admin/templates` and
+`/scheduling/admin/patterns` were intermediate addresses that never shipped in a
+release.
 
 ### Data Model Changes (2026-03-19)
 

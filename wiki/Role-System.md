@@ -316,3 +316,119 @@ When adding new modules:
 is an elevated lookup and requires either `users.view` or `members.manage`.
 Navigation and direct-route protection use the same OR rule; granting only
 `members.view` must not surface the scanner.
+
+## Permission movements, August 31 – September 6, 2026
+
+Eleven migrations moved grants on **seeded** positions in this window. They are
+not eleven independent decisions — nine of them trace to one root cause.
+
+### The root cause: the onboarding wizard overwrote the registry
+
+The old onboarding position editor did not read `DEFAULT_POSITIONS`. It derived
+its two-checkbox-per-module defaults from a heuristic — _"a member views every
+module whose category is not System"_, _"a leader manages everything but
+settings"_ — and **its first Continue saved that output over the seeded rows
+wholesale.**
+
+Because `dependencies.py` unions every assigned position's stored permissions,
+the heuristic's answer became **live grants** on every department that
+onboarded under that code. This is CLAUDE.md pitfall #23 in its most expensive
+form: the registry said one thing and the database said another, and the
+database wins.
+
+That is why a rank-and-file member could open Administration → Reports. The
+registry seeds `reports.view` to no rank-and-file position, but Reports is its
+own module category, so the heuristic ticked it — and holding it also opened
+the Administration section itself.
+
+**Four migrations chased this before one worked.** The first three repaired
+only a row matching the heuristic's output _in full_, and four other migrations
+edit those same rows first — so a department that onboarded early was a
+permission or two off, its row was skipped, and every discrepancy survived. The
+working one removes and restores **one permission at a time**, which does not
+depend on the rest of the row.
+
+**New departments no longer create the problem.** Setting up a position now
+starts from the registry on both the create and the update path, and EMT —
+which the wizard offered to every agency type with nothing seeded behind it —
+is registered alongside Firefighter and Engineer.
+
+### Revocations
+
+| Revision       | Grant                                                                                                                                                                                                                                                                                     | Off which positions                                                                                       | Why                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `c9a5e21f7b04` | `reports.view`                                                                                                                                                                                                                                                                            | Baseline member, Firefighter                                                                              | Opens the report catalog, generation and every saved report — all of which **aggregate across the whole department** rather than scoping to the holder  |
+| `f3b8d0c26a17` | `integrations.view`, `medical_supplies.view`, `mobile.view`, `prospective_members.view` (and their `.manage` / module-wildcard forms); Engineer also loses `positions.view`, `reports.view`, `settings.view`, and its `apparatus.*` narrows to `apparatus.view` + `apparatus.maintenance` | Member, Firefighter, Engineer, EMT                                                                        | The wizard's over-grants, removed **unconditionally** — see the warning below                                                                           |
+| `b6e4a0d17c93` | `apparatus.view`                                                                                                                                                                                                                                                                          | Seeded rank-and-file                                                                                      | The apparatus pages are a maintenance and compliance workspace — inspection expirations, out-of-service status, deficiency flags, driver qualifications |
+| `d5f2b8c04a19` | `apparatus.view`                                                                                                                                                                                                                                                                          | The membership positions `c3d4e5f6a7b8` kept (Probationary, Junior, Life, Administrative, Social, Exempt) | Rows a department accumulated under the old role setup, missed by the revision above                                                                    |
+| `a2e9f6b04c71` | The heuristic's over-grants                                                                                                                                                                                                                                                               | Every seeded EMT row                                                                                      | Until the registry gained an `emt` entry, `save_session_roles` took its **create** branch and stored the checkbox expansion verbatim                    |
+| `9d2b4492faba` | Skills-testing viewer grants naming a test's own examiner                                                                                                                                                                                                                                 | —                                                                                                         | The examiner already holds full disclosure on their own scoring, so the grant was a no-op the officer could not tell had done nothing                   |
+
+> **⚠️ `f3b8d0c26a17` revokes unconditionally, including where a department
+> granted deliberately.** The earlier attempts gated on a "wizard fingerprint"
+> — the row still carrying one of `integrations.view`, `medical_supplies.view`,
+> `mobile.view` or `prospective_members.view` — so a deliberate grant would
+> survive. **That gate missed every department that had switched those modules
+> off during setup**, leaving the original problem in place for exactly the
+> smaller departments least likely to notice.
+>
+> Nothing in a stored row distinguishes a grant the heuristic wrote from one an
+> administrator chose, and a built-in position stays marked built-in after an
+> administrator edits it. Because these grants expose other members' aggregated
+> hours, training and roster data, they are removed wherever they are found.
+> **A department that deliberately gave its members Reports must grant it again
+> on the positions screen.** A position the department created itself is not
+> touched at all.
+
+### Restores
+
+| Revision                                    | Grant                                                                     | Onto                      | Gate                                                                                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `b4d1c8e37f52`, broadened by `c7a4e91d3b68` | `locations.view`, `meetings.view`, `organization.view`, `scheduling.swap` | Seeded EMT rows           | Only where the row holds **none of the four** — no checkbox in any version of the setup screen can produce them, so their absence is the mark of a row the screen built. A department that removed some keeps that choice |
+| `f7b3c8d2e569`, `d1c7f4a92e63`              | The registry's seeded grants                                              | Rows the wizard overwrote | Superseded in part by `f3b8d0c26a17`; retained because a department already past them would never execute a rewritten version                                                                                             |
+| `e8a1c04f6b27`                              | `inventory.check_submit`                                                  | Default Member position   | One of three repairs that had silently never run — those members had **lost the checklist on upgrade**                                                                                                                    |
+
+**Restores are gated; revocations are not.** That asymmetry follows pitfall
+#23: an unconditional _add_ would override a department that removed a grant on
+purpose, and a missing benign grant discloses nothing — whereas leaving a
+disclosing grant in place on an unrecognized row keeps the disclosure open.
+
+`c7a4e91d3b68` is worth reading as a worked example of the other half of that
+pitfall. `b4d1c8e37f52` identified a row by comparing its **whole** permission
+list against a frozen snapshot of the editor's output — the strategy pitfall
+#23 bans by name — and it failed exactly as predicted, because the snapshot is
+pinned to one build's module list. It was **superseded by a child revision
+rather than edited**, since an installation that already stamped the narrow
+version would never execute a rewritten body.
+
+### Renamed: `equipment_check.*` → `inventory.check_*`
+
+Equipment checklists moved from Scheduling to Inventory on 2026-08-31, and the
+permission strings moved with them (`ff8076f4987a`). Every position keeps
+exactly the authority it had — the migration rewrites the stored grants, and
+the old names keep working for any row it cannot reach.
+
+> **⚠️ One consequence to check: a position holding `inventory.*` now grants
+> the three checklist permissions.** A module wildcard covers everything in its
+> module, and these are now in Inventory. **No seeded position or rank grants
+> `inventory.*`**, so this reaches only positions a department built for itself
+> — typically a quartermaster, who can now author and submit equipment
+> checklists. The behaviour is deliberate (a checklist is a list of inventory
+> items) and is pinned by a test. If it is wider than intended, replace the
+> wildcard with the specific `inventory.` grants you want.
+
+### New permission
+
+| Permission              | Held by default | Gates                                           |
+| ----------------------- | --------------- | ----------------------------------------------- |
+| `integrations.mcp_keys` | IT Manager only | Issuing and revoking the Claude MCP service key |
+
+### Narrowed endpoint
+
+`GET /scheduling/eligibility/roster` accepted `training.view_all` /
+`training.manage` as well as the scheduling grants. It now requires
+**`scheduling.manage`**, matching the page above it. Narrowing only the page
+would have revoked nothing: a client gate is not a gate, and a training officer
+refused by the screen could still pull the whole roster — member eligibility
+and EVOC standing — straight from the API. The endpoint's documented permission
+was also wrong, claiming `scheduling.view`, which it never accepted.

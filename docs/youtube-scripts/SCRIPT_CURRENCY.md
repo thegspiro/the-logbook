@@ -1,5 +1,100 @@
 # Script currency
 
+## Flagged by the 2026-08-31 → 09-06 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-31_TO_09-06.md`](../CHANGE_AUDIT_2026-08-31_TO_09-06.md#documentation-and-media-disposition).
+
+This window produced **six Wrong** — all six rewritten in-script — plus three new
+chapters in script 03 and six new shorts. As in every prior window,
+determinations were made by **reading the script files**, not by inferring from
+the change list.
+
+**This is the largest navigation break the series has had.** Two features
+changed address, retiring fourteen URLs, thirteen with no redirect. The failure
+mode matters for production: **a retired URL does not error, it lands on the
+dashboard**, so a take shot from an old address captures the wrong screen and
+looks fine in review. Where a beat names a path, the path has been corrected in
+the script rather than noted here.
+
+**Rewritten in-script this window** (per the standing rule that no behavioural
+content lives only in SCRIPT_CURRENCY):
+
+| Script | Beat                                        | Was                                                                                                                                                                                                                                                | Now                                                                                                                                                                                                       |
+| ------ | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **06** | `RECORDING WHAT YOU USED` screen note       | "A phone. **Scheduling → Equipment Checks tab.**" — that tab no longer exists                                                                                                                                                                      | "A phone. **Operations → My Checklists.**" Editor note added explaining the silent dashboard landing                                                                                                      |
+| **08** | Short: Apparatus Inventory                  | "**Scheduling → Equipment Checks** → tap Apparatus Inventory"                                                                                                                                                                                      | "**Operations → My Checklists** → tap Apparatus Inventory"                                                                                                                                                |
+| **08** | Short: require end-of-shift checks          | "In **Scheduling Settings**, switch on 'Require end-of-shift equipment checks.'"                                                                                                                                                                   | "In **Inventory Admin → Equipment Checklists → Checklist settings**…" — the checklist timing settings moved with the feature                                                                              |
+| **08** | Short 8Z screen note                        | "A compliance matrix **column**, entirely red" — there are no columns any more                                                                                                                                                                     | The matrix filtered to one requirement, with its non-compliant group                                                                                                                                      |
+| **05** | `COMPLIANCE MATRIX`                         | "a **grid view** — members on one axis, required certifications on the other. Green means current, yellow expiring, red expired"                                                                                                                   | The grid is gone. Rewritten around the **triage rail**: grouped by standing, worst first, with the figure behind each row. Two grading fixes noted, both of which can **raise** a department's percentage |
+| **16** | `COLD OPEN` + the hover beat                | "The Compliance Matrix, mostly green with a scattering of amber and red **cells**"; "Cursor hovers a **red cell**"                                                                                                                                 | The triage rail with groups open; opening the first non-compliant member and reading their figures                                                                                                        |
+| **02** | Email platform beat                         | "**Gmail** and **Microsoft 365** integrate via **OAuth** or app passwords" — **a defect narrated as the design.** There was no OAuth path for either; the fields were decorative and are now deleted. And both platforms **could not send at all** | App-password SMTP with the host and port filled in by a preset; Microsoft 365's new **App registration** path and the Exchange Online Basic-auth deadline; the Test Connection button                     |
+| **04** | `SETTING SHIFT CLOSE-OUT RULES` screen note | "**Scheduling → Settings** → Close-out rules card"                                                                                                                                                                                                 | "**Administration → Scheduling → Settings → General**" — with an editor note that each section is now its own route                                                                                       |
+
+### Verified clean — suspected and checked
+
+- **03 — Salesforce beat.** The `Client ID` / `Client Secret` hits in this
+  script are **Salesforce Connected App** credentials, not the deleted email
+  OAuth fields. Unchanged and correct.
+- **13 — Department Store.** No beat names `/store/admin`, so the console's move
+  to `/inventory/admin/store` does not touch the script — and that URL redirects
+  anyway.
+- **01 — Installing The Logbook.** Its `alembic upgrade head` beat is generic and
+  names no head, so the new head does not date it.
+
+### New in script 03 (three chapters, added in-script)
+
+- **Chapter 11 — "The September 6 upgrade: two modules changed address"**
+  (~4:00). Head `d7c1b95e2a40`, thirty-four migrations, eleven with no-op
+  downgrades and **none destructive on the way down** — worth saying explicitly,
+  because last window's chapter had an export-first warning and this one does
+  not. **The beat that cannot be cut is the fourteen retired URLs**, and it
+  needs to be _shown_: paste an old address on camera and let the viewer watch
+  it land on the dashboard without an error. Then the six permission
+  revocations, **one of which is unconditional** and will take a grant a
+  department made deliberately, and the `inventory.*` wildcard now reaching the
+  checklist permissions.
+- **Chapter 12 — "Gmail and Microsoft 365 email never worked"** (~2:30). Blunt
+  on purpose. Those platforms could never send, and failed _in preference to_ a
+  working global SMTP configuration.
+- **Chapter 13 — "Claude (MCP): an integration that is off"** (~2:00). The
+  framing to keep is _"if you do not want it, do nothing"_. This chapter exists
+  to answer the member who asks whether an AI can read their phone number — the
+  answer is the redaction boundary, and it should be stated plainly.
+
+### Six new shorts available
+
+1. **Where the equipment checks went** — Operations → My Checklists. The single
+   most likely support question this window.
+2. **Quick Add in two taps** — the Add button in the middle of the phone bar,
+   against the old four-taps-and-two-page-loads path.
+3. **Name your own call types** — and why you _retire_ one with history rather
+   than deleting it.
+4. **What you have worked this year** — the Hours view in My Shifts.
+5. **Who's going to this event** — and where you stand on the waitlist.
+6. **Ask for a size we don't stock** — the request path that had no way to
+   record the one thing a quartermaster cannot otherwise learn.
+
+### Do not script
+
+- **The crew "Sweep" for equipment checks.** It shipped this window **behind a
+  prop and is not switched on for crews** — visible only in the template
+  builder's preview. Filming it as the member experience would document a screen
+  no crew can reach.
+- **The equipment-check lap.** Still built and unwired; carried forward
+  unchanged from three previous windows.
+- **Qualification entry.** Still no direct entry screen; a qualification is
+  written only as a side effect of a training record against a course whose
+  **Certifies** field is set.
+
+### Re-shoot list
+
+Any take showing: the sidebar or the phone bottom bar; the Shift Details
+right-edge drawer (it is a centred modal now); the Compliance Matrix grid; the
+`/members` roster as a member; the dashboard's timeline, gear or hours cards; a
+right-aligned table (108 headers across 37 files moved); or a member account's
+navigation, which no longer carries Administration or Apparatus.
+
 ## Editing incident, 2026-08-31 — a rewrite deleted two chapters of script 12
 
 **Recorded here permanently, because the failure was in the editing method and

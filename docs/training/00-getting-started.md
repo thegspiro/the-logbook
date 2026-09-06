@@ -202,7 +202,7 @@ If you have administrative permissions (officers, IT Manager, etc.), you will se
 | **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
 | **Events Admin**            | Create events, view analytics                                                                 |
 | **Training Admin**          | Review submissions, manage requirements, compliance                                           |
-| **Gear Admin**              | Manage gear and uniform items, view member issued equipment                                   |
+| **Inventory Admin**         | Manage gear and uniform items, view member issued equipment                                   |
 | **Store Admin**             | Storefront products, order windows, and fulfilment                                            |
 | **Admin Hours**             | Review and approve administrative hours                                                       |
 | **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |
@@ -448,3 +448,47 @@ department-wide responses.
 _The boundary is the tab. Everything in the first frame is Dana's own —
 her gear, her hours, her outstanding items. Everything in the second is the
 department's, and none of it is attributed to her. Nothing appears in both._
+
+## What moved in the navigation _(August 31 – September 6, 2026)_
+
+If you are following an older walkthrough, four things are in different places.
+
+| Looking for                                                                 | It is now                                                                              |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Equipment checks (was a tab on the Scheduling page)                         | **Operations → My Checklists** for members; **Fleet Readiness** beside it for officers |
+| Scheduling settings, templates, patterns, reports, platoons, qualifications | **Administration → Scheduling** (`/scheduling/admin`)                                  |
+| Gear Admin                                                                  | **Inventory Admin** — the same place, renamed                                          |
+| The Department Store console                                                | Inside Inventory Admin, at `/inventory/admin/store`                                    |
+
+> **⚠️ Old links land on the dashboard, not on an error.** Thirteen addresses
+> stop resolving with no redirect, and the catch-all makes that silent — so a
+> bookmark or an SOP link appears to work and simply shows you the wrong page.
+> The full before/after tables are in
+> [20 — September release changes](./20-september-2026-release-changes.md#where-everything-moved).
+
+> **Screenshot needed:**
+> _[The sidebar as an officer, showing the Operations section with My Checklists
+> and Fleet Readiness, and the Administration section with its Scheduling and
+> Inventory Admin rows. Every existing navigation capture predates all four
+> changes above.]_
+
+### On a phone
+
+The centre of the bottom bar is now an **Add** button — Quick Add, covering the
+things a member logs most often. The bar keeps five items and the configurable
+slots go from three to two; a saved layout keeps its first two destinations.
+
+### Some pages show members less than they used to
+
+Two grants were revoked from the seeded rank-and-file positions in this window,
+so a member account will not see:
+
+- **Administration → Reports** (`reports.view`)
+- **The Apparatus pages** (`apparatus.view`) — the lightweight Apparatus Basic
+  page, shown when the Apparatus module is off, is unaffected and stays open to
+  everyone
+
+That is the intended state, not a fault. An administrator can re-grant either on
+the positions screen. See
+[20 — September release changes](./20-september-2026-release-changes.md#six-upgrade-steps-take-permissions-away)
+for why those grants were there in the first place.

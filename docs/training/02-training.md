@@ -2603,3 +2603,115 @@ nothing keeps them.
 
 Access is `training.manage` plus the Training module enabled. See the
 [shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+
+## The Compliance Matrix is a queue you can work _(2026-09-05)_
+
+The member × requirement icon grid is gone. Every cell said only "met" or "not
+met", so a coordinator could see who was short **without seeing by how much**,
+and the screen offered nowhere to go next.
+
+Members — or requirements, on the other axis — are now grouped by standing,
+ordered worst-first, and stepped through one at a time, with the numbers behind
+each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
+26 days"_.
+
+> **Screenshot needed:**
+> _[The redesigned Compliance Matrix triage rail: members grouped by standing
+> with the worst first, one member's detail open showing the per-requirement
+> figures, and the status chip from a dashboard deep link visible above it.
+> Every existing capture of this screen shows the icon grid, which no longer
+> exists — this is a replacement, not an addition.]_
+
+### ⚠️ Your compliance percentages may move
+
+Both fixes below move numbers in the **favourable** direction, so a department
+that was chasing a member who looked short may find they were not.
+
+- **A member exempt from a requirement could never reach 100%.** The percentage
+  divided by every active requirement while counting only the ones applicable to
+  that member, so anyone whose membership type excused them from one was capped
+  below full compliance no matter what they did. The denominator is now the
+  requirements actually asked of them, reported alongside as met/total.
+- **A certification expiring soon read as a failure.** The tally counted only
+  the "met" tone, so a member holding a card valid for another 26 days rendered
+  under "Compliant" reading _"1 of 2 met · 1 open item"_ — a contradiction on
+  the face of the screen. **A cert valid today is met today**; the tone is a
+  renewal warning, and the orange "Due soon" pill still marks the row.
+
+### The dashboard link lands filtered
+
+The Needs Attention widget has been linking to a non-compliant filter all along
+and the grid ignored it, dropping the coordinator into the full unfiltered
+roster. Clearing the chip drops the parameter too, so a refresh does not
+silently re-apply a filter that was just dismissed.
+
+### Actions are limited to ones with something behind them
+
+Print, a CSV export, and links to member training records.
+
+> **Notify and Assign are gone.** They had no endpoint behind them — a control
+> wired to nothing invites somebody to believe a message was sent.
+
+### One screen, one answer
+
+Compliance is evaluated through a cut-off date the server chooses, not through
+the viewer's clock, and each requirement can move its own. The screen now
+reports the server's date per cell rather than measuring expiry from the
+browser's — which had turned a certificate the backend had accepted into a
+lapsed cell, putting an open item on a member the same response called
+compliant.
+
+A member with **no** applicable requirements now reads "not applicable" rather
+than 100%: a denominator of nothing is not a passing score.
+
+## Management controls are hidden from members who cannot use them _(2026-09-05 → 09-06)_
+
+Two training screens rendered their write controls to every member. Every write
+behind them already required `training.manage` on the server, so the controls
+were an invitation to a 403 or to the access-denied page.
+
+### Course Library
+
+**Add, Edit, Delete and Manage classes now require `training.manage`.** Every
+write behind those four — create, update (which is how "Deactivate" is
+implemented) and the syllabus builder — already did.
+
+The gate is on the page content rather than the route, because the same page is
+mounted inside the training admin hub where the officer does hold the grant.
+
+> **Screenshot needed:**
+> _[The Course Library as a member without `training.manage`: the course list
+> readable, with Add / Edit / Delete / Manage classes absent. Pair it with the
+> existing officer capture so the difference is the lesson.]_
+
+### Training Programs
+
+- **Creating, importing and exporting a pipeline, adding a sample template, and
+  creating, importing or editing a requirement** now render only for training
+  managers. Tapping "New Pipeline" or "Create Your First Pipeline" used to land
+  a member on the access-denied page; a registry import returned 403.
+- **The Requirements tab was blank for anyone without `training.manage`.** It
+  loaded the registry list alongside the requirements in one batch, and that
+  endpoint is manager-only — so its 403 rejected the whole batch and the
+  requirements never rendered. Members no longer request it.
+- **The Requirements and Templates tabs are gone for members.** Both are
+  manager-only views, so the whole tab strip is hidden and a member sees the
+  Programs list on its own.
+- **With no programs to show, a member sees an empty panel** rather than a card
+  whose only content is a prompt to create the thing they cannot create. A
+  search that matched nothing still reports "No programs found" to everyone —
+  that is feedback on the term they typed.
+
+The lists themselves stay readable throughout. It is the write controls that are
+withheld.
+
+## A stale due date after changing a requirement's type _(2026-09-04)_
+
+The requirement form seeded its **Due date** field from the existing row and
+only cleared or edited it on the fixed-date screen. Switching an existing
+requirement's due-date type away from **Fixed date** — to Calendar period,
+Rolling or Certification period — therefore still submitted the old due date
+alongside the new type, leaving a stale value on a requirement whose deadline
+should come entirely from its period calculation.
+
+The upgrade clears the stale values already stored.

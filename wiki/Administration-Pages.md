@@ -51,12 +51,14 @@ The queue lists work, and **its rows name people** — the member whose screenin
 lapsed, the officer whose report is outstanding. That is why access is the
 module's own manage permission rather than a blanket administrator gate:
 
-| Module    | Permission         | Additional                                                                        |
-| --------- | ------------------ | --------------------------------------------------------------------------------- |
-| Members   | `members.manage`   | The queue and the screening-currency metric also require `medical_screening.view` |
-| Training  | `training.manage`  | Requires the `training` module                                                    |
-| Inventory | `inventory.manage` | Requires the `inventory` module                                                   |
-| Events    | `events.manage`    | —                                                                                 |
+| Module           | Permission          | Additional                                                                                                                                                                                               |
+| ---------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Members          | `members.manage`    | The queue and the screening-currency metric also require `medical_screening.view`                                                                                                                        |
+| Training         | `training.manage`   | Requires the `training` module                                                                                                                                                                           |
+| Inventory        | `inventory.manage`  | Requires the `inventory` module. The **hub** additionally admits `inventory.check_manage` and the store grant, because it carries cards for those consoles — each card still resolves its own permission |
+| Events           | `events.manage`     | —                                                                                                                                                                                                        |
+| Scheduling       | `scheduling.manage` | _(2026-09-05)_ One grant runs the whole area — the hub, every page behind it and the nav rows                                                                                                            |
+| Department Store | store management    | _(2026-09-03)_ Joined the shared frame at `/inventory/admin/store`                                                                                                                                       |
 
 An inventory officer who cannot manage members has no business reading the
 member queue, and now cannot.
@@ -91,3 +93,59 @@ See [API Reference → Administration Page Frame](API-Reference#administration-p
 
 `admin_hub_metric_preferences` — see
 [Database Schema](Database-Schema#recent-schema-changes-2026-08-23--08-24).
+
+## Breadcrumbs _(2026-09-05)_
+
+Every administration hub and the pages beneath it now carry a breadcrumb trail.
+Nothing under `/scheduling/admin` had one: its sub-pages offered a single
+unlabelled back arrow whose destination was only in its `aria-label`, and each
+one was headed "Shift Scheduling" with its real name demoted to a prefix on the
+description. Templates, Patterns, Reports, Platoons, Who Can Fill What and the
+six Settings sections now name themselves and show the path back up.
+
+Three rules the trail follows, each because the naive version was wrong:
+
+- **On a hub the trail stops at the parent**, rather than repeating the page's
+  own heading — which the header already states twice.
+- **A crumb that cannot be opened is plain text, not a link.** A generated
+  trail is built from URL prefixes, and a prefix is often either not a route at
+  all (`/inventory/admin/checklists/templates`, which declares only `/new` and
+  one per template) or a route the viewer lacks the grant for — a checklist
+  manager holds `inventory.check_manage`, which opens
+  `/inventory/admin/checklists` but not its parent `/inventory`. Both used to
+  render as working links, landing on the dashboard and on Access Denied
+  respectively.
+- **A detail page keeps its link back to the list.** Where a URL ends in a
+  record id the id is not shown, so the crumb before it names the collection
+  the record came from — `Applications` on a grant application, not the record
+  itself. Member edit and audit history separately used to end in a link to
+  `/members/admin/edit`, which is not a route.
+
+**Equipment Checklists is no longer a dead end.** It carried no back link of
+its own, and is reached from Scheduling Administration as well as Inventory
+Administration.
+
+## The Administration section opens for more grants _(2026-09-05)_
+
+`scheduling.manage` was added to `ADMIN_NAVIGATION_PERMISSIONS`. Without it, a
+scheduling officer holding nothing else administrative never saw the section
+open, so the new row inside it would never have been reachable.
+
+**This widens who sees the section open — not what anyone can do inside it**,
+which is still decided card by card and route by route.
+
+Two structural notes that came out of getting this right:
+
+- **The top navigation's Admin dropdown drops itself when every row inside it
+  is gated away**, so widening the section without adding a row would have
+  given a scheduling officer an Administration section containing nothing.
+- **A hub gate wider than every card behind it only opens an empty page.**
+  `training.view_all` was briefly added alongside `scheduling.manage` for the
+  position roster, then removed with it when that page narrowed to
+  `scheduling.manage` — nothing in the app has ever linked a training officer
+  there, so the wider gate bought a screen reachable only by typing its URL
+  while forcing every gate above it to widen to match.
+
+`administrationDiscovery.test.tsx` renders the section for a scheduling-officer
+persona and a training-officer persona, because **a gate is only reachable if
+every gate above it also opens.**
