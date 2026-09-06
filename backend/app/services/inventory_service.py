@@ -1657,6 +1657,7 @@ class InventoryService:
         exclude_item_types: Optional[Iterable[ItemType]] = None,
         assigned_to: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
+        unassigned_location: bool = False,
         storage_area_id: Optional[UUID] = None,
         vendor_id: Optional[UUID] = None,
         search: Optional[str] = None,
@@ -1670,6 +1671,11 @@ class InventoryService:
         limit: int = 100,
     ) -> Tuple[List[InventoryItem], int]:
         """Get items with filtering, sorting, and pagination.
+
+        ``unassigned_location`` restricts to items filed under no location at
+        all — the population the location panel labels "Unassigned". It is
+        ignored when ``location_id`` names a location, since the two ask for
+        disjoint sets and a request carrying both is asking for nothing.
 
         ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
         out — that pair is what keeps the medical-supply page and the
@@ -1722,6 +1728,12 @@ class InventoryService:
 
         if location_id:
             query = query.where(InventoryItem.location_id == str(location_id))
+        elif unassigned_location:
+            # The location panel's "Unassigned" bucket is a real subset of the
+            # catalog, not the absence of a filter. Without a way to say "no
+            # location" the card could only clear the filter it looked like it
+            # applied, so it read as selected whenever nothing was selected.
+            query = query.where(InventoryItem.location_id.is_(None))
 
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
@@ -3712,9 +3724,27 @@ class InventoryService:
         }
 
     async def get_summary_by_location(
-        self, organization_id: UUID
+        self,
+        organization_id: UUID,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Dict[str, Any]]:
-        """Get inventory summary grouped by location"""
+        """Get inventory summary grouped by location.
+
+        ``exclude_item_types`` carves a domain out of every figure, the way
+        :meth:`get_items` carves it out of a listing — and the caller that
+        wants the panel to agree with a listing must pass the same value that
+        listing was fetched with. This panel sits directly above the row list
+        on the items page, so a domain counted here and excluded there puts a
+        location card on screen whose rows the page can never show: the gear
+        page reported 82 units across 8 items while listing 30 units across 6,
+        the difference being medical stock that lives on its own page.
+        """
+        domain_filters = (
+            [self._outside_domains(organization_id, exclude_item_types)]
+            if exclude_item_types
+            else []
+        )
+
         result = await self.db.execute(
             select(
                 Location.id,
@@ -3733,6 +3763,7 @@ class InventoryService:
                     InventoryItem.location_id == Location.id,
                     InventoryItem.organization_id == str(organization_id),
                     InventoryItem.active.is_(True),
+                    *domain_filters,
                 ),
             )
             .where(Location.organization_id == str(organization_id))
@@ -3755,6 +3786,7 @@ class InventoryService:
                 InventoryItem.organization_id == str(organization_id),
                 InventoryItem.active.is_(True),
                 InventoryItem.location_id.is_(None),
+                *domain_filters,
             )
         )
         unassigned = unassigned_result.one()
