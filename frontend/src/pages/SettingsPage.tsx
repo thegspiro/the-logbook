@@ -73,6 +73,7 @@ import { SettingsLayout, type SettingsSection } from '../components/settings/Set
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
 import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
+import { useEmailConnectionTest } from '../hooks/useEmailConnectionTest';
 
 // ── Section definitions ──
 
@@ -435,13 +436,15 @@ export const SettingsPage: React.FC = () => {
     use_tls: true,
   });
   const [savingEmail, setSavingEmail] = useState(false);
-  const [testingEmail, setTestingEmail] = useState(false);
-  // Read at result time so a connection test can tell whether the form it
-  // was sent for is still the form on screen.
-  const emailSettingsRef = useRef<EmailServiceSettings>(emailSettings);
-  useEffect(() => {
-    emailSettingsRef.current = emailSettings;
-  }, [emailSettings]);
+  // Wrapped rather than passed as a bare method reference: the service is a
+  // plain object literal, and handing its method around unbound is what
+  // `@typescript-eslint/unbound-method` exists to catch. Stable, so the
+  // hook's callback identity does not churn on every render.
+  const testEmailSettings = useCallback(
+    (next: EmailServiceSettings) => organizationService.testEmailSettings(next),
+    []
+  );
+  const { testing: testingEmail, runTest: handleTestEmail } = useEmailConnectionTest(emailSettings, testEmailSettings);
   const [emailPasswordVisible, setEmailPasswordVisible] = useState(false);
 
   // File storage state
@@ -715,38 +718,6 @@ export const SettingsPage: React.FC = () => {
       );
     } finally {
       setSavingEmail(false);
-    }
-  };
-
-  const handleTestEmail = async () => {
-    // A test takes up to 30 seconds. If the admin edits the form while it
-    // runs, the result describes values that are no longer on screen, and a
-    // green toast over a since-changed password would vouch for a
-    // configuration nobody has tested.
-    const submitted = emailSettings;
-    setTestingEmail(true);
-    try {
-      const result = await organizationService.testEmailSettings(submitted);
-      if (emailSettingsRef.current !== submitted) {
-        toast.error('Email settings changed while the test was running. Test again.');
-        return;
-      }
-      if (result.success) {
-        toast.success(result.message || 'Email connection test successful');
-      } else {
-        toast.error(result.message || 'Email connection test failed');
-      }
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(
-        status === 403
-          ? 'Permission denied.'
-          : status === 429
-            ? 'Too many connection tests. Wait a minute and try again.'
-            : getErrorMessage(err, 'Failed to test email connection.')
-      );
-    } finally {
-      setTestingEmail(false);
     }
   };
 

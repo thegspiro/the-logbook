@@ -91,6 +91,13 @@ EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
 # `!` so an image can be told from a link, and tolerating Markdown's optional
 # title — `[a](b.md "Title")`, `'Title'` or `(Title)`.
 #
+# A bare destination admits one level of balanced parentheses, so
+# `images/pump(1).png` — an unremarkable filename a screenshot tool produces on
+# its own — is captured whole rather than truncated at the first `)` and then
+# reported as a file that does not exist. A false positive there would block
+# the documentation job over a correct page, which is worse than the miss it
+# sits beside. `<...>` handles anything more nested, or containing a space.
+#
 # Without the title branch the whole reference silently does not match, so a
 # broken target wearing a title is not reported at all. Nothing in the tree uses
 # the form today, which is exactly why it would have gone unnoticed: the first
@@ -110,7 +117,7 @@ EXPLICIT_ANCHOR_RE = re.compile(r"<a\s+(?:name|id)=[\"']([^\"']+)[\"']", re.I)
 # strips before matching.
 LINK_RE = re.compile(
     r"(!?)\[[^\]]*\]\("
-    r"\s*(?:<([^<>]*)>|([^)\s]+?))\s*"
+    r"\s*(?:<([^<>]*)>|((?:[^()\s]|\([^()\s]*\))+))\s*"
     r"""(?:"[^"]*"|'[^']*'|\([^)]*\))?\s*"""
     r"\)"
 )
