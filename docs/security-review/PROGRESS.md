@@ -17,7 +17,8 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 29 (Reports & analytics), pass 4** — branch
-`claude/security-review-reports-analytics-pass4`, PR pending. Subscribed;
+`claude/security-review-reports-analytics-pass4`,
+[PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Subscribed;
 awaiting CI/review.
 
 ---
