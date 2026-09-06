@@ -1068,7 +1068,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next.splice(idx + 1, 0, copy);
       return next;
     });
-    openCompartment(copy.clientKey);
+    // `id ?? clientKey`, matching getCompKey: a clone of a SAVED location comes
+    // back from compartmentFormFromResponse with a server id and a fresh
+    // clientKey, and the row renders under the id. Passing the clientKey names
+    // a location that does not exist, so the clone opened collapsed (that half
+    // predates the action bar) and the bar's target falls through to the last
+    // location instead of the copy just made.
+    openCompartment(copy.id ?? copy.clientKey);
     toast.success(comp.id ? `“${copy.name}” added` : 'Draft compartment duplicated');
     if (!comp.id) markDirty();
   };

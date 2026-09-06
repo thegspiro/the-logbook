@@ -382,6 +382,28 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(await within(bar).findByRole('button', { name: 'Add an item to New Compartment' })).toBeVisible();
   });
 
+  it('opens a duplicated location and targets it, keyed the way its row is', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockResolvedValue({
+      ...template.compartments[0],
+      id: 'cab-copy',
+      name: 'Cab (copy)',
+      items: [{ ...template.compartments[0]?.items[0], id: 'radio-copy' }],
+    });
+    renderBuilder();
+
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+
+    // A saved clone's row is keyed by its server id, so naming it by clientKey
+    // matches nothing: the copy opened collapsed and the bar kept adding to
+    // the last location instead of the one just made.
+    expect(await screen.findByRole('button', { name: 'Collapse Cab (copy)' })).toBeVisible();
+    const bar = screen.getByLabelText('Checklist action bar');
+    expect(within(bar).getByRole('button', { name: 'Add an item to Cab (copy)' })).toBeVisible();
+  });
+
   it('keeps adding an item available while the template still has blockers', async () => {
     // A count item with no par is an item-level blocker, which is what puts
     // the bar into its Review state — the state a template spends most of its
