@@ -17,14 +17,16 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 23 (Medical supplies), pass 3** — branch
-`claude/security-review-medical-supplies`. No new finding: the endpoint
-file grew 670 L → 699 L since pass 2 in comments only (no route or logic
-change), and every `InventoryService` method it calls was re-read directly
-against current line numbers (the service grew ~8,200 L → ~9,995 L from
-unrelated inventory work). MSUP-1/2/3/5/6's fixes and the domain-pinning
-mechanism all re-verified intact; MSUP-4 (unbounded `get_expiring_lots`)
-re-confirmed still open, unchanged product decision. 110 scoped tests pass
-unmodified. See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3. PR not yet opened — pushing next.
+`claude/security-review-medical-supplies`,
+[PR #2301](https://github.com/thegspiro/the-logbook/pull/2301). No new
+finding: the endpoint file grew 670 L → 699 L since pass 2 in comments only
+(no route or logic change), and every `InventoryService` method it calls
+was re-read directly against current line numbers (the service grew
+~8,200 L → ~9,995 L from unrelated inventory work). MSUP-1/2/3/5/6's fixes
+and the domain-pinning mechanism all re-verified intact; MSUP-4 (unbounded
+`get_expiring_lots`) re-confirmed still open, unchanged product decision.
+110 scoped tests pass unmodified. See
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 3.
 
 ---
 
