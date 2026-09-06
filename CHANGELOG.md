@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expanded array — so five dependencies were reported as six, against a limit
   that explicitly permits five. Non-empty top-level segments are counted
   instead.
+
 ### The Minutes page advertised a feature members cannot use (2026-09-06)
 
 **Fixed**
@@ -67,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **This is a widening.** The officer-facing endpoints for _another_ member's
   sizes are untouched and keep their stricter gates — `inventory.view` to
   read, `inventory.manage` to write — and a test now pins both halves.
+
 ### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
 
 **Fixed**
@@ -80,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control is now disabled rather than hidden, with a title naming who does it,
   matching the Swap control on the apparatus inventory screen — the same
   manage-gated stock write. Reading the worklist is unchanged.
+
 ### Inventory and Members pages say which hub they belong to (2026-09-06)
 
 **Added**
@@ -112,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Check In Station" against a heading that hyphenates it. The hub-card
   agreement test now covers Inventory as well as Scheduling, so a card and a
   crumb naming one page differently fails rather than shipping.
+
 ### The close-out queue and the number above it are one list now (2026-09-06)
 
 **Added**
@@ -150,6 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run on. The refresh is skipped while a close-out wizard is open, so it cannot
   unmount unsaved entries, and a failed refresh leaves the last good list on
   screen rather than blanking a working page.
+
 ### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
 
 **Fixed**
@@ -167,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checklist builder now meet the 44-pixel minimum touch size on phones.
 - **A stray scrollbar under the tabs on an inventory item's page** has been
   removed.
+
 ### Create Shift: the dialog's fields had no names (2026-09-06)
 
 **Fixed**
@@ -187,7 +193,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screen reader offered "08:00 hour" where it should have said "Start Time
   hour", and the end field fell back to a bare "Time". All six now carry the
   visible field name.
-### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
+### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**
 
@@ -196,8 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   write different content at the same offset and git reports a conflict -- not
   over substance, but because a textual merge has no rule for ordering two
   additions. On 2026-09-06 this was the only conflict left across all ten open
-  PRs, hitting seven of them, and each one costs a merge, a resolution and a
-  full CI re-run.
+  PRs, hitting seven of them.
 
   Union is sound for this file specifically because entries are independent and
   additive: no PR edits another's entry, so taking both cannot drop an intended
@@ -206,9 +212,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conflicting -- branches delete lines there, and union would silently
   resurrect every deleted entry.
 
-  The tradeoff it does carry: two branches editing the _same_ entry get both
-  revisions as adjacent duplicate lines rather than a conflict. That is visible
-  in review, and is recorded in the `.gitattributes` comment.
+  **Scope, stated plainly because the first version of this entry overstated
+  it: this does not fix the "Merge pull request" button.** GitHub's server-side
+  merge does not apply `.gitattributes` merge drivers, so a PR whose only
+  conflict is this one is still reported as conflicted in the UI and still
+  refuses to merge. What the rule covers is every merge run by a _git client_ --
+  `git merge main` on a feature branch, `git pull`, and merging a PR branch
+  locally before pushing. That is where the seven were resolved.
+
+  **A second sharp edge, since it is not obvious:** git reads merge attributes
+  from the tree being merged **into**, not from either side's content. A branch
+  created before this commit therefore still hits the conflict when main is
+  merged into it, because its own checkout has no `.gitattributes`. Cherry-pick
+  this file onto such a branch first, then merge.
+
+  The tradeoff the rule itself carries: two branches editing the _same_ entry
+  get both revisions as adjacent duplicate lines rather than a conflict. That
+  is visible in review, and is recorded in the `.gitattributes` comment.
+
 ### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
 
 Codex raised these on #2206 as it merged, so none were addressed there.
