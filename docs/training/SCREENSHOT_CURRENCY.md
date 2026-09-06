@@ -35,6 +35,177 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Restarted 2026-09-06 — the eight-commit drift list, and 14 of the 42
+
+The recurring capture session was recreated from a fresh `main` (past
+`42c63be5`, PR #2320 and its follow-ups #2328/#2330/#2335). Bootstrap and seed
+ran against a clean database; nothing below is carried over from a prior
+session's data.
+
+### Six shots re-taken for the hub-breadcrumb drift
+
+`1cd01c30` ("Give the Inventory and Members pages their hub crumb") added a
+`Breadcrumbs` trail to five pages that previously rendered none — four of the
+five sit outside their module's hub URL space, so nothing pointed a viewer
+back to it. Six existing captures picture the top of one of those pages and
+now show a stale, crumb-less header:
+
+| Image | Page |
+| --- | --- |
+| `05-08-checkouts.png` | `/inventory/checkouts` (Temporary Loans) |
+| `05-36-storage-areas.png`, `05-48-storage-area-items.png` | `/inventory/storage-areas` |
+| `19-38-check-in-station-armed.png`, `10-21-check-in-station-tablet.png` | `/members/check-in-station` |
+| `10-14-scan-camera-denied.png` | `/members/scan` |
+
+All six were re-captured in place (same id, same file — the markdown already
+references it, so nothing needed re-applying). The other seven items on the
+drift list turned out not to touch any *existing* capture: the Minutes
+member-view change and the supply-worklist permission gate both affect states
+nothing in the manifest pictures yet; the close-out-backlog and
+shift-waiting rewrites landed on `/scheduling/admin/closeout`, a screen with
+no manifest entry at all (it is on the still-open Aug 31 – Sep 6 disposition
+queue below, not this list); the inventory location duplicate/expand/refocus
+fixes and the decline-endpoint addition are interaction-bug fixes with no
+picture in the guides that could go stale from them.
+
+**`05-36`/`05-48` needed a seeder fix first, not just a re-capture.** Both
+timed out on first attempt — every storage area was empty, because
+`seed_inventory_operations` was raising before it ever created one. See below.
+
+### Two seeder bugs fixed, both pre-existing and both blocking real captures
+
+Found while re-seeding for the drift shots above, on a fresh database — the
+kind of bug the create-path only runs once per install, so a long-lived demo
+database never re-exercises it (the same class of defect the 2026-08-16 entry
+below describes for a different step).
+
+1. **`_seed_item_maintenance` sent `"passed": true` on every blueprint entry**,
+   including `"advanced_cleaning"` and `"repair"`. The schema's
+   `MaintenanceRecordCreate` validator refuses a pass/fail result outside the
+   four inspection types (`Pass/fail result is only allowed for inspections`),
+   so the function raised on its second entry and returned before ever
+   creating a storage area, a kit or an allowance — the rest of
+   `seed_inventory_operations` never ran. Fixed by sending `passed` only for
+   `routine_inspection`.
+2. **The rank-repair branch in `seed_members` tried to reassign an
+   administrative member's pre-move rank on every re-run.** `jwhitfield` and
+   `bhollis` are seeded with `rank="emt"` and then moved to
+   `membership_type="administrative"`, which the API correctly clears the rank
+   for. The repair loop compared the *stored* rank against the tuple's
+   `"emt"` unconditionally, so a second seed run tried to reinstate it and hit
+   `Administrative members do not hold an operational rank` — a 400 the
+   seeder logged but did not fail on, so it was easy to miss even though it
+   fired on every re-run after the first. Fixed by repairing toward `None` for
+   the two administrative usernames.
+
+Also added: `seed_checkouts`, a new step. Nothing previously called
+`POST /inventory/checkout`, so `/inventory/checkouts` (Temporary Loans) had
+never had a populated capture behind it — `05-08-checkouts` was applied once,
+long enough ago that the seeder's coverage had since drifted from what the
+guide pictures, and would have gone back to an empty-state hold-back the
+moment anyone re-seeded from empty. One item, checked out to one ordinary
+member, 14 days out.
+
+### 14 of the 42 remaining placeholders filled
+
+Guide-by-guide: `00` (1→0), `01` (2→1), `02` (2→1), `03` (3→2), `06` (1→0),
+`10` (1→0), `19` (9→7), `08` (7→6), `20` (13→8). **530 of 558 now filled.**
+
+Several placeholders in different guides describe the exact same screen —
+guide 20 is the release-notes companion to guides 00-19, so a screen it
+documents is very often also the subject of an older guide's own marker. Each
+still gets its own manifest entry and its own capture (the id is the output
+filename), but the same `prepare`/`route` was reused for:
+
+- **My Shifts → Hours** (`03-100-my-shifts-hours` / `20-04-my-shifts-hours`)
+- **Facilities Settings** (`06-28-facilities-settings` /
+  `19-42-facilities-settings`, guide 19's own marker having gone unfilled
+  since before guide 20 existed)
+- **The phone Quick Add sheet** (`10-22-quick-add-sheet` /
+  `20-06-quick-add-sheet`)
+- **Dashboard timeline + hours card** (`08-77-dashboard-timeline-hours` /
+  `20-03-dashboard-timeline-hours`)
+
+New, guide-20-only: the `/scheduling/admin` hub (`20-01`) and the
+`/scheduling/admin/planning` staffing-gaps view (`20-02`).
+
+**The hub's stat-card row does not match the guide's prose.** `20-01`'s
+placeholder describes five headline metrics (To close out, Short-staffed,
+Hours this month, Shifts ahead, Requests waiting); the shipped hub renders
+four (To Close Out, Short-Staffed, Hours This Month, Needs Attention), with
+the "shifts ahead" and "requests waiting" figures folded into the Needs
+Attention queue's row text instead of their own cards. The capture pictures
+what actually renders; the alt text was written to match the image rather
+than repeat the guide's stale count. The surrounding prose is unchanged —
+correcting guide text is outside what this pass covered.
+
+**The Quick Add capture cannot literally satisfy its own description.**
+Both markers ask for "the phone bottom bar... and the Quick Add sheet open"
+in one frame. `QuickAddSheet` registers with `useOverlaySurface`
+specifically so the bottom bar — `fixed bottom-0 z-50`, painted after the
+page — hides itself while the sheet is open; the component's own comment
+says the bar would otherwise sit on top of the sheet its own tab just opened.
+So the bar and the open sheet are never on screen together by construction.
+The capture shows the sheet, which is the state the marker is actually after
+(the entry rows); the bar is not recoverable in the same frame and no amount
+of re-shooting will change that — the same class of defect
+`SCREENSHOT_CURRENCY.md`'s "check the API" note describes for a caption
+describing something a screen is structurally unable to show.
+
+New anchors needed a same-source-line check before they'd apply.
+`apply_placeholders.py` builds its match text by joining the placeholder's raw
+lines with a single space — each line still carries its leading `> `, so an
+anchor phrase that happens to straddle the wrap point (the `> ` lands in the
+middle of it once joined) never matches. Cost four anchors on the first pass
+(`01-40`, `19-43`, `20-01`, `20-02`); all four were rewritten to sit inside one
+source line and re-captured so `capture-report.json` — which is what
+`apply_placeholders.py` actually reads, not a fresh read of the manifest —
+picked up the corrected text.
+
+### Encountered, not fixed — flagged rather than worked around
+
+Three `seed_demo_data.py` steps still fail on a fresh database, unrelated to
+any capture this pass needed and left alone rather than guessed at:
+
+- **`training enhancements`: `POST /training/recertification/pathways` → 400
+  "Invalid required course".**
+- **`equipment checks`: `POST /equipment-checks/shifts/{id}/checks` → 400
+  "Template is not applicable to this shift"**, on a shift the seeder had
+  already filtered to `apparatus_type_of(shift) == "engine"` — the same
+  symptom the 2026-08-16 entry below describes fixing by that exact filter,
+  now reproducing again on a fresh install.
+- **`sealed compartments`: `POST /equipment-checks/checks` → 400 "Template not
+  found"**, in the function that depends on the step above having completed.
+
+All three sit in the equipment-checklist feature that moved into Inventory
+this window, which is suggestive, but diagnosing which side — seeder
+assumption or a real matching-logic change in the move — owns each one is a
+backend investigation, not a screenshot-pipeline fix, and none of them block
+any placeholder this pass touched. Left for whoever picks up that module
+next rather than patched blind.
+
+### Still queued
+
+The Aug 31 – Sep 6 disposition below is unchanged and much larger than this
+pass — dozens of screens, several sweep-scale items (table alignment,
+navigation renames). This pass did not touch it; treat it as the next
+session's starting point, not as covered by the above.
+
+Of the 28 placeholders still open after this pass, two need a **seeder
+extension** before they can be attempted at all — the org chart (guide 08/19,
+3 shots) and the Testing Checklist module (guide 08/19, 3 shots) both need
+demo data nothing currently seeds — and the rest need a more involved
+`prepare` than this pass budgeted for: the Call types editor (needs a
+retired type and one with calls behind it), the redesigned Compliance Matrix
+triage rail, the gear request form's two-step flow, the Shift Details modal
+(now a centred dialog, two viewports), event attendee visibility as a member,
+Settings → Email's Test Connection (needs a real SMTP target — not
+attemptable against this disposable stack), the profile-visibility toggles,
+photo-use consent (needs three members seeded into three consent states, none
+of which the seeder currently sets), and the Claude (MCP) connect form plus
+its shown-once service-key panel (the latter also needs the key redacted by
+hand after capture).
+
 ## Disposition for August 31 – September 6, 2026 — two modules changed address
 
 Audit: [`CHANGE_AUDIT_2026-08-31_TO_09-06.md`](../CHANGE_AUDIT_2026-08-31_TO_09-06.md).

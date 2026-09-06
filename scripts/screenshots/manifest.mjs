@@ -12583,6 +12583,33 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Same screen as 06-28, for guide 19's near-identical marker -- written
+    // before guide 20 existed and never filled either.
+    id: "19-42-facilities-settings",
+    doc: "19-august-2026-release-changes.md",
+    line: 2063,
+    anchor: "lookup categories populated, so the screen is not empty",
+    alt: "Facilities Settings with the types, statuses and maintenance-type lookup categories populated",
+    route: "/facilities/settings",
+    fullPage: true,
+  },
+  {
+    id: "19-43-messages-detail",
+    doc: "19-august-2026-release-changes.md",
+    line: 2206,
+    anchor:
+      "demo data:_ a department message",
+    alt: "A department message on its own page at /messages/:id — sender, sent date and the breadcrumb back to the inbox all in frame",
+    route: "/messages",
+    prepare: openFirstFromApi(
+      "/messages?include_inactive=true",
+      (id) => `/messages/${id}`,
+      "messages",
+      (m) => String(m.title || "").includes("SCBA Flow Test"),
+    ),
+    fullPage: true,
+  },
+  {
     // Applied through the picker rather than the API: the point of the pair is
     // that nothing in the confirmation says the voting method is about to
     // change, so the change has to arrive by the route a secretary takes.
@@ -12695,6 +12722,170 @@ export const SHOTS = [
     route: "/scheduling?tab=my-shifts",
     prepare: clickByName(/^Request Time Off$/),
     fullPage: false,
+  },
+
+  // -- 2026-09-06: drift/placeholder pass following the Sep 1-6 window ------
+  // 42 remaining placeholders as of SCREENSHOT_STATUS.md; the entries below
+  // are the subset filled this pass. See SCREENSHOT_CURRENCY.md for what
+  // still needs a seeder extension (org chart, testing checklist) or a more
+  // involved `prepare` (call types editor, compliance matrix, gear request,
+  // Shift Details modal, event attendee visibility, MCP) than this pass
+  // budgeted for.
+  {
+    id: "00-26-sidebar-officer-checklists",
+    doc: "00-getting-started.md",
+    line: 470,
+    anchor:
+      "the sidebar as an officer, showing the operations section with my checklists",
+    alt: "The sidebar as an officer: Operations with My Checklists and Fleet Readiness, and the Administration section's Scheduling Admin and Inventory Admin rows",
+    route: "/dashboard",
+    // Chief holds every permission, so expanding Operations alone -- without
+    // touching Training or the deeper Members sub-toggle -- already surfaces
+    // both new rows without growing the capture past what a tall viewport
+    // can hold in one unscrolled shot.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Operations$/ })
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+    },
+    viewport: { width: 1440, height: 2600 },
+    selector: "nav",
+  },
+  {
+    id: "01-40-member-directory",
+    doc: "01-membership.md",
+    line: 1656,
+    anchor: 'as a member without `members.manage`: titled "member directory"',
+    alt: 'The member roster as an ordinary member: titled "Member Directory", with no usernames, hire-date column, Actions column or bulk selection',
+    auth: "member",
+    route: "/members",
+    fullPage: true,
+  },
+  {
+    id: "02-106-course-library-member",
+    doc: "02-training.md",
+    line: 2682,
+    anchor: "the course library as a member without",
+    alt: "Course Library as an ordinary member: the course list readable, with Add / Edit / Delete / Manage classes all absent",
+    auth: "member",
+    route: "/training/courses",
+    fullPage: true,
+  },
+  {
+    id: "03-100-my-shifts-hours",
+    doc: "03-scheduling.md",
+    line: 3377,
+    anchor: "the hours view in my shifts: the three cards reading this month",
+    alt: "The Hours view in My Shifts: this month / this year / all time above the month-by-month table and its vs.-busiest-month bar column",
+    auth: "member",
+    route: "/scheduling?tab=my-shifts&view=hours",
+    fullPage: true,
+  },
+  {
+    id: "06-28-facilities-settings",
+    doc: "06-apparatus-facilities.md",
+    line: 919,
+    anchor: "lookup categories populated, so the screen is not empty",
+    alt: "Facilities Settings at laptop width, with the types, statuses and maintenance-type lookup categories populated",
+    route: "/facilities/settings",
+    fullPage: true,
+  },
+  {
+    id: "10-22-quick-add-sheet",
+    doc: "10-mobile-pwa.md",
+    line: 893,
+    anchor:
+      "the phone bottom bar at 390px with the add button in the centre, and the",
+    alt: "The phone bottom bar with the Add button centred, and the Quick Add sheet open showing a member's entry rows",
+    auth: "member",
+    route: "/dashboard",
+    viewport: { width: 390, height: 844 },
+    prepare: async (page) => {
+      await page
+        .locator('nav[aria-label="Primary"]')
+        .getByRole("button", { name: "Add" })
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // Same interaction as 10-22, for guide 20's own marker on the same
+    // feature.
+    id: "20-06-quick-add-sheet",
+    doc: "20-september-2026-release-changes.md",
+    line: 465,
+    anchor:
+      "the phone bottom bar at 390px with the add button in the centre, and the",
+    alt: "The phone bottom bar with the Add button centred, and the Quick Add sheet open showing a member's entry rows",
+    auth: "member",
+    route: "/dashboard",
+    viewport: { width: 390, height: 844 },
+    prepare: async (page) => {
+      await page
+        .locator('nav[aria-label="Primary"]')
+        .getByRole("button", { name: "Add" })
+        .click({ timeout: 10_000 });
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: "20-01-scheduling-admin-hub",
+    doc: "20-september-2026-release-changes.md",
+    line: 85,
+    anchor: "hub: the card grid on the shared administration",
+    // The shipped hub carries four stat cards (To Close Out, Short-Staffed,
+    // Hours This Month, Needs Attention), not the five the guide's prose
+    // names -- the alt describes what actually renders rather than repeating
+    // a count the screen does not show.
+    alt: "The /scheduling/admin hub: the card grid, its headline stat cards and the Needs attention queue below them",
+    route: "/scheduling/admin",
+    fullPage: true,
+  },
+  {
+    id: "20-02-staffing-gaps",
+    doc: "20-september-2026-release-changes.md",
+    line: 296,
+    anchor:
+      "the staffing-gaps view at `/scheduling/admin/planning`: several short shifts",
+    alt: "The staffing-gaps view at /scheduling/admin/planning: short shifts with the assignment control on each row and the Templates/Patterns section tabs beside it",
+    route: "/scheduling/admin/planning",
+    fullPage: true,
+  },
+  {
+    id: "20-04-my-shifts-hours",
+    doc: "20-september-2026-release-changes.md",
+    line: 490,
+    anchor: "the hours view in my shifts: the three cards reading this month",
+    alt: "The Hours view in My Shifts: this month / this year / all time above the month-by-month table and its vs.-busiest-month bar column",
+    auth: "member",
+    route: "/scheduling?tab=my-shifts&view=hours",
+    fullPage: true,
+  },
+  {
+    id: "20-03-dashboard-timeline-hours",
+    doc: "20-september-2026-release-changes.md",
+    line: 690,
+    anchor:
+      'the dashboard timeline card titled "next 30 days" with its all shifts',
+    alt: 'The dashboard\'s "Next 30 Days" timeline with its All Shifts control, and the hours card below it reading Administrative hours as a figure rather than "Unavailable"',
+    auth: "member",
+    route: "/dashboard",
+    fullPage: true,
+  },
+  {
+    // Same shot as 20-03, for guide 08's identical marker.
+    id: "08-77-dashboard-timeline-hours",
+    doc: "08-admin-reports.md",
+    line: 2611,
+    anchor:
+      'the dashboard timeline card titled "next 30 days" with its all shifts',
+    alt: 'The dashboard\'s "Next 30 Days" timeline with its All Shifts control, and the hours card below it reading Administrative hours as a figure rather than "Unavailable"',
+    auth: "member",
+    route: "/dashboard",
+    fullPage: true,
   },
 ];
 

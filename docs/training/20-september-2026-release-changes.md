@@ -82,11 +82,7 @@ scheduling entry at all. That strip is gone.
 `/scheduling/admin/settings?tab=…` **does** still work — it forwards to the
 section your parameter names, and to General if it names nothing recognisable.
 
-> **Screenshot needed:**
-> _[The `/scheduling/admin` hub: the card grid on the shared administration
-> frame, with the five headline metrics across the top (To close out,
-> Short-staffed, Hours this month, Shifts ahead, Requests waiting) and the
-> Needs attention queue below them.]_
+![The /scheduling/admin hub: the card grid, its headline stat cards and the Needs attention queue below them](./images/20-01-scheduling-admin-hub.png)
 
 **Each settings section is its own route now**, so it can be linked to,
 bookmarked, refreshed into and reached with the back button. This is
@@ -293,10 +289,7 @@ The assignment goes through the drawer's own call, so it surfaces the same EVOC
 and overtime advisories and opens the same driver-exception dialog — a refusal
 with no route forward is where a safety control turns into a workaround.
 
-> **Screenshot needed:**
-> _[The staffing-gaps view at `/scheduling/admin/planning`: several short shifts
-> over a date range with the assignment control on each row, and the section
-> tabs for Templates and Patterns visible beside it.]_
+![The staffing-gaps view at /scheduling/admin/planning: short shifts with the assignment control on each row and the Templates/Patterns section tabs beside it](./images/20-02-staffing-gaps.png)
 
 **Templates and patterns are sections of this screen**, not screens beside it —
 the reason to open a template is a shift that keeps coming up short, and that
@@ -462,10 +455,7 @@ Before this, every one of them was reached the same way: tap More, wait for the
 drawer, find the module, find the page, find its button. **Four taps and two
 page loads before the first field.**
 
-> **Screenshot needed:**
-> _[The phone bottom bar at 390px with the Add button in the centre, and the
-> Quick Add sheet open showing the entry rows. Capture as a member — the
-> officer rows are gated and should not appear.]_
+![The phone bottom bar with the Add button centred, and the Quick Add sheet open showing a member's entry rows](./images/20-06-quick-add-sheet.png)
 
 **Quick Add adds no forms of its own.** Each row goes to the screen that already
 owns that entry, so there is no second path for the same data to drift down and
@@ -487,10 +477,7 @@ Until now a member could see the hours on each past shift but had no total for
 a month or a year, so _"how many hours do I have this year?"_ was a question
 only an officer with the department-wide report could answer.
 
-> **Screenshot needed:**
-> _[The Hours view in My Shifts: the three cards reading this month, this year
-> and all time, above the month-by-month table with the "vs. busiest month"
-> bar column.]_
+![The Hours view in My Shifts: this month / this year / all time above the month-by-month table and its vs.-busiest-month bar column](./images/20-04-my-shifts-hours.png)
 
 Three things worth knowing about the numbers:
 
@@ -687,12 +674,7 @@ in that window returned data older than the edit.
   socials spread across the next six months were enough to hide every drill in
   the coming month — on a card whose own subtitle promises drills.
 
-> **Screenshot needed:**
-> _[The dashboard timeline card titled "Next 30 Days" with its All Shifts
-> control, and the hours card below it showing Administrative hours as a figure
-> rather than "Unavailable". The duplicate "N hrs in Month" chip that used to
-> sit in the header is gone, so an old capture of this area is wrong in three
-> places at once.]_
+![The dashboard's "Next 30 Days" timeline with its All Shifts control, and the hours card below it reading Administrative hours as a figure rather than "Unavailable"](./images/20-03-dashboard-timeline-hours.png)
 
 ### A crew seat read as "EMS" on the schedule and "EMT" everywhere else
 

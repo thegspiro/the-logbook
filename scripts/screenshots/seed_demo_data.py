@@ -1111,7 +1111,8 @@ class Seeder:
                     and pick(current, "id")
                 ):
                     self.api.patch(
-                        f"/users/{pick(current, 'id')}/profile", {"rank": rank}
+                        f"/users/{pick(current, 'id')}/profile",
+                        {"rank": rank},
                     )
                     current["rank"] = rank
                 # Same reason as the rank repair above: a member created before
@@ -4517,6 +4518,49 @@ class Seeder:
         return {"requests": created}
 
     # -- inventory: variants and reorder requests --------------------
+
+    def seed_checkouts(self, members: list[dict]) -> None:
+        """One item checked out to a member, for the Temporary Loans page.
+
+        Nothing else in this seeder calls `POST /inventory/checkout` — every
+        other inventory shot pictures the catalog, an assignment or an
+        issuance, none of which touch `check_out_records`. Left unseeded,
+        `/inventory/checkouts` (Temporary Loans) renders "No Active Temporary
+        Loans" on every fresh database, which is an accurate picture of an
+        empty department but not of the populated screen the guides describe.
+        """
+        active = items(self.api.get("/inventory/checkout/active"), "checkouts")
+        if active:
+            return
+        available = [
+            i
+            for i in items(self.api.get("/inventory/items?limit=200"), "items")
+            if pick(i, "status") == "available" and pick(i, "id")
+        ]
+        # Not the account running the seeder: the checkout listing names the
+        # holder, and a loan against an ordinary member is the picture the
+        # guide describes rather than one against the department chief.
+        candidate_ids = {
+            pick(m, "id")
+            for m in members
+            if pick(m, "id") and pick(m, "username") != DEMO_ADMIN_USERNAME
+        }
+        if not available or not candidate_ids:
+            return
+        member_id = sorted(candidate_ids)[0]
+        self.api.post(
+            "/inventory/checkout",
+            {
+                "item_id": pick(available[0], "id"),
+                "user_id": member_id,
+                "expected_return_at": (
+                    datetime.combine(TODAY + timedelta(days=14), time(17, 0))
+                    .replace(tzinfo=timezone.utc)
+                    .isoformat()
+                ),
+                "checkout_reason": "Temporary loan for a training assignment.",
+            },
+        )
 
     def seed_inventory_variants(
         self, categories: list[dict], stations: list[dict]
@@ -14593,6 +14637,7 @@ class Seeder:
                 inventory.get("categories", []), stations
             ),
         )
+        self.step("checkouts", lambda: self.seed_checkouts(members))
         # After the variants: the requests name catalog items, and the gloves
         # one of them asks for is created by the variant pass.
         self.step(

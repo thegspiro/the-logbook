@@ -467,11 +467,7 @@ If you are following an older walkthrough, four things are in different places.
 > The full before/after tables are in
 > [20 — September release changes](./20-september-2026-release-changes.md#where-everything-moved).
 
-> **Screenshot needed:**
-> _[The sidebar as an officer, showing the Operations section with My Checklists
-> and Fleet Readiness, and the Administration section with its Scheduling and
-> Inventory Admin rows. Every existing navigation capture predates all four
-> changes above.]_
+![The sidebar as an officer: Operations with My Checklists and Fleet Readiness, and the Administration section's Scheduling Admin and Inventory Admin rows](./images/00-26-sidebar-officer-checklists.png)
 
 ### On a phone
 

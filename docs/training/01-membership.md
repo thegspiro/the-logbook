@@ -1653,11 +1653,7 @@ Everyone still gets the status counters, the contact column their department has
 chosen to publish, search, filtering and pagination. For them the page is titled
 **Member Directory**.
 
-> **Screenshot needed:**
-> _[`/members` as a member without `members.manage`: titled "Member Directory",
-> with no usernames, no hire-date column, no Actions column and no bulk
-> selection. Pair it with the existing coordinator capture — the difference
-> between the two is the lesson.]_
+![The member roster as an ordinary member: titled "Member Directory", with no usernames, hire-date column, Actions column or bulk selection](./images/01-40-member-directory.png)
 
 **Search no longer matches a username** for members who cannot see one. It is
 not displayed anywhere on their page, so a row returned for "ladams" had no

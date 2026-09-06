@@ -2623,11 +2623,7 @@ their own console only by typing the address.
   asked to acknowledge the same message again; a notification marked read could
   return to the feed, taking the unread count back up with it.
 
-> **Screenshot needed:**
-> _[The dashboard timeline card titled "Next 30 Days" with its All Shifts
-> control, and the hours card below it showing Administrative hours as a figure
-> rather than "Unavailable". The duplicate "N hrs in Month" chip is gone from
-> the header, so an old capture of this area is wrong in three places at once.]_
+![The dashboard's "Next 30 Days" timeline with its All Shifts control, and the hours card below it reading Administrative hours as a figure rather than "Unavailable"](./images/08-77-dashboard-timeline-hours.png)
 
 ## Table headings finally sit over their own columns _(2026-09-05)_
 

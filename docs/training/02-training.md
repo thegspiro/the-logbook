@@ -2679,10 +2679,7 @@ implemented) and the syllabus builder — already did.
 The gate is on the page content rather than the route, because the same page is
 mounted inside the training admin hub where the officer does hold the grant.
 
-> **Screenshot needed:**
-> _[The Course Library as a member without `training.manage`: the course list
-> readable, with Add / Edit / Delete / Manage classes absent. Pair it with the
-> existing officer capture so the difference is the lesson.]_
+![Course Library as an ordinary member: the course list readable, with Add / Edit / Delete / Manage classes all absent](./images/02-106-course-library-member.png)
 
 ### Training Programs
 
