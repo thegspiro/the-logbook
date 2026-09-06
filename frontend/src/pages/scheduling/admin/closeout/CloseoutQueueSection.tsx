@@ -38,8 +38,25 @@ import { useTimezone } from '../../../../hooks/useTimezone';
 import { EmptyState } from '../../../../components/ux/EmptyState';
 import { ShiftCloseoutWizard } from '../../ShiftCloseoutWizard';
 
-/** How far back the queue looks by default. A month of backlog is a real one. */
-const DEFAULT_LOOKBACK_DAYS = 30;
+/**
+ * How far back the queue looks by default.
+ *
+ * Six months rather than one. The hub's **To close out** metric has no lower
+ * bound at all — `_scheduling_closeout_backlog` counts a shift left unclosed
+ * three years ago — and this page is described as the list behind that number.
+ * A month-wide default meant an officer could follow a metric reading three
+ * straight into a page reporting that the range was clear, with the very work
+ * that sent them here sitting outside it.
+ *
+ * Not unbounded, though, and the reason is the endpoint's own ordering: it
+ * returns shifts oldest first, so a range covering all of a department's
+ * history would spend the page budget below on shifts closed years ago and
+ * could truncate before reaching the backlog. Six months covers a real backlog
+ * without that risk; the empty state below says what was actually checked, and
+ * the server-side close-out endpoint is what will make the two populations
+ * identical rather than merely close.
+ */
+const DEFAULT_LOOKBACK_DAYS = 180;
 
 /** Shifts per request. The endpoint's own ceiling is 1000; this pages under it. */
 const PAGE_SIZE = 200;
@@ -351,11 +368,21 @@ const CloseoutQueueSection: React.FC = () => {
       )}
 
       {!loading && !rangeReversed && settingsLoaded && !failed && !truncated && queue.length === 0 && (
-        <EmptyState
-          icon={CheckCircle2}
-          title="Every shift in this range is closed out"
-          description="A shift still running is not counted — one with no recorded end is judged against the department's open-ended cushion, the same number the roster lock uses."
-        />
+        <>
+          <EmptyState
+            icon={CheckCircle2}
+            title="Every shift in this range is closed out"
+            description="A shift still running is not counted — one with no recorded end is judged against the department's open-ended cushion, the same number the roster lock uses."
+          />
+          {/* Said here rather than left to be inferred: the hub's To close out
+              metric has no lower bound, so an officer who arrived from a
+              non-zero count and finds nothing needs to know that only this
+              range was read, not that the count was wrong. */}
+          <p className="text-theme-text-muted mt-2 text-center text-xs">
+            Only {from || 'the beginning'} to {to} was checked. The hub&rsquo;s <strong>To close out</strong> count has
+            no earliest date, so widen <strong>From</strong> if it disagrees with this.
+          </p>
+        </>
       )}
 
       {!loading &&

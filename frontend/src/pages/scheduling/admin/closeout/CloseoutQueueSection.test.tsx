@@ -100,8 +100,11 @@ describe('CloseoutQueueSection', () => {
     renderWithRouter(<CloseoutQueueSection />);
 
     await waitFor(() => expect(mockGetShifts).toHaveBeenCalled());
+    // The subject is `end_date`: the department's calendar day, not the
+    // browser's. `start_date` follows from it by the default lookback and moves
+    // with that constant.
     expect(mockGetShifts).toHaveBeenCalledWith(
-      expect.objectContaining({ start_date: '2026-08-06', end_date: '2026-09-05' })
+      expect.objectContaining({ start_date: '2026-03-09', end_date: '2026-09-05' })
     );
     vi.useRealTimers();
   });
@@ -465,6 +468,18 @@ describe('CloseoutQueueSection', () => {
     renderWithRouter(<CloseoutQueueSection />);
 
     expect(await screen.findByText(/Every shift in this range is closed out/)).toBeInTheDocument();
+  });
+
+  // The hub's To close out metric has no earliest date — it counts a shift left
+  // unclosed three years ago — while this page reads a range. An officer who
+  // follows a non-zero count here and finds nothing has to be told that only
+  // the range was read, or the page contradicts the number that sent them.
+  it('says which range it checked when it finds nothing', async () => {
+    mockGetShifts.mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 200 });
+    renderWithRouter(<CloseoutQueueSection />);
+
+    await screen.findByText(/Every shift in this range is closed out/);
+    expect(screen.getByText(/has no earliest date/)).toBeInTheDocument();
   });
 
   // A crew still out is not a backlog. The cushion is the department's own

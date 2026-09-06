@@ -140,6 +140,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders for count-only departments alone, so naming the types "the breakdown
   the close-out wizard asks for" described a screen a detailed or off department
   never sees.
+- **The queue opens on six months, not one, and says what it checked.** The
+  hub's **To close out** metric has no earliest date — it counts a shift left
+  unclosed three years ago — so a one-month default let an officer follow a
+  count of three straight into a page reporting the range clear, with the work
+  that sent them there outside it. The default is wider, and where nothing is
+  found the page names the range it read and points at the **From** field,
+  rather than leaving a contradiction with the number on the hub.
 - **An unread equipment-check status is reported as unread, not as zero.** Where
   the department does not block close-out on those checks a failed lookup no
   longer stops the wizard opening — the server does not consult them there — but
