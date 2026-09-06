@@ -74,6 +74,15 @@ import { Breadcrumbs } from '../../../components/ux';
 const PAGE_SIZE = 50;
 
 /**
+ * Delay before a filter change is sent, applied to every control alike.
+ *
+ * Search needs it — a request per keystroke otherwise — and giving the
+ * dropdowns the same path costs a third of a second and removes the second
+ * code path that used to reload the list.
+ */
+const FILTER_DEBOUNCE_MS = 350;
+
+/**
  * `fLoc` value standing for the location panel's "Unassigned" bucket.
  *
  * Not the empty string: that is "All Locations", and collapsing the two made
@@ -477,29 +486,38 @@ const InventoryItemsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter / sort changes.
+  // Filter / sort changes, keyed on `filterParams` rather than on a list of
+  // the filters themselves.
   //
-  // Every control `filterParams` reads belongs here. Location, size, colour,
-  // style and the vendor scope were missing, so those five filters changed
-  // nothing on screen: the request was never re-sent, and the next reload
-  // triggered by something else (a websocket event, a bulk edit) applied them
-  // without the user having touched them. It is what made the location panel
-  // unreconcilable with the list beneath it — the cards were the only place
-  // those items were ever counted.
-  useEffect(() => {
-    if (loading) return;
-    void loadItems(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fCat, fStatus, fCond, fType, fLoc, fSize, fColor, fStyle, vendorFilter, sortBy, sortOrd]);
-
-  // Debounced search
+  // This was two effects over a hand-written array of six names, beside a
+  // `filterParams` that read eleven. Location, size, colour, style and the
+  // vendor scope were missing from it, so those five controls changed the
+  // request the page *would* send and never sent it — the list stayed put
+  // until an unrelated reload (a websocket event, a bulk edit) applied a
+  // filter nobody had touched since. It is what made the location cards
+  // impossible to reconcile with the list beneath them.
+  //
+  // Adding the five back left the mirror in place for the next filter to fall
+  // out of. `filterParams` is that whole set as one identity and ESLint
+  // maintains *its* dependency array, so a filter added there reaches this
+  // effect with no second list to remember. `effectDepsIntegrity.test.ts`
+  // holds the line.
+  //
+  // One debounced path, not an immediate one for the dropdowns and a debounced
+  // one for the text box: `filterParams` changes on a keystroke as readily as
+  // on a select, so a single effect covers both, and rapid changes across
+  // several controls coalesce into one request instead of racing.
   useEffect(() => {
     if (loading) return;
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => void loadItems(true), 350);
+    timerRef.current = setTimeout(() => void loadItems(true), FILTER_DEBOUNCE_MS);
     return () => clearTimeout(timerRef.current);
+    // `loadItems` and `loading` are deliberately omitted, and both would
+    // misfire if listed: `loadItems` changes identity with `skip`, which this
+    // effect resets to 0, and re-running when the mount load clears `loading`
+    // would send a second identical request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [filterParams]);
 
   // WebSocket
   const onWs = useCallback(() => {
