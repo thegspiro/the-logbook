@@ -112,7 +112,13 @@ async function renderRoster(): Promise<void> {
   expect(within(table()).getByText('Laura Adams')).toBeInTheDocument();
 }
 
-function installDefaults(canManage: boolean): void {
+/**
+ * Grant an exact permission set rather than a blanket boolean. members.manage
+ * and members.create are not the same population -- the Captain, Vice
+ * President and Assistant Secretary positions hold the first without the
+ * second -- and a mock answering true to everything cannot tell them apart.
+ */
+function installDefaults(held: string[]): void {
   // Reset rather than clear: an implementation left by a neighbouring block
   // survives vi.clearAllMocks(), and what checkPermission returns is this
   // file's entire subject (CLAUDE.md pitfall #28).
@@ -127,11 +133,11 @@ function installDefaults(canManage: boolean): void {
     show_phone: false,
     show_mobile: false,
   });
-  mockCheckPermission.mockReturnValue(canManage);
+  mockCheckPermission.mockImplementation((permission: unknown) => held.includes(permission as string));
 }
 
 describe('Members roster — regular member (no members.manage)', () => {
-  beforeEach(() => installDefaults(false));
+  beforeEach(() => installDefaults([]));
 
   it('hides the username under each member name, in both layouts', async () => {
     await renderRoster();
@@ -250,8 +256,44 @@ describe('Members roster — regular member (no members.manage)', () => {
   });
 });
 
+describe('Members roster — captain (members.manage without members.create)', () => {
+  // The Captain, Vice President and Assistant Secretary positions, and the
+  // Captain rank, are seeded this way. Adding and importing land on
+  // MembersAdminHub tabs gated on members.create, and the hub falls back to
+  // Manage rather than erroring -- so an Add Member button offered here would
+  // silently drop the click.
+  beforeEach(() => installDefaults(['members.manage']));
+
+  it('withholds Add Member and Import CSV from the toolbar', async () => {
+    renderWithRouter(<Members />);
+
+    await screen.findByRole('table');
+    expect(screen.queryByRole('button', { name: /Add Member/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import/i })).not.toBeInTheDocument();
+  });
+
+  it('withholds the add-or-import prompt on an empty roster', async () => {
+    mockGetUsers.mockResolvedValue([]);
+    renderWithRouter(<Members />);
+
+    // The heading still answers the question they came with; it is the
+    // invitation that is withheld.
+    expect(await screen.findByText('No Members Found')).toBeInTheDocument();
+    expect(screen.queryByText('Get started by adding your first member or importing from CSV')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add Member/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the management columns and the CSV export it does hold', async () => {
+    renderWithRouter(<Members />);
+
+    await screen.findByRole('table');
+    expect(within(table()).getByText('Hire Date')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export/i })).toBeInTheDocument();
+  });
+});
+
 describe('Members roster — membership coordinator (members.manage)', () => {
-  beforeEach(() => installDefaults(true));
+  beforeEach(() => installDefaults(['members.manage', 'members.create']));
 
   it('offers the add and import prompt on an empty roster', async () => {
     mockGetUsers.mockResolvedValue([]);

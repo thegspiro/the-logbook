@@ -90,7 +90,11 @@ export const MembersAdminPage: React.FC = () => {
   // Station lookup
   const [availableStations, setAvailableStations] = useState<Location[]>([]);
 
-  const canCreateMembers = checkPermission('users.create');
+  // members.create is the gate on the hub tab this button selects. users.create
+  // is what the server enforces on POST /users, and the two are held by the
+  // same positions today -- but the tab is what decides whether the click
+  // lands anywhere, so the button follows the tab.
+  const canCreateMembers = checkPermission('members.create');
 
   useEffect(() => {
     void fetchData();

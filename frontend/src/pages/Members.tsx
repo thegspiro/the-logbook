@@ -43,6 +43,13 @@ const Members: React.FC = () => {
   // mean nothing to a member looking someone up. A member without the grant
   // gets a directory; a coordinator gets the management table unchanged.
   const canManageMembers = checkPermission('members.manage');
+  // Adding and importing answer to members.create, not members.manage. Both
+  // buttons navigate to tabs on MembersAdminHub, which gates them on
+  // members.create and silently falls back to Manage when the tab is not
+  // openable -- so gating them here on members.manage sent a Captain, Vice
+  // President or Assistant Secretary (who hold manage without create) to a
+  // screen that quietly dropped what they clicked.
+  const canCreateMembers = checkPermission('members.create');
   const [members, setMembers] = useState<User[]>([]);
   const [stats, setStats] = useState<MemberStats>({
     total: 0,
@@ -385,7 +392,7 @@ const Members: React.FC = () => {
             </div>
 
             {/* Action Buttons */}
-            {canManageMembers && (
+            {canCreateMembers && (
               <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
                 <button
                   onClick={() => void navigate('/members/import')}
@@ -432,12 +439,12 @@ const Members: React.FC = () => {
                     ? 'Try adjusting your search or filters'
                     : // An instruction to add or import, so only for someone who
                       // can do either.
-                      canManageMembers
+                      canCreateMembers
                       ? 'Get started by adding your first member or importing from CSV'
                       : undefined
                 }
                 actions={
-                  canManageMembers && !listIsNarrowed
+                  canCreateMembers && !listIsNarrowed
                     ? [
                         {
                           label: 'Import CSV',

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Add Member was offered to three positions it did not work for (2026-09-06)
+
+**Fixed**
+
+- **The roster's Add Member and Import CSV buttons asked the wrong
+  permission.** They were gated on `members.manage`, but both navigate to tabs
+  on the members admin hub that are gated on `members.create` — and the hub
+  falls back to Member Management rather than erroring when a tab is not
+  openable. The Captain, Vice President and Assistant Secretary positions (and
+  the Captain rank) hold manage without create, so a captain tapping Add Member
+  landed on the management list with no error and no explanation. All three
+  entry points to that tab — the roster toolbar, the empty-state prompt and the
+  command palette's Add Member action — now ask `members.create`, the gate on
+  the tab they select. The management affordances those positions do hold, the
+  Hire Date column and the CSV export among them, are unchanged.
+- **The members administration screen's Add Member button** asked
+  `users.create`, a third name for the same action. It now matches the tab it
+  selects as well. The two grants are held by the same positions in every
+  seeded position and rank, so this changes no one's access today; it removes
+  the second name.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
@@ -236,6 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visible field name.
 
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
 ### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**

@@ -210,7 +210,11 @@ const COMMANDS: CommandItem[] = [
     path: '/members/add',
     icon: Users,
     section: 'Actions',
-    permission: 'members.manage',
+    // members.create, not members.manage: this lands on a MembersAdminHub tab
+    // gated on create, which falls back to Manage rather than erroring, so the
+    // three positions holding manage without create would pick this and go
+    // somewhere else. Same reasoning as the buttons on Members.tsx.
+    permission: 'members.create',
   },
   {
     id: 'submit-training',
