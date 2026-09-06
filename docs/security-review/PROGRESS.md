@@ -16,18 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 25 (Messaging & notifications), pass 3** — branch
-`claude/security-review-messaging-notifications`,
-[PR #2305](https://github.com/thegspiro/the-logbook/pull/2305). Two new
-findings fixed (MSG-13: unbounded push-device registration; MSG-14:
-unescaped email subtitle), one flagged (MSG-15: push's send-time
-DNS-rebinding pin is skipped outside `ENVIRONMENT in (production,
-staging)`, deliberate for test infra, needs a design decision to close
-properly), and a doc correction (MSG-10 was already fixed on `main` —
-`KNOWN_LIMITATIONS.md` still described the old behavior). Full completion
-gate green — see the Log and
-`docs/security-review/MSG-25-messaging-notifications.md` for detail.
-Subscribed; awaiting CI/review.
+**None.** Feature 25 (Messaging & notifications)'s PR #2305 merged
+(`c24df34`). Rotation row 25 -> ✅. Next: 26 Forms.
+
+---
+
+### 2026-09-06 — Feature 25 (Messaging & notifications, pass 3) ✅ merged — PR #2305
+
+MSG-13 (unbounded push-device registration) went through 4 rounds of
+Codex review before landing, each finding a real concurrency gap the
+previous round's own fix had left open — one of them (round 4) a genuine
+MariaDB deadlock CI itself caught live on the guard test, not just static
+review:
+
+1. Enforce the cap on reassignment too (not just brand-new registrations),
+   and serialize the count-then-insert check.
+2. Fix a deadlock the round-1 fix introduced when two users swap devices
+   with each other (AB/BA lock-order cycle) — fixed by locking every
+   affected user in a fixed, sorted order.
+3. Fix a correctness bug: the self-refresh fast path decided ownership
+   from a stale, unlocked read, so a concurrent transfer could leave a
+   device's `user_id` pointing at the new owner while its encryption keys
+   still belonged to the old owner — a notification meant for the new
+   owner would then be decryptable on the old owner's device.
+4. CI caught a real deadlock in round 3's own fix (an InnoDB gap-lock
+   class — the same shape already fixed once in this codebase, FAC-45 in
+   `documents_service.py`). Fixed by peeking with a plain read and only
+   locking via a point lookup on an id the peek found; a deeper residual
+   interleaving was closed with a bounded retry on genuine deadlock
+   (MySQL 1213) rather than a fifth ordering patch. Also capped
+   `send_to_user`'s delivery so an account that already exceeded the
+   limit before this shipped doesn't keep the fan-out.
+
+MSG-14 (unescaped email `subtitle`) fixed. MSG-15 (push's send-time
+DNS-rebinding pin skipped outside `ENVIRONMENT in (production, staging)`)
+flagged — deliberate for test infra today, needs a design decision to
+close properly. Doc correction: MSG-10 was already fixed on `main`
+(`KNOWN_LIMITATIONS.md` still described the old, pre-fix behavior).
+One thread left open for a maintainer call (a lint-warning-policy
+disagreement with Codex, evidence posted on the PR, not a defect in this
+change) rather than resolved unilaterally. Full completion gate green,
+including all 17 CI checks on the final head (both MariaDB and MySQL
+integration suites, which genuinely exercise the two-real-session
+deadlock guard tests). Full write-up:
+`docs/security-review/MSG-25-messaging-notifications.md`. Rotation row 25
+-> ✅. Next: 26 Forms.
 
 ---
 
@@ -9602,8 +9635,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | 🔄     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
