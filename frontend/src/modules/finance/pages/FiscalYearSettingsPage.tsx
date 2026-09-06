@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/ux/ConfirmDialog';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 // =============================================================================
 // Status Badge
@@ -288,6 +289,7 @@ const FiscalYearSettingsPage: React.FC = () => {
   if (isLoading && fiscalYears.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Manage fiscal years and budget categories</p>
@@ -299,6 +301,8 @@ const FiscalYearSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      <Breadcrumbs />
+
       {/* Header */}
       <div>
         <h1 className="text-theme-text-primary text-2xl font-bold">Finance Settings</h1>

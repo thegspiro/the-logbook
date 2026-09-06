@@ -258,6 +258,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
   if (isLoading && approvalChains.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <div className="flex items-center gap-4">
           <Link
             to="/finance/settings"

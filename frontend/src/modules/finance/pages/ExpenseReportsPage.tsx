@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { formatDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { ExpenseReportStatus, EXPENSE_REPORT_STATUS_COLORS } from '../types';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 // =============================================================================
 // Constants
@@ -64,6 +65,7 @@ const ExpenseReportsPage: React.FC = () => {
   if (isLoading && expenseReports.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Expense Reports</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Submit and track expense reimbursements</p>
@@ -75,6 +77,8 @@ const ExpenseReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

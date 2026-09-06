@@ -25,20 +25,29 @@
 
 # Public webhook: there is no caller org.
 # The integration id IS the credential.
+
+
+# Not yet reviewed.
 app/api/public/integrations_webhook.py::_load_integration::Integration::integration_id
 
-# Public webhook: there is no caller org.
-# The integration id IS the credential.
+# Not yet reviewed.
 app/api/public/paypal_webhook.py::paypal_inbound_webhook::Integration::integration_id
 
-# Public webhook: there is no caller org.
-# The integration id IS the credential.
+# Not yet reviewed.
 app/api/public/salesforce_webhook.py::salesforce_inbound_webhook::Integration::integration_id
 
 # Not yet reviewed.
 app/api/v1/endpoints/external_training.py::perform_sync_task::ExternalTrainingProvider::provider_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - bulk_approve::User::member_id
+#     member_id comes off entries fetched with an organization_id filter above
+#   - clock_in::User::user_id
+#     endpoint passes current_user.id; the query is a lock acquisition (Pitfall #27), not a read
+#   - create_manual_entry::User::user_id
+#     endpoint passes current_user.id; lock acquisition, not a read
+#   - edit_pending_entry::User::owner_id
+#     owner_id comes off an entry fetched with an organization_id filter above
 app/services/admin_hours_service.py::bulk_approve::User::member_id
 app/services/admin_hours_service.py::clock_in::User::user_id
 app/services/admin_hours_service.py::create_manual_entry::User::user_id
@@ -54,10 +63,16 @@ app/services/auth_service.py::get_user_from_token::User::user_id
 app/services/documents_service.py::_lock_destination_folder::DocumentFolder::folder_id
 app/services/documents_service.py::_lock_folder_by_id::DocumentFolder::folder_id
 
-# Not yet reviewed.
-app/services/election_service.py::_notify_leadership::User::performed_by
+# Reviewed 2026-09-06 (services pass): safe.
+#   - check_voter_eligibility::User::user_id
+#     both callers are safe: one passes current_user.id, the other (preview_ballot_for_user) verifies the target in-org first
+#   - process_election_lifecycle::Election::election_id
+#     election_id comes off an org-filtered query above; this is the re-fetch
 app/services/election_service.py::check_voter_eligibility::User::user_id
 app/services/election_service.py::process_election_lifecycle::Election::election_id
+
+# Not yet reviewed.
+app/services/election_service.py::_notify_leadership::User::performed_by
 
 # Not yet reviewed.
 app/services/equipment_check_service.py::_send_check_failure_notification::EquipmentCheckTemplate::template_id
@@ -72,25 +87,41 @@ app/services/finance_service.py::_entity_creator_email::User::requester_id
 # Not yet reviewed.
 app/services/inventory_notification_service.py::_get_user::User::user_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - create_return_request::CheckOutRecord::checkout_id
+#     assert_in_org() bounds all three client FKs before any ownership lookup — textbook #14c
+#   - create_return_request::ItemAssignment::assignment_id
+#     assert_in_org() bounds all three client FKs before any ownership lookup — textbook #14c
+#   - create_return_request::ItemIssuance::issuance_id
+#     assert_in_org() bounds all three client FKs before any ownership lookup — textbook #14c
 app/services/inventory_service.py::create_return_request::CheckOutRecord::checkout_id
 app/services/inventory_service.py::create_return_request::ItemAssignment::assignment_id
 app/services/inventory_service.py::create_return_request::ItemIssuance::issuance_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - get_preset::Position::position_id
+#     position_id is returned by _primary_position_id(user_id, organization_id), already org-scoped
 app/services/label_service.py::get_preset::Position::position_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - reactivate_member::User::reactivated_by
+#     reactivated_by is current_user.id; the target user is fetched with an organization_id filter
 app/services/member_archive_service.py::reactivate_member::User::reactivated_by
 
 # Not yet reviewed.
 app/services/member_leave_service.py::_deactivate_linked_waiver::TrainingWaiver::waiver_id
 app/services/member_leave_service.py::_update_linked_waiver::TrainingWaiver::waiver_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - link_event::User::linked_by
+#     linked_by is current_user.id
 app/services/membership_pipeline_service.py::link_event::User::linked_by
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - generate_report::User::performed_by
+#     performed_by is current_user.id
+#   - generate_report::User::user_id
+#     change_member_status verifies the target user in-org before calling this
 app/services/property_return_service.py::generate_report::User::performed_by
 app/services/property_return_service.py::generate_report::User::user_id
 
@@ -101,9 +132,15 @@ app/services/push_service.py::_subscribe_once::User::uid
 # Not yet reviewed.
 app/services/role_service.py::set_user_roles::User::user_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - resolve_check_templates::Apparatus::apparatus_id
+#     caller passes shift.apparatus_id from an org-scoped shift, alongside the same organization_id
+#   - resolve_check_templates::ApparatusType::app_type_id
+#     app_type_id is read from the Apparatus row resolved on the line above
 app/services/scheduled_tasks.py::resolve_check_templates::Apparatus::apparatus_id
 app/services/scheduled_tasks.py::resolve_check_templates::ApparatusType::app_type_id
+
+# Not yet reviewed.
 app/services/scheduled_tasks.py::run_recover_stranded_message_deliveries::DepartmentMessage::message_id
 
 # Not yet reviewed.
@@ -114,7 +151,9 @@ app/services/scheduling_service.py::_notify_shift_decline::Shift::shift_id
 app/services/scheduling_service.py::_notify_shift_decline::User::user_id
 app/services/scheduling_service.py::_send_finalization_notification::User::officer_id
 
-# Not yet reviewed.
+# Reviewed 2026-09-06 (services pass): safe.
+#   - get_report::ShiftCompletionReport::report_id
+#     optional organization_id IS applied, via a builder .where() the ratchet cannot see (its documented blind spot); EC-9 documents the unscoped path
 app/services/shift_completion_service.py::get_report::ShiftCompletionReport::report_id
 
 # Not yet reviewed.
