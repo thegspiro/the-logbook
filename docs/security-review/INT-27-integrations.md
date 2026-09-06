@@ -41,8 +41,95 @@ limited (30/min/IP), reject any integration with no configured
 `webhook_secret` (fail closed), verify HMAC/shared-secret with
 `hmac.compare_digest`-based helpers, replay-protected
 (`is_duplicate_webhook`), and resolve the acting org from the id-matched
-`Integration` row rather than from the payload. 19 endpoints total across
-the four files, all enumerated, none newly ungated.
+`Integration` row rather than from the payload.
+
+**Correction (Codex round, 2026-09-06):** the count above stopped one file
+short. `main.py` mounts two more public webhook routers immediately before
+`integrations_webhook_router` — `app/api/public/salesforce_webhook.py`
+(`POST /public/v1/webhooks/salesforce/{integration_id}`) and
+`app/api/public/paypal_webhook.py` (`POST /public/v1/webhooks/paypal/
+{integration_id}`) — neither inspected in this pass nor in pass 2, despite
+PayPal being listed as reviewed and clean below. Read both in full: **21
+endpoints across six files**, not 19 across four. Both hold up to the same
+checklist dimensions the rest of this pass used —
+
+- **`salesforce_webhook.py`:** HMAC-SHA256 verified with
+  `hmac.compare_digest`; an integration with no `webhook_secret` configured
+  is rejected (401), not silently trusted; rate limited (30/min/IP,
+  5-minute lockout); replay-protected (`is_duplicate_webhook`, correctly
+  ordered _after_ shape validation so a rejected payload's fingerprint
+  can't be poisoned — see the file's own comment); a `records` array is
+  capped at 500 per request; the acting org comes from
+  `integration.organization_id` on the id-matched row, never the payload.
+  One inaccuracy fixed in the file's own docstring: it claimed payload size
+  was "limited by FastAPI / Uvicorn defaults" — neither imposes a body-size
+  limit on its own; see the inbound-body-size note below for the real
+  mechanism. Corrected in place.
+- **`paypal_webhook.py`:** signature verification is delegated to PayPal's
+  own `verify-webhook-signature` API (`paypal_service.verify_webhook_
+signature`), which fails closed (returns `False`, never raises past the
+  caller) on a missing `webhook_id`, missing signature headers, or a
+  transport failure; rate limited (60/min/IP); replay-protected the same
+  way; the acting org again comes from the id-matched `Integration` row.
+  One inconsistency noted, not fixed here: `paypal_service.py`'s own two
+  outbound calls to PayPal (`get_access_token`, `verify_webhook_signature`)
+  use a bare `httpx.AsyncClient(timeout=_TIMEOUT)` rather than
+  `create_integration_client()`, so they don't inherit the INT-7 fix below.
+  Low risk — `base_url` is one of two hardcoded PayPal API hosts
+  (`_API_HOSTS`), never client/org-supplied, so there's no SSRF or
+  cross-tenant exposure, only the same class of unbounded-response memory
+  risk INT-7 covers, against a single trusted vendor host rather than an
+  arbitrary admin-configured endpoint. Flagged as a follow-up rather than
+  changed in this pass, since swapping clients here would also silently
+  change the timeout from PayPal's own tuned `Timeout(15.0, connect=10.0)`
+  to `INTEGRATION_TIMEOUT`'s `Timeout(10.0, connect=5.0)` — a second
+  behavior change bundled into what should be a one-line consistency fix.
+
+**Inbound webhook body size — nginx is deployment-conditional, but the
+backend has its own cap regardless (Codex round, 2026-09-06).** Both files'
+`request.body()` calls run before signature verification, on a public,
+unauthenticated route, which makes body size a real question independent of
+INT-7 (that finding is about _outbound_ response size). Checked two things
+Codex raised:
+
+1. **Is nginx actually in front of the backend?** No, not by default.
+   `docker-compose.yml`'s `nginx` service is `profiles: [production]` —
+   opt-in — while `backend` publishes directly on `${BACKEND_PORT:-3001}`
+   with no profile gate, so the default (`docker-compose up`, no
+   `--profile production`) stack has no nginx in the request path at all,
+   and the documented standalone backend image can likewise run without
+   it. So a claim that inbound webhook bodies are bounded by nginx's 50 MB
+   `client_max_body_size` cannot be unconditional — it depends on a
+   deployment choice this repo does not default to.
+2. **Does anything else cap it?** Yes — `RequestSizeLimitMiddleware`
+   (`app/core/security_middleware.py`, pure ASGI per CLAUDE.md pitfall #4)
+   is registered in `main.py` as the **outermost** middleware
+   (`app.add_middleware(RequestSizeLimitMiddleware, max_body_size=settings.
+MAX_REQUEST_BODY_SIZE)`, added last so it wraps every other layer) and
+   applies to every request the ASGI app receives, public webhook routers
+   included, regardless of whether nginx is present. It rejects (413) up
+   front when a declared `Content-Length` exceeds the cap, and separately
+   counts streamed bytes and signals disconnect if a client omits or lies
+   about `Content-Length` (chunked upload), so a request body cannot be
+   silently unbounded either way. `settings.MAX_REQUEST_BODY_SIZE` defaults
+   to 60 MB — pre-existing on `main`, not added by this PR or this pass.
+
+**Net effect:** the "arbitrarily large body" DoS Codex described does not
+hold as stated — the backend caps inbound bodies at 60 MB unconditionally,
+independent of nginx. What _is_ real, and worth naming precisely rather than
+leaving to an unconditional nginx claim: without nginx, an oversized body is
+rejected only after the backend process has already accepted the connection
+and started counting bytes (up to 60 MB before the `RequestSizeLimitMiddleware`
+disconnect fires), whereas nginx in front would reject a body over its own
+50 MB cap before the request reaches a backend worker at all. That's a real,
+if minor, difference in how much per-request resource an anonymous flood can
+make the backend absorb — not the unbounded gap originally described, so no
+new finding (no "INT-8") is warranted; the existing control already closes
+the unbounded case. This finding's own prior text (in INT-7's "Impact"
+section, below) named nginx's cap as the relevant control for inbound
+webhook bodies; corrected there to name `RequestSizeLimitMiddleware` as the
+actually load-bearing, deployment-independent control, with nginx as an
+additional, deployment-conditional layer in front of it — not the reverse.
 
 ### MCP glue reviewed (new since pass 2) ✅
 
@@ -83,19 +170,17 @@ audit-gated).
 
 ### Findings
 
-#### INT-7 — LOW-MED — `MAX_RESPONSE_SIZE` is declared, never enforced — 🚩 FLAGGED
+#### INT-7 — LOW-MED — `MAX_RESPONSE_SIZE` is declared, never enforced — ✅ FIXED (Codex round, 2026-09-06)
 
-**What:** `app/services/integration_services/base.py` declares a 10 MB
+**What:** `app/services/integration_services/base.py` declared a 10 MB
 `MAX_RESPONSE_SIZE` constant with a docstring claiming "response size
-limits" as one of the hardened client's defaults. Nothing reads this
+limits" as one of the hardened client's defaults. Nothing read this
 constant anywhere in the codebase (`grep -rn MAX_RESPONSE_SIZE app/` — one
-hit, its own declaration). `create_integration_client()` returns a plain
+hit, its own declaration). `create_integration_client()` returned a plain
 `httpx.AsyncClient` with no size-related config; every connector
 (`calcom_service.list_bookings`, `documenso_service`, `salesforce_service._
-request`, the chat senders, PayPal) calls the client's non-streaming
-`.get()`/`.request()` and then `.json()`/`.text`, which buffers the entire
-response body into process memory before any caller-side code — including a
-hypothetical check against this constant — ever runs. This is not a new
+request`, the chat senders) calls the client's non-streaming
+`.get()`/`.request()` and then `.json()`/`.text`. This is not a new
 regression; it has been true since the constant and docstring were written
 (pre-dates pass 1), but no prior pass named it — `docs/module-audit/
 integrations.md`'s "Tenant isolation" bullet listed "size cap" among the
@@ -103,56 +188,103 @@ base client's verified-good hardened defaults, which per this rotation's own
 rule ("a claim in Verified good must name the mechanism that makes it true")
 was not actually checked against the code; corrected in that doc.
 
-**Where:** `backend/app/services/integration_services/base.py:23` (constant,
-now commented per the fix below); every connector's response-consuming call
-site (not enumerated individually — the gap is structural, not per-file).
+**Originally flagged, not fixed, in this pass's first draft** on the belief
+that enforcing the cap meant every connector's response-reading call site
+switching from `client.get(url).json()` to `client.stream(...)` plus a
+running-byte-count abort — a call-site-by-call-site change across roughly
+ten connector files. **A Codex review round on this PR (#2307) challenged
+that premise**, and it does not hold: httpx's non-streaming `AsyncClient.
+send()` still fully drains `response.stream` via `Response.aread()` before
+`.json()`/`.text` become available on _any_ call — `.get()`, `.post()`,
+`.request()` included (`send()` calls `await response.aread()` whenever
+`stream=False`, which is the default `.get()`/`.request()` use). That
+stream is exactly what a wrapping transport controls, so the cap can be
+enforced once, centrally, with **no connector call site changing at all**.
 
-**Failure scenario:** the department's own configured Salesforce instance,
-Documenso deployment, Cal.com instance, or generic webhook target — any of
-which could be self-hosted, compromised, or simply misbehaving — returns an
-arbitrarily large response body (a malformed/huge JSON payload, a hung
-chunked-transfer stream, or a deliberately oversized reply from a
-compromised self-hosted endpoint an admin pointed the integration at). The
-request handler buffers the entire body into memory before `.json()` can
-even raise a decode error, so a single request can consume memory
-proportional to whatever the remote endpoint chooses to send, unbounded by
-anything in this codebase. `INTEGRATION_TIMEOUT` (10s total) bounds how long
-this can run per request but not how much memory one request can consume in
-that window over a fast connection.
+**Fix:** `base.py` now wraps its transport with a new `_SizeLimitedTransport`
+(and `_SizeLimitedAsyncStream`), which intercepts `response.stream` in
+`handle_async_request()` and aborts — raising `ResponseTooLargeError`
+(`httpx.TransportError` subclass, so it's caught by every existing `except
+httpx.TransportError` retry path the same as a connection/timeout failure,
+and `sanitize_connector_error` (INT-6) treats it as an unvetted infra
+failure rather than a hand-authored safe message) — once more than
+`MAX_RESPONSE_SIZE` bytes have been read. `create_integration_client()`
+builds its own `httpx.AsyncHTTPTransport(verify=True, limits=
+INTEGRATION_LIMITS)` explicitly and wraps that, rather than letting
+`httpx.AsyncClient` build its default transport, because passing an
+explicit `transport=` makes `AsyncClient` ignore its own `verify=`/`limits=`
+kwargs entirely (`AsyncClient._init_transport` only builds a transport from
+them when `transport` is `None`) — moved onto the inner transport instead so
+neither hardening default silently regresses.
 
-**Impact:** every trigger for an outbound integration call requires
+Verified against a real `httpx.AsyncHTTPTransport` over an actual socket
+(not just `httpx.MockTransport`) before writing the fix, to confirm the
+mechanism holds against the real transport class this client uses, not only
+a synthetic one — see the guard tests below for the equivalent, checked-in
+version of that verification.
+
+**Where:** `backend/app/services/integration_services/base.py` (the whole
+fix — one file, as the Codex round predicted).
+
+**Reachable population corrected (Codex round, 2026-09-06):** the original
+"Impact" text below said every trigger for an outbound integration call
+requires `integrations.manage`. That's wrong. `notify_entity_created`
+(`app/services/integration_services/notification_dispatch.py`) fans out to
+every enabled Slack/Discord/Teams webhook via `create_integration_client()`
+the same as any other connector, and it is enqueued as a background task
+from `create_event` (`events.manage`), `create_shift`
+(`scheduling.manage`), and `create_record` (`training.manage`) — three
+endpoints, none gated on `integrations.manage`. So the actual reachable
+population for triggering an outbound chat-webhook request (and therefore
+this finding, before the fix) is anyone holding any one of those three
+module-manage permissions, not just an org's integration admin. The
+"self-hosted third-party endpoint the admin configured" framing for the
+_destination_ still holds — a member cannot point the webhook anywhere new
+— but the _trigger_ is far broader than `integrations.manage` alone.
+
+**Timeout semantics corrected (Codex round, 2026-09-06):** the original text
+below described `INTEGRATION_TIMEOUT` as bounding "how long this can run per
+request" (a 10s total). That's also wrong, and raises the pre-fix severity:
+`httpx.Timeout(10.0, connect=5.0)` sets a 5s _connect_ timeout and a 10s
+_read_ timeout applied to each individual socket read (confirmed against
+the pinned httpx 0.28.1's own source — `httpx._config.Timeout` has no
+"total" concept at all; every value it accepts maps to one of
+connect/read/write/pool). A server that sends one chunk every 9 seconds
+resets the read timer each time and can hold the connection open
+indefinitely — a slow-drip availability scenario, not a bounded one. This
+was corrected in `base.py`'s own comment on `INTEGRATION_TIMEOUT` (fixed
+alongside the response-size cap, since both wrong claims sat in the same
+file) and in `KNOWN_LIMITATIONS.md` below. It does not change what the fix
+above closes — the size cap aborts on byte count, not elapsed time, so it
+still stops the slow-drip scenario from consuming unbounded _memory_; the
+unbounded-_time_ half of a slow-drip request is a distinct, still-open
+gap, noted as a `KNOWN_LIMITATIONS.md` follow-up rather than fixed in this
+pass (a genuine wall-clock deadline needs an `asyncio.wait_for()`-style
+wrapper around the whole request, not a `Timeout` tweak, and touches the
+same ~seventeen call sites INT-7 itself would have if central enforcement
+hadn't been possible).
+
+**Impact (as originally written, now superseded by the two corrections
+above):** ~~every trigger for an outbound integration call requires
 `integrations.manage` (an org admin), so this is not directly reachable by
-an unprivileged member — the realistic actor is a self-hosted third-party
-endpoint the admin configured that later misbehaves or is compromised, not
-an anonymous attacker. Inbound webhook bodies (the one path an unauthenticated
-caller can influence) are already bounded by nginx's global `client_max_body_
-size 50M` in `infrastructure/nginx/nginx.conf` — a separate, pre-existing
-control this finding does not change. Scored LOW-MED: real unbounded memory
-growth on a plausible trigger, but gated behind an admin-configured
-destination and a request-scoped (not persistent) resource, not a
-cross-tenant or credential-exposure issue.
+an unprivileged member~~ — struck through rather than deleted, so the
+correction is visible in place. Inbound webhook bodies are a separate
+question from this finding (outbound response size) — see the inbound
+body-size note under "Route inventory" above; nginx's `client_max_body_size`
+was never load-bearing for _this_ finding, since INT-7 is about a _response_
+body from an admin-configured outbound destination, not a request body from
+an inbound caller.
 
-**Why flagged, not fixed:** enforcing this correctly means every connector's
-response-reading call site switching from `client.get(url).json()` to
-`client.stream(...)` plus a running-byte-count abort — httpx's non-streaming
-request methods have already fully buffered the body by the time a response
-object reaches any caller-side code, so there is no single-file, low-risk
-place to intercept this after the fact. That is a call-site-by-call-site
-change across roughly ten connector files with a real behavior change on
-every one (a legitimate large-but-under-cap response still needs the
-streaming read to work correctly, e.g. Salesforce's own paginated bulk pull),
-which is exactly the "changes behavior… gets flagged, not implemented" case
-in this rotation's own rules — verifying ten independent streaming-refactor
-diffs against real (or fully-mocked) HTTP behavior in one pass is a correctness
-risk in its own right, not just a scope one.
-
-**Fix applied (doc-only, no behavior change):** removed the false "response
-size limits" claim from `base.py`'s docstring and corrected `docs/module-
-audit/integrations.md`'s "size cap" bullet, both now pointing at this
-finding instead of asserting a control that doesn't exist. Mirrored into
-`KNOWN_LIMITATIONS.md` as an owner-decision follow-up (pick a cap value and
-whether every connector needs it, e.g. Salesforce's own bulk pulls may
-legitimately need a higher one than a webhook test-connection call).
+**Guard tests:** see "Guard tests added" below —
+`backend/tests/test_integration_response_size_cap.py` (new file): a
+transport-unit test that an oversized streamed response aborts with
+`ResponseTooLargeError`, one confirming an under-limit response is
+unaffected, a structural test that `create_integration_client()` actually
+wires `_SizeLimitedTransport` in (so reverting the wiring — as opposed to
+the wrapper logic — also fails a test), and an end-to-end test through a
+real connector (`CalcomService.test_connection`) with only the network-
+facing `httpx.AsyncHTTPTransport` replaced, proving the cap holds along the
+real code path a connector call takes.
 
 ### Re-verified from pass 1/2 (all hold)
 
@@ -180,13 +312,36 @@ legitimately need a higher one than a webhook test-connection call).
 
 ## Guard tests added
 
-None this pass — INT-7 is a flagged design gap, not a fixed defect, so
-there is no "revert this line, watch a test fail" shape available; enforcing
-a guard test here would mean asserting on the _absence_ of streaming reads
-across ten files, which is exactly the kind of brittle, easily-defeated test
-this rotation avoids adding for its own sake. If/when INT-7 is fixed, the
-guard test belongs with that fix (one oversized-response test per connector
-switched to streaming).
+**Initial draft of this pass:** none — INT-7 was flagged as a design gap
+rather than fixed, on the (mistaken) premise that closing it needed a
+per-connector streaming-read change with no single safe interception point,
+so there was no "revert this line, watch a test fail" shape to test against.
+
+**Codex round, 2026-09-06:** that premise didn't hold (see INT-7 above), so
+this pass now ships the fix and its guard tests together —
+`backend/tests/test_integration_response_size_cap.py` (new file):
+
+- `test_oversized_response_aborts_before_full_buffering` /
+  `test_response_at_or_under_the_limit_is_unaffected` — a `_SizeLimitedTransport`
+  wrapping an `httpx.MockTransport` that streams a response (via `stream=`,
+  not `content=` — the latter eagerly materializes `Response._content`
+  inside `MockTransport`'s dispatch call, before the wrapping transport gets
+  a chance to intercept anything, so it doesn't exercise the real mechanism
+  a live transport uses).
+- `test_create_integration_client_wires_the_size_limited_transport` — a
+  structural check that `create_integration_client()`'s returned client's
+  `_transport` actually is a `_SizeLimitedTransport` with the right
+  `max_bytes`; this is what fails if a future edit reverts the wiring in
+  `create_integration_client()` even though the wrapper class itself (and
+  the two tests above, which build their own instance directly) still pass.
+- `test_real_connector_call_aborts_on_an_oversized_response` — end-to-end
+  through `CalcomService.test_connection()` with only the network-facing
+  `httpx.AsyncHTTPTransport` replaced, proving the cap holds along the real
+  code path a connector call takes, not just in the transport unit tests.
+
+All four pass after the fix; the first, third, and fourth fail (no
+`ResponseTooLargeError`/no `_SizeLimitedTransport`) if `_SizeLimitedTransport`
+or its wiring into `create_integration_client()` is reverted.
 
 ## Completion gate (pass 3)
 
@@ -213,6 +368,22 @@ reader does not mistake either number for a real `main`-red finding.
 
 No frontend source file was touched this pass, so `tsc`/`eslint` verify no
 regression rather than validate new code.
+
+### Completion gate — Codex round (2026-09-06)
+
+Re-run after the INT-7 fix and doc corrections above. No frontend file
+touched in this round either, so `tsc`/`eslint` were not re-run — the
+pass-3 table above still stands for those two checks.
+
+| Check                                                                        | Result                                                                    |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                                         | ✅ 1504 files unchanged                                                   |
+| `isort --check-only app/ tests/ alembic/`                                    | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                            | ✅ 431 revisions, single head (`d7c1b95e2a40`), PASSED (no schema change) |
+| new guard tests (`test_integration_response_size_cap.py`)                    | ✅ 4 passed                                                               |
+| backend tests, scope (`-k "integration or salesforce or paypal or webhook"`) | ✅ 2374 passed, 21 skipped (env-only), 0 failed                           |
+| backend tests, full suite (`pytest tests/ -q`)                               | ✅ 11476 passed, 21 skipped (env-only), 0 failed                          |
 
 ---
 

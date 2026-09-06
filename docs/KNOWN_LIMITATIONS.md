@@ -2586,36 +2586,41 @@ count corrected by the training-extended pass,
 both re-verified in the training-extended pass 3 re-review, the latter
 following a Codex finding on that pass's own PR.)
 
-## Outbound Integration Requests — Response Size Is Unbounded (INT-7, 2026-09-06)
+## Outbound Integration Requests — No Wall-Clock Deadline (INT-7 follow-up, 2026-09-06)
 
-`app/services/integration_services/base.py` declared a 10 MB
-`MAX_RESPONSE_SIZE` constant with a docstring claiming a response-size cap
-as one of the shared HTTP client's hardened defaults. Nothing enforces it —
-`create_integration_client()` returns a plain `httpx.AsyncClient`, and every
-connector (Salesforce, Cal.com, Documenso, the chat webhooks, PayPal) calls
-its non-streaming `.get()`/`.request()` then `.json()`/`.text`, which
-buffers the full response body into memory before any caller-side code
-could check it against the constant. An org-configured integration
-endpoint (self-hosted, compromised, or simply misbehaving) that returns an
-arbitrarily large or slow-drip body can drive unbounded per-request memory
-growth. Not directly reachable by an unprivileged member — every trigger
-requires `integrations.manage` — and inbound webhook bodies (the one
-unauthenticated-adjacent path) are already bounded by nginx's global
-`client_max_body_size 50M`, a separate control this does not change.
+**INT-7 (outbound integration response size was unbounded) is fixed** —
+`app/services/integration_services/base.py`'s `create_integration_client()`
+now wraps its transport with `_SizeLimitedTransport`, which aborts a
+response once `MAX_RESPONSE_SIZE` (10 MB) bytes have been read, centrally,
+with no connector call site changed. See
+`docs/security-review/INT-27-integrations.md` (INT-7) for the fix and its
+guard tests.
 
-**Not fixed — needs an owner decision on scope, not a one-line patch.**
-Enforcing it means every connector's response-reading call site switching
-from a non-streaming `.get(url).json()` to `client.stream(...)` plus a
-running-byte-count abort, since httpx has already fully buffered the body
-by the time a non-streaming call returns a `Response` to check. That is a
-behavior change across roughly ten connector files at once (some, like
-Salesforce's own paginated bulk pull, may legitimately need a higher cap
-than a webhook test-connection call), which is why this was flagged rather
-than force-fixed inside a single security-review pass.
+**A narrower, related gap remains, discovered while fixing INT-7.**
+`INTEGRATION_TIMEOUT = httpx.Timeout(10.0, connect=5.0)` does not impose a
+10-second wall-clock cap on a request's total duration — httpx's `Timeout`
+has no "total" concept; the `10.0` sets a **read** timeout that applies to
+each individual socket read, restarted on every chunk received. A remote
+integration endpoint (self-hosted, compromised, or simply misbehaving) that
+sends one chunk every 9 seconds can hold the connection open indefinitely
+while never tripping the read timeout — the response-size fix above stops
+this from consuming unbounded _memory_, but the _time_ a request can run for
+is still unbounded. Same reachability as INT-7 before its fix: any of
+`events.manage`/`scheduling.manage`/`training.manage` (not just
+`integrations.manage`) can trigger an outbound chat-webhook call through
+`notify_entity_created`, and an org admin can trigger any connector
+directly.
 
-(Security review INT-27 pass 3, `docs/security-review/INT-27-integrations.md`;
-`docs/module-audit/integrations.md`'s "size cap" claim corrected in the same
-pass — it had never actually been true.)
+**Not fixed — a genuine per-request deadline needs an `asyncio.wait_for()`-
+style wrapper around the whole request/response cycle, not a `Timeout`
+tweak** (no combination of httpx's `connect`/`read`/`write`/`pool` timeout
+knobs produces a total-duration cap), and touches every connector call site
+`create_integration_client()` is used from — the same shape of change INT-7
+turned out not to need, but this one does, since there is no single stream
+to intercept for elapsed time the way there was for byte count.
+
+(Security review INT-27 pass 3, Codex round, 2026-09-06:
+`docs/security-review/INT-27-integrations.md`.)
 
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 

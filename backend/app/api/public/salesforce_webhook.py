@@ -8,7 +8,10 @@ HMAC-SHA256 signatures with the per-integration webhook secret.
 Security:
 - Rate limited per IP (30 requests/minute, 5-minute lockout)
 - HMAC-SHA256 signature verification
-- Payload size limited by FastAPI / Uvicorn defaults
+- Payload size capped by `RequestSizeLimitMiddleware` (ASGI, applies
+  regardless of whether nginx is in front of this deployment) and, when
+  nginx is present, by its own `client_max_body_size` as well — not a
+  FastAPI/Uvicorn default, which imposes no such limit on its own
 - Integration ID validated against the database
 - All inbound payloads are audit-logged
 """

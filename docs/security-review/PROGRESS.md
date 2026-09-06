@@ -18,15 +18,18 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 27 (Integrations), pass 3** — branch
 `claude/security-review-integrations`,
-[PR #2307](https://github.com/thegspiro/the-logbook/pull/2307). One
-new finding, **INT-7** (LOW-MED, flagged): `base.py`'s `MAX_RESPONSE_SIZE`
-constant was declared but never enforced by any connector — every outbound
-integration HTTP call buffers its full response into memory with no cap,
-contradicting `docs/module-audit/integrations.md`'s "size cap" claim
-(corrected in the same pass). Flagged rather than fixed: closing it means a
-behavior-changing streaming-read refactor across ~10 connector files at
-once, not a same-file patch. All of INT-1 through INT-6 re-verified intact.
-Full completion gate green — see the Log and
+[PR #2307](https://github.com/thegspiro/the-logbook/pull/2307). **INT-7 is
+now ✅ FIXED** (a Codex review round found the original "flagged, not fixed"
+call was based on a false premise — see the 2026-09-06 Codex-round entry
+below): `create_integration_client()`'s transport now wraps every
+connector's response stream and aborts once `MAX_RESPONSE_SIZE` (10 MB) is
+exceeded, enforced centrally with no connector call site changed. All of
+INT-1 through INT-6 re-verified intact. A narrower related gap (no
+wall-clock request deadline) is tracked separately in
+`KNOWN_LIMITATIONS.md`. Route inventory corrected to 21 endpoints across six
+files (two public webhook routers, `salesforce_webhook.py`/
+`paypal_webhook.py`, were missed in passes 2-3 and are now reviewed and
+clean). Full completion gate green — see the Log and
 `docs/security-review/INT-27-integrations.md` for detail. Subscribed;
 awaiting CI/review.
 
