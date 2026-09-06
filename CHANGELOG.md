@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expanded array — so five dependencies were reported as six, against a limit
   that explicitly permits five. Non-empty top-level segments are counted
   instead.
+
 ### The Minutes page advertised a feature members cannot use (2026-09-06)
 
 **Fixed**
@@ -96,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **This is a widening.** The officer-facing endpoints for _another_ member's
   sizes are untouched and keep their stricter gates — `inventory.view` to
   read, `inventory.manage` to write — and a test now pins both halves.
+
 ### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
 
 **Fixed**
@@ -109,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control is now disabled rather than hidden, with a title naming who does it,
   matching the Swap control on the apparatus inventory screen — the same
   manage-gated stock write. Reading the worklist is unchanged.
+
 ### Inventory and Members pages say which hub they belong to (2026-09-06)
 
 **Added**
@@ -141,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Check In Station" against a heading that hyphenates it. The hub-card
   agreement test now covers Inventory as well as Scheduling, so a card and a
   crumb naming one page differently fails rather than shipping.
+
 ### The close-out queue and the number above it are one list now (2026-09-06)
 
 **Added**
