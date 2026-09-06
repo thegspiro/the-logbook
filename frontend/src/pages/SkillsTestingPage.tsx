@@ -15,6 +15,7 @@ import { useAuthStore } from '../stores/authStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTemplateListItem, SkillTestListItem } from '../types/skillsTesting';
+import { Breadcrumbs } from '../components/ux';
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -167,6 +168,7 @@ export const SkillsTestingPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs underHub="/training/admin" />
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-theme-text-primary flex items-center space-x-3 text-2xl font-bold sm:text-3xl">

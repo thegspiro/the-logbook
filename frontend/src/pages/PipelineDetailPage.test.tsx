@@ -144,20 +144,29 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     mockDeleteProgram.mockResolvedValue(undefined);
   });
 
-  it('shows an Admin breadcrumb back to the training admin hub for training managers', async () => {
+  // Generated from the URL now rather than passed as items, so these set the
+  // route. The trail ends at Programs: the programme's own name is the <h1>
+  // just below, and repeating it in the trail is the duplication the reports
+  // page was pulled up for.
+  it('shows the hub breadcrumb back to training administration for training managers', async () => {
+    window.history.replaceState({}, '', '/training/programs/prog-1');
     renderWithRouter(<PipelineDetailPage />);
 
     const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
-    expect(within(nav).getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/training/admin');
+    expect(within(nav).getByRole('link', { name: 'Training Administration' })).toHaveAttribute(
+      'href',
+      '/training/admin'
+    );
     expect(within(nav).getByRole('link', { name: 'Programs' })).toHaveAttribute('href', '/training/programs');
   });
 
-  it('omits the Admin breadcrumb for members without training.manage', async () => {
+  it('omits the hub breadcrumb for members without training.manage', async () => {
     mockHasPermission = false;
+    window.history.replaceState({}, '', '/training/programs/prog-1');
     renderWithRouter(<PipelineDetailPage />);
 
     const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
-    expect(within(nav).queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Training Administration' })).not.toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Programs' })).toHaveAttribute('href', '/training/programs');
   });
 
