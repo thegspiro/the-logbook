@@ -16,7 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 22 (Grants & fundraising), pass 3** — branch
+None. Feature 22 (Grants & fundraising) merged via PR #2251 — see the Log
+entry below. Feature 23 (Medical supplies) is now in progress.
+
+---
+
+<!-- Retained below: PR #2251's tend history, for reference until archived into the Log proper. -->
+
+**Feature 22 (Grants & fundraising), pass 3 [MERGED]** — branch
 `claude/security-review-grants-fundraising`,
 [PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). Diff-scoped
 against pass 2's merge (`d7a0c456`, verified reachable after an unshallow
@@ -98,6 +105,26 @@ full completion gate post-merge: `flake8`, `black --check`,
 fundraising"` and the full backend suite green; `tsc --noEmit` 0 errors;
 `eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge; no
 code or CI problem.
+
+---
+
+### 2026-09-06 — Feature 22 (Grants & fundraising) ✅ closed — PR #2251 merged
+
+**PR #2251 merged cleanly** (merge commit `849afee`, head `003edd3`). One
+new finding this pass — GF-35 (LOW-MED, fixed): all 11 `list_*` methods
+across `grant_service.py`/`fundraising_service.py` fetched an org's entire
+table before slicing `skip`/`limit` in Python instead of pushing
+`LIMIT`/`OFFSET` into SQL. A Codex review round raised 3 follow-on findings
+against that same fix (missing id tie-breaker on the modified `ORDER BY`s,
+and two list-endpoints still eager-loading full child collections before
+the page limit applied); all verified real and fixed. GF-7/8/9/27a/33
+re-confirmed open as unchanged product/design decisions. The PR then took
+5 rounds of watchdog merge-conflict tends (all `CHANGELOG.md`
+`[Unreleased]`-block collisions against unrelated PRs landing on `main`,
+resolved each time by keeping both entries) before the owner merged it. All
+17 CI checks green at merge. See `docs/security-review/GF-22-grants-fundraising.md`
+→ Pass 3 for the complete write-up. Rotation row 22 → ✅. Next: 23 Medical
+supplies.
 
 ---
 
@@ -8845,8 +8872,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | 🔄     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
