@@ -132,6 +132,22 @@ describe('AdminHubFrame', () => {
 
   // The frame summarises the work; it is not the work. A summary that cannot
   // load must not take the tab body down with it.
+  it('survives a summary that arrives without an attention list', async () => {
+    // `metrics` was defaulted with `?? []` and `attention` was not, and the
+    // asymmetry cost the whole page: an object with no `attention` is still
+    // truthy, so the queue rendered and threw on `items.length`, and the
+    // ErrorBoundary replaced the entire hub. The field is required by the API
+    // schema — this is defence against a shape surprise, not a case seen in
+    // production — but a missing card is the right failure and a white screen
+    // is not.
+    mockGetSummary.mockResolvedValue({ ...summary, attention: undefined });
+
+    renderFrame();
+
+    expect(await screen.findByText('Tab body')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Training Administration' })).toBeInTheDocument();
+  });
+
   it('keeps the tab body usable when the summary fails', async () => {
     mockGetSummary.mockRejectedValue(new Error('boom'));
     renderFrame();

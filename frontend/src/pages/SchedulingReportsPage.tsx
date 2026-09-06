@@ -307,8 +307,19 @@ export const SchedulingReportsPage: React.FC = () => {
           duplicate landmark to a screen reader and a repeated title to everyone
           else. */}
 
-      {/* Tabs */}
-      <div className="tab-scroll mb-6" role="tablist" aria-label="Scheduling reports">
+      {/* Tabs. Declared as a scroll region rather than made to fit: three tabs
+          with icons do not fit 375px, and `tab-scroll` already makes them
+          reachable by swiping. The declaration is what the mobile ratchet reads
+          — and it carries a contract, so the row is also keyboard focusable and
+          named, which a swipe-only region would not be. Undeclared until now
+          only because every route on this page was measuring Access Denied. */}
+      <div
+        className="tab-scroll mb-6"
+        role="tablist"
+        aria-label="Scheduling reports"
+        data-mobile-scroll-region
+        tabIndex={0}
+      >
         <button
           onClick={() => handleTabChange('member-hours')}
           role="tab"
