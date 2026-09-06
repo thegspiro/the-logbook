@@ -133,79 +133,74 @@ describe('CloseoutQueueSection', () => {
     expect(mockGetShiftChecklists).toHaveBeenCalledTimes(2);
   });
 
-  // `preparing` disables only the row that was clicked, so a second row can be
-  // started while the first is still fetching — and the slower answer would
-  // otherwise replace the wizard the officer most recently opened.
-  it('does not let a slower row open replace the wizard the officer just opened', async () => {
-    let releaseFirst: (value: unknown) => void = () => {};
-    mockGetBacklog.mockResolvedValue({
-      shifts: [unclosedShift, { ...unclosedShift, id: 'shift-2', apparatus_unit_number: 'Engine 2' }],
-      total: 2,
-      skip: 0,
-      limit: 200,
-    });
-    mockGetShiftChecklists
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          releaseFirst = resolve;
-        })
-      )
-      .mockResolvedValue([]);
-
-    const user = userEvent.setup();
-    renderWithRouter(<CloseoutQueueSection />);
-    await screen.findByText(/Engine 1/);
-
-    const rows = screen.getAllByRole('button', { name: /Close out/ });
-    await user.click(rows[0] as HTMLElement);
-    await user.click(rows[1] as HTMLElement);
-    expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('wizard for shift-2');
-
-    // Released inside act so the late continuation actually runs before the
-    // assertion; without that this passes whether or not the guard is there.
-    await act(async () => {
-      releaseFirst([
-        { templateId: 't1', templateName: 'End of shift', checkTiming: 'end_of_shift', isCompleted: false },
-      ]);
-    });
-
-    // Still the second row's wizard, not the first's arriving late.
-    expect(screen.getByTestId('closeout-wizard')).toHaveTextContent('wizard for shift-2');
-    expect(screen.getByTestId('closeout-wizard')).toHaveTextContent('0 outstanding');
-  });
-
-  // `useSignupWindow` re-renders on the clock but returns one identity across
-  // ticks, so a useMemo keyed on it alone froze the queue at first render: a
-  // shift whose end passed while the page stayed open never appeared.
-  it('picks up a shift whose end passes while the page is open', async () => {
+  // Which shifts are waiting is the server's answer and it only answers when
+  // asked, so a shift ending while the officer watches the queue used to appear
+  // only because the client re-filtered a date range it already held. Reading
+  // the backlog endpoint took that away; polling on the clock the badges
+  // already run on is what puts it back. The old test could only pass by
+  // mocking the endpoint returning a shift that had not ended — a response it
+  // is defined never to give.
+  it('picks up a shift that starts waiting while the page is open', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const start = Date.parse('2026-09-06T04:00:00Z');
-    vi.setSystemTime(start);
-    // Ends two minutes from now — after the first render, before the tick.
-    mockGetBacklog.mockResolvedValue({
-      shifts: [
-        {
-          ...unclosedShift,
-          shift_date: '2026-09-06',
-          start_time: '2026-09-05T20:00:00Z',
-          end_time: '2026-09-06T04:02:00Z',
-        },
-      ],
-      total: 1,
-      skip: 0,
-      limit: 200,
-    });
+    vi.setSystemTime(Date.parse('2026-09-06T04:00:00Z'));
+    mockGetBacklog.mockReset();
+    mockGetBacklog
+      .mockResolvedValueOnce({ shifts: [], total: 0, skip: 0, limit: 200 })
+      .mockResolvedValue({ shifts: [unclosedShift], total: 1, skip: 0, limit: 200 });
 
     renderWithRouter(<CloseoutQueueSection />);
     expect(await screen.findByText(/Every shift is closed out/)).toBeInTheDocument();
 
     await act(async () => {
-      vi.setSystemTime(start + 3 * 60_000);
       // Past the clock's own 30-second bucket, so the tick fires.
       await vi.advanceTimersByTimeAsync(60_000);
     });
 
     expect(screen.getByText(/1 shift waiting to be closed out/)).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  // The poll must not take the page out from under an officer mid-close-out:
+  // `load` clears `openRow`, so an unattended refresh would unmount a wizard
+  // holding attendance times and call counts that are not saved until Next.
+  it('does not poll while a wizard is open', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getByRole('button', { name: /Close out/ }));
+    await screen.findByTestId('closeout-wizard');
+    const callsBefore = mockGetBacklog.mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120_000);
+    });
+
+    expect(mockGetBacklog.mock.calls.length).toBe(callsBefore);
+    expect(screen.getByTestId('closeout-wizard')).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  // A poll that fails is not evidence the queue is empty. Blanking a correct
+  // list because one background request lost the network would be the poll
+  // doing harm nobody asked for; the next tick tries again.
+  it('leaves the last good queue alone when a poll fails', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockGetBacklog.mockReset();
+    mockGetBacklog
+      .mockResolvedValueOnce({ shifts: [unclosedShift], total: 1, skip: 0, limit: 200 })
+      .mockRejectedValue(new Error('nope'));
+
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(screen.getByText(/Engine 1/)).toBeInTheDocument();
+    expect(screen.queryByText(/did not load/)).not.toBeInTheDocument();
     vi.useRealTimers();
   });
 
@@ -327,6 +322,19 @@ describe('CloseoutQueueSection', () => {
     // Not still "Checking…": the page has stopped claiming the answer is on
     // its way, which is what the endless spinner did.
     expect(screen.queryByText('Checking…')).not.toBeInTheDocument();
+  });
+
+  // Two contradictory descriptions of the same queue, one screen apart. The
+  // rows are gated on the settings; the cap notice counting them was not, so a
+  // settings failure printed "The oldest 1 of 412 shifts waiting are listed"
+  // directly beneath an alert saying nothing is listed.
+  it('does not count listed rows while the settings failure says none are', async () => {
+    storeState.settingsLoaded = false;
+    mockGetBacklog.mockResolvedValue({ shifts: [unclosedShift], total: 412, skip: 0, limit: 200 });
+    renderWithRouter(<CloseoutQueueSection />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/scheduling settings did not load/);
+    expect(screen.queryByText(/are listed/)).not.toBeInTheDocument();
   });
 
   beforeEach(() => {
@@ -459,20 +467,5 @@ describe('CloseoutQueueSection', () => {
     await screen.findByText(/Engine 1/);
 
     expect(screen.queryByText(/oldest/)).not.toBeInTheDocument();
-  });
-
-  // A crew still out is not a backlog. The cushion is the department's own
-  // number, read from the same settings the roster lock stands on.
-  it('leaves an open-ended shift alone while it is still inside the cushion', async () => {
-    const startedAnHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    mockGetBacklog.mockResolvedValue({
-      shifts: [{ ...unclosedShift, start_time: startedAnHourAgo, end_time: undefined }],
-      total: 1,
-      skip: 0,
-      limit: 200,
-    });
-    renderWithRouter(<CloseoutQueueSection />);
-
-    expect(await screen.findByText(/Every shift is closed out/)).toBeInTheDocument();
   });
 });

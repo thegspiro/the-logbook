@@ -14,9 +14,17 @@
  * own choosing, so a shift left unclosed before the range began was counted
  * there and missing here.
  *
- * `closeoutQueue` stays, as the presentation rule: it reads the board's own
- * `shiftEndInstant` for the waiting label, so an open-ended shift is described
- * here against the department's cushion exactly as the roster lock judges it.
+ * `closeoutQueue` stays, but only as the presentation rule: it reads the board's
+ * own `shiftEndInstant` for the waiting label, so an open-ended shift is
+ * described here against the department's cushion exactly as the roster lock
+ * judges it. It no longer decides membership, and must not — the cushion comes
+ * from settings this tab caches, so re-testing the server's answer against a
+ * stale one drops rows the server had just declared overdue.
+ *
+ * Because membership is now only ever the server's answer, the queue is re-read
+ * on the same clock the badges age on. Without that the page stops discovering
+ * work the moment it opens: a shift ending while the officer watches it would
+ * never appear.
  *
  * **There is one close-out implementation, not two.** A department recording a
  * call count gets the three-step wizard, opened in place on the row; every
@@ -124,18 +132,20 @@ const CloseoutQueueSection: React.FC = () => {
   // officer most recently opened.
   const openId = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     const mine = ++requestId.current;
-    // A checklist request still in flight would otherwise stay current and
-    // reopen its wizard on top of the refreshed list — the row the officer
-    // closed by refreshing, coming back on its own a moment later.
-    openId.current += 1;
-    setOpenRow(null);
-    setPreparing(null);
-    setChecksFailed(null);
-    setChecksUnknown(null);
-    setLoading(true);
-    setFailed(false);
+    if (!quiet) {
+      // A checklist request still in flight would otherwise stay current and
+      // reopen its wizard on top of the refreshed list — the row the officer
+      // closed by refreshing, coming back on its own a moment later.
+      openId.current += 1;
+      setOpenRow(null);
+      setPreparing(null);
+      setChecksFailed(null);
+      setChecksUnknown(null);
+      setLoading(true);
+      setFailed(false);
+    }
     try {
       const result = await schedulingService.getShiftsNeedingCloseout({ limit: PAGE_SIZE });
       if (mine !== requestId.current) return;
@@ -145,15 +155,22 @@ const CloseoutQueueSection: React.FC = () => {
       // against a length silently answers false — which is the branch that
       // decides whether the officer is told the list is capped.
       setTotal(result.total ?? 0);
+      if (quiet) setFailed(false);
     } catch {
       // Said rather than swallowed: an empty queue and a failed load look
       // identical, and one of them tells an officer there is no work waiting.
-      if (mine !== requestId.current) return;
+      //
+      // A failed poll is the exception: it leaves the last good list on screen
+      // untouched rather than replacing a correct queue with an error, and the
+      // next tick tries again half a minute later. Blanking a working page
+      // because one background request lost the network would be the poll doing
+      // harm the officer never asked for.
+      if (mine !== requestId.current || quiet) return;
       setFailed(true);
       setShifts([]);
       setTotal(0);
     } finally {
-      if (mine === requestId.current) setLoading(false);
+      if (mine === requestId.current && !quiet) setLoading(false);
     }
   }, []);
 
@@ -161,9 +178,39 @@ const CloseoutQueueSection: React.FC = () => {
     void load();
   }, [load]);
 
-  // The department's own cushion decides when an open-ended shift is over, so
-  // the queue waits for the settings rather than listing against the default
-  // and re-listing a moment later.
+  // Which shifts are waiting is the server's answer and it only answers when
+  // asked, so without this the page stops discovering work the moment it opens:
+  // a shift ending while an officer watches the queue never appears, and the
+  // client-side re-filtering that used to make it appear is exactly what let
+  // this page and the hub's count describe different populations.
+  //
+  // On the clock the badges already run on, so there is no second timer, and
+  // skipped in the two states where a refresh would do damage rather than good:
+  // while a wizard is open, because replacing the list under it would unmount
+  // the officer's unsaved close-out; and while the page has never successfully
+  // loaded, because the visible Retry is the officer's to press.
+  const pollable = openRow === null && !loading && !failed;
+  // The tick this effect has already acted on. Without it the effect fires on
+  // mount too — a second identical request beside the one the mount effect just
+  // made — and again every time `pollable` flips, rather than only when the
+  // clock has actually moved. A tick that passes while a wizard is open is
+  // marked as spent rather than deferred: catching up the moment the officer
+  // closes the row would refresh the list under the click that closed it.
+  const lastPolled = useRef(clock);
+  useEffect(() => {
+    if (clock === lastPolled.current) return;
+    lastPolled.current = clock;
+    if (!pollable) return;
+    void load({ quiet: true });
+    // `clock` is what makes this run again — it advances every 30 seconds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock, pollable]);
+
+  // The department's own cushion decides when an open-ended shift was over, so
+  // the waiting badges wait for the settings rather than labelling against the
+  // default and re-labelling a moment later. Membership is not in question
+  // here — `closeoutQueue` no longer filters — only how long each row has
+  // waited.
   const queue = useMemo(
     () => (settingsLoaded ? closeoutQueue(shifts, window_, Date.now()) : []),
     // `clock` is the dependency that matters and is deliberately not used in
@@ -297,7 +344,11 @@ const CloseoutQueueSection: React.FC = () => {
           of the backlog, which is the right part to work first — but the count
           in the hub is the whole of it, and an officer who closes these and
           sees the number still standing needs to know why. */}
-      {!loading && !failed && total > shifts.length && (
+      {/* Gated on `settingsLoaded` as well, because that is what gates the rows
+          it is describing. Without it a settings failure showed this notice
+          counting rows the alert directly above it says are not listed — two
+          contradictory descriptions of the same queue, one screen apart. */}
+      {!loading && !failed && settingsLoaded && total > shifts.length && (
         <div className="alert-warning text-sm" role="alert">
           The oldest {shifts.length} of {total} shifts waiting are listed. Close these out and refresh for the rest.
         </div>

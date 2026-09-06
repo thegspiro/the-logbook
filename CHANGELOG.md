@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ones could sit on page three. The list is capped at one page of 200 and says
   so when the backlog is longer, rather than letting a cap read as the end of
   the work.
+- **The queue refreshes itself as shifts become eligible.** The page no longer
+  re-tests the server's answer against its own cached cushion — an officer who
+  lowered the cushion elsewhere made every other open tab drop rows the server
+  had just declared overdue, and the page then read "Every shift is closed out"
+  with a positive total beside it. Membership is the server's answer alone, so
+  the queue is re-read on the thirty-second clock the waiting badges already
+  run on. The refresh is skipped while a close-out wizard is open, so it cannot
+  unmount unsaved entries, and a failed refresh leaves the last good list on
+  screen rather than blanking a working page.
 
 ### Events and Training pages say which hub they belong to (2026-09-06)
 
