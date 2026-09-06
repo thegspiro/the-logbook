@@ -13,6 +13,7 @@ import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import type { Budget } from '../types';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 // =============================================================================
 // Budget Progress Bar
@@ -150,6 +151,7 @@ const BudgetsPage: React.FC = () => {
   if (isLoading && budgets.length === 0) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Budgets</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Budget allocations and utilization by fiscal year</p>
@@ -161,6 +163,8 @@ const BudgetsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

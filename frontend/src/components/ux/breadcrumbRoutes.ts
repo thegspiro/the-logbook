@@ -103,7 +103,10 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // ── Sections within a module ───────────────────────────────────────────
   '/finance/budgets': { permissions: ['finance.view'] },
   '/finance/check-requests': { permissions: ['finance.view'] },
-  '/finance/expenses': { permissions: ['finance.view'] },
+  // Registered for its label: the segment is "expenses" while the page's own
+  // heading, the detail page's back link and the testing registry all call it
+  // Expense Reports.
+  '/finance/expenses': { label: 'Expense Reports', permissions: ['finance.view'] },
   '/finance/purchase-requests': { permissions: ['finance.view'] },
   '/finance/settings': { permissions: ['finance.manage'] },
   '/grants/applications': { permissions: ['fundraising.view'] },

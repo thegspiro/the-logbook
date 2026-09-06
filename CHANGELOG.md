@@ -28,6 +28,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seeded position and rank, so this changes no one's access today; it removes
   the second name.
 
+### Finance and Elections pages keep their trail in every state (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the six Finance section pages.** Budgets, Purchase
+  Requests, Expense Reports, Check Requests, Dues and Finance Settings had none,
+  while the detail and form pages beneath them did — so a trail appeared once
+  you opened a record and disappeared when you went back to the list it came
+  from.
+- **A trail on the election detail page, in all three of its states.** Its URL
+  is `/elections/:electionId`, and a generated trail skips the id and then
+  suppresses itself for having only one crumb, so the page showed nothing. Its
+  loading and not-found branches offered no route away at all — not even the
+  "Back to Elections" link the loaded page carries — which is what a member
+  following a stale election link landed on.
+
+**Fixed**
+
+- **Four Finance pages showed their trail only after loading finished.** The
+  three request forms and the approval-chain settings rendered `<Breadcrumbs />`
+  in the loaded branch and not in the skeleton branch above it. This is the
+  mirror of the defect fixed earlier in the same directory, where two detail
+  pages had a trail _while_ loading and lost it once the record arrived.
+- **The Expense Reports crumb no longer reads "Expenses".** The page heading,
+  the detail page's back link and the testing registry all call it Expense
+  Reports; only the URL segment says otherwise.
+
+**Changed**
+
+- **The finance breadcrumb test now checks every branch a page can return,
+  rather than the last one.** It was written against the first direction of this
+  defect and was blind to the second by construction, which is how four pages
+  kept a trail-less loading branch. Both directions are now covered, and the
+  failure names the branch index.
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
