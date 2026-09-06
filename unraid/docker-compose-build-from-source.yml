@@ -58,7 +58,11 @@ services:
     networks:
       - logbook-internal
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep PONG",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -168,7 +172,13 @@ services:
     networks:
       - logbook-internal
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3001/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:3001/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -202,7 +212,8 @@ services:
     networks:
       - logbook-internal
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test:
+        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 3s
       retries: 3

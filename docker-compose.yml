@@ -88,7 +88,11 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a $${REDIS_PASSWORD} --no-auth-warning ping | grep PONG",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -207,7 +211,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import requests; r = requests.get('http://localhost:3001/health', timeout=5); exit(0 if r.status_code in (200, 503) else 1)\""]
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import requests; r = requests.get(''http://localhost:3001/health'', timeout=5); exit(0 if r.status_code in (200, 503) else 1)"',
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -215,7 +223,8 @@ services:
     networks:
       - intranet-network
     # Exec form so uvicorn receives SIGTERM for graceful shutdown
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001", "--reload"]
+    command:
+      ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001", "--reload"]
     init: true
     stop_grace_period: 15s
     deploy:
