@@ -222,10 +222,27 @@ class PushService:
         untrusted client value enters.
         """
         endpoint_hash = hash_endpoint(endpoint)
+        # A locking read from the start, not a plain SELECT: the self-refresh
+        # decision just below depends on *who currently owns this endpoint*,
+        # and a plain read can answer that from a snapshot already stale by
+        # the time this request began (its transaction's snapshot was fixed
+        # when `current_user` was loaded upstream, same shape as the count
+        # below). Deciding "genuine refresh" from a stale answer is how a
+        # concurrent transfer away from this endpoint could be overwritten
+        # right back by a refresh that still believes it owns it — the row
+        # ends up assigned to the new owner with the old owner's encryption
+        # keys, so a notification meant for the new owner gets pushed (and
+        # is decryptable) on the old owner's device. Locking it also closes
+        # a pre-existing gap where two brand-new subscribes for the same
+        # endpoint could both decide "no existing row" and race the INSERT's
+        # unique constraint. Two different endpoints are never contended
+        # between two different callers, so this lock cannot itself deadlock
+        # against another caller's row — only the sorted user-row locks
+        # below are ever shared across callers.
         result = await self.db.execute(
-            select(PushSubscription).where(
-                PushSubscription.endpoint_hash == endpoint_hash
-            )
+            select(PushSubscription)
+            .where(PushSubscription.endpoint_hash == endpoint_hash)
+            .with_for_update()
         )
         existing = result.scalar_one_or_none()
 

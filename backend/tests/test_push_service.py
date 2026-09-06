@@ -642,3 +642,94 @@ class TestConcurrentEndpointSwapDoesNotDeadlock:
             await session_a.close()
             await session_b.close()
             await _cleanup_users(org_a, org_b)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestConcurrentRefreshDuringTransferStaysConsistent:
+    async def test_a_refresh_racing_a_transfer_never_splits_owner_from_keys(self):
+        """Codex round 3 on MSG-13: the self-refresh fast path decided
+        "I already own this" from a plain, unlocked read. If a transfer
+        away from the old owner committed in between that read and the
+        refresh's own commit, the refresh would still write its (old
+        owner's) encryption keys onto a row a transfer had just reassigned
+        to someone else -- leaving `user_id` pointing at the new owner
+        while `p256dh`/`auth` still belong to the old owner's browser. A
+        push meant for the new owner would then be encrypted with keys the
+        OLD owner's device holds the matching private key for, and
+        delivered there instead.
+
+        Real committed rows, two independent sessions, and asyncio.gather:
+        the old owner "refreshes" (re-subscribes with new keys, believing
+        they still own the endpoint) at the same moment a different user
+        claims that same endpoint. Whichever request the database
+        serializes first must fully decide the row -- user_id and its keys
+        must always agree on which request produced them, never a mix.
+        """
+        org_old, user_old = str(uuid.uuid4()), str(uuid.uuid4())
+        org_new, user_new = str(uuid.uuid4()), str(uuid.uuid4())
+        endpoint = "https://push.example/contested-device"
+        old_keys = _client_keys()
+        new_keys = _client_keys()
+
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_user(setup, org_old, user_old, "OLD")
+            await _insert_org_and_user(setup, org_new, user_new, "NEW")
+            await setup.commit()
+
+        session_old = database_manager.session_factory()
+        session_new = database_manager.session_factory()
+        try:
+            svc_old = PushService(session_old)
+            svc_new = PushService(session_new)
+            # OLD owns the endpoint to start.
+            await svc_old.subscribe(org_old, user_old, endpoint, *old_keys)
+            await session_old.commit()
+
+            async def act(svc, session, org_id, user_id, keys):
+                sub = await svc.subscribe(org_id, user_id, endpoint, *keys)
+                await session.commit()
+                return sub
+
+            result_old, result_new = await asyncio.gather(
+                act(svc_old, session_old, org_old, user_old, old_keys),
+                act(svc_new, session_new, org_new, user_new, new_keys),
+                return_exceptions=True,
+            )
+
+            for label, result in (
+                ("OLD's refresh", result_old),
+                ("NEW's transfer", result_new),
+            ):
+                assert not isinstance(
+                    result, BaseException
+                ), f"{label} raised {result!r}"
+
+            async with database_manager.session_factory() as check:
+                row = (
+                    await check.execute(
+                        text(
+                            "SELECT user_id, p256dh FROM push_subscriptions"
+                            " WHERE endpoint_hash = :h"
+                        ),
+                        {"h": hash_endpoint(endpoint)},
+                    )
+                ).one()
+            final_user_id, final_p256dh = row[0], row[1]
+
+            if final_user_id == str(user_old):
+                assert final_p256dh == old_keys[0], (
+                    "row belongs to OLD but carries NEW's encryption key -- "
+                    "a push meant for NEW would be decryptable on OLD's device"
+                )
+            else:
+                assert final_user_id == str(user_new)
+                assert final_p256dh == new_keys[0], (
+                    "row belongs to NEW but carries OLD's encryption key -- "
+                    "a push meant for NEW would be decryptable on OLD's device"
+                )
+        finally:
+            await session_old.rollback()
+            await session_new.rollback()
+            await session_old.close()
+            await session_new.close()
+            await _cleanup_users(org_old, org_new)
