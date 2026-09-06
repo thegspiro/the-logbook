@@ -56,8 +56,19 @@ the shared `onHandQuantity()` helper, so a lot-stocked item's detail page
 still showed stale stock despite MSUP-8 already attaching lot stock to the
 response. **MSUP-15** (LOW, flagged) — the item edit form's Quantity field
 has no lot-stocked awareness; a product/UX decision, not a mechanical fix.
-Full local gate green including the full backend suite (11,453 passed).
-See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 4.
+A fifth Codex round then found the MSUP-7→13 fix chain had itself
+regressed a real capability: closing the `active`/RETIRED bypass left a
+caller holding only `inventory.manage_medical` (no broader
+`inventory.manage`) with no way to retire a medical item at all, since the
+only retire route lived on the general inventory router gated on
+`inventory.manage` alone. **MSUP-16** (MED, fixed): added a domain-pinned
+`POST /medical-supplies/items/{id}/retire` mirroring the general route
+behind this router's usual permission/domain pattern. **MSUP-17** (LOW,
+comment hygiene, fixed): `update_item`'s rejection comment had drifted
+into review chronology ("a Codex review caught three gaps...") instead of
+stating the durable invariant; rewritten.
+Full local gate green including the full scoped test run (735 passed).
+See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 5.
 
 ---
 
@@ -299,6 +310,62 @@ updated: `docs/security-review/MSUP-23-medical-supplies.md` → Pass 4,
 MSUP-13 (supersedes MSUP-12), MSUP-14, MSUP-15. Rotation row 23 still ⏳ —
 awaiting owner merge of PR #2301. Next: 24 Meetings & minutes, once this PR
 merges.
+
+---
+
+### 2026-09-06 — Feature 23 (Medical supplies), pass 5 — fifth Codex round: the fix chain itself had regressed a capability
+
+A fifth Codex round, reviewing the commit that fixed MSUP-13, found one
+functional regression the MSUP-7→13 fix chain had introduced across its
+own rounds, plus a comment that had drifted into review chronology:
+
+- **Every route on `medical_supplies.py` grants `inventory.manage_medical`
+  the same access as the broader `inventory.manage`** — that's the whole
+  point of the router, letting a supply officer manage medical stock
+  without blanket inventory access. Retirement was the one exception: the
+  only retire route lived on the general inventory router, gated on
+  `inventory.manage` alone, with no domain-pinned equivalent here. Before
+  MSUP-7, a medical-only manager could still reach deactivation indirectly
+  via `PATCH /medical-supplies/items/{id}` with `{"active": false}`
+  (unsafe, but reachable); MSUP-7 → MSUP-12 → MSUP-13 progressively closed
+  that path for good reason, but none of those fixes added a replacement —
+  so as of MSUP-13, such a caller had no way to retire a medical item at
+  all. This regression was introduced by this PR's own earlier rounds, not
+  a pre-existing gap.
+- `update_item`'s rejection comment described "a first attempt" and
+  enumerated "three gaps a Codex review caught" — accurate history, but
+  code that reads as review-round narrative instead of a durable
+  invariant, and it will drift the moment the guard changes again.
+
+**MSUP-16 (MED, fixed):** added `POST
+/medical-supplies/items/{item_id}/retire` (`retire_medical_item`), gated
+on the router's usual `require_permission("inventory.manage_medical",
+"inventory.manage")`, domain-checked via the existing
+`_require_medical_item` before delegating to
+`InventoryService.retire_item` — a thin wrapper mirroring `inventory.py`'s
+own retire route behind this router's domain pin, not a second
+implementation.
+
+**MSUP-17 (LOW, comment hygiene, fixed):** rewrote `update_item`'s
+rejection comment to state the durable invariant directly (retirement
+needs a locked fetch, the blocker checks, `status`/`condition`/`active`
+set together, and a dedicated audit event — this method has none of that
+and must not approximate it inline), with no review chronology.
+
+Guard tests: `TestItemDomainPinning` in `test_medical_supplies_domain.py`
+gained 3 cases — retiring a gear item is a 404 with `retire_item` never
+awaited, a successful retire delegates to the service with the request's
+notes and logs a `medical_item_retired` audit event, and a blocker error
+surfaces as a clean 400 with no audit event.
+
+Full gate: flake8/black/isort clean, `validate_migrations.py --strict`
+(single head, no schema change), `test_medical_supplies_domain.py` (30
+passed), `test_endpoint_auth_coverage.py` (1 passed), and the full
+`inventory or medical_supplies`-scoped run (735 passed, 1 pre-existing
+skip). Findings doc updated:
+`docs/security-review/MSUP-23-medical-supplies.md` → Pass 5, MSUP-16,
+MSUP-17. Rotation row 23 still ⏳ — awaiting owner merge of PR #2301.
+Next: 24 Meetings & minutes, once this PR merges.
 
 ---
 

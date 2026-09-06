@@ -1966,31 +1966,21 @@ class InventoryService:
                 if new_qty < 0:
                     return None, "Pool item quantity cannot be negative"
 
-            # `active` is not a field this method accepts, and neither is a
-            # `status`/`condition` pair of RETIRED — both are retire_item's
-            # job alone. A first attempt gated a bare `active` clear on the
-            # same checks retire_item runs (assignment, checkout, pool
-            # issuance) directly in this unlocked method, but a Codex review
-            # caught three gaps that check alone could not close:
-            #
-            # 1. The check ran against a read this method does not lock, so
-            #    a concurrent assign/checkout could still land between the
-            #    check and this call's own commit.
-            # 2. A caller could clear `active` while leaving `status` at
-            #    AVAILABLE, which assign_item_to_user/checkout_item gate on
-            #    rather than `active` — letting the "deactivated" item be
-            #    handed out again immediately.
-            # 3. A caller could skip `active` entirely and send
-            #    {"status": "retired", "condition": "retired"} directly:
-            #    that pair passes `_validate_item_state` (RETIRED has no
-            #    assigned-user rule blocking it) with none of retire_item's
-            #    blocker checks and no `active` sync at all.
-            #
-            # retire_item already closes all three, atomically (locked
-            # fetch, blocker checks, status/condition/active set together,
-            # dedicated audit trail); nothing in this codebase reactivates a
-            # retired item, so there is no legitimate use of any of these
-            # here to preserve.
+            # Taking an item out of active inventory is retire_item's job
+            # alone, never this method's — whether requested directly
+            # (`active: false`) or via the equivalent `status`/`condition`
+            # pair (`{"status": "retired", "condition": "retired"}`, which
+            # `_validate_item_state` otherwise allows on its own). Retirement
+            # requires a locked fetch (so a concurrent assign/checkout can't
+            # land between the blocker check and the commit), the same
+            # blocker checks (assignment, active checkout, unreturned pool
+            # issuance), `status`/`condition`/`active` set together (a
+            # partial change leaves `assign_item_to_user`/`checkout_item` —
+            # which gate on `status`, not `active` — free to hand the item
+            # out again), and a dedicated audit event. This method has none
+            # of that machinery and must not approximate it inline; nothing
+            # in this codebase reactivates a retired item, so there is no
+            # legitimate use of either route here to preserve.
             if (
                 "active" in update_data
                 or update_data.get("status") == ItemStatus.RETIRED.value

@@ -896,3 +896,80 @@ on-hand count.
 MSUP-4, MSUP-11, and the new MSUP-15 remain the only open, flagged items.
 MSUP-13 and MSUP-14 are new fixes; MSUP-1 through MSUP-12 all re-verified
 intact.
+
+## Pass 5 — 2026-09-06
+
+A fifth Codex round, reviewing the commit that fixed MSUP-13, found one
+functional regression the fix chain itself had introduced, plus a comment
+in `update_item` that had drifted into review chronology instead of a
+durable explanation.
+
+### MSUP-16 — MED — closing the `active`/RETIRED bypass left medical-only managers with no way to retire a medical item at all — ✅ FIXED
+
+**What:** Every route on `medical_supplies.py` grants `inventory.manage_medical`
+the same access as the broader `inventory.manage` — that OR-permission
+pattern is the whole point of the router, letting a supply officer manage
+medical stock without also holding blanket inventory access. The one
+exception was retirement: the only retire route lived on the general
+inventory router (`POST /inventory/items/{id}/retire`), gated on
+`inventory.manage` alone, with no domain-pinned equivalent on
+`medical_supplies.py`. Before MSUP-7, a medical-only manager could still
+reach deactivation indirectly through `PATCH /medical-supplies/items/{id}`
+with `{"active": false}` (unsafe, but reachable); MSUP-7 → MSUP-12 → MSUP-13
+progressively closed that path for good reason (it bypassed retire_item's
+blocker checks, locking, and status sync), but none of those fixes added a
+replacement — so as of MSUP-13, a caller holding only
+`inventory.manage_medical` had **no way to retire a medical item at all**.
+This is a real regression this PR's own fix chain introduced, not a
+pre-existing gap: MSUP-7's first commit is what started removing the only
+path such a caller had.
+
+**Where:** `app/api/v1/endpoints/medical_supplies.py`.
+
+**Fix:** added `POST /medical-supplies/items/{item_id}/retire`
+(`retire_medical_item`), gated on the router's usual
+`require_permission("inventory.manage_medical", "inventory.manage")`,
+domain-checked via the existing `_require_medical_item` before delegating
+to `InventoryService.retire_item` — a thin wrapper, not a second
+implementation, mirroring `inventory.py`'s own retire route (same
+`ItemRetireRequest` schema, same `if error: raise 400` shape) behind this
+router's domain pin.
+
+**Guard tests:** `TestItemDomainPinning` in `test_medical_supplies_domain.py`
+gained 3 cases — retiring a gear item is a 404 with `retire_item` never
+awaited (domain pinning holds here too), a successful retire delegates to
+`service.retire_item` with the request's notes and logs a
+`medical_item_retired` audit event, and a blocker error from `retire_item`
+(e.g. still assigned) surfaces as a clean 400 with no audit event.
+
+### MSUP-17 — LOW, comment hygiene — `update_item`'s rejection comment read as review chronology, not a durable invariant — ✅ FIXED
+
+**What:** The comment above `update_item`'s `active`/RETIRED rejection
+described "a first attempt", enumerated "three gaps a Codex review
+caught", and narrated how each fix round closed them. That is accurate
+history, but it belongs in this findings doc and the PR description
+(both already carry it) — not in the code, where it reads as unstable
+process narrative that will drift the moment the guard changes again, and
+obscures the one thing a future reader actually needs: _why_ this method
+must not attempt retirement inline.
+
+**Fix:** rewritten to state the durable invariant directly — retirement
+requires a locked fetch, the blocker checks, `status`/`condition`/`active`
+set together, and a dedicated audit event, and `update_item` has none of
+that machinery and must not approximate it. No review chronology, no
+enumerated fix history.
+
+### Completion gate (pass 5)
+
+| Check                                                                                                                          | Result                                 |
+| ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| `flake8` / `black --check` / `isort --check-only` (medical_supplies.py, inventory_service.py, test_medical_supplies_domain.py) | clean                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                              | PASSED — single head, no schema change |
+| `test_medical_supplies_domain.py`                                                                                              | 30 passed (27 existing + 3 new)        |
+| `test_endpoint_auth_coverage.py` (new route registered correctly)                                                              | 1 passed                               |
+| `pytest -k "inventory or medical_supplies"` (full scoped run)                                                                  | 735 passed, 1 pre-existing skip        |
+
+MSUP-4, MSUP-11, and MSUP-15 remain the only open, flagged items. MSUP-16
+is a new fix (a genuine functional regression introduced by this same PR's
+earlier rounds, not a pre-existing gap); MSUP-17 is comment hygiene, no
+behavior change.

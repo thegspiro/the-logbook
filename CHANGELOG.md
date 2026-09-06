@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the retire action itself now re-checks the item's current holder right
   before deactivating it, closing a narrow window where a member could be
   assigned the item in the instant before it was retired.
+- **A medical-supplies manager without broader inventory access lost the
+  ability to retire a medical item.** Closing the deactivation gap above
+  removed the only path such a manager had — the dedicated retire action
+  existed only on the general inventory permission. Medical supplies now
+  has its own retire action under the same medical-supplies permission
+  every other action on that screen already uses.
 - **An item's detail page could show stale stock for consumables tracked by
   lot.** The list view already computed on-hand stock from dated lots for
   any item stocked that way; the single-item detail page (medical supplies
