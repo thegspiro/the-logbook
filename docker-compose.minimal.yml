@@ -53,7 +53,17 @@ services:
   # Backend with single worker
   backend:
     # Exec form so uvicorn receives SIGTERM for graceful shutdown
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001", "--workers", "1"]
+    command:
+      [
+        "uvicorn",
+        "main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "3001",
+        "--workers",
+        "1",
+      ]
     init: true
     stop_grace_period: 15s
     environment:

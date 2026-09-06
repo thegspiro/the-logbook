@@ -310,6 +310,31 @@ Events support configurable reminders that are sent via the notification system:
 
 After an event ends, the event organizer receives an automatic notification prompting them to review and finalize the attendance records. This ensures attendance data is complete and accurate for compliance tracking.
 
+**Finalizing closes the event.** The roster is fixed, hours are credited to
+everyone who was checked in, and the linked training record is written.
+Reopening it afterwards needs `events.reopen_attendance` — deliberately *not*
+part of `events.manage`, so that the organizer who closed an event cannot
+quietly reopen it and change numbers already fed into admin hours, training
+records and compliance. It is held by the three chief ranks and the president.
+
+> **⚠️ If you tried to reopen an event on 24 August 2026, check whether it is
+> actually open.** Reopening returned an error for any event **that has a
+> location** — most real events — and it did so _after_ the reopen had already
+> gone through. **The event really was reopened while you were shown a
+> failure.** So a chief who tried it, concluded it had not worked and moved on
+> may have an event sitting open that they believe is closed, with its roster
+> editable and its hours in a state nobody expects. Events with no location were
+> never affected, which is exactly why this reached the field. Fixed 25 August
+> 2026.
+>
+> **Same dates, second thing to re-check.** If you reopened an event to correct
+> somebody's hours and then re-finalized, the member's training record picked up
+> the correction but the certification and phase totals behind it did not — so a
+> member corrected downward could still read at the original figure on a
+> compliance screen. Fixed going forward; it does **not** retroactively repair a
+> record already restated under the old behaviour, so re-check anyone you
+> corrected that way.
+
 ### Training Sessions from Events
 
 Training-type events can be linked to a **Training Session** for automatic record-keeping:
@@ -1111,6 +1136,8 @@ Events support three check-in window modes that control when QR and manual check
 | "Already checked in" error                                 | The member has already checked in. Use the monitoring view to verify or override times.                                                                                                                                                                                                                                                   |
 | Cannot RSVP to an event                                    | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to.                                                                                                                                                                                                                                 |
 | Training records not created from event                    | The event must have a linked Training Session that has been finalized and approved.                                                                                                                                                                                                                                                       |
+| Reopened an event on 24 Aug 2026, saw an error              | The reopen **worked** — it committed, then failed while building the response, for any event with a location. Check whether the event is actually open and finalize or correct it deliberately. Fixed 25 Aug 2026                                                                                                                          |
+| Corrected hours, but compliance still shows the old figure  | Before 25 Aug 2026, re-finalizing a reopened event refreshed the training record without restating the certification and phase totals behind it. Fixed going forward; records already restated under the old behaviour are not repaired retroactively, so re-check the member                                                              |
 | Minutes not showing attendees                              | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in.                                                                                                                                                                                                                    |
 | "Already voted" error                                      | Each member can only vote once per candidate/position (approval and ranked-choice elections allow additional votes for _different_ candidates or ranks). This is by design — votes are never overwritten.                                                                                                                                 |
 | Election results not visible                               | Results are gated until the election is closed **and** its scheduled end date has passed (or `results_visible_immediately` is on). If the election was closed early, flip "results visible immediately" on the closed election to show them now.                                                                                          |

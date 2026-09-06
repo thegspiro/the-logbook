@@ -16,7 +16,7 @@ The Events module manages department events with QR code check-in, recurring eve
 - **Booking Prevention** — Prevents double-booking of locations at the same time
 - **Event Attachments** — Upload documents, images, or files to events
 - **Reminders** — Configurable multi-tier reminders (e.g., 24 hours and 1 hour before)
-- **Post-Event Validation** — Organizers receive notifications to review/finalize attendance
+- **Post-Event Validation** — Organizers receive notifications to review/finalize attendance. **Finalizing closes the event**: the roster is fixed, hours are credited to everyone checked in, and the linked training record is written. Reopening needs `events.reopen_attendance`, deliberately kept out of `events.manage` so the organizer who closed an event cannot quietly reopen it and change numbers already fed into hours and compliance
 - **Past Events Tab** — Managers can browse historical events (hidden from regular members by default)
 - **Attendee Management** — Add/remove attendees directly from event detail page
 - **Training Integration** — Events can generate training sessions for attendance credit. _(2026-08-05)_ The reverse now exists too: generating a **course cohort** creates one event per class of a multi-class course (a recruit school's fifteen subjects), each with its linked training session and the roster already RSVP'd — see [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05)
@@ -692,3 +692,41 @@ Separately, the 30-second poll on both the QR page and the self-check-in page
 was being answered from the shared client cache — fresh for 30s, then stale for
 a further 60s — so **the window could open without the page noticing for 90
 seconds.** That payload now skips the cache, which is the whole point of it.
+
+## Two Corrections Worth Acting On _(24–25 August 2026)_
+
+Both concern reopening a finalized event, and both leave a department holding a
+belief about its own data that may be wrong. Neither is fixed retroactively.
+
+**Reopening returned 500 for any event with a `location_id` — and reopened it
+anyway.** `reopen_event_attendance` fetched the event with no eager loads while
+the endpoint serializes through `_build_event_response`, whose first read is
+`event.location_obj`; under the async session that lazy load is IO outside the
+greenlet context, so it raised `MissingGreenlet` **after the reopen had already
+committed**. The lock was genuinely cleared while the caller saw a failure.
+Events with a NULL `location_id` short-circuit on the foreign key and never
+reached the load, which is why it passed testing and failed in the field.
+
+> **Action:** any event somebody attempted to reopen on 24 August 2026 may be
+> open without their knowing. Check its actual state rather than trusting what
+> the screen said at the time.
+
+**Re-finalizing applied no delta to the totals behind the training record.** The
+progress ledger is idempotent per `(progress, source_type, source_id)`, so a
+re-finalize found its own prior entry and did nothing: the training record moved
+to the corrected hours while certification and phase totals kept the original
+figure. `apply_requirement_credit` now takes a `restate` flag, and the
+enrollment lookups include `COMPLETED` rows — when this session's own credit is
+what carried a member past 100%, an `ACTIVE`-only filter finds nothing to
+correct.
+
+> **Action:** re-check any member whose hours were corrected by reopening and
+> re-finalizing before 25 August 2026.
+
+**Related, same window:** the lock itself was a check followed by a hope. Every
+attendance writer now takes `SELECT ... FOR UPDATE` on the event row and
+finalize commits the close in the same transaction, so a check-in arriving
+mid-finalize blocks and then finds the event closed rather than landing as
+checked-in-but-uncredited behind a lock. The bulk paths (`update_future_events`,
+`cancel_series`, `delete_event_series`) were reading the finalized state without
+holding the rows at all.
