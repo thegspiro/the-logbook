@@ -133,6 +133,12 @@ export const EventTemplatesPage: React.FC = () => {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* The trail belongs in every branch, and most of all in this one: a
+            page that cannot load its content is where a route away from it
+            matters. Finance lost its trails the mirror-image way — rendered
+            while loading and gone once the record arrived. */}
+        <Breadcrumbs underHub="/events/admin" />
+
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button

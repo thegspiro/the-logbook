@@ -49,6 +49,9 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
   if (showWizard) {
     return (
       <div className={embedded ? '' : 'mx-auto max-w-4xl px-4 py-8'}>
+        {/* The wizard replaces the whole page, so the trail belongs here too —
+            otherwise the only way out of a focused flow is its own Cancel. */}
+        {!embedded && <Breadcrumbs underHub="/training/admin" />}
         <h2 className="text-theme-text-primary mb-6 text-xl font-semibold">New cohort</h2>
         <CohortWizard
           onCancel={() => setShowWizard(false)}
