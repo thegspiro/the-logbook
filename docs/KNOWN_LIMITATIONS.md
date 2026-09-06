@@ -2611,13 +2611,18 @@ is still unbounded. Same reachability as INT-7 before its fix: any of
 `notify_entity_created`, and an org admin can trigger any connector
 directly.
 
-**Not fixed — a genuine per-request deadline needs an `asyncio.wait_for()`-
+**Not fixed — a genuine per-request deadline needs an `asyncio.timeout()`-
 style wrapper around the whole request/response cycle, not a `Timeout`
 tweak** (no combination of httpx's `connect`/`read`/`write`/`pool` timeout
-knobs produces a total-duration cap), and touches every connector call site
-`create_integration_client()` is used from — the same shape of change INT-7
-turned out not to need, but this one does, since there is no single stream
-to intercept for elapsed time the way there was for byte count.
+knobs produces a total-duration cap). This does **not** need every
+connector call site touched: every connector already gets its client from
+`create_integration_client()`, so the fix is centralized the same way
+INT-7's `_SizeLimitedTransport` was — a small `httpx.AsyncClient` subclass
+constructed there whose `send()` wraps `super().send()` in
+`asyncio.timeout(N)`, covering connect, every read, and the full
+non-streaming body drain (`Response.aread()`) in one place. (Confirmed
+locally: wrapping `send()` this way raises `TimeoutError` and unwinds a
+slow `MockTransport` request cleanly at the deadline.)
 
 (Security review INT-27 pass 3, Codex round, 2026-09-06:
 `docs/security-review/INT-27-integrations.md`.)

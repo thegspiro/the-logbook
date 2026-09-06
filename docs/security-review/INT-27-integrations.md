@@ -259,10 +259,14 @@ above closes — the size cap aborts on byte count, not elapsed time, so it
 still stops the slow-drip scenario from consuming unbounded _memory_; the
 unbounded-_time_ half of a slow-drip request is a distinct, still-open
 gap, noted as a `KNOWN_LIMITATIONS.md` follow-up rather than fixed in this
-pass (a genuine wall-clock deadline needs an `asyncio.wait_for()`-style
-wrapper around the whole request, not a `Timeout` tweak, and touches the
-same ~seventeen call sites INT-7 itself would have if central enforcement
-hadn't been possible).
+pass (a genuine wall-clock deadline needs an `asyncio.timeout()`-style
+wrapper around the whole request, not a `Timeout` tweak — but, per a Codex
+correction on this same PR, that does not need every connector call site
+touched: every connector already gets its client from
+`create_integration_client()`, so the fix centralizes the same way this
+pass's `_SizeLimitedTransport` did, via an `httpx.AsyncClient` subclass
+constructed there whose `send()` wraps `super().send()` in
+`asyncio.timeout(N)`).
 
 **Impact (as originally written, now superseded by the two corrections
 above):** ~~every trigger for an outbound integration call requires

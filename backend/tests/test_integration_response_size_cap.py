@@ -17,6 +17,8 @@ set until something actually reads the stream) — with `content=`, the
 wrapping transport never gets a chance to intercept anything.
 """
 
+import gzip
+import os
 from unittest.mock import patch
 
 import httpx
@@ -26,6 +28,8 @@ from app.services.integration_services import base as base_module
 from app.services.integration_services.base import (
     MAX_RESPONSE_SIZE,
     ResponseTooLargeError,
+    UnsupportedContentEncodingError,
+    _environment_proxy_mounts,
     _SizeLimitedTransport,
     create_integration_client,
 )
@@ -83,6 +87,19 @@ async def test_create_integration_client_wires_the_size_limited_transport():
         await client.aclose()
 
 
+def _mock_public_dns():
+    """Mock DNS resolution to a public IP the way test_integrations_security.py
+    does — assert_outbound_url_safe() (called by every connector's
+    _assert_base_url_safe()) resolves the configured hostname before the
+    patched transport is ever reached, so a test running with no outbound
+    network access needs this or it fails on `Could not resolve hostname`
+    rather than on anything this file is testing."""
+    return patch(
+        "app.utils.url_validator.socket.getaddrinfo",
+        return_value=[(2, 1, 6, "", ("104.18.0.62", 0))],
+    )
+
+
 async def test_real_connector_call_aborts_on_an_oversized_response():
     """End-to-end through an actual connector (CalcomService), with only the
     network-facing httpx.AsyncHTTPTransport replaced — proving the cap is
@@ -98,6 +115,145 @@ async def test_real_connector_call_aborts_on_an_oversized_response():
             return await self._inner.handle_async_request(request)
 
     service = CalcomService({"api_base_url": "https://api.cal.com/v1", "api_key": "k"})
-    with patch.object(base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport):
-        with pytest.raises(ResponseTooLargeError):
-            await service.test_connection()
+    with _mock_public_dns():
+        with patch.object(
+            base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport
+        ):
+            with pytest.raises(ResponseTooLargeError):
+                await service.test_connection()
+
+
+async def test_gzip_bomb_is_rejected_before_expansion():
+    """INT-27/Codex, 2026-09-06: _SizeLimitedAsyncStream counts wire bytes,
+    which are the *compressed* bytes for an encoded response — httpx only
+    decompresses afterward in Response.aiter_bytes(). A small gzip body that
+    decodes to far more than MAX_RESPONSE_SIZE must never reach
+    response.content: it must be rejected for its Content-Encoding before
+    any decoding happens, not silently allowed through because the wire size
+    is under the cap."""
+    decoded = b"0" * (MAX_RESPONSE_SIZE + (1024 * 1024))  # decodes to >10MB
+    compressed = gzip.compress(decoded)
+    assert len(compressed) < 20_000  # wire size is nowhere near the cap
+
+    def dispatch(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-encoding": "gzip"},
+            stream=_ChunkedStream(compressed),
+        )
+
+    transport = _SizeLimitedTransport(
+        httpx.MockTransport(dispatch), max_bytes=MAX_RESPONSE_SIZE
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(UnsupportedContentEncodingError):
+            await client.get("https://example.test/bomb")
+
+
+async def test_identity_content_encoding_is_not_rejected():
+    """A response that explicitly declares Content-Encoding: identity (a
+    no-op encoding) must still be served — only a real compression scheme is
+    refused."""
+    body = b"y" * 100
+
+    def dispatch(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, headers={"content-encoding": "identity"}, stream=_ChunkedStream(body)
+        )
+
+    transport = _SizeLimitedTransport(
+        httpx.MockTransport(dispatch), max_bytes=MAX_RESPONSE_SIZE
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        response = await client.get("https://example.test/ok")
+        assert response.content == body
+
+
+async def test_create_integration_client_requests_identity_encoding():
+    """create_integration_client() asks servers not to compress at all, so a
+    well-behaved API never triggers the Content-Encoding rejection above."""
+    client = create_integration_client()
+    try:
+        assert client.headers.get("accept-encoding") == "identity"
+    finally:
+        await client.aclose()
+
+
+async def test_real_connector_call_aborts_on_a_gzip_bomb():
+    """Same end-to-end shape as
+    test_real_connector_call_aborts_on_an_oversized_response, but for a
+    compressed body whose wire size is under the cap and whose decoded size
+    is not."""
+    decoded = b"z" * (MAX_RESPONSE_SIZE + (1024 * 1024))
+    compressed = gzip.compress(decoded)
+    assert len(compressed) < 20_000
+
+    def dispatch(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-encoding": "gzip"},
+            stream=_ChunkedStream(compressed),
+        )
+
+    class _FakeNetworkTransport(httpx.AsyncBaseTransport):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._inner = httpx.MockTransport(dispatch)
+
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            return await self._inner.handle_async_request(request)
+
+    service = CalcomService({"api_base_url": "https://api.cal.com/v1", "api_key": "k"})
+    with _mock_public_dns():
+        with patch.object(
+            base_module.httpx, "AsyncHTTPTransport", _FakeNetworkTransport
+        ):
+            with pytest.raises(UnsupportedContentEncodingError):
+                await service.test_connection()
+
+
+async def test_environment_proxy_mounts_wraps_the_proxy_transport():
+    """INT-27/Codex, 2026-09-06: create_integration_client() passes an
+    explicit transport=, which makes httpx.AsyncClient skip its own
+    HTTP_PROXY/HTTPS_PROXY resolution (allow_env_proxies = trust_env and
+    transport is None). _environment_proxy_mounts() must replay that
+    resolution itself so a deployment relying on an egress proxy still gets
+    one — and the replayed proxy transport must still be size-limited."""
+    with patch.dict(
+        os.environ,
+        {"HTTP_PROXY": "http://proxy.example:8080", "HTTPS_PROXY": ""},
+        clear=False,
+    ):
+        # HTTPS_PROXY="" would be falsy to getproxies() for the https scheme,
+        # so only assert on the http:// mount to avoid depending on how the
+        # test runner's own ambient proxy env (if any) affects https://.
+        mounts = _environment_proxy_mounts(MAX_RESPONSE_SIZE)
+        http_transport = mounts.get("http://")
+        assert isinstance(http_transport, _SizeLimitedTransport)
+        assert http_transport._max_bytes == MAX_RESPONSE_SIZE
+        assert isinstance(http_transport._transport, httpx.AsyncHTTPTransport)
+
+
+async def test_create_integration_client_mounts_match_stock_httpx_resolution():
+    """Parity check: given the same environment, the mounts
+    create_integration_client() builds via _environment_proxy_mounts() must
+    resolve the same URL patterns httpx.AsyncClient() would have resolved on
+    its own with no transport= override — proving the replay doesn't miss or
+    add any NO_PROXY/HTTP_PROXY/HTTPS_PROXY pattern."""
+    with patch.dict(
+        os.environ,
+        {
+            "HTTP_PROXY": "http://proxy.example:8080",
+            "HTTPS_PROXY": "http://proxy.example:8080",
+            "NO_PROXY": "internal.example.com",
+        },
+        clear=False,
+    ):
+        stock_client = httpx.AsyncClient()
+        mine = create_integration_client()
+        try:
+            stock_patterns = {str(p.pattern) for p in stock_client._mounts}
+            mine_patterns = {str(p.pattern) for p in mine._mounts}
+            assert mine_patterns == stock_patterns
+        finally:
+            await stock_client.aclose()
+            await mine.aclose()
