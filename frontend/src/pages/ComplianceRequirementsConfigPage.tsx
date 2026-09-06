@@ -48,6 +48,7 @@ import type {
   ComplianceReportGenerate,
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
+import { Breadcrumbs } from '../components/ux';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -479,6 +480,7 @@ export default function ComplianceRequirementsConfigPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <Breadcrumbs underHub="/training/admin" />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

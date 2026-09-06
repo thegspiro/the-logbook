@@ -113,7 +113,7 @@ export const EventTemplatesPage: React.FC = () => {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
+        <Breadcrumbs underHub="/events/admin" />
         <div className="mb-6">
           <div className="bg-theme-surface-hover mb-2 h-8 w-48 animate-pulse rounded-sm" />
           <div className="bg-theme-surface-hover h-4 w-80 animate-pulse rounded-sm" />
@@ -151,7 +151,7 @@ export const EventTemplatesPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Breadcrumbs />
+        <Breadcrumbs underHub="/events/admin" />
 
         {/* Header */}
         <div className="mb-6">

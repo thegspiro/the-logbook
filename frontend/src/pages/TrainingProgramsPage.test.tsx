@@ -144,22 +144,30 @@ describe('TrainingProgramsPage', () => {
     });
   });
 
-  it('shows an Admin breadcrumb back to the training admin hub for training managers', async () => {
+  // The trail is generated from the URL now rather than passed as items, so
+  // these set the route they are asserting about. The hub is named the way the
+  // registry names it — this trail used to say "Admin" while the hub, the
+  // navigation and the registry all said "Training Administration".
+  it('shows the hub breadcrumb back to training administration for training managers', async () => {
     mockHasPermission = true;
+    window.history.replaceState({}, '', '/training/programs');
     renderWithRouter(<TrainingProgramsPage />);
 
     const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
-    const adminLink = within(nav).getByRole('link', { name: 'Admin' });
-    expect(adminLink).toHaveAttribute('href', '/training/admin');
+    expect(within(nav).getByRole('link', { name: 'Training Administration' })).toHaveAttribute(
+      'href',
+      '/training/admin'
+    );
     expect(within(nav).getByRole('link', { name: 'Training' })).toHaveAttribute('href', '/training');
     expect(within(nav).getByText('Programs')).toBeInTheDocument();
   });
 
-  it('omits the Admin breadcrumb for members without training.manage', async () => {
+  it('omits the hub breadcrumb for members without training.manage', async () => {
+    window.history.replaceState({}, '', '/training/programs');
     renderWithRouter(<TrainingProgramsPage />);
 
     const nav = await screen.findByRole('navigation', { name: /breadcrumb/i });
-    expect(within(nav).queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Training Administration' })).not.toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Training' })).toHaveAttribute('href', '/training');
   });
 
