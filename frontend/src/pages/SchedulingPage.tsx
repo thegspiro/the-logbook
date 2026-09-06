@@ -419,8 +419,14 @@ const SchedulingPage: React.FC = () => {
    * The hook is gated as well as the markup — left on `showCreateShift` it
    * would hold a registration in the dialog stack, and the body scroll lock
    * with it, for a dialog that is not rendered.
+   *
+   * `canManage` belongs here rather than on the markup for the same reason.
+   * Creating a shift is scheduling.manage-gated on the server, and both
+   * controls that open this form are already withheld from a member — but the
+   * form rendered on its own open state alone, so losing the permission while
+   * it was open left a Create Shift button that would 403.
    */
-  const createShiftOpen = showCreateShift && !selectedShift;
+  const createShiftOpen = canManage && showCreateShift && !selectedShift;
 
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: createShiftOpen, onClose: () => setShowCreateShift(false) });
 

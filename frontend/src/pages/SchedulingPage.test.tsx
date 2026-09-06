@@ -138,6 +138,24 @@ describe('SchedulingPage', () => {
       expect(hrefs.filter((href) => href?.startsWith('/scheduling/admin'))).toEqual([]);
     });
 
+    it('closes an open Create Shift form if scheduling.manage is revoked', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'scheduling.manage');
+
+      const { rerender } = renderWithRouter(<SchedulingPage />);
+      await waitFor(() => expectTabVisible('Schedule'));
+
+      await user.click(screen.getByRole('button', { name: /Create Shift/i }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+      // The form only ever posts a scheduling.manage-gated create, so it must
+      // not survive the permission going away and offer a Create that 403s.
+      mockCheckPermission.mockReturnValue(false);
+      rerender(<SchedulingPage />);
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
     it('should not render admin links for non-admin users', async () => {
       mockCheckPermission.mockReturnValue(false);
 
