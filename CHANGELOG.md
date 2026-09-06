@@ -224,6 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visible field name.
 
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
 ### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**
