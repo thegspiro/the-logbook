@@ -41,7 +41,18 @@ _MAX_BATCHES_PER_RUN = 20
 
 
 async def _get_or_create_state(db: AsyncSession) -> AuditShipState:
-    state = (await db.execute(select(AuditShipState).limit(1))).scalar_one_or_none()
+    # Locked read: this task runs both on a schedule and via a manual
+    # /scheduled/run-task?task=audit_log_ship trigger (system.run_tasks), so
+    # two runs can start concurrently. A plain SELECT would let both read the
+    # same watermark, ship an overlapping batch, and race to advance it --
+    # whichever commits last can regress the watermark, causing the next run
+    # to re-deliver rows already shipped (CLAUDE.md pitfall #27's model,
+    # applied to a watermark advance rather than a capacity count). FOR
+    # UPDATE serializes the two: the second run blocks until the first
+    # commits, then sees the advanced watermark and ships only what's left.
+    state = (
+        await db.execute(select(AuditShipState).limit(1).with_for_update())
+    ).scalar_one_or_none()
     if state is None:
         state = AuditShipState(id=1, last_shipped_id=0)
         db.add(state)

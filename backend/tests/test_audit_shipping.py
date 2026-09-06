@@ -1,5 +1,11 @@
-"""Tests for off-host audit-log shipping (watermark + HMAC-signed NDJSON)."""
+"""Tests for off-host audit-log shipping (watermark + HMAC-signed NDJSON).
 
+``TestConcurrentShipRuns`` (marked ``integration``) needs two real,
+independently-committing database sessions to reproduce a watermark race and
+so cannot run in the no-DB unit job.
+"""
+
+import asyncio
 import hashlib
 import hmac
 import json
@@ -8,12 +14,13 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 import app.services.audit_ship_service as audit_ship_module
 from app.core.audit import _get_audit_signing_key, audit_logger
 from app.core.config import settings
-from app.models.audit import AuditShipState
+from app.core.database import database_manager
+from app.models.audit import AuditLog, AuditShipState
 from app.services.audit_ship_service import ship_new_audit_logs
 
 pytestmark = pytest.mark.integration
@@ -153,3 +160,85 @@ class TestAuditShipping:
         assert result["batches"] == 3
         assert len(captured) == 3
         assert await _watermark(db_session) == rows[-1].id
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestConcurrentShipRuns:
+    """SEC2-28-9: the watermark read must be a locking read.
+
+    ``audit_log_ship`` runs both on a schedule and via a manual
+    ``/scheduled/run-task?task=audit_log_ship`` trigger, so two runs can
+    execute concurrently. A plain SELECT would let both read the same
+    watermark, ship an overlapping batch to the collector, and race to
+    advance it -- whichever commits last can regress the watermark, causing
+    the next run to re-deliver rows already shipped. Real committed rows,
+    two independent sessions, and asyncio.gather -- a mocked session cannot
+    reproduce real row-lock blocking.
+    """
+
+    async def test_two_concurrent_runs_never_double_ship_or_regress_watermark(
+        self, monkeypatch
+    ):
+        monkeypatch.setattr(settings, "AUDIT_SHIP_WEBHOOK_URL", _URL)
+        monkeypatch.setattr(audit_ship_module, "assert_outbound_url_safe", MagicMock())
+
+        async with database_manager.session_factory() as setup:
+            rows = await _write_logs(setup, 4)
+            await setup.commit()
+            last_id = rows[-1].id
+            # Pre-create the watermark row so this test exercises only the
+            # locked steady-state read, not the (separate, far narrower)
+            # first-ever-row creation race.
+            setup.add(AuditShipState(id=1, last_shipped_id=0))
+            await setup.commit()
+
+        session_a = database_manager.session_factory()
+        session_b = database_manager.session_factory()
+        client_a, captured_a = _collector()
+        client_b, captured_b = _collector()
+        try:
+            result_a, result_b = await asyncio.gather(
+                ship_new_audit_logs(session_a, client=client_a),
+                ship_new_audit_logs(session_b, client=client_b),
+                return_exceptions=True,
+            )
+
+            for label, outcome in (("A", result_a), ("B", result_b)):
+                assert not isinstance(
+                    outcome, BaseException
+                ), f"run {label} raised {outcome!r} instead of completing"
+
+            assert result_a["error"] is None
+            assert result_b["error"] is None
+
+            # Exactly the 4 rows must be delivered in total -- not doubled
+            # (both runs racing on the same stale watermark) and not lost
+            # (a regressed watermark stranding a row neither run re-picks-up
+            # within this test).
+            assert result_a["shipped_entries"] + result_b["shipped_entries"] == 4
+
+            delivered_ids = set()
+            for captured in (captured_a, captured_b):
+                for request in captured:
+                    for line in request.content.decode().strip().splitlines():
+                        delivered_ids.add(json.loads(line)["id"])
+            assert delivered_ids == {row.id for row in rows}
+
+            async with database_manager.session_factory() as verify:
+                assert await _watermark(verify) == last_id
+        finally:
+            await session_a.rollback()
+            await session_b.rollback()
+            await session_a.close()
+            await session_b.close()
+            # Real commits above (a locking read needs a real transaction,
+            # which the auto-rollback db_session fixture can't provide), so
+            # this test must clean up after itself rather than leak the
+            # singleton watermark row and these log rows into every test
+            # that runs after it in this session.
+            async with database_manager.session_factory() as cleanup:
+                await cleanup.execute(delete(AuditShipState))
+                await cleanup.execute(
+                    delete(AuditLog).where(AuditLog.id.in_([row.id for row in rows]))
+                )
+                await cleanup.commit()

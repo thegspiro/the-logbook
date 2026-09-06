@@ -16,9 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 27 (Integrations) is fully merged (PR #2311); see the Log
-entry below and Rotation row 27 (✅). Currently reviewing Feature 28
-(Security, audit & IP).
+**Feature 28 (Security, audit & IP), pass 3** — branch
+`claude/friendly-babbage-mxcgij`, PR pending (opening this iteration).
+
+---
+
+### 2026-09-06 — Feature 28 (Security, audit & IP, pass 3)
+
+Re-verification pass: three parallel readers split by the same lines as
+pass 2 (audit chain/error logs; security monitoring/alerts; IP allowlist/
+geo-blocking). Every previously-FIXED item (SEC-1 through SEC-9, SEC2-28-1
+through SEC2-28-4) is intact; every previously-flagged, still-open item
+(SEC2-28-5 IP-allowlist enforcement gap, SEC2-28-6 TOCTOU, SEC2-28-7 alert
+visibility/severity) is unchanged, with SEC2-28-7's `Content-Length`
+exfiltration-detection gap now confirmed across all 16 `StreamingResponse`
+export call sites in the app (pass 2 had sampled 3 of 15). The 265-line
+growth in `services/security_monitoring.py` since pass 2 turned out to be
+three legitimate concurrency/correctness bug fixes (a read-before-evict
+race, a session-hijack rewrite) — re-verified, no regression. One new LOW
+finding: `analyze_request`/`_check_rate_limit`/`_check_injection_patterns`
+have zero production callers (flagged, not fixed). **Scope correction:**
+added `app/services/audit_ship_service.py` (off-host audit-log shipping)
+to this feature's file list — it had never been reviewed under this
+feature despite sharing the audit signing key/serializer with `core/
+audit.py`. Found and fixed **SEC2-28-9**: its singleton watermark read was
+a plain SELECT, not a locking read, so a scheduled run racing a manual
+`/scheduled/run-task?task=audit_log_ship` trigger could duplicate or
+regress the delivery watermark (CLAUDE.md pitfall #27's model, applied to
+a watermark rather than a capacity count) — fixed with `.with_for_update()`
+and a guard test proving both the failure (reverted, 5/5 runs) and the fix.
+Full completion gate green: flake8/black/isort clean across `app/`, `tests/`,
+`alembic/`; migrations validated (431 revisions, single head, no new
+migration); 335/335 scoped and 11,505/11,505 full backend suite pass;
+frontend n/a (no frontend file touched). Findings doc:
+`docs/security-review/SEC2-28-security-audit-ip.md` (Pass 3). Rotation row
+28 → ✅. Next: 29 Reports & analytics.
 
 ---
 
@@ -9806,7 +9838,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | 🔄     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
