@@ -1192,7 +1192,9 @@ export interface InventoryItemCreate {
   min_rank_order?: number | null | undefined;
   restricted_to_positions?: string[] | null | undefined;
   notes?: string | null | undefined;
-  standard_size?: string | undefined;
+  /** Nullable so clearing the size picker on an edit sends an explicit clear
+   *  rather than omitting the key, which `exclude_unset` reads as "leave alone". */
+  standard_size?: string | null | undefined;
   style?: string | undefined;
   variant_group_id?: string | undefined;
 }
