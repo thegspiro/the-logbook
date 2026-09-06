@@ -1,21 +1,29 @@
 """
 Unit tests for pure helpers in the forms service
-(app/services/forms_service.py). DB-free.
+(app/services/forms_service.py). DB-free, except
+``TestConcurrentDuplicateSubmissionCheck`` (marked ``integration``), which
+needs two real, independently-committing database sessions to reproduce a
+REPEATABLE READ snapshot race and so cannot run in the no-DB unit job.
 
 Focus: FORM-6 — a required field is satisfied only by a non-empty value, not
 merely by the key being present.
 """
 
+import asyncio
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy import text
 
+from app.core.database import database_manager
 from app.models.forms import (
     FieldType,
     Form,
     FormField,
     FormIntegration,
+    FormStatus,
     IntegrationTarget,
     IntegrationType,
 )
@@ -394,3 +402,159 @@ class TestIntegrationProcessorsSanitizeErrors:
         error_text = submission.integration_result["event_registration"]["error"]
         assert sensitive not in error_text
         assert "IntegrityError" not in error_text
+
+
+async def _insert_org_and_member(
+    session, org_id: str, user_id: str, label: str
+) -> None:
+    await session.execute(
+        text(
+            "INSERT INTO organizations (id, name, organization_type, slug, timezone)"
+            " VALUES (:id, :name, :otype, :slug, :tz)"
+        ),
+        {
+            "id": org_id,
+            "name": f"Forms Dup Race Test Org {label}",
+            "otype": "fire_department",
+            "slug": f"fdrt-{org_id[:8]}",
+            "tz": "UTC",
+        },
+    )
+    await session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name,"
+            " last_name, email, password_hash, status)"
+            " VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+        ),
+        {
+            "id": user_id,
+            "org": org_id,
+            "un": f"member-{user_id[:8]}",
+            "fn": "Test",
+            "ln": "Member",
+            "em": f"member-{user_id[:8]}@test.com",
+            "pw": "hashed",
+        },
+    )
+
+
+async def _cleanup_org(org_id: str) -> None:
+    async with database_manager.session_factory() as session:
+        await session.execute(
+            text("DELETE FROM form_submissions WHERE organization_id = :o"),
+            {"o": org_id},
+        )
+        await session.execute(
+            text("DELETE FROM forms WHERE organization_id = :o"), {"o": org_id}
+        )
+        await session.execute(
+            text("DELETE FROM users WHERE organization_id = :o"), {"o": org_id}
+        )
+        await session.execute(
+            text("DELETE FROM organizations WHERE id = :o"), {"o": org_id}
+        )
+        await session.commit()
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("_initialize_database")
+class TestConcurrentDuplicateSubmissionCheck:
+    async def test_two_concurrent_submissions_from_the_same_member_never_both_succeed(
+        self,
+    ):
+        """A form with ``allow_multiple_submissions=False`` locks the Form
+        row before checking for a prior submission from the same member, but
+        locking the parent row alone does not refresh a stale REPEATABLE READ
+        snapshot (CLAUDE.md pitfall #27): each request's very first read is
+        ``get_form_by_slug()``, so the duplicate-check query -- if it is a
+        plain SELECT -- still answers from a snapshot taken before either
+        request's insert committed. Two submissions arriving at the same
+        moment could then both pass the check and both insert, defeating
+        "one submission per member" entirely.
+
+        Real committed rows, two independent sessions, and asyncio.gather --
+        a mocked session cannot reproduce a real InnoDB/MariaDB snapshot
+        staleness outcome. The invariant asserted is winner-agnostic: exactly
+        one of the two concurrent submissions must succeed and the other
+        must be rejected as a duplicate, regardless of which the database
+        happens to serialize first.
+        """
+        org_id, user_id = str(uuid.uuid4()), str(uuid.uuid4())
+
+        async with database_manager.session_factory() as setup:
+            await _insert_org_and_member(setup, org_id, user_id, "")
+            form = Form(
+                organization_id=org_id,
+                name="No Repeat Form",
+                status=FormStatus.PUBLISHED,
+                is_public=True,
+                require_authentication=False,
+                allow_multiple_submissions=False,
+                public_slug=uuid.uuid4().hex[:12],
+            )
+            setup.add(form)
+            await setup.commit()
+            slug = form.public_slug
+
+        session_a = database_manager.session_factory()
+        session_b = database_manager.session_factory()
+        try:
+            # Pin both transactions' REPEATABLE READ snapshot *before* either
+            # coroutine starts: a snapshot is fixed at a transaction's first
+            # *consistent read*, whichever statement that happens to be, so
+            # an innocuous throwaway read here has the same effect as the
+            # real first read inside submit_public_form() -- as long as it
+            # actually engages InnoDB. A bare ``SELECT 1`` does not: it names
+            # no table, so the server answers it without ever starting an
+            # InnoDB snapshot, and the transaction's real snapshot would
+            # still be taken later, at whichever statement happens to touch
+            # a table first. Reading the organization row we already
+            # committed above is a real InnoDB access. Without this,
+            # asyncio.gather does not guarantee that both attempts reach
+            # their own first read before either commits -- a scheduling
+            # quirk could let session A run to completion before session B's
+            # snapshot is taken, in which case B would see A's committed row
+            # and correctly reject it, passing the assertion below without
+            # ever exercising the staleness this test exists to catch.
+            pin_snapshot = text("SELECT id FROM organizations WHERE id = :o")
+            await session_a.execute(pin_snapshot, {"o": org_id})
+            await session_b.execute(pin_snapshot, {"o": org_id})
+
+            svc_a = FormsService(session_a)
+            svc_b = FormsService(session_b)
+
+            async def attempt(svc, session):
+                result, error = await svc.submit_public_form(
+                    slug=slug,
+                    data={},
+                    submitted_by=user_id,
+                )
+                await session.commit()
+                return result, error
+
+            outcome_a, outcome_b = await asyncio.gather(
+                attempt(svc_a, session_a),
+                attempt(svc_b, session_b),
+                return_exceptions=True,
+            )
+
+            for label, outcome in (("A", outcome_a), ("B", outcome_b)):
+                assert not isinstance(
+                    outcome, BaseException
+                ), f"attempt {label} raised {outcome!r} instead of completing"
+
+            results = [outcome_a, outcome_b]
+            successes = [r for r, e in results if r is not None]
+            rejections = [e for r, e in results if r is None]
+
+            assert len(successes) == 1, (
+                f"expected exactly one submission to succeed, got "
+                f"{len(successes)} -- the duplicate check let both through"
+            )
+            assert rejections == ["You have already submitted this form"]
+        finally:
+            await session_a.rollback()
+            await session_b.rollback()
+            await session_a.close()
+            await session_b.close()
+            await _cleanup_org(org_id)

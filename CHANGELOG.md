@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
+
+**Fixed**
+
+- **A form set to reject repeat submissions could still receive two from the
+  same member if they were submitted at nearly the same moment** (e.g. a
+  double-click, or two tabs/devices). The duplicate check looked for a prior
+  submission using a read that could miss one committed by the other
+  request a moment earlier; it's now a read that always sees the latest
+  data, closing the race.
+
 ### Security: unbounded push-device registration, and an unescaped email subtitle (2026-09-06)
 
 **Fixed**
