@@ -361,6 +361,27 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(bar).getByRole('button', { name: 'Add an item to Cab' })).toBeVisible();
   });
 
+  it('retargets to a location the bar itself creates', async () => {
+    const user = userEvent.setup();
+    addCompartment.mockResolvedValue({ id: 'bay', name: 'New Compartment', containerType: 'compartment' });
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+
+    // Target something that is NOT last in the list first. A new location is
+    // appended, so the derived fallback would land on it either way — without
+    // this step the assertion below passes even with the retarget removed.
+    await user.click(screen.getByRole('button', { name: 'Add item to Cab' }));
+    expect(within(bar).getByRole('button', { name: 'Add an item to Cab' })).toBeVisible();
+
+    // Adding a location expands it, which is the author moving into it. The
+    // target has to move too, or the Add item beside this button keeps filling
+    // the location they just left.
+    await user.click(within(bar).getByRole('button', { name: 'Add a location' }));
+
+    expect(await within(bar).findByRole('button', { name: 'Add an item to New Compartment' })).toBeVisible();
+  });
+
   it('keeps adding an item available while the template still has blockers', async () => {
     // A count item with no par is an item-level blocker, which is what puts
     // the bar into its Review state — the state a template spends most of its

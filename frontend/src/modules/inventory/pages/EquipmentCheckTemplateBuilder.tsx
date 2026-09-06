@@ -760,20 +760,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Compartment helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Open one location, and point the phone action bar's Add item at it.
+   *
+   * Every path that opens a single location goes through here. Updating the
+   * target beside two hand-picked callers instead is what let `addCompartment`
+   * create a location, expand it, and leave the bar adding to the previous
+   * one — the same shape of defect twice, so the update belongs with the
+   * expansion rather than at each call site.
+   *
+   * Bulk expansion (load, staged import, Expand all) deliberately does not
+   * route through here: it opens no particular location, so there is nothing
+   * for the bar to follow and the derived fallback stays right.
+   */
+  const openCompartment = (key: string) => {
+    setExpandedCompartments((prev) => new Set(prev).add(key));
+    setMobileAddTargetKey(key);
+  };
+
   const toggleCompartmentExpanded = (key: string) => {
-    const willExpand = !expandedCompartments.has(key);
-    setExpandedCompartments((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
+    if (expandedCompartments.has(key)) {
+      setExpandedCompartments((prev) => {
+        const next = new Set(prev);
         next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-    // Opening a location is the author saying that is where they are working,
-    // which is the signal the action bar's Add item follows.
-    if (willExpand) setMobileAddTargetKey(key);
+        return next;
+      });
+      return;
+    }
+    openCompartment(key);
   };
 
   /**
@@ -785,8 +799,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * they cannot drift apart.
    */
   const openAddSurface = (key: string) => {
-    setExpandedCompartments((prev) => new Set(prev).add(key));
-    setMobileAddTargetKey(key);
+    openCompartment(key);
     if (!isLaptop) {
       setMobileAddLocations((previous) => new Set(previous).add(key));
       return;
@@ -801,7 +814,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const comp = emptyCompartment();
         comp.parentCompartmentId = parentCompartmentId;
         setCompartments((prev) => [...prev, comp]);
-        setExpandedCompartments((prev) => new Set(prev).add(comp.clientKey));
+        openCompartment(comp.clientKey);
         return;
       }
 
@@ -828,7 +841,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         };
         savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
-        setExpandedCompartments((prev) => new Set(prev).add(created.id));
+        openCompartment(created.id);
         toast.success('Compartment added');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add compartment'));
@@ -1055,7 +1068,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next.splice(idx + 1, 0, copy);
       return next;
     });
-    setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
+    openCompartment(copy.clientKey);
     toast.success(comp.id ? `“${copy.name}” added` : 'Draft compartment duplicated');
     if (!comp.id) markDirty();
   };
@@ -4236,7 +4249,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 className={mobileMenuItemClass}
                 onClick={() => {
-                  setExpandedCompartments((previous) => new Set(previous).add(key));
+                  openCompartment(key);
                   window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
                 }}
               >
@@ -5127,7 +5140,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // A row inside a collapsed location is not in the DOM to scroll to, so the
     // jump has to open it first — and then wait a frame for it to render.
     if (expandKey && !expandedCompartments.has(expandKey)) {
-      setExpandedCompartments((prev) => new Set(prev).add(expandKey));
+      openCompartment(expandKey);
       window.setTimeout(() => goToBlocker(anchorId, undefined, focusId, editorTarget, addKey), 0);
       return;
     }
@@ -5984,6 +5997,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     <button
                       type="button"
                       className="text-theme-accent-blue min-h-11"
+                      /* The canvas toolbar's own button is already named
+                         "Location" and renders at every width, so a bare
+                         "Location" here would be a second control with the
+                         same name on the same phone screen. The label names
+                         the action, and parallels its sibling's "Add an item
+                         to X". */
+                      aria-label="Add a location"
                       onClick={() => void addCompartment()}
                       disabled={addingCompartment}
                     >
