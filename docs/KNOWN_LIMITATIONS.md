@@ -2586,6 +2586,37 @@ count corrected by the training-extended pass,
 both re-verified in the training-extended pass 3 re-review, the latter
 following a Codex finding on that pass's own PR.)
 
+## Outbound Integration Requests — Response Size Is Unbounded (INT-7, 2026-09-06)
+
+`app/services/integration_services/base.py` declared a 10 MB
+`MAX_RESPONSE_SIZE` constant with a docstring claiming a response-size cap
+as one of the shared HTTP client's hardened defaults. Nothing enforces it —
+`create_integration_client()` returns a plain `httpx.AsyncClient`, and every
+connector (Salesforce, Cal.com, Documenso, the chat webhooks, PayPal) calls
+its non-streaming `.get()`/`.request()` then `.json()`/`.text`, which
+buffers the full response body into memory before any caller-side code
+could check it against the constant. An org-configured integration
+endpoint (self-hosted, compromised, or simply misbehaving) that returns an
+arbitrarily large or slow-drip body can drive unbounded per-request memory
+growth. Not directly reachable by an unprivileged member — every trigger
+requires `integrations.manage` — and inbound webhook bodies (the one
+unauthenticated-adjacent path) are already bounded by nginx's global
+`client_max_body_size 50M`, a separate control this does not change.
+
+**Not fixed — needs an owner decision on scope, not a one-line patch.**
+Enforcing it means every connector's response-reading call site switching
+from a non-streaming `.get(url).json()` to `client.stream(...)` plus a
+running-byte-count abort, since httpx has already fully buffered the body
+by the time a non-streaming call returns a `Response` to check. That is a
+behavior change across roughly ten connector files at once (some, like
+Salesforce's own paginated bulk pull, may legitimately need a higher cap
+than a webhook test-connection call), which is why this was flagged rather
+than force-fixed inside a single security-review pass.
+
+(Security review INT-27 pass 3, `docs/security-review/INT-27-integrations.md`;
+`docs/module-audit/integrations.md`'s "size cap" claim corrected in the same
+pass — it had never actually been true.)
+
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 
 `BulkTrainingRecordEntry.training_type`/`.status`,
