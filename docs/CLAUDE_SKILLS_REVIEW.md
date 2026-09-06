@@ -4,7 +4,7 @@
 **Scope:** Which Claude Code skills would measurably improve how this
 repository is worked on — both the skills already available to this account and
 the project-local skills worth authoring.
-**Status:** Review complete. Steps 2 and 6 of the sequencing below are implemented (see §7); no skills were created.
+**Status:** Review complete. Steps 2, 3 and 6 of the sequencing below are implemented (see §7). One project skill exists: `repo-migrations`.
 
 ---
 
@@ -394,3 +394,71 @@ that installs it, so it could not be proven live from the session that wrote
 it — open `/hooks` once, or restart, if it does not fire. And it is committed
 to project settings, so it applies to every contributor using Claude Code on
 this repository, not just one machine.
+
+---
+
+## 8. The migrations skill, as built
+
+Step 3. Built on the `docs/rules/` + thin-pointer split from §5, on one rule
+set, so the pattern can be judged on evidence before anything else moves.
+
+### What moved, and what did not
+
+The gate in §5 is that a rule may only be reached through a skill if a missed
+trigger costs a red build rather than a shipped defect. Applying it decided the
+split, and it excluded more than expected:
+
+| Rule                                                                                                                    | Machine check                                                                                         | Outcome                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Pitfall #26 — guard a table only `create_all` builds                                                                    | `test_migration_create_all_tables.py`, 1,533 lines of static analysis over every migration            | **Moved**                                                                              |
+| Pitfall #23 — a seeded rank grant reaches the DB through a position                                                     | `test_baseline_member_grants.py`, `test_seeded_position_grants.py`, `test_rank_registry_agreement.py` | **Moved**                                                                              |
+| Alembic hygiene — single head, complete chain, non-empty `downgrade()`, `DROP TABLE IF EXISTS`, chronological revisions | `test_alembic_migrations.py`                                                                          | **Documented for the first time**; the test was the only place these were written down |
+| Pitfall #8 — seed ordering and `SEED_DATA_FILES`                                                                        | none — `grep -rn SEED_DATA_FILES backend/tests/` returns nothing                                      | **Stayed in CLAUDE.md**                                                                |
+| Pitfall #12 — JSON column shallow copies                                                                                | behavioural tests per feature; nothing flags a new `dict()` copy                                      | **Stayed** (and is a service rule, not a migration one)                                |
+| Pitfall #20 — canonical JSON shape                                                                                      | its migration half is inseparable from its write-path half                                            | **Stayed** — splitting a coherent rule is how the halves drift                         |
+
+Pitfall #8 is the one worth noting: it reads like a migration rule and sits in
+the middle of the ones that moved, and it is precisely the kind of rule the
+gate exists to hold back. Give it a guard and it can move.
+
+### Files
+
+| File                                          | Role                                                                                                                                                                          |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docs/rules/migrations.md`                    | The prose. How the schema is actually built (`create_all` + `repair_schema` + Alembic), the hygiene rules CI enforces, pitfalls #26 and #23 verbatim, and what stayed behind. |
+| `.claude/skills/repo-migrations/SKILL.md`     | ~45 lines. When to load, the two rules that cost most, the pre-finish checklist, and the link.                                                                                |
+| `CLAUDE.md`                                   | Pitfalls #23 and #26 keep their headings and numbers — ~20 code comments cite them by number — and now carry the rule in a paragraph plus a link. 97,985 → 92,176 bytes.      |
+| `AGENTS.md`                                   | Points at `docs/rules/migrations.md` by path, so Codex and human contributors reach the same words.                                                                           |
+| `.gitignore`                                  | `!.claude/skills/` added to the existing negation block.                                                                                                                      |
+| `backend/tests/test_claude_skill_pointers.py` | The guard on the arrangement itself.                                                                                                                                          |
+
+### Why the prose is not in the skill
+
+`AGENTS.md:7` states CLAUDE.md's technical rules are "repository rules, not
+Claude-only rules", and the commit history shows Codex running many of the
+review rounds. Codex cannot read `.claude/skills/`. Filing the prose there
+would not have relocated it — it would have deleted it for the other half of
+the agents that act on it. `docs/rules/` is a path every reader can open.
+
+### What guards the arrangement
+
+- `scripts/check_docs_links.py` (the `docs-links` CI job) walks
+  `git ls-files "*.md"`, which now includes `SKILL.md` — so a pointer that
+  stops resolving fails the build. This is why the skill had to be committed
+  rather than left gitignored.
+- `backend/tests/test_claude_skill_pointers.py` covers the failures that are
+  **not** broken links and would otherwise be silent: missing or malformed
+  frontmatter, a `name` that no longer matches its directory, an empty
+  `description` (the skill loads and never triggers), and a `docs/rules/` file
+  that `CLAUDE.md` has stopped linking to. Each was verified by mutation —
+  breaking the name, the link, and the CLAUDE.md pointer each failed exactly
+  its own test and nothing else.
+
+### Measuring it before extending it
+
+§6 step 4 stands: this is one rule set, chosen because it is the best-enforced
+one in the repository, and the question it exists to answer is whether the
+skill actually triggers on real migration work. Run a few migrations through
+it before moving tenancy, forms or tests. If it does not trigger reliably, the
+pointer pattern is wrong here and ~12 k tokens of always-on rules is the
+correct price.

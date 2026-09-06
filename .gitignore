@@ -193,9 +193,17 @@ Desktop.ini
 # fixture setup, and the summary line still reads as a pass. Recreating that
 # per clone is how a session reports green on a suite that never ran.
 # settings.local.json stays ignored — it is personal, and is not re-included.
+#
+# Skills are shared on the same reasoning. A project skill is a pointer into
+# docs/rules/, and a pointer only one clone has is worse than none: CLAUDE.md
+# would carry a one-line rule whose full text nobody else's session can reach.
+# Committing them also puts SKILL.md under `git ls-files "*.md"`, which is what
+# the docs-links CI job walks — so a pointer that stops resolving fails the
+# build instead of rotting.
 .claude/*
 !.claude/commands/
 !.claude/hooks/
+!.claude/skills/
 !.claude/settings.json
 
 # Playwright

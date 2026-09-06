@@ -217,7 +217,7 @@ When a schema or persisted data shape changes:
 5. provide a downgrade when safe and meaningful, or explicitly document intentional irreversibility where repository conventions permit it;
 6. do not edit an already-deployed migration merely to change current behavior unless repository policy explicitly calls for that.
 
-Review the migration, JSON-column, foreign-key, and seed-data pitfalls documented in `CLAUDE.md` before modifying persistence behavior.
+Review the migration, JSON-column, foreign-key, and seed-data pitfalls documented in `CLAUDE.md` before modifying persistence behavior. The Alembic rules in full — how this schema is actually built, the hygiene checks CI enforces, the tables no migration creates, and the seeded-grant rule — are in [docs/rules/migrations.md](docs/rules/migrations.md), which `CLAUDE.md` links to rather than repeating. It is repository documentation on an ordinary path: read it directly, whatever agent you are.
 
 ## Reuse Existing Architecture
 

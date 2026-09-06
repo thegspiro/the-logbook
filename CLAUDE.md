@@ -470,6 +470,14 @@ This application handles protected health information (PHI) and must maintain HI
 
 These are recurring errors identified from the project's change history. Follow these rules to avoid re-introducing them.
 
+A few entries state the rule here and keep their full text in `docs/rules/`,
+loaded on demand (by the matching skill in `.claude/skills/`, or by anyone
+following the link). **Only a rule with a machine check behind it is allowed to
+move** — then a reader who never opens the linked file costs a red build, not a
+shipped defect. Everything unenforced stays here in full. `docs/rules/` is used
+rather than the skill directory because `AGENTS.md` makes these repository
+rules and the other agents working this repo cannot read `.claude/skills/`.
+
 ### 1. Empty Strings: Always Use `||`, Never `??` for Form Values
 
 **The #1 most common bug in this project.** React form fields initialize as empty strings (`""`). The nullish coalescing operator (`??`) only filters `null`/`undefined` — it does NOT filter `""`. This causes empty strings to be sent to the backend, where Pydantic validators reject them with 422 errors.
@@ -1093,85 +1101,21 @@ this rule, not a re-run.
 
 ### 23. A Seeded Rank Grant Reaches the Database Through a Position _(2026-08-24)_
 
-`operational_ranks` has no `permissions` column. Rank defaults resolve at
-runtime from `OPERATIONAL_RANKS` via `get_rank_default_permissions`, which
-makes "removing a grant from a rank needs no data migration" sound obviously
-true. It is false, and the reason is one line of aliasing:
+**Rule:** `operational_ranks` has no `permissions` column, which makes
+"removing a grant from a rank needs no data migration" sound obviously true. It
+is false: `DEFAULT_POSITIONS["firefighter"]["permissions"]` **is** the rank's
+list — the same object — so a rank's grants do reach the database, by way of a
+system position, and an installation that has run onboarding keeps them until a
+migration rewrites that row. Changing a seeded grant means changing the
+registry **and** writing a migration covering every stored `positions` row that
+carries it. A published revision is frozen: ship the delta as a new child
+revision, never an in-place edit.
 
-```python
-# permissions.py — DEFAULT_POSITIONS
-"firefighter": {
-    ...
-    "permissions": OPERATIONAL_RANKS["firefighter"]["default_permissions"],
-},
-```
-
-`DEFAULT_POSITIONS["firefighter"]["permissions"]` **is** the rank's list — the
-same object. Onboarding creates a system _position_ with slug `firefighter`
-carrying a copy of it, and `dependencies.py` unions every assigned position's
-stored permissions. So the rank's grants do reach the database, by way of a
-position, and an installation that already ran onboarding keeps them until a
-migration rewrites that row.
-
-This cost a review round on #1795: `compliance.view` was revoked from the
-`member` position only, and would have stayed live for everyone holding the
-Firefighter position on every existing department.
-
-It also defeats naive analysis. A survey that reads each role's body looking
-for `SOMETHING.name` literals sees an empty list under `firefighter`, because
-the entry is a reference — which is how the gap was missed in the first place.
-
-**Rule:** changing a seeded grant means changing the registry **and** writing a
-migration that covers every stored `positions` row carrying it — for a rank
-grant, both the `member`-style position and the rank-mirroring one. Scope the
-`UPDATE` to `is_system = True`: a position the department **created** is theirs.
-Verify the migration by running it against a real table rather than by
-reading it; `20260824_2140_31e2816df7c3` and its precedent
-`20260814_0004` are the shape to copy. `tests/test_baseline_member_grants.py`
-asserts the day-one grant set on all three registry entries by name, aliasing
-or not, so the persisted path is covered rather than inferred.
-
-**`is_system = True` does not mean the row is unedited** _(2026-09-04)_. It
-separates the seeded positions from ones the department added — nothing more.
-`RoleService.update_role` (`app/services/role_service.py`) explicitly permits
-editing a **system** position's `permissions` and leaves the flag set, so a
-seeded row may hold exactly what an administrator chose. An earlier version of
-this rule said the scope preserved "a department's own customized position",
-and three migrations were written against that reading.
-
-Nothing in the row distinguishes a grant the seed wrote from one an
-administrator added, so decide by direction rather than by guessing provenance:
-
-- **Revoking** a grant that discloses other members' data — reporting,
-  rosters, compliance, another member's record — is unconditional. Leaving it
-  in place on an unrecognized row keeps the disclosure open; the cost of being
-  wrong is an administrator re-adding it on the positions screen.
-- **Adding** a grant is gated on some positive evidence the row is an
-  unrepaired seed. An unconditional add overrides a department that removed the
-  grant deliberately, and a missing benign grant discloses nothing.
-
-Do not try to recognize an unedited row by matching its whole permission list:
-`20260901_1320_f7b3c8d2e569` did, and every later migration that touched those
-rows moved them out of the match. A snapshot of a whole row is pinned to the
-build that produced it, so it also misses every row written by any _other_
-build — silently, while reading as though it covered them. `b4d1c8e37f52` was
-written that way and had to be superseded by `c7a4e91d3b68`: gate instead on a
-signal no build could have produced, which for an addition is usually the
-**absence of the very grants being added** when nothing in the editor can emit
-them. That answer cannot drift, because adding a module to the registry cannot
-move a row across it. Say in the migration's docstring which direction you chose
-and what it costs when it is wrong.
-
-**Superseded, not edited — and the distinction is the whole repair.** The first
-attempt at that fix rewrote `b4d1c8e37f52` in place, which changes nothing where
-it matters: Alembic records a revision as applied by id, so an installation that
-already ran the narrow version never executes the widened body, and the rows it
-skipped are exactly the ones the widening exists to reach. A published revision
-is frozen (pitfall #20) and the delta belongs in a child revision — the shape
-`f3b8d0c26a17` states plainly: "A new revision is also the only thing that
-reaches an installation which already stamped either version." Being sure
-nothing has upgraded yet is not a substitute; that is another unverifiable
-premise, which is the failure this rule already exists to stop.
+Full text — why `is_system = True` does not mean unedited, which direction
+(revoking vs. adding) may run unconditionally, and why gating on a whole
+permission list fails — in
+**[docs/rules/migrations.md](./docs/rules/migrations.md#a-seeded-rank-grant-reaches-the-database-through-a-position)**.
+`tests/test_baseline_member_grants.py` asserts the day-one grant set by name.
 
 ### 24. Do Not Reuse a Branch Name After Its Pull Request Merges _(2026-08-24)_
 
@@ -1233,71 +1177,19 @@ the escaped form is how the inventory barcode search came to report the wrong
 
 ### 26. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
 
-**40 of this schema's 254 tables are never created by any migration.**
-`event_requests`, `prospects`, the whole finance-approval set (`budgets`,
-`budget_categories`, `check_requests`, `expense_reports`, ...) and more come
-into being when `main.py`'s `_fast_path_init()` calls `create_all()` and
-stamps Alembic at head — the deployment model
-`app/utils/enum_normalization` documents.
+**Rule:** 40 of this schema's 254 tables are never created by any migration —
+they come into being when `main.py`'s `_fast_path_init()` calls `create_all()`.
+CI runs `alembic upgrade head` against an **empty** database, so reflecting or
+altering such a table raises `NoSuchTableError` and kills the whole upgrade,
+not just the one step. Guard the step on the table's existence. Skipping is
+correct, not merely safe: a table `create_all` builds later is built from the
+models, which already declare the new column.
 
-**A table renamed into existence by a migration does not belong on this
-list, even if no migration ever `create_table`s it under its current name.**
-`positions`/`user_positions` looked like textbook examples — no
-`op.create_table("positions", ...)` anywhere in the chain — until a
-2026-08-31 review (`docs/security-review/MSG-25-messaging-notifications.md`,
-MSG-11) added an unnecessary guard on exactly that reasoning, then had to
-revert it once empirical testing (a real `alembic upgrade head` against a
-fresh database, not just re-reading the migration source) showed the tables
-already exist by then: `20260805_0008_rename_roles_to_positions.py` renames
-`roles`/`user_roles` — created outright by the initial schema migration —
-to `positions`/`user_positions`, and is a required upgrade-path ancestor of
-every later migration that touches them. `backend/tests/
-test_migration_create_all_tables.py`'s `_tables_created_by_migrations` now
-credits `op.rename_table` destinations for exactly this reason — trust that
-function's output (or an empirical fresh-database run) over a manual grep
-for `create_table`.
-
-That is deliberate, and it is also a trap, because **CI runs `alembic upgrade
-head` against an empty database** in the integration and contract jobs, before
-anything calls `create_all`. Reflecting a column on a table that is not there
-raises `NoSuchTableError`, and that kills the entire upgrade — not just the one
-step:
-
-```python
-# WRONG — dies on any database that has not started the app yet
-def _has_column(table: str, column: str) -> bool:
-    inspector = sa.inspect(op.get_bind())
-    return column in {c["name"] for c in inspector.get_columns(table)}
-
-if not _has_column("event_requests", "staffing_shift_id"):
-    op.add_column("event_requests", sa.Column(...))
-
-# CORRECT — require the table as well as the absent column
-def _has_table(table: str) -> bool:
-    return table in sa.inspect(op.get_bind()).get_table_names()
-
-if _has_table("event_requests") and not _has_column("event_requests", "..."):
-    op.add_column("event_requests", sa.Column(...))
-```
-
-**Skipping is correct, not merely safe.** A table `create_all` builds later is
-built from the models, which already declare the new column.
-
-This was live on 2026-08-24: two migrations adding columns to `event_requests`
-failed on every fresh database, which is four red matrix jobs (MySQL 8.0 and
-MariaDB 10.11 × integration and contract), not one. Fifteen of the sixteen
-existing migrations that touch such a table already guarded; the pattern was
-simply undocumented.
-
-**Rule:** before altering a table in a migration, check whether any migration
-creates it. If none does, guard the step on the table's existence.
-`tests/test_migration_create_all_tables.py` enforces this and was clean when
+Full text — the detection helper, the `op.rename_table` subtlety, and why
+`alembic upgrade head` alone does not produce a working schema — in
+**[docs/rules/migrations.md](./docs/rules/migrations.md#a-migration-must-tolerate-a-table-only-create_all-builds)**.
+`tests/test_migration_create_all_tables.py` enforces it and was clean when
 written, so any failure is new.
-
-**Related, same root:** `alembic upgrade head` alone does not produce a working
-schema. On a freshly migrated database `scripts/repair_schema.py` still adds a
-dozen columns the models declare and no migration creates. Treat the models as
-the schema of record and migrations as alterations on top — not the reverse.
 
 ### 27. A Capacity Check Is a Read-Then-Write, and Needs the Row Locked _(2026-08-25)_
 
