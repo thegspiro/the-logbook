@@ -305,17 +305,24 @@ class AttendanceDashboardService:
         )
         waivers = list(result.scalars().all())
 
-        # Get user names
+        # Get user names (org-scoped: w.user_id/w.waiver_granted_by come off
+        # an already org-filtered MeetingAttendee row, but a name lookup is
+        # cheap insurance against a future write path that skips that check)
         waiver_list = []
         for w in waivers:
             user_result = await self.db.execute(
-                select(User).where(User.id == w.user_id)
+                select(User).where(
+                    User.id == w.user_id, User.organization_id == organization_id
+                )
             )
             user = user_result.scalar_one_or_none()
 
             grantor_result = (
                 await self.db.execute(
-                    select(User).where(User.id == w.waiver_granted_by)
+                    select(User).where(
+                        User.id == w.waiver_granted_by,
+                        User.organization_id == organization_id,
+                    )
                 )
                 if w.waiver_granted_by
                 else None

@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2)
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3) · **PR:** #1906 (pass 1), [#2079](https://github.com/thegspiro/the-logbook/pull/2079) (pass 2), pass 3 PR TBD
 
 ## Pass 1 (2026-08-26)
 
@@ -492,3 +492,152 @@ instance of this bug.
 | `npx tsc --noEmit` (frontend)                               | 0 errors                                                  |
 | `npx eslint .` (frontend)                                   | 0 errors, 8 pre-existing warnings (none in touched files) |
 | `npx vitest run src/modules/minutes` (frontend)             | 23 passed, 3 files                                        |
+
+---
+
+## Pass 3 (2026-09-06)
+
+**Backend:** `app/api/v1/endpoints/meetings.py` (623 L, was 493, +130),
+`app/services/meetings_service.py` (642 L, was 608, +34),
+`app/api/v1/endpoints/minutes.py` (1,123 L, was 1,037, +86),
+`app/services/minute_service.py` (991 L, was 921, +70),
+`app/services/quorum_service.py` (159 L, was 139, +20). Also pulled in
+`app/services/attendance_dashboard_service.py` — backs three `meetings.py`
+routes (`get_attendance_dashboard`, `grant_attendance_waiver`,
+`list_attendance_waivers`) and was not named as in-scope by either prior
+pass, a scope gap closed this pass.
+**Frontend:** spot-checked `frontend/src/modules/minutes/` (9 files, 3,280
+lines, including a new `MinutesDetailPage.linkedElections.test.tsx`) and the
+new "Linked Elections" cross-module card in `MinutesDetailPage.tsx`.
+**Migrations:** none.
+
+### Scope
+
+The local clone is a shallow clone (433 commits visible), so `git log` could
+not reliably diff against pass 2's merged PR content. Read all five backend
+files fresh, in full, via two parallel background agents (one per endpoint
+pair: `meetings.py`+`meetings_service.py`, `minutes.py`+`minute_service.py`+
+`quorum_service.py`), each briefed with the exact set of pass-1/pass-2
+findings already fixed (not to re-report) and already open (to re-verify,
+not re-derive) — plus my own direct read of `attendance_dashboard_service.py`
+and the frontend module.
+
+### New findings
+
+**MM-9 (updated, still OPEN)** — the `update_meeting` PATCH route
+(`app/api/v1/endpoints/meetings.py:125-159`) reaches the exact same
+unguarded state MM-9 already flagged, through a second path:
+`MeetingUpdate.status` accepts any legal `MeetingStatus` value including
+`"approved"`, and `MeetingsService.update_meeting` (`meetings_service.py:
+247-263`) applies it via `apply_updates` with no state-machine check —
+so a generic PATCH can flip a meeting straight from `DRAFT` to `APPROVED`
+while leaving `approved_by`/`approved_at` at whatever they already were
+(typically `None`), which is a _more_ silent version of the gap than calling
+the dedicated `/approve` route: no approval actor or timestamp is ever
+recorded. Same permission (`meetings.manage`) already gates both routes, so
+this is not a privilege escalation on its own, but it is one more surface
+that the same missing state-machine guard reaches. Folded into MM-9 rather
+than filed as a separate id, since both need the same product decision
+(what `Meeting`'s approval workflow is actually supposed to enforce) before
+either can be mechanically fixed — flagged, not fixed, pending that
+decision, same disposition as before.
+
+**MM-14 — LOW — cross-org name leak surface in `list_waivers` — FIXED.**
+**What:** `AttendanceDashboardService.list_waivers` (`attendance_dashboard_
+service.py`, now lines ~308-330) resolved the waiving member's and the
+granting admin's names via `select(User).where(User.id == w.user_id)` /
+`select(User).where(User.id == w.waiver_granted_by)` — no `organization_id`
+filter, unlike every other by-id lookup in this feature (e.g.
+`attach_creator_names`).
+**Where:** `app/services/attendance_dashboard_service.py`.
+**Scenario:** not exploitable today — `w.user_id` and `w.waiver_granted_by`
+on a `MeetingAttendee` row are always populated from an already org-validated
+write (`grant_waiver`'s own `assert_in_org` calls, and `add_attendee`'s
+explicit check elsewhere), so a client cannot currently steer these ids
+cross-org. It is exactly the fragile shape pitfall 14a warns about: a single
+future write path that stores a `MeetingAttendee.user_id`/`waiver_granted_by`
+without that validation would have this lookup silently resolve and return
+another organization's member's name.
+**Fix:** both lookups now filter `User.organization_id == organization_id`,
+matching the convention used everywhere else in this feature.
+**Guard test:** `backend/tests/test_attendance_dashboard_service.py::
+TestWaivers::test_list_waivers_scopes_member_and_grantor_lookup_to_org` —
+captures the compiled `WHERE` clause (not the full compiled statement,
+which always mentions the column name `organization_id` in its `SELECT`
+list regardless of any filter — the test's first draft false-passed against
+the unfixed code for exactly that reason, caught and corrected before
+landing) and asserts `organization_id` appears in it for both the member and
+the grantor query. Verified to fail against the reverted (unfixed) code and
+pass after.
+
+### Looked suspicious, not fixed — reasoning recorded
+
+- **`meeting_action_items.created_by`/`source`** (added by migration
+  `20260903_1130_7bfe85f2e4e5`, exposed via `ActionItemResponse`) has no
+  writer anywhere in `meetings.py`, `meetings_service.py`, or
+  `app/mcp/tools/meetings.py` (confirmed by grep) — a column shipped ahead
+  of the feature that populates it. Always `null` today; not a security
+  defect, but the same shape as pitfall #19 (a switch with no reader, here
+  a column with no writer). Not filed as a security finding since there is
+  no disclosure or integrity risk in an always-null column; noting it so
+  the next pass over this feature isn't surprised by it.
+- **`set_meeting_quorum_config`** (`minutes.py:987-1064`) has no
+  finalization-status guard (can rewrite quorum settings and recompute
+  `quorum_met`/`quorum_count` on an already-`APPROVED` minutes record) and
+  validates only `quorum_threshold > 0` with no upper bound, which feeds
+  `quorum_service.py`'s `math.ceil(raw_required - 1e-9)` (line ~123).
+  Unconfirmed exploitable — requires `minutes.manage`, and would need a
+  value approaching `inf` to raise `OverflowError` — and unchanged since
+  pass 1's description of this endpoint. Left open for a future pass rather
+  than guessed at.
+
+### Confirmed still-intact (re-verified fresh, not trusted from prior docs)
+
+- All 17 `meetings.py` routes and all 25 `minutes.py` routes still carry
+  `require_permission(...)`; no bare `get_current_user`, no `.view`
+  permission gating a mutation.
+- Every by-id service method across both features still filters
+  `organization_id` or resolves through an org-scoped parent — re-swept
+  method-by-method in both files, no new gap.
+- XC-1 FK validation, `apply_updates` (not blind `setattr`), LIKE-escaping,
+  JSON-column handling, finalization guards on `minutes.py`'s mutation
+  routes, `assert_different_person` on `approve_minutes`, the
+  `.with_for_update()` + `populate_existing=True` identity-map fix in
+  `quorum_service.calculate_quorum`, and audit logging on every mutation
+  route in both features — all re-verified present and unchanged.
+- **MM-9's original finding** (`approve_meeting` has no state-machine guard
+  and no separation of duties) — confirmed still open and unchanged, now
+  updated above to include the `update_meeting` path.
+- **`minutes.view_executive`** — confirmed the tier still does not exist;
+  the restricted-read filter (non-managers see only `APPROVED` +
+  non-`EXECUTIVE` minutes, 404 rather than 403 on a restricted record) is
+  present and unchanged in `get_minutes`, `list_minutes`, `search_minutes`,
+  and `get_stats`; no new read path in `minute_service.py` bypasses it.
+- Frontend: no `window.confirm`/`window.alert`/`window.prompt` anywhere
+  under `src/modules/minutes/` or `src/pages/MinutesPage.tsx`. The new
+  "Linked Elections" card in `MinutesDetailPage.tsx` calls
+  `electionService.getElectionsByEvent`, which routes to `elections.py`'s
+  `list_elections` — confirmed `require_permission("elections.view")` and
+  `Election.organization_id` scoping on that route, so the cross-module
+  fetch is properly secured. (Its blanket `.catch(() => setLinkedElections
+([]))` silently hides the card on any error including a legitimate 403 —
+  safe, if imprecise, UX; not filed as a finding.)
+
+### Guard tests added (pass 3)
+
+- `backend/tests/test_attendance_dashboard_service.py::TestWaivers::
+test_list_waivers_scopes_member_and_grantor_lookup_to_org` (MM-14, above).
+
+### Completion gate (pass 3)
+
+| Check                                                                              | Result                                                    |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                      | clean (0 violations)                                      |
+| `black --check app/ tests/ alembic/`                                               | clean (1503 files unchanged)                              |
+| `isort --check-only app/ tests/ alembic/`                                          | clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                  | PASSED — 431 revisions, single head                       |
+| backend tests, scope (`-k "meeting or minutes or quorum or attendance_dashboard"`) | 245 passed, 1 skipped (pre-existing, py_vapid)            |
+| backend tests, full suite                                                          | 11,470 passed, 21 skipped (env-only), 0 failed            |
+| `npx tsc --noEmit` (frontend)                                                      | 0 errors                                                  |
+| `npx eslint .` (frontend)                                                          | 0 errors, 3 pre-existing warnings (none in touched files) |
+| `npx vitest run src/modules/minutes` (frontend)                                    | 23 passed, 3 files                                        |

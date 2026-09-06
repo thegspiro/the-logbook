@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a meeting attendance waiver's name lookup did not filter by organization (2026-09-06)
+
+**Fixed**
+
+- **The attendance dashboard's waiver list resolved member and grantor names
+  without an organization filter.** The lookup relied entirely on those ids
+  already having come from an org-scoped write elsewhere in the code —
+  true today, but a single future write path that skipped that validation
+  would have silently returned another organization's member's name. Both
+  lookups now filter by organization directly, matching the convention used
+  everywhere else in this feature.
+
 ### Inventory: a generic item edit could deactivate equipment still checked out (2026-09-06)
 
 **Fixed**
