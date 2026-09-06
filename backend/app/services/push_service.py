@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.notification import PushSubscription
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +229,45 @@ class PushService:
         )
         existing = result.scalar_one_or_none()
 
+        # A genuine refresh (the caller already owns this exact endpoint) is
+        # the only case exempt from the cap below — reassigning someone
+        # else's device to this user is a new subscription for them and must
+        # be counted against their own limit, or two accounts trading a
+        # device back and forth could grow one of them past it indefinitely.
+        if existing and existing.user_id == str(user_id):
+            existing.organization_id = str(organization_id)
+            existing.p256dh = p256dh
+            existing.auth = auth
+            existing.user_agent = user_agent
+            await self.db.commit()
+            await self.db.refresh(existing)
+            return existing
+
+        # Lock the user row first: it is the one thing every one of this
+        # user's concurrent subscribe() calls already shares, so locking it
+        # serializes them the way the seats-being-counted never could (a
+        # not-yet-inserted subscription has no row to lock). The count that
+        # follows must then be a *locking* read of its own — under
+        # REPEATABLE READ, the request's transaction already took its
+        # snapshot when `current_user` was loaded upstream, so merely
+        # acquiring this lock does not refresh what a plain SELECT would see
+        # (CLAUDE.md pitfall #27): only a locking read is defined to return
+        # the latest committed rows.
+        await self.db.execute(
+            select(User).where(User.id == str(user_id)).with_for_update()
+        )
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(PushSubscription)
+            .where(PushSubscription.user_id == str(user_id))
+            .with_for_update()
+        )
+        if count_result.scalar_one() >= _MAX_PUSH_SUBSCRIPTIONS_PER_USER:
+            raise ValueError(
+                f"Maximum of {_MAX_PUSH_SUBSCRIPTIONS_PER_USER} push "
+                "subscriptions reached. Remove an old device first."
+            )
+
         if existing:
             existing.organization_id = str(organization_id)
             existing.user_id = str(user_id)
@@ -237,17 +277,6 @@ class PushService:
             await self.db.commit()
             await self.db.refresh(existing)
             return existing
-
-        count_result = await self.db.execute(
-            select(func.count())
-            .select_from(PushSubscription)
-            .where(PushSubscription.user_id == str(user_id))
-        )
-        if count_result.scalar_one() >= _MAX_PUSH_SUBSCRIPTIONS_PER_USER:
-            raise ValueError(
-                f"Maximum of {_MAX_PUSH_SUBSCRIPTIONS_PER_USER} push "
-                "subscriptions reached. Remove an old device first."
-            )
 
         sub = PushSubscription(
             organization_id=str(organization_id),

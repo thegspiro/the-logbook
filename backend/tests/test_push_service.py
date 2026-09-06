@@ -239,6 +239,34 @@ class TestSubscribe:
             _MAX_PUSH_SUBSCRIPTIONS_PER_USER
         )
 
+    async def test_reassigning_someone_elses_device_still_respects_the_cap(
+        self, db_session, two_orgs
+    ):
+        """Claiming a device currently registered to another member is a new
+        subscription for the claimant, not a refresh — two accounts trading
+        one endpoint back and forth must not be a way around the cap."""
+        from app.services.push_service import _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+
+        org_a, user_a = two_orgs["a"]
+        org_b, user_b = two_orgs["b"]
+        p256dh, auth = _client_keys()
+        svc = PushService(db_session)
+
+        for i in range(_MAX_PUSH_SUBSCRIPTIONS_PER_USER):
+            await svc.subscribe(
+                org_a, user_a, f"https://push.example/{i}", p256dh, auth
+            )
+        await svc.subscribe(org_b, user_b, "https://push.example/shared", p256dh, auth)
+
+        with pytest.raises(ValueError, match="Maximum"):
+            await svc.subscribe(
+                org_a, user_a, "https://push.example/shared", p256dh, auth
+            )
+        assert await _count(db_session, "user_id", user_a) == (
+            _MAX_PUSH_SUBSCRIPTIONS_PER_USER
+        )
+        assert await _count(db_session, "user_id", user_b) == 1
+
     async def test_resubscribing_an_existing_endpoint_is_not_blocked_by_the_cap(
         self, db_session, two_orgs
     ):
