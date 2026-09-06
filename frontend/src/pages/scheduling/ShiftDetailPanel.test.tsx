@@ -672,13 +672,13 @@ describe('ShiftDetailPanel dialog shell', () => {
     const closeOnPhone = await screen.findByRole('button', { name: 'Close panel' });
     await user.click(closeOnPhone);
     closeOnPhone.focus();
-    expect(document.activeElement).toBe(closeOnPhone);
+    expect(closeOnPhone).toHaveFocus();
 
     await resizeTo('laptop');
 
     const closeOnLaptop = screen.getByRole('button', { name: 'Close panel' });
-    expect(document.activeElement).toBe(closeOnLaptop);
-    expect(document.activeElement).not.toBe(document.body);
+    expect(closeOnLaptop).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
   });
 
   it('closes on a backdrop click but not on a click inside the panel', async () => {

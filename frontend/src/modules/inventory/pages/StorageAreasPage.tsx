@@ -639,7 +639,7 @@ const StorageAreasPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       {/* Header */}
-      <Breadcrumbs />
+      <Breadcrumbs underHub="/inventory/admin" />
 
       <Link
         to="/inventory/admin"
