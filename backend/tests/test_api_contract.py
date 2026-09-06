@@ -64,12 +64,25 @@ pytestmark = [pytest.mark.slow, pytest.mark.integration]
 # advertising valid addresses as invalid — the same breach in the other
 # direction.
 #
-# Every address this generates is one email-validator accepts; that property
-# is what the strategy is for, and it was checked over 400 generated cases
-# rather than assumed.
+# Every address this generates is one email-validator accepts. The first
+# version of this strategy claimed that property on the strength of 400
+# generated samples and did not hold it: it allowed a hyphen anywhere inside a
+# domain label, so it could emit `fa--jm.bfd`, and email-validator refuses two
+# letters followed by two dashes at a label's third and fourth characters —
+# IDNA reserves that shape for punycode's `xn--`. CI generates a fresh corpus
+# every run, so it surfaced months later as a one-off red on an unrelated PR.
+#
+# Sampling could not have caught it and cannot confirm the repair: `--` is rare
+# enough in random draws from the old pattern that 3000 of them produced none.
+# Never emitting two adjacent hyphens sidesteps the rule outright, and that is
+# a property of the pattern rather than of a sample — `-?` is always followed
+# by an alphanumeric, checked by brute force over every hyphen/alphanumeric
+# domain of length 8 (0 matches containing `--`) rather than by drawing from it.
+#
+# Single hyphens still generate (`ab-cd.com`), so this narrows the shapes the
+# strategy explores without narrowing them to hyphen-free.
 _DELIVERABLE_EMAIL = (
-    r"[a-z0-9]{1,20}(\.[a-z0-9]{1,20})?"
-    r"@[a-z0-9]([a-z0-9-]{0,20}[a-z0-9])?\.[a-z]{2,6}"
+    r"[a-z0-9]{1,20}(\.[a-z0-9]{1,20})?" r"@[a-z0-9](-?[a-z0-9]){0,20}\.[a-z]{2,6}"
 )
 schemathesis.openapi.format("email", st.from_regex(_DELIVERABLE_EMAIL, fullmatch=True))
 

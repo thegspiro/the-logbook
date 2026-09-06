@@ -28,6 +28,21 @@ _RENAMED_SINCE: dict[str, str] = {
 }
 
 
+#: Grants added to a seeded position *after* this migration was written, and
+#: carried to existing departments by a later migration of their own. They are
+#: not drift: this snapshot has to keep matching the rows it will actually
+#: meet, which is what a department's row looks like at revision
+#: ``b3e8d1f45a27`` — before the later migration runs. Subtracting them here
+#: keeps the drift check meaningful for everything else rather than freezing
+#: the registry, which is what an unqualified equality would do.
+#:
+#: ``finance.approve`` / ``finance.configure_approvals`` reach the treasurer's
+#: stored row through ``20260906_2141_ee7390dcdf47``.
+_ADDED_SINCE: dict[str, set[str]] = {
+    "treasurer": {"finance.approve", "finance.configure_approvals"},
+}
+
+
 def _as_frozen(permissions: set[str]) -> set[str]:
     """Spell *permissions* the way a migration older than the rename would.
 
@@ -119,7 +134,20 @@ class TestBackfillMirrorsTheRegistry:
     def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
         module = _load_migration()
         registry = _as_frozen(set(DEFAULT_POSITIONS[slug]["permissions"]))
-        assert module._PRIOR_DEFAULTS[slug] == registry - set(module._GRANTS)
+        expected = registry - set(module._GRANTS) - _ADDED_SINCE.get(slug, set())
+        assert module._PRIOR_DEFAULTS[slug] == expected
+
+    @pytest.mark.parametrize("slug", sorted(_ADDED_SINCE))
+    def test_a_later_grant_is_recorded_rather_than_folded_into_the_snapshot(self, slug):
+        """The exemption above must name a grant the registry actually holds.
+
+        Otherwise it silently widens: a stale entry would subtract a permission
+        the registry no longer has, and the equality would stop catching real
+        drift for that position.
+        """
+        registry = _as_frozen(set(DEFAULT_POSITIONS[slug]["permissions"]))
+
+        assert _ADDED_SINCE[slug] <= registry
 
     def test_snapshot_never_already_carries_a_grant(self):
         # If it did, a pristine row would never match and nothing would be

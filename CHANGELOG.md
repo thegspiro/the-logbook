@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Nobody could run a finance approval chain (2026-09-06)
+
+**Fixed**
+
+- **The Treasurer can now reach the approval workflow.** `finance.approve` and
+  `finance.configure_approvals` gate nine endpoints — the approval queue and
+  the whole approval-chain settings screen — and no seeded position held
+  either. The only account that could reach them held the `*` wildcard, i.e.
+  the IT administrator. With no chain configured, `submit_purchase_request`
+  skips approval entirely, so requests quietly bypassed the workflow; configure
+  a chain, which needed that same unreachable screen, and every submitted
+  request landed in `pending_approval` with nobody able to action it. The
+  `treasurer` position now carries both grants, and a migration carries them to
+  departments that already onboarded — gated on the stored row still holding
+  exactly the finance grants the registry seeded, so a position an
+  administrator curated is left alone. `assert_different_person` still refuses
+  self-approval whoever holds the permission, so a Treasurer cannot walk their
+  own request through a chain.
+
+### Two permission gates that pointed at nothing (2026-09-06)
+
+**Fixed**
+
+- **The supply worklist no longer admits a grant its own endpoint refuses.**
+  `/inventory/admin/checklists/supply` was gated on `scheduling.manage`,
+  `inventory.check_view` or `inventory.manage`, but
+  `GET /equipment-check/supply/expiring-items` accepts only the latter two. A
+  shift officer holding just `scheduling.manage` passed the route guard and met
+  a 403 on load, reaching a page that rendered nothing but its failure state.
+  The route, the administration hub card and the two inbound links (the fleet
+  board and the apparatus detail page) now all match the endpoint. Narrowed
+  rather than widened deliberately: the worklist is fleet-wide item stock and
+  expiry, so the fix is to stop admitting a purely scheduling grant rather than
+  to disclose inventory data to one.
+- **The API contract suite's generated email addresses are now all addresses
+  Pydantic accepts.** The strategy behind OpenAPI's `email` format allowed a
+  hyphen anywhere inside a domain label, so it could emit `fa--jm.bfd` —
+  email-validator refuses two letters followed by two dashes at a label's third
+  and fourth characters, since IDNA reserves that shape for punycode's `xn--`.
+  Schemathesis reported the resulting 422 as "API rejected schema-compliant
+  request", which surfaced as a one-off red months after the strategy landed,
+  on an unrelated pull request. The pattern no longer emits two adjacent
+  hyphens; single hyphens still generate.
 ### The program print sheet's Enrolled Members table could never render (2026-09-06)
 
 **Fixed**
