@@ -140,6 +140,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders for count-only departments alone, so naming the types "the breakdown
   the close-out wizard asks for" described a screen a detailed or off department
   never sees.
+- **An unread equipment-check status is reported as unread, not as zero.** Where
+  the department does not block close-out on those checks a failed lookup no
+  longer stops the wizard opening — the server does not consult them there — but
+  proceeding silently would have put the fabricated zero back one branch over
+  from where it was taken out. The row says nothing read the status.
 - **An open row always has a way out.** The wizard renders nothing at all when
   its own state request fails — it reports the error and returns null — and the
   row had already hidden the button that opened it, leaving an empty card whose

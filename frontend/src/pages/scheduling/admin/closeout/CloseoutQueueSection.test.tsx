@@ -120,7 +120,11 @@ describe('CloseoutQueueSection', () => {
     await user.click(screen.getByRole('button', { name: /Close out/ }));
 
     expect(await screen.findByTestId('closeout-wizard')).toHaveTextContent('not blocking');
-    expect(screen.queryByText(/equipment checks could not be read/)).not.toBeInTheDocument();
+    // Opening is right — the server does not consult these checks here — but
+    // the row must not let an unread status read as zero outstanding, which is
+    // the fabricated zero this whole path was fixed to stop reporting.
+    expect(screen.getByText(/status could not be read/)).toBeInTheDocument();
+    expect(screen.queryByText(/still outstanding/)).not.toBeInTheDocument();
   });
 
   // Cancel with a check outstanding, the crew finishes it, reopen: a cached

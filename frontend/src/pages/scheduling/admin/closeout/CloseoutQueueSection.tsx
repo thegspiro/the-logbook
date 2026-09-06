@@ -85,6 +85,10 @@ const CloseoutQueueSection: React.FC = () => {
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
   const [checksFailed, setChecksFailed] = useState<string | null>(null);
+  // Distinct from `checksFailed`: the lookup failed but the department does not
+  // block on it, so close-out proceeds — and the row has to say the status is
+  // unknown rather than let an absent answer read as zero outstanding.
+  const [checksUnknown, setChecksUnknown] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<string, ShiftCheckSummary[]>>({});
 
   // The store deliberately leaves `settingsLoaded` false on a failed load, so
@@ -129,6 +133,7 @@ const CloseoutQueueSection: React.FC = () => {
     setOpenRow(null);
     setPreparing(null);
     setChecksFailed(null);
+    setChecksUnknown(null);
     if (rangeReversed) {
       setShifts([]);
       setFailed(false);
@@ -208,6 +213,7 @@ const CloseoutQueueSection: React.FC = () => {
     const mine = ++openId.current;
     setPreparing(entry.shift.id);
     setChecksFailed(null);
+    setChecksUnknown(null);
     try {
       const summaries = await equipmentCheckService.getShiftChecklists(entry.shift.id);
       if (mine !== openId.current) return;
@@ -237,7 +243,11 @@ const CloseoutQueueSection: React.FC = () => {
         setPreparing(null);
         return;
       }
-      setChecksFailed(null);
+      // Proceeding is right — the server does not consult these checks here —
+      // but proceeding *silently* would put the fabricated zero back, one
+      // branch over from where it was taken out. Nothing read the status, and
+      // the row says so.
+      setChecksUnknown(entry.shift.id);
     }
     setPreparing(null);
     setOpenRow(entry.shift.id);
@@ -380,7 +390,15 @@ const CloseoutQueueSection: React.FC = () => {
                   somebody else's checklist is a different job from one that
                   only needs its times confirming, and the officer should see
                   which before starting the three steps. */}
-              {isOpen && pending > 0 && (
+              {isOpen && checksUnknown === shift.id && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  This shift&rsquo;s equipment check status could not be read, so it is not shown below. Your department
+                  does not block close-out on it.
+                </p>
+              )}
+
+              {isOpen && checksUnknown !== shift.id && pending > 0 && (
                 <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   {pending} end-of-shift equipment check{pending === 1 ? '' : 's'} still outstanding
