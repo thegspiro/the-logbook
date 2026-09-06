@@ -72,6 +72,17 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { Breadcrumbs } from '../../../components/ux';
 
 const PAGE_SIZE = 50;
+
+/**
+ * `fLoc` value standing for the location panel's "Unassigned" bucket.
+ *
+ * Not the empty string: that is "All Locations", and collapsing the two made
+ * the Unassigned card unfilterable *and* permanently ring-highlighted, since
+ * clicking it set the state the unfiltered page already sat in. A sentinel a
+ * location id can never take, sent to the API as its own flag rather than as
+ * a `location_id`.
+ */
+const UNASSIGNED_LOCATION = 'unassigned';
 const SORT_COLS = [
   { key: 'name', label: 'Name' },
   { key: 'status', label: 'Status' },
@@ -399,7 +410,8 @@ const InventoryItemsPage: React.FC = () => {
       status: fStatus || undefined,
       condition: fCond || undefined,
       item_type: fType || undefined,
-      location_id: fLoc || undefined,
+      location_id: fLoc && fLoc !== UNASSIGNED_LOCATION ? fLoc : undefined,
+      unassigned_location: fLoc === UNASSIGNED_LOCATION ? true : undefined,
       vendor_id: vendorFilter || undefined,
       size: fSize || undefined,
       color: fColor || undefined,
@@ -465,12 +477,20 @@ const InventoryItemsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter / sort changes
+  // Filter / sort changes.
+  //
+  // Every control `filterParams` reads belongs here. Location, size, colour,
+  // style and the vendor scope were missing, so those five filters changed
+  // nothing on screen: the request was never re-sent, and the next reload
+  // triggered by something else (a websocket event, a bulk edit) applied them
+  // without the user having touched them. It is what made the location panel
+  // unreconcilable with the list beneath it — the cards were the only place
+  // those items were ever counted.
   useEffect(() => {
     if (loading) return;
     void loadItems(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fCat, fStatus, fCond, fType, sortBy, sortOrd]);
+  }, [fCat, fStatus, fCond, fType, fLoc, fSize, fColor, fStyle, vendorFilter, sortBy, sortOrd]);
 
   // Debounced search
   useEffect(() => {
@@ -713,7 +733,11 @@ const InventoryItemsPage: React.FC = () => {
           {summary && (
             <div className="text-theme-text-muted mt-2 flex flex-wrap gap-4 text-sm">
               <span className="flex items-center gap-1.5">
-                <Package className="h-4 w-4" /> {summary.total_items} items
+                {/* non_medical_items, not total_items: the latter sums
+                    quantities across every domain including medical, while
+                    the list below counts rows and excludes it. A header of 82
+                    over a list of 6 reads as a bug in the list. */}
+                <Package className="h-4 w-4" /> {summary.non_medical_items} items
               </span>
               <span className="flex items-center gap-1.5">
                 <AlertTriangle className="h-4 w-4" /> {summary.overdue_checkouts} overdue
@@ -784,9 +808,11 @@ const InventoryItemsPage: React.FC = () => {
             <button
               key={loc.location_id ?? 'unassigned'}
               onClick={() => {
-                setFLoc(loc.location_id ?? '');
+                const value = loc.location_id ?? UNASSIGNED_LOCATION;
+                setFLoc((prev) => (prev === value ? '' : value));
               }}
-              className={`card-secondary hover:bg-theme-surface-hover p-3 text-left ${fLoc === (loc.location_id ?? '') ? 'ring-2 ring-blue-500' : ''}`}
+              aria-pressed={fLoc === (loc.location_id ?? UNASSIGNED_LOCATION)}
+              className={`card-secondary hover:bg-theme-surface-hover p-3 text-left ${fLoc === (loc.location_id ?? UNASSIGNED_LOCATION) ? 'ring-2 ring-blue-500' : ''}`}
             >
               <div className="mb-1 flex items-center gap-1.5">
                 <MapPin className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
@@ -903,6 +929,7 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFLoc(e.target.value)}
           >
             <option value="">All Locations</option>
+            <option value={UNASSIGNED_LOCATION}>Unassigned</option>
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -1037,7 +1064,7 @@ const InventoryItemsPage: React.FC = () => {
           icon={Package}
           title="No items found"
           description={
-            search || fCat || fStatus || fCond || fType || fLoc
+            search || fCat || fStatus || fCond || fType || fLoc || fSize || fColor || fStyle || vendorFilter
               ? 'Try adjusting your filters.'
               : 'Get started by adding your first inventory item.'
           }

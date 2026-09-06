@@ -1657,6 +1657,7 @@ class InventoryService:
         exclude_item_types: Optional[Iterable[ItemType]] = None,
         assigned_to: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
+        unassigned_location: bool = False,
         storage_area_id: Optional[UUID] = None,
         vendor_id: Optional[UUID] = None,
         search: Optional[str] = None,
@@ -1670,6 +1671,11 @@ class InventoryService:
         limit: int = 100,
     ) -> Tuple[List[InventoryItem], int]:
         """Get items with filtering, sorting, and pagination.
+
+        ``unassigned_location`` restricts to items filed under no location at
+        all — the population the location panel labels "Unassigned". It is
+        ignored when ``location_id`` names a location, since the two ask for
+        disjoint sets and a request carrying both is asking for nothing.
 
         ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
         out — that pair is what keeps the medical-supply page and the
@@ -1722,6 +1728,12 @@ class InventoryService:
 
         if location_id:
             query = query.where(InventoryItem.location_id == str(location_id))
+        elif unassigned_location:
+            # The location panel's "Unassigned" bucket is a real subset of the
+            # catalog, not the absence of a filter. Without a way to say "no
+            # location" the card could only clear the filter it looked like it
+            # applied, so it read as selected whenever nothing was selected.
+            query = query.where(InventoryItem.location_id.is_(None))
 
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
@@ -3712,9 +3724,27 @@ class InventoryService:
         }
 
     async def get_summary_by_location(
-        self, organization_id: UUID
+        self,
+        organization_id: UUID,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Dict[str, Any]]:
-        """Get inventory summary grouped by location"""
+        """Get inventory summary grouped by location.
+
+        ``exclude_item_types`` carves a domain out of every figure, the way
+        :meth:`get_items` carves it out of a listing — and the caller that
+        wants the panel to agree with a listing must pass the same value that
+        listing was fetched with. This panel sits directly above the row list
+        on the items page, so a domain counted here and excluded there puts a
+        location card on screen whose rows the page can never show: the gear
+        page reported 82 units across 8 items while listing 30 units across 6,
+        the difference being medical stock that lives on its own page.
+        """
+        domain_filters = (
+            [self._outside_domains(organization_id, exclude_item_types)]
+            if exclude_item_types
+            else []
+        )
+
         result = await self.db.execute(
             select(
                 Location.id,
@@ -3733,6 +3763,7 @@ class InventoryService:
                     InventoryItem.location_id == Location.id,
                     InventoryItem.organization_id == str(organization_id),
                     InventoryItem.active.is_(True),
+                    *domain_filters,
                 ),
             )
             .where(Location.organization_id == str(organization_id))
@@ -3755,6 +3786,7 @@ class InventoryService:
                 InventoryItem.organization_id == str(organization_id),
                 InventoryItem.active.is_(True),
                 InventoryItem.location_id.is_(None),
+                *domain_filters,
             )
         )
         unassigned = unassigned_result.one()
@@ -7893,6 +7925,24 @@ class InventoryService:
             )
         return query.order_by(InventoryItem.name.asc(), InventoryItem.id.asc())
 
+    @staticmethod
+    def _narrow_to_variant_siblings(query, referenced: InventoryItem):
+        """Restrict *query* to rows that could share *referenced*'s variant.
+
+        Coarse on purpose: this is the widest set the exact identity check can
+        draw from, expressed in SQL so the whole catalog is not loaded. A
+        variant group bounds it when the row has one; otherwise the product is
+        name-based within a category, and the name comparison happens in
+        Python because the base name is derived, not stored.
+        """
+        if referenced.variant_group_id:
+            return query.where(
+                InventoryItem.variant_group_id == referenced.variant_group_id
+            )
+        if referenced.category_id is None:
+            return query.where(InventoryItem.category_id.is_(None))
+        return query.where(InventoryItem.category_id == referenced.category_id)
+
     async def get_fulfillment_options(
         self,
         request_id: UUID,
@@ -7937,11 +7987,31 @@ class InventoryService:
         if req is None:
             return None
 
-        # Narrowed the way the fulfil dialog narrows: the referenced item when
-        # the request names one, otherwise its category. A free-text request
-        # names neither, and leaves the whole gear catalog eligible.
+        # Narrowed the way the fulfil dialog narrows: the variant the
+        # referenced item stands for when the request names one, otherwise its
+        # category. A free-text request names neither, and leaves the whole
+        # gear catalog eligible.
         narrowed = self._fulfillment_base_query(organization_id, search)
+        referenced: Optional[InventoryItem] = None
         if req.item_id:
+            # Deliberately unfiltered by status/active: the row only has to be
+            # readable enough to compute an identity from. It may well have
+            # been retired since the member asked, which is precisely when
+            # offering its siblings matters.
+            referenced = (
+                await self.db.execute(
+                    select(InventoryItem).where(
+                        InventoryItem.id == req.item_id,
+                        InventoryItem.organization_id == str(organization_id),
+                    )
+                )
+            ).scalar_one_or_none()
+
+        if req.item_id and referenced is not None:
+            narrowed = self._narrow_to_variant_siblings(narrowed, referenced)
+        elif req.item_id:
+            # Unresolvable id (deleted, or another org's): unchanged behaviour,
+            # which yields nothing rather than widening to the whole catalog.
             narrowed = narrowed.where(InventoryItem.id == req.item_id)
         elif req.category_id:
             narrowed = narrowed.where(InventoryItem.category_id == req.category_id)
@@ -7949,6 +8019,16 @@ class InventoryService:
         compatible_items = list(
             (await self.db.execute(narrowed)).scalars().unique().all()
         )
+        if referenced is not None:
+            # The coarse SQL above cannot express the normalised size/colour/
+            # style comparison, so the exact identity is settled in Python
+            # against the same helper the catalog grouped by.
+            wanted_identity = self._variant_identity(referenced)
+            compatible_items = [
+                item
+                for item in compatible_items
+                if self._variant_identity(item) == wanted_identity
+            ]
         await self._attach_lot_stock(str(organization_id), compatible_items)
         compatible = [self._fulfillment_option(item) for item in compatible_items]
 
@@ -8187,6 +8267,46 @@ class InventoryService:
         return slugs
 
     @classmethod
+    def _product_key(cls, item: InventoryItem) -> str:
+        """The product a catalog row belongs to.
+
+        A variant group is the product when the row has one; otherwise rows are
+        gathered by category and by the base name behind a decorated variant
+        name ("Duty Shirt — L — Navy" and "Duty Shirt — XL — Navy" are one
+        product). ``variant_group_id`` alone is enough to key on: the column is
+        ``ondelete="SET NULL"``, so it cannot point at a group that is gone.
+        """
+        if item.variant_group_id:
+            return f"vg:{item.variant_group_id}"
+        base_name = cls._product_base_name(item)
+        return f"nm:{item.category_id or ''}:{base_name.casefold()}"
+
+    @classmethod
+    def _variant_key(cls, item: InventoryItem) -> Tuple[str, str, str]:
+        """The variant a catalog row collapses into, within its product.
+
+        Size, colour and style, normalised. Rows sharing this are one line to
+        the member: ten serialized radios read as "7 available", not as ten
+        indistinguishable rows.
+        """
+        return (
+            cls._normalize_size_key(cls._item_stock_size_value(item)),
+            (item.color or "").casefold(),
+            cls._enum_value(item.style) or "",
+        )
+
+    @classmethod
+    def _variant_identity(cls, item: InventoryItem) -> Tuple[str, str, str, str]:
+        """Product and variant together — the row-set the catalog showed as one.
+
+        Both the catalog's collapsing and the fulfilment narrowing resolve
+        identity through this, so a request raised against one advertised
+        variant cannot be answered with a different set of rows than the
+        variant was counted from (CLAUDE.md pitfall #29).
+        """
+        return (cls._product_key(item),) + cls._variant_key(item)
+
+    @classmethod
     def _group_requestable(cls, items: List[InventoryItem]) -> List[Dict[str, Any]]:
         """Collapse catalog rows into products, and rows into size variants.
 
@@ -8200,11 +8320,10 @@ class InventoryService:
 
         for item in items:
             base_name = cls._product_base_name(item)
+            product_key = cls._product_key(item)
             if item.variant_group_id and item.variant_group is not None:
-                product_key = f"vg:{item.variant_group_id}"
                 product_name = item.variant_group.name or base_name
             else:
-                product_key = f"nm:{item.category_id or ''}:{base_name.casefold()}"
                 product_name = base_name
 
             product = products.get(product_key)
@@ -8233,11 +8352,7 @@ class InventoryService:
                 product["tracking_type"] = TrackingType.POOL.value
 
             size_value = cls._item_stock_size_value(item)
-            variant_key = (
-                cls._normalize_size_key(size_value),
-                (item.color or "").casefold(),
-                cls._enum_value(item.style) or "",
-            )
+            variant_key = cls._variant_key(item)
             available = cls._requestable_available(item)
 
             variant = product["_variants"].get(variant_key)

@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A request is fulfilled from the variant it named, not one row of it (2026-09-06)
+
+**Fixed**
+
+- **The fulfil picker now offers every row the member's chosen variant was
+  counted from.** The request catalog deliberately collapses rows that share a
+  product and a size/colour/style into one line and sums their availability —
+  that is what turns ten serialized radios into "Portable Radio — 7 available"
+  instead of ten indistinguishable rows. The request then stored a single
+  `item_id` out of that line, and fulfilment narrowed to exactly that row, so a
+  member could ask for ten against a line advertising ten and leave the
+  quartermaster looking at the one row holding one. Fulfilment now resolves the
+  request to the variant and offers its sibling rows, so the options match the
+  availability the member was shown. Rows outside that variant — a different
+  size, colour, style, product or organization — stay excluded, unchanged.
+- The product and variant identity the catalog groups by is now one definition
+  (`_product_key` / `_variant_key` / `_variant_identity`), consumed by both the
+  grouping and the fulfilment narrowing rather than restated on each side.
+
+### The inventory location panel agrees with the list beneath it (2026-09-06)
+
+**Fixed**
+
+- **Five of the items page's nine filters did nothing.** Location, size, colour,
+  style and the vendor scope were absent from the reload effect's dependencies,
+  so picking one changed the request the page _would_ send and never sent it.
+  The list stayed as it was until an unrelated reload — a websocket event, a
+  bulk status change — applied a filter nobody had touched since. This is what
+  made the location cards impossible to reconcile with the list: they are links
+  into a list that did not respond to them.
+- **The location cards counted medical stock the list excludes.**
+  `GET /inventory/summary/by-location` reported every domain while `GET /items`
+  carves EMS supplies out — they have their own page and their own permission.
+  A department running both saw a header of "82 items" and an "Unassigned" card
+  reading 52 units across 2 items, above a list of 6 items totalling 30; the
+  difference was medical stock with no location filed against it, counted in the
+  panel and unlistable on that page. The panel now takes the same carve-out the
+  listing is fetched with, so a location holding only medical stock gets no card
+  rather than a card whose rows the page cannot show.
+- **The "Unassigned" card could not filter to the items it counted.** It sent
+  the empty string, which is "All Locations", so clicking it cleared the filter
+  it appeared to apply and its highlight was on whenever nothing was selected.
+  `GET /items` gains an optional `unassigned_location` flag for the "no location
+  at all" population; the card, a new dropdown option and a second click to
+  clear all use it.
+- **The header counted a different thing from the list under it.** It read
+  `total_items`, which sums quantities across every domain including medical,
+  over a list that counts rows and excludes it. It now reads
+  `non_medical_items`, which exists for exactly this and which the inventory hub
+  already used.
+
 ### An inventory item's size is edited through a labelled picker (2026-09-06)
 
 **Fixed**
@@ -55,6 +106,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the endpoints check. The gate is on the component, not the route, because the
   same page is mounted inside the training admin hub where the officer does hold
   it.
+
+### Grants & Fundraising: list endpoints now page at the database (2026-09-05)
+
+**Fixed**
+
+- Every grants/fundraising list endpoint (opportunities, applications,
+  budget items, expenditures, compliance tasks, notes, campaigns, donors,
+  donations, pledges, fundraising events) previously fetched an org's
+  **entire** matching table from the database before selecting the
+  requested page in application memory. For a department with years of
+  donation, donor, or grant-application history, this meant every list page
+  view scanned and loaded the complete history regardless of how small the
+  requested page was. Pagination (`skip`/`limit`) is now applied in the SQL
+  query itself, so a page load only reads the rows it actually displays.
+  No response shape or ordering changed for any request within the
+  documented row limits.
 
 ### Shift Details becomes a modal (2026-09-05)
 
