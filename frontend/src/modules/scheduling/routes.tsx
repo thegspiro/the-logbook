@@ -27,6 +27,10 @@ const SchedulingPlanningPage = lazyWithRetry(
   () => import('../../pages/scheduling/admin/planning/SchedulingPlanningPage')
 );
 
+const SchedulingCloseoutPage = lazyWithRetry(
+  () => import('../../pages/scheduling/admin/closeout/SchedulingCloseoutPage')
+);
+
 const SchedulingAdminReportsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingAdminReportsPage'));
 
 const SchedulingSettingsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingSettingsPage'));
@@ -100,6 +104,20 @@ export const getSchedulingRoutes = () => {
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingPlanningPage section="patterns" />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      {/* Department-wide, so it stands on `scheduling.manage` like the rest of
+          this area. The named shift officer's own route to closing their shift
+          is unchanged and does not come through here: the shift panel grants
+          them that authority per shift, mirroring the backend. */}
+      <Route
+        path="/scheduling/admin/closeout"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
+              <SchedulingCloseoutPage />
             </ProtectedRoute>
           </Suspense>
         }

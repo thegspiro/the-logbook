@@ -1281,6 +1281,164 @@ class TestCallCountAutoPopulation:
         assert report.call_types == ["mutual_aid"]
         assert report.data_sources["call_types"] == "org_calls"
 
+    async def _count_only_report(self, db_session, d, slugs=("mutual_aid",)):
+        """A linked-shift report whose types are this org's slugs."""
+        from app.core.utils import generate_uuid
+        from app.models.call_tracking import OrgCall, OrgCallResponse
+
+        for slug in slugs:
+            call_id = generate_uuid()
+            db_session.add(
+                OrgCall(
+                    id=call_id,
+                    organization_id=d["org_id"],
+                    call_date=d["shift_date"],
+                    call_type=slug,
+                )
+            )
+            db_session.add(
+                OrgCallResponse(
+                    id=generate_uuid(),
+                    organization_id=d["org_id"],
+                    call_id=call_id,
+                    shift_id=d["shift_id"],
+                )
+            )
+        await db_session.execute(
+            text(
+                "INSERT INTO shift_attendance "
+                "(id, shift_id, user_id, duration_minutes, call_count) "
+                "VALUES (:id, :sid, :uid, 720, :n)"
+            ),
+            {
+                "id": generate_uuid(),
+                "sid": d["shift_id"],
+                "uid": d["crew_1"],
+                "n": len(slugs),
+            },
+        )
+        await db_session.flush()
+
+        svc = ShiftCompletionService(db_session)
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+        await db_session.flush()
+        assert report.data_sources["call_types"] == "org_calls"
+        return svc, report
+
+    async def test_an_edit_that_stays_in_slugs_keeps_its_provenance(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The draft editor offers this department's own types on a report that
+        carries slugs, so an edit there yields slugs again. Clearing the marker
+        would cost the report its labels and its standing as a reason not to
+        delete a type, for an edit that changed neither."""
+        d = setup_shift_with_crew
+        svc, report = await self._count_only_report(db_session, d)
+
+        updated = await svc.update_report(
+            report_id=report.id,
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=str(d["officer_id"]),
+            updates={"call_types": ["mutual_aid", "fire"]},
+        )
+
+        assert updated is not None
+        assert updated.call_types == ["mutual_aid", "fire"]
+        assert (updated.data_sources or {}).get("call_types") == "org_calls"
+
+    async def test_one_typed_name_among_the_slugs_clears_it(
+        self, db_session, setup_shift_with_crew
+    ):
+        """The marker describes the array, and a reader relabels every value in
+        it. A mixed list cannot claim they are all slugs."""
+        d = setup_shift_with_crew
+        svc, report = await self._count_only_report(db_session, d)
+
+        updated = await svc.update_report(
+            report_id=report.id,
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=str(d["officer_id"]),
+            updates={"call_types": ["mutual_aid", "Structure Fire"]},
+        )
+
+        assert updated is not None
+        assert "call_types" not in (updated.data_sources or {})
+
+    async def test_emptying_the_list_clears_it(self, db_session, setup_shift_with_crew):
+        """A list with nothing in it describes no value at all."""
+        d = setup_shift_with_crew
+        svc, report = await self._count_only_report(db_session, d)
+
+        updated = await svc.update_report(
+            report_id=report.id,
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=str(d["officer_id"]),
+            updates={"call_types": []},
+        )
+
+        assert updated is not None
+        assert "call_types" not in (updated.data_sources or {})
+
+    async def test_a_slug_no_longer_configured_clears_it(
+        self, db_session, setup_shift_with_crew
+    ):
+        """Only types in force can be confirmed. A value the department no
+        longer configures resolves to no label, so the marker buys the report
+        nothing and asserting it would be a claim nothing supports."""
+        d = setup_shift_with_crew
+        svc, report = await self._count_only_report(db_session, d)
+
+        updated = await svc.update_report(
+            report_id=report.id,
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=str(d["officer_id"]),
+            updates={"call_types": ["retired_long_ago"]},
+        )
+
+        assert updated is not None
+        assert "call_types" not in (updated.data_sources or {})
+
+    async def test_a_detailed_reports_marker_still_clears_on_any_edit(
+        self, db_session, setup_shift_with_crew
+    ):
+        """A detailed-tracking report's values are the officer's own wording,
+        and an edit that happens to name a configured type does not make them
+        the department's slug list. Its marker clears as it always has —
+        preserving provenance is scoped to the one case it describes."""
+        d = setup_shift_with_crew
+        await self._log_call(db_session, d, [d["crew_1"]], "EMS")
+        svc = ShiftCompletionService(db_session)
+
+        report = await svc.create_report(
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=uuid.UUID(d["officer_id"]),
+            trainee_id=d["crew_1"],
+            shift_date=d["shift_date"],
+            hours_on_shift=12.0,
+            shift_id=d["shift_id"],
+            commit=False,
+        )
+        await db_session.flush()
+        assert report.data_sources["call_types"] == "shift_calls"
+
+        updated = await svc.update_report(
+            report_id=report.id,
+            organization_id=uuid.UUID(d["org_id"]),
+            officer_id=str(d["officer_id"]),
+            updates={"call_types": ["fire"]},
+        )
+
+        assert updated is not None
+        assert "call_types" not in (updated.data_sources or {})
+
     async def test_editing_a_draft_s_types_clears_their_provenance(
         self, db_session, setup_shift_with_crew
     ):

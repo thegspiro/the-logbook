@@ -1040,13 +1040,25 @@ Three new print-formatted pages allow officers and administrators to generate pa
 
 Renders a paper-formatted member training record including:
 
-- Member name, rank, station, and membership dates
-- Training hours summary (current period and all-time)
-- Certification status and expiration dates
-- Compliance indicators (green/yellow/red) for all active requirements
-- Complete chronological list of training records with course, date, hours, and category
+- The member's name and one overall compliance label. The name comes from the `?name=` query parameter rather than the record, and reads "Member" when the caller omits it — rank, station and membership dates are not on the sheet. The label is coloured by standing — green for `green`, red for `red`, amber for `yellow`. An **exempt** member has no modifier rule of its own, so it falls back to the base `.member-training-print__compliance` colour, which is the same `#92400e` amber `yellow` uses: exempt and yellow are indistinguishable on the sheet
+- Four counts: Total Hours, Hours This Year, Active Certifications, Completed Courses
+- One aggregate compliance row — Requirements Met (`met / total`), Expiring Soon, Expired. There is no per-requirement breakdown on this page; the [Compliance Matrix](#compliance-matrix-print-page) is where a requirement-by-requirement view lives
+- Program Enrollments, with each program's status, progress percentage, enrolment date and target completion
+- Certifications, with number, issuing agency, completion date, expiry and status
+- Training History in reverse-chronological order, with course, type, date, hours, instructor and status
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Member Training Print Page showing the letter-size layout with member info header, hours summary cards, certification table, compliance status badges, and the training records table._
+The last three sections are each omitted when they have no rows, so a member with
+no enrolments prints without a Program Enrollments heading at all.
+
+> **A record can appear in both tables.** The two lists are split from one set of
+> training records, and the two filters are not complements. Certifications takes
+> a record carrying a certification number **or** typed `certification`; Training
+> History takes one that is **not** typed `certification` **or** carries no
+> number. Two combinations satisfy both and print twice: a certification
+> recorded without a number, and a non-certification record that carries one.
+> Worth knowing before reading either as duplicate data entry.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Member Training Print Page showing the letter-size layout: the "Training Record" heading with the member's name beneath it and the generated date and `Compliance: <label>` line at the top right; the four stat tiles (Total Hours, Hours This Year, Active Certifications, Completed Courses); the Requirements Met / Expiring Soon / Expired summary row; and the Program Enrollments, Certifications and Training History tables. Shoot a member who holds certifications and at least one enrollment — each of those three tables is omitted when it has no rows._
 
 ### Training Program Print Page
 
@@ -1054,12 +1066,26 @@ Renders a paper-formatted member training record including:
 
 Renders a training program detail for paper:
 
-- Program name, description, type (Flexible/Sequential/Phase-based), and status
-- Phase breakdown with requirements listed under each phase
-- Milestones with completion criteria
-- Enrollment roster with per-member progress percentages
+- Program name and description, with the program's code and version beside the generated date
+- A four-cell strip: Structure (the stored `structure_type` — `sequential`, `phases` or `flexible` — printed as stored, not title-cased), Target Position, Time Limit and the enrolment count. The program's own status is not on the sheet
+- **Program Phases** — number, name, description, time limit and a count of the requirements in each phase
+- **Program Requirements** — requirement, the phase it belongs to, whether it is required or optional, and its description. This is a **flat table with a Phase column**, not requirements nested under the phase rows above
+- **Enrolled Members** — member, status, progress percentage, enrolment date, target date and current phase
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Program Print Page showing the program header, phase accordion expanded with requirements and progress bars, milestone checkpoints, and enrollment table._
+Both tables are omitted when empty, and Milestones are not printed: the page
+renders phases and requirements only.
+
+> **Enrolled Members cannot currently render, and `Enrolled:` always reads 0.**
+> The page builds both from `program.enrollments`, but it loads the program from
+> `GET /training/programs/programs/{id}` — the segment doubles because the
+> router mounts at `/training/programs` and its handler sits at
+> `/programs/{program_id}` — whose `ProgramWithPhasesAndRequirements`
+> response carries `phases`, `requirements` and `milestones` and **no
+> enrollments field**. The component types it as an optional extra, so nothing
+> errors — the list is simply always empty. Treat the enrolment count on a
+> printed program as unwired rather than as a program nobody has joined.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Program Print Page showing the "Training Program" heading with the program name and description, and the generated date, code and version at the top right; the Structure / Target Position / Time Limit / Enrolled strip; the Program Phases table (number, name, description, time limit, requirement count); and the Program Requirements table (requirement, phase, required, description). Shoot a phase-based program — the Program Phases table is not rendered for a program with no phases. The strip will read `Enrolled: 0` and there will be no Enrolled Members table whatever program you pick, for the reason above; do not go looking for one._
 
 ### Compliance Matrix Print Page
 
@@ -1068,12 +1094,26 @@ Renders a training program detail for paper:
 
 Renders the department-wide compliance matrix (all members × all requirements) as a printable grid:
 
-- Members listed as rows, requirements as columns
-- Color-coded cells (green/yellow/red) with percentage values
-- Optimized for letter-size landscape printing with repeat headers across pages
+- Four counts across the top: 100% Complete, Partially Complete, Not Started, and the number of requirements. The first three are printed green, amber and red respectively — fixed to the label, not to the value, so a zero under "Not Started" is still red
+- Members as rows — sorted by completion, least complete first — and requirements as columns, each heading truncated to twelve characters with the full name on the cell's `title`
+- A **Completion** column carrying each member's percentage, coloured by value: green at 100%, amber above zero, red at zero
+- Per-requirement cells carrying `✓`, `◐` or `—` — **glyphs, not colour and not percentages**. The endpoint emits four statuses; only two get a glyph of their own, and everything else falls through to the dash:
+
+  | Cell | Means                                                           |
+  | ---- | --------------------------------------------------------------- |
+  | `✓`  | `completed`                                                     |
+  | `◐`  | `in_progress`                                                   |
+  | `—`  | `expired`, `not_started`, **or the requirement does not apply** |
+
+  **The dash carries three unrelated meanings, and one of them is not a deficiency.** Columns are every active requirement in the organization, but a member is graded only on the ones that apply to them — a compliance profile narrows the set, and a requirement carrying `required_membership_types` is skipped for anyone outside them. A requirement a member is not graded on has no entry to look up, so it prints as a dash exactly like a lapsed one.
+
+  So do not read a row of dashes as a member in trouble. A lapsed certification, one never started, and one that was never asked of them are indistinguishable on paper. Check the on-screen matrix or the member's own record before treating any dash as an open item — and note that the member's Completion percentage is calculated against **their** applicable requirements, so it stays consistent with the requirements they are actually held to even while the printed row shows dashes across columns that never applied
+
+- A signature block for the Training Officer and the Chief / Department Head
+- Letter landscape. Column headings repeat on each printed page because the grid uses a real `<thead>`, but nothing constrains the width: past roughly twenty requirements the columns run off the right edge of the sheet
 - Designed for annual reviews, regulatory audits, and compliance filing
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page showing the grid with member names on the left, requirement names across the top, and colored cells with percentages. Show the landscape orientation and page break indicators._
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page in landscape showing the four summary counts (100% Complete, Partially Complete, Not Started, Requirements); the grid with member names down the left, a colour-coded Completion percentage beside each, and one column per requirement — headings truncated to twelve characters, cells carrying `✓`, `◐` or `—` rather than colour or a percentage; and the Training Officer / Chief signature block at the foot. Shoot a department with few enough requirements that the grid fits the sheet; past roughly twenty the columns run off the right edge._
 
 ### Print Buttons on Source Pages
 
@@ -1087,13 +1127,13 @@ Each source page now includes a **Print** button that navigates to the correspon
 
 ### Edge Cases
 
-| Scenario                            | Behavior                                                             |
-| ----------------------------------- | -------------------------------------------------------------------- |
-| Member with no training records     | Print page shows empty table with "No records found" message         |
-| Program with no enrollments         | Enrollment section shows "No members enrolled"                       |
-| Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers |
-| Browser blocks auto-print dialog    | Page remains visible for manual Ctrl+P                               |
-| Print page for member on leave      | Leave period shown with pro-rated requirement adjustments            |
+| Scenario                            | Behavior                                                                                                                                                                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member with no training records     | The section is **omitted entirely** — no empty table, no message. A member with nothing recorded prints a header and the stat tiles alone                                                                                                                 |
+| Program with no enrollments         | The Enrolled Members section is **omitted entirely**, and always is — see the note above on why `Enrolled:` never leaves 0                                                                                                                                |
+| Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers                                                                                                                                                                                      |
+| Browser blocks auto-print dialog    | Page remains visible for manual Ctrl+P                                                                                                                                                                                                                    |
+| Print page for member on leave      | The **evaluation** accounts for the leave — a waiver reduces the required total behind the scenes — but no print page shows the leave period, the waived months or the adjusted target. The sheet reports the outcome, not the allowance that produced it |
 
 ---
 

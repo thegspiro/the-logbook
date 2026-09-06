@@ -1023,6 +1023,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/scheduling/admin/closeout',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
     path: '/scheduling/admin/reports',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'ratchet',
