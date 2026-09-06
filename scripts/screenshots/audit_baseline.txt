@@ -116,3 +116,14 @@
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
 04-47-template-reminder-audience.png
+
+# Ten, as of the two below, added 2026-09-06 by the #2320 refresh of the 424
+# training-guide captures — a screening record form and a template reset
+# dialog, both light pages under a modal scrim, both flagged the moment they
+# were re-shot. Neither is a regression and neither was avoidable: the capture
+# pass did exactly what it was asked to, and the check reported the constant
+# described above. That is the fourth consecutive time this section has grown
+# without anybody doing anything wrong, which is the argument for retiring the
+# subtle tier rather than for another entry here.
+08-22-screening-record-form.png
+08-57-template-reset-dialog.png
