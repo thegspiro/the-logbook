@@ -827,8 +827,13 @@ the way a quartermaster reads them, not the way a computer sorts strings.
 
 ## The console moved into Inventory Administration _(2026-09-03)_
 
-**The quartermaster console is now called "Department Store" and lives at
-`/inventory/admin/store`.** It was "Store Admin" at `/store/admin`.
+**The quartermaster console lives at `/inventory/admin/store` and its page
+title now reads "Department Store".** It was at `/store/admin`.
+
+**The sidebar entry is still labelled "Store Admin"**, in the Administration
+section — so that is what you tell someone to click, even though the page they
+land on is headed Department Store. Worth saying out loud in training, because
+the two names differ.
 
 Nothing inside it changed — the same six tabs (Overview, Order Windows, Catalog,
 Orders, Payments, Settings), the same `storefront.manage` permission, the same

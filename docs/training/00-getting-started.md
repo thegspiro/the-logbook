@@ -202,8 +202,9 @@ If you have administrative permissions (officers, IT Manager, etc.), you will se
 | **Members** ▾               | Prospective, Pipeline Settings, Member Management, Scan Member ID, Waivers, Medical Screening |
 | **Events Admin**            | Create events, view analytics                                                                 |
 | **Training Admin**          | Review submissions, manage requirements, compliance                                           |
-| **Inventory Admin**         | Manage gear and uniform items, view member issued equipment                                   |
-| **Store Admin**             | Storefront products, order windows, and fulfilment                                            |
+| **Scheduling Admin**        | Shift planning, platoons, positions, scheduling reports and settings (`scheduling.manage`)    |
+| **Inventory Admin**         | Manage gear and uniform items, equipment checklists, view member issued equipment             |
+| **Store Admin**             | Storefront products, order windows, and fulfilment — opens the **Department Store** console   |
 | **Admin Hours**             | Review and approve administrative hours                                                       |
 | **Forms & Comms** ▾         | Email Templates, Messages, Forms, Integrations                                                |
 | **Reports**                 | Generate department reports                                                                   |

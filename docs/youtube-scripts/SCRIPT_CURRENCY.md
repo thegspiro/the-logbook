@@ -11,9 +11,10 @@ determinations were made by **reading the script files**, not by inferring from
 the change list.
 
 **This is the largest navigation break the series has had.** Two features
-changed address, retiring fourteen URLs, thirteen with no redirect. The failure
-mode matters for production: **a retired URL does not error, it lands on the
-dashboard**, so a take shot from an old address captures the wrong screen and
+changed address, breaking fourteen addresses, none of which redirects (thirteen
+are retired paths; `/scheduling?tab=equipment-checks` still opens Scheduling, on
+its Schedule tab). The failure mode matters for production: **a retired URL does
+not error, it lands on the dashboard**, so a take shot from an old address captures the wrong screen and
 looks fine in review. Where a beat names a path, the path has been corrected in
 the script rather than noted here.
 

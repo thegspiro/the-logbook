@@ -30,14 +30,20 @@ disposition](#documentation-and-media-disposition) below.
 Five things in this window change what an operator or integrator must do,
 rather than just what they see:
 
-1. **Fourteen URLs stop resolving, and there is no redirect for thirteen of
-   them.** Equipment checklists moved from Scheduling to Inventory (eight
-   URLs) and scheduling administration moved under `/scheduling/admin` (six).
-   A bookmark, a link in a previously-sent email, or a notification already
-   sitting in a member's bell lands on the dashboard — silently, because the
-   catch-all redirect succeeds. `/store/admin` is the one exception: it
-   redirects to `/inventory/admin/store`. The full before/after tables are in
-   [Retired URLs](#retired-urls).
+1. **Fourteen addresses stop taking a member where they used to, and none of
+   them redirects.** Equipment checklists moved from Scheduling to Inventory
+   (eight) and scheduling administration moved under `/scheduling/admin`
+   (six). **Thirteen are retired paths**: a bookmark, a link in a
+   previously-sent email, or a notification already sitting in a member's bell
+   lands on the dashboard — silently, because the catch-all redirect succeeds.
+   **The fourteenth is not a retired path at all.**
+   `/scheduling?tab=equipment-checks` still resolves, because `/scheduling`
+   does; the removed tab value is simply ignored and the page opens on
+   **Schedule**. The member does not reach their checklists and nothing says
+   why, so it is as broken in effect — but it lands somewhere else, which
+   matters if you are testing these by hand. `/store/admin` **does** redirect
+   (to `/inventory/admin/store`) and is _not_ one of the fourteen. The full
+   before/after tables are in [Retired URLs](#retired-urls).
 
 2. **Six migrations take permissions away from seeded positions, and three
    give some back.** `reports.view` and `apparatus.view` come off the
@@ -107,8 +113,15 @@ rather than just what they see:
 
 ## Retired URLs
 
-**Thirteen of these fourteen have no redirect.** A bookmark or an emailed link
-lands on the dashboard, and the catch-all redirect makes that silent.
+**None of these fourteen redirects.** Thirteen are retired paths: a bookmark or
+an emailed link lands on the dashboard, and the catch-all redirect makes that
+silent. The fourteenth, `/scheduling?tab=equipment-checks`, is the odd one —
+`/scheduling` still resolves, so the removed tab value is ignored and the page
+opens on **Schedule** rather than on the dashboard. It is listed here because
+the member still fails to reach their checklists, not because the path retired.
+
+`/store/admin` is a genuine redirect (to `/inventory/admin/store`) and is
+deliberately **not** in these tables.
 
 ### Equipment checklists (Scheduling → Inventory)
 
@@ -305,8 +318,9 @@ override a department that removed a grant on purpose, and a missing benign
 grant discloses nothing — whereas leaving a disclosing grant in place on an
 unrecognized row keeps the disclosure open.
 
-**What an administrator has to do about it.** Nothing is granted back
-automatically. Specifically:
+**What an administrator has to do about it.** Nothing **revoked** by these six
+steps is granted back automatically — two separate steps do add grants, covered
+above. Specifically:
 
 - **A department that deliberately gave its members Reports must grant
   `reports.view` again** on the positions screen. A position the department

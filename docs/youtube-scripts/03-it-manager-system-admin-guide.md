@@ -1076,8 +1076,8 @@ delivery pass that compresses this chapter must not drop either.]**
 
 **[BEAT]**
 
-> "But the migrations are not the headline this time. **Fourteen URLs stop
-> working**, and thirteen of them have no redirect."
+> "But the migrations are not the headline this time. **Fourteen addresses stop
+> working, and not one of them redirects.**"
 
 **[SCREEN: Paste an old `/scheduling/equipment` URL. It lands on the dashboard.]**
 
@@ -1108,7 +1108,10 @@ delivery pass that compresses this chapter must not drop either.]**
 > the rank and file. And four more come off Member, Firefighter, Engineer and
 > EMT."
 
-**[CALLOUT: "Nothing is granted back automatically"]**
+**[CALLOUT: "Nothing these six steps take away is granted back automatically"]**
+
+> "Two _other_ steps do add grants back — so do not tell your chief the upgrade
+> never grants anything. It is the six removals that are one-way."
 
 **[BEAT — this is the beat that cannot be cut]**
 

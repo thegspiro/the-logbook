@@ -7,8 +7,8 @@ Predecessor: [August 24–31](Recent-Changes-2026-08-24-to-31).
 
 **The headline:** **equipment checklists moved out of Shift Scheduling into
 Inventory**, and **everything an officer administers about the schedule moved
-into the Administration section** — between them retiring **fourteen
-addresses**, thirteen of them with no redirect. Departments can now **name
+into the Administration section** — between them breaking **fourteen
+addresses**, none of which redirects. Departments can now **name
 their own call types**. Gmail and Microsoft 365 email, which **had never been
 able to send a message**, now send. There is a new opt-in **Claude (MCP)
 integration**. And six upgrade steps **take permissions away** from seeded
@@ -19,8 +19,12 @@ the rest.
 
 **If you administer a department:**
 
-- **Bookmarks will break, quietly.** Fourteen addresses no longer resolve and
-  land on the dashboard instead of showing an error. If you have links to
+- **Bookmarks will break, quietly.** Fourteen addresses no longer take you
+  where they used to, and none of them redirects. Thirteen land on the
+  dashboard instead of showing an error; the fourteenth
+  (`/scheduling?tab=equipment-checks`) opens Scheduling on its **Schedule** tab,
+  because that page still exists and simply ignores the tab that was removed.
+  Either way nothing tells the person following the link that the page moved. If you have links to
   equipment checklists or scheduling settings in a station SOP, a pinned tab or
   a previously-sent email, they need updating. The tables are in
   [What moved where](#what-moved-where).
@@ -29,8 +33,9 @@ the rest.
   old checklist address** and will land on the dashboard. New ones are correct,
   and these age out within a few days. It is worth one message to your crews.
 
-- **Six upgrade steps revoke permissions from seeded positions.** Nothing is
-  granted back automatically:
+- **Six upgrade steps revoke permissions from seeded positions.** Nothing
+  those six steps take away is granted back automatically (two other steps do
+  add grants — see below):
   - **`reports.view` is taken off the Member and Firefighter positions.** This
     is why a regular member could open Administration → Reports at all — see
     [Why your members could see Reports](#why-your-members-could-see-reports).

@@ -9,10 +9,12 @@ module-state issue, not a rendering failure.
 Its predecessor is
 [19 — August 12–31 release changes](./19-august-2026-release-changes.md).
 
-> **Two features changed address in this window, and thirteen URLs stop
-> resolving with no redirect.** A stale link lands on the dashboard rather than
-> showing an error, so nothing tells the person following it that the page
-> moved. If your department keeps links in a station SOP, a pinned browser tab
+> **Two features changed address in this window, and fourteen addresses stop
+> working with no redirect.** Thirteen are retired paths and land on the
+> dashboard rather than showing an error; the fourteenth
+> (`/scheduling?tab=equipment-checks`) opens Scheduling on its **Schedule** tab,
+> because that page still exists and ignores the tab that was removed. Either
+> way nothing tells the person following the link that the page moved. If your department keeps links in a station SOP, a pinned browser tab
 > or a laminated card, read
 > [Where everything moved](#where-everything-moved) first.
 
@@ -119,8 +121,10 @@ console, now at `/inventory/admin/store`, and `/store/admin` redirects to it.
 
 ### Six upgrade steps take permissions away
 
-Nothing is granted back automatically. Most of this traces to one root cause,
-explained under [Why your members could see
+**Nothing these six steps take away is granted back automatically.** (Two
+_other_ steps do add grants — see the note below the table; do not read this as
+"the upgrade never grants anything".) Most of the removals trace to one root
+cause, explained under [Why your members could see
 Reports](#why-your-members-could-see-reports) below.
 
 | Grant                                                                                   | Comes off                                                                                                                   | What those members lose                                                                                     |
