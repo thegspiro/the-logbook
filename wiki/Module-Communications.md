@@ -302,3 +302,112 @@ under every US department's own address.
 - `inventory_notification_service` passed **no organization** to `render()`, so
   every `{{organization_*}}` variable was silently dropped from inventory change
   emails.
+
+## The Send Log is your own send log _(2026-09-05)_
+
+**`GET /notifications/logs` filtered on the organization and nothing else**, so
+the Send Log tab showed the subject, body and recipient address of every
+colleague's notifications to anyone who could open it — a grant that was seeded
+to the whole department until it was revoked in August.
+
+The endpoint now defaults to the caller's own deliveries, and the tab asks for
+nothing else.
+
+**The Send Log is now offered to every member.** What it shows is their own
+delivery history — email as well as in-app, with delivered/failed status —
+which is their own data on the same footing as their inbox, so it no longer
+sits behind `notifications.view`.
+
+**The organization-wide view survives for auditing deliverability**, as an
+explicit `scope=organization` request on `GET /notifications/logs` and
+`POST /notifications/logs/read-all`. It requires **`notifications.manage`**,
+matching the org-wide "mark all read" it sits beside rather than the read-only
+permission that let the leak happen.
+
+> **⚠️ API change:** `POST /notifications/logs/read-all` previously **always**
+> swept the whole organization and now defaults to the caller. Pass
+> `scope=organization` for the old behaviour.
+
+"Mark all as read" now clears exactly the rows the tab showed, across both
+channels, and reconciles the inbox tab and the unread badge with it — the same
+notification no longer reads as read on one tab and unread on the next.
+
+## Long notification lists could skip a notification while you paged _(2026-09-05)_
+
+Both the Send Log and the notification inbox are newest-first and asked the
+server for _"rows 50–99 of the current answer"_. A notification arriving
+between two page requests shifts every later row down one, so the next page
+**re-served a row already on screen and skipped another** — with nothing on the
+page saying so. Demonstrated against a real database: with one notification
+arriving mid-paging, the old paging repeated one row and lost another.
+
+Both lists now ask for _"the rows after this one"_.
+
+**A fan-out is the worst case, not an edge case.** `sent_at` is stored to the
+second, so every message sent to the whole department shares one timestamp.
+Paging keyed on the timestamp alone would mis-handle exactly the group that
+produces the most rows at once, so the key is **the timestamp paired with the
+row id**.
+
+Two consequences on the button itself:
+
+- **It stops when the server says the list has ended**, rather than when a
+  running total says so. The two disagree while notifications are arriving,
+  which is when the count is least trustworthy.
+- **It no longer claims how many are left.** It counted the whole list against
+  the rows on screen, and the list includes newer notifications that arrived
+  after you started paging — ones "load more" can never reach, because it
+  continues from where you were. It reads "Load more".
+
+### API and schema
+
+`GET /notifications/logs` and `GET /notifications/my` accept a `cursor` and
+return `next_cursor`, which is `null` — **never omitted** — at the end of the
+list. `skip` continues to work for existing callers; a cursor supersedes it.
+
+`notification_logs.sent_at` is now **NOT NULL** (`c8f4a1e6b309`), with a new
+index behind the paged query. It always had a default, and a NULL would have
+sorted last under `ORDER BY sent_at DESC` and been unreachable by any cursor —
+silently absent from a list that claims to be complete.
+
+## Message audience: revocation and provenance _(2026-09-01)_
+
+Inbox visibility is authorized on the recipient row alone. Reconciling a
+published message's audience deletes the rows of members who fell out of it,
+but deliberately **keeps** any row carrying a `read_at`/`acknowledged_at`
+receipt, because that receipt is the only record the member read the notice.
+
+The two rules collided: **a member removed from an audience kept full access to
+the message**, because the row kept for evidence was also the row that granted
+access. `department_message_recipients.revoked_at` (`b2c9d4e6f813`) splits the
+two.
+
+`created_at` (`e93b6a4d21c7`) answers the other half — the audience is mutable
+after publication, so "was this member in the audience when the notice went
+out, or added afterwards?" was unanswerable from the table.
+
+## Push-device cap, and acknowledgment history survives an audience change _(2026-09-06)_
+
+- **A member could register an unlimited number of push-notification devices.**
+  Every later notification to that member then fanned out to every registered
+  device — an unbounded resource cost with no legitimate reason a real person
+  would ever approach it. Registering a new device is now capped at **20 per
+  member**; refreshing a device already registered is unaffected.
+- **An email subtitle was not escaped before going into outgoing mail.** No
+  current sender passes anything but static text through it, so this had no
+  live effect — it is fixed so a future sender that does cannot reintroduce it.
+
+### Narrowing an audience no longer erases the acknowledgment record
+
+This is the user-facing half of the `revoked_at` column added earlier in this
+window.
+
+Editing who a department message goes out to **after it is published** could
+silently erase the record of who had already read or formally acknowledged it —
+because the row kept for evidence was the same row that granted access, so
+removing access removed the evidence.
+
+A member dropped from a corrected audience now **keeps their read/acknowledgment
+record**, marked as no longer active rather than deleted. An acknowledgment
+report therefore stays accurate after the audience is adjusted, and the member's
+access to the message is still correctly withdrawn.

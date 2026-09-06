@@ -28,15 +28,20 @@
 
 ### COLD OPEN (0:00 – 0:35)
 
-**[SCREEN: The Compliance Matrix, mostly green with a scattering of amber and
-red cells.]**
+**[SCREEN: The Compliance Matrix triage rail — the compliant group collapsed,
+with the at-risk and non-compliant groups open above it.]**
+
+**[EDITOR NOTE (2026-09-05): the grid of coloured cells this shot described was
+replaced by a triage rail grouped by standing. Re-shoot the cold open; the old
+footage shows a screen that no longer exists.]**
 
 > "At the end of Part 1 you had a training program, a set of requirements, and a
 > way to record completions. Which means the system now knows what your department
 > owes — and, for the first time, it can tell you who hasn't paid up."
 
-**[SCREEN: Cursor hovers a red cell; the member's name and the missing
-requirement surface.]**
+**[SCREEN: Open the first member in the non-compliant group; their unmet
+requirements list with the figures behind each one — "6 of 24 hours",
+"Lapsed 41 days ago".]**
 
 > "That's this. And it's the difference between _having_ a training program and
 > being able to _prove_ you have one."

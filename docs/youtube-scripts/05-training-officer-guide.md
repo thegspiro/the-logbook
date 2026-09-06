@@ -118,16 +118,44 @@ say "soonest first" on camera.]**
 
 ### COMPLIANCE MATRIX (3:30 – 4:00)
 
-**[SCREEN: Navigate to the Compliance Matrix tab (ComplianceMatrixTab)]**
+**[SCREEN: Navigate to the Compliance Matrix tab]**
 
-> "The Compliance Matrix is a grid view — members on one axis, required
-> certifications on the other. Green means current, yellow means expiring soon,
-> red means expired or missing. At a glance, you can see the entire department's
-> training posture."
+**[EDITOR NOTE (2026-09-05): REWRITTEN. This beat described a member ×
+requirement grid of coloured cells. **That grid no longer exists** — it was
+replaced by a triage rail, so any take walking the matrix is wrong, not merely
+dated. Re-shoot; do not re-use the old footage.]**
 
-**[SCREEN: Show the matrix with color-coded cells]**
+> "The Compliance Matrix isn't a wall of coloured squares any more — it's a
+> queue. Members grouped by where they stand, worst first, and you work down it."
 
-**[CALLOUT: "The Compliance Matrix = your department's training report card"]**
+**[SCREEN: The triage rail. Point at the top group.]**
+
+> "The old grid could tell you _that_ somebody was short. It couldn't tell you
+> **by how much**, and it gave you nowhere to go next. Now every row carries the
+> number behind it — 'six of twenty-four hours', 'lapsed forty-one days ago',
+> 'expires in twenty-six days.'"
+
+**[SCREEN: Step through two members using the rail.]**
+
+> "You step through them one at a time, worst first. That's the whole change:
+> it went from a thing you read to a thing you work."
+
+**[CALLOUT: "The Compliance Matrix = your work queue, worst first"]**
+
+**[SCREEN: Come in from the dashboard's Needs Attention widget instead, and
+land already filtered.]**
+
+> "One more. If you get here from the dashboard's non-compliant link, it now
+> lands filtered on exactly those members. It always sent the filter — the grid
+> just ignored it and dropped you in the full roster."
+
+**[EDITOR NOTE: two grading fixes shipped with this, both in the members'
+favour, so a department's percentages may **rise** after the upgrade. A member
+exempt from a requirement could never reach 100%, because the percentage divided
+by every active requirement while counting only the applicable ones. And a
+certification with weeks left counted as a failure — a member holding a card
+valid for another 26 days rendered under "Compliant" reading "1 of 2 met · 1
+open item". Do not narrate a pre-upgrade percentage as the current one.]**
 
 **[TRANSITION: Programs section]**
 

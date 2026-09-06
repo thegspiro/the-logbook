@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffered into memory — with no change needed at any connector's call
   site.
 
+### A Create Shift form outlived the permission that opened it (2026-09-06)
+
+**Fixed**
+
+- **The Create Shift form rendered on its own open state alone.** Both controls
+  that open it are already withheld from a member, and creating a shift is
+  `scheduling.manage`-gated on the server — but losing the permission while the
+  form was open left a Create Shift button on screen that would 403. The form
+  now closes with the permission, gated at `createShiftOpen` so the dialog-stack
+  registration and the body scroll lock go with it rather than being stranded.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**

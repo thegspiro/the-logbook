@@ -627,3 +627,21 @@ to use them.
 
 **Deleting a grant opportunity could silently wipe out every application ever
 linked to it.** Fixed.
+
+## Lists stop getting slower as history accumulates _(2026-09-05)_
+
+Every list in this module — opportunities, applications, budget items,
+expenditures, compliance tasks, notes, campaigns, donors, donations, pledges and
+fundraising events — used to fetch your organization's **entire** matching table
+before picking out the page you asked for.
+
+For a department with years of donation, donor or grant-application history,
+that meant every single page view loaded the complete history, however small the
+page.
+
+Paging now happens in the database, so a page load only reads the rows it
+displays.
+
+**Nothing about what you see changed** — same rows, same order, same totals — so
+there is nothing to re-check after upgrading. The lists are simply no longer
+affected by how much history sits behind them.

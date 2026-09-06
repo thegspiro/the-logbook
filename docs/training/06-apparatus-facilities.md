@@ -666,14 +666,14 @@ Over time, these readings build a usage trend that helps identify anomalies (e.g
 
 ## Equipment Checks (2026-03-19)
 
-The Equipment Check system provides structured vehicle and equipment inspections tied to shift operations. For detailed documentation including template building, check submission, and reporting, see [Shifts & Scheduling > Equipment Check System](./03-scheduling.md#equipment-check-system).
+The Equipment Check system provides structured vehicle and equipment inspections tied to shift operations. For detailed documentation including template building, check submission, and reporting, see [Inventory > Equipment Checklists](./05-inventory.md#equipment-checklists-moved-here-2026-08-31). **This system moved out of Scheduling and into Inventory on 2026-08-31** — the section in the scheduling guide is now a pointer, not the documentation.
 
 ### Key Points for Apparatus & Facilities Users
 
 - **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient (`has_deficiency = true`, `deficiency_since` records the date). The deficiency badge appears on the apparatus list and detail pages
 - **Auto-clear**: When a subsequent full check passes all items, the deficiency flag is automatically cleared
 - **Failure notifications**: Failed check items trigger in-app notifications to shift officers and configurable roles (e.g., apparatus maintenance officer)
-- **Cross-reference**: Equipment check reports are accessible from both the Scheduling module (`/inventory/admin/checklists/reports`) and the apparatus detail page
+- **Cross-reference**: Equipment check reports are accessible from both the Inventory module (**Inventory Administration > Checklist Reports**, `/inventory/admin/checklists/reports`) and the apparatus detail page
 
 > **Corrected 2026-08-12.** The **Deficiency badge is real** and appears on
 > both the list row and the detail header. The **date is not**:
@@ -683,8 +683,9 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 > **Corrected 2026-08-12.** There is no deficiency **banner** — only the badge
 > described above, beside the status badge — and no link from the apparatus to
-> the equipment check that failed. Reach the check from **Scheduling > Check
-> Reports** instead. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
+> the equipment check that failed. Reach the check from **Inventory
+> Administration > Checklist Reports** (`/inventory/admin/checklists/reports`)
+> instead — this was _Scheduling > Check Reports_ until 2026-08-31. Recorded in [Apparatus & Facilities — Four Guide Sections With No Screen](../KNOWN_LIMITATIONS.md#apparatus--facilities--four-guide-sections-with-no-screen-2026-08-08).
 
 ### Edge Cases — Equipment Checks
 

@@ -83,11 +83,21 @@ for (const target of SPLASH_TARGETS) {
 await makeSocialImage();
 
 // Emit the <link> tags so index.html can be kept in sync by hand without
-// re-deriving the media queries, which are unforgiving.
+// re-deriving the media queries, which are unforgiving. Printed in the
+// attribute-per-line form Prettier produces for index.html: the media query
+// alone exceeds the 120-column width set in frontend/.prettierrc.json, so a
+// single-line tag pasted in is reformatted the next time anyone runs Prettier
+// over the file, and the paste shows up as a diff nobody made.
 console.log('\n--- apple-touch-startup-image links ---');
 for (const m of made) {
   console.log(
-    `    <link rel="apple-touch-startup-image" media="(device-width: ${m.w}px) and (device-height: ${m.h}px) and (-webkit-device-pixel-ratio: ${m.dpr}) and (orientation: portrait)" href="/${m.name}" />`,
+    [
+      '    <link',
+      '      rel="apple-touch-startup-image"',
+      `      media="(device-width: ${m.w}px) and (device-height: ${m.h}px) and (-webkit-device-pixel-ratio: ${m.dpr}) and (orientation: portrait)"`,
+      `      href="/${m.name}"`,
+      '    />',
+    ].join('\n')
   );
 }
 console.log(`\ngenerated ${made.length} splash images + og-image.png`);

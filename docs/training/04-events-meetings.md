@@ -310,6 +310,31 @@ Events support configurable reminders that are sent via the notification system:
 
 After an event ends, the event organizer receives an automatic notification prompting them to review and finalize the attendance records. This ensures attendance data is complete and accurate for compliance tracking.
 
+**Finalizing closes the event.** The roster is fixed, hours are credited to
+everyone who was checked in, and the linked training record is written.
+Reopening it afterwards needs `events.reopen_attendance` — deliberately *not*
+part of `events.manage`, so that the organizer who closed an event cannot
+quietly reopen it and change numbers already fed into admin hours, training
+records and compliance. It is held by the three chief ranks and the president.
+
+> **⚠️ If you tried to reopen an event on 24 August 2026, check whether it is
+> actually open.** Reopening returned an error for any event **that has a
+> location** — most real events — and it did so _after_ the reopen had already
+> gone through. **The event really was reopened while you were shown a
+> failure.** So a chief who tried it, concluded it had not worked and moved on
+> may have an event sitting open that they believe is closed, with its roster
+> editable and its hours in a state nobody expects. Events with no location were
+> never affected, which is exactly why this reached the field. Fixed 25 August
+> 2026.
+>
+> **Same dates, second thing to re-check.** If you reopened an event to correct
+> somebody's hours and then re-finalized, the member's training record picked up
+> the correction but the certification and phase totals behind it did not — so a
+> member corrected downward could still read at the original figure on a
+> compliance screen. Fixed going forward; it does **not** retroactively repair a
+> record already restated under the old behaviour, so re-check anyone you
+> corrected that way.
+
 ### Training Sessions from Events
 
 Training-type events can be linked to a **Training Session** for automatic record-keeping:
@@ -1111,6 +1136,8 @@ Events support three check-in window modes that control when QR and manual check
 | "Already checked in" error                                 | The member has already checked in. Use the monitoring view to verify or override times.                                                                                                                                                                                                                                                   |
 | Cannot RSVP to an event                                    | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to.                                                                                                                                                                                                                                 |
 | Training records not created from event                    | The event must have a linked Training Session that has been finalized and approved.                                                                                                                                                                                                                                                       |
+| Reopened an event on 24 Aug 2026, saw an error              | The reopen **worked** — it committed, then failed while building the response, for any event with a location. Check whether the event is actually open and finalize or correct it deliberately. Fixed 25 Aug 2026                                                                                                                          |
+| Corrected hours, but compliance still shows the old figure  | Before 25 Aug 2026, re-finalizing a reopened event refreshed the training record without restating the certification and phase totals behind it. Fixed going forward; records already restated under the old behaviour are not repaired retroactively, so re-check the member                                                              |
 | Minutes not showing attendees                              | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in.                                                                                                                                                                                                                    |
 | "Already voted" error                                      | Each member can only vote once per candidate/position (approval and ranked-choice elections allow additional votes for _different_ candidates or ranks). This is by design — votes are never overwritten.                                                                                                                                 |
 | Election results not visible                               | Results are gated until the election is closed **and** its scheduled end date has passed (or `results_visible_immediately` is on). If the election was closed early, flip "results visible immediately" on the closed election to show them now.                                                                                          |
@@ -1732,3 +1759,113 @@ built-in three metrics are **Upcoming**, **RSVPs this week** and **Check-ins
 logged**; the fourth slot is always the count the queue is about. Access is
 `events.manage`. See the
 [shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+
+## Who's going, RSVP and the waitlist _(2026-09-01)_
+
+Three things a member could not do before this: see who else is attending,
+respond to an event that does not require a response, and find out where they
+stand in a queue.
+
+### The attendee list can be shared with members
+
+An event's attendee list was reachable only with `events.manage`, so an ordinary
+member saw aggregate counts and nothing else.
+
+**What a member sees is names and going status — nothing else.** Contact
+details, RSVP notes, dietary restrictions, accessibility needs, guest counts and
+check-in times stay in the organizer view and are never included.
+
+| Setting | Where | Default |
+| --- | --- | --- |
+| Attendee visibility | Organization settings → Events | **Managers only** |
+| Per-event override | On the event itself, in either direction | Inherits the organization default |
+
+**The default ships as managers-only**, so nothing changes for an existing
+department until an administrator opts in. Inheriting is a real third state, not
+a missing value — no existing event was changed by the upgrade.
+
+> **Screenshot needed:**
+> _[An event detail page as a member with attendee visibility switched on: the
+> going list showing names and status only, and the waitlist position line
+> beneath it. Capture the member view, not the organizer view — the point of
+> the shot is what a member can now see.]_
+
+### Responding to an event that does not require a response
+
+`requires_rsvp` now means **"a response is expected"**, not "responses are
+permitted". It still drives the Required badge, the deadline and the
+non-respondent reminder audience.
+
+What it no longer does is refuse a response outright, which had left members
+with nothing to do on the majority of events.
+
+**Inline RSVP from the dashboard** is available too, matching the sign-up open
+shifts already offered there.
+
+### Waitlist standing
+
+The detail page says **"You're #2 of 5 on the waitlist"** rather than only that
+a waitlist exists, ordered by the same column the server actually promotes on.
+
+Releasing several seats now promotes several members rather than one, and a
+party larger than the whole event is refused at RSVP time instead of sitting at
+the head of the queue blocking everyone behind it.
+
+### ⚠️ Guests occupy seats now
+
+`allow_guests` had been on the model since the beginning and was **read
+nowhere**, so guests were accepted on events that forbade them. Capacity counted
+going *rows*, leaving guests out entirely, so a capped event could be
+oversubscribed by however many guests attendees brought.
+
+Capacity is now a sum of seats.
+
+> **A capped event will fill sooner than it used to. That is the correction, not
+> a regression.** Events already over the seat count are left alone rather than
+> retroactively waitlisted — they simply admit nobody new.
+
+### Also fixed
+
+- **"Apply to all future events" works on an optional series**, and goes through
+  the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank,
+  which had quietly discarded their notes — and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+
+## The check-in QR code is withheld until its window opens _(2026-09-05)_
+
+**A greyed-out QR code is still a QR code.** Outside the check-in window the
+event QR page rendered the real code at 40% opacity so the page would be "ready"
+when the window opened. A phone camera reads a code straight through that, so
+members scanned early, hit a check-in that refuses them, and had nothing on the
+page explaining why.
+
+The code is now withheld entirely until check-in is actually open, with a
+same-size placeholder holding the space so the layout does not shift when the
+real code takes over on the next 30-second refresh.
+
+> The gate is "can check in", **not** the stricter "window is officially open".
+> A Flexible/Window event admits a scan up to an hour before its official
+> window, and withholding the code there would have blocked a check-in the
+> backend was ready to accept.
+
+**The window could also open without the page noticing for 90 seconds.** The
+30-second poll on both the QR page and the self-check-in page was being answered
+from the shared client cache — fresh for 30s, then served stale for a further 60s
+while revalidating in the background. The whole point of that payload is
+reporting whether the window is open *right now*, so it now skips the cache.
+
+## Meeting records are audited, and Unlink unlinks _(2026-08-31)_
+
+- **Clicking "Unlink" on a meeting minutes record's linked event showed an
+  "Event unlinked" success message, but the link was never actually removed** —
+  it reappeared on the next page load. Unlinking now takes effect immediately
+  and persists.
+- **Creating, editing, deleting or approving a meeting record — or adding,
+  removing or editing its attendees and action items — left no record of who
+  made the change or when.** Meeting *minutes* already recorded this; the
+  meeting scheduling records now do too.
+- An election's linked meeting was a link to nowhere — there is no meeting
+  detail screen, so naming the meeting cost the reader their place. It is text
+  now; the "(change)" control is unaffected.

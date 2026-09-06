@@ -380,7 +380,13 @@ printable QR code.]**
 
 **[SCREEN: Toggle on "Require end-of-shift equipment checks"]**
 
-> "In Scheduling Settings, switch on 'Require end-of-shift equipment checks.'"
+> "In Inventory Admin → Equipment Checklists → Checklist settings, switch on
+> 'Require end-of-shift equipment checks.'"
+
+**[EDITOR NOTE (2026-08-31): the checklist timing settings moved out of
+Scheduling with the rest of the feature. The Equipment section of Scheduling
+settings is now a signpost to Inventory with no Save button — four settings that
+were stored and read by no code were removed from it.]**
 
 **[SCREEN: An officer opening the finalize dialog with checks outstanding —
 Finalize is blocked]**
@@ -833,7 +839,12 @@ non-compliant]**
 
 ---
 
-**[SCREEN: A compliance matrix column, entirely red, for a course requirement]**
+**[SCREEN: The Compliance Matrix filtered to one course requirement, every
+applicable member in the non-compliant group]**
+
+**[EDITOR NOTE (2026-09-05): the matrix is a triage rail now, not a grid, so
+there is no "column" to point at. Shoot the requirement axis and let the
+non-compliant group carry the point.]**
 
 > "Whole column red on a course requirement, and you know people have taken it?
 > There's a specific reason, and it's fixable in about a minute."
@@ -928,8 +939,12 @@ last item out of a compartment.]**
 > "Usually nothing. Maybe you tell someone. Mostly it waits for whoever does the
 > morning check — which is exactly the window where the truck goes out short."
 
-**[SCREEN: Scheduling → Equipment Checks → tap **Apparatus Inventory** in the
+**[SCREEN: Operations → My Checklists → tap **Apparatus Inventory** in the
 header]**
+
+**[EDITOR NOTE (2026-08-31): equipment checklists moved from Scheduling to
+Inventory. Members reach them at Operations → My Checklists; the old
+`/scheduling/equipment*` addresses land on the dashboard silently.]**
 
 > "You don't need to start a whole equipment check. Apparatus Inventory is a
 > standing view of the truck. Open any time."

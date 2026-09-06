@@ -240,3 +240,74 @@ by different people** and need to be distinguishable.
 Historical `qr_scan` rows are left alone: they really were written by the QR
 path, and rewriting any of them would invent a provenance the database never
 recorded.
+
+## Compliance, duration and dashboard fixes _(2026-09-05)_
+
+### Grading
+
+- **A profile's at-risk-threshold override of `0` was silently discarded.**
+  Compliance grading fell back to the organization's default threshold instead,
+  so a profile configured to grade any shortfall `non_compliant` with no
+  at-risk buffer had that choice ignored.
+- **Quarterly requirements and a historical year.** Admin Hours compliance for
+  a quarterly requirement ignored a requested historical year and graded the
+  live quarter instead.
+
+> **⚠️ API behaviour change.**
+> `GET /admin-hours/compliance/{user_id}?year=…` now returns **400 Bad
+> Request** when the requested year is not the current year and the resolved
+> compliance profile has a quarterly requirement — instead of `200 OK` with the
+> quarterly item silently missing from the list.
+>
+> The endpoint's only shipped caller always uses the default (current) year, so
+> no in-app flow is affected. An external caller passing an explicit `year`
+> against a quarterly-graded profile now gets an error rather than a response
+> that looked complete while quietly omitting an item. Passing the current
+> year, or omitting `year`, is unaffected.
+
+### A DST fall-back could shorten a logged shift
+
+Picking a quick-duration preset — or letting the end time follow a moved start
+— across the one hour per year that repeats when clocks fall back could submit
+a **shorter entry than the one selected and previewed**: a 2-hour entry
+recorded as 1 hour.
+
+### Bulk approval deadlock
+
+Bulk-approving entries could deadlock against a concurrent single-entry edit.
+The previous fix had `bulk_approve` lock its own batch of entries in sorted
+order and `edit_pending_entry` lock the owning member's `User` row before the
+entry row — but the two did not share one global lock order. A batch containing
+two entries for the same member, racing an edit whose locking overlap check
+reached into the other entry in that batch, could still deadlock (InnoDB
+aborting one side as a 500).
+
+`bulk_approve` now also locks every affected member's `User` row, in sorted
+order, before locking any entry row — the same _"member rows first, then entry
+rows, both in a stable order"_ protocol `edit_pending_entry` already followed.
+
+### The dashboard's Administrative hours row
+
+Three separate defects on one row:
+
+- **It read "Unavailable" to every ordinary member.** "Unavailable" is a claim
+  the figure is unknown; the figure was simply never fetched. The dashboard
+  gated the read on `admin_hours.view`, a permission that exists in the
+  registry and that **no default position or rank grants** — while every other
+  gate on the feature is open: `/admin-hours` carries no `ProtectedRoute`, the
+  sidebar entry carries no permission, and `GET /admin-hours/summary` requires
+  only authentication. The read is now unconditional, and a member who has
+  logged no time this month reads `0`.
+- **An officer's "My Hours" card totalled the whole department.**
+  `GET /admin-hours/summary` only falls back to the caller's own id for someone
+  _without_ `admin_hours.manage`, and the service applies no user filter when
+  none is supplied. The request now passes the member's own id explicitly.
+- **Everything logged today fell outside the month.** The month-to-date range
+  went as a bare `YYYY-MM-DD`; the endpoint parses that as midnight and filters
+  `clock_in_at <= end_date`, so the current day was excluded entirely — and the
+  start bound cut the month at UTC midnight rather than the department's,
+  pulling the tail of the previous month in for any department west of UTC.
+
+The dashboard header's duplicate "N hrs in Month" chip is gone; the hours card
+below it carries the same total plus the per-source breakdown and its own
+failure state, so it is now the single statement.

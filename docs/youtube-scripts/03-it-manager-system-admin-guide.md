@@ -1059,6 +1059,173 @@ delivery pass that compresses this chapter must not drop either.]**
 > the change rather than locking the department out — but you don't want to
 > discover that on the day your only admin retires."
 
+### THE SEPTEMBER 6 UPGRADE: TWO MODULES CHANGED ADDRESS (ADDED 2026-09-06)
+
+**[SCREEN: Terminal — backup, `alembic heads`, `alembic upgrade head`]**
+
+> "The week to September 6 carries **thirty-four** migrations. Same drill: back
+> up, run `alembic heads`, confirm you get exactly one, then upgrade. The head
+> you should land on is `d7c1b95e2a40`."
+
+**[CALLOUT: "Head: d7c1b95e2a40 — confirm it, don't assume it"]**
+
+> "Eleven of the thirty-four don't reverse. Unlike last month, **none of them
+> destroys data on the way down** — there is nothing to export first. They are
+> either dropping something that held nothing worth restoring, or they are data
+> repairs where reversing them would re-break what they fixed."
+
+**[BEAT]**
+
+> "But the migrations are not the headline this time. **Fourteen addresses stop
+> working, and not one of them redirects.**"
+
+**[SCREEN: Paste an old `/scheduling/equipment` URL. It lands on the dashboard.]**
+
+> "Watch what that looks like. It does not error. It lands on the dashboard,
+> because the catch-all redirect succeeds. So the person following your station
+> SOP thinks the link worked and is simply looking at the wrong page."
+
+**[SCREEN: The two before/after tables from the release notes]**
+
+> "Two things moved. **Equipment checklists** went from Scheduling to Inventory
+> — that is eight addresses. And **scheduling administration** moved into the
+> Administration section under `/scheduling/admin` — six more. Go and find your
+> links: station SOPs, pinned tabs, anything you have emailed."
+
+> "One you cannot fix by editing a document: **end-of-shift reminder
+> notifications already sitting in members' bells carry the old address**. New
+> ones are correct and these age out in a few days, but expect the question."
+
+**[TRANSITION: To the permission steps]**
+
+> "Six upgrade steps take permissions away from seeded positions, and this is
+> the part to brief your chief on."
+
+**[SCREEN: The permission table from the release notes]**
+
+> "`reports.view` comes off Member and Firefighter — that is why a regular
+> member could open Administration → Reports at all. `apparatus.view` comes off
+> the rank and file. And four more come off Member, Firefighter, Engineer and
+> EMT."
+
+**[CALLOUT: "Nothing these six steps take away is granted back automatically"]**
+
+> "Two _other_ steps do add grants back — so do not tell your chief the upgrade
+> never grants anything. It is the six removals that are one-way."
+
+**[BEAT — this is the beat that cannot be cut]**
+
+> "One of these is different, and you need to understand it before somebody
+> asks. **It is revoked unconditionally — including where your department
+> granted it on purpose.**"
+
+> "Two earlier attempts tried to tell a deliberate grant apart from the setup
+> screen's mistake. The test they used missed every department that had
+> switched those modules off during setup — which left the problem in place for
+> exactly the smallest departments, the ones least likely to notice. Nothing in
+> a stored position row distinguishes the two, and this grant exposes every
+> member's aggregated hours, training and roster data. So it comes off wherever
+> it is found."
+
+> "If your department deliberately gave members Reports: grant it again on the
+> positions screen after upgrading. A position **you** created is never
+> touched."
+
+**[SCREEN: The positions screen, a custom position holding `inventory.*`]**
+
+> "One more to check. Equipment checklists moved into Inventory, and their three
+> permissions were renamed to sit inside that module. A module wildcard covers
+> its whole module — so **any custom position holding `inventory.*` can now
+> author and submit equipment checklists.**"
+
+> "No seeded position grants `inventory.*`, so this only reaches positions you
+> built yourself. Usually a quartermaster. It is deliberate — a checklist is a
+> list of inventory items — but if it is wider than you want, replace the
+> wildcard with the specific grants."
+
+### GMAIL AND MICROSOFT 365 EMAIL NEVER WORKED (ADDED 2026-09-06)
+
+**[SCREEN: Settings → Email, Gmail selected]**
+
+> "This one is uncomfortable, so I will be direct. If your department is on
+> **Gmail or Microsoft 365** for outbound email, **it has never sent a
+> message**."
+
+**[BEAT]**
+
+> "The form saved your credentials under one set of keys and the sender read a
+> different set, so it resolved no mail host at all. Every message failed —
+> after a green 'Email settings saved' toast. And it failed **in preference to**
+> a working server-wide SMTP configuration, because the organization's own
+> section wins whenever it is switched on."
+
+**[SCREEN: Re-open Settings → Email, confirm From address and app password]**
+
+> "Both work now. Re-open Settings → Email, confirm the From address and app
+> password, and use the new **Test Connection** button — it signs in to the
+> provider without saving anything."
+
+**[SCREEN: Point at where the OAuth Client ID / Secret fields used to be]**
+
+> "The Gmail and Microsoft **OAuth Client ID and Client Secret** fields are
+> gone, and the upgrade deletes what was stored in them. They never did
+> anything — no token was ever obtained and there was no send path — and the
+> onboarding test reported them 'valid' on string format alone. That step does
+> not reverse, which costs nothing, because nothing read those values."
+
+**[CALLOUT: "Microsoft 365: Basic auth for SMTP is being retired"]**
+
+> "And a deadline. Exchange Online is retiring Basic authentication for SMTP
+> submission — unchanged through December 2026, disabled by default for existing
+> tenants at the end of it, gone in the second half of 2027. An app password
+> **is** Basic auth."
+
+**[SCREEN: Microsoft 365 → App registration (OAuth) option]**
+
+> "Settings → Email now offers **App registration** alongside it. You will need
+> the tenant ID, the application ID and a client secret, the `SMTP.SendAsApp`
+> application permission, and `SendAs` on the sending mailbox. Nothing changes
+> for a working app-password setup until you choose to move."
+
+### CLAUDE (MCP): AN INTEGRATION THAT IS OFF (ADDED 2026-09-06)
+
+**[SCREEN: Integrations → Claude (MCP), disconnected]**
+
+> "New in the integrations catalog: **Claude (MCP)**. It lets Claude answer
+> questions about your department's Logbook — the roster, shifts, training,
+> inventory, apparatus, meetings."
+
+**[CALLOUT: "Off by default · needs a key · redacts everything personal"]**
+
+> "Three things about it, and they are all deliberate. It is **off on every
+> installation** until an administrator connects it. Then it still answers
+> nothing until an IT administrator **mints a service key** — those are two
+> separate steps on purpose."
+
+**[SCREEN: The connect form with the three data switches visibly off]**
+
+> "And three areas sit behind their own switches, all off: finance totals,
+> medical-screening status, and the full duty schedule. Without the schedule
+> switch it only sees shifts open to all members — what any member could see
+> anyway. Three write tools are behind a fourth switch, also off. **Tools you
+> have not switched on are not even listed to the client.**"
+
+**[BEAT]**
+
+> "The part your members will ask about: **personal information never leaves.**
+> Phone, email, home address, date of birth, emergency contacts, photo,
+> membership and certification numbers, medical results — stripped from every
+> answer at every depth. And every piece of free text is scrubbed of email
+> addresses and phone numbers, so a note cannot carry them out either."
+
+**[SCREEN: The service key panel, key redacted]**
+
+> "The key is shown **once** and stored only as a digest. Issuing and revoking
+> it needs a new permission that only the IT Manager position holds. Every tool
+> call, issue and revocation is audit-logged."
+
+> "If you do not want it, do nothing. It is already off."
+
 ### ASK BEFORE YOU RESTART (31:00 – 32:15) — ADDED 2026-08-19
 
 > "The next section is about the app refusing to boot. Before we get there —
@@ -1470,6 +1637,24 @@ Two new sections are in the script body above:
   "a screen disappeared" and neither is self-explanatory. Also: the
   administrative-rank clearing, which does not reverse, and four no-op
   downgrades with their reasons.
+- **Chapter 11, "The September 6 upgrade: two modules changed address"**
+  (~4:00). Head `d7c1b95e2a40`, thirty-four migrations, eleven with no-op
+  downgrades and **none destructive on the way down**. The beat that cannot be
+  cut is the **fourteen retired URLs**, because a stale link lands on the
+  dashboard rather than erroring — the viewer has to see that happen. Then the
+  **six permission revocations**, one of which is unconditional and will take a
+  grant a department made deliberately, and the `inventory.*` wildcard now
+  reaching the checklist permissions.
+- **Chapter 12, "Gmail and Microsoft 365 email never worked"** (~2:30). Blunt on
+  purpose: those platforms could never send, and failed in preference to a
+  working global SMTP configuration. Covers the new Test Connection button, the
+  removal of the decorative OAuth fields, and the Exchange Online Basic-auth
+  retirement deadline that makes the app-registration path worth adopting.
+- **Chapter 13, "Claude (MCP): an integration that is off"** (~2:00). Off by
+  default, key-gated, three data switches off independently, and one redaction
+  boundary on every answer. The framing to keep is "if you do not want it, do
+  nothing" — this chapter exists to answer the member who asks whether an AI
+  can read their phone number.
 
 **EDITOR:** ~4:30 total on top of everything above. Chapter 7's addition
 re-times Chapters 8 and 9 and the clip table; Chapter 9's re-times only its own

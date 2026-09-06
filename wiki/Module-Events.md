@@ -16,7 +16,7 @@ The Events module manages department events with QR code check-in, recurring eve
 - **Booking Prevention** — Prevents double-booking of locations at the same time
 - **Event Attachments** — Upload documents, images, or files to events
 - **Reminders** — Configurable multi-tier reminders (e.g., 24 hours and 1 hour before)
-- **Post-Event Validation** — Organizers receive notifications to review/finalize attendance
+- **Post-Event Validation** — Organizers receive notifications to review/finalize attendance. **Finalizing closes the event**: the roster is fixed, hours are credited to everyone checked in, and the linked training record is written. Reopening needs `events.reopen_attendance`, deliberately kept out of `events.manage` so the organizer who closed an event cannot quietly reopen it and change numbers already fed into hours and compliance
 - **Past Events Tab** — Managers can browse historical events (hidden from regular members by default)
 - **Attendee Management** — Add/remove attendees directly from event detail page
 - **Training Integration** — Events can generate training sessions for attendance credit. _(2026-08-05)_ The reverse now exists too: generating a **course cohort** creates one event per class of a multi-class course (a recruit school's fifteen subjects), each with its linked training session and the roster already RSVP'd — see [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05)
@@ -612,3 +612,121 @@ scheduled start it was.
   RSVP, what its event's start time was at the moment somebody tapped — and an
   event whose start was edited afterwards would be given a number that was
   never true. NULL reads as "not recorded", which is what it is.
+
+## Who's going, RSVP and the waitlist _(2026-09-01)_
+
+Three things a member could not do before this: see who else is attending,
+respond to an event that does not require a response, and find out where they
+stand in a queue.
+
+### The attendee list is shareable
+
+An event's attendee list was reachable only with `events.manage`, so an
+ordinary member saw aggregate counts and nothing else.
+
+**What a member sees is names and going status — nothing else.** Contact
+details, RSVP notes, dietary restrictions, accessibility needs, guest counts
+and check-in times stay in the organizer view and are never included.
+
+| Setting                               | Where                                    | Default        |
+| ------------------------------------- | ---------------------------------------- | -------------- |
+| `events.defaults.attendee_visibility` | Organization settings                    | `managers`     |
+| `events.attendee_visibility`          | Per event, overrides in either direction | NULL = inherit |
+
+NULL is a real third state, not a missing value, so **no backfill was
+performed and nothing changes for an existing department until it opts in.**
+
+### `requires_rsvp` means "a response is expected", not "responses are permitted"
+
+It still drives the Required badge, the deadline and the non-respondent
+reminder audience. What it no longer does is refuse a response outright, which
+had left members with nothing to do on the majority of events.
+
+### Waitlist standing
+
+The detail page says **"You're #2 of 5 on the waitlist"**, ordered by the same
+column the server actually promotes on. Releasing several seats now promotes
+several members rather than one, and a party larger than the whole event is
+refused at RSVP time instead of sitting at the head of the queue blocking
+everyone behind it.
+
+### ⚠️ Guests occupy seats
+
+`allow_guests` had been on the model since the beginning and was **read
+nowhere**, so guests were accepted on events that forbade them. Capacity
+counted going _rows_, leaving guests out entirely, so a capped event could be
+oversubscribed by however many guests attendees brought.
+
+Capacity is now a sum of seats. **A capped event will fill sooner than it used
+to — that is the correction, not a regression.** Events already over the seat
+count are left alone rather than retroactively waitlisted; they simply admit
+nobody new.
+
+### Also fixed
+
+- **"Apply to all future events" works on an optional series**, and goes
+  through the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank —
+  which had quietly discarded their notes, and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+- **Inline RSVP from the dashboard**, matching the sign-up open shifts already
+  offered there.
+
+## The check-in QR code is withheld until its window opens _(2026-09-05)_
+
+Outside the check-in window the event QR page rendered the **real code at 40%
+opacity** so the page would be "ready" when the window opened. A phone camera
+reads a code straight through that, so members scanned early, hit a check-in
+that refuses them, and had nothing on the page explaining why.
+
+The code is now withheld entirely until `can_check_in`, with a same-size
+placeholder holding the space so the layout does not shift when the real code
+takes over on the next 30-second refresh.
+
+The gate is `can_check_in`, **not** the stricter `is_valid`: a Flexible/Window
+event admits a scan up to an hour before its official window, and withholding
+the code there would have blocked a check-in the backend was ready to accept.
+
+Separately, the 30-second poll on both the QR page and the self-check-in page
+was being answered from the shared client cache — fresh for 30s, then stale for
+a further 60s — so **the window could open without the page noticing for 90
+seconds.** That payload now skips the cache, which is the whole point of it.
+
+## Two Corrections Worth Acting On _(24–25 August 2026)_
+
+Both concern reopening a finalized event, and both leave a department holding a
+belief about its own data that may be wrong. Neither is fixed retroactively.
+
+**Reopening returned 500 for any event with a `location_id` — and reopened it
+anyway.** `reopen_event_attendance` fetched the event with no eager loads while
+the endpoint serializes through `_build_event_response`, whose first read is
+`event.location_obj`; under the async session that lazy load is IO outside the
+greenlet context, so it raised `MissingGreenlet` **after the reopen had already
+committed**. The lock was genuinely cleared while the caller saw a failure.
+Events with a NULL `location_id` short-circuit on the foreign key and never
+reached the load, which is why it passed testing and failed in the field.
+
+> **Action:** any event somebody attempted to reopen on 24 August 2026 may be
+> open without their knowing. Check its actual state rather than trusting what
+> the screen said at the time.
+
+**Re-finalizing applied no delta to the totals behind the training record.** The
+progress ledger is idempotent per `(progress, source_type, source_id)`, so a
+re-finalize found its own prior entry and did nothing: the training record moved
+to the corrected hours while certification and phase totals kept the original
+figure. `apply_requirement_credit` now takes a `restate` flag, and the
+enrollment lookups include `COMPLETED` rows — when this session's own credit is
+what carried a member past 100%, an `ACTIVE`-only filter finds nothing to
+correct.
+
+> **Action:** re-check any member whose hours were corrected by reopening and
+> re-finalizing before 25 August 2026.
+
+**Related, same window:** the lock itself was a check followed by a hope. Every
+attendance writer now takes `SELECT ... FOR UPDATE` on the event row and
+finalize commits the close in the same transaction, so a check-in arriving
+mid-finalize blocks and then finds the event closed rather than landing as
+checked-in-but-uncredited behind a lock. The bulk paths (`update_future_events`,
+`cancel_series`, `delete_event_series`) were reading the finalized state without
+holding the rows at all.

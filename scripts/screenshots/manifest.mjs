@@ -340,7 +340,7 @@ export function openTemplateNamed(name) {
   return async (page) => {
     await openFirstFromApi(
       "/equipment-checks/templates",
-      (id) => `/scheduling/equipment-check-templates/${id}`,
+      (id) => `/inventory/admin/checklists/templates/${id}`,
       "templates",
       (t) => (t.name ?? "") === name,
     )(page);
@@ -1253,7 +1253,9 @@ async function armStationAndTap(page) {
   await page.waitForFunction(
     () => {
       const el = document.querySelector("#station-target");
-      return el instanceof HTMLSelectElement && !el.disabled && el.options.length > 0;
+      return (
+        el instanceof HTMLSelectElement && !el.disabled && el.options.length > 0
+      );
     },
     { timeout: 20_000 },
   );
@@ -1288,7 +1290,10 @@ async function openStandingShiftDialog(page) {
   const days = page.locator("[role='gridcell']").locator("visible=true");
   const total = await days.count();
   for (let i = 0; i < total && !(await tuesday.count()); i += 1) {
-    await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
+    await days
+      .nth(i)
+      .click({ timeout: 5_000 })
+      .catch(() => {});
     await page.waitForTimeout(200);
   }
   await tuesday.click({ timeout: 15_000 });
@@ -2239,7 +2244,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the vehicle check preset picker showing the pre-built",
     alt: "The vehicle preset picker listing each pre-built check with its section and item counts",
-    route: "/scheduling/equipment-check-templates/new",
+    route: "/inventory/admin/checklists/templates/new",
     prepare: async (page) => {
       // A new template starts as "equipment", and Load Vehicle Preset only
       // renders on a vehicle or combined one.
@@ -3019,8 +3024,7 @@ export const SHOTS = [
     // Anchored on the label, with the wrapper matched by the shared `card`
     // utility rather than the raw `rounded-lg border` it used to carry -- the
     // same migration that moved the shift-report cards.
-    selector:
-      "div.card:has(label:text-is('Training records date range'))",
+    selector: "div.card:has(label:text-is('Training records date range'))",
   },
   {
     id: "04-37-hour-tracking-mapping",
@@ -5296,7 +5300,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab",
     alt: "Equipment Check Reports page with the compliance dashboard",
-    route: "/scheduling/equipment-check-reports",
+    route: "/inventory/admin/checklists/reports",
   },
 
   {
@@ -5306,7 +5310,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Expiring on Apparatus page with the three summary pills",
     alt: "Expiring on Apparatus: the summary pills, the 30/60/90 window, and three rows — one expiring, one reported used, one short of par",
-    route: "/scheduling/supply/expiring",
+    route: "/inventory/admin/checklists/supply",
     fullPage: true,
     // "No stock" is the per-row label on the deliberately-unlinked traffic
     // cones position ("No stock · Not linked to inventory") — the page's
@@ -5322,7 +5326,7 @@ export const SHOTS = [
       'Screenshot of the "report used" sheet on a phone showing the quantity stepper',
     alt: "The Flag sheet on a counted position — it raises the restock report with an optional note, leaving the count to the minus button",
     auth: "member",
-    route: "/scheduling/apparatus-inventory",
+    route: "/inventory/checklists/apparatus-inventory",
     viewport: "mobile",
     prepare: async (page) => {
       await selectMedicApparatus(page);
@@ -6422,11 +6426,11 @@ export const SHOTS = [
     anchor:
       "Screenshot of the equipment check template builder's Preview showing how the check form",
     alt: "The template builder's Preview — the check form drawn inside a phone frame, as a crew would see it",
-    route: "/scheduling/equipment-check-templates",
+    route: "/inventory/admin/checklists",
     prepare: async (page) => {
       await openFirstFromApi(
         "/equipment-checks/templates",
-        (id) => `/scheduling/equipment-check-templates/${id}`,
+        (id) => `/inventory/admin/checklists/templates/${id}`,
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
@@ -6545,7 +6549,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Settings tab showing the payment method checkboxes with the",
     alt: "Store administration settings with the payment method options",
-    route: "/store/admin",
+    route: "/inventory/admin/store",
     fullPage: true,
   },
 
@@ -6750,11 +6754,11 @@ export const SHOTS = [
     anchor:
       "Screenshot of the template builder's quick-add bar with a partial search term typed",
     alt: "The template builder's quick-add bar, its catalog matches listed beneath and the create-in-inventory option under them",
-    route: "/scheduling/equipment-check-templates",
+    route: "/inventory/admin/checklists",
     prepare: async (page) => {
       await openFirstFromApi(
         "/equipment-checks/templates",
-        (id) => `/scheduling/equipment-check-templates/${id}`,
+        (id) => `/inventory/admin/checklists/templates/${id}`,
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
@@ -6788,11 +6792,11 @@ export const SHOTS = [
     // Engine Daily Check is the seeded template written before the catalog link
     // existed: nine positions, none of them linked. Medic 3 is mostly linked
     // already and would open this dialog on three rows.
-    route: "/scheduling/equipment-check-templates",
+    route: "/inventory/admin/checklists",
     prepare: async (page) => {
       await openFirstFromApi(
         "/equipment-checks/templates",
-        (id) => `/scheduling/equipment-check-templates/${id}`,
+        (id) => `/inventory/admin/checklists/templates/${id}`,
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
@@ -7536,7 +7540,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Equipment Check Template Builder showing the template header (name,",
     alt: "Equipment check template builder with the template header and sections",
-    route: "/scheduling/equipment-check-templates",
+    route: "/inventory/admin/checklists",
     // The seeded Medic 3 Supply Check, not the blank create form. The guide
     // text under this image is about compartments, item check types and the
     // catalog quick-add — none of which render on a template with no items,
@@ -7561,7 +7565,7 @@ export const SHOTS = [
       }
       await page.goto(
         new URL(
-          `/scheduling/equipment-check-templates/${id}`,
+          `/inventory/admin/checklists/templates/${id}`,
           page.url(),
         ).toString(),
         { waitUntil: "domcontentloaded" },
@@ -7880,7 +7884,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Order Windows tab showing an open window card with",
     alt: "Store order windows tab with the open window and its order totals",
-    route: "/store/admin",
+    route: "/inventory/admin/store",
     prepare: clickByName(/window/i),
     fullPage: true,
   },
@@ -10167,7 +10171,7 @@ export const SHOTS = [
     // `equipment_check.submit` — the default member position — and that is the
     // whole claim the feature makes about who records what they used.
     auth: "member",
-    route: "/scheduling/apparatus-inventory",
+    route: "/inventory/checklists/apparatus-inventory",
     // A tall phone rather than `viewport: "mobile"` + `fullPage`. The bottom
     // tab bar is `position: fixed`, and a full-page shot paints it once at its
     // viewport offset — across the middle of the list, over the one row whose
@@ -10202,7 +10206,7 @@ export const SHOTS = [
       "Screenshot of the lots sheet open over the Apparatus Inventory page",
     alt: "The lots-aboard sheet on a phone — two lots on one position, each with its own count and expiry",
     auth: "member",
-    route: "/scheduling/apparatus-inventory",
+    route: "/inventory/checklists/apparatus-inventory",
     viewport: "mobile",
     prepare: async (page) => {
       const select = page.locator("#apparatus-select");
@@ -11068,7 +11072,7 @@ export const SHOTS = [
     line: 64,
     anchor: "Store Admin with activity/status cards and a matching filtered",
     alt: "Store Admin's Orders tab narrowed to paid orders, the list showing only the two the status filter matches",
-    route: "/store/admin",
+    route: "/inventory/admin/store",
     prepare: async (page) => {
       // Scoped to the tab strip. A bare name match also hits the Overview's
       // recent-order rows, and clicking one of those opens the order modal over
@@ -11108,7 +11112,7 @@ export const SHOTS = [
     line: 64,
     anchor: "__paired-with-19-06__",
     alt: "Store Admin's Overview: the activity counts across the top and the order-workflow breakdown counting each fulfilment state the Orders list can be filtered by",
-    route: "/store/admin",
+    route: "/inventory/admin/store",
     fullPage: true,
   },
   {
