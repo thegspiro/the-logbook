@@ -21,9 +21,10 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { routeGate, routeSources } from '../../test/routeGates';
+import { barePath, routeGate, routeSources } from '../../test/routeGates';
 import { BREADCRUMB_ROUTES } from './breadcrumbRoutes';
 import { SCHEDULING_HUB_CARDS } from '../../pages/scheduling/admin/schedulingHubCards';
+import { INVENTORY_HUB_CARDS } from '../../modules/inventory/pages/inventoryHubCards';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -182,13 +183,65 @@ describe('breadcrumb route registry', () => {
     expect(unlabelled, 'a hub is spliced in with no label of its own').toEqual([]);
   });
 
-  it('names a page the same way its hub card does', () => {
+  it('gives every Inventory Administration card outside the hub’s URL space its hub crumb', () => {
+    // The gap `underHub` leaves open: it is opt-in per page, so a page that
+    // should name its hub and does not simply will not, in silence. The
+    // registration test above proves the values that ARE used are real hubs; it
+    // cannot know about a page that never opted in.
+    //
+    // Inventory declares its cards as data, which makes the obligation
+    // derivable: a card is a page of Inventory Administration, so any card
+    // route that does not already sit under /inventory/admin has to say so.
+    // A card pointing outside the module altogether (EMS Supplies →
+    // /medical-supplies) is excluded — `withHubCrumb` needs a shared ancestor
+    // and would insert nothing there anyway.
+    const HUB = '/inventory/admin';
+    const routesFile = path.join(SRC, 'modules/inventory/routes.tsx');
+    const routesSource = fs.readFileSync(routesFile, 'utf8');
+
+    const componentFiles = new Map<string, string>();
+    for (const match of routesSource.matchAll(/const (\w+) = \w+\(\(\) => import\('([^']+)'\)\)/g)) {
+      const resolved = path.resolve(path.dirname(routesFile), match[2] as string);
+      const file = ['.tsx', '.ts'].map((ext) => resolved + ext).find((candidate) => fs.existsSync(candidate));
+      if (file) componentFiles.set(match[1] as string, file);
+    }
+    expect(componentFiles.size, 'could not read the lazy imports out of the inventory routes').toBeGreaterThan(10);
+
+    const owed = INVENTORY_HUB_CARDS.map((card) => barePath(card.path)).filter(
+      (route) => route.startsWith('/inventory/') && !route.startsWith(HUB)
+    );
+    expect(owed.length, 'no inventory card sits outside the hub’s URL space, so this checks nothing').toBeGreaterThan(
+      0
+    );
+
+    const missing = owed.filter((route) => {
+      const component = new RegExp(`path="${route}"[\\s\\S]{0,900}?<(\\w+)\\s*/>`).exec(routesSource)?.[1];
+      const file = component ? componentFiles.get(component) : undefined;
+      return !file || !fs.readFileSync(file, 'utf8').includes(`underHub="${HUB}"`);
+    });
+
+    expect(missing, 'these Inventory Administration pages do not name their hub').toEqual([]);
+  });
+
+  // Every hub whose cards are declared as data. A hub that builds its cards
+  // inline cannot be read here, which is a reason to declare them, not a reason
+  // to leave the comparison to review.
+  const HUB_CARDS: { hub: string; cards: { label: string; path: string }[] }[] = [
+    { hub: 'scheduling', cards: SCHEDULING_HUB_CARDS },
+    { hub: 'inventory', cards: INVENTORY_HUB_CARDS },
+  ];
+
+  it.each(HUB_CARDS)('names a page the same way the $hub hub card does', ({ cards }) => {
     // A crumb and a heading naming one screen differently is not cosmetic: the
     // roster's segment is "positions" and the page calls itself "Who Can Fill
     // What", so the fallback label invented a second name for it. The hub cards
     // are where these pages are named for the officer, so where both registries
     // describe the same path they have to agree.
-    const labelled = SCHEDULING_HUB_CARDS.filter((card) => BREADCRUMB_ROUTES[card.path]?.label !== undefined);
+    //
+    // A card path may carry a query string ("?item_type=ppe") selecting a view
+    // of a page rather than naming a page; those are not comparable and drop
+    // out by simply not matching a registry key.
+    const labelled = cards.filter((card) => BREADCRUMB_ROUTES[card.path]?.label !== undefined);
 
     // Only a card whose path carries a crumb label is comparable, so pin that
     // there is one — otherwise this passes by having nothing to check.
