@@ -49,7 +49,12 @@ from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     OnboardingService,
 )
-from app.utils.email_providers import missing_for_enabled, required_field_message
+from app.utils.email_providers import (
+    MICROSOFT_AUTH_METHODS,
+    invalid_for_enabled,
+    missing_for_enabled,
+    required_field_message,
+)
 from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
@@ -173,7 +178,30 @@ def _incomplete_session_email(session_data: Optional[dict]) -> Optional[str]:
             f"{required_field_message(platform, missing)} Return to the email "
             "step and save it again, or choose Other to configure email later."
         )
+    invalid = invalid_for_enabled(mapped)
+    if invalid:
+        return f"{invalid} Return to the email step and correct it."
     return None
+
+
+def _validated_microsoft_auth_method(value: Any) -> Optional[str]:
+    """The submitted Microsoft auth method, or None when absent.
+
+    Refused rather than stored verbatim: every reader treats an unrecognized
+    method as App Password, so an unsupported value paired with an App
+    Password would pass the enabled check and persist — and the settings
+    schema, which every read rebuilds stored rows through, rejects it. The
+    organization would be locked out of the screen that could fix it, which
+    is the trap normalize_stored_platform exists to undo for platform.
+    """
+    if value is None or value == "":
+        return None
+    if value not in MICROSOFT_AUTH_METHODS:
+        raise ValueError(
+            "Microsoft 365 authentication method must be one of: "
+            f"{', '.join(MICROSOFT_AUTH_METHODS)}"
+        )
+    return value
 
 
 def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
@@ -199,7 +227,9 @@ def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
         "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
         "google_app_password": raw_config.get("googleAppPassword"),
         "microsoft_app_password": raw_config.get("microsoftAppPassword"),
-        "microsoft_auth_method": raw_config.get("microsoftAuthMethod"),
+        "microsoft_auth_method": _validated_microsoft_auth_method(
+            raw_config.get("microsoftAuthMethod")
+        ),
         "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
         "microsoft_client_id": raw_config.get("microsoftClientId"),
         "microsoft_client_secret": raw_config.get("microsoftClientSecret"),

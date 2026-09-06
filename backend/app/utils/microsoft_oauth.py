@@ -37,6 +37,15 @@ MICROSOFT_OAUTH_SCOPE = "https://outlook.office365.com/.default"
 
 _AUTHORITY_TEMPLATE = "https://login.microsoftonline.com/{tenant}"
 
+# Passed to msal as the underlying requests timeout, which msal's own
+# documentation says to set. Without it a stalled authority blocks the
+# calling thread forever: the connection test's asyncio timeout abandons the
+# future but not the worker running it, and a real send goes through
+# asyncio.to_thread with no outer deadline at all, so repeated sends against
+# an unreachable endpoint would consume the executor and stall unrelated
+# threaded work. Comfortably inside the 30s connection-test budget.
+MICROSOFT_TOKEN_TIMEOUT_SECONDS = 10
+
 # A tenant is a GUID or a verified domain (contoso.onmicrosoft.com). It is
 # interpolated into the authority URL, so anything else is rejected rather
 # than sent: a value carrying a slash or an @ would redirect the token
@@ -52,6 +61,10 @@ _DOMAIN = re.compile(
 _MAX_CACHED_APPS = 16
 _app_cache: "OrderedDict[tuple[str, str, str], Any]" = OrderedDict()
 _app_cache_lock = threading.Lock()
+# One build lock per app registration. Construction is not held under the
+# shared lock — msal performs authority discovery there, and serializing that
+# across every tenant would make one slow directory block the others.
+_build_locks: "dict[tuple[str, str, str], threading.Lock]" = {}
 
 
 class MicrosoftOAuthError(ValueError):
@@ -96,34 +109,61 @@ def xoauth2_string(user: str, access_token: str) -> str:
     return f"user={user}\x01auth=Bearer {access_token}\x01\x01"
 
 
+def _cached_app(key: tuple) -> Any:
+    with _app_cache_lock:
+        cached = _app_cache.get(key)
+        if cached is not None:
+            _app_cache.move_to_end(key)
+        return cached
+
+
 def _client_app(tenant_id: str, client_id: str, client_secret: str) -> Any:
     """A cached ``msal`` confidential client for one app registration.
 
     Keyed by a hash of the secret as well as the identifiers, so rotating
     the secret builds a new client rather than reusing one that would keep
     presenting the retired credential.
+
+    The point of caching is msal's token cache, which lives on the instance.
+    Building under a per-key lock with a re-check is what makes that hold: a
+    notification fan-out starting from a cold cache would otherwise have
+    every thread miss, build its own client, and go to Entra ID separately —
+    the throttling risk the cache exists to avoid.
     """
     import msal
 
     secret_digest = hashlib.sha256(client_secret.encode("utf-8")).hexdigest()
     key = (tenant_id, client_id, secret_digest)
+
+    cached = _cached_app(key)
+    if cached is not None:
+        return cached
+
     with _app_cache_lock:
-        cached = _app_cache.get(key)
+        build_lock = _build_locks.setdefault(key, threading.Lock())
+
+    with build_lock:
+        # Another thread may have built it while this one waited.
+        cached = _cached_app(key)
         if cached is not None:
-            _app_cache.move_to_end(key)
             return cached
 
-    app = msal.ConfidentialClientApplication(
-        client_id,
-        authority=_AUTHORITY_TEMPLATE.format(tenant=tenant_id),
-        client_credential=client_secret,
-    )
+        app = msal.ConfidentialClientApplication(
+            client_id,
+            authority=_AUTHORITY_TEMPLATE.format(tenant=tenant_id),
+            client_credential=client_secret,
+            timeout=MICROSOFT_TOKEN_TIMEOUT_SECONDS,
+        )
 
-    with _app_cache_lock:
-        _app_cache[key] = app
-        _app_cache.move_to_end(key)
-        while len(_app_cache) > _MAX_CACHED_APPS:
-            _app_cache.popitem(last=False)
+        with _app_cache_lock:
+            _app_cache[key] = app
+            _app_cache.move_to_end(key)
+            while len(_app_cache) > _MAX_CACHED_APPS:
+                evicted, _ = _app_cache.popitem(last=False)
+                _build_locks.pop(evicted, None)
+            # Held only for the build; a waiter past this point re-checks the
+            # cache and finds the app rather than the lock.
+            _build_locks.pop(key, None)
     return app
 
 
