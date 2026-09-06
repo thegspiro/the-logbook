@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Nobody could run a finance approval chain (2026-09-06)
+
+**Fixed**
+
+- **The Treasurer can now reach the approval workflow.** `finance.approve` and
+  `finance.configure_approvals` gate nine endpoints — the approval queue and
+  the whole approval-chain settings screen — and no seeded position held
+  either. The only account that could reach them held the `*` wildcard, i.e.
+  the IT administrator. With no chain configured, `submit_purchase_request`
+  skips approval entirely, so requests quietly bypassed the workflow; configure
+  a chain, which needed that same unreachable screen, and every submitted
+  request landed in `pending_approval` with nobody able to action it. The
+  `treasurer` position now carries both grants, and a migration carries them to
+  departments that already onboarded — gated on the stored row still holding
+  exactly the finance grants the registry seeded, so a position an
+  administrator curated is left alone. `assert_different_person` still refuses
+  self-approval whoever holds the permission, so a Treasurer cannot walk their
+  own request through a chain.
+
 ### Two permission gates that pointed at nothing (2026-09-06)
 
 **Fixed**
@@ -31,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request", which surfaced as a one-off red months after the strategy landed,
   on an unrelated pull request. The pattern no longer emits two adjacent
   hyphens; single hyphens still generate.
+
 ### Notification Rules invited an officer to create one they cannot (2026-09-06)
 
 **Fixed**
@@ -260,6 +280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   visible field name.
 
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
 ### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
 
 **Fixed**
