@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
+
+**Fixed**
+
+- **"Add stock" on the supply worklist is now gated on `inventory.manage`.**
+  Reading the worklist takes `inventory.check_view`, and the administration hub
+  offers it on that grant deliberately — knowing what is about to expire is the
+  checklist officer's business. Adding replacement stock is not:
+  `POST /inventory/items/{id}/lots` requires `inventory.manage`, so a
+  check_view holder got a 403 from a button the page had just offered them. The
+  control is now disabled rather than hidden, with a title naming who does it,
+  matching the Swap control on the apparatus inventory screen — the same
+  manage-gated stock write. Reading the worklist is unchanged.
+
 ### A hand-written hook dependency array can no longer drift (2026-09-06)
 
 **Fixed**
