@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
+
+**Fixed**
+
+- **`effectDepsIntegrity` failed open on the arrays it exists to catch.** The
+  scan for a dependency array's closing bracket stopped 400 characters past the
+  suppression. Prettier puts one entry per line once an array is long, so nine
+  ordinary names already carry the bracket past that — and the array was then
+  skipped as though the suppression governed no dependency array at all. Longer
+  meant likelier to escape, the exact inverse of the rule's intent. The
+  lookahead now bounds the search for the _opening_ bracket only; the match for
+  the close runs to the end of the file. No suppression in the tree was being
+  skipped today, so the gap was latent rather than active.
+- **A legal five-entry array no longer fails the check.** Entries were counted
+  as top-level commas plus one, and Prettier leaves a trailing comma on an
+  expanded array — so five dependencies were reported as six, against a limit
+  that explicitly permits five. Non-empty top-level segments are counted
+  instead.
 ### The Minutes page advertised a feature members cannot use (2026-09-06)
 
 **Fixed**
