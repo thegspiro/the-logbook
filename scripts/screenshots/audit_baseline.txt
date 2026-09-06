@@ -108,25 +108,6 @@
 # day, by a different session, without either of us having to do anything wrong.
 # The section is now growing roughly as fast as the guides gain modal captures,
 # which is the clearest argument yet for retiring the subtle tier.
-#
-# Ten, 2026-09-06. The last two arrived by the mechanism this section predicted
-# rather than by anyone's mistake: `cb98827` re-shot 424 training-guide captures
-# against the running app, and the two of them that happen to be modals on light
-# pages came back flagged. Both were opened and read. `08-22` is the screening
-# record form and `08-57` is the Reset to Default confirmation — a scrim over a
-# light page in each, 15px strip, luma 159 and 134, the subtle tier exactly as
-# described above.
-#
-# Worth being explicit, because the shape invites the wrong conclusion: a FRESH
-# capture flagged with an artifact whose original cause was fixed on 2026-08-15
-# reads like the capture environment regressed. It did not. Re-capturing these
-# cannot clear them, for the `position: fixed` reason given above, so the two
-# lines below are the only thing that closes them.
-#
-# This is also the first time the growth blocked unrelated work: every open PR
-# went red on Docs Link Check until these were listed, because CI audits the
-# pull_request merge commit and so inherits main's images. That cost is what the
-# recommendation above has been describing in the abstract since 2026-08-18.
 05-75-setup-item-prefilled.png
 06-26-room-delete-subrooms.png
 19-05-qr-regenerate-warning.png
@@ -135,5 +116,3 @@
 03-82-call-volume-count-only.png
 03-83-call-volume-detailed.png
 04-47-template-reminder-audience.png
-08-22-screening-record-form.png
-08-57-template-reset-dialog.png
