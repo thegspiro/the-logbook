@@ -61,10 +61,50 @@ _DOMAIN = re.compile(
 _MAX_CACHED_APPS = 16
 _app_cache: "OrderedDict[tuple[str, str, str], Any]" = OrderedDict()
 _app_cache_lock = threading.Lock()
-# One build lock per app registration. Construction is not held under the
-# shared lock — msal performs authority discovery there, and serializing that
-# across every tenant would make one slow directory block the others.
-_build_locks: "dict[tuple[str, str, str], threading.Lock]" = {}
+
+
+class _Registration:
+    """Serializes work for one app registration, for as long as anyone needs it.
+
+    Reference-counted rather than dropped when a build finishes: a waiter
+    holding the lock object while the entry was removed would be joined by
+    the next arrival on a *different* lock, and the two would then run
+    concurrently — which during an authority outage is repeated overlapping
+    discovery on the threads this serialization exists to protect. Counting
+    users keeps the entry installed while any thread holds or awaits it, and
+    removes it when the last one leaves, so the registry still cannot
+    outgrow the work in flight.
+
+    Reentrant because ``acquire_access_token`` holds it across the whole
+    build-and-fetch sequence while ``_client_app`` takes it again for the
+    build alone; both entry points stay correct on their own.
+    """
+
+    __slots__ = ("lock", "users")
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.users = 0
+
+
+_registrations: "dict[tuple[str, str, str], _Registration]" = {}
+
+
+def _enter_registration(key: tuple) -> _Registration:
+    with _app_cache_lock:
+        registration = _registrations.get(key)
+        if registration is None:
+            registration = _Registration()
+            _registrations[key] = registration
+        registration.users += 1
+    return registration
+
+
+def _leave_registration(key: tuple, registration: _Registration) -> None:
+    with _app_cache_lock:
+        registration.users -= 1
+        if registration.users <= 0:
+            _registrations.pop(key, None)
 
 
 class MicrosoftOAuthError(ValueError):
@@ -117,39 +157,36 @@ def _cached_app(key: tuple) -> Any:
         return cached
 
 
+def _cache_key(tenant_id: str, client_id: str, client_secret: str) -> tuple:
+    """Identifies one app registration, with the secret reduced to a digest.
+
+    The secret is part of the identity so a rotation builds a new client
+    rather than reusing one that would keep presenting the retired
+    credential; hashing keeps the raw value out of a long-lived dict key.
+    """
+    digest = hashlib.sha256(client_secret.encode("utf-8")).hexdigest()
+    return (tenant_id, client_id, digest)
+
+
 def _client_app(tenant_id: str, client_id: str, client_secret: str) -> Any:
     """A cached ``msal`` confidential client for one app registration.
 
-    Keyed by a hash of the secret as well as the identifiers, so rotating
-    the secret builds a new client rather than reusing one that would keep
-    presenting the retired credential.
-
     The point of caching is msal's token cache, which lives on the instance.
-    Building under a per-key lock with a re-check is what makes that hold: a
-    notification fan-out starting from a cold cache would otherwise have
-    every thread miss, build its own client, and go to Entra ID separately —
-    the throttling risk the cache exists to avoid.
+    Building under the registration lock with a re-check is what makes that
+    hold: a notification fan-out starting from a cold cache would otherwise
+    have every thread miss and build its own client.
     """
     import msal
 
-    secret_digest = hashlib.sha256(client_secret.encode("utf-8")).hexdigest()
-    key = (tenant_id, client_id, secret_digest)
+    key = _cache_key(tenant_id, client_id, client_secret)
 
     cached = _cached_app(key)
     if cached is not None:
         return cached
 
-    with _app_cache_lock:
-        build_lock = _build_locks.setdefault(key, threading.Lock())
-
-    # The entry exists only while a build is in flight, so the dict cannot
-    # outgrow the work actually happening. Dropped in a finally because
-    # construction reaches the network — authority discovery, now under a
-    # timeout — and a raise on the success path's cleanup would strand the
-    # key forever. Retrying with fresh credentials would then add another,
-    # outside the cap that bounds _app_cache (CLAUDE.md pitfall 9).
+    registration = _enter_registration(key)
     try:
-        with build_lock:
+        with registration.lock:
             # Another thread may have built it while this one waited.
             cached = _cached_app(key)
             if cached is not None:
@@ -166,16 +203,10 @@ def _client_app(tenant_id: str, client_id: str, client_secret: str) -> Any:
                 _app_cache[key] = app
                 _app_cache.move_to_end(key)
                 while len(_app_cache) > _MAX_CACHED_APPS:
-                    evicted, _ = _app_cache.popitem(last=False)
-                    _build_locks.pop(evicted, None)
+                    _app_cache.popitem(last=False)
             return app
     finally:
-        # A thread already waiting holds this lock object and still
-        # serializes against the builder; one arriving later takes a fresh
-        # lock and finds the cache populated, or rebuilds after a failure,
-        # which is the outcome either way.
-        with _app_cache_lock:
-            _build_locks.pop(key, None)
+        _leave_registration(key, registration)
 
 
 def _describe_failure(result: Optional[dict]) -> str:
@@ -213,17 +244,44 @@ def acquire_access_token(tenant_id: Any, client_id: Any, client_secret: Any) -> 
     """Return an Exchange Online access token for the app registration.
 
     Raises ``MicrosoftOAuthError`` with an administrator-facing message when
-    the credentials are malformed or Microsoft declines the request.
+    the credentials are malformed, Microsoft declines the request, or the
+    directory cannot be reached.
     """
+    import requests
+
     tenant = validate_tenant_id(tenant_id)
     client = validate_client_id(client_id)
     if not isinstance(client_secret, str) or not client_secret:
         raise MicrosoftOAuthError("Microsoft 365 client secret is required")
 
-    app = _client_app(tenant, client, client_secret)
-    # msal serves a cached token when one is still valid, so this is not a
-    # network round trip on every send.
-    result = app.acquire_token_for_client(scopes=[MICROSOFT_OAUTH_SCOPE])
+    key = _cache_key(tenant, client, client_secret)
+    registration = _enter_registration(key)
+    try:
+        # Held across the build *and* the token request, not just the build.
+        # msal locks each search of its token cache but not the whole
+        # miss-to-network sequence, so sharing one client is not enough on a
+        # cold start: every thread would see the empty cache and send its own
+        # client-credentials request, which is the burst at Entra ID this
+        # serialization exists to prevent. Once a token is cached the lock is
+        # held only for an in-memory lookup, and a refresh single-flights the
+        # same way.
+        with registration.lock:
+            app = _client_app(tenant, client, client_secret)
+            result = app.acquire_token_for_client(scopes=[MICROSOFT_OAUTH_SCOPE])
+    except requests.exceptions.RequestException as e:
+        # msal lets transport failures through untouched, and the timeout
+        # above makes one an expected outcome rather than a surprise. Left
+        # raw it reaches the endpoint's generic handler and is reported as an
+        # internal error, which tells an administrator nothing about their
+        # mail configuration.
+        logger.error("Microsoft 365 OAuth transport failure: {}", e)
+        raise MicrosoftOAuthError(
+            "Could not reach Microsoft to obtain an access token "
+            f"(no response within {MICROSOFT_TOKEN_TIMEOUT_SECONDS} seconds). "
+            "Check outbound access to login.microsoftonline.com and try again."
+        ) from e
+    finally:
+        _leave_registration(key, registration)
 
     token = (result or {}).get("access_token")
     if not token:

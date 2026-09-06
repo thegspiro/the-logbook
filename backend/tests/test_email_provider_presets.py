@@ -1645,7 +1645,7 @@ class TestMicrosoftOAuthConnectionTest:
                 return_value=(
                     False,
                     "SMTP authentication failed.",
-                    {"connected": True, "auth_attempted": True},
+                    {"connected": True, "auth_attempted": True, "auth_rejected": True},
                 ),
             ),
         ):
@@ -2239,10 +2239,10 @@ class TestSavingAMicrosoftOAuthConfiguration:
 def _clear_msal_cache():
     """The msal client cache is module state that outlives a test."""
     microsoft_oauth._app_cache.clear()
-    microsoft_oauth._build_locks.clear()
+    microsoft_oauth._registrations.clear()
     yield
     microsoft_oauth._app_cache.clear()
-    microsoft_oauth._build_locks.clear()
+    microsoft_oauth._registrations.clear()
 
 
 @pytest.mark.usefixtures("_clear_msal_cache")
@@ -2307,9 +2307,9 @@ class TestMsalClientIsBoundedAndShared:
 
         assert first is not second
 
-    def test_a_failed_build_does_not_strand_its_lock(self):
+    def test_a_failed_build_does_not_strand_its_registration(self):
         # Construction reaches the network, so it can raise — and the key
-        # would then sit in _build_locks forever. Retrying with fresh
+        # would then sit in the registry forever. Retrying with fresh
         # credentials adds another, outside the cap that bounds _app_cache.
         with patch(
             "msal.ConfidentialClientApplication",
@@ -2319,7 +2319,7 @@ class TestMsalClientIsBoundedAndShared:
                 with pytest.raises(OSError, match="authority unreachable"):
                     microsoft_oauth._client_app(_TENANT, _CLIENT, f"secret-{i}")
 
-        assert microsoft_oauth._build_locks == {}
+        assert microsoft_oauth._registrations == {}
         assert microsoft_oauth._app_cache == {}
 
     def test_a_retry_after_a_failure_still_builds_and_caches(self):
@@ -2335,9 +2335,9 @@ class TestMsalClientIsBoundedAndShared:
             assert microsoft_oauth._client_app(_TENANT, _CLIENT, "s3cret") is built
         # Served from the cache on the next call, not rebuilt.
         assert microsoft_oauth._client_app(_TENANT, _CLIENT, "s3cret") is built
-        assert microsoft_oauth._build_locks == {}
+        assert microsoft_oauth._registrations == {}
 
-    def test_the_cache_and_its_build_locks_stay_bounded(self):
+    def test_the_cache_and_its_registry_stay_bounded(self):
         with patch(
             "msal.ConfidentialClientApplication",
             side_effect=lambda *a, **k: MagicMock(),
@@ -2346,9 +2346,9 @@ class TestMsalClientIsBoundedAndShared:
                 microsoft_oauth._client_app(_TENANT, _CLIENT, f"secret-{i}")
 
         assert len(microsoft_oauth._app_cache) == microsoft_oauth._MAX_CACHED_APPS
-        # Build locks are dropped with the entries they guarded; left behind
+        # Registry entries live only while a thread is using one; left behind
         # they would be the unbounded dict the cache cap exists to prevent.
-        assert len(microsoft_oauth._build_locks) == 0
+        assert len(microsoft_oauth._registrations) == 0
 
 
 class TestCloudflareUnreachableAccountCheckIsNotAVerdict:
@@ -2610,3 +2610,207 @@ class TestOnboardingRefusesAnUnreadableAuthMethod:
 
         assert problem is not None
         assert "Application (client) ID" in problem
+
+
+@pytest.mark.usefixtures("_clear_msal_cache")
+class TestTokenAcquisitionIsSingleFlight:
+    """Sharing one client is not enough on a cold start.
+
+    msal locks each search of its token cache but not the whole
+    miss-to-network sequence, so without serialization across the fetch
+    every thread in a fan-out sees the empty cache and sends its own
+    client-credentials request — the burst at Entra ID the shared cache
+    exists to prevent.
+    """
+
+    def test_concurrent_callers_make_one_token_request(self):
+        started = threading.Barrier(8)
+        app = MagicMock()
+        calls: list = []
+
+        def _slow_token(**kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                time.sleep(0.05)
+                return {"access_token": "TOKEN"}
+            return {"access_token": "TOKEN"}
+
+        app.acquire_token_for_client.side_effect = _slow_token
+
+        tokens: list = [None] * 8
+
+        def _worker(index):
+            started.wait()
+            tokens[index] = microsoft_oauth.acquire_access_token(
+                _TENANT, _CLIENT, "s3cret"
+            )
+
+        with patch("msal.ConfidentialClientApplication", return_value=app):
+            threads = [threading.Thread(target=_worker, args=(i,)) for i in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert tokens == ["TOKEN"] * 8
+        # msal is what caches the token; the point here is that the callers
+        # were serialized rather than all arriving at an empty cache at once.
+        assert app.acquire_token_for_client.call_count == 8
+        assert all(
+            c["scopes"] == [microsoft_oauth.MICROSOFT_OAUTH_SCOPE] for c in calls
+        )
+
+    def test_the_registry_is_empty_once_every_caller_has_left(self):
+        app = MagicMock()
+        app.acquire_token_for_client.return_value = {"access_token": "TOKEN"}
+
+        with patch("msal.ConfidentialClientApplication", return_value=app):
+            microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert microsoft_oauth._registrations == {}
+
+    def test_a_registration_survives_while_another_caller_holds_it(self):
+        # The entry must not be dropped while a waiter still needs it, or the
+        # next arrival takes a different lock and runs concurrently with them.
+        key = microsoft_oauth._cache_key(_TENANT, _CLIENT, "s3cret")
+        first = microsoft_oauth._enter_registration(key)
+        second = microsoft_oauth._enter_registration(key)
+
+        assert first is second
+        microsoft_oauth._leave_registration(key, first)
+        assert key in microsoft_oauth._registrations
+
+        microsoft_oauth._leave_registration(key, second)
+        assert key not in microsoft_oauth._registrations
+
+
+@pytest.mark.usefixtures("_clear_msal_cache")
+class TestTransportFailuresBecomeActionable:
+    """The timeout made a network failure an expected outcome.
+
+    msal lets a requests exception through untouched, so left raw it reaches
+    the endpoint's generic handler and is reported as an internal error —
+    telling an administrator nothing about their mail configuration.
+    """
+
+    def test_a_token_request_timeout_is_reported_as_one(self):
+        import requests
+
+        app = MagicMock()
+        app.acquire_token_for_client.side_effect = requests.exceptions.ReadTimeout(
+            "timed out"
+        )
+
+        with patch("msal.ConfidentialClientApplication", return_value=app):
+            with pytest.raises(MicrosoftOAuthError, match="Could not reach Microsoft"):
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+    def test_an_unreachable_authority_is_reported_as_one(self):
+        import requests
+
+        with patch(
+            "msal.ConfidentialClientApplication",
+            side_effect=requests.exceptions.ConnectTimeout("no route"),
+        ):
+            with pytest.raises(MicrosoftOAuthError, match="Could not reach Microsoft"):
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+    def test_the_message_names_the_deadline_and_the_host(self):
+        import requests
+
+        app = MagicMock()
+        app.acquire_token_for_client.side_effect = requests.exceptions.ReadTimeout("x")
+
+        with patch("msal.ConfidentialClientApplication", return_value=app):
+            with pytest.raises(MicrosoftOAuthError) as excinfo:
+                microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        message = str(excinfo.value)
+        assert str(microsoft_oauth.MICROSOFT_TOKEN_TIMEOUT_SECONDS) in message
+        assert "login.microsoftonline.com" in message
+
+    def test_a_transport_failure_leaves_no_registration_behind(self):
+        import requests
+
+        with patch(
+            "msal.ConfidentialClientApplication",
+            side_effect=requests.exceptions.ConnectTimeout("no route"),
+        ):
+            for _ in range(5):
+                with pytest.raises(MicrosoftOAuthError, match="Could not reach"):
+                    microsoft_oauth.acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert microsoft_oauth._registrations == {}
+
+
+class TestOnlyARejectionPointsAtTheMailboxGrant:
+    _CONFIG = {
+        "fromEmail": "alerts@dept.example",
+        "microsoftAuthMethod": "oauth",
+        "microsoftTenantId": _TENANT,
+        "microsoftClientId": _CLIENT,
+        "microsoftClientSecret": "s3cret",
+    }
+
+    def _run(self, smtp_result):
+        with (
+            patch(
+                "app.api.v1.email_test_helper.acquire_access_token",
+                return_value="TOKEN",
+            ),
+            patch(
+                "app.api.v1.email_test_helper.test_smtp_connection",
+                return_value=smtp_result,
+            ),
+        ):
+            return email_test_helper.test_microsoft_connection(dict(self._CONFIG))
+
+    def test_a_connection_lost_mid_handshake_keeps_the_transport_message(self):
+        # auth_attempted is true here — the handshake was reached — but the
+        # server never rejected anything, so an Exchange diagnosis would send
+        # the administrator after the wrong problem.
+        success, message, _ = self._run(
+            (
+                False,
+                "Server disconnected unexpectedly",
+                {"connected": True, "auth_attempted": True},
+            )
+        )
+
+        assert not success
+        assert "SendAs" not in message
+        assert "disconnected" in message
+
+    def test_a_rejected_credential_still_points_at_the_grant(self):
+        success, message, _ = self._run(
+            (
+                False,
+                "SMTP authentication failed.",
+                {"connected": True, "auth_attempted": True, "auth_rejected": True},
+            )
+        )
+
+        assert not success
+        assert "SendAs" in message
+
+    def test_the_rejection_flag_is_recorded_by_the_smtp_test(self):
+        # Proves the flag the branch above depends on is actually set where
+        # the rejection happens, rather than only in these stubs.
+        server = MagicMock()
+        server.auth.side_effect = smtplib.SMTPAuthenticationError(535, b"denied")
+        config = {
+            "smtpHost": "smtp.office365.com",
+            "smtpPort": 587,
+            "smtpEncryption": "tls",
+            "fromEmail": "alerts@dept.example",
+            "smtpUsername": "alerts@dept.example",
+            "smtpOAuthToken": "TOKEN",
+        }
+
+        with patch("app.api.v1.email_test_helper.smtplib") as smtplib_module:
+            smtplib_module.SMTPAuthenticationError = smtplib.SMTPAuthenticationError
+            smtplib_module.SMTP.return_value.__enter__.return_value = server
+            success, _, details = email_test_helper.test_smtp_connection(config)
+
+        assert not success
+        assert details["auth_rejected"] is True

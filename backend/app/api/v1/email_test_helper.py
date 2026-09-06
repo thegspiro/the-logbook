@@ -168,6 +168,11 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
 
     except smtplib.SMTPAuthenticationError as e:
         logger.error("SMTP authentication failed: {}", e)
+        # The server answered the handshake and refused the credential.
+        # Distinct from auth_attempted, which only says the handshake was
+        # reached: a connection that drops or times out mid-AUTH leaves that
+        # true while the real failure is the transport.
+        details["auth_rejected"] = True
         error_str = str(e).lower()
 
         # Provide user-friendly authentication error messages
@@ -332,12 +337,13 @@ def _test_microsoft_oauth_connection(
     smtp_config["smtpOAuthToken"] = token
     success, message, details = test_smtp_connection(smtp_config)
     details["token_acquired"] = True
-    if not success and details.get("auth_attempted"):
-        # A token was issued and the server refused it at the handshake, so
-        # the app registration is fine and the mailbox grant is what is
-        # missing. Gated on the handshake actually being reached: a TLS or
-        # connection failure has its own accurate message, and replacing it
-        # would send the administrator to Exchange for a network problem.
+    if not success and details.get("auth_rejected"):
+        # A token was issued and the server refused it, so the app
+        # registration is fine and the mailbox grant is what is missing.
+        # Gated on an actual rejection rather than on having reached the
+        # handshake: a connection that drops or times out mid-AUTH also
+        # reaches it, and that failure has its own accurate message which
+        # this would otherwise overwrite with an Exchange diagnosis.
         message = (
             "Entra ID issued an access token but Exchange Online refused it. "
             "Confirm the application has SendAs permission on this mailbox "
