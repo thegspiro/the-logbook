@@ -28,6 +28,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sizes are untouched and keep their stricter gates — `inventory.view` to
   read, `inventory.manage` to write — and a test now pins both halves.
 
+### A hand-written hook dependency array can no longer drift (2026-09-06)
+
+**Fixed**
+
+- **The inventory items page keys its reload on `filterParams`, not on a copy
+  of the filters.** Nine filters were maintained in two places — the
+  `filterParams` callback ESLint checks, and a hand-written array beside it
+  that listed six. The five missing entries (location, size, colour, style and
+  the vendor scope) are why those controls did nothing until an unrelated
+  reload applied them; adding them back left the copy in place for the next
+  filter to fall out of. One effect now depends on `filterParams` itself, so a
+  filter added there reaches the reload with no second list to remember.
+- **Every filter takes the same debounced path.** The dropdowns reloaded
+  immediately and the search box after 350ms, which is what made two effects
+  necessary in the first place. One path costs a third of a second on a
+  dropdown and lets changes across several controls coalesce into one request
+  rather than race.
+
+**Added**
+
+- **`effectDepsIntegrity.test.ts` fails on a long hand-maintained dependency
+  array under an `exhaustive-deps` suppression.** In the manner of
+  `routeIntegrity` and `dialogScrollIntegrity`, it walks the source. The
+  threshold is measured rather than chosen: of the 40 suppressions in the tree,
+  the legitimate ones run 0–4 entries — mount-only effects and route-param keys
+  that omit a function identity, where there is no list to drift — and the one
+  defect ran 11. A suppression is still the right call for those; what is
+  banned is the array that is trying to be exhaustive by hand.
+
 ### Events and Training pages say which hub they belong to (2026-09-06)
 
 **Added**
@@ -50,6 +79,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The hub crumb is now taken from the registry, so it cannot drift again.
 - **The programme detail no longer repeats the programme's name.** The trail
   ended with the name that the heading directly below it already carried.
+
+### Security: outbound integration requests had no response-size cap (2026-09-06)
+
+**Fixed**
+
+- **An integration endpoint (Salesforce, Cal.com, Documenso, or a chat
+  webhook) that returned an oversized or slow-drip response body could
+  drive unbounded memory growth per request.** A size limit was declared
+  in the shared integration HTTP client's code but nothing enforced it.
+  It is now enforced centrally for every connector using the shared
+  `create_integration_client()` helper — a response is aborted once it
+  exceeds the limit, before it can be buffered into memory — with no
+  change needed at most connectors' call sites. PayPal's two outbound
+  calls (`get_access_token`, `verify_webhook_signature`) built their own
+  bare `httpx.AsyncClient` instead of using the shared helper and were
+  not covered by the initial fix; they now go through
+  `create_integration_client()` too (with PayPal's own vendor-tuned
+  timeout preserved via a new `timeout=` override), so every **httpx-based**
+  integration connector's outbound calls are covered. **Named exception:**
+  Google Calendar's connector (`google_calendar_service.py`) builds its
+  client via `googleapiclient.discovery.build()`, which wires up its own
+  `httplib2`-based transport entirely outside `create_integration_client()`
+  — it is not covered by this fix. See
+  `docs/KNOWN_LIMITATIONS.md` ("Google Calendar's Connector Bypasses the
+  Shared HTTP Hardening") for why a safe fix wasn't forced through in this
+  pass and what it would take.
+- **`create_integration_client()`'s `**kwargs` interface silently dropped
+  `http2`, `http1`, and `cert`.** Because this factory always supplies an
+  explicit `transport=`, pinned httpx 0.28.1 never applied those kwargs to
+  the actual connection — a caller asking for `http2=True` or a client
+  certificate got neither, with no error. They're now forwarded to every
+  transport this factory builds (direct and proxy-mounted alike).
 
 ### The lightweight apparatus list hides what a member cannot do (2026-09-06)
 
