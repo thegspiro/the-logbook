@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.user import User
 from app.services.inventory_service import InventoryService
 
 pytestmark = [pytest.mark.integration]
@@ -52,11 +53,12 @@ async def _variants(svc, org_id, user_id, **kwargs):
     kwargs.setdefault("base_name", "Dept Polo")
     kwargs.setdefault("sizes", ["m"])
     kwargs.setdefault("create_variant_group", False)
-    return await svc.create_size_variants(
+    items, group_id, _skipped = await svc.create_size_variants(
         organization_id=uuid.UUID(org_id),
         created_by=uuid.UUID(user_id),
         **kwargs,
     )
+    return items, group_id
 
 
 class TestCombinationGeneration:
@@ -339,3 +341,149 @@ class TestWritePathsKeepTheColumnsPaired:
         assert err is None
         assert updated.style is None
         assert updated.style_attributes is None
+
+
+class TestIdempotentGeneration:
+    """Re-running the generator adds what is missing instead of duplicating.
+
+    Before this, a second run created a whole second set under a second group
+    with the same name. `_product_key` keys on the group, so the member saw two
+    identically-named products with the stock split between them, and
+    fulfilment — which narrows by variant_group_id — could not answer a request
+    raised against one from the other's shelf.
+    """
+
+    async def test_an_identical_rerun_creates_nothing(
+        self, db_session: AsyncSession, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        svc = InventoryService(db_session)
+        first, group_id, _ = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m", "l"],
+            styles=["polo"],
+        )
+        assert len(first) == 2
+
+        second, second_group, skipped = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m", "l"],
+            styles=["polo"],
+        )
+
+        assert second == []
+        assert skipped == 2
+        assert second_group == group_id
+
+    async def test_a_rerun_adds_only_the_missing_size(
+        self, db_session: AsyncSession, org_and_user
+    ):
+        """The 'add 3XL to the polo we already stock' route, which had no path
+        at all before — the generator was the only way in and it duplicated."""
+        org_id, user_id = org_and_user
+        svc = InventoryService(db_session)
+        _first, group_id, _ = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m", "l"],
+            styles=["polo"],
+        )
+
+        added, same_group, skipped = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m", "l", "xxxl"],
+            styles=["polo"],
+        )
+
+        assert [i.standard_size.value for i in added] == ["xxxl"]
+        assert skipped == 2
+        assert same_group == group_id
+
+    async def test_a_differing_style_is_a_new_variant_not_a_duplicate(
+        self, db_session: AsyncSession, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        svc = InventoryService(db_session)
+        await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m"],
+            styles=["mens", "polo"],
+        )
+
+        added, _group, skipped = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m"],
+            styles=["womens", "polo"],
+        )
+
+        assert len(added) == 1
+        assert added[0].style_attributes == ["womens", "polo"]
+        assert skipped == 0
+
+    async def test_the_name_match_ignores_case(
+        self, db_session: AsyncSession, org_and_user
+    ):
+        """Group names are not unique and nobody retypes a name identically."""
+        org_id, user_id = org_and_user
+        svc = InventoryService(db_session)
+        _items, group_id, _ = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="Dept Polo",
+            sizes=["m"],
+            styles=["polo"],
+        )
+
+        _added, same_group, skipped = await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            base_name="dept polo",
+            sizes=["m"],
+            styles=["polo"],
+        )
+
+        assert same_group == group_id
+        assert skipped == 1
+
+    async def test_the_member_catalog_shows_one_product_after_a_rerun(
+        self, db_session: AsyncSession, org_and_user
+    ):
+        """The damage this prevents, asserted where it was visible."""
+        org_id, user_id = org_and_user
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Uniform Shirts", "item_type": "uniform"},
+            created_by=uuid.UUID(user_id),
+        )
+        for _ in range(2):
+            await svc.create_size_variants(
+                organization_id=uuid.UUID(org_id),
+                created_by=uuid.UUID(user_id),
+                base_name="Dept Polo",
+                sizes=["m"],
+                styles=["polo"],
+                category_id=cat.id,
+                quantity_per_variant=5,
+            )
+        await db_session.flush()
+
+        user = await db_session.get(User, user_id)
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        polos = [p for p in products if p["name"] == "Dept Polo"]
+        assert len(polos) == 1
+        assert polos[0]["total_available"] == 5

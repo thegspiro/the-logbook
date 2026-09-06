@@ -61,7 +61,7 @@ import type {
 import {
   STATUS_OPTIONS,
   ITEM_TYPES,
-  STANDARD_SIZES,
+  SIZE_PICKER_GROUPS,
   GARMENT_STYLE_AXES,
   getStatusStyle,
   getConditionColor,
@@ -375,6 +375,10 @@ const InventoryItemsPage: React.FC = () => {
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
+  // Loaded once from the org's distinct colours rather than derived from
+  // `items`: that derivation was bounded by the loaded page AND narrowed by
+  // the colour filter itself, so choosing a colour left it as the only option.
+  const [colorOptions, setColorOptions] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -469,6 +473,20 @@ const InventoryItemsPage: React.FC = () => {
       setStorageAreas(a);
     } catch {
       /* non-critical */
+    }
+
+    // Fetched on its own, deliberately not inside the Promise.all above: one
+    // rejection there skips every setter, so a colours endpoint an older
+    // backend does not serve yet would empty the category, location and
+    // storage-area pickers along with it. The colour filter is the only thing
+    // that should degrade when the colour call does.
+    try {
+      const colors = await inventoryService.getItemColors();
+      // Rendered straight into <option>s, so a shape that is not a list takes
+      // the whole page down rather than just the filter.
+      setColorOptions(Array.isArray(colors) ? colors : []);
+    } catch {
+      setColorOptions([]);
     }
   }, []);
 
@@ -963,10 +981,17 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFSize(e.target.value)}
           >
             <option value="">All Sizes</option>
-            {STANDARD_SIZES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+            {/* Grouped like the styles filter. The flat letter list also made
+                boot and waist sizes unfilterable, even for items created one
+                at a time through the Physical picker, which does offer them. */}
+            {SIZE_PICKER_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <select
@@ -976,13 +1001,11 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFColor(e.target.value)}
           >
             <option value="">All Colors</option>
-            {Array.from(new Set(items.map((i) => i.color).filter(Boolean)))
-              .sort()
-              .map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
+            {colorOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
           <select
             aria-label="Filter by style"

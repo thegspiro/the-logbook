@@ -2357,7 +2357,17 @@ class MemberSizePreferences(Base):
 
     # Shirt / top sizes
     shirt_size = Column(String(20))
-    shirt_style = Column(String(30))  # short_sleeve, long_sleeve, etc.
+    # DEPRECATED, and kept only to preserve the values already stored. It held
+    # one value spanning four orthogonal axes, so recording "Women's" silently
+    # also meant "no sleeve preference", and nothing ever read it — a switch
+    # wired to nothing (CLAUDE.md pitfall #19). `garment_fit` replaces it.
+    # Dropping the column is a breaking response-schema change and needs its own
+    # deprecation window.
+    shirt_style = Column(String(30))
+    # The cut a member wears, across every garment — the one style axis that is
+    # a property of the person rather than of what the department stocks. Read
+    # by the requestable catalog to preselect the right variant.
+    garment_fit = Column(String(20))
 
     # Pants / bottom sizes
     pant_waist = Column(String(10))

@@ -61,7 +61,7 @@ async def _uniform_variants(svc, org_id, user_id, *, quantities):
         category_data={"name": "Uniform Shirts", "item_type": "uniform"},
         created_by=uuid.UUID(user_id),
     )
-    items, group_id = await svc.create_size_variants(
+    items, group_id, _skipped = await svc.create_size_variants(
         organization_id=uuid.UUID(org_id),
         created_by=uuid.UUID(user_id),
         base_name="Long Sleeve",

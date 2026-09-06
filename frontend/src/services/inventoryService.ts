@@ -197,6 +197,17 @@ export const inventoryService = {
     return response.data;
   },
 
+  /**
+   * Every colour the org stocks. Colour is free text by design, so unlike
+   * sizes and styles there is no constant to render the filter from; deriving
+   * it from the loaded page meant a colour past the first page could not be
+   * selected, and picking one collapsed the list to that colour alone.
+   */
+  async getItemColors(): Promise<string[]> {
+    const response = await api.get<string[]>('/inventory/items/colors');
+    return response.data;
+  },
+
   async getItems(params?: {
     category_id?: string | undefined;
     status?: string | undefined;

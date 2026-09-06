@@ -324,6 +324,14 @@ export const GARMENT_STYLE_AXES: ReadonlyArray<{
  */
 export const GARMENT_STYLES = GARMENT_STYLE_AXES.flatMap((axis) => [...axis.options]);
 
+/**
+ * The fit axis on its own — the one style axis a member holds a standing
+ * preference about, since it describes them rather than what the department
+ * chose to stock. Derived from the axes so it cannot drift; mirrors
+ * `FIT_VALUES` in `backend/app/utils/garment_styles.py`.
+ */
+export const GARMENT_FIT_OPTIONS = GARMENT_STYLE_AXES.find((axis) => axis.key === 'fit')?.options ?? [];
+
 const STYLE_LABELS: Record<string, string> = Object.fromEntries(GARMENT_STYLES.map((s) => [s.value, s.label]));
 
 /** Canonical axis order, used to sort a stored list back into reading order. */
@@ -377,8 +385,16 @@ export function styleCombinationCount(selected: readonly string[]): number {
 
 /** Fields shown per item type category */
 export const ITEM_TYPE_FIELDS: Record<string, string[]> = {
-  uniform: ['size', 'color', 'quantity', 'unit_of_measure'],
-  ppe: ['size', 'color', 'serial_number', 'inspection_interval_days', 'last_inspection_date', 'next_inspection_due'],
+  uniform: ['size', 'color', 'style', 'quantity', 'unit_of_measure'],
+  ppe: [
+    'size',
+    'color',
+    'style',
+    'serial_number',
+    'inspection_interval_days',
+    'last_inspection_date',
+    'next_inspection_due',
+  ],
   electronics: ['serial_number', 'model_number', 'manufacturer', 'warranty_expiration'],
   tool: ['serial_number', 'model_number', 'manufacturer'],
   equipment: ['serial_number', 'model_number', 'manufacturer', 'asset_tag'],

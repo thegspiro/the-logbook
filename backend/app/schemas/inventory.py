@@ -20,7 +20,7 @@ from pydantic import (
 )
 
 from app.schemas.base import UTCResponseBase
-from app.utils.garment_styles import first_conflicting_axis
+from app.utils.garment_styles import FIT_VALUES, first_conflicting_axis
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -1535,6 +1535,11 @@ class RequestableProduct(BaseModel):
     size_field: Optional[str] = None
     member_size: Optional[str] = None
     suggested_size: Optional[str] = None
+    # The variant to preselect, as a whole identity. `suggested_size` keeps its
+    # meaning and shape — a size alone cannot choose between a men's and a
+    # women's polo of the same size, which is exactly the choice the style axes
+    # made visible.
+    suggested_variant: Optional[RequestableVariant] = None
     total_available: int = 0
     variants: List[RequestableVariant] = Field(default_factory=list)
 
@@ -1860,15 +1865,18 @@ class SizeVariantCreate(BaseModel):
         max_length=200,
         description="Base name, e.g. 'Dept Polo'. Size appended automatically.",
     )
-    sizes: List[str] = Field(
+    sizes: List[StandardSizeLiteral] = Field(
         ...,
         min_length=1,
-        description='Sizes to create, e.g. ["S", "M", "L", "XL", "2XL"]',
+        description='Sizes to create, e.g. ["s", "m", "l", "xl", "xxl"]. Also '
+        "accepts boot/glove numerics and waist sizes.",
     )
-    colors: Optional[List[str]] = Field(
+    colors: Optional[List[Annotated[str, Field(max_length=50)]]] = Field(
         None,
         description="Colors to create variants for (creates size×color matrix). "
-        "If empty, only size variants are created.",
+        "If empty, only size variants are created. Free text by design — a "
+        "department stocks whatever its supplier sells — but folded into the "
+        "spelling already in use for that colour.",
     )
     styles: Optional[List[GarmentStyleLiteral]] = Field(
         None,
@@ -1892,11 +1900,37 @@ class SizeVariantCreate(BaseModel):
         description="Automatically create a variant group and link all items to it.",
     )
 
+    @field_validator("sizes", mode="before")
+    @classmethod
+    def _accept_any_casing(cls, value: Any) -> Any:
+        """Lowercase before the Literal sees the value, and dedupe.
+
+        Constraining `sizes` without this would be a breaking change: the
+        service lowercased only for its enum lookup and stored the raw string,
+        so `["L"]` has always worked and would suddenly 422. It also left the
+        two columns disagreeing in case — `size="L"` beside
+        `standard_size=StandardSize.L` — which this settles on one spelling.
+
+        Dedupe here rather than in the service so `["m", "M"]` is one size
+        rather than two identical items.
+        """
+        if not isinstance(value, list):
+            return value
+        settled: List[Any] = []
+        for entry in value:
+            item = entry.strip().lower() if isinstance(entry, str) else entry
+            if item not in settled:
+                settled.append(item)
+        return settled
+
 
 class SizeVariantCreateResponse(BaseModel):
     """Response from creating size variants."""
 
     created_count: int
+    # Combinations already stocked under this product and therefore left alone.
+    # Additive: a client that ignores it sees exactly the previous shape.
+    skipped_count: int = 0
     items: List[InventoryItemResponse]
     variant_group_id: Optional[UUID] = None
 
@@ -2368,11 +2402,19 @@ class EquipmentKitDetailResponse(EquipmentKitResponse):
 # ============================================
 
 
+# Derived from the fit axis rather than retyped, so the vocabulary has one
+# source. `GarmentStyleLiteral` above is a hand-kept mirror of the model enum;
+# this is deliberately not a sixth copy of the same three words.
+GarmentFitLiteral = Literal[FIT_VALUES]  # type: ignore[valid-type]
+
+
 class MemberSizePreferencesCreate(BaseModel):
     """Schema for creating/setting member size preferences"""
 
     shirt_size: Optional[str] = Field(None, max_length=20)
+    # Deprecated; still accepted so an older client does not start 422-ing.
     shirt_style: Optional[str] = Field(None, max_length=30)
+    garment_fit: Optional[GarmentFitLiteral] = None
     pant_waist: Optional[str] = Field(None, max_length=10)
     pant_inseam: Optional[str] = Field(None, max_length=10)
     jacket_size: Optional[str] = Field(None, max_length=20)
@@ -2391,6 +2433,7 @@ class MemberSizePreferencesResponse(UTCResponseBase):
     user_id: UUID
     shirt_size: Optional[str] = None
     shirt_style: Optional[str] = None
+    garment_fit: Optional[str] = None
     pant_waist: Optional[str] = None
     pant_inseam: Optional[str] = None
     jacket_size: Optional[str] = None

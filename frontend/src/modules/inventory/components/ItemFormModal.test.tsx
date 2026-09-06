@@ -422,7 +422,7 @@ describe('ItemFormModal', () => {
       await user.click(screen.getByRole('button', { name: 'Crew Neck' }));
       await user.click(screen.getByRole('button', { name: 'Quarter Zip' }));
 
-      expect(screen.getByRole('button', { name: /Create 1 Item/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Create 1 Item$/ })).toBeInTheDocument();
     });
 
     it('multiplies sizes, colors and axes together', async () => {
@@ -457,6 +457,25 @@ describe('ItemFormModal', () => {
       ).toBeInTheDocument();
     });
 
+    it('offers boot and waist sizes, and no Custom chip', async () => {
+      // The flat letter list left a department stocking boots 8-13 or trousers
+      // in waist 30-40 with no way to generate them, though the API always
+      // accepted them. Custom produced an item named "... - Custom" with
+      // nowhere to say what the custom size was.
+      const user = userEvent.setup();
+      await openGenerator(user);
+
+      expect(
+        within(screen.getByRole('group', { name: 'Boot / Glove' })).getByRole('button', { name: '10.5' })
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('group', { name: 'Waist' })).getByRole('button', { name: '34' })
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('group', { name: 'Garment' })).queryByRole('button', { name: 'Custom' })
+      ).toBeNull();
+    });
+
     it('exposes the generate control as a switch', async () => {
       const user = userEvent.setup();
       render(<ItemFormModal {...baseProps} isOpen />);
@@ -465,6 +484,72 @@ describe('ItemFormModal', () => {
       expect(toggle).toHaveAttribute('aria-checked', 'false');
       await user.click(toggle);
       expect(toggle).toHaveAttribute('aria-checked', 'true');
+    });
+  });
+
+  describe('style on an existing item', () => {
+    // Own defaults rather than inherited ones (CLAUDE.md pitfall #28): the
+    // failure paths in this file queue `...Once` values that survive
+    // vi.clearAllMocks().
+    beforeEach(() => {
+      mockUpdateItem.mockReset();
+      mockUpdateItem.mockResolvedValue({});
+      mockGetVendors.mockReset();
+      mockGetVendors.mockResolvedValue([]);
+    });
+
+    // A garment category, so `has('style')` is true — the picker is scoped to
+    // the item types that actually have a garment style.
+    const uniformItem = (over: Partial<InventoryItem> = {}): InventoryItem => ({
+      ...makeItem(),
+      name: 'Dept Polo',
+      category_id: 'cat-ppe',
+      style: 'polo',
+      style_attributes: ['long_sleeve', 'mens', 'polo'],
+      ...over,
+    });
+
+    it('shows the stored style selected', async () => {
+      render(<ItemFormModal {...ppeProps} isOpen editItem={uniformItem()} />);
+
+      const fit = await screen.findByRole('group', { name: 'Fit' });
+      expect(within(fit).getByRole('button', { name: "Men's" })).toHaveAttribute('aria-pressed', 'true');
+      expect(within(fit).getByRole('button', { name: "Women's" })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('falls back to the single style column for a pre-axes row', async () => {
+      render(
+        <ItemFormModal {...ppeProps} isOpen editItem={uniformItem({ style_attributes: null, style: 'v_neck' })} />
+      );
+
+      const neckline = await screen.findByRole('group', { name: 'Neckline' });
+      expect(within(neckline).getByRole('button', { name: 'V-Neck' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    it('replaces rather than adds within one axis', async () => {
+      // Two fits on one garment is not a garment, and the backend 422s on it.
+      const user = userEvent.setup();
+      render(<ItemFormModal {...ppeProps} isOpen editItem={uniformItem()} />);
+
+      const fit = await screen.findByRole('group', { name: 'Fit' });
+      await user.click(within(fit).getByRole('button', { name: "Women's" }));
+
+      expect(within(fit).getByRole('button', { name: "Women's" })).toHaveAttribute('aria-pressed', 'true');
+      expect(within(fit).getByRole('button', { name: "Men's" })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('sends an explicit null when every chip is cleared', async () => {
+      // An omitted key reads as "leave this alone" against exclude_unset, so
+      // the clear would be lost behind a success toast.
+      const user = userEvent.setup();
+      render(<ItemFormModal {...ppeProps} isOpen editItem={uniformItem({ style_attributes: ['polo'] })} />);
+
+      const neckline = await screen.findByRole('group', { name: 'Neckline' });
+      await user.click(within(neckline).getByRole('button', { name: 'Polo' }));
+      await user.click(screen.getByRole('button', { name: /Save|Update/i }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ style_attributes: null });
     });
   });
 

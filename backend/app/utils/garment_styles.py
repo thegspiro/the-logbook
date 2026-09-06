@@ -76,6 +76,24 @@ _AXIS_OF: Dict[str, str] = {
 _AXIS_KEYS: Tuple[str, ...] = tuple(key for key, _label, _values in GARMENT_STYLE_AXES)
 
 
+# The axis a member can hold a standing preference about.
+#
+# Fit is a property of the *person*: someone who wears a women's cut wears it
+# across every shirt the department stocks. Sleeve, neckline and closure are
+# properties of the garment the department chose to buy — nobody has a
+# cross-wardrobe preference for "polo" — so a member preference over those
+# would be asking for something no stock decision can honour.
+FIT_AXIS = "fit"
+
+FIT_VALUES: Tuple[str, ...] = next(
+    values for key, _label, values in GARMENT_STYLE_AXES if key == FIT_AXIS
+)
+
+# A fit that describes anybody. Preferred over a mismatched fit when the
+# member's own is not stocked, and ranked behind their actual fit.
+FIT_NEUTRAL = "unisex"
+
+
 def axis_of(value: str) -> Optional[str]:
     """The axis a style value belongs to, or None if it is not a known style."""
     return _AXIS_OF.get(value)
@@ -198,6 +216,14 @@ def style_combinations(
     # normalizing anyway keeps this function's output and the write-side
     # authority provably identical rather than merely intended to be.
     return [normalize_style_attributes(c) for c in combos]
+
+
+def fit_of(attributes: Optional[Sequence[str]]) -> Optional[str]:
+    """The fit a garment is cut for, or None when it is fit-agnostic."""
+    for value in attributes or []:
+        if _AXIS_OF.get(value) == FIT_AXIS:
+            return value
+    return None
 
 
 def assert_axes_cover_enum() -> None:

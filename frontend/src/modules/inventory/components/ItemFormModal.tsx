@@ -24,12 +24,12 @@ import type {
   SizeVariantCreate,
 } from '../types';
 import SettingsToggle from '../../../components/settings/SettingsToggle';
+import GarmentStyleAxisPicker from './GarmentStyleAxisPicker';
 import {
   ITEM_TYPE_FIELDS,
   getItemTypeFromCategory,
   CUSTOM_SIZE_OPTION,
   SIZE_PICKER_GROUPS,
-  STANDARD_SIZES,
   GARMENT_STYLE_AXES,
   styleCombinationCount,
   standardSizeCode,
@@ -45,6 +45,8 @@ interface FD {
   barcode: string;
   /** Chosen `StandardSize` code, or `CUSTOM_SIZE_OPTION` when `size` holds free text. */
   standard_size: string;
+  /** Garment style attributes, flat across the four axes. */
+  style_attributes: string[];
   /** Free text, and only ever read when `standard_size` is `CUSTOM_SIZE_OPTION`. */
   size: string;
   color: string;
@@ -74,6 +76,7 @@ const EMPTY: FD = {
   asset_tag: '',
   barcode: '',
   standard_size: '',
+  style_attributes: [],
   size: '',
   color: '',
   purchase_price: '',
@@ -209,6 +212,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         asset_tag: editItem.asset_tag ?? '',
         barcode: editItem.barcode ?? '',
         standard_size: sizeCode || (editItem.size ? CUSTOM_SIZE_OPTION : ''),
+        // Fall back to the single `style` for a row written before the axes
+        // existed, so opening one does not silently blank its style on save.
+        style_attributes: editItem.style_attributes ?? (editItem.style ? [editItem.style] : []),
         size: sizeCode ? '' : (editItem.size ?? ''),
         color: editItem.color ?? '',
         purchase_price: editItem.purchase_price != null ? String(editItem.purchase_price) : '',
@@ -264,6 +270,19 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   const toggleSize = useCallback((value: string) => {
     setSelectedSizes((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
+  }, []);
+
+  /** Single-item path: one value per axis, so picking a second in the same
+   *  axis replaces the first rather than making the item two things at once —
+   *  which the backend rejects with a 422 naming the axis. */
+  const toggleItemStyle = useCallback((value: string) => {
+    setF((prev) => {
+      const axis = GARMENT_STYLE_AXES.find((a) => a.options.some((o) => o.value === value));
+      const siblings = axis ? axis.options.map((o) => o.value) : [];
+      const already = prev.style_attributes.includes(value);
+      const kept = prev.style_attributes.filter((v) => !siblings.includes(v));
+      return { ...prev, style_attributes: already ? kept : [...kept, value] };
+    });
   }, []);
 
   const toggleStyle = useCallback((value: string) => {
@@ -361,6 +380,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         size: text(sizeText),
         standard_size: pick(sizeCode),
         color: text(f.color),
+        // An explicit null when every chip is cleared: update payloads are
+        // dumped with `exclude_unset`, so omitting the key means "leave this
+        // alone" and the clear would vanish behind a success toast
+        // (CLAUDE.md pitfall #1). On create, omit instead.
+        style_attributes: f.style_attributes.length ? f.style_attributes : isEdit ? null : undefined,
         purchase_price: num(f.purchase_price),
         current_value: num(f.current_value),
         purchase_date: pick(f.purchase_date),
@@ -429,7 +453,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       footer={
         <>
           <button type="submit" form="item-form" disabled={saving} className="btn-info btn-md ml-2">
-            {saving ? 'Saving...' : editItem ? 'Update' : generateVariants ? `Create ${variantCount} Items` : 'Create'}
+            {saving
+              ? 'Saving...'
+              : editItem
+                ? 'Update'
+                : generateVariants
+                  ? `Create ${variantCount} Item${variantCount === 1 ? '' : 's'}`
+                  : 'Create'}
           </button>
           <button type="button" onClick={onClose} className="btn-secondary btn-md">
             Cancel
@@ -580,16 +610,38 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               <span className={lbl} id="item-sizes-label">
                 Sizes *
               </span>
-              <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="item-sizes-label">
-                {STANDARD_SIZES.map((s) => (
-                  <button
-                    key={s.value}
-                    type="button"
-                    className={`${chipBase} ${selectedSizes.includes(s.value) ? chipOn : chipOff}`}
-                    onClick={() => toggleSize(s.value)}
-                  >
-                    {s.label}
-                  </button>
+              {/* Grouped like the style axes below, and for more than symmetry:
+                  the flat list was the letter sizes only, so a department
+                  stocking boots 8-13 or trousers in waist 30-40 had no way to
+                  generate them even though the API always accepted them. It
+                  also drops the "Custom" chip, which produced an item named
+                  "... - Custom" with nowhere to say what the custom size was. */}
+              <div className="mt-1 space-y-2">
+                {SIZE_PICKER_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <span
+                      className="text-theme-text-muted text-xs font-medium"
+                      id={`item-size-${group.label.replace(/\W+/g, '-').toLowerCase()}-label`}
+                    >
+                      {group.label}
+                    </span>
+                    <div
+                      className="mt-1 flex flex-wrap gap-1.5"
+                      role="group"
+                      aria-labelledby={`item-size-${group.label.replace(/\W+/g, '-').toLowerCase()}-label`}
+                    >
+                      {group.options.map((o) => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          className={`${chipBase} ${selectedSizes.includes(o.value) ? chipOn : chipOff}`}
+                          onClick={() => toggleSize(o.value)}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
               {selectedSizes.length > 0 && (
@@ -604,29 +656,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 and a neckline describe one garment rather than three. */}
             <div className="space-y-3">
               <span className={lbl}>Styles</span>
-              {GARMENT_STYLE_AXES.map((axis) => (
-                <div key={axis.key}>
-                  <span className="text-theme-text-muted text-xs font-medium" id={`item-style-${axis.key}-label`}>
-                    {axis.label}
-                  </span>
-                  <div
-                    className="mt-1 flex flex-wrap gap-1.5"
-                    role="group"
-                    aria-labelledby={`item-style-${axis.key}-label`}
-                  >
-                    {axis.options.map((o) => (
-                      <button
-                        key={o.value}
-                        type="button"
-                        className={`${chipBase} ${selectedStyles.includes(o.value) ? chipOn : chipOff}`}
-                        onClick={() => toggleStyle(o.value)}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <GarmentStyleAxisPicker selected={selectedStyles} onToggle={toggleStyle} idPrefix="item-style" />
             </div>
 
             {/* Colors (comma-separated text) */}
@@ -719,6 +749,21 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 </div>
               )}
             </div>
+            {/* Style, on the single-item path. The generator could write a
+                men's long-sleeve polo and nothing could then correct it: this
+                form had no style control at all, so a mis-picked chip meant
+                the item was stuck with it, and renaming only changed the label
+                while the catalog kept grouping on the columns. */}
+            {has('style') && (
+              <div className="mt-3">
+                <span className={lbl}>Style</span>
+                <GarmentStyleAxisPicker
+                  selected={f.style_attributes}
+                  onToggle={toggleItemStyle}
+                  idPrefix="item-physical-style"
+                />
+              </div>
+            )}
           </fieldset>
         )}
 

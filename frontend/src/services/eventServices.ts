@@ -1078,6 +1078,9 @@ export interface RequestableProduct {
   member_size?: string | null;
   /** The stocked variant size matching `member_size`, when there is one. */
   suggested_size?: string | null;
+  /** The variant to preselect, as a whole identity — a size alone cannot
+   *  choose between a men's and a women's cut of the same size. */
+  suggested_variant?: RequestableVariant | null;
   total_available: number;
   variants: RequestableVariant[];
 }
@@ -1280,7 +1283,10 @@ export interface MemberSizePreferences {
   organization_id: string;
   user_id: string;
   shirt_size?: string;
+  /** @deprecated Conflated four style axes into one value; use `garment_fit`. */
   shirt_style?: string;
+  /** The cut the member wears: mens | womens | unisex. */
+  garment_fit?: string;
   pant_waist?: string;
   pant_inseam?: string;
   jacket_size?: string;
@@ -1295,7 +1301,9 @@ export interface MemberSizePreferences {
 
 export interface MemberSizePreferencesCreate {
   shirt_size?: string | undefined;
+  /** @deprecated Still accepted so an older client does not start failing. */
   shirt_style?: string | undefined;
+  garment_fit?: string | undefined;
   pant_waist?: string | undefined;
   pant_inseam?: string | undefined;
   jacket_size?: string | undefined;

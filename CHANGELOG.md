@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A garment's style is one description, not one item per adjective (2026-09-06)
+
+**Fixed**
+
+- **Describing a men's long-sleeve polo no longer creates three items.** The ten
+  `GarmentStyle` values read like ten alternatives and are not: they are four
+  orthogonal descriptors — sleeve, fit, neckline, closure — and variant
+  generation took a flat cartesian product over them, so every adjective of one
+  garment became its own pool item. The product now runs _across_ axes and
+  multiplies only _within_ one, so one pick per axis is one item while Men's +
+  Women's is genuinely two. Closure is its own axis rather than a fifth
+  neckline, because a quarter-zip has a neckline too and folding it in would
+  have made a crew-neck quarter-zip two garments.
+- **An item can now record every style attribute it has.** `inventory_items.style`
+  holds a single enum value, so until now an item could not be both "Long
+  Sleeve" and "Men's" even if the product had been right. `style_attributes`
+  holds the canonical list and `style` keeps the derived primary, so the filter,
+  the badges and the catalog are untouched. Filtering by "Long Sleeve" now finds
+  a men's long-sleeve polo, whose primary style says "polo".
+- **A men's and a women's polo are two requestable variants, not one.** Both
+  store `polo`, so the catalog collapsed them into a single line with their
+  stock summed — a member picked "Polo · 14 available" and the quartermaster was
+  handed whichever cut sorted first. The same collapse double-counted cells in
+  the variant group stock matrix.
+- **The member's fit is read.** `shirt_style` was written, echoed back and
+  consulted by nothing, while `boot_width` beside it in the same form was read
+  and folded into "10 (wide)" — a switch wired to nothing, in a form where its
+  neighbour worked. It is replaced by `garment_fit`, which the request catalog
+  uses to preselect the right cut. Without it the preselect matched on size
+  alone and took the first variant, and variants sort by their attribute string,
+  so "mens" preceded "womens" and every member was defaulted to the men's cut.
+  A member who records no fit is now steered to a cut that fits anybody rather
+  than to whichever sorts first.
+- **Re-running the variant generator adds what is missing instead of duplicating
+  the product.** There was no existence check and no constraint behind it, so a
+  second run built a whole second set under a second group with the same name.
+  `_product_key` keys on the group, so the member saw two identically-named
+  products with the stock split between them, and fulfilment — which narrows by
+  variant group — could not answer a request against one from the other's shelf.
+  This also supplies the "add 3XL to the polo we already stock" route, which had
+  no path at all.
+- **"Navy" and "navy" are one colour.** The catalog collapsed variants on a
+  casefolded colour while the admin list filtered with a case-sensitive `=`, so
+  the quartermaster saw two rows that could never be viewed together and the
+  member saw one merged variant. Colours are now folded into the spelling the
+  department already uses, and the list filter agrees with the catalog. The
+  "All Colors" dropdown reads the organization's distinct colours rather than
+  the page of items already loaded — it was bounded by the page _and_ narrowed
+  by its own filter, so choosing a colour collapsed it to that colour alone.
+- **The variant generator's size chips offer boots and waists.** They were the
+  letter sizes only, so a department stocking boots 8–13 or trousers in waist
+  30–40 had no way to generate them, though the API always accepted them. The
+  `Custom` chip is gone with them: it produced an item named "… — Custom" with
+  nowhere to say what the custom size was.
+- **The Generate Sizes & Styles knob sits in its track.** It was an `::after` on
+  a track that was never `relative`, so it positioned against the 44px label
+  instead of the 20px switch and floated above it.
+
+**Changed**
+
+- **`POST /inventory/items/create-variants` — `styles` changes meaning.** The
+  field keeps its shape and vocabulary, but three styles drawn from different
+  axes used to create three items and now create one. Same-axis selections are
+  unchanged: `["short_sleeve", "long_sleeve"]` is still two. The Add Item modal
+  is the only caller, and the old behaviour was the defect.
+- `sizes` on the same endpoint is constrained to the size vocabulary and
+  deduplicated. Any casing is still accepted — `["L"]` keeps working — but
+  `"Large"` is now a 422 instead of an item named "… — LARGE" with no structured
+  size and no way to filter for it.
+- `MemberSizePreferences.shirt_style` is deprecated in favour of `garment_fit`.
+  It is still accepted and returned so existing clients keep working, and a fit
+  value stored in it is still honoured; it is no longer offered in the UI.
+- `SizeVariantCreateResponse` gains `skipped_count`, and `RequestableProduct`
+  gains `suggested_variant`. Both are additive.
+
+**Added**
+
+- `app/utils/garment_styles.py` owns the axis taxonomy, the write-side
+  normalizer and the label rule; the frontend mirrors the axes and
+  `test_garment_style_axis_parity.py` reads that file from disk and fails if the
+  two drift. Adding a style value now means adding it to an axis, not just to
+  the enum.
+- A style picker on the single-item form. The generator could write a men's
+  long-sleeve polo and nothing could then correct it — the form had no style
+  control at all, and renaming the item changed only its label while the catalog
+  kept grouping on the columns.
+
 ### A hand-written hook dependency array can no longer drift (2026-09-06)
 
 **Fixed**
