@@ -6,7 +6,8 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
+import { membersSettingsPathFor } from './members/admin/settings/membersSettingsSections';
 import {
   Building2,
   GraduationCap,
@@ -27,7 +28,6 @@ import {
   MapPin,
   Upload,
   Shield,
-  Users,
   Truck,
   MessageSquare,
   Briefcase,
@@ -53,13 +53,7 @@ import type {
   OrganizationProfile,
   RankValidationIssue,
 } from '../services/api';
-import type {
-  ContactInfoSettings,
-  MembershipIdSettings,
-  EmailServiceSettings,
-  FileStorageSettings,
-  AuthSettings,
-} from '../types/user';
+import type { EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
 import { invalidateRanksCache } from '../hooks/useRanks';
 import { useAuthStore } from '../stores/authStore';
 import EmailSettingsSection from '../components/settings/EmailSettingsSection';
@@ -71,14 +65,17 @@ import EvocLevelsSettingsSection from '../components/settings/EvocLevelsSettings
 import LabelPrintersSection from '../components/settings/LabelPrintersSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
-import { SettingsToggle as Toggle } from '../components/settings/SettingsToggle';
 import { useSettingsAutosave } from '../hooks/useSettingsAutosave';
 import { useEmailConnectionTest } from '../hooks/useEmailConnectionTest';
 
 // ── Section definitions ──
 
-type SectionKey =
-  'general' | 'modules' | 'members' | 'ranks' | 'email' | 'storage' | 'labelPrinters' | 'authentication';
+// `members` is deliberately absent: Contact Visibility and Membership IDs moved
+// to /members/admin/settings on 2026-09-06. The union is hand-written rather
+// than derived from `sections`, so removing the entry above does not remove the
+// key here — and a stale key makes the render switch non-exhaustive, which is
+// how a removed section becomes a blank panel instead of a compile error.
+type SectionKey = 'general' | 'modules' | 'ranks' | 'email' | 'storage' | 'labelPrinters' | 'authentication';
 
 /**
  * Sub-pages across every section. One flat union rather than one per section:
@@ -121,16 +118,6 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
     ],
   },
   {
-    key: 'members',
-    label: 'Members',
-    icon: Users,
-    description: 'Contact visibility and membership IDs',
-    subPages: [
-      { key: 'visibility', label: 'Contact Visibility', hint: 'What members see of each other' },
-      { key: 'ids', label: 'Membership IDs', hint: 'Numbering and prefixes' },
-    ],
-  },
-  {
     key: 'ranks',
     label: 'Ranks',
     icon: Shield,
@@ -170,7 +157,7 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
  * a pill still reading "All changes saved" from an earlier section would be
  * describing a write that is not going to happen.
  */
-const AUTOSAVED_SECTIONS = new Set<SectionKey>(['general', 'modules', 'members', 'ranks']);
+const AUTOSAVED_SECTIONS = new Set<SectionKey>(['general', 'modules', 'ranks']);
 
 const DEFAULT_SUB_PAGE = new Map<SectionKey, SubPageKey | null>(
   SECTIONS.map((section) => [section.key, section.subPages?.[0]?.key ?? null])
@@ -379,6 +366,23 @@ export const SettingsPage: React.FC = () => {
   const requestedPage = searchParams.get('page');
 
   /**
+   * Members settings moved to `/members/admin/settings` on 2026-09-06, and the
+   * old address is in bookmarks and in links already sent.
+   *
+   * Redirected rather than remapped — this is the one case on this screen that
+   * leaves the page entirely. Without it `?tab=members` fails the section check
+   * below and lands on General, which looks like the settings were taken away
+   * rather than moved: the same failure the EVOC remap under this exists to
+   * prevent, one page further out.
+   *
+   * The sub-page carries across, so a link to Membership IDs arrives at
+   * Membership IDs rather than at the first section of a screen the reader now
+   * has to search.
+   */
+  const movedToMembersAdmin =
+    requestedTab === 'members' ? membersSettingsPathFor(requestedPage === 'ids' ? 'ids' : 'visibility') : null;
+
+  /**
    * EVOC was a top-level section until this screen gained sub-pages, and the
    * old UI put `?tab=evoc` in the address bar itself — so those links are in
    * members' bookmarks and in messages already sent. Without this they would
@@ -412,20 +416,6 @@ export const SettingsPage: React.FC = () => {
   const [togglingModule, setTogglingModule] = useState<string | null>(null);
 
   // Contact info state
-  const [contactSettings, setContactSettings] = useState<ContactInfoSettings>({
-    enabled: false,
-    show_email: true,
-    show_phone: true,
-    show_mobile: true,
-  });
-
-  // Membership ID state
-  const [membershipId, setMembershipId] = useState<MembershipIdSettings>({
-    enabled: false,
-    auto_generate: false,
-    prefix: '',
-    next_number: 1,
-  });
 
   // Email settings state
   const [emailSettings, setEmailSettings] = useState<EmailServiceSettings>({
@@ -542,15 +532,6 @@ export const SettingsPage: React.FC = () => {
           organizationService.getProfile(),
           fetchRanks(),
         ]);
-        // The autosave savers read these refs at fire time, so the loaded
-        // values have to land in both or the first edit would write a payload
-        // built on the pre-load defaults.
-        setContactSettings(settingsData.contact_info_visibility);
-        contactSettingsRef.current = settingsData.contact_info_visibility;
-        if (settingsData.membership_id) {
-          setMembershipId(settingsData.membership_id);
-          membershipIdRef.current = settingsData.membership_id;
-        }
         if (settingsData.email_service) setEmailSettings(settingsData.email_service);
         if (settingsData.file_storage) setStorageSettings(settingsData.file_storage);
         if (settingsData.auth) setAuthSettings(settingsData.auth);
@@ -667,34 +648,6 @@ export const SettingsPage: React.FC = () => {
         setTogglingModule(null);
       }
     });
-  };
-
-  // ── Contact info handlers ──
-
-  const contactSettingsRef = useRef<ContactInfoSettings>(contactSettings);
-
-  const updateContactSetting = (patch: Partial<ContactInfoSettings>) => {
-    const next = { ...contactSettingsRef.current, ...patch };
-    contactSettingsRef.current = next;
-    setContactSettings(next);
-    void save(() => organizationService.updateContactInfoSettings(next));
-  };
-
-  // ── Membership ID handlers ──
-
-  const membershipIdRef = useRef<MembershipIdSettings>(membershipId);
-
-  const updateMembershipIdSetting = (patch: Partial<MembershipIdSettings>, { immediate = false } = {}) => {
-    const next = { ...membershipIdRef.current, ...patch };
-    membershipIdRef.current = next;
-    setMembershipId(next);
-    // Read at fire time, for the same reason as the profile above.
-    const write = () => organizationService.updateMembershipIdSettings(membershipIdRef.current);
-    if (immediate) {
-      void save(write);
-    } else {
-      saveDebounced('membership-id', write);
-    }
   };
 
   // ── Email settings handlers ──
@@ -846,6 +799,13 @@ export const SettingsPage: React.FC = () => {
         <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
       </div>
     );
+  }
+
+  // Placed after every hook above: an early return before them would change the
+  // hook count between renders. `replace`, because the old address is not a page
+  // anybody should be able to go "back" to.
+  if (movedToMembersAdmin) {
+    return <Navigate to={movedToMembersAdmin} replace />;
   }
 
   // ── Render section content ──
@@ -1192,130 +1152,6 @@ export const SettingsPage: React.FC = () => {
       // ════════════════════════════════════════════
       // MEMBERS
       // ════════════════════════════════════════════
-      case 'members':
-        if (activeSubPage === 'ids') {
-          return (
-            <div>
-              <SettingsPanelHead
-                title="Membership ID Number"
-                description="Each member can be assigned a unique ID displayed on their profile."
-                meta={membershipId.enabled ? `Next: ${membershipId.prefix}${membershipId.next_number}` : undefined}
-              />
-              <div className="space-y-3">
-                <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
-                  <div>
-                    <p className="text-theme-text-primary text-sm font-medium">Enable Membership ID Numbers</p>
-                    <p className="text-theme-text-muted text-xs">Display membership IDs on member profiles and lists</p>
-                  </div>
-                  <Toggle
-                    checked={membershipId.enabled}
-                    onChange={() => updateMembershipIdSetting({ enabled: !membershipId.enabled }, { immediate: true })}
-                  />
-                </div>
-
-                {membershipId.enabled && (
-                  <div className="space-y-4 pl-4">
-                    <div className="flex items-center justify-between py-2">
-                      <div>
-                        <p className="text-theme-text-primary text-sm">Auto-Generate IDs</p>
-                        <p className="text-theme-text-muted text-xs">
-                          Automatically assign sequential IDs to new members
-                        </p>
-                      </div>
-                      <Toggle
-                        checked={membershipId.auto_generate}
-                        onChange={() =>
-                          updateMembershipIdSetting({ auto_generate: !membershipId.auto_generate }, { immediate: true })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-theme-text-primary mb-1 block text-sm font-medium">ID Prefix</label>
-                      <p className="text-theme-text-muted mb-2 text-xs">
-                        Optional prefix (e.g. &quot;FD-&quot; produces FD-001)
-                      </p>
-                      <input
-                        type="text"
-                        maxLength={10}
-                        value={membershipId.prefix}
-                        onChange={(e) => updateMembershipIdSetting({ prefix: e.target.value })}
-                        placeholder="e.g. FD-"
-                        className="form-input w-40"
-                      />
-                    </div>
-
-                    {membershipId.auto_generate && (
-                      <div>
-                        <label className="text-theme-text-primary mb-1 block text-sm font-medium">Next ID Number</label>
-                        <p className="text-theme-text-muted mb-2 text-xs">
-                          Next number assigned when a new member is added
-                        </p>
-                        <input
-                          type="number"
-                          min={1}
-                          value={membershipId.next_number}
-                          onChange={(e) =>
-                            updateMembershipIdSetting({ next_number: Math.max(1, parseInt(e.target.value) || 1) })
-                          }
-                          className="form-input w-40"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <div>
-            <SettingsPanelHead
-              title="Contact Information Visibility"
-              description="Control what appears on the member list page."
-            />
-            <div className="space-y-3">
-              <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
-                <div>
-                  <p className="text-theme-text-primary text-sm font-medium">Show Contact Information</p>
-                  <p className="text-theme-text-muted text-xs">Enable display of contact info for all members</p>
-                </div>
-                <Toggle
-                  checked={contactSettings.enabled}
-                  onChange={() => updateContactSetting({ enabled: !contactSettings.enabled })}
-                />
-              </div>
-
-              {contactSettings.enabled && (
-                <div className="space-y-3 pl-4">
-                  <div className="flex items-center justify-between py-2">
-                    <p className="text-theme-text-primary text-sm">Show Email Addresses</p>
-                    <Toggle
-                      checked={contactSettings.show_email}
-                      onChange={() => updateContactSetting({ show_email: !contactSettings.show_email })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <p className="text-theme-text-primary text-sm">Show Phone Numbers</p>
-                    <Toggle
-                      checked={contactSettings.show_phone}
-                      onChange={() => updateContactSetting({ show_phone: !contactSettings.show_phone })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <p className="text-theme-text-primary text-sm">Show Mobile Numbers</p>
-                    <Toggle
-                      checked={contactSettings.show_mobile}
-                      onChange={() => updateContactSetting({ show_mobile: !contactSettings.show_mobile })}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
       // ════════════════════════════════════════════
       // RANKS
       // ════════════════════════════════════════════
