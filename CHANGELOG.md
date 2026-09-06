@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: outbound integration requests had no response-size cap (2026-09-06)
+
+**Fixed**
+
+- **An integration endpoint (Salesforce, Cal.com, Documenso, or a chat
+  webhook) that returned an oversized or slow-drip response body could
+  drive unbounded memory growth per request.** A size limit was declared
+  in the shared integration HTTP client's code but nothing enforced it.
+  It is now enforced centrally for every integration connector — a
+  response is aborted once it exceeds the limit, before it can be
+  buffered into memory — with no change needed at any connector's call
+  site.
+
 ### Security: a form's "one submission per person" rule could be bypassed by submitting twice at once (2026-09-06)
 
 **Fixed**
