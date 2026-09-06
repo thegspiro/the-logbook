@@ -1,7 +1,8 @@
 # Security Review — Medical Supplies
 
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
-#1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076)
+#1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076),
+2026-09-06 (pass 3)
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
 endpoints; pass 2: 670 L, 14 routes — no route added or removed). No
@@ -421,3 +422,73 @@ pass after.
 | new guard test, verified fail-before/pass-after       | confirmed                          |
 | backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip    |
 | backend tests, full suite                             | 9273 passed, 22 pre-existing skips |
+
+## Pass 3 — 2026-09-06
+
+The endpoint file grew from 670 L to 699 L since pass 2 — no route added or
+removed (still 14 routes), and diffing the growth shows it is entirely
+explanatory comments (the module docstring's domain-pinning rationale, the
+`_require_medical_item`/`_require_medical_category` docstrings, and inline
+notes on the MSUP-5/MSUP-6 audit-snapshot and MSUP-2 bulk-domain-check
+fixes) — no logic changed. `inventory_service.py` grew substantially
+(~8,200 L → ~9,995 L) from unrelated inventory work landing since pass 2
+(e.g. the fulfillment-options feature), so every method this router calls
+was re-read directly against current line numbers rather than trusted from
+the prior pass's summary:
+
+- **MSUP-1's fix holds.** `update_category`, `update_item`, and `update_lot`
+  (`inventory_service.py:853`, `:1884`, `:6841`) all still route through
+  `apply_updates`, not a hand-rolled `setattr` loop.
+- **Domain pinning is unchanged and still real.** `category_in_domain`
+  (`:6360`), `item_in_domain` (`:6425`), `items_in_domain` (`:6447`), and
+  `lot_in_domain` (`:6478`) all still filter/join on `organization_id` on
+  both sides and fail closed (an unresolvable or wrong-domain id returns
+  `False`/empty, never raises past the caller).
+- **`get_items`'s domain filter and its `_category_ids_of_type` subquery
+  are still org-scoped inside the subquery** (`:1607`), not just the outer
+  query; its free-text search still uses `like_pattern` +
+  `escape=LIKE_ESCAPE_CHAR` on every `ilike` clause (Pitfall #25); its
+  `ORDER BY` still carries `InventoryItem.id` as a tie-breaker.
+- **`add_lots_bulk`'s XC-1 check still resolves every `inventory_item_id`
+  in one org-scoped query before writing any lot** (`:6640-6656`) — a
+  delivery naming another org's item id is rejected whole, not partially
+  applied — and `receive_medical_delivery` still validates the whole
+  line-list's domain membership through `items_in_domain` in one query
+  (MSUP-2), not a per-line loop.
+- **`medical_supply_summary`'s `low_stock`/`total_items` split still holds**
+  (MSUP-3): `low_stock` comes from `get_low_stock_items_for_alerts`
+  (uncapped, `reorder_point IS NOT NULL`-filtered before any row loads),
+  `total_items` from `get_items(..., limit=1)`'s separate always-uncapped
+  count — neither depends on a page-size cap.
+- **MSUP-5/MSUP-6's audit trail on category/item updates still fires**, and
+  the `fields_updated` snapshot in `update_medical_category` is still taken
+  _before_ `service.update_category()`'s in-place `metadata` →
+  `extra_data` rename, so the audit event still reports what the caller
+  sent rather than the DB column name.
+- **MSUP-4 re-confirmed still open, unchanged.** `get_expiring_lots`
+  (`inventory_service.py:6894`) still has no `limit`/pagination — still a
+  shared `InventoryService` method backing the main inventory router and
+  the alert email, so a cap remains a cross-cutting product decision, not a
+  medical-specific patch. `docs/KNOWN_LIMITATIONS.md`'s MSUP-4 row is
+  unchanged and accurate.
+
+No new finding. All 110 scoped tests
+(`test_medical_supplies_domain.py` + `test_inventory_service.py`) pass
+unmodified, confirming every pass-1/pass-2 fix and guard test still holds
+against the current code with zero drift in the logic this router and its
+domain-pinning helpers depend on.
+
+### Completion gate (pass 3)
+
+| Check                                                                               | Result     |
+| ----------------------------------------------------------------------------------- | ---------- |
+| `flake8 app/api/v1/endpoints/medical_supplies.py app/services/inventory_service.py` | clean      |
+| `black --check` (same files)                                                        | clean      |
+| `isort --check-only` (same files)                                                   | clean      |
+| `tests/test_endpoint_auth_coverage.py`                                              | 1 passed   |
+| `tests/test_medical_supplies_domain.py tests/test_inventory_service.py`             | 110 passed |
+
+No migration, no schema change, no code change this pass — every finding
+from pass 1/pass 2 was re-verified against current code rather than
+re-fixed, and MSUP-4 remains the sole open, flagged item (unchanged product
+decision).

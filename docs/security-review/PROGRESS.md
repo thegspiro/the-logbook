@@ -16,95 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 22 (Grants & fundraising) merged via PR #2251 — see the Log
-entry below. Feature 23 (Medical supplies) is now in progress.
+**Feature 23 (Medical supplies), pass 3** — branch
+`claude/security-review-medical-supplies`. No new finding: the endpoint
+file grew 670 L → 699 L since pass 2 in comments only (no route or logic
+change), and every `InventoryService` method it calls was re-read directly
+against current line numbers (the service grew ~8,200 L → ~9,995 L from
+unrelated inventory work). MSUP-1/2/3/5/6's fixes and the domain-pinning
+mechanism all re-verified intact; MSUP-4 (unbounded `get_expiring_lots`)
+re-confirmed still open, unchanged product decision. 110 scoped tests pass
+unmodified. See `docs/security-review/MSUP-23-medical-supplies.md` → Pass 3. PR not yet opened — pushing next.
 
 ---
 
-<!-- Retained below: PR #2251's tend history, for reference until archived into the Log proper. -->
+### 2026-09-06 — Feature 23 (Medical supplies), pass 3 — 0 fixes, 0 flagged (new)
 
-**Feature 22 (Grants & fundraising), pass 3 [MERGED]** — branch
-`claude/security-review-grants-fundraising`,
-[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). Diff-scoped
-against pass 2's merge (`d7a0c456`, verified reachable after an unshallow
-fetch): zero code drift. One new finding — GF-35 (LOW-MED, fixed): all 11
-`list_*` methods across both services fetched an org's entire table before
-slicing `skip`/`limit` in Python; now paginated in SQL. All three Codex
-review threads addressed and resolved (eager-load-before-limit on the
-budget-item/expenditure/note parent check, missing id tie-breaker on
-paginated `ORDER BY`, and remaining child eager-loads on `list_applications`
-itself). All CI checks green.
+No security-review PR was open (feature 22's had just merged), so the
+rotation continued directly to feature 23 per the pass order. The endpoint
+file (`app/api/v1/endpoints/medical_supplies.py`) grew 670 L → 699 L since
+pass 2 — no route added or removed (still 14 routes) — and the growth is
+entirely explanatory comments describing the pass-2 fixes already in place;
+no logic changed. `inventory_service.py` grew substantially since pass 2
+(~8,200 L → ~9,995 L) from unrelated inventory work, so every method this
+router calls (`update_category`/`update_item`/`update_lot`,
+`category_in_domain`/`item_in_domain`/`items_in_domain`/`lot_in_domain`,
+`get_items`, `add_lots_bulk`, `get_low_stock_items_for_alerts`,
+`get_expiring_lots`) was re-read directly against current line numbers
+rather than trusted from the prior pass's summary. MSUP-1/2/3/5/6's fixes
+and the domain-pinning mechanism (org-scoped, fail-closed on every helper)
+all re-verified intact. MSUP-4 (`get_expiring_lots` has no row cap)
+re-confirmed still open, unchanged cross-cutting product decision, still
+accurately mirrored in `docs/KNOWN_LIMITATIONS.md`. No new finding.
 
-2026-09-05 tend: `main` had advanced past this PR's base since pass 2
-(PR #2255 and others merged in). Merged `origin/main` into the PR branch;
-the only conflict was two independently-added `[Unreleased]` blocks in
-`CHANGELOG.md`, resolved by keeping both. Re-ran the full completion gate
-post-merge (flake8/black/isort, migration validation, `pytest -k "grant or
-fundraising"` — 537 passed, migration `create_all` guard test — 33 passed,
-`tsc --noEmit`, `eslint .`) — all clean — and pushed. No review comments or
-CI failures outstanding.
-
-2026-09-05 tend (round 2): `main` had advanced another 16 commits past the
-prior tend's merge point (PRs #2257–#2261 and others). Merged `origin/main`
-into the PR branch again; the only conflict was, once more, two
-independently-added `[Unreleased]` blocks in `CHANGELOG.md`, resolved by
-keeping both. Re-ran the full completion gate post-merge:
-flake8/black/isort clean, `validate_migrations.py --strict` (425 revisions,
-single head), `pytest -k "grant or fundraising"` — 556 passed, full backend
-suite — 11100 passed/21 pre-existing skips/0 failed, `tsc --noEmit` 0
-errors, `eslint .` 0 errors/0 warnings — and pushed. All 17 CI checks green
-on the new head; no review comments outstanding.
-
-2026-09-05 tend (round 3): a watchdog check found the previous tend's
-narrative had itself gone stale — `main` had merged 10 more PRs
-(#2261–#2271, including #2269's own fix to this section's stale `#2247`
-pointer) since round 2, and this time `main`'s copy of both `CHANGELOG.md`
-and this file's own "Open PR" section had drifted enough to conflict on
-merge, not just `CHANGELOG.md` alone. Resolved `CHANGELOG.md` by keeping
-both `[Unreleased]` entries as before; resolved this file by keeping this
-section's own continuously-updated narrative (round 1/round 2 tends already
-cover the stale-pointer story `main`'s draft was independently describing)
-and dropping `main`'s duplicate, terser copy of the "Feature 21 merged" log
-entry below in favor of this branch's own richer one. Re-ran the full
-completion gate post-merge: flake8/black/isort clean,
-`validate_migrations.py --strict` single head, `pytest -k "grant or
-fundraising"` and the full backend suite green, `tsc --noEmit` 0 errors,
-`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge;
-this is a documentation-only conflict between two branches recording the
-same PR, not a code or CI problem.
-
-2026-09-05 tend (round 4, watchdog): `main` picked up PR #2270 (and others)
-since round 3, reintroducing the same `CHANGELOG.md` `[Unreleased]`
-conflict (this PR's grants/fundraising pagination entry against an
-unrelated equipment-request-catalog entry newly merged to `main`). No new
-review comments; all 3 Codex threads from earlier rounds remain resolved.
-Merged `origin/main` into the PR branch, kept both `[Unreleased]` blocks,
-and re-ran the completion gate scoped to the touched backend files plus
-`validate_migrations.py --strict` (428 revisions, single head — the merge
-pulled in `main`'s new `a1c7e93b2d54` equipment-request-size migration),
-`pytest -k "grant or fundraising"` (563 passed, 1 pre-existing skip), and
-`tsc --noEmit` (0 errors) — all clean — and pushed. Still awaiting owner
-merge; no code or CI problem, just `main`'s pace outrunning `mergeable_state`
-recomputation between tend passes.
-
-2026-09-06 tend (round 5, watchdog): `main`'s independently-maintained copy
-of this section had drifted again — the same recurring shape as round 3 —
-describing the same PR's history in its own words (most recently two
-"watchdog" checks that pushed merge commits at `72c4cfc` and `7a6d841`).
-Both copies had already converged on the same actual branch head
-(`7a6d841`), so this was a documentation-only conflict, not a code
-divergence. Resolved the same way as round 3: kept this section's own
-continuously-updated narrative (rounds 1-4 above already cover the same
-merge/CI history `main`'s copy was independently describing) and dropped
-`main`'s duplicate copy. `CHANGELOG.md` carried the same recurring
-`[Unreleased]`-section conflict, this time against a newly-merged Course
-Library permissions entry; resolved by keeping both entries. Re-ran the
-full completion gate post-merge: `flake8`, `black --check`,
-`isort --check-only` on `app/`, `tests/`, `alembic/` clean;
-`scripts/validate_migrations.py --strict` single head; `pytest -k "grant or
-fundraising"` and the full backend suite green; `tsc --noEmit` 0 errors;
-`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge; no
-code or CI problem.
+Full local completion gate green: flake8/black/isort clean on both touched
+files, `tests/test_endpoint_auth_coverage.py` (1 passed),
+`test_medical_supplies_domain.py` + `test_inventory_service.py` (110
+passed, unmodified). No migration, no schema change, no code change this
+pass. Findings doc: `docs/security-review/MSUP-23-medical-supplies.md` →
+Pass 3. Rotation row 23 → ⏳ (PR open, no code diff — findings-doc and
+`PROGRESS.md` updates only). Next: 24 Meetings & minutes, once this PR
+merges.
 
 ---
 
@@ -8873,7 +8823,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | 🔄     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
