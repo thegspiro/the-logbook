@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Finance and Elections pages keep their trail in every state (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the six Finance section pages.** Budgets, Purchase
+  Requests, Expense Reports, Check Requests, Dues and Finance Settings had none,
+  while the detail and form pages beneath them did — so a trail appeared once
+  you opened a record and disappeared when you went back to the list it came
+  from.
+- **A trail on the election detail page, in all three of its states.** Its URL
+  is `/elections/:electionId`, and a generated trail skips the id and then
+  suppresses itself for having only one crumb, so the page showed nothing. Its
+  loading and not-found branches offered no route away at all — not even the
+  "Back to Elections" link the loaded page carries — which is what a member
+  following a stale election link landed on.
+
+**Fixed**
+
+- **Four Finance pages showed their trail only after loading finished.** The
+  three request forms and the approval-chain settings rendered `<Breadcrumbs />`
+  in the loaded branch and not in the skeleton branch above it. This is the
+  mirror of the defect fixed earlier in the same directory, where two detail
+  pages had a trail _while_ loading and lost it once the record arrived.
+- **The Expense Reports crumb no longer reads "Expenses".** The page heading,
+  the detail page's back link and the testing registry all call it Expense
+  Reports; only the URL segment says otherwise.
+
+**Changed**
+
+- **The finance breadcrumb test now checks every branch a page can return,
+  rather than the last one.** It was written against the first direction of this
+  defect and was blind to the second by construction, which is how four pages
+  kept a trail-less loading branch. Both directions are now covered, and the
+  failure names the branch index.
+
 ### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
 
 **Fixed**
@@ -25,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expanded array — so five dependencies were reported as six, against a limit
   that explicitly permits five. Non-empty top-level segments are counted
   instead.
+
 ### The Minutes page advertised a feature members cannot use (2026-09-06)
 
 **Fixed**
@@ -67,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **This is a widening.** The officer-facing endpoints for _another_ member's
   sizes are untouched and keep their stricter gates — `inventory.view` to
   read, `inventory.manage` to write — and a test now pins both halves.
+
 ### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
 
 **Fixed**
@@ -80,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control is now disabled rather than hidden, with a title naming who does it,
   matching the Swap control on the apparatus inventory screen — the same
   manage-gated stock write. Reading the worklist is unchanged.
+
 ### Inventory and Members pages say which hub they belong to (2026-09-06)
 
 **Added**
@@ -112,6 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Check In Station" against a heading that hyphenates it. The hub-card
   agreement test now covers Inventory as well as Scheduling, so a card and a
   crumb naming one page differently fails rather than shipping.
+
 ### The close-out queue and the number above it are one list now (2026-09-06)
 
 **Added**
@@ -150,6 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run on. The refresh is skipped while a close-out wizard is open, so it cannot
   unmount unsaved entries, and a failed refresh leaves the last good list on
   screen rather than blanking a working page.
+
 ### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
 
 **Fixed**
@@ -167,6 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checklist builder now meet the 44-pixel minimum touch size on phones.
 - **A stray scrollbar under the tabs on an inventory item's page** has been
   removed.
+
 ### Create Shift: the dialog's fields had no names (2026-09-06)
 
 **Fixed**
@@ -187,6 +228,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screen reader offered "08:00 hour" where it should have said "Start Time
   hour", and the end field fell back to a bare "Time". All six now carry the
   visible field name.
+
 ### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
 
 **Fixed**
@@ -209,6 +251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The tradeoff it does carry: two branches editing the _same_ entry get both
   revisions as adjacent duplicate lines rather than a conflict. That is visible
   in review, and is recorded in the `.gitattributes` comment.
+
 ### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
 
 Codex raised these on #2206 as it merged, so none were addressed there.
