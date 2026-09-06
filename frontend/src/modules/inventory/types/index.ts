@@ -213,6 +213,58 @@ export const SHOE_SIZES = [
   '15',
 ] as const;
 
+/**
+ * Waist sizes, mirroring the numeric waist block of the backend's
+ * ``StandardSize`` enum (``backend/app/models/inventory.py``).
+ */
+export const WAIST_SIZES = ['28', '30', '32', '34', '36', '38', '40', '42', '44', '46'] as const;
+
+/**
+ * UI-only sentinel for the size picker's free-text escape hatch.
+ *
+ * Never stored. A custom size is saved the way every pre-picker row already
+ * holds one — free text in `size` with `standard_size` cleared — rather than
+ * with the enum's `custom` sentinel, so the null fallback each reader already
+ * has (`standard_size || size`) covers it with no reader change.
+ */
+export const CUSTOM_SIZE_OPTION = '__custom__';
+
+/**
+ * The whole `StandardSize` vocabulary, grouped for a `<select>`.
+ *
+ * `STANDARD_SIZES` above is the *chip* list for variant generation and stays
+ * letters-only on purpose; this is the full set the backend enum accepts, so a
+ * row already holding a boot or waist size round-trips through the picker
+ * instead of coming back blank and being cleared on save. Kept in step with
+ * `StandardSize` in `backend/app/models/inventory.py` — an unlisted value is
+ * rejected there with a 422.
+ */
+export const SIZE_PICKER_GROUPS: ReadonlyArray<{
+  label: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+}> = [
+  { label: 'Garment', options: STANDARD_SIZES.filter((s) => s.value !== 'custom') },
+  { label: 'Boot / Glove', options: SHOE_SIZES.map((v) => ({ value: v, label: v })) },
+  { label: 'Waist', options: WAIST_SIZES.map((v) => ({ value: v, label: v })) },
+];
+
+const SIZE_PICKER_VALUES = new Set(SIZE_PICKER_GROUPS.flatMap((g) => g.options.map((o) => o.value)));
+
+/**
+ * The picker option a stored size selects, or `''` when the value is free text.
+ *
+ * Matches case-insensitively so a legacy `size` of `"L"` — which the size
+ * filter never matched, because it compares against the lowercase code — lands
+ * on the same option as a variant-generated `"l"`. The enum's `custom`
+ * sentinel is deliberately absent from the set, so it resolves to free text,
+ * which is what it means.
+ */
+export function standardSizeCode(value: string | null | undefined): string {
+  if (!value) return '';
+  const code = value.trim().toLowerCase();
+  return SIZE_PICKER_VALUES.has(code) ? code : '';
+}
+
 /** Garment style options */
 export const GARMENT_STYLES = [
   { value: 'short_sleeve', label: 'Short Sleeve' },

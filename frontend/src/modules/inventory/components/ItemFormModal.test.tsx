@@ -202,6 +202,133 @@ describe('ItemFormModal', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
   });
 
+  // The Size control writes both size columns. It used to be a free-text box
+  // over the legacy `size` alone, which meant it printed the stored code — a
+  // quartermaster editing a variant-generated shirt read "l" where every other
+  // screen says "L" — and left `standard_size` at its old value on save.
+  describe('size picker', () => {
+    const sizeSelect = (): HTMLElement => screen.getByLabelText('Size');
+
+    it('shows the readable label for a stored size code', () => {
+      render(
+        <ItemFormModal
+          {...ppeProps}
+          isOpen
+          editItem={makeItem({ category_id: 'cat-ppe', standard_size: 'l', size: 'l' })}
+        />
+      );
+
+      expect(sizeSelect()).toHaveValue('l');
+      expect(screen.getByRole('option', { name: 'L', selected: true })).toBeInTheDocument();
+    });
+
+    it('offers the labels rather than the codes', () => {
+      render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe' })} />);
+
+      expect(screen.getByRole('option', { name: 'One Size' })).toHaveValue('one_size');
+      expect(screen.getByRole('option', { name: '3XL' })).toHaveValue('xxxl');
+    });
+
+    it('writes the chosen code to both size columns', async () => {
+      const user = userEvent.setup();
+      render(
+        <ItemFormModal
+          {...ppeProps}
+          isOpen
+          editItem={makeItem({ category_id: 'cat-ppe', standard_size: 'l', size: 'l' })}
+        />
+      );
+
+      await user.selectOptions(sizeSelect(), 'xl');
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ size: 'xl', standard_size: 'xl' });
+    });
+
+    // A boot width or a chest measurement is a size too, and the picker must
+    // not be the reason one can no longer be recorded.
+    it('keeps a free-text size in the custom box and clears the structured column', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', size: '10.5 EE' })} />);
+
+      expect(sizeSelect()).toHaveValue('__custom__');
+      expect(screen.getByLabelText('Custom size')).toHaveValue('10.5 EE');
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ size: '10.5 EE', standard_size: null });
+    });
+
+    it('saves a newly typed custom size', async () => {
+      const user = userEvent.setup();
+      render(
+        <ItemFormModal
+          {...ppeProps}
+          isOpen
+          editItem={makeItem({ category_id: 'cat-ppe', standard_size: 'l', size: 'l' })}
+        />
+      );
+
+      await user.selectOptions(sizeSelect(), '__custom__');
+      await user.type(screen.getByLabelText('Custom size'), '42 Long');
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ size: '42 Long', standard_size: null });
+    });
+
+    // The old free-text box stored whatever was typed, and the list endpoint's
+    // size filter compares against the lowercase code — so "L" was never
+    // reachable from the L filter until an edit normalized it.
+    it('resolves a legacy free-text code onto its picker option', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', size: 'L' })} />);
+
+      expect(sizeSelect()).toHaveValue('l');
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ size: 'l', standard_size: 'l' });
+    });
+
+    // On an edit the backend dumps with `exclude_unset`, so an omitted key
+    // means "leave this alone" and the cleared size would survive the save.
+    it('sends an explicit clear when the size is deselected', async () => {
+      const user = userEvent.setup();
+      render(
+        <ItemFormModal
+          {...ppeProps}
+          isOpen
+          editItem={makeItem({ category_id: 'cat-ppe', standard_size: 'l', size: 'l' })}
+        />
+      );
+
+      await user.selectOptions(sizeSelect(), '');
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+      expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ size: null, standard_size: null });
+    });
+
+    // On a create a blank must be omitted rather than nulled, so `""` never
+    // reaches a Pydantic validator.
+    it('omits an unset size on create', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...ppeProps} isOpen />);
+
+      await user.type(nameInput(), 'Turnout Coat');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+      // `undefined`, not `null`: axios serializes with JSON.stringify, which
+      // drops the key, so nothing reaches the Pydantic validator as `""`.
+      const payload = mockCreateItem.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload['standard_size']).toBeUndefined();
+      expect(payload['size']).toBeUndefined();
+    });
+  });
+
   it('generates size variants when the toggle is enabled', async () => {
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen />);
