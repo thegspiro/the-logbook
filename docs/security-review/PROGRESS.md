@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 34 (Frontend shared, pass 5, corrective) PR
+[#2382](https://github.com/thegspiro/the-logbook/pull/2382) merged
+(`f53258ee`). It corrected three `chatgpt-codex-connector[bot]` findings that
+PR #2379 (pass 4) merged unaddressed (wrong baseline commit citation, the
+`GET /inventory/items/colors` caching gap, and this tracker's own stale
+FE3-34-5 disposition), then picked up three more from Codex review on its own
+pushes as it went — a fourth (the `list_item_colors` permission gate itself,
+`get_current_user` → `require_permission("inventory.view")`, plus a
+regression test) and two doc-accuracy corrections (the completion-gate table
+and the "Schema & migration notes" section both still called the pass
+frontend-only after the permission fix landed). A fifth finding (`85cc9b6` as
+an "orphaned pre-squash" ancestor of the cited fix commit) was verified
+against the actual repository and found to not exist anywhere in this
+history — replied on the PR with the verification rather than acting on it.
+All six real/verified findings across the PR's four commits were addressed,
+replied to, and resolved before merge. See
+`docs/security-review/FE5-34-frontend-shared.md` for the full corrective
+review. Feature 34 stays ✅ at pass 4's rotation position — this PR repaired
+pass 4's record, it did not open a new pass. Rotation wraps to 00
+(cross-cutting baseline) for the next full pass.
+
+<details>
+<summary>Superseded — PR #2382 (pass 5, corrective), preserved for history</summary>
+
 **Feature 34 (Frontend shared, pass 5, corrective)** — PR
 [#2382](https://github.com/thegspiro/the-logbook/pull/2382), branch
 `claude/fe34-pass5-baseline-fix`. Corrects three `chatgpt-codex-connector[bot]`
@@ -29,6 +53,8 @@ tracker's own stale FE3-34-5 disposition (already corrected above). Feature
 it does not open a new pass. See
 `docs/security-review/FE5-34-frontend-shared.md` for the full corrective
 review.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2379 (pass 4), preserved for history</summary>
@@ -143,6 +169,37 @@ once #2370 merges: 34 Frontend shared.
 </details>
 
 </details>
+
+---
+
+### 2026-09-07 — Feature 34's corrective PR #2382 merged, watchdog recorded it
+
+PR #2382 (pass 5, corrective) went through four commits before merge, each
+addressing Codex review comments as they landed rather than batching them:
+the three original findings (wrong baseline citation, the colours-caching
+gap, the stale FE3-34-5 tracker note), then a fourth Codex found on that same
+push — `list_item_colors` was gated on `get_current_user` instead of
+`require_permission("inventory.view")` like every sibling read on the
+inventory router, so a custom position lacking that permission could still
+read every colour in the org's catalog through this one route. Fixed to
+match its siblings, plus a regression test
+(`test_item_colors_requires_inventory_view` in
+`test_inventory_member_visibility.py`, using the file's existing
+`_permission_set` helper) guarding against it loosening back. Two more
+Codex findings on the resulting push were doc-accuracy only — the
+completion-gate table and the "Schema & migration notes" section both still
+called the pass frontend-only after that permission fix landed — corrected
+both. A sixth Codex comment claimed the cited fix commit was an "orphaned
+pre-squash" sibling of a commit `85cc9b6`; verified against the actual
+repository (`git cat-file -t`, `git log --all`) that no such commit exists
+anywhere in this history, replied with that evidence, and left the citation
+unchanged. All threads replied to and resolved before merge (`f53258ee`).
+CI was fully green on the final head; the one apparent CI failure along the
+way (`ea5d877`'s "CI Success" job) was confirmed to be jobs auto-cancelled by
+the next push arriving mid-run, not a real failure. Rotation row 34 stays ✅
+(this PR repaired pass 4's record, it did not open a new pass — already
+reflected in the table above). Next: 00 Cross-cutting baseline, a fresh full
+pass over the rotation.
 
 ---
 
