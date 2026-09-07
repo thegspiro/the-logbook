@@ -9,7 +9,7 @@ image still matches the application is tracked by hand in
 [SCREENSHOT_CURRENCY.md](./SCREENSHOT_CURRENCY.md) — this file is
 regenerated wholesale, so that audit cannot live here.
 
-**568 of 580 placeholders filled** (12 remaining).
+**581 of 585 placeholders filled** (4 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -17,8 +17,8 @@ regenerated wholesale, so that audit cannot live here.
 | [01-membership.md](./01-membership.md) | 29 | 0 |
 | [02-training.md](./02-training.md) | 73 | 0 |
 | [03-scheduling.md](./03-scheduling.md) | 82 | 1 |
-| [04-events-meetings.md](./04-events-meetings.md) | 38 | 1 |
-| [05-inventory.md](./05-inventory.md) | 60 | 1 |
+| [04-events-meetings.md](./04-events-meetings.md) | 39 | 0 |
+| [05-inventory.md](./05-inventory.md) | 62 | 0 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 21 | 0 |
 | [07-documents-forms.md](./07-documents-forms.md) | 13 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 53 | 0 |
@@ -29,10 +29,10 @@ regenerated wholesale, so that audit cannot live here.
 | [13-medical-screening.md](./13-medical-screening.md) | 6 | 0 |
 | [14-elections.md](./14-elections.md) | 18 | 0 |
 | [15-prospective-members.md](./15-prospective-members.md) | 15 | 0 |
-| [16-integrations.md](./16-integrations.md) | 5 | 1 |
+| [16-integrations.md](./16-integrations.md) | 7 | 0 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 4 | 0 |
 | [18-storefront.md](./18-storefront.md) | 4 | 0 |
-| [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 48 | 1 |
-| [20-september-2026-release-changes.md](./20-september-2026-release-changes.md) | 21 | 7 |
-| **Total** | **568** | **12** |
+| [19-august-2026-release-changes.md](./19-august-2026-release-changes.md) | 49 | 0 |
+| [20-september-2026-release-changes.md](./20-september-2026-release-changes.md) | 28 | 3 |
+| **Total** | **581** | **4** |
 
