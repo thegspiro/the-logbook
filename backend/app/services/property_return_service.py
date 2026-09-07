@@ -9,6 +9,12 @@ The report:
   - Includes predefined language about returning department property
   - Is formatted as a printable HTML document (suitable for email or postal mail)
   - Is saved to the Documents module for record-keeping
+
+The saved copy goes into the leadership-only "Member Separations" folder, not
+the organization-visible "Reports" folder it used until 2026-09-07. The report
+body carries the member's home address and the stated reason for the
+separation; filing it anywhere a plain ``documents.view`` holder can read
+publishes both to the whole department.
 """
 
 from datetime import date, datetime, timedelta, timezone
@@ -21,13 +27,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.document import Document, DocumentFolder, DocumentStatus, DocumentType
+from app.models.document import (
+    SYSTEM_FOLDERS,
+    Document,
+    DocumentFolder,
+    DocumentStatus,
+    DocumentType,
+)
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.user import Organization, User
 
 
 class PropertyReturnService:
     """Generates and stores property-return reports for dropped members."""
+
+    #: The leadership-only folder every generated report is filed in.
+    SEPARATIONS_FOLDER_SLUG = "member-separations"
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -229,6 +244,79 @@ class PropertyReturnService:
         html = self._render_html(report_data, custom_instructions, reason=reason)
         return report_data, html
 
+    async def _find_separations_folder(
+        self, organization_id: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's separations folder.
+
+        ``with_for_update`` on the *read* is the second half of pitfall #27,
+        and it is load-bearing here rather than defensive: the caller has
+        already read the member, the organization and the assignment rows, so
+        under this app's default REPEATABLE READ the transaction's snapshot
+        predates the organization lock taken below. A plain ``SELECT`` would
+        still answer "no folder yet" from that older snapshot even after
+        waiting for a concurrent transaction that created one.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(
+                DocumentFolder.organization_id == organization_id,
+                DocumentFolder.slug == self.SEPARATIONS_FOLDER_SLUG,
+            )
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_or_create_separations_folder(
+        self, organization_id: str, created_by: str
+    ) -> DocumentFolder:
+        """Resolve the leadership-only folder these reports are filed in.
+
+        Created on demand rather than relying on ``initialize_system_folders``,
+        which only runs for an organization that has *no* system folders at
+        all — so every department that onboarded before this folder existed
+        would otherwise never receive it, and the report would fall back to a
+        folder that discloses it.
+
+        Get-or-create with no uniqueness constraint behind ``(organization_id,
+        slug)`` is the read-then-write of pitfall #27, so it takes the same
+        shape ``ensure_facility_folder`` uses: a fast path for the case the
+        folder already exists, then the organization row locked and the check
+        repeated under it. Two members dropped in the same moment would
+        otherwise both insert, and every later read raises
+        ``MultipleResultsFound`` — permanently, for that department.
+        """
+        folder = await self._find_separations_folder(organization_id)
+        if folder is not None:
+            return folder
+
+        # A row that does not exist cannot be locked, so serialize on the
+        # organization row — the same anchor ensure_facility_folder uses. Only
+        # reached the first time a department drops a member, so the exclusive
+        # lock is not on any hot path.
+        await self.db.execute(
+            select(Organization)
+            .where(Organization.id == organization_id)
+            .with_for_update()
+        )
+
+        folder = await self._find_separations_folder(organization_id)
+        if folder is not None:
+            return folder
+
+        folder_def = next(
+            s for s in SYSTEM_FOLDERS if s["slug"] == self.SEPARATIONS_FOLDER_SLUG
+        )
+        folder = DocumentFolder(
+            organization_id=organization_id,
+            created_by=created_by,
+            is_system=True,
+            **folder_def,
+        )
+        self.db.add(folder)
+        await self.db.flush()
+        return folder
+
     async def save_as_document(
         self,
         organization_id: str,
@@ -236,20 +324,21 @@ class PropertyReturnService:
         html_content: str,
         created_by: str,
     ) -> Optional[Document]:
-        """Save the report as a generated document in the Reports folder."""
-        # Find the Reports system folder
-        folder_result = await self.db.execute(
-            select(DocumentFolder).where(
-                DocumentFolder.organization_id == organization_id,
-                DocumentFolder.name == "Reports",
-                DocumentFolder.is_system == True,  # noqa: E712
-            )
+        """Save the report as a generated document, leadership-only.
+
+        The folder is resolved before the document is built and never left
+        unset: ``DocumentsService.can_access_document`` treats a document with
+        no ``folder_id`` as organization-level and readable by anyone holding
+        ``documents.view``, so a missing folder would fail *open* on exactly
+        the record that must not.
+        """
+        folder = await self._get_or_create_separations_folder(
+            organization_id, created_by
         )
-        folder = folder_result.scalar_one_or_none()
 
         doc = Document(
             organization_id=organization_id,
-            folder_id=str(folder.id) if folder else None,
+            folder_id=str(folder.id),
             name=f"Property Return - {member_name} - {date.today().strftime('%Y-%m-%d')}",
             file_type="text/html",
             document_type=DocumentType.GENERATED,
