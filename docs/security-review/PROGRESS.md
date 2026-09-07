@@ -16,21 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 31 (Scheduled tasks, pass 3) — PR
-[#2362](https://github.com/thegspiro/the-logbook/pull/2362), branch
-`claude/security-review-scheduled-tasks-pass3`.** 2 fixed (both LOW —
-CRON3-31-1: the new `run_recover_stranded_message_deliveries` sweep and its
-pre-existing sibling `run_publish_scheduled_messages` had no
-`Organization.active` filter, same child-table-keyed CRON-2 shape
-CRON2-31-11/CRON-31-5 already closed elsewhere in this file; CRON3-31-2: a
-pre-existing test's own assertion held an ORM object handle across a
-rollback that could expire it, latent until CRON3-31-1's added `JOIN`
-started reordering rows often enough to expose it — full suite now a clean
-11,642/0). 0 new flagged (CRON-31-7, CRON-31-8, and the scheduler's
-Redis-down fallback all re-confirmed unchanged, considered trade-offs, not
-re-applied). Full findings: `docs/security-review/CRON3-31-scheduled-tasks.md`.
-Rotation row 31 -> ✅ (pending PR merge). Next: 32 Locations & kiosk, once
-this PR merges.
+**None.** Feature 31 (Scheduled tasks)'s PR #2362 merged (`ff8cf35c`) —
+fully green (17/17) and idle, merged directly by a 30-minute watchdog check
+per the established precedent (PR #2301, #2303, #2306, #2358). Rotation row
+31 stays ✅. Next: 32 Locations & kiosk.
+
+---
+
+### 2026-09-07 — Feature 31 (Scheduled tasks) — PR #2362 merged, watchdog recorded it
+
+PR #2362 (pass 3: CRON3-31-1/CRON3-31-2 fixed, all prior open items
+re-confirmed unchanged) went fully green (17/17) and sat idle with no
+unresolved review threads (only the informational Codex usage-limit
+comment), so a 30-minute watchdog check merged it directly rather than
+leaving it idle. Next: 32 Locations & kiosk.
 
 ---
 
