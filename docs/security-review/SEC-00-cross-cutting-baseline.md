@@ -1,8 +1,104 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged)
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4)
 
 ---
+
+## Out-of-band data-leakage sweep (2026-09-07) — PR #2381, prior art for pass 4
+
+Run as a standalone review between pass 3's completion and pass 4's start,
+not as a rotation iteration — so it never occupied `PROGRESS.md`'s **Open
+PR** row, and pass 4's Feature 00 iteration would otherwise re-derive both
+findings from scratch. Recorded here because this file, not `PROGRESS.md`'s
+log, is what Step 2 of the security-review skill actually loads before
+reading code.
+
+Two findings, both fixed:
+
+1. **A record written into a shared container inherits that container's
+   audience.** `PropertyReturnService.save_as_document` filed a
+   property-return report — a departed member's name, home address, and the
+   stated reason for the separation — into the organization-visible
+   `Reports` documents folder, readable by every `documents.view` holder.
+   Fixed: reports now go into a leadership-only `member-separations` folder,
+   with a migration relocating existing ones. Full write-up: **XC-4** in
+   `docs/module-audit/CROSS-CUTTING.md`.
+2. **Member-PII endpoints held in the frontend response cache.**
+   `frontend/src/utils/apiCache.ts` added 15 exclusion patterns (11
+   prefixes, 4 substrings), which — verified by diffing the full route
+   inventory against the old vs. new denylist, not a raw pattern match —
+   newly exclude **18 routes** from caching. No module-audit or
+   cross-cutting entry documents this finding elsewhere — this section is
+   its only prior-art record. For the exact diff, see PR #2381's
+   `frontend/src/utils/apiCache.ts` change.
+
+   **Every one of the 18 was individually traced to its frontend caller
+   (or lack of one) for this entry** — not sampled — after three rounds of
+   Codex review each found more no-ops than the last. Two independent axes
+   determine whether an exclusion is a real fix:
+
+   - **Which axios client serves it.** Only `services/apiClient.ts` caches
+     GET responses. Anything requested through a module's own
+     `createApiClient()` instance (no cache interceptor) was never cached
+     regardless of `apiCache.ts`.
+   - **Whether any frontend code calls it at all.** A route can have a
+     wrapper function in a service file that imports the cached client and
+     still have zero call sites — the wrapper itself was never cached
+     because nothing invokes it.
+
+   | Outcome                                                              | Count  | Routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+   | -------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | **Genuine fix** — real call site through the cached `apiClient.ts`   | **10** | `/inventory/allowances/check/{user_id}/{category_id}` (`checkAllowance`), `/inventory/clearances` (`getDepartureClearances`), `/inventory/items/{item_id}/exposures` (`getExposureRecords`), `/inventory/items/{item_id}/history` (`getItemHistory`), `/inventory/items/{item_id}/issuances` (`getItemIssuances`), `/inventory/requests` (`getEquipmentRequests`), `/inventory/reorder-requests` (`getReorderRequests`), `/inventory/return-requests` (`getReturnRequests`), `/inventory/write-offs` (`getWriteOffRequests`), `/operational-ranks/validate` (`validateRanks`) |
+   | No-op — apparatus module's uncached `createApiClient()`              | **4**  | `/apparatus/operators`, `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`, `/apparatus/evoc-check/{apparatus_id}/{user_id}`                                                                                                                                                                                                                                                                                                                                                                                                                            |
+   | No-op — **no wrapper exists at all**, on any client                  | **2**  | `/inventory/clearances/{clearance_id}`, `/roles/{role_id:uuid}/users`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+   | No-op — wrapper exists on the cached client, but **zero call sites** | **2**  | `/inventory/reorder-requests/{request_id}` (`getReorderRequest` — declared, never called; only plural `getReorderRequests` is), `/training/instructors/validate/{user_id}/{course_id}` (`validateInstructor` — declared, never called)                                                                                                                                                                                                                                                                                                                                        |
+
+   **10 genuine fixes, 8 no-ops.** The 8 no-ops still closed nothing today
+   — but "no-op today" is not "safe to leave excluded without a guard": the
+   apparatus module could gain a cache interceptor, a wrapper could gain a
+   caller, or a wrapper could be written for one of the two currently
+   wrapper-less routes, and the exclusion would then be doing real work
+   with no test asserting it stays in place.
+
+   **Ratchet coverage does not track the genuine-fix/no-op split** —
+   `test_api_cache_pii_exclusions.py` only checks `response_model` +
+   `PII_FIELDS`, which is blind to which axios client serves a route or
+   whether anything calls it. Of the 18, **9 are ratchet-protected**: 4 of
+   the 10 genuine fixes (`/inventory/reorder-requests`,
+   `/inventory/return-requests`, `/inventory/write-offs`,
+   `/operational-ranks/validate`) and, incidentally, 5 of the 8 no-ops
+   (`/apparatus/operators`, `/apparatus/driver-exceptions`,
+   `/apparatus/driver-exceptions/approvers`,
+   `/inventory/reorder-requests/{request_id}`,
+   `/roles/{role_id:uuid}/users`). The **9 unratcheted** routes split into
+   two different priorities:
+
+   - **6 genuine fixes with no regression guard** — a real leak that would
+     reopen silently if its exclusion were ever removed:
+     `/inventory/allowances/check/{user_id}/{category_id}`,
+     `/inventory/clearances`, `/inventory/items/{item_id}/exposures`,
+     `/inventory/items/{item_id}/history`,
+     `/inventory/items/{item_id}/issuances`, `/inventory/requests`.
+   - **3 no-ops with no regression guard** — inert today, but nothing
+     would catch it if that stopped being true:
+     `/apparatus/evoc-check/{apparatus_id}/{user_id}`,
+     `/inventory/clearances/{clearance_id}`,
+     `/training/instructors/validate/{user_id}/{course_id}`.
+
+   Neither set is covered by `api_cache_pii_baseline.txt` either (it lists
+   tolerated exceptions, not fixed routes, and is intentionally empty).
+
+**Action for pass 4:** treat both as already-fixed prior art, but do not
+read this as limiting the sweep to re-verifying only these named routes —
+this file's whole-codebase sweeps re-run against whatever has landed
+_since_ PR #2381 too (see `PROGRESS.md`'s "35 iterations per full pass"
+note). At minimum: (a) re-verify the 6 unratcheted genuine fixes above are
+still excluded, since a regression there is a real leak the ratchet
+cannot catch; (b) spot-check the 3 unratcheted no-ops haven't gained a
+caller or a cache interceptor, which is lower priority but not zero; and
+(c) sweep any endpoint or module-service change landed after PR #2381 for
+the same two shapes (shared-container writes, cache-by-default
+exclusions) rather than assuming this list is exhaustive going forward.
 
 ## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
 
