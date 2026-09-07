@@ -367,8 +367,21 @@ class RateLimiter:
             if self._active_lockout_count >= self._MAX_LOCKOUTS:
                 self._refresh_active_lockout_count(current_time)
 
-            if self._active_lockout_count < self._MAX_LOCKOUTS:
+            # A lockout_seconds=0 caller (public_rate_limit's in-memory
+            # fallback default) never produces a genuinely active lockout —
+            # lockout_until == current_time fails the ">" check every other
+            # reader of this state uses — so it must never compete for
+            # _MAX_LOCKOUTS capacity or inflate the shared, process-wide
+            # _active_lockout_count. Doing so let a flood of public,
+            # zero-duration violators (each landing on its own distinct key)
+            # exhaust the counter with phantom entries, pushing a completely
+            # unrelated scope's *real* violator (e.g. "login") into the
+            # saturation-fallback path even though the true active-lockout
+            # count was zero.
+            if lockout_seconds <= 0:
                 lockout_until: float | None = current_time + lockout_seconds
+            elif self._active_lockout_count < self._MAX_LOCKOUTS:
+                lockout_until = current_time + lockout_seconds
                 self._active_lockout_count += 1
             else:
                 # Saturated: this violator's own lockout can't be

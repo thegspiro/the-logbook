@@ -14,8 +14,10 @@ after PR #2370's round-5 (CI3-33-2g/2h), fixing the same
 _MAX_KEYS-conflates-locked-and-unlocked-counts root cause behind both a
 CPU-amplification finding and a rate-limit bypass — a third session
 collision, this one merging both sessions' regression tests cleanly, with
-the more precise of the two implementations landing), `app/core/config.py`
-(1,041 L),
+the more precise of the two implementations landing → 1,707 L after PR
+#2370's round-6 (CI3-33-2i), a zero-duration lockout inflating the shared
+active-lockout counter and stealing an unrelated scope's real lockout),
+`app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -1302,6 +1304,69 @@ this session's own 2 tests (behavior-only assertions, not tied to either
 implementation's internals) are still present and still pass against the
 version of the fix that shipped, alongside the other session's 2.
 
+### CI3-33-2i — P1 — a zero-duration lockout could inflate the shared active-lockout count and steal an unrelated scope's real lockout — ✅ FIXED (Codex review of PR #2370, round 9)
+
+**What:** `public_rate_limit`'s in-memory fallback defaults
+`lockout_seconds=0` for several unauthenticated public endpoints (calendar,
+legal, finance-approval, PayPal/Salesforce/integration webhooks). At
+`lockout_seconds=0`, the "too many requests" branch computes `lockout_until
+= current_time + 0 = current_time` — by definition never actually active,
+since every reader of this state (the exact `_active_lockout_count`
+recompute, `_refresh_active_lockout_count`, the "currently locked out"
+check at the top of `is_rate_limited`) tests `lockout_until > now`, which a
+value equal to `now` fails immediately. But the insertion branch
+incremented `self._active_lockout_count` unconditionally, with no
+exception for `lockout_seconds <= 0`. `_active_lockout_count` is a single
+counter shared across **every** scope on this one process-wide limiter
+instance (login, register, and every public endpoint alike) — so a flood
+of public, zero-duration violators, each landing on its own distinct key,
+could exhaust the shared counter with entries that were never genuinely
+active, pushing a completely unrelated scope's real violator into the
+saturation-fallback path even though the true active-lockout count was
+zero.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.is_rate_limited`, the insertion branch's `self.
+_active_lockout_count += 1`.
+
+**Failure scenario:** reproduced directly — `_MAX_LOCKOUTS = 10`, 11
+distinct `pub_form_submit` keys each hit with `lockout_seconds=0`: the
+cached counter reached exactly 10 (capped) despite 0 true active lockouts.
+A subsequent, completely unrelated `login` violator (real
+`lockout_seconds=1800`) then lost its own per-key lockout entirely —
+`is_rate_limited` took the saturation branch instead, since the cached
+count already read at capacity and the 1-second verify throttle had not
+yet re-confirmed it was phantom.
+
+**Impact:** cross-scope contamination from an unauthenticated surface into
+an authentication-relevant one. An attacker (or just heavy legitimate
+public traffic) hitting any `lockout_seconds=0` public endpoint hard
+enough could, for up to the 1-second verify-throttle window, cause a
+completely unrelated login violator to receive the broader, scope-wide
+saturation-reject fallback instead of their own targeted per-key lockout —
+not a bypass (the request is still rejected either way) but a
+denial-amplification: the saturation fallback's `reject_until` is a scope-
+wide signal, so it can affect _other_ keys in that scope too, in a way a
+real per-key lockout never would.
+
+**Fix:** a `lockout_seconds <= 0` insertion never competes for
+`_MAX_LOCKOUTS` capacity and never touches `_active_lockout_count` — it
+was never going to hold a genuinely active slot regardless of capacity, so
+there's no reason to deny it a nominal `lockout_until=current_time` record
+or let it inflate the shared counter. This preserves the existing
+zero-lockout behavior (the sliding-window-only fallback protection
+documented at the "Lockout expired" branch above) while removing the
+phantom capacity consumption entirely.
+
+**Tests:**
+`test_zero_lockout_seconds_never_inflates_the_shared_active_lockout_count`
+— the direct reproduction described above. Verified to **fail** against
+the pre-fix code (cached count inflated to 10, the login violator's own
+real lockout replaced by the saturation fallback) and **pass** after
+(cached count stays 0, login violator gets its own real per-key lockout).
+
+`TestRateLimiter` is 42 tests (was 41).
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1703,6 +1768,19 @@ test_over_capacity_retries_do_not_force_a_sweep_on_every_request` —
 `TestRateLimiter` is 41 tests (was 37 before this round: 2 from each of
 the two sessions' independent fixes).
 
+**Added in PR #2370 round 6 (CI3-33-2i):**
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_zero_lockout_seconds_never_inflates_the_shared_active_lockout_count`
+  — `_MAX_LOCKOUTS=10`, 11 distinct public keys hit with `lockout_seconds=
+0`, then an unrelated `login` violator. Verified to **fail** against the
+  pre-fix code (cached count inflated to 10 despite 0 true active
+  lockouts; the login violator lost its own real lockout to the saturation
+  fallback) and **pass** after (cached count stays 0; login violator gets
+  its own real per-key lockout).
+
+`TestRateLimiter` is 42 tests (was 41).
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
@@ -1775,7 +1853,21 @@ semantics:**
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                                               |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,742 passed, 21 skipped, 0 failed (was 11,738 after round 4; skips all pre-existing)                                  |
 
-No frontend file was touched in PR #2370 (any of its five rounds), so the
+**After PR #2370's round-6 fix (CI3-33-2i), the gate was re-run once
+more — full backend suite included, given this changes the shared
+`_active_lockout_count` semantics:**
+
+| Check                                                                      | Result                                                                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                  |
+| `black --check` (both files)                                               | ✅ clean                                                                                         |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                       |
+| Scoped tests (same 7 files as above)                                       | ✅ 195 passed (was 194 after round 5; +1 for CI3-33-2i — `TestRateLimiter` now 42 tests, was 41) |
+| Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,743 passed, 21 skipped, 0 failed (was 11,742 after round 5; skips all pre-existing)        |
+
+No frontend file was touched in PR #2370 (any of its six rounds), so the
 frontend checks below (last run at PR #2368's merge) are unchanged and were
 not re-run:
 

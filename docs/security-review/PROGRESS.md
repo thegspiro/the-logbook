@@ -66,12 +66,46 @@ Round 6 (a third session collision, same finding — see the "round 6" entry
 below): the version that landed sizes the eviction off an exact evictable
 scan rather than the cached approximation; unlike round 3b's collision,
 both sessions' test additions merged with no conflict, so all 4 (39 + the
-other session's 2) are in the final suite (41 total). Rotation row 33 -> ✅
+other session's 2) are in the final suite (41 total). Round 7: CI3-33-2i —
+a `lockout_seconds=0` insertion (public endpoints' default) unconditionally
+incremented the _shared, cross-scope_ `_active_lockout_count`, letting a
+public-endpoint flood of phantom zero-duration "lockouts" push an
+unrelated scope's real violator (e.g. "login") into the saturation
+fallback. Fixed by excluding `lockout_seconds <= 0` from the counter
+entirely. 1 more test (42 total). Rotation row 33 -> ✅
 (#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
 
 ---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 7: a zero-duration lockout could inflate the shared active-lockout counter and steal an unrelated scope's real lockout
+
+Codex reviewed the merged round-6 state and found one more real P1:
+`public_rate_limit`'s in-memory fallback defaults `lockout_seconds=0` for
+several unauthenticated public endpoints, and the insertion branch
+incremented `self._active_lockout_count` unconditionally regardless of
+`lockout_seconds` — even though `lockout_until = current_time + 0` is
+never actually "active" by the definition every other reader of this state
+uses (`lockout_until > now`). Since `_active_lockout_count` is a single
+counter shared across every scope on this one process-wide limiter
+instance, a flood of public, zero-duration violators (each landing on its
+own distinct key) could exhaust the shared counter with phantom entries —
+pushing a completely unrelated scope's real violator (e.g. "login") into
+the saturation-fallback path even though the true active-lockout count was
+zero. Reproduced directly: `_MAX_LOCKOUTS=10`, 11 distinct public keys hit
+with `lockout_seconds=0` inflated the cached count to 10 (0 true active),
+and a subsequent `login` violator lost its own real per-key lockout to the
+saturation fallback.
+
+Fixed by excluding `lockout_seconds <= 0` insertions from the capacity
+check and the counter entirely — such an insertion was never going to hold
+a genuinely active slot regardless of capacity, so there's no reason to
+deny it a nominal record or let it inflate the shared counter. 1 new test,
+verified fail-before/pass-after. `TestRateLimiter` now 42 tests (was 41).
+Full completion gate re-run (full backend suite included): 195 scoped, 63
+tenancy, 11,743 full-suite passed. Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2i).
 
 ### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 6: a third session collision on the same CI3-33-2g/2h finding; test additions merged cleanly this time, the more precise implementation landed
 

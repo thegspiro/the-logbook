@@ -1594,6 +1594,60 @@ class TestRateLimiter:
         assert limiter._keys["scopeA:9.9.9.9"].request_times
         assert limiter._keys["scopeB:9.9.9.9"].request_times
 
+    @pytest.mark.unit
+    def test_zero_lockout_seconds_never_inflates_the_shared_active_lockout_count(
+        self,
+    ):
+        """Codex review of PR #2370 (round 9): a lockout_seconds=0 caller
+        (public_rate_limit's in-memory-fallback default) produces
+        lockout_until == current_time, which is never actually "active" —
+        every reader of this state checks lockout_until > now, which fails
+        for an equal value immediately. But the insertion branch
+        unconditionally incremented self._active_lockout_count regardless
+        of lockout_seconds, so a flood of public, zero-duration violators
+        (each on its own distinct key) could exhaust the *shared,
+        process-wide* counter with phantom entries — pushing a completely
+        unrelated scope's real violator (e.g. "login") into the
+        saturation-fallback path even though the true active-lockout count
+        was zero. Verified to fail against the pre-fix code: 11 distinct
+        public keys with lockout_seconds=0 (against _MAX_LOCKOUTS=10)
+        inflated the cached count to 10 despite 0 true active lockouts, and
+        a subsequent "login" violator lost its own real per-key lockout to
+        the saturation fallback instead."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 10
+        limiter._MAX_KEYS = 100_000
+        limiter._EVICTION_INTERVAL = 60
+        limiter._LOCKOUT_VERIFY_INTERVAL = 1.0
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            limiter._last_eviction = now
+            limiter._last_lockout_verify = now
+
+            for i in range(11):
+                key = f"pub_form_submit:client{i}"
+                limiter.is_rate_limited(
+                    key, max_requests=1, window_seconds=60, lockout_seconds=0
+                )
+                limiter.is_rate_limited(
+                    key, max_requests=1, window_seconds=60, lockout_seconds=0
+                )
+
+            assert limiter._active_lockout_count == 0
+
+            is_limited, _ = limiter.is_rate_limited(
+                "login:9.9.9.9", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            is_limited, _ = limiter.is_rate_limited(
+                "login:9.9.9.9", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        assert is_limited
+        login_state = limiter._keys["login:9.9.9.9"]
+        assert login_state.lockout_until == now + 1800
+        assert "login" not in limiter._saturation_reject_until
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded
