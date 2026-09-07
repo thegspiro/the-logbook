@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an empty baseline. CLAUDE.md stated this rule and nothing checked it, which
   is the same gap that let pitfall #16 regress after holding across 58 call
   sites on review discipline alone.
+
 ### An inventory item's colour could be briefly cached even when it wasn't just a colour (2026-09-07)
 
 **Fixed**
