@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 30 (Onboarding, pass 3) — PR TBD, branch
+**Feature 30 (Onboarding, pass 3) — PR
+[#2358](https://github.com/thegspiro/the-logbook/pull/2358), branch
 `claude/security-review-onboarding-pass3`.** 1 fixed (LOW), 0 new
 flagged (every prior open item — ONB-7, ONB-30-3, ONB2-30-8, the reset-audit
 transaction boundary, role/position dedup, `/organization`'s missing

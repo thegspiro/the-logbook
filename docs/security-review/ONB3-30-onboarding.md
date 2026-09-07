@@ -4,7 +4,7 @@
 iteration 25, app-review B25 (4 passes), security-review pass 1 — PR #1913 +
 follow-up (`docs/security-review/ONB2-30-onboarding.md`), security-review
 pass 2 — PR #2093 (`docs/security-review/ONB-30-onboarding.md`))
-· **Reviewed:** 2026-09-06/07 · **PR:** (opened this pass)
+· **Reviewed:** 2026-09-06/07 · **PR:** [#2358](https://github.com/thegspiro/the-logbook/pull/2358)
 
 **Backend:** `backend/app/api/v1/onboarding.py` (2,639 L, 24 unauthenticated
 bootstrap routes), `backend/app/services/onboarding.py` (1,465 L, unchanged
