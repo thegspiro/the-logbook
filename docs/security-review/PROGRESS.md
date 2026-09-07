@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 34 (Frontend shared, pass 5, corrective)'s PR #2382 merged
+(`f53258ee`) — fully green (17/17) and idle, all 6 Codex review threads
+across 3 rounds resolved (color-caching permission gap closed with
+`require_permission("inventory.view")`, tracker's Open PR section corrected
+to track the right PR, reviewed commit range pinned to an immutable SHA, a
+missing backend permission regression test added, and one hallucinated
+Codex citation — a commit SHA that does not exist in this repo — correctly
+identified and declined rather than blindly "fixed"). Rotation stays ✅
+through Feature 34; next iteration wraps to **00 (cross-cutting baseline)**.
+
+<details>
+<summary>Superseded — PR #2382 (pass 5, corrective), preserved for history</summary>
+
 **Feature 34 (Frontend shared, pass 5, corrective)** — PR
 [#2382](https://github.com/thegspiro/the-logbook/pull/2382), branch
 `claude/fe34-pass5-baseline-fix`. Corrects three `chatgpt-codex-connector[bot]`
@@ -29,6 +42,8 @@ tracker's own stale FE3-34-5 disposition (already corrected above). Feature
 it does not open a new pass. See
 `docs/security-review/FE5-34-frontend-shared.md` for the full corrective
 review.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2379 (pass 4), preserved for history</summary>
@@ -10981,6 +10996,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-07 — Feature 34 (Frontend shared, pass 5, corrective) — PR #2382 merged, watchdog recorded it
+
+PR #2382 (corrective follow-up to pass 4's PR #2379, which merged with 3
+`chatgpt-codex-connector[bot]` findings unaddressed) went fully green (17/17)
+with all 6 review threads across 3 rounds resolved: the wrong-baseline
+re-review found no new gap, the color-caching fix was completed (permission
+dependency tightened to `require_permission("inventory.view")`, with a new
+backend regression test), the tracker's Open PR pointer and reviewed-range
+citation were corrected, and one Codex citation referencing a commit SHA
+that does not exist anywhere in this repo's history was verified against
+`git cat-file`/`git log --all` and correctly declined rather than
+"fixed" on faith. A 30-minute watchdog check merged it and records that
+here. Next: 00 (cross-cutting baseline).
 
 ### 2026-09-07 — Feature 34 (Frontend shared, pass 4) — 0 new findings; 1 prior HIGH finding confirmed fixed, 1 re-confirmed still open, 1 initially marked fixed then reopened
 
