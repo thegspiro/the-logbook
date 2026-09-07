@@ -13236,6 +13236,52 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "20-17-email-microsoft-oauth-test",
+    doc: "20-september-2026-release-changes.md",
+    line: 190,
+    anchor:
+      "Settings → Email with the Test Connection button and a successful test",
+    alt: "Settings → Email with Microsoft 365 selected, the App registration (OAuth) / App Password authentication choice and its December 2026 retirement notice, and a successful Test Connection result",
+    route: "/settings?tab=email",
+    beforeNavigate: async (page) => {
+      // The demo department has no real Microsoft tenant to authenticate
+      // against, so a genuine test would fail regardless of what is typed
+      // in. Mock the endpoint's success rather than skip the shot the guide
+      // is asking for -- the button, the choice above it, and the toast it
+      // produces are the point, not a live Exchange Online handshake.
+      await page.route(
+        "**/api/v1/organization/settings/email/test",
+        async (route) => {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              success: true,
+              message: "SMTP connection successful",
+              details: {},
+            }),
+          });
+        },
+      );
+    },
+    prepare: async (page) => {
+      await clickByName(/Microsoft 365/)(page);
+      // An existing department is the one the guide is addressing -- it
+      // already has a working App Password, which is exactly why it needs
+      // to see the retirement notice next to the OAuth choice. A fresh
+      // selection defaults to OAuth and would hide that notice entirely.
+      await clickByName(/App Password/)(page);
+      await page
+        .getByLabel(/Microsoft 365 App Password/i)
+        .fill("demo-app-password-a1b2");
+      await clickByName(/^Test Connection$/)(page);
+      await page
+        .getByText(/SMTP connection successful/i)
+        .waitFor({ timeout: 10_000 });
+    },
+    fullPage: false,
+  },
+  {
     id: "20-02-staffing-gaps",
     doc: "20-september-2026-release-changes.md",
     line: 296,
