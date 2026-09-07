@@ -524,14 +524,16 @@ class TestRateLimiter:
 
     @pytest.mark.unit
     def test_lockouts_are_capped_independently_of_requests(self):
-        """CI3-33-1b (Codex review of PR #2368): CI3-33-1 stopped the
+        """CI3-33-1b/1c (Codex review of PR #2368): CI3-33-1 stopped the
         requests-eviction loop from also popping active lockouts, which
         fixed the early-unlock bug — but that had been the *only* thing
         bounding self.lockouts' size. Decoupled, self.lockouts has no cap of
         its own: a flood of distinct keys each tripping the lockout (e.g.
         during a Redis outage, this limiter's exact fallback window) grows
         it unboundedly for the full lockout duration — CLAUDE.md Pitfall #9's
-        shape. Must be capped independently by _MAX_LOCKOUTS."""
+        shape. Capped at insertion time by _MAX_LOCKOUTS (CI3-33-1c) — never
+        by evicting an existing entry, so the dict can never exceed the cap
+        even by one."""
         limiter = RateLimiter()
         limiter._MAX_KEYS = 100
         limiter._MAX_LOCKOUTS = 100
@@ -545,56 +547,114 @@ class TestRateLimiter:
                 f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
             )
 
-        assert len(limiter.lockouts) <= limiter._MAX_LOCKOUTS + 1
+        assert len(limiter.lockouts) <= limiter._MAX_LOCKOUTS
 
     @pytest.mark.unit
-    def test_lockout_cap_eviction_removes_soonest_expiring_first(self):
-        """CI3-33-1b: eviction of over-cap lockouts must pick the
-        soonest-to-expire entries, not an arbitrary or recency-of-request
-        order — those cost the least "early unlock" impact, since they were
-        going to naturally expire soonest regardless of eviction."""
+    def test_an_already_persisted_lockout_is_never_evicted_once_saturated(self):
+        """CI3-33-1b: once self.lockouts reaches its cap, the FIRST attackers
+        to have been locked out (persisted before saturation) must keep
+        their lockouts for the rest of a sustained flood — the cap must bind
+        *new* insertions, never bump an existing active lockout to make
+        room."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 100
+        limiter._MAX_LOCKOUTS = 100
+        limiter._EVICTION_INTERVAL = 0
+
+        for i in range(500):
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        # The first 100 attackers were persisted before the table saturated
+        # — none of them should have been displaced by the 400 that came
+        # after.
+        assert all(f"attacker-{i}" in limiter.lockouts for i in range(100))
+
+    @pytest.mark.unit
+    def test_an_active_lockout_is_never_evicted_by_an_unrelated_keys_sweep(self):
+        """CI3-33-1c (Codex review of PR #2368, correcting CI3-33-1b's own
+        fix): CI3-33-1b's first attempt at bounding self.lockouts evicted
+        the soonest-to-expire entries once over _MAX_LOCKOUTS. That
+        protected the *calling* key's own lockout (via read-before-evict)
+        but not anyone else's — an unrelated key's own over-cap call could
+        still pick a genuinely different, currently locked-out victim's
+        entry for eviction, silently releasing an active lockout early
+        (the identical failure class CI3-33-1 started this chain by fixing,
+        just at _MAX_LOCKOUTS scale instead of _MAX_KEYS scale). Reproduced
+        by Codex: with self.requests[victim] also evicted by the unrelated
+        _MAX_KEYS sweep in the same call, victim's very next request came
+        back (False, None) — not rate limited, mid-lockout. An active
+        lockout must never be evicted for size, only for having genuinely
+        expired."""
         limiter = RateLimiter()
         limiter._MAX_LOCKOUTS = 3
-        limiter._MAX_KEYS = 10_000
+        limiter._MAX_KEYS = 3
         limiter._EVICTION_INTERVAL = 0
 
         now = time.time()
-        limiter.lockouts["soon-1"] = now + 5
-        limiter.lockouts["soon-2"] = now + 6
-        limiter.lockouts["late-1"] = now + 5000
-        limiter.lockouts["late-2"] = now + 6000
-        limiter.lockouts["late-3"] = now + 7000
-
-        limiter._last_eviction = 0.0
-        limiter.is_rate_limited("victim-check", max_requests=100, window_seconds=60)
-
-        assert set(limiter.lockouts.keys()) == {"late-1", "late-2", "late-3"}
-
-    @pytest.mark.unit
-    def test_a_calling_keys_own_active_lockout_survives_its_own_cap_eviction(self):
-        """CI3-33-1b: the new _MAX_LOCKOUTS eviction must not let a key
-        bypass its own still-active lockout via its own call's eviction pass
-        — the same self-eviction hazard CI3-33-2 closed for self.requests,
-        now also possible for self.lockouts since it is capped
-        independently."""
-        limiter = RateLimiter()
-        limiter._MAX_LOCKOUTS = 3
-        limiter._MAX_KEYS = 10_000
-        limiter._EVICTION_INTERVAL = 0
-
-        now = time.time()
-        # "victim" is locked out and would be the soonest-to-expire (and so
-        # the first eviction candidate) among the tracked lockouts.
+        # "victim" is locked out and has request history, but is NOT the key
+        # making the triggering call below. Its lockout was, under the old
+        # (buggy) by-expiry policy, the first eviction candidate.
+        limiter.requests["victim"] = [now - 100]
         limiter.lockouts["victim"] = now + 5
         for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
             limiter.lockouts[f"other-{i}"] = now + 1000 + i
 
-        is_limited, reason = limiter.is_rate_limited(
-            "victim", max_requests=100, window_seconds=60, lockout_seconds=1800
-        )
+        # An unrelated key's call triggers the over-cap sweep on both dicts.
+        limiter.is_rate_limited("trigger-key", max_requests=100, window_seconds=60)
 
+        assert "victim" in limiter.lockouts
+
+        is_limited, reason = limiter.is_rate_limited(
+            "victim", max_requests=5, window_seconds=60, lockout_seconds=1800
+        )
         assert is_limited is True
         assert "locked" in (reason or "").lower()
+
+    @pytest.mark.unit
+    def test_a_saturated_lockout_table_fails_closed_without_evicting_anyone(self):
+        """CI3-33-1c: once self.lockouts is genuinely at capacity with
+        active entries, a *new* key that trips the limit is still rejected
+        this call (the count-based check already decided that on its own
+        merits) but its lockout is simply not persisted — the existing
+        entries are left completely untouched rather than one being bumped
+        to make room."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        limiter.lockouts["existing-1"] = now + 1000
+        limiter.lockouts["existing-2"] = now + 1000
+        limiter.lockouts["existing-3"] = now + 1000
+
+        # First call for "new-violator" is allowed (establishes 1 request in
+        # its window); the second exceeds max_requests=1 and should trip a
+        # lockout it can't persist, since the table is already saturated.
+        limiter.is_rate_limited(
+            "new-violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+        )
+        is_limited, reason = limiter.is_rate_limited(
+            "new-violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+        )
+
+        # Rejected this call regardless of whether the lockout could be
+        # persisted.
+        assert is_limited is True
+        # But the table is untouched — no existing lockout was evicted, and
+        # the new one was not force-inserted over the cap.
+        assert set(limiter.lockouts.keys()) == {
+            "existing-1",
+            "existing-2",
+            "existing-3",
+        }
+        assert "new-violator" not in limiter.lockouts
 
 
 # ---------------------------------------------------------------------------
