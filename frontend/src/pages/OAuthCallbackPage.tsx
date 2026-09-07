@@ -65,7 +65,11 @@ export const OAuthCallbackPage: React.FC = () => {
   }, [loadUser, navigate]);
 
   return (
-    <main className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+    >
       <div className="card w-full max-w-md p-8 text-center">
         {failed ? (
           <>

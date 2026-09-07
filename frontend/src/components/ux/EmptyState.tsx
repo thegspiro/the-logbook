@@ -22,6 +22,21 @@ export interface EmptyStateProps {
   actions?: EmptyStateAction[] | undefined;
   children?: ReactNode | undefined;
   className?: string | undefined;
+  /**
+   * Heading level for the title. Defaults to 2.
+   *
+   * It was 3, and that skipped a level on twenty-odd routes: an empty state is
+   * usually the only thing under the page's `h1`, so `h1 -> h3` left a hole in
+   * the outline, which is the list a screen reader user navigates by. `h2` is
+   * the safe default in both directions — axe only objects to *skipping* a
+   * level on the way down, so an `h2` under a section's own `h3` is fine.
+   *
+   * Pass `1` when the empty state *is* the page — a closed storefront, a module
+   * with nothing set up yet. Those screens return early, before the page header
+   * renders, so their only heading is this one and the page needs it to be the
+   * `h1`. Pass `3` where the empty state genuinely sits under an `h2`.
+   */
+  headingLevel?: 1 | 2 | 3;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -31,7 +46,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   actions,
   children,
   className = '',
+  headingLevel = 2,
 }) => {
+  const Heading = `h${headingLevel}` as const;
   return (
     <div className={`animate-fade-in px-4 py-12 text-center ${className}`}>
       {Icon && (
@@ -39,7 +56,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           <Icon className="text-theme-text-muted h-8 w-8" aria-hidden="true" />
         </div>
       )}
-      <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">{title}</h3>
+      <Heading className="text-theme-text-primary mb-2 text-lg font-semibold">{title}</Heading>
       {description && (
         <p className="text-theme-text-muted mx-auto mb-6 max-w-sm text-sm leading-relaxed">{description}</p>
       )}

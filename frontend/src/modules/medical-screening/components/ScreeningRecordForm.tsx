@@ -72,13 +72,14 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="screening-record-dialog-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
       <div ref={dialogRef} className="modal-panel modal-body w-full max-w-lg">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-          <h2 className="text-theme-text-primary text-lg font-bold">
+          <h2 id="screening-record-dialog-title" className="text-theme-text-primary text-lg font-bold">
             {record ? 'Edit Screening Record' : 'Add Screening Record'}
           </h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">

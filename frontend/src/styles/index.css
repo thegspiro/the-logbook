@@ -307,10 +307,17 @@
 }
 
 /* Existing routes historically put their viewport padding on either the page
- * root or its immediate <main>. Remove only that outer padding so the shared
- * boundary does not double it; component/card padding remains untouched. */
+ * root or its immediate wrapper. Remove only that outer padding so the shared
+ * boundary does not double it; component/card padding remains untouched.
+ *
+ * That wrapper used to be a `<main>` and this rule matched it by tag. It is a
+ * `<div data-page-main>` now, because AppLayout owns the one `main` landmark
+ * and a page rendered inside it must not declare a second. Matching by tag
+ * after that change silently gave the padding back, which squeezed the
+ * scheduling calendar's day cells to 41px — under the touch minimum, and
+ * caught only because the presentation ratchet measures them. */
 [data-page-layout='application'] > :first-child,
-[data-page-layout='application'] > :first-child > main {
+[data-page-layout='application'] > :first-child > [data-page-main] {
   padding: 0;
 }
 

@@ -1078,7 +1078,7 @@ const ReviewSubmissionsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button
@@ -1210,7 +1210,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

@@ -72,13 +72,14 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="screening-requirement-dialog-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
       <div ref={dialogRef} className="modal-panel modal-body w-full max-w-lg">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-          <h2 className="text-theme-text-primary text-lg font-bold">
+          <h2 id="screening-requirement-dialog-title" className="text-theme-text-primary text-lg font-bold">
             {requirement ? 'Edit Requirement' : 'Add Screening Requirement'}
           </h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">

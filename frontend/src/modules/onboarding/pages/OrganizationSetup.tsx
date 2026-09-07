@@ -736,7 +736,13 @@ const OrganizationSetup: React.FC = () => {
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 relative min-h-screen bg-linear-to-br px-4 pb-8">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="mx-auto max-w-3xl">
+      {/* A real `main`, carrying the id the skip link in index.html points
+          at. Onboarding renders outside AppLayout, so nothing else on the page
+          provides one: the skip link resolved to nothing, and every element on
+          the screen sat outside a landmark. That is Bypass Blocks (2.4.1) on
+          the one flow a chief walks through before the application has any
+          other navigation at all. */}
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl">
         {/* Back Button */}
         <div className="mb-4">
           <BackButton to="/" label="Back to Welcome" />
@@ -1251,7 +1257,7 @@ const OrganizationSetup: React.FC = () => {
             </a>
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

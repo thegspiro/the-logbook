@@ -98,8 +98,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
 
         <div className="space-y-4 p-6">
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Name *</label>
+            <label htmlFor="facility-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Name *
+            </label>
             <input
+              id="facility-name"
               type="text"
               value={formData.name}
               onChange={(e) => setField('name', e.target.value)}
@@ -110,8 +113,14 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           </div>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Facility Number</label>
+            <label
+              htmlFor="facility-facility-number"
+              className="text-theme-text-secondary mb-1 block text-sm font-medium"
+            >
+              Facility Number
+            </label>
             <input
+              id="facility-facility-number"
               type="text"
               value={formData.facility_number}
               onChange={(e) => setField('facility_number', e.target.value)}
@@ -121,8 +130,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           </div>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Address</label>
+            <label htmlFor="facility-address" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Address
+            </label>
             <input
+              id="facility-address"
               type="text"
               value={formData.address_line1}
               onChange={(e) => setField('address_line1', e.target.value)}
@@ -133,8 +145,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">City</label>
+              <label htmlFor="facility-city" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                City
+              </label>
               <input
+                id="facility-city"
                 type="text"
                 value={formData.city}
                 onChange={(e) => setField('city', e.target.value)}
@@ -142,8 +157,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">State</label>
+              <label htmlFor="facility-state" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                State
+              </label>
               <input
+                id="facility-state"
                 type="text"
                 value={formData.state}
                 onChange={(e) => setField('state', e.target.value)}
@@ -151,8 +169,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Zip</label>
+              <label htmlFor="facility-zip" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Zip
+              </label>
               <input
+                id="facility-zip"
                 type="text"
                 value={formData.zip_code}
                 onChange={(e) => setField('zip_code', e.target.value)}
@@ -163,8 +184,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Phone</label>
+              <label htmlFor="facility-phone" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Phone
+              </label>
               <input
+                id="facility-phone"
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setField('phone', e.target.value)}
@@ -173,8 +197,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
               />
             </div>
             <div>
-              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Email</label>
+              <label htmlFor="facility-email" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Email
+              </label>
               <input
+                id="facility-email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setField('email', e.target.value)}
@@ -187,8 +214,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           <div className="grid grid-cols-2 gap-3">
             {facilityTypes.length > 0 && (
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Type</label>
+                <label htmlFor="facility-type" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Type
+                </label>
                 <select
+                  id="facility-type"
                   value={formData.facility_type_id}
                   onChange={(e) => setField('facility_type_id', e.target.value)}
                   className={inputCls}
@@ -204,8 +234,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             )}
             {facilityStatuses.length > 0 && (
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Status</label>
+                <label htmlFor="facility-status" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Status
+                </label>
                 <select
+                  id="facility-status"
                   value={formData.status_id}
                   onChange={(e) => setField('status_id', e.target.value)}
                   className={inputCls}
@@ -222,8 +255,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           </div>
 
           <div>
-            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Notes</label>
+            <label htmlFor="facility-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Notes
+            </label>
             <textarea
+              id="facility-notes"
               value={formData.notes}
               onChange={(e) => setField('notes', e.target.value)}
               rows={3}

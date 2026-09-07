@@ -169,3 +169,115 @@ than being skipped.
 and redirect routes genuinely represented by a measured sibling — but the
 generated sentence still does not distinguish a considered exemption from an
 unconsidered one. Naming the representative route in each detail would.
+
+---
+
+# Round two — themes, the wider rule set, and dialogs
+
+The first pass measured WCAG 2.1 A/AA in the light theme on a route's landing
+state. Three things were still unmeasured, and each held defects.
+
+## The rule set was narrower than it looked
+
+Running axe with the `wcag2a/2aa/21a/21aa` tags excludes `wcag22aa` — axe's
+`target-size` rule — and all 30 `best-practice` rules, which are the
+screen-reader _navigation_ rules: heading order, landmarks, region, dialog
+names, skip-link. None had ever run. The first run returned **132 findings**,
+and they were not spread thin:
+
+| Rule                                         | Count | Cause                                                                                     |
+| -------------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| `aria-allowed-role`                          | 51    | one element: `<aside role="navigation">`, on every route                                  |
+| `landmark-*` (four rules)                    | 38    | `AppLayout` declared `role="main"` **and** 41 pages inside it declared their own `<main>` |
+| `heading-order`                              | 20    | `EmptyState` rendered an `h3` directly under the page `h1`                                |
+| `region` + `landmark-one-main` + `skip-link` | 12    | onboarding step 1 had no `main` at all                                                    |
+
+Four fixes cleared 120 of them:
+
+- **`<nav>` instead of `<aside role="navigation">`.** An `aside` already carries
+  the `complementary` role; overriding it with a different landmark role is the
+  contradiction axe reports.
+- **One main landmark.** `AppLayout` now renders a real `<main id="main-content">`
+  and the 41 page-level wrappers became `<div data-page-main>`. Two nested main
+  landmarks is not a style question — it is the element a screen reader user
+  jumps to, and there were two of them on 12 of the measured routes.
+- **`EmptyState` defaults to `h2`.** It was `h3`, and an empty state is usually
+  the only thing under the page `h1`, so `h1 → h3` left a hole in the outline on
+  twenty routes. `h2` never skips a level in either direction. A `headingLevel`
+  prop covers the two ends: `1` where the empty state _is_ the page (a closed
+  storefront), `3` where it genuinely sits under an `h2`.
+- **A `main` for onboarding.** Step 1 had none, so its content sat outside every
+  landmark — and the skip link in `index.html` points at `#main-content`, which
+  did not exist. That is Bypass Blocks (SC 2.4.1) broken on the flow a chief
+  walks through before the application has any other navigation. Sixteen
+  pre-auth pages now provide the target.
+
+Twelve advisory findings remain, ratcheted per route.
+
+## Two themes had never been measured
+
+Everything so far was the light theme. Contrast is the one thing a theme
+changes, so that measured a third of the question.
+
+- **Dark holds AA on every route.** No findings.
+- **High-contrast did not.** Four AA failures — and it is the mode somebody
+  turns on _because_ they need contrast. `text-red-600` measures **4.35:1** on
+  its black ground and `text-blue-600` **4.06:1**, both below the 4.5:1 floor.
+  Both were raw Tailwind colours used where the theme-aware `--accent-red` /
+  `--accent-blue` tokens belong; those tokens already resolve to 6.2:1, 6.1:1
+  and better in each theme, and were simply bypassed.
+
+All three themes are now asserted at zero.
+
+## Dialogs were never opened
+
+The ratchet only ever sees a route's landing state, and a dialog is where the
+density is: the tightest form layout, a focus trap, and the one surface that can
+render taller than the viewport with no reachable end.
+
+`mobile-dialogs.spec.ts` clicks the first create-shaped control in each page
+body and measures what opens — accessible name, axe A/AA, both ends reachable,
+no overflow at 320px. It found three defects on its first run: the **Add
+Station** and **Add Requirement** dialogs had no accessible name (a screen
+reader announces "dialog" and stops), and **Add Station** and **Add Facility**
+had eleven fields between them whose visible labels were never associated with
+their inputs. Seven dialogs are measured and all seven now pass.
+
+Two mistakes in building it are worth recording, because both produced a
+confident wrong answer:
+
+- Searching the whole document for the opener meant the bottom navigation's
+  global "Add" sorted first on nearly every route. The pass measured one
+  quick-add sheet **42 times** and reported it as 42 dialogs — the same
+  "measuring the shell" failure this whole review was about.
+- `querySelector('[role="dialog"]')` returns the first dialog in source order,
+  not the one that just opened. On a page holding three, that reported a working
+  focus trap as broken.
+
+## A regression this work introduced, and what caught it
+
+Converting the 41 page-level `<main>` elements to `<div>` silently broke a
+stylesheet rule keyed to the tag:
+
+```css
+[data-page-layout="application"] > :first-child > main {
+  padding: 0;
+}
+```
+
+Those pages got their outer padding back, which narrowed the scheduling
+calendar until its day cells measured **41px** — under the touch minimum. The
+rule is now keyed to `[data-page-main]`.
+
+Nothing about the change looked risky, and no type or lint check could have
+seen it. The presentation ratchet caught it on the next run, which is the
+argument for the ratchet: a CSS selector matching on a tag name is coupled to
+markup nobody thinks of as an interface.
+
+## A ninth Access Denied route
+
+`page-has-heading-one` surfaced one the first round missed: `/apparatus` was
+still measuring the refusal screen, whose heading is an `h2`. A route stuck on
+it therefore has no `h1` at all — which is how a rule about headings found a
+coverage gap. The count in the first half of this document should read nine,
+not eight.

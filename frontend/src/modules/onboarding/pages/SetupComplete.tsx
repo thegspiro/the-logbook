@@ -61,7 +61,7 @@ const SetupComplete: React.FC = () => {
         subtitle="Setup Complete"
       />
 
-      <main className="flex flex-1 items-start justify-center p-4 py-10">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-start justify-center p-4 py-10">
         <div className="w-full max-w-3xl space-y-8">
           {/* Confirmation */}
           <div className="text-center">

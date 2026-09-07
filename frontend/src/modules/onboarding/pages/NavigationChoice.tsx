@@ -88,7 +88,7 @@ const NavigationChoice: React.FC = () => {
       />
 
       {/* Main Content */}
-      <main className="flex flex-1 items-center justify-center p-4">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-4xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">

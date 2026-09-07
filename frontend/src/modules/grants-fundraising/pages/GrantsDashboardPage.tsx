@@ -228,7 +228,7 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
         <h2 className="text-theme-text-primary text-sm font-semibold">Grant Pipeline</h2>
         <Link
           to="/grants/applications"
-          className="touch-target-phone text-xs font-medium text-red-600 hover:text-red-700"
+          className="touch-target-phone text-theme-accent-red text-xs font-medium hover:underline"
         >
           View All
         </Link>
@@ -274,7 +274,7 @@ const UpcomingDeadlines: React.FC<UpcomingDeadlinesProps> = ({ deadlines, timezo
       </div>
       <Link
         to="/grants/opportunities"
-        className="touch-target-phone text-xs font-medium text-red-600 hover:text-red-700"
+        className="touch-target-phone text-theme-accent-red text-xs font-medium hover:underline"
       >
         View All
       </Link>
@@ -398,7 +398,10 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
         <HandCoins className="text-theme-text-secondary h-4 w-4" />
         <h2 className="text-theme-text-primary text-sm font-semibold">Recent Donations</h2>
       </div>
-      <Link to="/grants/donations" className="touch-target-phone text-xs font-medium text-red-600 hover:text-red-700">
+      <Link
+        to="/grants/donations"
+        className="touch-target-phone text-theme-accent-red text-xs font-medium hover:underline"
+      >
         View All
       </Link>
     </div>

@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
+
+**Fixed**
+
+- **The application shipped two `main` landmarks on 12 routes.** `AppLayout`
+  declared `role="main"` and 41 pages rendered inside it declared a second
+  `<main>` of their own, nested in the first. The layout now owns one real
+  `<main>`; the page wrappers are `<div data-page-main>`.
+- **The skip link pointed at nothing on every pre-auth page.** `index.html`
+  links to `#main-content`, which only `AppLayout` provided — so on onboarding,
+  forgot-password, reset-password and the OAuth callback it resolved to no
+  element. That is Bypass Blocks (SC 2.4.1) broken on the flow a chief walks
+  through before the application has any other navigation. Onboarding step 1
+  additionally had no `main` at all, leaving every element on it outside a
+  landmark. Sixteen pages now provide the target.
+- **High-contrast mode failed WCAG AA in four places** — the one theme somebody
+  turns on _because_ they need contrast, and the only one with no test coverage
+  anywhere in the repository. `text-red-600` measures 4.35:1 on its black
+  ground and `text-blue-600` 4.06:1, both below the 4.5:1 floor. Both were raw
+  Tailwind colours standing where the theme-aware `--accent-red` /
+  `--accent-blue` tokens belong; those already resolve to 6.2:1 or better in
+  every theme. Dark mode was clean.
+- **`<aside role="navigation">` in the side navigation** contradicted the
+  element's own `complementary` role, and so was flagged on every route in the
+  application. It is a `<nav>`.
+- **`EmptyState` rendered an `h3` directly under the page `h1`**, skipping a
+  level on twenty routes and leaving a hole in the outline a screen reader user
+  navigates by. It defaults to `h2` now, with a `headingLevel` prop for the two
+  ends — `1` where the empty state is the whole page, `3` where it sits under
+  an `h2`.
+- **Two dialogs had no accessible name** (Add Station, Add Requirement — a
+  screen reader announces "dialog" and stops) and **eleven form fields across
+  two more** had visible labels that were never associated with their inputs.
+- **`Collapsible` gave every instance an unnamed `role="region"`**, so a page
+  with several offered a landmark list of identical, indistinguishable entries.
+  Each is now named from its own trigger.
+- **A ninth route was still measuring Access Denied.** `/apparatus` needs
+  `apparatus.view`, which the fixture did not hold. What surfaced it was the
+  `page-has-heading-one` rule: the refusal screen's heading is an `h2`, so a
+  route stuck on it has no `h1` at all.
+
+**Changed**
+
+- **The accessibility pass runs in all three themes and against WCAG 2.2.** It
+  had used the 2.0/2.1 A and AA tags in the light theme only, which excluded
+  `target-size` (SC 2.5.8) and all 30 of axe's best-practice rules — heading
+  order, landmarks, region, dialog names, skip-link. Those found 132 issues on
+  their first run, now 12, ratcheted per route. A/AA is asserted at zero in
+  light, dark and high-contrast.
+- **New `mobile-dialogs.spec.ts`.** The ratchet only ever measured a route's
+  landing state; this opens each page's first create-shaped control and
+  measures the dialog — accessible name, axe A/AA, both ends reachable (Pitfall
+  #21), no overflow at 320px. Seven dialogs, all passing.
+
+**Notes**
+
+- Converting those 41 `<main>` elements silently broke a stylesheet rule keyed
+  to the tag (`[data-page-layout='application'] > :first-child > main`), which
+  gave the pages their outer padding back and squeezed the scheduling
+  calendar's day cells to 41px — under the touch minimum. No type or lint check
+  could see it; the presentation ratchet caught it on the next run. The rule is
+  now keyed to `[data-page-main]`.
+- Building the dialog pass produced two confidently wrong answers worth
+  recording: searching the whole document for the opener made the bottom
+  navigation's global "Add" win on nearly every route, so it measured one
+  quick-add sheet 42 times and reported 42 dialogs; and
+  `querySelector('[role="dialog"]')` returns the first dialog in source order
+  rather than the one that opened, which reported a working focus trap as
+  broken. Both are documented in the spec.
+- Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
 ### Mobile coverage reported a fifth of the application it had never measured (2026-09-07)
 
 **Fixed**

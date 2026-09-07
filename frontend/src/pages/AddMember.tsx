@@ -320,7 +320,7 @@ const AddMember: React.FC = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         <form
           onSubmit={(e) => {
             void handleSubmit(e);
@@ -949,7 +949,7 @@ const AddMember: React.FC = () => {
             </button>
           </div>
         </form>
-      </main>
+      </div>
     </div>
   );
 };

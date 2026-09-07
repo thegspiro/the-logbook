@@ -160,7 +160,7 @@ const ModuleOverview: React.FC = () => {
         icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex-1 p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-4 py-8">
         <div className="mx-auto w-full max-w-6xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">

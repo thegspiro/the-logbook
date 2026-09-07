@@ -532,7 +532,7 @@ const PositionSetup: React.FC = () => {
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
-      <main className="flex-1 p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-4 py-8">
         <div className="mx-auto w-full max-w-6xl">
           <BackButton to="/onboarding/it-team" className="mb-6" />
 

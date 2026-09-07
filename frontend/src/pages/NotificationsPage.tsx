@@ -517,17 +517,17 @@ const NotificationsPage: React.FC = () => {
   if (loading && loadingInbox && loadingLogs) {
     return (
       <div className="min-h-screen">
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           <Breadcrumbs />
           <SkeletonPage rows={6} />
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <Breadcrumbs />
 
         {/* Page Header */}
@@ -1178,7 +1178,7 @@ const NotificationsPage: React.FC = () => {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

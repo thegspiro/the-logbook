@@ -103,7 +103,11 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxTinyText: 0,
     permissions: ['inventory.check_manage', 'settings.manage'],
   },
-  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0 },
+  // apparatus.view is not in BASE_PERMISSIONS, so this measured Access Denied
+  // — a ninth route in the same state as the eight corrected above. What
+  // surfaced it was the `page-has-heading-one` rule: the refusal screen's
+  // heading is an h2, so a route stuck on it has no h1 at all.
+  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0, permissions: ['apparatus.view'] },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },

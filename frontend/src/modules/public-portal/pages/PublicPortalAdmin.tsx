@@ -153,7 +153,11 @@ const PublicPortalAdmin: React.FC = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                     activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
+                      ? // The theme-aware token, not a raw blue: `text-blue-600`
+                        // is 4.06:1 on the high-contrast theme's black ground,
+                        // below the AA floor, in the mode somebody turns on
+                        // precisely because they need contrast.
+                        'text-theme-accent-blue border-blue-500'
                       : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
                   }`}
                 >

@@ -205,7 +205,7 @@ export const ApparatusDetailPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <main className="mx-auto max-w-7xl px-6 py-6">
+      <div data-page-main className="mx-auto max-w-7xl px-6 py-6">
         {activeTab === 'overview' && (
           <ApparatusOverviewTab currentApparatus={currentApparatus} apparatusType={apparatusType} timezone={tz} />
         )}
@@ -250,7 +250,7 @@ export const ApparatusDetailPage: React.FC = () => {
         )}
 
         {activeTab === 'documents' && <DocumentsTab id={id || ''} />}
-      </main>
+      </div>
     </div>
   );
 };

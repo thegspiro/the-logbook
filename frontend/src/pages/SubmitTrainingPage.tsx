@@ -1140,7 +1140,7 @@ const SubmitTrainingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-4xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
+      <div data-page-main className="mx-auto max-w-4xl px-4 py-8 pb-40 sm:px-6 lg:px-8 lg:pb-8">
         <Breadcrumbs />
 
         <div className="mb-6 flex items-start gap-3.5">
@@ -1186,7 +1186,7 @@ const SubmitTrainingPage: React.FC = () => {
           editSubmission={editingSubmission}
           onCancelEdit={() => setEditingSubmission(null)}
         />
-      </main>
+      </div>
     </div>
   );
 };

@@ -766,11 +766,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         />
       )}
 
-      {/* Side Navigation */}
-      <aside
+      {/* Side Navigation.
+
+          `<nav>`, not `<aside role="navigation">`: an `aside` already carries
+          the `complementary` role, and overriding it with a different landmark
+          role is the kind of contradiction axe flags as `aria-allowed-role`.
+          It fired on every route in the application, this being the one element
+          it came from. The element that means "navigation" is `nav`. */}
+      <nav
         ref={sideNavRef}
         id="side-navigation"
-        role="navigation"
         aria-label="Main navigation"
         className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed left-0 z-40 overscroll-contain border-r transition-all duration-300 md:top-0 md:h-full ${
           collapsed ? 'w-20' : 'w-64'
@@ -1077,7 +1082,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             </button>
           </div>
         </div>
-      </aside>
+      </nav>
     </>
   );
 };

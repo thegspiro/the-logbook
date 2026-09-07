@@ -310,7 +310,7 @@ export const ElectionsPage: React.FC = () => {
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <div>
-              <h2 className="text-theme-text-primary text-2xl font-bold">Elections</h2>
+              <h1 className="text-theme-text-primary text-2xl font-bold">Elections</h1>
               <p className="text-theme-text-muted mt-1 text-sm">Manage elections and view results</p>
             </div>
             <HelpLink
