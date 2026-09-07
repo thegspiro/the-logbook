@@ -628,6 +628,16 @@ describe('apiCache', () => {
       expect(isCacheable('/inventory/summary')).toBe(true);
     });
 
+    it('returns false for /inventory/items/colors (unconstrained free-text field)', () => {
+      // color is Optional[str] with only a 50-char cap and no fixed vocabulary
+      // (backend/app/schemas/inventory.py); normalize_color only collapses
+      // whitespace, so whatever an inventory manager or a CSV import puts in
+      // the colour column is exactly what this dropdown-options endpoint
+      // echoes back. Sibling of /inventory/requestable-catalog above: the
+      // parent /inventory/items catalog stays cacheable.
+      expect(isCacheable('/inventory/items/colors')).toBe(false);
+    });
+
     it('returns true for /roles/ (non /roles/my/)', () => {
       expect(isCacheable('/roles/')).toBe(true);
       expect(isCacheable('/roles/list')).toBe(true);

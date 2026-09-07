@@ -17,12 +17,20 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 34 (Frontend shared, pass 4)** — PR
-[#2379](https://github.com/thegspiro/the-logbook/pull/2379), branch
-`claude/friendly-babbage-6japkr`. 0 new findings; FE3-34-4 and FE3-34-5 (both
-HIGH) confirmed already fixed by intervening commits unrelated to this
-rotation; FE3-34-2 (HIGH) re-verified still open, needs a product decision.
-See `docs/security-review/FE4-34-frontend-shared.md`. Once merged: rotation
-wraps to 00 (cross-cutting baseline) for the next full pass.
+[#2379](https://github.com/thegspiro/the-logbook/pull/2379) merged. 0 new
+findings from the original pass; FE3-34-4 (HIGH) confirmed already fixed by an
+intervening commit unrelated to this rotation. FE3-34-5 (HIGH) was initially
+marked fixed the same way, then **reopened** after Codex review on this PR
+found the fix closes only the timing race, not the purge-failure path — see
+`docs/security-review/FE4-34-frontend-shared.md` and
+`docs/KNOWN_LIMITATIONS.md`. FE3-34-2 (HIGH) re-verified still open, needs a
+product decision. Rotation wraps to 00 (cross-cutting baseline) for the next
+full pass.
+
+Three Codex findings on this PR went unaddressed at merge (wrong baseline
+citation, a caching gap, and this tracker's own stale FE3-34-5 disposition —
+now corrected above); see `docs/security-review/FE5-34-frontend-shared.md`
+for the corrective follow-up.
 
 <details>
 <summary>Superseded — prior Open PR note, preserved for history</summary>
@@ -10956,7 +10964,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-07 — Feature 34 (Frontend shared, pass 4) — 0 new findings; 2 prior HIGH findings confirmed already fixed, 1 re-confirmed still open
+### 2026-09-07 — Feature 34 (Frontend shared, pass 4) — 0 new findings; 1 prior HIGH finding confirmed fixed, 1 re-confirmed still open, 1 initially marked fixed then reopened
+
+**Corrected 2026-09-07 (pass 5):** this entry originally read "2 prior HIGH
+findings confirmed already fixed" and said below that FE3-34-5 "are fixed."
+That was true only until later the same day, when Codex review on PR #2379
+found the FE3-34-5 fix closes just the timing race, not the purge-failure
+path, and it was reopened (commit `9d745075`) — correctly, in
+`FE4-34-frontend-shared.md` and `KNOWN_LIMITATIONS.md`, but this entry was
+never updated to match. Corrected in place below. See
+`docs/security-review/FE5-34-frontend-shared.md` for the full corrective
+follow-up, including the wrong-baseline-citation defect this same PR left
+unresolved and the caching gap that citation caused to go unreviewed.
 
 4th pass over this feature (`utils/apiCache.ts`, `services/apiClient.ts`,
 `utils/createApiClient.ts`, `components/ProtectedRoute.tsx`, all 4 global
@@ -10975,27 +10994,39 @@ logout leaves the session cookies live while showing an unauthenticated UI):
 (`auth.py:1197-1235` → `:1334-1372`) but the logic is identical. Still a
 product decision, not a same-pass patch — carried forward.
 
-**FE3-34-4 and FE3-34-5 (both HIGH) are fixed** — each by a commit authored
-outside this rotation (regular feature work: `a8f160ec` "Version cache
-writes against mutations, not only against full clears" for FE3-34-4;
-`fd2d5dbb` "fix: repair CI, an assigned-item rewrite, and two access leaks"
-for FE3-34-5) that happened to close a gap this rotation had flagged. Both
-fixes were already present in `b10ecfe3` itself — the commit that landed the
-FE3-34 doc calling them open — so the doc was stale on arrival, not from
-later drift (two branches landing concurrently, same class of race
-`PROGRESS.md` documents elsewhere for Alembic merges). Both verified against
-current code with their guard tests passing: `apiClient.test.ts`'s three
-cache-boundary cases (FE3-34-4) and `authStore.test.ts`'s six device-claim
-cases (FE3-34-5). Removed both from `KNOWN_LIMITATIONS.md` per its own
-"when resolved, remove it" convention; refreshed FE3-34-2's line-number
-citation there.
+**FE3-34-4 (HIGH) is fixed** — by a commit authored outside this rotation
+(regular feature work: `a8f160ec` "Version cache writes against mutations,
+not only against full clears") that happened to close a gap this rotation
+had flagged. The fix was already present in `b10ecfe3` itself — the commit
+that landed the FE3-34 doc calling it open — so the doc was stale on
+arrival, not from later drift (two branches landing concurrently, same class
+of race `PROGRESS.md` documents elsewhere for Alembic merges). Verified
+against current code with its guard tests passing:
+`apiClient.test.ts`'s three cache-boundary cases. Removed from
+`KNOWN_LIMITATIONS.md` per its own "when resolved, remove it" convention;
+refreshed FE3-34-2's line-number citation there.
+
+**FE3-34-5 (HIGH) looked like the same story** — its fix (`fd2d5dbb` "fix:
+repair CI, an assigned-item rewrite, and two access leaks") was also already
+present in `b10ecfe3` — and was _initially_ marked fixed here on that basis,
+verified against `authStore.test.ts`'s six device-claim cases. **Corrected
+same day, on this same PR:** Codex review found the fix closes only the
+timing race the original finding described, not the purge-failure path —
+`purgeLocalMemberData()` is designed to never throw and always settle, so a
+blocked/slow IndexedDB can leave a member's queued items behind while the
+device is claimed for the next member anyway. Reopened (commit `9d745075`),
+restored to `KNOWN_LIMITATIONS.md` with the precise remaining gap. **OPEN**,
+not fixed — this section previously said otherwise and is corrected here.
 
 Diff-swept the whole frontend (not just this feature's files) for new
 cache-exposure risk since the baseline: one new endpoint
-(`GET /inventory/items/colors`, a plain colour-name list, no PII) correctly
-left cacheable; every other "new" `api.get` call in the diff was already
-covered by an exclusion added between FE3-34 being written and merging.
-Zero new gaps. `components/ux/*` (in scope per FE3-34) diffed too:
+(`GET /inventory/items/colors`) was assessed as "a plain colour-name list, no
+PII" and left cacheable; every other "new" `api.get` call in the diff was
+already covered by an exclusion added between FE3-34 being written and
+merging. **This assessment was wrong** — `color` is unconstrained free
+text, not a fixed vocabulary — and is fixed in
+`docs/security-review/FE5-34-frontend-shared.md`, not here.
+`components/ux/*` (in scope per FE3-34) diffed too:
 `breadcrumbRoutes.ts`/`Breadcrumbs.tsx` (new, fail-closed allowlist with its
 own drift test) and a `CommandPalette.tsx` permission-string change
 (cosmetic — a UX filter, not an access-control boundary) — no findings.

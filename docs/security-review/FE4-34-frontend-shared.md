@@ -24,6 +24,25 @@ re-confirmed intact.**
 
 ---
 
+> **Corrected by pass 5 (`docs/security-review/FE5-34-frontend-shared.md`).**
+> Two things below are wrong and left in place rather than rewritten, per this
+> rotation's own convention of appending corrections instead of editing
+> history:
+>
+> 1. **The baseline commit cited throughout this doc, `b10ecfe3`, is wrong.**
+>    It is the merge of unrelated PR #2244 (2026-09-04), not the pass-3
+>    closure commit. The real pass-3 baseline is `796059dc` (PR #2120,
+>    2026-08-31). Every `git diff --stat b10ecfe3..HEAD` in this doc therefore
+>    **excluded** real changes made between `796059dc` and `b10ecfe3` — this
+>    pass never actually diffed those against a correct baseline. Pass 5 redid
+>    the diff against `796059dc` and read what was missed; see its findings.
+> 2. **The `/inventory/items/colors` disposition below ("No PII, no
+>    per-member data, no free-text field") is wrong.** `color` is
+>    `Optional[str]` with only a 50-character cap and no fixed vocabulary
+>    (`backend/app/schemas/inventory.py`); `normalize_color` only collapses
+>    whitespace. It **is** a free-text field, and pass 5 added it to
+>    `UNCACHEABLE_PREFIXES`.
+
 ## Method
 
 This is the 4th pass over a feature whose prior three passes (module-audit
