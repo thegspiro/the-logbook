@@ -825,3 +825,144 @@ describe('InventoryItemsPage — grouping', () => {
     expect(screen.queryByRole('button', { name: /Class A Uniform \(/ })).not.toBeInTheDocument();
   });
 });
+
+describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
+  // One rule under test: whatever you group by is stated once by the group
+  // header and never repeated on the rows beneath — whether it lives in a real
+  // column or in a variant capsule.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({
+          id: 'a-coat',
+          name: 'Dress Coat',
+          category_id: 'cat-a',
+          size: 'l',
+          standard_size: 'l',
+          color: 'Navy',
+          storage_location: 'Shelf B-3',
+        }),
+        makeItem({
+          id: 'b-polo',
+          name: 'Class B Polo',
+          category_id: 'cat-b',
+          size: 'l',
+          standard_size: 'l',
+          color: 'Navy',
+          storage_location: 'Shelf B-3',
+        }),
+      ],
+      total: 2,
+      groups: [
+        { key: 'cat-a', label: 'Class A Uniform', available_count: 1, unavailable_count: 0 },
+        { key: 'cat-b', label: 'Class B Uniform', available_count: 1, unavailable_count: 0 },
+      ],
+    });
+    mockGetSummary.mockResolvedValue({
+      total_items: 2,
+      non_medical_items: 2,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([
+      { id: 'cat-a', name: 'Class A Uniform', item_type: 'uniform', active: true },
+      { id: 'cat-b', name: 'Class B Uniform', item_type: 'uniform', active: true },
+    ]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const groupBy = async (value: string) => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByLabelText('Group by:');
+    await user.selectOptions(screen.getByLabelText('Group by:'), value);
+    await screen.findByRole('columnheader', { name: 'Variant' });
+    return user;
+  };
+
+  const header = (name: string) => screen.queryAllByRole('columnheader', { name });
+
+  it('leaves every column in place when nothing is grouped', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Dress Coat');
+
+    // The promise this change makes: the default view is untouched.
+    expect(header('Category').length).toBeGreaterThan(0);
+    expect(header('Location').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('columnheader', { name: /Condition/ }).length).toBeGreaterThan(0);
+    expect(header('Size')).toHaveLength(0);
+  });
+
+  it('drops the Category column when grouped by category', async () => {
+    await groupBy('category');
+
+    expect(header('Category')).toHaveLength(0);
+    // Named once, by the header that accounts for the rows.
+    expect(screen.getByRole('button', { name: /Class A Uniform/ })).toBeInTheDocument();
+  });
+
+  it('drops the Condition column when grouped by condition', async () => {
+    await groupBy('condition');
+    expect(screen.queryAllByRole('columnheader', { name: /Condition/ })).toHaveLength(0);
+  });
+
+  it('drops the Location column when grouped by location', async () => {
+    await groupBy('location');
+    expect(header('Location')).toHaveLength(0);
+  });
+
+  // Scoped to the table: the filter bar carries an "All Sizes" select whose
+  // options include a literal "L", so an unscoped text query matches the
+  // control rather than the rows.
+  const sizesInRows = () => within(screen.getByRole('table', { name: 'Available' })).queryAllByText('L');
+
+  it('adds a Size column when grouping, and shows size once not twice', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Dress Coat');
+    // Ungrouped: size appears once per row, as a capsule.
+    expect(sizesInRows()).toHaveLength(2);
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Group by:'), 'category');
+    await waitFor(() => expect(header('Size').length).toBeGreaterThan(0));
+
+    // Still once per row — now the column, not the capsule. Four would mean
+    // the capsule stayed and the column duplicated it.
+    expect(sizesInRows()).toHaveLength(2);
+  });
+
+  it('drops the colour capsule when grouped by colour', async () => {
+    await groupBy('color');
+
+    // Colour only ever renders as a capsule, so its absence is unambiguous.
+    await waitFor(() => expect(screen.queryByText('Navy')).not.toBeInTheDocument());
+    // And the columns it does not own are untouched.
+    expect(header('Category').length).toBeGreaterThan(0);
+    expect(header('Size').length).toBeGreaterThan(0);
+  });
+
+  it('adds no Size column when size IS the grouping', async () => {
+    await groupBy('size');
+
+    // The header already says it; a column would be the exact redundancy this
+    // rule removes.
+    expect(header('Size')).toHaveLength(0);
+    expect(sizesInRows()).toHaveLength(0);
+  });
+
+  it('hides no column for a dimension that has none, but still adds Size', async () => {
+    await groupBy('vendor');
+
+    // Proves the two rules are independent: nothing to hide, Size still gained.
+    expect(header('Category').length).toBeGreaterThan(0);
+    expect(header('Location').length).toBeGreaterThan(0);
+    expect(header('Size').length).toBeGreaterThan(0);
+  });
+});

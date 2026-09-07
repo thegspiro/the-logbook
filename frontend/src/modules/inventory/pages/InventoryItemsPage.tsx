@@ -52,7 +52,8 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import ReceiveStockModal from '../components/ReceiveStockModal';
 import BulkAddItemsModal from '../components/BulkAddItemsModal';
 import { VariantCapsules } from '../components/VariantCapsules';
-import { getDisplayName } from '../utils/variantHelpers';
+import type { VariantAttribute } from '../components/VariantCapsules';
+import { displaySize, getDisplayName } from '../utils/variantHelpers';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -267,6 +268,24 @@ const ItemTable: React.FC<ItemTableProps> = ({
   const ariaSort = (col: SortKey): 'ascending' | 'descending' | 'none' =>
     sortBy === col ? (sortOrd === 'asc' ? 'ascending' : 'descending') : 'none';
 
+  // One rule: the grouped dimension never appears in the row. The group header
+  // states it once; repeating it on every row beneath is dead width. It applies
+  // the same whether the dimension lives in a real column (Category, Condition,
+  // Location) or in a variant capsule (Colour, Size, Style).
+  const grouped = (dimension: GroupKey) => groupBy === dimension;
+  // Size earns a column of its own in the space a hidden column vacates — it is
+  // what a quartermaster scans for, and a chip wedged between colour and style
+  // is not scannable. Never when size IS the grouping, because then the header
+  // already says it and a column would be the very redundancy being removed.
+  const showSizeColumn = Boolean(groupBy) && !grouped('size');
+  const omitCapsules: VariantAttribute[] = [
+    // Whenever anything is grouped: either the Size column carries it, or the
+    // group header does.
+    ...(groupBy ? (['size'] as const) : []),
+    ...(grouped('color') ? (['color'] as const) : []),
+    ...(grouped('style') ? (['style'] as const) : []),
+  ];
+
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
@@ -316,26 +335,44 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   </button>
                 </th>
               )}
-              <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
-                Category
-              </th>
+              {!grouped('category') && (
+                <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                  Category
+                </th>
+              )}
               <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
                 Variant
               </th>
+              {/* Not sortable, deliberately: the backend's _SORTABLE_COLUMNS has
+                  no size key and silently falls back to name, so a sort button
+                  here would look live and do nothing. */}
+              {showSizeColumn && (
+                <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                  Size
+                </th>
+              )}
               <th scope="col" className="text-theme-text-secondary px-3 py-3 text-center font-medium">
                 Qty
               </th>
-              <th scope="col" aria-sort={ariaSort('condition')} className="px-3 py-3 text-left">
-                <button
-                  onClick={() => toggleSort('condition')}
-                  className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
-                >
-                  Condition <SortIc col="condition" />
-                </button>
-              </th>
-              <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
-                Location
-              </th>
+              {/* Hiding this also hides its sort button, which is right:
+                  sorting by the dimension you are grouped by is meaningless
+                  (the group order dominates it), and the mobile Sort dropdown
+                  still offers Condition. */}
+              {!grouped('condition') && (
+                <th scope="col" aria-sort={ariaSort('condition')} className="px-3 py-3 text-left">
+                  <button
+                    onClick={() => toggleSort('condition')}
+                    className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
+                  >
+                    Condition <SortIc col="condition" />
+                  </button>
+                </th>
+              )}
+              {!grouped('location') && (
+                <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                  Location
+                </th>
+              )}
               <th scope="col" className="w-20 px-3 py-3" />
             </tr>
           </thead>
@@ -462,12 +499,19 @@ const ItemTable: React.FC<ItemTableProps> = ({
                           {item.status.replace(/_/g, ' ').toUpperCase()}
                         </span>
                       </td>
-                      <td data-label="Category" className="text-theme-text-muted px-3 py-3">
-                        {cat?.name ?? ''}
-                      </td>
+                      {!grouped('category') && (
+                        <td data-label="Category" className="text-theme-text-muted px-3 py-3">
+                          {cat?.name ?? ''}
+                        </td>
+                      )}
                       <td data-label="Variant" className="px-3 py-3">
-                        <VariantCapsules item={item} />
+                        <VariantCapsules item={item} omit={omitCapsules} />
                       </td>
+                      {showSizeColumn && (
+                        <td data-label="Size" className="text-theme-text-primary px-3 py-3">
+                          {displaySize(item) || '--'}
+                        </td>
+                      )}
                       <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
                         {qtyLabel(item)}
                         {item.is_lot_stocked && (
@@ -479,15 +523,19 @@ const ItemTable: React.FC<ItemTableProps> = ({
                           </span>
                         )}
                       </td>
-                      <td
-                        data-label="Condition"
-                        className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}
-                      >
-                        {item.condition.replace(/_/g, ' ')}
-                      </td>
-                      <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
-                        {loc || '-'}
-                      </td>
+                      {!grouped('condition') && (
+                        <td
+                          data-label="Condition"
+                          className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}
+                        >
+                          {item.condition.replace(/_/g, ' ')}
+                        </td>
+                      )}
+                      {!grouped('location') && (
+                        <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
+                          {loc || '-'}
+                        </td>
+                      )}
                       {/* Mobile-only detail cells (hidden on desktop, revealed by the reflow) */}
                       <td data-label="Manufacturer" className="hidden">
                         {manufacturer || '--'}

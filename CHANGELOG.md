@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A grouped items list stops repeating the grouped value on every row (2026-09-07)
+
+**Changed**
+
+- **The dimension you group by no longer appears in the rows beneath.** Grouping
+  by Category left a CATEGORY column restating the same value under a header
+  that already said it — dead width on every row. The same now applies to
+  Condition and Location, and to the Colour and Style capsules, which grouping
+  previously did not touch at all. One rule: the group header states it once,
+  the rows do not repeat it.
+- **Size gets its own column whenever a grouping is active**, in the space the
+  hidden column vacates, and leaves the Variant capsules so it is not shown
+  twice. It is the attribute a quartermaster scans for, and a chip wedged
+  between colour and style is not scannable.
+
+Two behaviours fall out of the rule rather than being special cases:
+
+- Grouping **by Size** adds no Size column — the header already says it.
+- `Item type` and `Vendor` hide nothing, because neither has a column or a
+  capsule today; they still gain the Size column.
+
+The ungrouped view is unchanged, and a test asserts that.
+
+**Notes**
+
+- The Size column is deliberately **not sortable**. The backend's
+  `_SORTABLE_COLUMNS` has no `size` key and an unknown `sort_by` silently falls
+  back to `name`, so a sort button there would look live and do nothing.
+- Hiding the Condition column also hides its sort button, which is correct —
+  sorting by the dimension you are grouped by is meaningless, the group order
+  dominates it, and the mobile Sort dropdown still offers Condition.
+- `displaySize` moved to `utils/variantHelpers.ts`, shared by the new column and
+  the capsule. It had been inline in `VariantCapsules` and a second copy is
+  precisely how `styleAttributesLabel` came to render "Mens" and "V Neck"
+  (pitfall #29). `VariantCapsules` gains an optional `omit` prop that defaults
+  to showing everything, so its five other call sites are untouched.
+
 ### The items list can be grouped by category, colour or any other attribute (2026-09-07)
 
 **Added**
