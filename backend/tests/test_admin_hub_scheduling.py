@@ -652,6 +652,81 @@ class TestShortStaffed:
 
         assert value == "0"
 
+    # The window is "a week at most" by convention, not by anything the query
+    # enforced — nothing stopped a department with a pathological number of
+    # shifts in the window from loading every one of them into Python. Mirrors
+    # SchedulingService.get_open_shifts's own `max_candidates` bound.
+    async def test_max_candidates_bounds_a_pathological_number_of_shifts(
+        self, db_session
+    ):
+        from app.services.admin_hub_service import _short_staffed_shifts
+
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        for i in range(5):
+            await _shift(
+                db_session,
+                org,
+                start=NOW + timedelta(days=1, minutes=i),
+                end=NOW + timedelta(days=1, hours=12, minutes=i),
+                min_staffing=4,
+            )
+
+        ctx = await AdminHubService(db_session)._context(admin)
+        uncapped = await _short_staffed_shifts(
+            ctx, NOW, NOW + timedelta(days=7), max_candidates=500
+        )
+        capped = await _short_staffed_shifts(
+            ctx, NOW, NOW + timedelta(days=7), max_candidates=2
+        )
+
+        assert len(uncapped) == 5
+        assert len(capped) == 2
+        # Bounded, not arbitrary: the earliest-starting shifts survive the cap
+        # rather than whichever two the database happened to return first.
+        assert [s.start_time for s in capped] == sorted(s.start_time for s in uncapped)[
+            :2
+        ]
+
+    # A hit cap means shifts starting after the cutoff were never even
+    # fetched, so an understaffed one among them would go unreported with no
+    # trace. Confirm the truncation is logged rather than silent.
+    async def test_hitting_the_cap_logs_a_warning(self, db_session):
+        from loguru import logger
+
+        from app.services.admin_hub_service import _short_staffed_shifts
+
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        for i in range(3):
+            await _shift(
+                db_session,
+                org,
+                start=NOW + timedelta(days=1, minutes=i),
+                end=NOW + timedelta(days=1, hours=12, minutes=i),
+                min_staffing=4,
+            )
+
+        ctx = await AdminHubService(db_session)._context(admin)
+        messages: list[str] = []
+        sink_id = logger.add(messages.append, level="WARNING")
+        try:
+            capped = await _short_staffed_shifts(
+                ctx, NOW, NOW + timedelta(days=7), max_candidates=2
+            )
+            uncapped = await _short_staffed_shifts(
+                ctx, NOW, NOW + timedelta(days=7), max_candidates=500
+            )
+        finally:
+            logger.remove(sink_id)
+
+        assert len(capped) == 2
+        assert any("hit the 2-candidate cap" in m for m in messages)
+        # The uncapped call examined every shift, so nothing was truncated —
+        # it must not log the same warning.
+        assert len(uncapped) == 3
+        assert not any("hit the 500-candidate cap" in m for m in messages)
+
 
 # ── Hours this month ────────────────────────────────────────────────────────
 
