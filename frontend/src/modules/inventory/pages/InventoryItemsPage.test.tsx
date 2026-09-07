@@ -842,6 +842,45 @@ describe('InventoryItemsPage — grouping', () => {
     expect(screen.queryByRole('button', { name: /Unspecified/ })).not.toBeInTheDocument();
   });
 
+  it('leaves a department-authored name exactly as typed', async () => {
+    // Underscore-opening is for enum values like `in_maintenance`. Category,
+    // colour, location and vendor names are typed by the department, so an
+    // unconditional replace rewrites their own data.
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 's1', name: 'Nozzle', group_key: 'cat-s1' })],
+      total: 1,
+      groups: [{ key: 'cat-s1', label: 'Station_1', available_count: 1, unavailable_count: 0 }],
+    });
+    await chooseGrouping('category');
+
+    expect(await screen.findByRole('button', { name: /Station_1/ })).toBeInTheDocument();
+  });
+
+  it('opens out underscores in an enum-backed value', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'm1', name: 'Saw', group_key: 'in_maintenance' })],
+      total: 1,
+      groups: [{ key: 'in_maintenance', label: 'in_maintenance', available_count: 0, unavailable_count: 1 }],
+    });
+    await chooseGrouping('condition');
+
+    expect(await screen.findByRole('button', { name: /in maintenance/i })).toBeInTheDocument();
+  });
+
+  it('gives each group its own row group', async () => {
+    const user = await chooseGrouping('category');
+    expect(user).toBeDefined();
+
+    // Wait for the grouped fetch: grouping does not apply until rows fetched
+    // for that dimension arrive.
+    await screen.findByRole('button', { name: /Class A Uniform/ });
+    const table = screen.getByRole('table', { name: 'Available' });
+    // thead plus one tbody per group. A single tbody would bind every
+    // scope="rowgroup" header to the rows of the whole table rather than its
+    // own, handing a screen reader the wrong group-to-row map.
+    expect(within(table).getAllByRole('rowgroup')).toHaveLength(3);
+  });
+
   it('renders no group headers when grouping is off', async () => {
     renderWithRouter(<InventoryItemsPage />);
     await screen.findByText('Dress Coat');
@@ -903,12 +942,20 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
     mockCheckPermission.mockReturnValue(true);
   });
 
+  const lastItemsCall = (): Record<string, unknown> =>
+    (mockGetItems.mock.calls[mockGetItems.mock.calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+
   const groupBy = async (value: string) => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
     await screen.findByLabelText('Group by:');
     await user.selectOptions(screen.getByLabelText('Group by:'), value);
-    await screen.findByRole('columnheader', { name: 'Variant' });
+    // Grouping deliberately does not apply until rows fetched FOR that
+    // dimension arrive — otherwise the previous dimension's keys are rendered
+    // under the new dimension's headings. So wait for the request to carry it
+    // and for a group heading to appear, rather than asserting mid-flight.
+    await waitFor(() => expect(lastItemsCall().group_by).toBe(value));
+    await screen.findByRole('button', { name: /Class A Uniform/ });
     return user;
   };
 

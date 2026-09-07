@@ -32,7 +32,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   join, each of which was a separate chance to disagree (pitfall #29).
 - The group header row declared `scope="colgroup"`, marking it a header for a
   group of _columns_; it labels the rows beneath it, so it is now
-  `scope="rowgroup"`.
+  `scope="rowgroup"` — and each group is rendered as its own `<tbody>`. The
+  scope change alone was not enough: `rowgroup` binds a header to its row
+  group, so with every heading in one `<tbody>` each claimed the rows to the
+  end of the table rather than its own.
+- **A department's own group names were being rewritten for display.**
+  Underscores were opened out unconditionally to humanise enum values like
+  `in_maintenance`, which also rewrote a station really called `Station_1` or a
+  category `SCBA_Equipment`. Only enum-backed dimensions are humanised now;
+  size uses the existing `sizeLabel`, and category, colour, location and vendor
+  names render exactly as typed.
+- **Changing the grouping dimension briefly rendered the previous dimension's
+  keys.** `group_by` changes with the dropdown, but the loaded rows keep the
+  key the server stamped for the dimension they were fetched for until the
+  debounced request lands — and indefinitely if it fails. The table now renders
+  against the dimension its rows were actually fetched for, so it shows the
+  last consistent state rather than a mixture of two.
 
 **Known limitation**
 
