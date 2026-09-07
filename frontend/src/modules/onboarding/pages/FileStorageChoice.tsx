@@ -262,7 +262,7 @@ const FileStorageChoice: React.FC = () => {
                 {/* Recommended Badge */}
                 {platform.recommended && (
                   <div className="absolute top-4 right-4">
-                    <span className="inline-flex items-center rounded-full bg-green-500 px-3 py-1 text-xs font-semibold text-white">
+                    <span className="inline-flex items-center rounded-full bg-green-700 px-3 py-1 text-xs font-semibold text-white">
                       <CheckCircle aria-hidden="true" className="mr-1 h-3 w-3" />
                       Recommended
                     </span>

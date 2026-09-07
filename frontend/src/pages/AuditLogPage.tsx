@@ -68,9 +68,20 @@ const AuditLogPage: React.FC = () => {
     setError(null);
     try {
       const [list, statsData] = await Promise.all([auditLogService.list(filters), auditLogService.getStats()]);
-      setEntries(list.logs);
-      setTotal(list.total);
-      setStats(statsData);
+      // `api.get<T>` asserts the wire format rather than verifying it, so a
+      // response that is merely well-formed JSON — a captive portal on station
+      // Wi-Fi, a proxy error page, an endpoint mid-rename — arrives typed as
+      // AuditLogStats with every field undefined. Normalizing here keeps the
+      // two tallies below (`Object.keys(by_category)`, `by_severity.critical`)
+      // reading real objects; without it the page died through the
+      // ErrorBoundary instead of rendering an empty log.
+      setEntries(Array.isArray(list?.logs) ? list.logs : []);
+      setTotal(typeof list?.total === 'number' ? list.total : 0);
+      setStats({
+        total: statsData?.total ?? 0,
+        by_severity: statsData?.by_severity ?? {},
+        by_category: statsData?.by_category ?? {},
+      });
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load audit log'));
     } finally {
@@ -112,7 +123,7 @@ const AuditLogPage: React.FC = () => {
         </div>
         <button
           onClick={() => void load()}
-          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors"
+          className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
           aria-label="Refresh audit log"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
@@ -201,11 +212,7 @@ const AuditLogPage: React.FC = () => {
           <button type="submit" className="btn-primary flex-1 text-sm">
             Apply
           </button>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-theme-text-secondary hover:text-theme-text-primary border-theme-surface-border rounded-md border px-3 py-2 text-sm"
-          >
+          <button type="button" onClick={resetFilters} className="btn-secondary btn-md text-sm">
             Reset
           </button>
         </div>

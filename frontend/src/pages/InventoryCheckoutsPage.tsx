@@ -557,7 +557,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                       void handleExtend();
                     }}
                     disabled={submitting || !extendDate}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                    className="rounded-lg bg-emerald-700 px-4 py-2 text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                   >
                     {submitting ? 'Extending...' : 'Extend'}
                   </button>

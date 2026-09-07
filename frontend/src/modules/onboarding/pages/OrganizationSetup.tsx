@@ -1243,7 +1243,7 @@ const OrganizationSetup: React.FC = () => {
             Need help?{' '}
             <a
               href="https://github.com/thegspiro/the-logbook/wiki/Onboarding"
-              className="text-theme-accent-red hover:text-theme-accent-red underline"
+              className="touch-target-phone text-theme-accent-red hover:text-theme-accent-red underline"
               target="_blank"
               rel="noopener noreferrer"
             >

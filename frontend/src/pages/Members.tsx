@@ -547,7 +547,7 @@ const Members: React.FC = () => {
                 <div className="ml-auto flex items-center gap-2">
                   <button
                     onClick={() => void navigate(`/members/print-labels?ids=${[...selectedIds].join(',')}`)}
-                    className="inline-flex items-center gap-1 rounded-sm bg-emerald-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-700"
+                    className="inline-flex items-center gap-1 rounded-sm bg-emerald-700 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-800"
                   >
                     <Printer className="h-3 w-3" />
                     Print Badges

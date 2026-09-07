@@ -511,8 +511,16 @@ export const ProspectiveMembersPage: React.FC = () => {
         </>
       )}
 
-      {/* Pipeline / archive tabs */}
-      <div className="tab-scroll mb-4">
+      {/* Pipeline / archive tabs.
+
+          `tab-scroll` makes the strip scrollable, but that alone is invisible
+          to the mobile presentation pass, which reads any child extending past
+          the viewport as an overflow bug. The marker is what declares the
+          overflow intentional, and it carries an accessibility contract with
+          it: a name, and a way to reach the off-screen end without a mouse.
+          Five views do not fit across a 390px phone — "Converted" starts
+          off-screen — so without this the last two were unreachable. */}
+      <nav className="tab-scroll mb-4" data-mobile-scroll-region aria-label="Applicant pipeline views" tabIndex={0}>
         <button
           onClick={() => setActiveTab('active')}
           className={`min-h-11 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
@@ -583,7 +591,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             </span>
           )}
         </button>
-      </div>
+      </nav>
 
       {/* Controls Bar (Active tab) */}
       {activeTab === 'active' && (
@@ -783,7 +791,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         void handleBulkAdvance();
                       }}
                       disabled={isBulkAdvancing}
-                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                     >
                       {isBulkAdvancing ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -889,7 +897,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                     void handleBulkReactivate();
                   }}
                   disabled={isBulkReactivating}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                 >
                   {isBulkReactivating ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -374,7 +374,7 @@ const ModuleOverview: React.FC = () => {
                         aria-label={`${isEnabled ? 'Enabled' : 'Enable'} ${module.name}`}
                         className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           isEnabled
-                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            ? 'bg-green-700 text-white hover:bg-green-800'
                             : 'bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover'
                         }`}
                       >

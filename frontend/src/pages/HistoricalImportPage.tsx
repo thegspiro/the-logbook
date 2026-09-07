@@ -84,7 +84,7 @@ const StepIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => (
               <span
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
                   isComplete
-                    ? 'bg-green-600 text-white'
+                    ? 'bg-green-700 text-white'
                     : isCurrent
                       ? 'bg-red-800 text-white'
                       : 'bg-theme-surface-hover text-theme-text-muted'

@@ -447,6 +447,7 @@ const FormsPage: React.FC = () => {
           className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
           role="tablist"
           aria-label="Forms views"
+          data-mobile-scroll-region
         >
           <button
             onClick={() => setActiveTab('forms')}
@@ -682,7 +683,7 @@ const FormsPage: React.FC = () => {
                         onClick={() => {
                           void handlePublish(form.id);
                         }}
-                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500"
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-800 dark:bg-green-700 dark:hover:bg-green-800"
                       >
                         <Send className="h-4 w-4" aria-hidden="true" />
                         Publish Form
@@ -931,6 +932,7 @@ const FormsPage: React.FC = () => {
                 className="bg-theme-surface-secondary hscroll mb-6 flex max-w-full space-x-1 rounded-lg p-1"
                 role="tablist"
                 aria-label="Form editor views"
+                data-mobile-scroll-region
               >
                 <button
                   onClick={() => setDetailTab('builder')}

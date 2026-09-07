@@ -64,7 +64,16 @@ const EventCheckInMonitoringPage: React.FC = () => {
     try {
       setError(null);
       const data = await eventService.getCheckInMonitoring(eventId);
-      setStats(data);
+      // The two activity lists are rendered unguarded below (`.length`,
+      // `.map`), and `api.get<T>` asserts the response shape rather than
+      // verifying it — so a payload that is valid JSON but not this type took
+      // the page down through the ErrorBoundary. Normalizing at the boundary
+      // keeps that invariant in one place rather than at every read.
+      setStats({
+        ...data,
+        recent_check_ins: Array.isArray(data?.recent_check_ins) ? data.recent_check_ins : [],
+        early_check_ins: Array.isArray(data?.early_check_ins) ? data.early_check_ins : [],
+      });
       setLastUpdated(new Date());
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load monitoring data'));
@@ -121,7 +130,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="mobile-touch-target text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>
@@ -136,7 +145,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
         <p className="text-theme-text-secondary">No monitoring data available</p>
         <Link
           to={`/events/${eventId}`}
-          className="mt-4 inline-block text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="mobile-touch-target mt-4 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>
@@ -158,7 +167,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="mb-4 inline-block text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="mobile-touch-target mb-4 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>

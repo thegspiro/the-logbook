@@ -45,7 +45,7 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
         </div>
         <button
           onClick={cycleTheme}
-          className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring ml-4 rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
+          className="btn-icon text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring ml-4 transition-colors focus:ring-2 focus:outline-hidden"
           title={`Theme: ${themeLabel}`}
           aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
         >

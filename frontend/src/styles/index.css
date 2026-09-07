@@ -469,7 +469,7 @@
 }
 
 @utility btn-success {
-  @apply focus:ring-theme-focus-ring rounded-lg bg-green-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-green-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
   /* Grow to the 44px touch minimum on phones. Applied inside the query so
      desktop button density is untouched; inline-flex centres the label in the
@@ -484,7 +484,7 @@
 }
 
 @utility btn-info {
-  @apply focus:ring-theme-focus-ring rounded-lg bg-blue-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-blue-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
   /* Grow to the 44px touch minimum on phones. Applied inside the query so
      desktop button density is untouched; inline-flex centres the label in the
@@ -499,7 +499,7 @@
 }
 
 @utility btn-warning {
-  @apply focus:ring-theme-focus-ring rounded-lg bg-yellow-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-yellow-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-amber-800 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-amber-900 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 
   /* Grow to the 44px touch minimum on phones. Applied inside the query so
      desktop button density is untouched; inline-flex centres the label in the
@@ -1098,6 +1098,23 @@
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
+}
+
+@utility touch-target-phone {
+  /* #21a The 44px touch minimum, applied on phones only.
+     `mobile-touch-target` above enforces it at every width, which is right for
+     a control that is cramped everywhere and wrong for one that is only
+     cramped on a phone: applying it to a wrapped row of status pills or a
+     dense filter strip grows the desktop layout to no purpose. This is the
+     same phone-scoped rule the `btn-*` utilities already carry internally,
+     factored out so a non-button control can reach for it too. */
+  @media (max-width: 767px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 @utility mobile-stack {

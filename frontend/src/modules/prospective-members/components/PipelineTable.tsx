@@ -217,7 +217,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 void handleBulkAction('advance');
               }}
               aria-label={`Advance ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-700"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800"
             >
               <Forward className="h-3.5 w-3.5" />
               Advance
@@ -227,7 +227,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 void handleBulkAction('hold');
               }}
               aria-label={`Hold ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-amber-700"
+              className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-amber-800"
             >
               <Pause className="h-3.5 w-3.5" />
               Hold

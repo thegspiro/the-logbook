@@ -76,12 +76,12 @@ const AdminHoursManagePage: React.FC = () => {
           >
             {TAB_LABELS[tab]}
             {tab === 'active' && activeSessions.length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-500 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                 {activeSessions.length}
               </span>
             )}
             {tab === 'pending' && pendingCount > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-800 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                 {pendingCount}
               </span>
             )}

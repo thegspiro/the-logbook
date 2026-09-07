@@ -225,7 +225,7 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
               <button
                 onClick={() => void handleRelease()}
                 disabled={releasing || isPending}
-                className="mobile-touch-target flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-3 font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                className="mobile-touch-target flex w-full items-center justify-center gap-2 rounded-xl bg-green-700 py-3 font-bold text-white transition-colors hover:bg-green-800 disabled:opacity-50"
               >
                 <Send className="h-5 w-5" />
                 {releasing ? 'Releasing…' : 'Release to candidate'}
@@ -346,7 +346,7 @@ export const SkillTestOfficerActions: React.FC<SkillTestOfficerActionsProps> = (
             <button
               onClick={() => void handleVoid()}
               disabled={voiding || voidReason.trim().length < MIN_VOID_REASON_LENGTH}
-              className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-amber-700 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {voiding ? 'Voiding…' : 'Void result'}
             </button>

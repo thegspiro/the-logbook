@@ -186,7 +186,7 @@ const ReturnRequestsPanel: React.FC = () => {
                           setReceivedQuantity(1);
                           setFollowUp('auto');
                         }}
-                        className="rounded-lg bg-green-600 p-1.5 text-white transition-colors hover:bg-green-700"
+                        className="rounded-lg bg-green-700 p-1.5 text-white transition-colors hover:bg-green-800"
                         title="Receive item"
                       >
                         <CheckCircle className="h-4 w-4" />

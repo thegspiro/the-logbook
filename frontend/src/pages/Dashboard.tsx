@@ -1991,7 +1991,7 @@ const Dashboard: React.FC = () => {
                   </h3>
                   {feedUnread > 0 && (
                     <span
-                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white tabular-nums"
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-800 px-1.5 text-[11px] font-bold text-white tabular-nums"
                       aria-label={`${feedUnread} unread`}
                     >
                       {feedUnread}

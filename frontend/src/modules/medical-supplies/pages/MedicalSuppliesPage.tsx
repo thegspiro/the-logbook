@@ -288,15 +288,20 @@ const MedicalSuppliesPage: React.FC = () => {
             setLoaded((current) => ({ ...current, [section]: true }));
             if (section === 'summary') setSummary(value as MedicalSupplySummary);
             if (section === 'items') {
-              const data = value as { items: InventoryItem[]; total: number; skip: number; limit: number };
-              setItems(data.items);
+              const data = (value ?? {}) as { items: InventoryItem[]; total: number; skip: number; limit: number };
+              // These four `as` casts assert a wire format that nothing checks.
+              // A response that is valid JSON but not this shape reached
+              // `expiring.map` as a non-array and took the whole page down
+              // through the ErrorBoundary — the failure a phone actually sees
+              // when station Wi-Fi answers 200 with a portal page.
+              setItems(Array.isArray(data.items) ? data.items : []);
               setItemPage({ total: data.total, skip: data.skip, limit: data.limit });
               // Stamped from this closure's own values, not from the render's
               // `filterKey`: those are what the request actually asked for.
               setItemsFilterKey(requestedFilterKey);
             }
-            if (section === 'categories') setCategories(value as InventoryCategory[]);
-            if (section === 'expiring') setExpiring(value as ExpiringLot[]);
+            if (section === 'categories') setCategories(Array.isArray(value) ? (value as InventoryCategory[]) : []);
+            if (section === 'expiring') setExpiring(Array.isArray(value) ? (value as ExpiringLot[]) : []);
           } catch (reason: unknown) {
             if (superseded()) return;
             if (section === 'items' && controller?.signal.aborted) return;
@@ -404,7 +409,7 @@ const MedicalSuppliesPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to="/dashboard"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-3 inline-flex items-center gap-1 text-sm"
+          className="touch-target-phone text-theme-text-muted hover:text-theme-text-primary mb-3 inline-flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Dashboard
@@ -431,7 +436,14 @@ const MedicalSuppliesPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="hscroll flex items-center gap-2">
+          {/* Four actions do not fit across a phone — "Add supply" ran to
+              408px. `hscroll` already scrolls them; the marker is what tells the
+              mobile pass that is deliberate. Buttons inside, so no tabIndex. */}
+          <div
+            className="hscroll flex items-center gap-2"
+            data-mobile-scroll-region
+            aria-label="Medical supply actions"
+          >
             <button
               type="button"
               onClick={() => void refresh()}

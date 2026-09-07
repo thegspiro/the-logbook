@@ -211,22 +211,32 @@ const AnalyticsDashboardPage: React.FC = () => {
       {/* Hourly Activity */}
       <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
         <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Activity by Hour</h2>
-        <div className="flex h-48 items-end justify-between gap-1">
-          {(metrics.hourlyActivity || []).map(({ hour, count }) => {
-            const maxCount = Math.max(...(metrics.hourlyActivity || []).map((h) => h.count), 1);
-            const heightPercent = (count / maxCount) * 100;
+        {/* Twenty-four columns cannot fit 320px, the width SC 1.4.10 names: at
+            that size each bar is under 10px and its hour label spills past the
+            last one, off the edge of the screen. A chart is the case the scroll
+            marker exists for — the bars keep a legible minimum width and the
+            strip scrolls, rather than the last hours becoming unreadable.
+            `min-w-full` keeps them stretched across a desktop. It needs its own
+            tabIndex: the bars are divs, so there is nothing inside a keyboard
+            could otherwise reach to scroll it. */}
+        <div className="hscroll" data-mobile-scroll-region aria-label="Activity by hour" tabIndex={0}>
+          <div className="flex h-48 min-w-full items-end justify-between gap-1">
+            {(metrics.hourlyActivity || []).map(({ hour, count }) => {
+              const maxCount = Math.max(...(metrics.hourlyActivity || []).map((h) => h.count), 1);
+              const heightPercent = (count / maxCount) * 100;
 
-            return (
-              <div key={hour} className="flex flex-1 flex-col items-center">
-                <div
-                  className="w-full cursor-pointer rounded-t bg-blue-600 transition-all hover:bg-blue-700"
-                  style={{ height: `${heightPercent}%` }}
-                  title={`${hour}:00 - ${count} events`}
-                ></div>
-                <div className="text-theme-text-muted mt-1 text-xs">{hour}</div>
-              </div>
-            );
-          })}
+              return (
+                <div key={hour} className="flex min-w-[18px] flex-1 flex-col items-center">
+                  <div
+                    className="w-full cursor-pointer rounded-t bg-blue-600 transition-all hover:bg-blue-700"
+                    style={{ height: `${heightPercent}%` }}
+                    title={`${hour}:00 - ${count} events`}
+                  ></div>
+                  <div className="text-theme-text-muted mt-1 text-xs">{hour}</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

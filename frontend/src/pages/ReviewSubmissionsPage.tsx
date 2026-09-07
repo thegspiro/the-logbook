@@ -311,7 +311,7 @@ const ReviewPanel: React.FC<{
           onClick={() => setAction('approve')}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === 'approve'
-              ? 'bg-green-600 text-white'
+              ? 'bg-green-700 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
@@ -322,7 +322,7 @@ const ReviewPanel: React.FC<{
           onClick={() => setAction(SubmissionStatus.REVISION_REQUESTED)}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === SubmissionStatus.REVISION_REQUESTED
-              ? 'bg-orange-600 text-white'
+              ? 'bg-orange-700 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >

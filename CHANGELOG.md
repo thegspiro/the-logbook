@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Mobile coverage reported a fifth of the application it had never measured (2026-09-07)
+
+**Fixed**
+
+- **Three pages died through the ErrorBoundary on a payload that was valid JSON
+  but not the declared type** — `AuditLogPage`, `EventCheckInMonitoringPage` and
+  `MedicalSuppliesPage`. `api.get<T>` asserts a wire format rather than
+  verifying it, so `Object.keys(stats.by_category)`, `stats.recent_check_ins.length`
+  and `expiring.map` each took a whole screen down. On a phone this is the
+  realistic case, not a contrived one: a captive portal on station Wi-Fi answers
+  HTTP 200 with an HTML body. Normalized at the read boundary.
+- **`btn-success` and `btn-warning` failed WCAG AA outright.** White on green-600
+  is 3.30:1 and on yellow-600 is 2.94:1, against a 4.5:1 floor; `btn-info` at
+  blue-600 was 5.17:1, AA but not the AAA the rest of the palette holds. They are
+  now green-800 (7.13:1), amber-800 (7.09:1) and blue-800 (8.72:1). The
+  2026-08-23 sweep that raised the palette searched for a _red_, so these three
+  were never looked at — between them they carry confirm, publish, approve and
+  archive in 101 files.
+- **125 hand-rolled class strings paired `text-white` with a fill below 4.5:1**,
+  across 60 files and outside the mast CSS entirely. All raised to at least AA,
+  hue preserved, minimal shade step.
+- **Eight WCAG AA violations**, now zero application-wide: two `aria-controls`
+  values naming ids that could not exist (the nav submenu id was built from a
+  label containing spaces, so it parsed as several ids), five unlabelled form
+  controls, and one link with no accessible name.
+- **Four elements overflowed a 320px viewport** — the width SC 1.4.10 actually
+  names, where the presentation pass measured 390.
+- **44 controls under the 44px touch minimum and 10 elements running off a 390px
+  screen**, almost all in modules that had never been measured.
+
+**Changed**
+
+- **The mobile ratchet covers 52 routes, up from 43.** Nine modules — finance,
+  grants & fundraising, onboarding, medical supplies, medical screening, IP
+  security, integrations, reports and the public portal, 56 routes between them
+  — had no entry at all. Every one sat in the inventory as `exempt` under the
+  same generated sentence, "covered by its representative module route", naming
+  a representative route that did not exist. 170 of the 196 exemptions use that
+  identical text.
+- **Eight ratcheted routes were measuring `ProtectedRoute`'s Access Denied
+  screen**, which passes every budget while testing nothing. They now carry the
+  grants their pages require. Their fingerprint had been visible in the run
+  output for some time: eight routes reporting an identical `tap 0/9, text 474`.
+- **New `mobile-accessibility.spec.ts`** runs axe (WCAG 2.1 A + AA, asserted at
+  zero) and a 320px reflow check (asserted at zero) over the same routes, plus a
+  ratcheted budget for AAA-only contrast findings. axe is injected from the
+  installed `axe-core` rather than adding `@axe-core/playwright`.
+- **`primaryFillContrast.test.ts` now measures every shared fill**, reading them
+  out of `index.css` instead of banning one shade by name, so a new `@utility`
+  pairing `text-white` with a fill is checked the day it is added.
+- **New `touch-target-phone` utility** — the 44px minimum on phones only.
+  `mobile-touch-target` applies it at every width, which is right for a control
+  that is cramped everywhere and wrong for a wrapped row of status pills.
+- The route list moved to `e2e/mobile-routes.ts`, shared by the presentation
+  ratchet, the accessibility pass and the coverage-integrity check.
+
+**Notes**
+
+- Two refinements stop the presentation pass demanding something WCAG does not:
+  a marked scroll region needs `tabIndex={0}` only when nothing inside it is
+  focusable (forcing it on a `role="tablist"` contradicts ARIA APG), and a link
+  inside running prose is exempt from the touch minimum per SC 2.5.5's Inline
+  case — detected by a sibling _text node_, so a row of adjacent links cannot
+  excuse itself.
+- 43 AAA-only contrast findings remain at individual call sites, held by the
+  per-route budget. The shared utilities are all AAA.
+- Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
 ### A grouped items list stops repeating the grouped value on every row (2026-09-07)
 
 **Changed**

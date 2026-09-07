@@ -1022,7 +1022,7 @@ export const EventDetailPage: React.FC = () => {
                       <button
                         onClick={() => void handleFinalizeAttendance()}
                         disabled={finalizingAttendance}
-                        className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                        className="inline-flex items-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-700 dark:text-emerald-950 dark:hover:bg-emerald-800"
                       >
                         <CheckCircle className="mr-2 h-4 w-4" />
                         {finalizingAttendance ? 'Finalizing...' : 'Finalize Attendance'}

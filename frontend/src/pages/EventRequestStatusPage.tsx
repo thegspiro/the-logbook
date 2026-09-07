@@ -197,7 +197,7 @@ const EventRequestStatusPage: React.FC = () => {
                             isCurrent
                               ? 'ring-theme-accent-red-muted bg-red-800 text-white ring-4'
                               : isActive
-                                ? 'bg-green-500 text-white'
+                                ? 'bg-green-700 text-white'
                                 : 'bg-theme-surface-hover text-theme-text-muted'
                           }`}
                         >

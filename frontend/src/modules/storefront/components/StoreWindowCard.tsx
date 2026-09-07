@@ -62,7 +62,7 @@ export const StoreWindowCard: React.FC<StoreWindowCardProps> = ({ storefront, on
       <div className="flex flex-wrap items-start justify-between gap-4 sm:gap-6">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {isOpen && (
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white sm:h-9 sm:w-9">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white sm:h-9 sm:w-9">
               <Check className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden="true" />
             </span>
           )}

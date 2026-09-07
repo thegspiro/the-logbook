@@ -387,7 +387,7 @@ export const ElectionsPage: React.FC = () => {
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-xs ${
                     statusFilter === status
-                      ? 'bg-blue-500 text-white'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted'
                   }`}
                 >

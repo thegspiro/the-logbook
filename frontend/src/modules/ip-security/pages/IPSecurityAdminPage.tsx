@@ -18,9 +18,13 @@ import { IPExceptionApprovalStatus } from '../../../constants/enums';
 import type { CountryBlockRuleCreate } from '../types';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
+// `btn-md` rather than a hand-typed box: it carries the phone-only 44px
+// minimum these tabs were missing (they rendered 36px tall), and blue-800
+// matches the fill `btn-info` uses — white on blue-600 is 5.17:1, which clears
+// AA and misses the 7:1 the rest of the palette holds to.
 const tabClass = (active: boolean) =>
-  `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-    active ? 'bg-blue-600 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+  `btn-md font-medium transition-colors ${
+    active ? 'bg-blue-800 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
   }`;
 
 const inputClass = 'form-input';
@@ -188,11 +192,16 @@ const IPSecurityAdminPage: React.FC = () => {
               <p className="text-theme-text-muted text-sm">Manage IP exceptions, geo-blocking, and access controls</p>
             </div>
           </div>
+          {/* Icon-only, so it needs a name of its own: it rendered 42x34 with
+              no text, which is both under the touch minimum and an unnamed
+              control — a screen reader announced it as just "button". */}
           <button
+            type="button"
             onClick={refresh}
-            className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+            aria-label="Refresh IP security data"
+            className="btn-icon border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover shrink-0 border transition-colors"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
           </button>
         </div>
 
@@ -201,7 +210,7 @@ const IPSecurityAdminPage: React.FC = () => {
           <button className={tabClass(activeTab === 'pending')} onClick={() => setActiveTab('pending')}>
             Pending Requests
             {pendingExceptions.length > 0 && (
-              <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+              <span className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-800 text-xs font-bold text-white">
                 {pendingExceptions.length}
               </span>
             )}
@@ -333,7 +342,7 @@ const IPSecurityAdminPage: React.FC = () => {
                   void handleApprove();
                 }}
                 disabled={isSaving}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                className="btn-success text-sm font-medium"
               >
                 {isSaving ? 'Approving...' : 'Approve'}
               </button>
@@ -373,7 +382,7 @@ const IPSecurityAdminPage: React.FC = () => {
                   void handleReject();
                 }}
                 disabled={isSaving || !rejectionReason.trim()}
-                className="rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+                className="btn-primary text-sm font-medium"
               >
                 {isSaving ? 'Rejecting...' : 'Reject'}
               </button>
@@ -413,7 +422,7 @@ const IPSecurityAdminPage: React.FC = () => {
                   void handleRevoke();
                 }}
                 disabled={isSaving || !revokeReason.trim()}
-                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+                className="btn-warning text-sm font-medium"
               >
                 {isSaving ? 'Revoking...' : 'Revoke'}
               </button>
