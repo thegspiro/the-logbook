@@ -11021,25 +11021,29 @@ fixed two distinct findings, only one of which has a module-audit entry:
 - Property-return reports filed into an organization-visible folder —
   recorded as **XC-4** in `docs/module-audit/CROSS-CUTTING.md`.
 - Member-PII endpoints missing from `UNCACHEABLE_PREFIXES`/
-  `UNCACHEABLE_SUBSTRINGS` in `frontend/src/utils/apiCache.ts` — the PR
-  description says "ten," but the diff adds 15 patterns (11 prefixes, 4
-  substrings) and a naive URL-match count against those patterns comes to
-  18 registered GET routes, most of which are false positives once
-  actually checked against a response schema (e.g. `/equipment-checks/*/history`
-  and several `/users/*` routes match only the broad `/history` and
-  `/users` substrings and carry no member PII). Re-running the ratchet
-  test's own schema-based matcher against the before/after diff of
-  `apiCache.ts` finds 9 routes whose response schema newly matches
-  `PII_FIELDS` and is now excluded — close to but not exactly "ten," and
-  neither figure this entry could produce is fully reconciled with the
-  other. Rather than assert a specific count, read the `apiCache.ts` diff
-  in PR #2381 directly for the exact scope. Fixed and now guarded by a
-  ratchet test, `backend/tests/test_api_cache_pii_exclusions.py`,
-  but **not** covered by XC-4 or any other cross-cutting entry.
+  `UNCACHEABLE_SUBSTRINGS` in `frontend/src/utils/apiCache.ts` — not
+  covered by XC-4 or any other cross-cutting entry. The PR description
+  says "ten"; the diff adds 15 patterns (11 prefixes, 4 substrings), and
+  diffing the full route inventory against the old vs. new denylist
+  (not a raw pattern match, which overcounts by including routes an
+  _existing_ prefix already excluded) gives **18 net-new excluded
+  routes**. Of those 18, only **9** have both a `response_model` and a
+  field name in `PII_FIELDS`, so only those 9 are protected by the new
+  ratchet test, `backend/tests/test_api_cache_pii_exclusions.py` — the
+  other 9 (`/apparatus/evoc-check/{apparatus_id}/{user_id}`,
+  `/inventory/allowances/check/{user_id}/{category_id}`,
+  `/inventory/clearances`, `/inventory/clearances/{clearance_id}`,
+  `/inventory/items/{item_id}/exposures`,
+  `/inventory/items/{item_id}/history`,
+  `/inventory/items/{item_id}/issuances`, `/inventory/requests`,
+  `/training/instructors/validate/{user_id}/{course_id}`) are fixed but
+  would cache again silently if their exclusion were ever removed, since
+  neither the ratchet nor its (intentionally empty)
+  `api_cache_pii_baseline.txt` names them. For the exact scope, read the
+  `apiCache.ts` diff in PR #2381 directly rather than either count above.
 
-Pass 4's Feature 00 iteration should treat both as already-fixed prior art
-rather than rediscovering them — the cache fix by reading the ratchet
-test's baseline, not by way of XC-4.
+Pass 4's Feature 00 iteration should treat both as already-fixed prior
+art rather than rediscovering them.
 
 ### 2026-09-07 — Feature 34 (Frontend shared, pass 5, corrective) — PR #2382 merged, watchdog recorded it
 
