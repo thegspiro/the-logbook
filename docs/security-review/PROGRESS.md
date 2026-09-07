@@ -16,22 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 32 (Locations & kiosk, pass 3) — PR
-[#2365](https://github.com/thegspiro/the-logbook/pull/2365), branch
-`claude/security-review-locations-kiosk-pass3`.** Delta-focused pass: every
-backend file in this feature's surface was byte-identical to pass 2's
-baseline (`5e382921`, PR #2098) except `admin_hub_service.py`, which grew
-+690 lines — two new administration-hub modules (`scheduling`, `storefront`)
-registered since pass 2 by the Scheduling Administration project. Read all
-13 new resolver functions end to end: correctly org-scoped throughout,
-permission gates match the underlying modules' own sensitivity, no
-injection surface, no PII/PHI, bounded queries, and both new modules already
-ship dedicated cross-org-isolation test coverage (54 tests). All five pass-2
-findings (LOC-32-1 through 5) and all pre-pass-1 findings (LOC-1/2/4)
-re-verified fixed against current code; LOC-3 re-confirmed still open,
-unchanged. **0 fixes, 0 new findings.** Full findings:
-`docs/security-review/LOC3-32-locations-kiosk.md`. Rotation row 32 -> ✅
-(pending PR merge). Next: 33 Core infrastructure, once this PR merges.
+**None.** Feature 32 (Locations & kiosk, pass 3)'s PR #2365 merged
+(`3ac9cd4a`) — fully green (17/17 checks), mergeable clean, Codex completed
+with no actionable findings. Rotation row 32 -> ✅. Next: 33 Core
+infrastructure.
+
+---
+
+### 2026-09-07 — Feature 32 (Locations & kiosk)'s PR #2365 merged, watchdog recorded it
+
+PR #2365 (pass 3: 0 fixes, two new admin-hub modules — `scheduling` and
+`storefront` — reviewed end to end and found clean) went fully green (17/17)
+and sat idle with no unresolved review threads (only the informational
+Codex usage-limit and review-summary comments), so a 30-minute watchdog
+check merged it directly rather than leaving it idle. Next: 33 Core
+infrastructure.
 
 ---
 
@@ -10043,7 +10042,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | 🔄     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
