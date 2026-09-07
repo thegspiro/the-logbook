@@ -33,20 +33,56 @@ capacity, a CPU-amplification DoS; fixed with a narrow, lockouts-only
 `_prune_expired_lockouts()` called only from the one request actually
 attempting an insertion, instead of forcing the shared sweep for every
 request that merely observes a full table. Round 3 (Codex reviewed round
-2's own commit): CI3-33-2d P1 — round 2's own narrowing still let a single
-already-rejected key's own repeated retries re-trigger the capacity scan —
+2's own commit): CI3-33-2d P1 — round 2's own scoping still let a single
+already-saturated key's repeated retries each pay the full prune scan —
 round 7 total, and a narrower version of the exact gap round 2 had just
-closed. The coordinator authorized the structural refactor at this point:
+closed. **Two independent Claude sessions worked this same round-7 finding
+concurrently** (see the two dated entries below): one landed a narrow
+short-circuit fix first; the other, working from the coordinator's explicit
+authorization to do the structural refactor instead of an eighth narrow
+patch, merged that narrow fix's finding into a full rewrite —
 `self.requests`/`self.lockouts`/`self._key_windows` collapsed into one
 `dict[str, _KeyState]` per key, paired with a throttled (1s)
-`_active_lockout_count` verification that closes CI3-33-2b/2c/2d together.
-All 33 existing `TestRateLimiter` tests rewritten against the new shape and
-passed on the first run; 2 new tests added (35 total). Rotation row 33 -> ✅
-(#2368 already merged; this is a follow-up fix, not new rotation work — see
+`_active_lockout_count` verification that closes CI3-33-2b/2c/2d together —
+and that is the version that landed as the branch's final state. All 33
+existing `TestRateLimiter` tests rewritten against the new shape and passed
+on the first run; 2 new tests added (35 total). Rotation row 33 -> ✅ (#2368
+already merged; this is a follow-up fix, not new rotation work — see
 CLAUDE.md Pitfall #24 on the fresh branch). Next once #2370 merges: 34
 Frontend shared.
 
 ---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3b: two concurrent sessions on the same round-7 finding; the structural refactor superseded the narrow fix
+
+Two Claude sessions worked PR #2370's round-3 (CI3-33-2d) finding at the
+same time, on the same branch, and diverged before either pushed — a
+session collision, not a mistake in either session's own work. The entry
+immediately below this one (chronologically the _first_ pushed, titled
+"round 3: Codex found CI3-33-2c's own fix...") landed a narrow
+short-circuit fix. This session's own instructions from the coordinator
+were more specific: explicit authorization to do the structural refactor
+"as part of closing this out, rather than a 7th narrow patch," received
+independently of (and before seeing) the other session's push.
+
+On pushing, this session's branch was rejected (`fetch first` — the other
+session's commit was already on the remote). Fetched, and merged rather
+than force-pushing over it (per this repo's own git safety rules): the
+code and test changes resolved in favor of the structural refactor — it is
+a strict superset that closes the other session's finding too (its
+`_active_lockout_count` + 1-second-throttled `_refresh_active_lockout_count`
+mechanism bounds the scan cost for _both_ "one key retrying repeatedly"
+and "many different keys arriving together" with the same throttle,
+verified directly for both shapes — see the refactor's own entry below).
+The other session's 2 regression tests (for its short-circuit-on-
+`_saturation_reject_until` approach) were not carried forward, since they
+assert internals (`self.lockouts`, `_prune_expired_lockouts` call counts)
+that no longer exist after the rewrite; the refactor's own round-7
+reproduction and fuzz test cover the same finding against the new shape.
+Docs (this file, the findings doc, `docs/KNOWN_LIMITATIONS.md`) merged by
+hand to keep both sessions' work visible in the record rather than
+silently overwritten — this entry and the "round 3: round 7 found,
+structural refactor authorized and shipped" entry below are both kept.
 
 ### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3: round 7 found, structural refactor authorized and shipped
 
@@ -129,6 +165,61 @@ and resolved the Codex thread. Findings doc updated with a dedicated "The
 structural refactor" section (CI3-33-2d and everything that landed with
 it), and `docs/KNOWN_LIMITATIONS.md`'s row for this upgraded from
 "RECOMMENDED NEXT PRIORITY" to "✅ Resolved."
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3 (superseded commit): Codex found CI3-33-2c's own fix still let an already-saturated key's retries repeat the full prune scan
+
+Codex reviewed PR #2370's round-2 commit (`0588634`) and found one more
+real P1 issue: CI3-33-2c's fix correctly scoped the lockouts-only prune to
+only the one call that is itself about to attempt an insertion — but did
+not distinguish "the call that first discovers this scope is saturated"
+from "every later retry from the same already-rejected key." Once a key is
+over its own limit, `filtered_requests` never drops back below
+`max_requests` for it until its own request history ages out of
+`window_seconds`, so every retry re-enters the same insertion-attempt
+branch and repeats the full `O(_MAX_LOCKOUTS)` prune scan for as long as
+the attacker keeps retrying — the retry loop itself became the amplifier.
+
+Reproduced directly before fixing: `_MAX_LOCKOUTS=3` with 3 genuinely
+active lockouts, then a single already-over-limit key retries 100 times —
+99 of the 100 retries (all but the one establishing saturation) each
+independently ran the full prune scan under the CI3-33-2c code, confirmed
+by counting calls to `_prune_expired_lockouts` directly.
+
+Fixed by short-circuiting on this scope's own `_saturation_reject_until`
+before attempting the prune or the capacity check: once a call has already
+established the scope as saturated, a later call within that window skips
+straight to extending the signal — the same outcome the scope's fallback
+already promised this key, so this cannot make its protection any weaker.
+Verified: 100 retries now trigger only 1 prune call (down from 99), all
+still rejected; a companion guard confirms the short-circuit does not
+outlive `reject_until` — once it lapses, the next call over its limit
+re-runs the accurate check and a new violator's lockout persists again.
+
+2 new regression tests (`TestRateLimiter` now 35, was 33): the direct
+reproduction (verified to fail against the CI3-33-2c code and pass after)
+and the reject_until-lapse companion guard (non-regression). Completion
+gate re-run: flake8/black/isort clean; migrations validated (unchanged);
+scoped 188/188 (was 186); full backend suite 11,736/0 (was 11,734). No
+frontend file touched. Pushed to the same `#2370` branch as a third commit.
+Replied to and resolved the Codex thread.
+
+**On the structural refactor:** round 6's write-up said explicitly that a
+further round of this general shape would be confirmation, not a new data
+point to weigh — round 7 is that confirmation. The recommendation is
+unchanged (the refactor is the next piece of work on this file) but is now
+stated with a fourth consecutive round in the exact same insertion-attempt
+code path behind it. Findings doc (CI3-33-2d write-up) and
+`docs/KNOWN_LIMITATIONS.md` (row text updated to record round 7) both
+updated.
+
+**Superseded**, per the "round 3b" entry above: this commit's fix was
+correct and independently verified, but the structural refactor that
+landed immediately after on the same branch closes the same finding (and
+the rest of the class) more thoroughly, so it is the refactor, not this
+short-circuit, that is in the code as of this branch's final state. Left
+in place, uncorrected in its own text, as the record of what this session
+found and shipped, matching this rotation's standing convention for a
+superseded fix.
 
 ---
 
@@ -271,6 +362,17 @@ a post-merge addendum note) and `docs/KNOWN_LIMITATIONS.md` (structural-
 refactor row updated to record the round-5 recurrence) both updated. PR
 #2370 opened, referencing #2368, and subscribed. Rotation row 33 stays as
 above. Next once #2370 merges: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure)'s PR #2368 merged, watchdog recorded it
+
+PR #2368 (pass 3: 7 fixed across the original round plus three Codex-caught
+follow-up rounds, all in `RateLimiter` — CI3-33-1/2/1a/1b/1c/1d/1e, plus
+CI3-33-1f, a comment-accuracy cleanup with no functional bug — 2 flagged,
+CI3-33-3 HIGH and CI3-33-4 LOW) went fully green with all 6 Codex review
+threads resolved and sat idle, so a 30-minute watchdog check merged it
+directly rather than leaving it idle. Next: 34 Frontend shared.
 
 ---
 

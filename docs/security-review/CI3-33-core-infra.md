@@ -6,7 +6,9 @@
 #2368's merge after four Codex-caught follow-up rounds → 1,605 L after PR
 #2370's round-1 fixes plus its comment-chronology trim → 1,641 L after PR
 #2370's round-2 (CI3-33-2c) fix → 1,638 L after PR #2370's round-3
-structural refactor, CI3-33-2d), `app/core/config.py` (1,041 L),
+structural refactor, CI3-33-2d — see the "Two sessions, one finding" note
+below for the parallel 1,657 L short-circuit fix this superseded),
+`app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -59,6 +61,19 @@ incremental patch. `RateLimiter`'s `self.requests`/`self.lockouts`/
 throttled (1-second) capacity-verification mechanism that closes CI3-33-2b,
 2c, and 2d together rather than one at a time. See CI3-33-2d and "The
 structural refactor" below, and PR #2370.
+
+**Two sessions, one finding:** CI3-33-2d was found and fixed independently by
+two concurrent Claude sessions on this same branch. A parallel session pushed
+first with a narrower short-circuit fix (on the scope's own
+`_saturation_reject_until`, "100 retries → 1 prune call") before this
+session's structural refactor was ready to push; the resulting push rejection
+was resolved by fetching and merging rather than force-pushing, keeping the
+refactor (a verified superset that closes the same finding, and the rest of
+the class, more thoroughly) as this branch's final state. The short-circuit
+fix's own write-up is left below, unedited, as the record of what that
+session found and shipped — see "CI3-33-2d (superseded commit)" immediately
+following "The structural refactor" section, and
+`docs/security-review/PROGRESS.md`'s "round 3b" entry for the full account.
 
 ---
 
@@ -951,6 +966,81 @@ own docstring in the source, which — per CI3-33-2c's own comment-chronology
 cleanup — is where the _invariant_ belongs; this document is where the
 _history of getting there_ belongs.
 
+### CI3-33-2d (superseded commit) — P1 — CI3-33-2c's own scoping left an already-saturated key's retries each paying the full prune scan — ✅ FIXED, then superseded by the structural refactor above (Codex review of PR #2370, round 7)
+
+**Two sessions, one finding.** This write-up is the record of a second,
+concurrent Claude session's independent fix for the same round-7 finding
+described above. Both sessions read the same Codex comment, reproduced the
+same gap, and shipped a fix on the same branch at nearly the same time; the
+other session's commit reached `origin` first, and this session's push was
+rejected and then merged (not force-pushed) rather than clobbering it. The
+structural refactor above — a verified superset that closes this finding and
+the rest of the CI3-33-1-through-2d class by construction, not just this one
+retry shape — is what actually landed as this branch's final state. This
+section is left in place, unedited from how that session wrote it, as an
+honest record of what was independently found and shipped, per this
+rotation's standing convention for a superseded fix (see
+`docs/security-review/PROGRESS.md`, "round 3b"). Its final paragraph below,
+recommending the refactor stay a follow-up item, was overtaken by events: the
+refactor is not a follow-up, it is what shipped.
+
+**What:** CI3-33-2c correctly scoped the lockouts-only prune to only the one
+call that is itself about to attempt an insertion — but did not distinguish
+"the call that first discovers this scope is saturated" from "every later
+retry from the same already-rejected key." Once a key is over its own limit,
+`filtered_requests` never drops back below `max_requests` for it until its
+own request history ages out of `window_seconds`, so every retry re-enters
+the same insertion-attempt branch and repeats the full
+`O(_MAX_LOCKOUTS)` `_prune_expired_lockouts` scan — for as long as the
+attacker keeps retrying. The one call CI3-33-2c scoped the cost to is not
+one call at all when the caller controls the retry rate; it is exactly as
+many calls as the attacker chooses to make.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.is_rate_limited`, the insertion-attempt branch CI3-33-2c
+introduced.
+
+**Failure scenario:** `_MAX_LOCKOUTS=3`, table filled with 3 genuinely
+active lockouts. A single already-over-limit key retries 100 times against
+the same scope. Reproduced directly against the CI3-33-2c code: 99 of the
+100 retries (all but the one that already recorded its first, unlimited
+request) each independently ran the full prune scan — confirmed by counting
+calls to `_prune_expired_lockouts` directly, not merely observing the
+outcome.
+
+**Impact:** narrower than CI3-33-2c (one key, one scope, not every request
+sharing the process-wide limiter) but the same CPU-amplification shape, and
+fully attacker-controlled: the retry loop itself is the amplifier, with no
+rate limit of its own gating how often it can be paid.
+
+**Fix (as originally shipped, before being superseded):** short-circuit on
+this scope's own `_saturation_reject_until` before attempting the prune or
+the capacity check at all. Once a call has already established the scope as
+saturated (`current_time < reject_until` for that scope), a later call
+within that window skips straight to extending the signal — the same
+outcome the scope's saturation-reject fallback already promised this key, so
+the short-circuit cannot make its protection any weaker. Verified the
+short-circuit does not outlive `reject_until`: once it lapses, the next call
+over its limit re-runs the accurate prune/capacity check rather than
+treating the scope as saturated forever (guard test). Reproduced and
+verified against the CI3-33-2c code (100 retries -> 1 prune call, all still
+rejected) before accepting.
+
+**On the structural refactor — round 7, and CI3-33-2c's own closing line
+has now happened.** CI3-33-2c said explicitly: "if another round of this
+general shape is found before the refactor lands, that is no longer a data
+point to weigh; it is confirmation the call made here was right." This is
+that round — a fix to the exact same insertion-attempt branch, found by
+reviewing the fix that preceded it, for the fourth time running (CI3-33-1d/
+1e, CI3-33-2a/2b, CI3-33-2c, now CI3-33-2d). _(As originally written, this
+paragraph continued: "The refactor recommendation in
+`docs/KNOWN_LIMITATIONS.md` is not changed further by this finding — it
+already reads 'RECOMMENDED NEXT PRIORITY' — but this round is the
+confirmation that row anticipated, not a new data point weighing toward it."
+That recommendation was, in fact, acted on in the same round by the other
+concurrent session — see "The structural refactor" above and
+`docs/KNOWN_LIMITATIONS.md`, now marked Resolved.)_
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1285,6 +1375,21 @@ the reasons given in "The structural refactor" above:
 `test_key_count_stays_bounded_by_max_keys_plus_max_lockouts_under_locked_out_retries`.
 `TestRateLimiter` is 35 tests (was 33 before this round).
 
+**The other session's tests (superseded, not carried forward):** the
+concurrent session's short-circuit fix (see "CI3-33-2d (superseded commit)"
+above) added its own two tests —
+`test_saturated_scope_does_not_repeat_full_prune_scan_on_retry` and
+`test_saturation_short_circuit_re_checks_capacity_once_reject_until_lapses`
+— both verified fail-before/pass-after against the CI3-33-2c code with the
+same discipline as this round's tests. They were not merged into the final
+suite: both assert against the three-dict internals
+(`_prune_expired_lockouts` call counts, `_saturation_reject_until` as the
+short-circuit signal) that the structural refactor replaced, so they do not
+apply to the code that shipped. The equivalent behavior — a saturated
+scope's retries do not repeat the full capacity scan — is what
+`test_round_7_retries_do_not_repeatedly_rescan_lockout_capacity` above
+verifies against the new `_KeyState` shape instead.
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
@@ -1332,6 +1437,12 @@ before pushing given the blast radius"):**
 No frontend file was touched in PR #2370 (any of its three rounds), so the
 frontend checks below (last run at PR #2368's merge) are unchanged and were
 not re-run:
+
+_(The concurrent session's short-circuit commit was also gated before being
+superseded — same 0-violation/clean/188-passed results, since both fixes
+added 2 tests to the same file — but that gate run is not reproduced here a
+second time; the table above, run against the code that actually shipped,
+is definitive.)_
 
 | Check                                                             | Result                                                                                                                                                                  |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
