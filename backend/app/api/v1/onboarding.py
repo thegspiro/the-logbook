@@ -556,7 +556,17 @@ class RoleSetupItem(BaseModel):
     description: str | None = Field(None, max_length=500)
     priority: int = Field(default=50, ge=0, le=100)
     permissions: dict[str, RolePermission] = Field(
-        default_factory=dict, description="Module permissions with view/manage flags"
+        default_factory=dict,
+        # The registry names 34 modules today; a client-supplied key is an
+        # arbitrary string (there is no allowlist — see ONB-7), so nothing
+        # else bounds how many `expand_module_checkboxes` turns into
+        # `{module}.view`/`{module}.manage`/`{module}.*` entries per role. The
+        # outer `RolesSetupRequest.roles`/`PositionsSetupRequest.positions`
+        # caps (ONB2-30-2) bound the number of roles in one request, not the
+        # size of any one role's own permission set — same rationale as
+        # `stations`/`apparatus`/`it_team`, headroom above the current count.
+        max_length=50,
+        description="Module permissions with view/manage flags",
     )
     is_custom: bool = Field(default=False, description="Whether this is a custom role")
 
