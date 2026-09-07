@@ -17,10 +17,98 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2368** — Feature 33 (Core infrastructure, pass 3): `claude/security-review-core-infra-pass3`.
-5 fixed (CI3-33-1/2 plus three Codex-caught follow-up rounds, CI3-33-1a/1b/1c,
-all in `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). All 3 Codex
-review threads replied to and resolved. Subscribed for activity. Rotation row
+7 fixed (CI3-33-1/2 plus four Codex-caught follow-up rounds, CI3-33-1a/1b/1c/1d/1e,
+all in `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). All Codex
+review threads (6 total across 3 rounds) replied to and resolved. A structural
+refactor (collapsing `requests`/`lockouts`/`_key_windows` into one per-key
+record) was considered and deliberately deferred as a follow-up design item
+rather than attempted mid-incident — recorded in
+`docs/KNOWN_LIMITATIONS.md`. Subscribed for activity. Rotation row
 33 -> ✅ (pending merge). Next once merged: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368, Codex round 3: `_key_windows` itself unbounded, and a saturated violator under-punished
+
+Codex reviewed the CI3-33-1c push (commit `68c6b141`) and found two more real
+gaps plus a comment-accuracy nit, all on `security_middleware.py`:
+
+- **CI3-33-1d** — `self._key_windows[key] = window_seconds` is written on
+  _every_ call for that key, including a retry against an already-active
+  lockout that returns early without ever touching `self.requests`. Neither
+  cleanup path notices: the individual stale-keys sweep and the forced
+  `_MAX_KEYS` eviction both pop `_key_windows[k]` only as a side effect of
+  popping `self.requests[k]`. A key that is only ever locked out — never
+  separately over its own count within one call — leaves a permanent
+  `_key_windows` entry the moment it stops calling. Reproduced directly:
+  2,000 distinct already-locked-out keys, each retrying once against a
+  `_MAX_KEYS=50` limiter, left `self.requests` correctly at 0 but
+  `self._key_windows` at all 2,000 — the same CLAUDE.md Pitfall #9 shape
+  CI3-33-1b/1c already fixed for `self.lockouts`, rediscovered in the third
+  dict. Fixed with an explicit orphan-cleanup step in `_evict_stale`, keyed
+  on absence from `self.requests` alone. (First attempt conditioned removal
+  on absence from _both_ `self.requests` and `self.lockouts` — verified via
+  the same repro script to do nothing, since `_key_windows` is only ever
+  read in the stale-keys comprehension, which never looks a key up unless
+  it is already present in `self.requests`; corrected before accepting.)
+  `_evict_stale`'s `over_limit` gate now also triggers on `_key_windows`
+  alone exceeding `_MAX_KEYS`.
+- **CI3-33-1e** — CI3-33-1c's fail-closed-on-saturation fix correctly stopped
+  displacing an existing active lockout, but left the new violator with _no_
+  memory of the violation beyond `self.requests`' own much shorter
+  `window_seconds` — Codex's repro: a violator told "Account locked for 30
+  minutes" got `(False, None)` just 61 seconds later. Reproduced exactly as
+  described before fixing. Fixed with a new bounded `O(1)` scalar,
+  `self._saturation_reject_until`, extended whenever a lockout can't be
+  persisted due to saturation; the final "allowed" path now fails closed
+  when reached with no live in-window history and the scalar hasn't yet
+  passed. A key with any live history is unaffected — checked first, on the
+  normal count-based path — so this can only make a request stricter, never
+  looser. Deliberately, and stated plainly in the findings doc, this also
+  rejects a genuinely brand-new key's first-ever request while saturation is
+  active — the coordinator's own framing sanctioned this, and no narrower
+  per-key mechanism was found that closes Codex's repro without
+  reintroducing unbounded per-key state. (First attempt placed the check at
+  the top of the method, gated on dict membership — verified via the same
+  repro to still return `(False, None)` 61s later, since `self.requests[key]`
+  gets written even on the saturated branch; corrected to key off
+  `filtered_requests` being empty instead, computed later in the method.)
+- **Comment-accuracy nit** — the `self.lockouts.get(key)` pre-eviction
+  capture's comment still described "restore in case eviction removed it,"
+  describing the by-size lockout eviction CI3-33-1c already deleted. Verified
+  by direct source inspection that the only remaining `self.lockouts`
+  mutation in `_evict_stale` is the expired-lockouts sweep, which cannot by
+  construction remove an entry the calling key just confirmed is still
+  unexpired — so the dead write-back line was genuinely unreachable, not
+  merely renamed. Removed it and rewrote the comment to state the real
+  remaining reason for the capture: recognizing an independently-expired
+  lockout so its request history correctly resets, not protecting against an
+  eviction path that can no longer happen.
+
+Coordinator also raised, explicitly as a judgment call rather than an
+instruction, whether a 4th round of the same defect shape (an
+eviction/capping interaction between `requests`/`lockouts`/`_key_windows`
+drifting apart) warranted a structural fix — one per-key record instead of
+three dicts — this pass. Considered and written up in the findings doc
+("On not doing a structural refactor this pass"): deferred as a follow-up
+design item, not attempted here, because every fix in this file has landed
+mid-incident against a live Codex round rather than planned, and the
+existing 29-test `TestRateLimiter` suite constructs its scenarios by writing
+directly into the three current dicts, so a representation change means
+rewriting the suite, not extending it — a materially riskier unit of work to
+take on under this kind of pressure than another narrowly-scoped, individually
+verified fix. Recorded as a follow-up row in `docs/KNOWN_LIMITATIONS.md`
+rather than left only in the findings doc.
+
+4 new regression tests added (2 direct fail-before/pass-after reproductions
+for CI3-33-1d/1e, 2 non-regression guards for the new mechanism's own stated
+bounds — a live-history key is unaffected, and the new scalar decays).
+`TestRateLimiter` now at 29/29. Scoped suite 182/182 (was 178), full suite
+11,730/0 passed (was 11,726), flake8/black/isort clean. Replied to all 3
+Codex threads (2 fixes explained, 1 cleanup explained with the dead-code
+verification stated) and resolved all 3. PR title/body and
+`docs/security-review/CI3-33-core-infra.md` updated to record these as
+CI3-33-1d/1e.
 
 ---
 
