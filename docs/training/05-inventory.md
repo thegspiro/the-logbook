@@ -2608,11 +2608,9 @@ know what the department calls a thing had nowhere to start.
   record selects the row you stored as "L". Any other size the department stocks
   is one tap away.
 
-> **Screenshot needed:**
-> _[The rebuilt gear request form at the product-selection step, showing the
-> category filters and one row per product with an on-hand count; then a second
-> capture of the size step with the member's recorded size preselected and an
-> out-of-stock size visibly selectable and labelled as such.]_
+![The Request Equipment modal's product-selection step: category filter chips above a scrollable product list, each row showing its on-hand count](./images/05-83-gear-request-product-step.png)
+
+![The size step of the same request, for a product carrying the member's own size preselected and a zero-stock size still selectable and labelled "none on hand"](./images/05-84-gear-request-size-step.png)
 
 ### A member can ask for something you do not stock
 
