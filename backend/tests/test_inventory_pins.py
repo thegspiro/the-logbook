@@ -14,6 +14,12 @@ from sqlalchemy import text
 from app.models.inventory import InventoryItemPin
 from app.services.inventory_service import InventoryService
 
+# What these assert is what MySQL actually returns — contiguous positions after
+# a compaction, the outer join not inflating `total`, the cross-tenant refusal.
+# The unit CI job runs with no database service, so without this marker they are
+# collected there and every one errors on connect.
+pytestmark = pytest.mark.integration
+
 
 async def _make_user(db, org_id: str, label: str) -> str:
     user_id = str(uuid.uuid4())

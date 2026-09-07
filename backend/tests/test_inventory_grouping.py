@@ -12,6 +12,12 @@ from sqlalchemy import text
 
 from app.services.inventory_service import InventoryService
 
+# What these assert is what MySQL actually returns — the GROUP BY counts, the
+# COALESCE location precedence, the case-insensitive colour collation. The unit
+# CI job runs with no database service, so without this marker they are
+# collected there and every one errors on connect.
+pytestmark = pytest.mark.integration
+
 
 async def _org(db, name: str) -> str:
     org_id = str(uuid.uuid4())
