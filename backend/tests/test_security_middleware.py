@@ -1663,6 +1663,72 @@ class TestRateLimiter:
         assert limiter._keys["login:attacker"].lockout_until is not None
         assert "login" not in limiter._saturation_reject_until
 
+    @pytest.mark.unit
+    def test_saturation_signal_is_never_extended_from_an_unverified_stale_count(
+        self,
+    ):
+        """Codex review of PR #2370 (round 10): when a genuinely-full
+        lockout table expires *less than* _LOCKOUT_VERIFY_INTERVAL after
+        the last verification, the cached count is stale-high for that
+        brief window — an already-accepted, documented tradeoff. But
+        extending self._saturation_reject_until[scope] from that
+        unverified read committed a *lockout_seconds*-long (often 30
+        minutes) scope-wide rejection from an error that was only ever
+        supposed to last _LOCKOUT_VERIFY_INTERVAL (1 second) — grossly
+        disproportionate, and the signal was never corrected once a later
+        call proved the table wasn't actually saturated. Verified to
+        **fail** against the pre-fix code: a fresh violator arriving 0.45s
+        after 3 real lockouts expired (well inside the 1s verify throttle)
+        got routed into the saturation branch and set a 30-minute
+        scope-wide signal; a *second*, entirely different fresh client
+        with zero prior history was then also rejected at t+1s, even
+        though real capacity had been available the whole time."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 60
+        limiter._LOCKOUT_VERIFY_INTERVAL = 1.0
+
+        t_fill = 9.6
+        with patch("time.time", return_value=t_fill):
+            for i in range(3):
+                limiter._keys[f"login:{i}"] = _KeyState(
+                    window_seconds=60, lockout_until=10.0
+                )
+            limiter._active_lockout_count = 3
+            limiter._last_eviction = t_fill
+            limiter._last_lockout_verify = t_fill
+
+        # 0.45s after the real lockouts expired, well inside the 1s verify
+        # throttle -- the cache still reads saturated.
+        t_violator = 10.05
+        with patch("time.time", return_value=t_violator):
+            limiter.is_rate_limited(
+                "login:freshclient",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+            limiter.is_rate_limited(
+                "login:freshclient",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+        assert "login" not in limiter._saturation_reject_until
+
+        # Real capacity was available well before this point; a completely
+        # different, never-before-seen client must not be denied.
+        with patch("time.time", return_value=11.0):
+            is_limited, _ = limiter.is_rate_limited(
+                "login:anotherfreshclient",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+        assert is_limited is False
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded

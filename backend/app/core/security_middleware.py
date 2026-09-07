@@ -253,11 +253,13 @@ class RateLimiter:
         )
         self._last_lockout_verify = now
 
-    def _refresh_active_lockout_count(self, now: float) -> None:
+    def _refresh_active_lockout_count(self, now: float) -> bool:
         """Recompute self._active_lockout_count exactly, throttled
         independently of the general periodic sweep — at most once per
         _LOCKOUT_VERIFY_INTERVAL (1 second), far shorter than
-        _EVICTION_INTERVAL (60 seconds).
+        _EVICTION_INTERVAL (60 seconds). Returns whether a real recompute
+        happened (False when throttled — the cache is left exactly as it
+        was, which the caller must treat as unverified).
 
         Called only when the cached count already reads at or over
         capacity, immediately before an insertion decision. Relying solely
@@ -273,13 +275,14 @@ class RateLimiter:
         general sweep's window.
         """
         if now - self._last_lockout_verify < self._LOCKOUT_VERIFY_INTERVAL:
-            return
+            return False
         self._last_lockout_verify = now
         self._active_lockout_count = sum(
             1
             for st in self._keys.values()
             if st.lockout_until is not None and st.lockout_until > now
         )
+        return True
 
     def is_rate_limited(
         self,
@@ -366,6 +369,15 @@ class RateLimiter:
             # survives (weaker, but real, fallback protection).
             if self._active_lockout_count >= self._MAX_LOCKOUTS:
                 self._refresh_active_lockout_count(current_time)
+            # Fresh as of *this* call if the cache's last exact recompute
+            # landed on current_time — whether that came from
+            # _refresh_active_lockout_count just above, or from _sweep's
+            # own recompute earlier in this same call (e.g. a forced sweep
+            # on a key count/scope-count overflow). Checking the
+            # timestamp directly, rather than trusting only the refresh
+            # call's own return value, is what makes both recompute paths
+            # count as "verified right now".
+            just_verified = self._last_lockout_verify == current_time
 
             if self._active_lockout_count < self._MAX_LOCKOUTS:
                 lockout_until: float | None = current_time + lockout_seconds
@@ -391,10 +403,22 @@ class RateLimiter:
                 # through with the sliding window's much shorter
                 # protection. See the check below.
                 lockout_until = None
-                self._saturation_reject_until[scope] = max(
-                    self._saturation_reject_until.get(scope, 0.0),
-                    current_time + lockout_seconds,
-                )
+                # Only commit a long-lived (lockout_seconds, often
+                # minutes) scope-wide signal from a count we just proved
+                # accurate. Extending it from an unverified, throttled-away
+                # read would let a sub-second stale-count race (the real
+                # table emptied a moment ago, but the cache hasn't been
+                # rechecked yet) block every fresh, no-history client in
+                # the scope for the full lockout duration — grossly
+                # disproportionate to how briefly the cache was actually
+                # wrong. This request is still rejected regardless (the
+                # count-based check above already decided that); only the
+                # broader signal is deferred to a call that can verify.
+                if just_verified:
+                    self._saturation_reject_until[scope] = max(
+                        self._saturation_reject_until.get(scope, 0.0),
+                        current_time + lockout_seconds,
+                    )
             self._keys[key] = _KeyState(
                 request_times=filtered_requests,
                 window_seconds=window_seconds,

@@ -17,8 +17,10 @@ collision, this one merging both sessions' regression tests cleanly, with
 the more precise of the two implementations landing → 1,706 L after PR
 #2370's round-6 (CI3-33-2i), a zero-duration lockout inflating the shared
 active-lockout counter and stealing an unrelated scope's real lockout — a
-fourth session collision, this one's test additions conflicting outright),
-`app/core/config.py` (1,041 L),
+fourth session collision, this one's test additions conflicting outright →
+1,730 L after PR #2370's round-7 (CI3-33-2j), an unverified stale count
+committing a full-duration, scope-wide rejection — the most severe finding
+in this class), `app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -125,6 +127,20 @@ request evict the _other_ key's one-entry history before either could
 accumulate enough to trip its own limit, so neither ever locked out no
 matter how many requests were sent. Both close with the same fix — see
 CI3-33-2g/2h below and PR #2370.
+
+**Sixth post-merge addendum (2026-09-07, PR #2370):** review of the CI3-33-2i
+fix found one more real P1, CI3-33-2j — the most severe of this whole
+class: extending `self._saturation_reject_until[scope]` from a cached
+count that had merely been _observed_ at capacity, without confirming it
+was accurate as of that call, meant a sub-second stale-read race (the real
+table emptied moments before the check) could commit a full
+`lockout_seconds` (often 30-minute) scope-wide rejection — one that then
+never self-corrected, since the signal is a stored value consulted, not
+re-verified, on every later request. Fixed by only committing that signal
+from a count just proved accurate this call; an unverified read still
+rejects the current request on its own count-based check, but defers the
+broader signal instead of committing a half-hour consequence to a
+staleness window bounded to one second. See CI3-33-2j below and PR #2370.
 
 ---
 
@@ -1384,6 +1400,81 @@ and this session's own test was not carried forward.
 
 `TestRateLimiter` is 42 tests (was 41).
 
+### CI3-33-2j — P1 — a stale, unverified saturation read committed a full-duration, scope-wide rejection for an error that only ever lasted the verify throttle — ✅ FIXED (Codex review of PR #2370, round 10)
+
+**What:** `_LOCKOUT_VERIFY_INTERVAL` throttles `_refresh_active_lockout_count`
+to at most once per second — an already-accepted, documented tradeoff: for
+up to that one second, a genuinely-emptied lockout table can still read as
+saturated in the cache. But the code that _acts_ on that possibly-stale
+read didn't scale its consequence to match the staleness bound. When the
+cache reads at/over capacity, the "too many requests" branch extends
+`self._saturation_reject_until[scope]` to `current_time + lockout_seconds`
+— often 30 minutes — regardless of whether the count backing that decision
+was just verified or was a throttled-away, unconfirmed read. A table that
+happened to empty less than a second before a fresh violator arrived could
+therefore commit a 30-minute, scope-wide rejection from an error window
+that was only ever supposed to last one second — and, because the signal
+is a stored value consulted independently on every later request (not
+re-verified), it stayed wrong for the full 30 minutes even once a
+subsequent call proved real capacity had been available the whole time.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.is_rate_limited` (the saturation branch's write to
+`self._saturation_reject_until`) and `RateLimiter._refresh_active_lockout_
+count` (needed a way to report whether it actually ran).
+
+**Failure scenario:** reproduced directly — 3 genuinely active lockouts
+all expiring at t=10.0, both throttles pre-warmed at t=9.6 (matching a
+realistic steady-state process, not the first request ever handled). A
+fresh violator arrives at t=10.05 — 0.45s after real expiry, well inside
+the 1-second verify throttle — and its own saturation-branch write set
+`_saturation_reject_until['login'] = 1810.05` (current_time + 1800). A
+second, completely unrelated fresh client (zero prior history) arriving a
+full second later, at t=11.0 — well past both the real lockouts' expiry
+and the verify throttle, when capacity was unambiguously available — was
+still rejected: `"Account locked. Try again in 1799 seconds"`.
+
+**Impact:** the most severe of this whole defect class so far. Every
+prior round in this file bounded its worst case to either a per-request
+CPU cost or a single request's own outcome; this one turns a sub-second
+timing coincidence into a 30-minute denial of an entire rate-limit scope
+(e.g. every fresh login attempt department-wide) for anyone with no live
+request history at the moment the signal was wrongly set — a real
+availability incident from ordinary traffic timing, not a sustained
+attack.
+
+**Fix:** `_refresh_active_lockout_count` now returns whether it performed
+a real recompute (`True`) or was throttled away (`False`, cache
+unchanged). `is_rate_limited` derives a `just_verified` flag from whether
+`self._last_lockout_verify == current_time` immediately after attempting
+a refresh — checking the timestamp directly rather than trusting only the
+refresh call's own return value, since `_sweep`'s own periodic exact
+recompute (a separate code path, run earlier in the same call whenever a
+forced sweep fires) can just as validly make the cache fresh "as of right
+now." The saturation branch only commits — or extends — the long-lived
+scope-wide signal when `just_verified` is true; an unverified read still
+rejects the _current_ request (the count-based check already decided
+that independently) but defers the broader signal to a call that can
+actually confirm saturation, rather than committing a `lockout_seconds`-
+long consequence to a staleness window bounded to one second.
+
+**Tests:**
+`test_saturation_signal_is_never_extended_from_an_unverified_stale_count`
+— the direct reproduction above. Verified to **fail** against the pre-fix
+code (`_saturation_reject_until['login']` set to `current_time + 1800`
+from the unverified read; the second, unrelated fresh client wrongly
+rejected a full second later) and **pass** after (no signal committed
+from the unverified read; the second fresh client passes through once
+capacity is genuinely available). The full existing suite — including
+every test exercising genuine, persistent saturation
+(`test_saturation_reject_is_scoped_to_the_affected_rate_limit_scope`,
+`test_a_saturated_table_violator_stays_rejected_past_its_own_window`, and
+others) — was re-verified to still pass unmodified, confirming the fix
+does not weaken protection for a table that is genuinely saturated, only
+for a read that has not (yet) been confirmed to be.
+
+`TestRateLimiter` is 43 tests (was 42).
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1802,6 +1893,22 @@ active_lockout_count`, same scenario, same assertions) — the version
 
 `TestRateLimiter` is 42 tests (was 41).
 
+**Added in PR #2370 round 7 (CI3-33-2j):**
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_saturation_signal_is_never_extended_from_an_unverified_stale_count` —
+  3 real lockouts all expiring at t=10.0, a fresh violator at t=10.05
+  (inside the 1s verify throttle), then a second, unrelated fresh client
+  at t=11.0 (real capacity long available). Verified to **fail** against
+  the pre-fix code (the unverified read set a 30-minute scope-wide
+  signal; the second, unrelated client was wrongly rejected a full second
+  later) and **pass** after (no signal committed from the unverified
+  read; the second client passes through). The full existing suite,
+  including every genuine-saturation test, was re-verified unmodified to
+  confirm this doesn't weaken protection for a table actually saturated.
+
+`TestRateLimiter` is 43 tests (was 42).
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
@@ -1890,8 +1997,22 @@ more, full backend suite included, given this changes the shared
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,743 passed, 21 skipped, 0 failed (was 11,742 after round 5; skips all pre-existing)        |
 
-No frontend file was touched in PR #2370 (any of its six rounds — a fourth
-session collision within round 6 does not add a seventh; see
+**After PR #2370's round-7 fix (CI3-33-2j), the gate was re-run once
+more — full backend suite included, given this touches the core
+saturation-signal decision and every test asserting genuine-saturation
+behavior had to be re-verified unmodified:**
+
+| Check                                                                      | Result                                                                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                  |
+| `black --check` (both files)                                               | ✅ clean                                                                                         |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                       |
+| Scoped tests (same 7 files as above)                                       | ✅ 196 passed (was 195 after round 6; +1 for CI3-33-2j — `TestRateLimiter` now 43 tests, was 42) |
+| Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,744 passed, 21 skipped, 0 failed (was 11,743 after round 6; skips all pre-existing)        |
+
+No frontend file was touched in PR #2370 (any of its rounds — see
 `docs/security-review/PROGRESS.md`'s dated entries for the full count of
 sessions vs. rounds), so the frontend checks below (last run at PR #2368's
 merge) are unchanged and were not re-run:

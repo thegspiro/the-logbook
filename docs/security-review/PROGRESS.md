@@ -78,12 +78,61 @@ smaller, one-line-gate fix landed instead of this session's own
 branch-restructuring version; both verified equivalent. This round's two
 test additions conflicted outright (same location in the file), so the
 other session's test replaced this session's own (still 42 total, a swap
-not an addition). Rotation row 33 -> ✅
+not an addition). Round 9: CI3-33-2j — the most severe finding in this
+class. Extending the scope-wide saturation signal from a merely-observed
+(not verified-this-call) count let a sub-second stale-read race commit a
+30-minute, scope-wide rejection that never self-corrected. Fixed by
+gating the signal's commit on a `just_verified` flag derived from
+`self._last_lockout_verify == current_time`. 1 more test (43 total).
+Rotation row 33 -> ✅
 (#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
 
 ---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 9: the most severe finding in this class — an unverified stale count committed a 30-minute, scope-wide rejection from a sub-second race
+
+Codex reviewed the merged round-8 (CI3-33-2i) state and found one more
+real P1, worse than every prior round in this class: `_LOCKOUT_VERIFY_
+INTERVAL` throttles `_refresh_active_lockout_count` to at most once per
+second — an already-accepted tradeoff, since for up to that one second a
+genuinely-emptied table can still read as saturated in the cache. But the
+code acting on that possibly-stale read didn't scale its _consequence_ to
+match: the saturation branch extends `self._saturation_reject_until
+[scope]` to `current_time + lockout_seconds` (often 30 minutes)
+regardless of whether the count was just verified or a throttled-away,
+unconfirmed read — and because that signal is a stored value consulted
+(not re-verified) on every later request, a table that emptied moments
+before a fresh violator arrived committed a 30-minute, scope-wide
+rejection that never self-corrected, even once a subsequent call proved
+real capacity had been available the whole time.
+
+Reproduced directly: 3 real lockouts all expiring at t=10.0, a fresh
+violator at t=10.05 (0.45s after real expiry, inside the 1s verify
+throttle) set `_saturation_reject_until['login'] = 1810.05`. A second,
+completely unrelated fresh client (zero prior history) arriving a full
+second later at t=11.0 — well past both the real expiry and the verify
+throttle — was still rejected with "Account locked. Try again in 1799
+seconds," even though real capacity was unambiguously available by then.
+
+Fixed by having `_refresh_active_lockout_count` report whether it
+performed a real recompute, and deriving a `just_verified` flag in
+`is_rate_limited` from `self._last_lockout_verify == current_time`
+(checking the timestamp directly, since `_sweep`'s own periodic recompute
+— a separate code path — can just as validly make the cache fresh "as of
+right now"). The saturation branch only commits or extends the long-lived
+scope-wide signal when `just_verified` is true; an unverified read still
+rejects the current request via its own count-based check, but defers the
+broader signal to a call that can actually confirm saturation.
+
+1 new regression test, verified fail-before/pass-after. Also re-verified
+the full existing suite unmodified — every test exercising genuine,
+persistent saturation still passes, confirming the fix narrows only the
+unverified-read case, not real saturation protection. `TestRateLimiter`
+now 43 tests (was 42). Full completion gate re-run (full backend suite
+included): 196 scoped, 63 tenancy, 11,744 full-suite passed. Full
+write-up: `docs/security-review/CI3-33-core-infra.md` (CI3-33-2j).
 
 ### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 8: a fourth session collision, same CI3-33-2i finding; this round's test additions conflicted outright, the other session's version landed
 
