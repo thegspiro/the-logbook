@@ -352,6 +352,11 @@ class Api:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar)
         )
+        # Set by login_as() -- the fallback this account re-authenticates with
+        # if a refresh (which needs a still-valid refresh_token cookie) is
+        # itself refused. Never used for the throttled member sessions
+        # member_session() opens; those are short-lived by design.
+        self._credentials: tuple[str, str] | None = None
 
     def _csrf(self) -> str | None:
         for cookie in self.jar:
@@ -367,6 +372,7 @@ class Api:
         *,
         body: bytes | None = None,
         content_type: str = "application/json",
+        _auth_retried: bool = False,
     ) -> Any:
         url = f"{self.api}{path}"
         data = (
@@ -396,10 +402,56 @@ class Api:
                     retry_after = exc.headers.get("Retry-After")
                     sleep(int(retry_after) if retry_after else 5 * (attempt + 1))
                     continue
+                if (
+                    exc.code == 401
+                    and not _auth_retried
+                    and path not in ("/auth/login", "/auth/refresh")
+                ):
+                    # ACCESS_TOKEN_EXPIRE_MINUTES is 30, and a full seed run
+                    # comfortably exceeds that once the rate-limit pacing
+                    # above is doing its job -- every step after the one
+                    # where this first fires used to 401 for the rest of the
+                    # run (LB-AUTH-001 on ~35 steps, reproduced live). The
+                    # frontend's own axios instance already does exactly
+                    # this refresh-then-retry on a 401; this mirrors it for
+                    # the admin session's raw urllib client, which had no
+                    # such recovery at all.
+                    if self._recover_session():
+                        return self.call(
+                            method,
+                            path,
+                            payload,
+                            body=body,
+                            content_type=content_type,
+                            _auth_retried=True,
+                        )
                 raise ApiError(
                     method, path, exc.code, exc.read().decode()[:600]
                 ) from exc
         return None
+
+    def _recover_session(self) -> bool:
+        """Refresh the access token, or fall back to a full re-login.
+
+        Refresh needs a still-valid `refresh_token` cookie (7-day expiry, set
+        by login), so it is tried first and should be enough within any one
+        seeding run. Falling back to `login_as` covers the case where it
+        is not -- an interrupted-and-resumed run, say -- for the admin
+        session only; a throttled member session (`member_session()`) has no
+        stored credentials to fall back with and is short-lived by design.
+        """
+        try:
+            self.call("POST", "/auth/refresh", _auth_retried=True)
+            return True
+        except ApiError:
+            pass
+        if self._credentials:
+            try:
+                self.login_as(*self._credentials)
+                return True
+            except ApiError:
+                pass
+        return False
 
     def get(self, path: str) -> Any:
         return self.call("GET", path)
@@ -475,6 +527,7 @@ class Api:
 
     def login_as(self, username: str, password: str) -> None:
         self.call("POST", "/auth/login", {"username": username, "password": password})
+        self._credentials = (username, password)
 
 
 def items(result: Any, *keys: str) -> list[dict]:
