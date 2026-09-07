@@ -1223,6 +1223,23 @@ class ItemRetireRequest(BaseModel):
     notes: Optional[FreeText] = None
 
 
+class ItemGroupCount(BaseModel):
+    """One bucket of a grouped items list, counted over the whole filtered set.
+
+    Split by availability because the list nests groups inside its Available
+    and Unavailable sections, so one dimension value can head two sections
+    with different tallies.
+    """
+
+    key: Optional[str] = None
+    # None when the item has no value on this dimension -- no colour recorded,
+    # no category. The UI shows that bucket as "Unspecified"; it is a real
+    # group, not an absence of one.
+    label: Optional[str] = None
+    available_count: int = 0
+    unavailable_count: int = 0
+
+
 class ItemsListResponse(BaseModel):
     """Schema for paginated items list"""
 
@@ -1230,6 +1247,10 @@ class ItemsListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+    # Present only when the request asked for a grouping. Counts cover every
+    # matching item, not the returned page, so a collapsed group header states
+    # a total rather than however much happened to load.
+    groups: List[ItemGroupCount] = []
 
 
 # ============================================

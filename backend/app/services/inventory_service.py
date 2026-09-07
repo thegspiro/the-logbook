@@ -1658,6 +1658,99 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    # Dimensions the items list can be grouped by, as
+    # name -> (key expression, label expression, outer joins to add).
+    #
+    # Every join is an OUTER join and every dimension tolerates NULL: an item
+    # whose category was deleted (the FK is ondelete=SET NULL), or that simply
+    # has no colour recorded, must still appear -- under "Unspecified" -- not
+    # vanish from a list it matches the filters for.
+    @staticmethod
+    def _group_spec(group_by: str):
+        """Return (key, label, joins) for a grouping dimension, or None."""
+        if group_by == "category":
+            return (
+                InventoryCategory.id,
+                InventoryCategory.name,
+                [
+                    (
+                        InventoryCategory,
+                        InventoryItem.category_id == InventoryCategory.id,
+                    )
+                ],
+            )
+        if group_by == "item_type":
+            # Lives on the category, not the item.
+            return (
+                InventoryCategory.item_type,
+                InventoryCategory.item_type,
+                [
+                    (
+                        InventoryCategory,
+                        InventoryItem.category_id == InventoryCategory.id,
+                    )
+                ],
+            )
+        if group_by == "color":
+            # Lower-cased, to agree with the colour FILTER, which has always
+            # matched case-insensitively because the catalog collapses on
+            # `color.casefold()`. Grouping on the raw column would put "Navy"
+            # and "navy" in two buckets that can never be viewed together --
+            # exactly the split the filter exists to avoid.
+            # The label is a representative spelling from the data, not a
+            # canonical one: MIN() under a case-insensitive collation treats
+            # "Navy" and "navy" as equal, so which of them heads the group is
+            # unspecified when the data carries both. Either is correct -- the
+            # bucket and its count are what matter.
+            return (
+                func.lower(InventoryItem.color),
+                func.min(InventoryItem.color),
+                [],
+            )
+        if group_by == "size":
+            # COALESCE, matching the size filter, which accepts a hit on
+            # either column.
+            expr = func.coalesce(InventoryItem.standard_size, InventoryItem.size)
+            return (expr, expr, [])
+        if group_by == "condition":
+            return (InventoryItem.condition, InventoryItem.condition, [])
+        if group_by == "style":
+            return (InventoryItem.style, InventoryItem.style, [])
+        if group_by == "location":
+            # The SAME precedence the list's Location column uses
+            # (frontend locLabel: storage_location, then the location's name,
+            # then station). Grouping on `location_id` alone would file an item
+            # tagged "Shelf B-3" under Unassigned while the cell beside it
+            # plainly reads "Shelf B-3".
+            expr = func.coalesce(
+                InventoryItem.storage_location,
+                Location.name,
+                InventoryItem.station,
+            )
+            return (
+                expr,
+                expr,
+                [(Location, InventoryItem.location_id == Location.id)],
+            )
+        if group_by == "vendor":
+            return (
+                InventoryVendor.id,
+                InventoryVendor.name,
+                [(InventoryVendor, InventoryItem.vendor_id == InventoryVendor.id)],
+            )
+        return None
+
+    GROUPABLE = (
+        "category",
+        "item_type",
+        "color",
+        "size",
+        "condition",
+        "style",
+        "location",
+        "vendor",
+    )
+
     # Ceiling on one member's pinned shortlist.
     #
     # Not arbitrary: the list endpoint pages at 50 rows and pinned items sort
@@ -1720,7 +1813,7 @@ class InventoryService:
             cls._outside_domains(organization_id, exclude_item_types),
         )
 
-    async def get_items(
+    def _build_items_query(
         self,
         organization_id: UUID,
         category_id: Optional[UUID] = None,
@@ -1739,31 +1832,12 @@ class InventoryService:
         color: Optional[str] = None,
         style: Optional[str] = None,
         active_only: bool = True,
-        sort_by: Optional[str] = None,
-        sort_order: Optional[str] = None,
-        pinned_for_user_id: Optional[UUID] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> Tuple[List[InventoryItem], int]:
-        """Get items with filtering, sorting, and pagination.
+    ) -> "Select":
+        """The filtered item select, with no ordering, joins or pagination.
 
-        ``unassigned_location`` restricts to items filed under no location at
-        all — the population the location panel labels "Unassigned". It is
-        ignored when ``location_id`` names a location, since the two ask for
-        disjoint sets and a request carrying both is asking for nothing.
-
-        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
-        out — that pair is what keeps the medical-supply page and the
-        gear-and-uniforms page from each listing the other's stock. Both are
-        applied server-side from the caller's permissions, never from a query
-        parameter, so a medical-only officer cannot widen their own view.
-
-        ``pinned_for_user_id`` hoists that member's pinned items to the front
-        of the result, ahead of whatever ``sort_by`` asks for, and stamps
-        ``pin_position`` on every returned row. It is the caller's own id, never
-        a request parameter -- a pin list is personal, and reading someone
-        else's is not a feature. A member with no pins gets an outer join that
-        matches nothing and the exact ordering they had before.
+        Extracted so ``get_items`` and ``get_item_group_counts`` cannot drift:
+        a second hand-maintained copy of a seventeen-parameter WHERE clause is
+        how a group header comes to disagree with the list it labels.
         """
         query = (
             select(InventoryItem)
@@ -1893,6 +1967,88 @@ class InventoryService:
         if active_only:
             query = query.where(InventoryItem.active.is_(True))
 
+        return query
+
+    async def get_items(
+        self,
+        organization_id: UUID,
+        category_id: Optional[UUID] = None,
+        status: Optional[ItemStatus] = None,
+        condition: Optional[ItemCondition] = None,
+        item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+        assigned_to: Optional[UUID] = None,
+        location_id: Optional[UUID] = None,
+        unassigned_location: bool = False,
+        storage_area_id: Optional[UUID] = None,
+        vendor_id: Optional[UUID] = None,
+        search: Optional[str] = None,
+        size: Optional[str] = None,
+        color: Optional[str] = None,
+        style: Optional[str] = None,
+        active_only: bool = True,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        pinned_for_user_id: Optional[UUID] = None,
+        group_by: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[InventoryItem], int]:
+        """Get items with filtering, sorting, and pagination.
+
+        ``unassigned_location`` restricts to items filed under no location at
+        all — the population the location panel labels "Unassigned". It is
+        ignored when ``location_id`` names a location, since the two ask for
+        disjoint sets and a request carrying both is asking for nothing.
+
+        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
+        out — that pair is what keeps the medical-supply page and the
+        gear-and-uniforms page from each listing the other's stock. Both are
+        applied server-side from the caller's permissions, never from a query
+        parameter, so a medical-only officer cannot widen their own view.
+
+        ``pinned_for_user_id`` hoists that member's pinned items to the front
+        of the result, ahead of whatever ``sort_by`` asks for, and stamps
+        ``pin_position`` on every returned row. It is the caller's own id, never
+        a request parameter -- a pin list is personal, and reading someone
+        else's is not a feature. A member with no pins gets an outer join that
+        matches nothing and the exact ordering they had before.
+
+        ``group_by`` names a dimension from ``GROUPABLE``. It does not change
+        WHICH items come back, only their order: rows are sorted so a group's
+        members are contiguous and therefore cannot be split across a page
+        boundary, which is what would make a collapsed group show half its
+        contents. The counts that label those groups come from
+        ``get_item_group_counts``, which measures the whole filtered set --
+        a header tallying only the loaded page would be worse than no header,
+        since "Class A Uniform (3)" reads as a total when 40 match.
+        """
+        query = self._build_items_query(
+            organization_id=organization_id,
+            category_id=category_id,
+            status=status,
+            condition=condition,
+            item_type=item_type,
+            item_types=item_types,
+            exclude_item_types=exclude_item_types,
+            assigned_to=assigned_to,
+            location_id=location_id,
+            unassigned_location=unassigned_location,
+            storage_area_id=storage_area_id,
+            vendor_id=vendor_id,
+            search=search,
+            size=size,
+            color=color,
+            style=style,
+            active_only=active_only,
+        )
+
+        group = self._group_spec(group_by) if group_by else None
+        if group is not None:
+            for target, onclause in group[2]:
+                query = query.outerjoin(target, onclause)
+
         if pinned_for_user_id is not None:
             # LEFT OUTER JOIN, so an unpinned item still appears. The
             # uq_item_pin_user_item constraint makes the match at most 1:1,
@@ -1926,6 +2082,15 @@ class InventoryService:
             order = [
                 InventoryItemPin.position.is_(None),
                 InventoryItemPin.position.asc(),
+            ]
+        if group is not None:
+            # Availability first, then the group key, so every group's rows are
+            # contiguous and a group cannot straddle a page boundary -- which
+            # is what would make a collapsed group show half its contents.
+            order += [
+                case((InventoryItem.status == ItemStatus.AVAILABLE, 0), else_=1),
+                group[0].is_(None),
+                group[0].asc(),
             ]
         if sort_order == "desc":
             order += [col.desc(), InventoryItem.id.desc()]
@@ -1967,6 +2132,74 @@ class InventoryService:
         for item in items:
             item.is_lot_stocked = item.id in totals
             item.lot_stock = totals.get(item.id)
+
+    async def get_item_group_counts(
+        self,
+        organization_id: UUID,
+        group_by: str,
+        **filters: Any,
+    ) -> List[Dict[str, Any]]:
+        """True per-(availability, group) counts over the whole filtered set.
+
+        Deliberately not a tally of the loaded page: the items list pages at
+        50 rows, so a header counting what arrived would read "Class A Uniform
+        (3)" while 40 match -- which is worse than no header at all, because a
+        bare number reads as a total.
+
+        Shares ``_build_items_query`` with ``get_items`` so the same filters
+        produce both, and an unknown ``group_by`` returns an empty list rather
+        than raising: a grouping the UI cannot render is a missing header, not
+        a failed request.
+        """
+        group = self._group_spec(group_by)
+        if group is None:
+            return []
+        key_expr, label_expr, joins = group
+
+        query = self._build_items_query(organization_id=organization_id, **filters)
+        for target, onclause in joins:
+            query = query.outerjoin(target, onclause)
+
+        avail = case((InventoryItem.status == ItemStatus.AVAILABLE, 1), else_=0).label(
+            "is_available"
+        )
+        # with_only_columns off the shared select, so every filter and join
+        # above is inherited rather than restated.
+        group_query = (
+            query.with_only_columns(
+                key_expr.label("group_key"),
+                label_expr.label("group_label"),
+                avail,
+                func.count(InventoryItem.id).label("item_count"),
+            )
+            .order_by(None)
+            .group_by(key_expr, avail)
+        )
+        rows = await self.db.execute(group_query)
+
+        tally: Dict[Any, Dict[str, Any]] = {}
+        for key, label, is_available, item_count in rows.all():
+            entry = tally.setdefault(
+                key,
+                {
+                    "key": None if key is None else str(key),
+                    "label": None if label is None else str(label),
+                    "available_count": 0,
+                    "unavailable_count": 0,
+                },
+            )
+            if is_available:
+                entry["available_count"] = item_count
+            else:
+                entry["unavailable_count"] = item_count
+
+        # NULL last: "Unspecified" is a real bucket -- an item with no colour
+        # recorded is not the same as no such items -- but it is not the one
+        # anybody is looking for first.
+        return sorted(
+            tally.values(),
+            key=lambda g: (g["label"] is None, (g["label"] or "").lower()),
+        )
 
     async def _attach_pin_positions(
         self,

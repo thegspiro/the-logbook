@@ -56,6 +56,7 @@ import { getDisplayName } from '../utils/variantHelpers';
 import type {
   InventoryItem,
   InventoryCategory,
+  ItemGroupCount,
   InventorySummary,
   LocationInventorySummary,
   StorageAreaResponse,
@@ -102,6 +103,68 @@ const SORT_COLS = [
   { key: 'created_at', label: 'Date Added' },
 ] as const;
 type SortKey = (typeof SORT_COLS)[number]['key'];
+
+/**
+ * Dimensions the list can be grouped by.
+ *
+ * Mirrors `InventoryService.GROUPABLE` on the backend, which owns the join and
+ * the counting for each. An unknown value degrades to an ungrouped list rather
+ * than erroring, so a stale link shows items instead of a failure page.
+ */
+const GROUP_COLS = [
+  { key: '', label: 'No grouping' },
+  { key: 'category', label: 'Category' },
+  { key: 'item_type', label: 'Item type' },
+  { key: 'color', label: 'Color' },
+  { key: 'size', label: 'Size' },
+  { key: 'condition', label: 'Condition' },
+  { key: 'style', label: 'Style' },
+  { key: 'location', label: 'Location' },
+  { key: 'vendor', label: 'Vendor' },
+] as const;
+type GroupKey = (typeof GROUP_COLS)[number]['key'];
+
+/** Header for the bucket of items with no value on the grouped dimension. */
+const UNSPECIFIED_GROUP = 'Unspecified';
+
+/**
+ * The grouped value of one item, as the string the backend keyed its counts on.
+ *
+ * Must agree with `InventoryService._group_spec`, or a row lands under a header
+ * whose count excludes it. Two agreements are load-bearing: colour is keyed
+ * lower-cased (the colour filter has always matched case-insensitively, so
+ * "Navy" and "navy" are one bucket), and location follows the same precedence
+ * as the Location column rather than `location_id` alone.
+ */
+function groupKeyOf(
+  item: InventoryItem,
+  dimension: GroupKey,
+  locs: Location[],
+  cats: InventoryCategory[]
+): string | null {
+  switch (dimension) {
+    case 'category':
+      return item.category_id ?? null;
+    case 'color':
+      return item.color ? item.color.toLowerCase() : null;
+    case 'size':
+      return item.standard_size ?? item.size ?? null;
+    case 'condition':
+      return item.condition ?? null;
+    case 'style':
+      return item.style ?? null;
+    case 'vendor':
+      return item.vendor_id ?? null;
+    case 'location':
+      return locLabel(item, locs) || null;
+    case 'item_type':
+      // Lives on the category, not the item — the backend groups it through
+      // the same join.
+      return cats.find((c) => c.id === item.category_id)?.item_type ?? null;
+    default:
+      return null;
+  }
+}
 
 function locLabel(item: InventoryItem, locs: Location[]): string {
   if (item.storage_location) return item.storage_location;
@@ -151,6 +214,14 @@ interface ItemTableProps {
    * one.
    */
   truncated?: boolean;
+  /** Active grouping dimension, '' for none. */
+  groupBy?: GroupKey;
+  /** Whole-set counts keyed by group key; '' keys the Unspecified bucket. */
+  groupTotals?: Map<string, number>;
+  /** Display names per key — a category id is not a heading. */
+  groupLabels?: Map<string, string>;
+  collapsed?: Set<string>;
+  onToggleGroup?: (key: string) => void;
   /** Renders the drag handle and the move arrows. Pinned section only. */
   pinnedMode?: boolean;
   onMovePin?: (itemId: string, toIndex: number) => void;
@@ -175,6 +246,11 @@ const ItemTable: React.FC<ItemTableProps> = ({
   onRetire,
   onTogglePin,
   truncated = false,
+  groupBy = '',
+  groupTotals,
+  groupLabels,
+  collapsed,
+  onToggleGroup,
   pinnedMode = false,
   onMovePin,
 }) => {
@@ -265,6 +341,16 @@ const ItemTable: React.FC<ItemTableProps> = ({
           </thead>
           <tbody className="divide-theme-surface-border divide-y">
             {items.map((item, index) => {
+              // Rows arrive ordered so a group's members are contiguous (the
+              // backend sorts by the group key), so a header is emitted
+              // wherever the key changes rather than by pre-bucketing.
+              const gKey = groupBy ? groupKeyOf(item, groupBy, locations, categories) : null;
+              const prev = index > 0 ? items[index - 1] : undefined;
+              const prevKey = groupBy && prev ? groupKeyOf(prev, groupBy, locations, categories) : undefined;
+              const startsGroup = Boolean(groupBy) && (index === 0 || gKey !== prevKey);
+              const bucket = gKey ?? '';
+              const isCollapsed = Boolean(groupBy) && (collapsed?.has(bucket) ?? false);
+              const groupTotal = groupTotals?.get(bucket);
               const cat = categories.find((ct) => ct.id === item.category_id);
               const loc = locLabel(item, locations);
               const manufacturer = [item.manufacturer, item.model_number].filter(Boolean).join(' ');
@@ -273,158 +359,193 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : '';
               return (
-                <tr
-                  key={item.id}
-                  {...(pinnedMode
-                    ? {
-                        draggable: true,
-                        onDragStart: () => setDragId(item.id),
-                        onDragEnd: () => setDragId(null),
-                        onDragOver: (e: React.DragEvent) => e.preventDefault(),
-                        onDrop: (e: React.DragEvent) => {
-                          e.preventDefault();
-                          if (dragId && dragId !== item.id) onMovePin?.(dragId, index);
-                          setDragId(null);
-                        },
-                      }
-                    : {})}
-                  className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''} ${dragId === item.id ? 'opacity-60' : ''}`}
-                >
-                  {pinnedMode && (
-                    <td data-label="Order" className="text-theme-text-muted px-2 py-3">
-                      {/* Grip and arrows in ONE cell so the reflow keeps them
+                <React.Fragment key={item.id}>
+                  {startsGroup && (
+                    <tr className="bg-theme-surface-hover/60">
+                      <th
+                        scope="colgroup"
+                        colSpan={20}
+                        className="border-theme-surface-border border-y px-3 py-2 text-left"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => onToggleGroup?.(bucket)}
+                          aria-expanded={!isCollapsed}
+                          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                          <span className={gKey === null ? 'italic' : ''}>
+                            {gKey === null ? UNSPECIFIED_GROUP : (groupLabels?.get(bucket) ?? bucket)}
+                          </span>
+                          {/* The backend's count, not the loaded rows': a
+                              collapsed group must state its total, and a
+                              tally of what arrived would understate it. */}
+                          <span className="text-theme-text-muted font-normal normal-case">({groupTotal ?? '—'})</span>
+                        </button>
+                      </th>
+                    </tr>
+                  )}
+                  {!isCollapsed && (
+                    <tr
+                      {...(pinnedMode
+                        ? {
+                            draggable: true,
+                            onDragStart: () => setDragId(item.id),
+                            onDragEnd: () => setDragId(null),
+                            onDragOver: (e: React.DragEvent) => e.preventDefault(),
+                            onDrop: (e: React.DragEvent) => {
+                              e.preventDefault();
+                              if (dragId && dragId !== item.id) onMovePin?.(dragId, index);
+                              setDragId(null);
+                            },
+                          }
+                        : {})}
+                      className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''} ${dragId === item.id ? 'opacity-60' : ''}`}
+                    >
+                      {pinnedMode && (
+                        <td data-label="Order" className="text-theme-text-muted px-2 py-3">
+                          {/* Grip and arrows in ONE cell so the reflow keeps them
                           together: split across the row's two ends, the arrows
                           landed after ten stacked field rows on a phone, which
                           is where they matter most — HTML5 drag never fires on
                           touch, so there they are the only way to reorder. */}
-                      <div className="flex items-center gap-0.5">
-                        <GripVertical className="hidden h-4 w-4 cursor-grab md:block" aria-hidden="true" />
-                        <button
-                          type="button"
-                          onClick={() => onMovePin?.(item.id, index - 1)}
-                          disabled={index === 0}
-                          className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
-                          aria-label={`Move ${getDisplayName(item)} up`}
+                          <div className="flex items-center gap-0.5">
+                            <GripVertical className="hidden h-4 w-4 cursor-grab md:block" aria-hidden="true" />
+                            <button
+                              type="button"
+                              onClick={() => onMovePin?.(item.id, index - 1)}
+                              disabled={index === 0}
+                              className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
+                              aria-label={`Move ${getDisplayName(item)} up`}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onMovePin?.(item.id, index + 1)}
+                              disabled={index === items.length - 1}
+                              className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
+                              aria-label={`Move ${getDisplayName(item)} down`}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                      <td data-label="" className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selIds.has(item.id)}
+                          onChange={() => toggle(item.id)}
+                          className="form-checkbox"
+                          aria-label={`Select ${item.name}`}
+                        />
+                      </td>
+                      <td data-label="Name" className="px-3 py-3">
+                        <Link
+                          to={`/inventory/items/${item.id}`}
+                          className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
                         >
-                          <ChevronUp className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onMovePin?.(item.id, index + 1)}
-                          disabled={index === items.length - 1}
-                          className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
-                          aria-label={`Move ${getDisplayName(item)} down`}
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                  <td data-label="" className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selIds.has(item.id)}
-                      onChange={() => toggle(item.id)}
-                      className="form-checkbox"
-                      aria-label={`Select ${item.name}`}
-                    />
-                  </td>
-                  <td data-label="Name" className="px-3 py-3">
-                    <Link
-                      to={`/inventory/items/${item.id}`}
-                      className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
-                    >
-                      {getDisplayName(item)}
-                    </Link>
-                  </td>
-                  {/* Status: a desktop column only when showStatus, but always
+                          {getDisplayName(item)}
+                        </Link>
+                      </td>
+                      {/* Status: a desktop column only when showStatus, but always
                       surfaced on mobile (where items aren't column-grouped). */}
-                  <td data-label="Status" className={`px-3 py-3 ${showStatus ? '' : 'md:hidden'}`}>
-                    <span
-                      className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(item.status)}`}
-                    >
-                      {item.status.replace(/_/g, ' ').toUpperCase()}
-                    </span>
-                  </td>
-                  <td data-label="Category" className="text-theme-text-muted px-3 py-3">
-                    {cat?.name ?? ''}
-                  </td>
-                  <td data-label="Variant" className="px-3 py-3">
-                    <VariantCapsules item={item} />
-                  </td>
-                  <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
-                    {qtyLabel(item)}
-                    {item.is_lot_stocked && (
-                      <span
-                        className="text-theme-text-muted block text-[10px] leading-tight"
-                        title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
-                      >
-                        in-date lots
-                      </span>
-                    )}
-                  </td>
-                  <td data-label="Condition" className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>
-                    {item.condition.replace(/_/g, ' ')}
-                  </td>
-                  <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
-                    {loc || '-'}
-                  </td>
-                  {/* Mobile-only detail cells (hidden on desktop, revealed by the reflow) */}
-                  <td data-label="Manufacturer" className="hidden">
-                    {manufacturer || '--'}
-                  </td>
-                  <td data-label="Serial #" className="hidden">
-                    {item.serial_number || '--'}
-                  </td>
-                  <td data-label="Asset Tag" className="hidden">
-                    {item.asset_tag || '--'}
-                  </td>
-                  <td data-label="Barcode" className="hidden">
-                    {item.barcode || '--'}
-                  </td>
-                  <td data-label="Cost" className="hidden">
-                    {cost || '--'}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onTogglePin(item)}
-                        className={`btn-icon-sm ${
-                          item.pin_position != null
-                            ? 'text-amber-600 dark:text-amber-400'
-                            : 'text-theme-text-muted hover:text-theme-text-primary'
-                        }`}
-                        aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
-                        aria-pressed={item.pin_position != null}
-                      >
-                        {item.pin_position != null ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                      </button>
-                      <Link
-                        to={`/inventory/items/${item.id}`}
-                        className="text-theme-text-muted hover:text-theme-text-primary"
-                        aria-label={`View ${item.name}`}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  </td>
-                  {/* Mobile-only inline actions */}
-                  {canManage && (
-                    <td data-label="" className="hidden">
-                      <div className="flex flex-wrap gap-2">
-                        <button onClick={() => onEdit(item)} className="btn-secondary btn-sm">
-                          Edit
-                        </button>
-                        {item.status !== 'retired' && (
-                          <button onClick={() => onRetire(item)} className="btn-secondary btn-sm">
-                            Retire
-                          </button>
+                      <td data-label="Status" className={`px-3 py-3 ${showStatus ? '' : 'md:hidden'}`}>
+                        <span
+                          className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(item.status)}`}
+                        >
+                          {item.status.replace(/_/g, ' ').toUpperCase()}
+                        </span>
+                      </td>
+                      <td data-label="Category" className="text-theme-text-muted px-3 py-3">
+                        {cat?.name ?? ''}
+                      </td>
+                      <td data-label="Variant" className="px-3 py-3">
+                        <VariantCapsules item={item} />
+                      </td>
+                      <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
+                        {qtyLabel(item)}
+                        {item.is_lot_stocked && (
+                          <span
+                            className="text-theme-text-muted block text-[10px] leading-tight"
+                            title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
+                          >
+                            in-date lots
+                          </span>
                         )}
-                      </div>
-                    </td>
+                      </td>
+                      <td
+                        data-label="Condition"
+                        className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}
+                      >
+                        {item.condition.replace(/_/g, ' ')}
+                      </td>
+                      <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
+                        {loc || '-'}
+                      </td>
+                      {/* Mobile-only detail cells (hidden on desktop, revealed by the reflow) */}
+                      <td data-label="Manufacturer" className="hidden">
+                        {manufacturer || '--'}
+                      </td>
+                      <td data-label="Serial #" className="hidden">
+                        {item.serial_number || '--'}
+                      </td>
+                      <td data-label="Asset Tag" className="hidden">
+                        {item.asset_tag || '--'}
+                      </td>
+                      <td data-label="Barcode" className="hidden">
+                        {item.barcode || '--'}
+                      </td>
+                      <td data-label="Cost" className="hidden">
+                        {cost || '--'}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onTogglePin(item)}
+                            className={`btn-icon-sm ${
+                              item.pin_position != null
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-theme-text-muted hover:text-theme-text-primary'
+                            }`}
+                            aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
+                            aria-pressed={item.pin_position != null}
+                          >
+                            {item.pin_position != null ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                          </button>
+                          <Link
+                            to={`/inventory/items/${item.id}`}
+                            className="text-theme-text-muted hover:text-theme-text-primary"
+                            aria-label={`View ${item.name}`}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+                        </div>
+                      </td>
+                      {/* Mobile-only inline actions */}
+                      {canManage && (
+                        <td data-label="" className="hidden">
+                          <div className="flex flex-wrap gap-2">
+                            <button onClick={() => onEdit(item)} className="btn-secondary btn-sm">
+                              Edit
+                            </button>
+                            {item.status !== 'retired' && (
+                              <button onClick={() => onRetire(item)} className="btn-secondary btn-sm">
+                                Retire
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
                   )}
-                </tr>
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -495,6 +616,12 @@ const InventoryItemsPage: React.FC = () => {
   const [fStyle, setFStyle] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortOrd, setSortOrd] = useState<'asc' | 'desc'>('asc');
+  const [groupBy, setGroupBy] = useState<GroupKey>('');
+  const [groupCounts, setGroupCounts] = useState<ItemGroupCount[]>([]);
+  // Collapsed group keys, per section. A group collapsed under Available
+  // should not also vanish from Unavailable — they are different populations
+  // that happen to share a heading.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -526,6 +653,36 @@ const InventoryItemsPage: React.FC = () => {
     [items]
   );
 
+  /* ---- grouping lookups ----
+     Keyed on the same strings `groupKeyOf` produces, with '' standing for the
+     Unspecified bucket, so a header always finds the backend's count for the
+     rows beneath it. */
+  const groupAvailable = useMemo(() => {
+    const m = new Map<string, number>();
+    groupCounts.forEach((g) => m.set(g.key ?? '', g.available_count));
+    return m;
+  }, [groupCounts]);
+  const groupUnavailable = useMemo(() => {
+    const m = new Map<string, number>();
+    groupCounts.forEach((g) => m.set(g.key ?? '', g.unavailable_count));
+    return m;
+  }, [groupCounts]);
+  const groupLabels = useMemo(() => {
+    const m = new Map<string, string>();
+    groupCounts.forEach((g) => {
+      if (g.label) m.set(g.key ?? '', g.label);
+    });
+    return m;
+  }, [groupCounts]);
+
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   /* ---- helpers ---- */
   const filterParams = useCallback(
     () => ({
@@ -542,8 +699,9 @@ const InventoryItemsPage: React.FC = () => {
       style: fStyle || undefined,
       sort_by: sortBy,
       sort_order: sortOrd,
+      group_by: groupBy || undefined,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, sortBy, sortOrd]
+    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, sortBy, sortOrd, groupBy]
   );
 
   const loadItems = useCallback(
@@ -554,6 +712,9 @@ const InventoryItemsPage: React.FC = () => {
         const items = asArray(res.items);
         setItems(reset || s === 0 ? items : (prev) => [...prev, ...items]);
         setTotal(res.total ?? 0);
+        // Whole-set counts, so a collapsed header states a total rather than
+        // however much of the group happened to load.
+        setGroupCounts(asArray(res.groups ?? []));
         if (reset) setSkip(0);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load items'));
@@ -1314,6 +1475,35 @@ const InventoryItemsPage: React.FC = () => {
         />
       )}
 
+      {/* Group-by — a view control, not a filter: it changes how rows are
+          arranged, never which ones match, so it sits with Sort rather than in
+          the filter card above. */}
+      {!loading && items.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <label htmlFor="group-by" className="text-theme-text-muted shrink-0 text-xs">
+            Group by:
+          </label>
+          <select
+            id="group-by"
+            className="form-input w-auto py-1.5 text-xs"
+            value={groupBy}
+            onChange={(e) => {
+              setGroupBy(e.target.value as GroupKey);
+              // Collapse state is keyed by group VALUE, and those values mean
+              // different things on a different dimension — a key collapsed
+              // under Colour must not silently collapse a Category.
+              setCollapsed(new Set());
+            }}
+          >
+            {GROUP_COLS.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Mobile sort controls — the table's header-sort buttons are hidden
           when rows reflow into cards on mobile, so expose sorting here. */}
       {!loading && items.length > 0 && (
@@ -1386,6 +1576,11 @@ const InventoryItemsPage: React.FC = () => {
             onRetire={retireOne}
             onTogglePin={(item) => void togglePin(item)}
             truncated={hasMore}
+            groupBy={groupBy}
+            groupTotals={groupAvailable}
+            groupLabels={groupLabels}
+            collapsed={collapsed}
+            onToggleGroup={toggleGroup}
           />
           <ItemTable
             label="Unavailable"
@@ -1406,6 +1601,11 @@ const InventoryItemsPage: React.FC = () => {
             onRetire={retireOne}
             onTogglePin={(item) => void togglePin(item)}
             truncated={hasMore}
+            groupBy={groupBy}
+            groupTotals={groupUnavailable}
+            groupLabels={groupLabels}
+            collapsed={collapsed}
+            onToggleGroup={toggleGroup}
           />
         </div>
       )}

@@ -228,6 +228,9 @@ export const inventoryService = {
     active_only?: boolean | undefined;
     sort_by?: string | undefined;
     sort_order?: 'asc' | 'desc' | undefined;
+    /** Groups the list by a dimension. Changes row ORDER and fills
+     *  `groups` with whole-set counts; never changes which items match. */
+    group_by?: string | undefined;
     skip?: number | undefined;
     limit?: number | undefined;
   }): Promise<InventoryItemsListResponse> {

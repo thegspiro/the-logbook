@@ -917,6 +917,22 @@ export interface InventoryItem {
   pin_position?: number | null;
 }
 
+/**
+ * One bucket of a grouped items list.
+ *
+ * Counts cover every matching item, not the loaded page, and are split by
+ * availability because groups render inside the Available and Unavailable
+ * sections — so one dimension value can head two sections with different
+ * tallies.
+ */
+export interface ItemGroupCount {
+  /** null when the item has no value on this dimension — shown as "Unspecified". */
+  key: string | null;
+  label: string | null;
+  available_count: number;
+  unavailable_count: number;
+}
+
 /** One entry in a member's pinned inventory shortlist. */
 export interface ItemPin {
   id: string;
@@ -1413,6 +1429,8 @@ export interface InventoryItemsListResponse {
   total: number;
   skip: number;
   limit: number;
+  /** Populated only when the request asked for a grouping. */
+  groups?: ItemGroupCount[];
 }
 
 /**

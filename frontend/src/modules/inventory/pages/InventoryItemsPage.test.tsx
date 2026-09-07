@@ -715,3 +715,113 @@ describe('InventoryItemsPage — pinned shortlist', () => {
     expect(screen.queryByRole('heading', { name: /^Pinned$/ })).not.toBeInTheDocument();
   });
 });
+
+describe('InventoryItemsPage — grouping', () => {
+  // Own defaults rather than a neighbour's: vi.clearAllMocks() resets recorded
+  // calls but not implementations (CLAUDE.md pitfall #28).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ id: 'a-coat', name: 'Dress Coat', category_id: 'cat-a' }),
+        makeItem({ id: 'b-polo', name: 'Class B Polo', category_id: 'cat-b' }),
+      ],
+      total: 2,
+      groups: [
+        { key: 'cat-a', label: 'Class A Uniform', available_count: 12, unavailable_count: 1 },
+        { key: 'cat-b', label: 'Class B Uniform', available_count: 30, unavailable_count: 0 },
+      ],
+    });
+    mockGetSummary.mockResolvedValue({
+      total_items: 2,
+      non_medical_items: 2,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([
+      { id: 'cat-a', name: 'Class A Uniform', item_type: 'uniform', active: true },
+      { id: 'cat-b', name: 'Class B Uniform', item_type: 'uniform', active: true },
+    ]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const lastItemsCall = (): Record<string, unknown> =>
+    (mockGetItems.mock.calls[mockGetItems.mock.calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+
+  const chooseGrouping = async (value: string) => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByLabelText('Group by:');
+    await user.selectOptions(screen.getByLabelText('Group by:'), value);
+    return user;
+  };
+
+  it('sends group_by on the request when a dimension is chosen', async () => {
+    await chooseGrouping('category');
+    await waitFor(() => expect(lastItemsCall().group_by).toBe('category'));
+  });
+
+  it('does not send group_by when grouping is off', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByLabelText('Group by:');
+    expect(lastItemsCall().group_by).toBeUndefined();
+  });
+
+  it("labels each group with the backend's whole-set count, not the loaded rows", async () => {
+    await chooseGrouping('category');
+
+    // One Class A row is loaded but 12 match. A tally of what arrived is the
+    // exact mislabel counting server-side exists to prevent.
+    const header = await screen.findByRole('button', { name: /Class A Uniform/ });
+    expect(header).toHaveTextContent('(12)');
+  });
+
+  it('collapses a group and keeps its count visible', async () => {
+    const user = await chooseGrouping('category');
+    const header = await screen.findByRole('button', { name: /Class A Uniform/ });
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(header);
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    expect(header).toHaveTextContent('(12)');
+    // The row is gone; the header that accounts for it is not.
+    expect(screen.queryByText('Dress Coat')).not.toBeInTheDocument();
+  });
+
+  it('clears collapse state when the dimension changes', async () => {
+    const user = await chooseGrouping('category');
+    await user.click(await screen.findByRole('button', { name: /Class A Uniform/ }));
+    expect(screen.queryByText('Dress Coat')).not.toBeInTheDocument();
+
+    // Collapse state is keyed by group VALUE, and 'cat-a' means nothing under
+    // Colour — carrying it over would collapse an unrelated bucket.
+    await user.selectOptions(screen.getByLabelText('Group by:'), 'color');
+    expect(await screen.findByText('Dress Coat')).toBeInTheDocument();
+  });
+
+  it('heads the no-value bucket "Unspecified" rather than dropping it', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'x', name: 'Unsorted Helmet' })],
+      total: 1,
+      groups: [{ key: null, label: null, available_count: 1, unavailable_count: 0 }],
+    });
+    await chooseGrouping('category');
+
+    // An item with no category is a group, not an absence of one — it must
+    // not vanish from a list it matches the filters for.
+    expect(await screen.findByRole('button', { name: /Unspecified/ })).toBeInTheDocument();
+    expect(screen.getByText('Unsorted Helmet')).toBeInTheDocument();
+  });
+
+  it('renders no group headers when grouping is off', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Dress Coat');
+    expect(screen.queryByRole('button', { name: /Class A Uniform \(/ })).not.toBeInTheDocument();
+  });
+});

@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The items list can be grouped by category, colour or any other attribute (2026-09-07)
+
+**Added**
+
+- **A "Group by" control on the inventory items list.** Choose Category, Item
+  type, Colour, Size, Condition, Style, Location or Vendor and the rows organise
+  into collapsible sections with counts — Class A in one group, Class B in
+  another. Groups nest inside the existing Available and Unavailable sections,
+  and the pinned shortlist stays above both.
+- **The counts are true totals, not a tally of what loaded.** The list pages at
+  50 rows, so a header counting the rows it received would read "Class A Uniform
+  (3)" while 40 matched — worse than no header, because a bare number reads as a
+  total. They come from a `GROUP BY` over the whole filtered set, split by
+  availability, and a collapsed group keeps its count.
+- Rows are ordered so a group's members are contiguous, so a group can never be
+  split across a page boundary and show half its contents under a header
+  claiming all of them.
+
+**Notes on two dimensions that could easily have been wrong**
+
+- **Colour groups case-insensitively.** The colour _filter_ has always matched
+  that way, because the requestable catalog collapses on `color.casefold()`;
+  grouping on the raw column would have put "Navy" and "navy" in two buckets
+  that can never be viewed together — reintroducing precisely the split the
+  filter exists to avoid. The header shows a real spelling from the data;
+  which one, when the data carries both, is unspecified.
+- **Location groups on the same precedence the Location column displays**
+  (`storage_location`, then the location's name, then station). Grouping on
+  `location_id` alone would file an item tagged "Shelf B-3" under _Unspecified_
+  while the cell beside it plainly reads "Shelf B-3".
+- An item with no value on the chosen dimension gets its own **"Unspecified"**
+  group, sorted last. It is a real bucket — an item with no colour recorded is
+  not the same as no such items — and must not vanish from a list it matches
+  the filters for.
+- An unrecognised `group_by` degrades to an ungrouped list rather than 400ing,
+  so a stale or hand-edited link shows the items instead of an error page.
+
+**Internal**
+
+- `InventoryService.get_items` keeps its two-value return and every existing
+  caller. The filter construction is extracted to `_build_items_query`, shared
+  with the new `get_item_group_counts`, so the counts cannot drift from the
+  list they label — a second hand-maintained copy of a seventeen-parameter
+  WHERE clause is how a header comes to disagree with the rows beneath it.
+
 ### A quartermaster can front their own working set on the items list (2026-09-07)
 
 **Added**

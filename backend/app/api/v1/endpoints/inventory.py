@@ -129,11 +129,12 @@ from app.schemas.inventory import (
     IssuanceChargeRequest,
     ItemAssignmentCreate,
     ItemAssignmentResponse,
+    ItemGroupCount,
     ItemIssuanceCreate,
     ItemIssuanceResponse,
     ItemIssuanceReturnRequest,
-    ItemRetireRequest,
     ItemPinReorder,
+    ItemRetireRequest,
     ItemsListResponse,
     ItemVariantGroupCreate,
     ItemVariantGroupDetailResponse,
@@ -611,6 +612,7 @@ async def list_items(
     active_only: bool = True,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
+    group_by: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -663,6 +665,12 @@ async def list_items(
                 detail=f"Invalid item_type: {item_type}",
             )
 
+    # An unrecognized grouping degrades to an ungrouped list rather than
+    # 400ing: a hand-edited or stale URL should show the items, not an error
+    # page, and the response says which grouping was actually applied by
+    # whether `groups` comes back populated.
+    grouping = group_by if group_by in InventoryService.GROUPABLE else None
+
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         category_id=category_id,
@@ -686,8 +694,35 @@ async def list_items(
         # The caller's own shortlist, never a query parameter: pins are
         # personal, and reading another member's is not a feature.
         pinned_for_user_id=current_user.id,
+        group_by=grouping,
         skip=skip,
         limit=limit,
+    )
+
+    # Counted over the whole filtered set rather than the page above, so a
+    # collapsed group header states a total instead of however much loaded.
+    groups = (
+        await service.get_item_group_counts(
+            organization_id=current_user.organization_id,
+            group_by=grouping,
+            category_id=category_id,
+            status=status_enum,
+            condition=condition_enum,
+            item_type=item_type_enum,
+            exclude_item_types=MEDICAL_ITEM_TYPES,
+            assigned_to=assigned_to,
+            location_id=location_id,
+            unassigned_location=unassigned_location,
+            storage_area_id=storage_area_id,
+            vendor_id=vendor_id,
+            search=search,
+            size=size,
+            color=color,
+            style=style,
+            active_only=active_only,
+        )
+        if grouping
+        else []
     )
 
     can_see_holders = _is_quartermaster(current_user)
@@ -699,6 +734,7 @@ async def list_items(
         total=total,
         skip=skip,
         limit=limit,
+        groups=[ItemGroupCount(**g) for g in groups],
     )
 
 
