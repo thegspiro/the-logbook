@@ -16,13 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 29 (Reports & analytics), pass 4 (round 2 / pass 5)** — branch
-`claude/security-review-reports-analytics-pass4`,
-[PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Extended with
-a second round rather than opened as a new PR — see the pass-5 log entry
-below. `subscribe_pr_activity` returned "could not subscribe" both times it
-was tried this round (possibly another watcher already on the PR); awaiting
-CI/review either way.
+**None.** Feature 29 (Reports & analytics)'s PR #2344 merged (`cf18d329`) —
+picked up by a 30-minute watchdog check after sitting merged for ~1h46m with
+no bookkeeping commit; no code activity on `main` since the merge needed
+re-verification against this feature. Rotation row 29 -> ✅. Feature 30
+(Onboarding, pass 3) now starting.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics) — PR #2344 merged, watchdog recorded it
+
+PR #2344 (pass 4/5) merged at 21:58:57Z (`main` is its merge commit
+`cf18d329`). No iteration had recorded the merge or cleared this row since;
+a 30-minute watchdog check found it and did so now rather than leaving the
+rotation idle. Next: 30 Onboarding.
 
 ---
 
@@ -9929,7 +9936,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | 🔄     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
