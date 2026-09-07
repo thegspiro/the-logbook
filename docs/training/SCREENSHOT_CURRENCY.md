@@ -35,6 +35,63 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Restarted 2026-09-07 — the roster-settings move caught by a currency spot-check
+
+Watchdog restart. Bootstrap and seed ran against a freshly dropped database
+(the prior session's `onboarding_sessions` row was stuck: an organization had
+been staged but the admin-creation step failed on a password without a
+special character, and `get_or_create_session`'s guard — any organization
+existing at all blocks a new `/onboarding/start`, regardless of whether setup
+actually finished — left no way to resume or restart onboarding through the
+API. Dropping and recreating `intranet_db`, then re-running
+`alembic upgrade head` + `repair_schema.py`, was the clean way out; noted here
+in case the same interruption recurs).
+
+**Spot-check per the task brief, not a placeholder fill: `01-22-member-
+lifecycle.png` was stale.** `30a85386` ("Move the roster settings into
+Members Administration", 2026-09-06) added a fourth tab — **Settings** — to
+`/members/admin`, carrying the Contact Visibility and Membership ID sections
+that used to live on the global Settings page. `01-membership.md`'s own
+"Corrected 2026-08-08" note still asserted "`/members/admin` has exactly
+three tabs — Member Management, Add Member, Import Members," and the image
+right below it was captured before Settings existed. Re-captured against the
+live app (all four tabs now visible) and the prose corrected to say so,
+crediting the new tab back to `08-admin-reports.md`'s own already-current
+description of the move (`### Contact Info Visibility`). This is exactly the
+class of drift the task brief's item 4 asks for — not a guide's own
+placeholder, found by reading a recent commit rather than by guessing which
+image might be wrong.
+
+### Also found while reading the same commit window, not yet acted on
+
+**A second, larger breadcrumb wave.** `27167868` ("Give the Events and
+Training record pages a trail in every state") and `9f9a28d3` ("Give the
+Finance and Elections pages a trail in every state"), both 2026-09-06, do to
+nine more record/detail pages what `1cd01c30` did to the five pages the
+2026-09-06 restart entry below already re-shot. Existing captures of these
+pages now picture a header one row shorter than what renders:
+
+| Page | Existing capture(s) |
+| --- | --- |
+| Event detail | `04-02-event-detail.png` |
+| Event QR code / check-in monitoring | `04-04-event-qr-code.png`, `04-06-check-in-monitoring.png` |
+| Event attendance | `04-10-event-attendance.png` |
+| Purchase request detail | `11-12-purchase-request-detail.png` (id number collides with the check-request shot below — pre-existing, not introduced here) |
+| Expense report detail | `11-14-expense-report-detail.png` |
+| Check request detail | `11-16-check-request-detail.png` |
+| Dues management | `11-15-dues-management.png` |
+| Budget categories | `11-03-budget-categories.png` (list page, not detail — carries the trail per the finance commit's "six section pages" note) |
+
+Training's nine (cohort detail, submit, programme progress, skill-test
+result, manual shift report) were not individually matched against the
+guide's image list this pass — `02-training.md` alone carries 73 captures,
+and matching each commit-described page to its filename needs the same
+one-at-a-time check the table above got, not a guess. **Not fixed this
+pass** — flagged so the next session (or this one, once the seed described
+below finishes) does not have to rediscover it. None of these are
+placeholders; all are existing, applied images, so nothing in
+`SCREENSHOT_STATUS.md` reflects this.
+
 ## Restarted 2026-09-06 (second pass) — 3 more of the 28, and a one-off environment fix worth keeping
 
 A fresh capture session — the prior "Restarted 2026-09-06" entry below ran in

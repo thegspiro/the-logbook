@@ -978,15 +978,20 @@ configured tiers.
 > **⚠️ Corrected 2026-08-08 — this page does not exist.** Earlier versions of this
 > guide described a "Member Lifecycle Management" page under Members Admin with
 > four tabs: Archived Members, Overdue Returns, Leave of Absence, and Tier
-> Configuration. **None of it is real.** `/members/admin` has exactly three tabs —
-> Member Management, Add Member, Import Members — and there is no lifecycle page
-> anywhere in the application.
+> Configuration. **None of it is real**, and there is no lifecycle page anywhere
+> in the application.
 >
 > The screenshot below was captured at `/members/admin` and applied under the old
 > caption, so it shows the Members Admin hub, not a lifecycle page. It has been
 > re-captioned rather than removed, since the page it actually shows is a real one.
+>
+> **`/members/admin` gained a fourth tab, Settings, on 2026-09-06** — Contact
+> Visibility and Membership ID settings moved here from the global Settings
+> page (see [Contact Info Visibility](./08-admin-reports.md#contact-info-visibility)
+> in the admin guide). The tab count below is now Member Management, Add
+> Member, Import Members and Settings.
 
-![The Members Admin hub — Member Management, Add Member and Import Members tabs](./images/01-22-member-lifecycle.png)
+![The Members Admin hub — Member Management, Add Member, Import Members and Settings tabs](./images/01-22-member-lifecycle.png)
 
 ### Where Each Lifecycle Operation Actually Lives
 
