@@ -243,8 +243,10 @@ virtualenv, or the pinned GitHub Action — never alongside `requirements.txt`.
 Option B. The ratchet is what ships.
 
 **Built:** `backend/tests/test_org_scoping_ratchet.py` plus
-`backend/tests/org_scoping_baseline.txt` — **47 entries across 27 files**, the
-bare-name ids on org-bearing models. It runs in the ordinary backend suite, in
+`backend/tests/org_scoping_baseline.txt` — **47 entries across 27 files** as
+built, the bare-name ids on org-bearing models. (46 since `set_user_roles` was
+scoped; the list may only shrink, so a count below 47 is the ratchet working
+rather than an entry going missing.) It runs in the ordinary backend suite, in
 about 6 seconds, needing no CI change.
 
 Verified by mutation in both directions: adding an unscoped query fails
@@ -411,8 +413,22 @@ security one:
   needs no signature change (the org is derivable from the user row) and makes
   it safe to wire up.
 
-Left for the owner to decide; the baseline entry records the risk in the
-meantime so it cannot be quietly wired up without someone reading this.
+**Resolved by scoping, not deletion** (2026-09-06, after this pass merged).
+The owner chose to keep the method. It now resolves the target user inside
+`organization_id`, runs `assert_all_in_org` over `role_ids` before any write,
+and org-filters the `select(Role)` behind the administrator-continuity check.
+Its baseline entry is gone — `test_baseline_has_no_stale_entries` is what
+required that, which is the ratchet doing the job it was built for.
+
+One correction to the option above, recorded because the reasoning was wrong
+rather than merely incomplete: it claimed scoping "needs no signature change
+(the org is derivable from the user row)". Deriving the org from the row you
+are about to trust is circular — it bounds nothing, since a caller passing a
+foreign `user_id` gets that user's own org back and every check then passes.
+`organization_id` is therefore a **required, keyword-only** parameter. Optional
+would have left the unscoped path in place for a caller to forget, which is the
+shape pitfall #14b warns about and the one `ShiftCompletionService.get_report`
+still carries as EC-9. There were no production callers to migrate.
 
 ### Everything else, by mechanism
 

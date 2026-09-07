@@ -27,6 +27,7 @@ from app.services.admin_continuity_service import (
     assert_positions_retain_administrator,
     assert_role_change_retains_administrator,
 )
+from app.utils.org_scoping import assert_all_in_org
 
 
 def slugify(name: str) -> str:
@@ -658,18 +659,52 @@ class RoleManagementService:
         user_id: str,
         role_ids: List[str],
         set_by: str,
+        *,
+        organization_id: str,
     ) -> List[Role]:
         """
         Set all roles for a user (replaces existing roles).
 
+        ``organization_id`` is required and keyword-only, deliberately. This
+        method had no org parameter at all and no caller in ``app/`` — an
+        unreachable bulk role-replacement that would have crossed tenants the
+        moment an endpoint wired it up, which is a worse failure than a
+        missing feature because the reviewer of *that* change sees only a
+        one-line service call. Keyword-only so a future caller cannot supply
+        it by accident of argument order; required rather than defaulting to
+        ``None`` so there is no unscoped path left to forget (the shape
+        CLAUDE.md pitfall #14b warns about, and the one
+        ``ShiftCompletionService.get_report`` still carries as EC-9).
+
         Args:
-            user_id: User ID
-            role_ids: List of role IDs to assign
+            user_id: User ID, resolved within ``organization_id``
+            role_ids: Position IDs to assign; each is verified in-org first
             set_by: User ID making the change
+            organization_id: The caller's organization. Bounds every read and
+                write below.
 
         Returns:
             List of newly assigned Role objects
+
+        Raises:
+            ValueError: the user is not in this org, or a position is not.
         """
+        # Resolve the target inside the org before anything else. The org also
+        # bounds the position ids below, so this read has to come first.
+        user_result = await db.execute(
+            select(User)
+            .options(selectinload(User.positions))
+            .where(User.id == user_id, User.organization_id == organization_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if user is None:
+            raise ValueError("User not found")
+
+        # XC-1: role_ids are client-supplied. Bound them to the org before any
+        # of them is stored — an unvalidated one persists a foreign position on
+        # this user, and positions carry permissions.
+        await assert_all_in_org(db, Role, role_ids, organization_id, label="position")
+
         # Get current roles
         current_roles = await self.get_user_roles(db, user_id)
         current_role_ids = {str(r.id) for r in current_roles}
@@ -684,31 +719,25 @@ class RoleManagementService:
         # through an intermediate state with neither, which a per-removal
         # check would reject even though the end state is fine.
         if to_remove:
-            user_result = await db.execute(
-                select(User)
-                .options(selectinload(User.positions))
-                .where(User.id == user_id)
-            )
-            user = user_result.scalar_one_or_none()
-            if user is not None:
-                resulting_permissions: set = set()
-                if role_ids:
-                    roles_result = await db.execute(
-                        select(Role).where(Role.id.in_([str(r) for r in role_ids]))
+            resulting_permissions: set = set()
+            if role_ids:
+                roles_result = await db.execute(
+                    select(Role).where(
+                        Role.id.in_([str(r) for r in role_ids]),
+                        Role.organization_id == organization_id,
                     )
-                    for role in roles_result.scalars().all():
-                        resulting_permissions.update(role.permissions or [])
-                if user.rank:
-                    resulting_permissions.update(
-                        get_rank_default_permissions(user.rank)
-                    )
-                await assert_positions_retain_administrator(
-                    db,
-                    str(user.organization_id),
-                    user_id,
-                    resulting_permissions,
-                    action="remove administrator positions from",
                 )
+                for role in roles_result.scalars().all():
+                    resulting_permissions.update(role.permissions or [])
+            if user.rank:
+                resulting_permissions.update(get_rank_default_permissions(user.rank))
+            await assert_positions_retain_administrator(
+                db,
+                str(user.organization_id),
+                user_id,
+                resulting_permissions,
+                action="remove administrator positions from",
+            )
 
         # Apply the complete replacement directly. Calling the single-assignment
         # methods here would create intermediate commits and duplicate audits.
