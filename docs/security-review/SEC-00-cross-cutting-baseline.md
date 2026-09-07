@@ -27,46 +27,49 @@ Two findings, both fixed:
    `frontend/src/utils/apiCache.ts` added 15 exclusion patterns (11
    prefixes, 4 substrings), which — verified by diffing the full route
    inventory against the old vs. new denylist, not a raw pattern match —
-   newly exclude **18 routes** from caching. Only **9** of those 18 have
-   both a `response_model` and a `PII_FIELDS`-matching field name, so only
-   those 9 are protected by the new ratchet test,
-   `backend/tests/test_api_cache_pii_exclusions.py`: `/apparatus/operators`,
-   `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`,
-   `/inventory/reorder-requests`, `/inventory/reorder-requests/{request_id}`,
-   `/inventory/return-requests`, `/inventory/write-offs`,
-   `/operational-ranks/validate`, `/roles/{role_id:uuid}/users`. The other
-   9 are fixed but **not** covered by the ratchet or by
-   `api_cache_pii_baseline.txt` (which lists tolerated exceptions, not fixed
-   routes, and is intentionally empty) — a future regression on these would
-   not be caught automatically: `/apparatus/evoc-check/{apparatus_id}/{user_id}`,
-   `/inventory/allowances/check/{user_id}/{category_id}`,
-   `/inventory/clearances`, `/inventory/clearances/{clearance_id}`,
-   `/inventory/items/{item_id}/exposures`,
-   `/inventory/items/{item_id}/history`,
-   `/inventory/items/{item_id}/issuances`, `/inventory/requests`,
-   `/training/instructors/validate/{user_id}/{course_id}`. No
-   module-audit or cross-cutting entry documents this finding elsewhere —
-   this section is its only prior-art record. For the exact diff, see PR
-   #2381's `frontend/src/utils/apiCache.ts` change.
+   newly exclude **18 routes** from caching. No module-audit or
+   cross-cutting entry documents this finding elsewhere — this section is
+   its only prior-art record. For the exact diff, see PR #2381's
+   `frontend/src/utils/apiCache.ts` change.
 
-   **Six of the 18 are no-ops, not fixes.** Four — `/apparatus/operators`,
-   `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`,
-   `/apparatus/evoc-check/{apparatus_id}/{user_id}` — are requested through
-   `frontend/src/modules/apparatus/services/api.ts`'s own
-   `createApiClient()` instance, which carries no cache interceptor at all
-   — only the shared `services/apiClient.ts` instance does. Two more —
-   `/inventory/clearances/{clearance_id}` and `/roles/{role_id:uuid}/users`
-   — have **no frontend caller at all** as of this pass:
-   `inventoryService.ts` calls only the `/inventory/clearances` list, and
-   `userServices.ts` calls `/roles/{roleId}` (the detail route) and
-   `/users/{userId}/roles`, never `/roles/{roleId}/users`. All six routes
-   were never held in the shared frontend cache, so excluding them from
-   `apiCache.ts`'s denylist closes nothing today (the ratchet test's own
-   scope note calls the client-mismatch shape a harmless no-op; an uncalled
-   route is the same outcome for a different reason — nothing to leak from
-   yet). The other **12** routes are requested through service files that
-   import the shared `apiClient.ts` and were genuine fixes to a real,
-   demonstrated cache leak.
+   **Every one of the 18 was individually traced to its frontend caller
+   (or lack of one) for this entry** — not sampled — after three rounds of
+   Codex review each found more no-ops than the last. Two independent axes
+   determine whether an exclusion is a real fix:
+
+   - **Which axios client serves it.** Only `services/apiClient.ts` caches
+     GET responses. Anything requested through a module's own
+     `createApiClient()` instance (no cache interceptor) was never cached
+     regardless of `apiCache.ts`.
+   - **Whether any frontend code calls it at all.** A route can have a
+     wrapper function in a service file that imports the cached client and
+     still have zero call sites — the wrapper itself was never cached
+     because nothing invokes it.
+
+   | Outcome                                                            | Count  | Routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+   | ------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | **Genuine fix** — real call site through the cached `apiClient.ts` | **10** | `/inventory/allowances/check/{user_id}/{category_id}` (`checkAllowance`), `/inventory/clearances` (`getClearances`), `/inventory/items/{item_id}/exposures` (`getExposureRecords`), `/inventory/items/{item_id}/history` (`getItemHistory`), `/inventory/items/{item_id}/issuances` (`getItemIssuances`), `/inventory/requests` (`getEquipmentRequests`), `/inventory/reorder-requests` (`getReorderRequests`), `/inventory/return-requests` (`getReturnRequests`), `/inventory/write-offs` (`getWriteOffRequests`), `/operational-ranks/validate` (`validateRanks`) |
+   | No-op — apparatus module's uncached `createApiClient()`            | **4**  | `/apparatus/operators`, `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`, `/apparatus/evoc-check/{apparatus_id}/{user_id}`                                                                                                                                                                                                                                                                                                                                                                                                                   |
+   | No-op — wrapper exists on the cached client, zero call sites       | **4**  | `/inventory/clearances/{clearance_id}` (no caller at all), `/inventory/reorder-requests/{request_id}` (`getReorderRequest` — declared, never called; only plural `getReorderRequests` is), `/roles/{role_id:uuid}/users` (no caller at all), `/training/instructors/validate/{user_id}/{course_id}` (`validateInstructor` — declared, never called)                                                                                                                                                                                                                  |
+
+   **10 genuine fixes, 8 no-ops.** The 8 no-ops still closed nothing today
+   — but "no-op today" is not "safe to leave excluded without a guard": the
+   apparatus module could gain a cache interceptor, or a product feature
+   could start calling one of the four unused wrappers, and the exclusion
+   would then be doing real work with no test asserting it stays in place.
+
+   Of the 10 genuine fixes, only **4** — `/inventory/reorder-requests`,
+   `/inventory/return-requests`, `/inventory/write-offs`,
+   `/operational-ranks/validate` — have both a `response_model` and a
+   `PII_FIELDS`-matching field name, so only those 4 are protected by the
+   new ratchet test, `backend/tests/test_api_cache_pii_exclusions.py`. The
+   other **6** — `/inventory/allowances/check/{user_id}/{category_id}`,
+   `/inventory/clearances`, `/inventory/items/{item_id}/exposures`,
+   `/inventory/items/{item_id}/history`, `/inventory/items/{item_id}/issuances`,
+   `/inventory/requests` — are genuine fixes but are **not** covered by the
+   ratchet or by `api_cache_pii_baseline.txt` (which lists tolerated
+   exceptions, not fixed routes, and is intentionally empty): a future
+   regression on any of these 6 would not be caught automatically.
 
 **Action for pass 4:** treat both as already-fixed prior art, but do not
 read this as limiting the sweep to re-verifying only these named routes —
