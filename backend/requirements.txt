@@ -47,7 +47,7 @@ pyotp==2.10.0
 qrcode==8.2
 
 # OAuth & SSO
-authlib==1.7.2
+authlib==1.8.0
 
 # ============================================
 # Encryption & Security
@@ -69,12 +69,12 @@ twilio==9.11.0
 # ============================================
 # Optional at runtime: push_service degrades to "unavailable" if absent, so a
 # deployment with PUSH_ENABLED=false need not have it installed.
-pywebpush==2.4.0
+pywebpush==2.5.0
 
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.82  # AWS S3
+boto3==1.43.88  # AWS S3
 azure-storage-blob==12.30.1
 google-cloud-storage==3.13.1
 python-magic==0.4.27
@@ -85,7 +85,7 @@ python-magic==0.4.27
 python-docx==1.2.0
 openpyxl==3.1.5
 reportlab==5.0.1
-pypdf==6.16.2  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
+pypdf==6.17.0  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
 Pillow==12.3.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 
@@ -107,7 +107,7 @@ tzdata>=2026.3  # Timezone data for zoneinfo (Python 3.9+ built-in)
 # ============================================
 # Payments
 # ============================================
-stripe==15.6.0
+stripe==15.6.1
 
 # ============================================
 # Monitoring & Logging
@@ -132,9 +132,9 @@ celery==5.6.3
 # ============================================
 msal==1.38.0
 msgraph-core==1.5.1
-google-auth==2.57.0
+google-auth==2.57.1
 google-auth-oauthlib==1.4.1
-google-api-python-client==2.199.0
+google-api-python-client==2.200.0
 
 # ============================================
 # Development & Testing
@@ -144,7 +144,7 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.165.10  # schemathesis 4.x requires >=6.130.12
+hypothesis==6.167.1  # schemathesis 4.x requires >=6.130.12
 schemathesis==4.25.2
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
@@ -159,8 +159,8 @@ schemathesis==4.25.2
 # free choice: 0.52.0 and the 0.50.0 that preceded it both make the file
 # unresolvable against the schemathesis above. Read that range off the
 # schemathesis release being pinned before changing this line.
-jsonschema-rs==0.51.0
-faker==40.37.0
+jsonschema-rs==0.53.0
+faker==40.38.0
 
 # Code Quality
 black==26.5.1
