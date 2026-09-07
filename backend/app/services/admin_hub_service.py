@@ -1362,7 +1362,14 @@ async def _short_staffed_shifts(
     The window is a week at most, so the rows are loaded and matched in
     Python — but "a week at most" is the intended case, not a guarantee, so
     ``max_candidates`` bounds pathological data the same way
-    ``SchedulingService.get_open_shifts`` bounds its own window query.
+    ``SchedulingService.get_open_shifts`` bounds its own window query. The cap
+    is applied earliest-start-first, so it never hides an open position among
+    the shifts it does return — but if the window holds more than
+    ``max_candidates`` shifts, the later-starting ones are never fetched at
+    all, and an understaffed shift among them would go unreported with no
+    trace. That case is pathological for a single department's 48-hour or
+    7-day window, so we log it rather than silently trusting the truncated
+    result is the complete population.
     """
     result = await ctx.db.execute(
         select(Shift)
@@ -1377,6 +1384,17 @@ async def _short_staffed_shifts(
         .limit(max_candidates)
     )
     shifts = list(result.scalars().all())
+    if len(shifts) == max_candidates:
+        logger.warning(
+            "admin_hub: short-staffed-shift scan for org {org} hit the "
+            "{cap}-candidate cap for window {start}..{end}; shifts starting "
+            "after {last} were not examined and may be under-reported",
+            org=ctx.organization_id,
+            cap=max_candidates,
+            start=start,
+            end=end,
+            last=shifts[-1].start_time,
+        )
     if not shifts:
         return []
     return await SchedulingService(ctx.db).filter_shifts_with_open_positions(
