@@ -35,6 +35,22 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Audited 2026-09-07 — no drift, nothing recaptured
+
+Routine maintenance pass per the currency job's standing brief, not a
+placeholder-filling session — `SCREENSHOT_STATUS.md` was already at 565/565.
+
+`origin/main`'s tip (`44c68d9`) is exactly the merge-base with this branch:
+no commit has landed on `main` since the branch's last capture session, so
+there was no frontend/style/route change to cross-reference against the
+guides. `audit_images.py --baseline scripts/screenshots/audit_baseline.txt`
+reported no new findings across all 565 images — the only flagged image is
+the pre-known scrollbar-gutter edge case already in the 45-line baseline.
+Servers were never started for this pass; the audit needs only the PNGs on
+disk, and with no drift signal and no upstream change, there was nothing to
+seed or recapture. Nothing changed on disk; this entry exists so the next
+session doesn't re-derive the same "no drift" answer from scratch.
+
 ## Captured 2026-09-07 — the four deferred screens, 9 → 1 remaining
 
 Restart of the prior session. All four screens flagged as "highest-value next
