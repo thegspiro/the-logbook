@@ -16,10 +16,92 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 30 (Onboarding)'s PR #2358 merged (`f0bda691`) — fully
-green (17/17) and idle, merged directly by a 30-minute watchdog check per
-the established precedent (PR #2301, #2303, #2306). Rotation row 30 -> ✅.
-Next: 31 Scheduled tasks.
+**None.** Feature 31 (Scheduled tasks)'s PR #2362 merged (`ff8cf35c`) — fully
+green with a root-caused (not dismissed) intermittent test fix, no unresolved
+review threads. Rotation row 31 -> ✅. Next: 32 Locations & kiosk.
+
+---
+
+### 2026-09-07 — Feature 31 (Scheduled tasks) — PR #2362 merged, watchdog recorded it
+
+PR #2362 (pass 3: CRON3-31-1/2 fixed, all prior open items re-confirmed
+unchanged, full suite 11,642/0) merged; a 30-minute watchdog check recorded
+it and cleared the stale Open PR row. Next: 32 Locations & kiosk.
+
+---
+
+### 2026-09-07 — Feature 31 (Scheduled tasks, pass 3)
+
+Feature 30's PR #2358 merged (`f0bda691`); a watchdog check (PR #2359,
+`235dd514`) had already recorded the merge and started this feature before
+this iteration began. Delta-focused pass per the established pass-3
+convention: diffed pass 2's merge commit (`8254875a`, PR #2095) against
+current `HEAD` for both target files. `scheduled.py` — no change.
+`scheduled_tasks.py` — +334/−34 lines, almost entirely one new task,
+`run_recover_stranded_message_deliveries` (44th runner, re-delivers
+department-message claims a dead worker left `pending`), plus small
+resolution/label changes to four existing runners.
+
+Gave the new task full scrutiny per the brief (it is exactly the "grown
+substantially or added since pass 2" case), including its existing 9-test
+file and the `MessageDeliveryService` claim/reclaim mechanism it calls. Found
+one real gap (CRON3-31-1, LOW/latent): neither the new sweep nor its
+pre-existing sibling `run_publish_scheduled_messages` filtered
+`Organization.active` — the identical child-table-keyed CRON-2 shape
+CRON2-31-11 and CRON-31-5 already found and fixed in three other places in
+this file, invisible to `test_scheduled_tasks_structure.py`'s AST guard for
+the same reason those three were (it matches the literal `select(Organization)`
+string, and this loop instead `join`s it). Fixed both sites: joined
+`Organization`, added `.isnot(False)`/`.is_(False)` matching the file's
+existing idiom, and — since the join would otherwise also lock the
+`Organization` row for the claim transaction's duration —
+`with_for_update(..., of=DepartmentMessage)`, mirroring the `of=` precedent
+already used elsewhere in the backend (`admin_hours_service.py`,
+`equipment_check_service.py`, `training_program_service.py`). 3 new
+regression tests added to `tests/test_message_delivery_claim_recovery.py`,
+each verified to fail against the pre-fix code and pass after.
+
+Re-verified every prior finding (CRON2-31-1 through 13, CRON-31-1 through 8)
+against current code at its current location — all holding, no regressions.
+Two of the still-open flagged items' line citations had drifted from the
+file's growth and are corrected in the new findings doc (logic unchanged,
+only line numbers moved).
+
+**A full-suite run after CRON3-31-1's fix intermittently failed one
+pre-existing test, and this was root-caused rather than filed as an
+unexplained flake (CLAUDE.md's no-suppression rule).**
+`TestPublishScheduledMessagesCommitFailureIsSurvivable::
+test_a_commit_failure_on_one_message_does_not_abort_the_batch`
+(`test_message_delivery_service.py`) failed with `MissingGreenlet` at a
+`SAVEPOINT` boundary in 2 consecutive full-suite runs with the fix applied,
+and 0 times in one full-suite run with it reverted — inconclusive from 3
+slow (5-minute) runs alone, so the investigation switched to a fast,
+targeted reproduction instead of a fourth full-suite run: looping the single
+test standalone 30 times reproduced **11/30 (~37%) failures with the fix
+applied, 0/30 with it reverted**, conclusively implicating the diff and
+proving it was never truly full-suite-scale-dependent — just intermittent
+enough to need more than a couple of tries. Reading the full traceback (not
+just its last line) found the actual mechanism: the test's own assertion
+read an ORM object's attribute _after_ the tested function returned, and
+that object could be expired by a later message's rollback in the same
+batch depending on which of two possible row orders MySQL happened to
+return for an _unordered_ query — latent since the test was written, newly
+exposed because CRON3-31-1's added `JOIN` changed the query's execution
+plan enough to make that previously-single-order query return rows in
+either order roughly equally often. Fixed as CRON3-31-2: the test now
+captures ids at call time rather than reading a persistent ORM attribute
+after the fact. 40/40 standalone passes after the fix (was 11/40 failures);
+a full clean suite run afterward confirmed it: **11,642 passed, 21 skipped,
+0 failed.** Full account, including the failed traceback read and the two
+30-run reproductions, in the findings doc.
+
+flake8/black/isort clean on `app/`, `tests/`, `alembic/` at CI's pinned
+versions; migrations PASSED (432 revisions, single head); scoped tests
+160/160 (1 skipped, pywebpush env-only); full suite 11,642/0 (21 skipped, all
+pre-existing Docker/optional-dependency/contract-suite skips); frontend
+typecheck 0 errors, eslint 0 errors/2 pre-existing warnings (no frontend
+files touched this pass). Findings doc:
+`docs/security-review/CRON3-31-scheduled-tasks.md`.
 
 ---
 
@@ -9946,8 +10028,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 

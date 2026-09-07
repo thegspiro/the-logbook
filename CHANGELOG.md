@@ -93,6 +93,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-sleeve polo and nothing could then correct it — the form had no style
   control at all, and renaming the item changed only its label while the catalog
   kept grouping on the columns.
+### Scheduled department-message tasks now skip decommissioned organizations (2026-09-07)
+
+**Fixed**
+
+- **A deactivated organization's scheduled department messages and stranded
+  delivery claims would still publish/re-send.** `run_publish_scheduled_messages`
+  and the new `run_recover_stranded_message_deliveries` sweep read
+  `DepartmentMessage` rows by `organization_id` with no join back to
+  `Organization.active`, the same gap already closed in three other
+  scheduled-task loops (2026-08-25's rolling-recurrence-extend and
+  compliance/training/Salesforce auto-sync fixes). Latent today — nothing yet
+  sets an organization inactive — but now closed the same way: joined to
+  `Organization` and filtered on `.active`, so a decommissioned department's
+  messages stop escalating and its stranded claims are retired instead of
+  redelivered.
+
 ### Members settings moved to Members Administration (2026-09-06)
 
 **Changed**
@@ -116,6 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A failed settings load says so.** Both sections render every toggle `false`
   before their data arrives, which reads as a department that has turned the
   feature off. They now report the failure and offer a retry instead.
+
 ### The set of paths that can create an account is now pinned (2026-09-06)
 
 **Added**
