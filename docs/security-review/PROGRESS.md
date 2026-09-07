@@ -18,20 +18,25 @@ feature. The rotation cannot outrun its own review queue.
 
 **None.** Feature 34 (Frontend shared, pass 5, corrective) PR
 [#2382](https://github.com/thegspiro/the-logbook/pull/2382) merged
-(`f53258ee`). It corrected three `chatgpt-codex-connector[bot]` findings that
-PR #2379 (pass 4) merged unaddressed (wrong baseline commit citation, the
-`GET /inventory/items/colors` caching gap, and this tracker's own stale
-FE3-34-5 disposition), then picked up three more from Codex review on its own
-pushes as it went — a fourth (the `list_item_colors` permission gate itself,
-`get_current_user` → `require_permission("inventory.view")`, plus a
-regression test) and two doc-accuracy corrections (the completion-gate table
-and the "Schema & migration notes" section both still called the pass
-frontend-only after the permission fix landed). A fifth finding (`85cc9b6` as
-an "orphaned pre-squash" ancestor of the cited fix commit) was verified
-against the actual repository and found to not exist anywhere in this
-history — replied on the PR with the verification rather than acting on it.
-All six real/verified findings across the PR's four commits were addressed,
-replied to, and resolved before merge. See
+(`f53258ee`). Its first commit corrected the three `chatgpt-codex-connector[bot]`
+findings that PR #2379 (pass 4) merged unaddressed (wrong baseline commit
+citation, the `GET /inventory/items/colors` caching gap, this tracker's own
+stale FE3-34-5 disposition) — that commit is what opened the PR. Codex then
+found three more on that commit, all fixed in the second commit: the
+`list_item_colors` permission gate itself (`get_current_user` →
+`require_permission("inventory.view")`, plus a regression test), this
+tracker's **Open PR** row still pointing at the already-merged #2379 instead
+of this PR, and the FE5 doc's diff-range citation using the moving `HEAD`
+instead of a pinned SHA. Codex found two more doc-accuracy gaps left behind
+by the permission fix (the completion-gate table and the "Schema &
+migration notes" section both still called the pass frontend-only) — fixed
+across the third and fourth commits. One further comment, interleaved with
+those two, claimed the cited fix commit was an "orphaned pre-squash" sibling
+of a commit `85cc9b6` that was verified against the actual repository to not
+exist anywhere in this history — replied on the PR with that verification
+rather than acting on it. Six findings in total across the PR's four
+commits, five real and fixed, one verified as not real; all threads replied
+to and resolved before merge. See
 `docs/security-review/FE5-34-frontend-shared.md` for the full corrective
 review. Feature 34 stays ✅ at pass 4's rotation position — this PR repaired
 pass 4's record, it did not open a new pass. Rotation wraps to 00
@@ -175,25 +180,36 @@ once #2370 merges: 34 Frontend shared.
 ### 2026-09-07 — Feature 34's corrective PR #2382 merged, watchdog recorded it
 
 PR #2382 (pass 5, corrective) went through four commits before merge, each
-addressing Codex review comments as they landed rather than batching them:
-the three original findings (wrong baseline citation, the colours-caching
-gap, the stale FE3-34-5 tracker note), then a fourth Codex found on that same
-push — `list_item_colors` was gated on `get_current_user` instead of
-`require_permission("inventory.view")` like every sibling read on the
-inventory router, so a custom position lacking that permission could still
-read every colour in the org's catalog through this one route. Fixed to
-match its siblings, plus a regression test
+addressing Codex review comments as they landed rather than batching them.
+The first commit (`9c3ff748`) fixed the three original findings PR #2379 had
+merged unaddressed (wrong baseline citation, the colours-caching gap, the
+stale FE3-34-5 tracker note) — that commit is what opened PR #2382. Codex
+then reviewed _that_ commit and raised three more, all fixed together in the
+second commit (`f2250051`): (1) `list_item_colors` was gated on
+`get_current_user` instead of `require_permission("inventory.view")` like
+every sibling read on the inventory router, so a custom position lacking
+that permission could still read every colour in the org's catalog through
+this one route — fixed to match its siblings, plus a regression test
 (`test_item_colors_requires_inventory_view` in
 `test_inventory_member_visibility.py`, using the file's existing
-`_permission_set` helper) guarding against it loosening back. Two more
-Codex findings on the resulting push were doc-accuracy only — the
-completion-gate table and the "Schema & migration notes" section both still
-called the pass frontend-only after that permission fix landed — corrected
-both. A sixth Codex comment claimed the cited fix commit was an "orphaned
+`_permission_set` helper); (2) the tracker's own **Open PR** row still
+pointed at the already-merged PR #2379 instead of this corrective follow-up
+— repointed at #2382, with #2379's text moved into superseded history; (3)
+the FE5 doc's cited diff range used the moving `HEAD` instead of an
+immutable SHA, made unreproducible by this very commit landing — repinned to
+`796059dc..f361ebe7`. Codex reviewed that push and raised two more, both
+doc-accuracy gaps left behind by finding (1) above: the completion-gate
+table and the "Schema & migration notes" section both still called the pass
+frontend-only after the permission fix landed — fixed in the third commit
+(`ea5d8774`, gate table) and fourth (`2f5754ff`, schema notes), the fourth
+also adding the missing regression-test record. Interleaved with those two,
+one further Codex comment claimed the cited fix commit was an "orphaned
 pre-squash" sibling of a commit `85cc9b6`; verified against the actual
 repository (`git cat-file -t`, `git log --all`) that no such commit exists
 anywhere in this history, replied with that evidence, and left the citation
-unchanged. All threads replied to and resolved before merge (`f53258ee`).
+unchanged — six findings in total across the four commits, five of them real
+and fixed, one (the hallucinated SHA) verified as not real and correctly not
+acted on. All threads replied to and resolved before merge (`f53258ee`).
 CI was fully green on the final head; the one apparent CI failure along the
 way (`ea5d877`'s "CI Success" job) was confirmed to be jobs auto-cancelled by
 the next push arriving mid-run, not a real failure. Rotation row 34 stays ✅
