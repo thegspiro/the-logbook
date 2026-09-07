@@ -1054,8 +1054,14 @@ class Seeder:
     # -- organization ------------------------------------------------
 
     # The QA checklist is a staff tool for walking the app page by page, not a
-    # department feature, and no training guide documents it. Everything else
-    # ships to a real department, so the demo org turns it on.
+    # department feature -- it ships off by default and guide 08's own demo
+    # data pictures it that way ("Settings -> Modules with Testing Checklist
+    # off"). Everything else ships to a real department, so the demo org turns
+    # it on. seed_testing_checklist() switches this one on just long enough to
+    # write its two runs through the API, then restores it to off so the
+    # module list still shows the shipped default -- the marks it wrote stay
+    # on the server regardless, which is the guide's own point about the
+    # switch.
     MODULES_LEFT_OFF = {"testing"}
 
     def enable_all_modules(self) -> None:
@@ -7543,6 +7549,121 @@ class Seeder:
             if title:
                 payload["title"] = title
             self.api.call("PUT", f"/officers/{office_key}", payload)
+
+    def seed_org_chart(self, members: list[dict]) -> dict[str, Any]:
+        """Governance -> Organizational Chart: a published, four-level tree.
+
+        It starts empty for every department (nothing is inferred from
+        positions or ranks -- see the guide's "It starts empty" section), so
+        the three org-chart shots need a chart built by hand the same way an
+        officer would build one. Idempotent on node count: a chart an earlier
+        run already published is left alone rather than grown on every re-seed.
+
+        Shapes required across the three placeholders in one tree, so the
+        outline and diagram shots can picture the very same chart:
+          - four levels deep (guide 08's own demo-data note)
+          - one seat with two holders (the shared Deputy Chief seat)
+          - three seats reporting to that shared seat (three Captains)
+          - one seat with a non-member holder, two member holders,
+            responsibility text and a position link (the node-modal shot --
+            "Captain — C Shift" carries all four at once so a single edit
+            click reaches the whole request)
+        """
+        existing = self.api.get("/org-chart")
+        if items(existing, "nodes"):
+            return {"skipped": "chart already published"}
+
+        by_username = {m.get("username"): m for m in members}
+
+        def holder_id(username: str) -> str | None:
+            return pick(by_username.get(username), "id")
+
+        roles = self.api.get("/roles")
+        captain_position_id = next(
+            (pick(r, "id") for r in roles if pick(r, "slug") == "captain"), None
+        )
+
+        def create(payload: dict[str, Any]) -> str:
+            response = self.api.post("/org-chart/nodes", payload)
+            nodes = items(response, "nodes")
+            # The endpoint returns the whole chart, not just the new node, so
+            # the fresh id is whichever node this title/parent pair matches
+            # that a prior call in this same run has not already claimed.
+            for node in nodes:
+                if (
+                    pick(node, "title") == payload["title"]
+                    and pick(node, "parent_id", "parentId") == payload.get("parent_id")
+                    and pick(node, "id") not in created_ids
+                ):
+                    created_ids.add(pick(node, "id"))
+                    return pick(node, "id")
+            raise RuntimeError(f"created node not found in response: {payload['title']}")
+
+        created_ids: set[str] = set()
+
+        chief_id = create(
+            {
+                "title": "Fire Chief",
+                "is_published": True,
+                "holders": [{"user_id": holder_id("chief")}],
+            }
+        )
+        deputy_id = create(
+            {
+                "title": "Deputy Chief",
+                "parent_id": chief_id,
+                "is_published": True,
+                "responsibility": "Day-to-day operations across all three shifts.",
+                "holders": [
+                    {"user_id": holder_id("mbell")},
+                    {"user_id": holder_id("praman")},
+                ],
+            }
+        )
+        captain_a = create(
+            {
+                "title": "Captain — A Shift",
+                "parent_id": deputy_id,
+                "position_id": captain_position_id,
+                "is_published": True,
+                "holders": [{"user_id": holder_id("okittredge")}],
+            }
+        )
+        create(
+            {
+                "title": "Captain — B Shift",
+                "parent_id": deputy_id,
+                "position_id": captain_position_id,
+                "is_published": True,
+                "holders": [{"user_id": holder_id("smarchetti")}],
+            }
+        )
+        create(
+            {
+                "title": "Captain — C Shift",
+                "parent_id": deputy_id,
+                "position_id": captain_position_id,
+                "is_published": True,
+                "responsibility": (
+                    "Oversees EMS operations, training compliance, and liaises "
+                    "with the department's on-call medical director."
+                ),
+                "holders": [
+                    {"user_id": holder_id("tlindqvist")},
+                    {"user_id": holder_id("aosei")},
+                    {"display_name": "Dr. Elena Vasquez (on-call medical director)"},
+                ],
+            }
+        )
+        create(
+            {
+                "title": "Lieutenant — A Shift",
+                "parent_id": captain_a,
+                "is_published": True,
+                "holders": [{"user_id": holder_id("hvance")}],
+            }
+        )
+        return {"created": len(created_ids)}
 
     def seed_messages(self, base_url: str, members: list[dict]) -> list[dict]:
         """Post department announcements and have some members acknowledge.
@@ -14518,6 +14639,95 @@ class Seeder:
             )
         return {"issued": issued, "member_id": member_id}
 
+    def seed_testing_checklist(self) -> dict[str, Any]:
+        """Two runs on the QA checklist: one archived, one current with marks.
+
+        `/testing-checklist` is gated on the `testing` module (the demo leaves
+        it off by default -- see MODULES_LEFT_OFF), so this switches the
+        module on only for the API calls that need it and always restores
+        the module's original setting afterward, success or failure, which is
+        why the toggle and the seeding both sit inside a `try`/`finally`
+        rather than a plain sequence of calls. That mirrors what the guide
+        itself says about the module switch: marks made while it was on stay
+        on the server and simply reappear the next time it is turned back on
+        -- which is exactly what a screenshot of the *off* module list next to
+        a full run picker is demonstrating.
+
+        Idempotent on run count: a department that already has two runs (an
+        archived one plus the current one this seeds) is left alone.
+        """
+        modules = self.api.get("/organization/modules")
+        settings = pick(modules, "module_settings", "moduleSettings") or {}
+        was_enabled = bool(settings.get("testing"))
+        if not was_enabled:
+            self.api.patch("/organization/modules", {"testing": True})
+        try:
+            existing = self.api.get("/testing-checklist?include_all_testers=true")
+            if len(items(existing, "runs")) >= 2:
+                return {"skipped": "checklist already has runs"}
+
+            def mark(route_path: str, status: str, **extra: Any) -> None:
+                self.api.put(
+                    "/testing-checklist/entries",
+                    {"route_path": route_path, "status": status, **extra},
+                )
+
+            # Every mark below lives in the registry's "Core" group (dashboard,
+            # learning, account, org chart, action items, documents) rather
+            # than being spread across the groups those routes' modules
+            # belong to. That is not where a real QA pass would necessarily
+            # land its marks -- it is so the run-picker screenshot can expand
+            # one group and show the whole pass/fail/blocked/mismatch mix at
+            # once, instead of four collapsed groups with one mark apiece.
+
+            # Run 1 -- becomes the archived predecessor the moment run 2 opens.
+            mark("/dashboard", "pass", expected_access="open", build_id="1.3")
+            mark("/account", "pass", expected_access="open", build_id="1.3")
+            mark(
+                "/governance/org-chart",
+                "pass",
+                expected_access="allowed",
+                build_id="1.3",
+            )
+            mark("/documents", "pass", expected_access="allowed", build_id="1.3")
+
+            self.api.post(
+                "/testing-checklist/runs",
+                {"label": "Pre-launch, build 1.4", "build_id": "1.4"},
+            )
+
+            # Run 2 -- the current run: a pass/fail/blocked mix plus one gate
+            # mismatch (status pass against an expectation of denied), which
+            # is what the printable report's "permissions defect" section and
+            # the run picker's mismatch flag both need something to show.
+            mark("/dashboard", "pass", expected_access="open", build_id="1.4")
+            mark(
+                "/learning",
+                "blocked",
+                note="No published learning paths in this demo organization.",
+                expected_access="open",
+                build_id="1.4",
+            )
+            mark(
+                "/account",
+                "fail",
+                note="Notification preferences tab does not save on the first click.",
+                expected_access="open",
+                build_id="1.4",
+            )
+            mark(
+                "/governance/org-chart",
+                "pass",
+                note="Opened for this account; the org chart is expected to refuse a general member.",
+                expected_access="denied",
+                build_id="1.4",
+            )
+            mark("/action-items", "pass", expected_access="allowed", build_id="1.4")
+            return {"runs": 2}
+        finally:
+            if not was_enabled:
+                self.api.patch("/organization/modules", {"testing": False})
+
     def seed_label_printers(self) -> int:
         """Two registered printers, one per command language, one default.
 
@@ -14652,6 +14862,7 @@ class Seeder:
         # notifies each rostered member, the administrator among them.
         self.step("shift reminder inbox", self.seed_shift_reminder_notification)
         self.step("officers", lambda: self.seed_officers(members))
+        self.step("org chart", lambda: self.seed_org_chart(members))
         self.step("messages", lambda: self.seed_messages(self.base_url, members))
         forms = self.step("forms", self.seed_forms) or []
         self.step(
@@ -14738,6 +14949,7 @@ class Seeder:
         self.step("unsized shift", self.seed_unsized_shift)
         self.step("sealed compartments", self.seed_sealed_compartments)
         self.step("member admin hours", self.seed_member_admin_hours)
+        self.step("testing checklist", self.seed_testing_checklist)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

@@ -134,6 +134,61 @@ export function clickByName(name) {
 }
 
 /**
+ * Ensure the Testing Checklist module is on, then land on `route`.
+ *
+ * The seeder writes both testing runs through the API but always restores the
+ * module to its off default afterward (see seed_testing_checklist in
+ * seed_demo_data.py) -- the marks stay on the server regardless, which is the
+ * whole point the "module off" screenshot beside these two is making. So the
+ * two shots that need to actually see `/testing` have to turn the module back
+ * on for themselves, through the same Settings -> Modules control a real
+ * administrator would use, before navigating to the route they were given.
+ * `afterEnable` runs once the target route has loaded.
+ */
+export function enableTestingModuleThenGoto(route, afterEnable) {
+  return async (page) => {
+    const origin = new URL(page.url()).origin;
+    await page.goto(`${origin}/settings?tab=modules&page=additional`, {
+      waitUntil: "domcontentloaded",
+    });
+    const enableBtn = page.getByRole("button", {
+      name: "Enable Testing Checklist",
+    });
+    if (await enableBtn.count()) {
+      await enableBtn.click({ timeout: 10_000 });
+      await page.waitForSelector(
+        '[aria-label="Disable Testing Checklist"]',
+        { timeout: 10_000 },
+      );
+    }
+    await page.goto(`${origin}${route}`, { waitUntil: "domcontentloaded" });
+    if (afterEnable) await afterEnable(page);
+  };
+}
+
+/**
+ * Toggle one call type's switch off in the draft, without saving.
+ *
+ * Retiring a type that already has calls filed under it is not offered --
+ * delete and the switch both stay meaningful only on a type with nothing on
+ * record -- so this picks the first row whose delete control is *not*
+ * disabled (no calls, no filed report naming it) and flips its switch. Rows
+ * the seeded call-tracking data already locked are left alone, which is what
+ * pictures the delete-disabled state the same screenshot asks for.
+ */
+export async function retireOneUnlockedCallType(page) {
+  await page.waitForSelector("text=Call types", { timeout: 20_000 });
+  const row = page
+    .locator("li")
+    .filter({
+      has: page.locator('button[aria-label^="Delete "]:not([disabled])'),
+    })
+    .first();
+  await row.locator('button[role="switch"]').click({ timeout: 10_000 });
+  await page.waitForTimeout(200);
+}
+
+/**
  * Navigate to a public room-display route.
  *
  * Both the kiosk and the guest sign-in page are addressed by the *location's*
@@ -12660,6 +12715,97 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Same chart, same interactions, as guide 08's identical markers.
+    id: "19-44-org-chart-outline",
+    doc: "19-august-2026-release-changes.md",
+    line: 1720,
+    anchor: "the org chart, outline view",
+    alt: "The org chart as an indented outline: Fire Chief, a Deputy Chief seat shared by two holders, three Captains reporting to it -- one seat naming a non-member holder -- and a Lieutenant a level below",
+    route: "/governance/org-chart",
+    prepare: clickByName(/^Show the chart as a list$/),
+    fullPage: true,
+  },
+  {
+    id: "19-45-org-chart-diagram",
+    doc: "19-august-2026-release-changes.md",
+    line: 1725,
+    anchor: "the org chart, diagram view",
+    alt: "The same chart as a boxes-and-connectors diagram",
+    route: "/governance/org-chart",
+    prepare: clickByName(/^Show the chart as a diagram$/),
+    fullPage: true,
+  },
+  {
+    id: "19-46-org-chart-node-modal",
+    doc: "19-august-2026-release-changes.md",
+    line: 1759,
+    anchor: "the org chart node modal",
+    alt: "The node editor open on Captain -- C Shift: two member holders and one non-member holder, responsibility text filled in, and the Captain position link visible",
+    route: "/governance/org-chart",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Captain — C Shift" })
+        .click({ timeout: 15_000 });
+      await page.waitForSelector('text="Edit Captain — C Shift"', {
+        timeout: 15_000,
+      });
+    },
+    selector: '[role="dialog"]',
+  },
+  {
+    id: "19-47-settings-modules-testing-off",
+    doc: "19-august-2026-release-changes.md",
+    line: 1966,
+    anchor: "settings -> modules with testing checklist off",
+    alt: 'Settings -> Modules -> Additional Modules, with Testing Checklist listed as Disabled and an Enable button -- the answer to "where did /testing go"',
+    route: "/settings?tab=modules&page=additional",
+    prepare: async (page) => {
+      const disableBtn = page.getByRole("button", {
+        name: "Disable Testing Checklist",
+      });
+      if (await disableBtn.count()) {
+        await disableBtn.click({ timeout: 10_000 });
+        await page.waitForSelector(
+          '[aria-label="Enable Testing Checklist"]',
+          { timeout: 10_000 },
+        );
+      } else {
+        await page.waitForSelector(
+          '[aria-label="Enable Testing Checklist"]',
+          { timeout: 15_000 },
+        );
+      }
+    },
+    selector: "main",
+  },
+  {
+    id: "19-48-testing-home-run-picker",
+    doc: "19-august-2026-release-changes.md",
+    line: 2000,
+    anchor: "testing home with a named run and the run picker",
+    alt: 'Testing Home on "Pre-launch, build 1.4" with the run picker showing two runs, the Core group expanded to a pass, a fail with a note, a blocked mark and a flagged gate mismatch on Org Chart',
+    route: "/testing",
+    prepare: enableTestingModuleThenGoto("/testing", async (page) => {
+      await page
+        .getByRole("button", { name: /^Core$/ })
+        .click({ timeout: 15_000 });
+      await page.waitForSelector("text=Org Chart", { timeout: 15_000 });
+    }),
+    fullPage: true,
+  },
+  {
+    id: "19-49-testing-report-print",
+    doc: "19-august-2026-release-changes.md",
+    line: 2012,
+    anchor: "the printable testing report",
+    alt: "The printable testing report for the current run: coverage summary, a failure carrying its note, and the Org Chart gate mismatch under permissions defects",
+    route: "/testing/report/print",
+    prepare: enableTestingModuleThenGoto("/testing/report/print", async (page) => {
+      await page.waitForSelector("text=Org Chart", { timeout: 15_000 });
+    }),
+    fullPage: true,
+  },
+  {
     // Applied through the picker rather than the API: the point of the pair is
     // that nothing in the confirmation says the voting method is about to
     // change, so the change has to arrive by the route a secretary takes.
@@ -12952,6 +13098,176 @@ export const SHOTS = [
     auth: "member",
     route: "/dashboard",
     fullPage: true,
+  },
+
+  // -- 2026-09-07: org chart, testing checklist, call types -----------------
+  // The three shapes the 2026-09-06 pass flagged as needing more than that
+  // pass budgeted: a seeder extension (org chart, testing checklist -- both
+  // added to seed_demo_data.py) and a multi-step `prepare` (the call types
+  // editor's retire/lock states). See SCREENSHOT_CURRENCY.md for what is
+  // still open after this pass (gear request, event attendee visibility,
+  // Claude MCP, the compliance matrix redesign, the Shift Details modal, the
+  // email test-connection button).
+  {
+    id: "08-79-org-chart-outline",
+    doc: "08-admin-reports.md",
+    line: 2389,
+    anchor: "the org chart, outline view",
+    alt: "The org chart as an indented outline: Fire Chief, a Deputy Chief seat shared by two holders, three Captains reporting to it -- one seat naming a non-member holder -- and a Lieutenant a level below",
+    route: "/governance/org-chart",
+    prepare: clickByName(/^Show the chart as a list$/),
+    fullPage: true,
+  },
+  {
+    id: "08-80-org-chart-diagram",
+    doc: "08-admin-reports.md",
+    line: 2394,
+    anchor: "the org chart, diagram view",
+    alt: "The same chart as a boxes-and-connectors diagram",
+    route: "/governance/org-chart",
+    prepare: clickByName(/^Show the chart as a diagram$/),
+    fullPage: true,
+  },
+  {
+    id: "08-81-org-chart-node-modal",
+    doc: "08-admin-reports.md",
+    line: 2398,
+    anchor: "the org chart node modal",
+    alt: "The node editor open on Captain -- C Shift: two member holders and one non-member holder, responsibility text filled in, and the Captain position link visible",
+    route: "/governance/org-chart",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit Captain — C Shift" })
+        .click({ timeout: 15_000 });
+      await page.waitForSelector('text="Edit Captain — C Shift"', {
+        timeout: 15_000,
+      });
+    },
+    selector: '[role="dialog"]',
+  },
+
+  {
+    id: "08-82-settings-modules-testing-off",
+    doc: "08-admin-reports.md",
+    line: 2433,
+    anchor: "settings -> modules with testing checklist off",
+    alt: 'Settings -> Modules -> Additional Modules, with Testing Checklist listed as Disabled and an Enable button -- the answer to "where did /testing go"',
+    route: "/settings?tab=modules&page=additional",
+    prepare: async (page) => {
+      // Idempotent regardless of what an earlier capture run left behind: the
+      // seeder always restores the module to off, but a re-run of just this
+      // shot (`--only 08-82`) after some other manual testing session left it
+      // on should not silently picture the wrong state.
+      const disableBtn = page.getByRole("button", {
+        name: "Disable Testing Checklist",
+      });
+      if (await disableBtn.count()) {
+        await disableBtn.click({ timeout: 10_000 });
+        await page.waitForSelector(
+          '[aria-label="Enable Testing Checklist"]',
+          { timeout: 10_000 },
+        );
+      } else {
+        await page.waitForSelector(
+          '[aria-label="Enable Testing Checklist"]',
+          { timeout: 15_000 },
+        );
+      }
+    },
+    selector: "main",
+  },
+
+  {
+    id: "08-83-testing-home-run-picker",
+    doc: "08-admin-reports.md",
+    line: 2476,
+    anchor: "testing home with a named run and the run picker",
+    // The run picker is a native <select> -- never "visible" to Playwright,
+    // per this file's own README -- so it is shown closed, naming the current
+    // run, rather than open. Every mark seed_testing_checklist() writes sits
+    // in the registry's "Core" group on purpose, so expanding that one group
+    // surfaces the whole pass/fail/blocked/mismatch mix in a single shot.
+    alt: 'Testing Home on "Pre-launch, build 1.4" with the run picker showing two runs, the Core group expanded to a pass, a fail with a note, a blocked mark and a flagged gate mismatch on Org Chart',
+    route: "/testing",
+    prepare: enableTestingModuleThenGoto("/testing", async (page) => {
+      await page
+        .getByRole("button", { name: /^Core$/ })
+        .click({ timeout: 15_000 });
+      await page.waitForSelector("text=Org Chart", { timeout: 15_000 });
+    }),
+    fullPage: true,
+  },
+
+  {
+    id: "08-84-testing-report-print",
+    doc: "08-admin-reports.md",
+    line: 2480,
+    anchor: "the printable testing report",
+    alt: "The printable testing report for the current run: coverage summary, a failure carrying its note, and the Org Chart gate mismatch under permissions defects",
+    route: "/testing/report/print",
+    prepare: enableTestingModuleThenGoto("/testing/report/print", async (page) => {
+      await page.waitForSelector("text=Org Chart", { timeout: 15_000 });
+    }),
+    fullPage: true,
+  },
+
+  {
+    id: "03-103-call-types-editor",
+    doc: "03-scheduling.md",
+    line: 3310,
+    anchor: "the call types editor in scheduling admin",
+    alt: "The Call types editor in Scheduling Admin -> General: the department's list with rename and reorder controls, one type toggled off (retired), and the delete control disabled on a type with calls behind it",
+    route: "/scheduling/admin/settings/general",
+    prepare: retireOneUnlockedCallType,
+    fullPage: true,
+  },
+  {
+    id: "20-07-call-types-editor",
+    doc: "20-september-2026-release-changes.md",
+    line: 320,
+    anchor: "the call types editor in scheduling admin",
+    alt: "The Call types editor in Scheduling Admin -> General: the department's list with rename and reorder controls, one type toggled off (retired), and the delete control disabled on a type with calls behind it",
+    route: "/scheduling/admin/settings/general",
+    prepare: retireOneUnlockedCallType,
+    fullPage: true,
+  },
+  {
+    // Same screen, same shot as 02-107 -- the compliance matrix redesign this
+    // release-notes guide is summarising is the one 02-training.md already
+    // documents in full, so its own capture stands in rather than being
+    // re-taken from scratch.
+    id: "20-05-compliance-matrix-triage",
+    doc: "20-september-2026-release-changes.md",
+    line: 361,
+    anchor: "the redesigned compliance matrix triage rail: members grouped by standing",
+    alt: "The redesigned Compliance Matrix: a triage rail of members grouped by standing, worst first, with one member's per-requirement detail open and the non-compliant status chip from a dashboard deep link above the queue",
+    route: "/training/admin?page=dashboard&tab=compliance&status=noncompliant",
+    fullPage: true,
+  },
+  {
+    // Same modal, same interaction as 03-101/03-102 -- guide 20's own marker
+    // (line 430) describes the identical Shift Details redesign.
+    id: "20-08-shift-details-modal-laptop",
+    doc: "20-september-2026-release-changes.md",
+    line: 430,
+    anchor: "the shift details modal at laptop width with the crew board visible",
+    alt: "The Shift Details surface as a centred modal at laptop width, with the crew board visible",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => !shift.is_finalized),
+    selector: 'div[role="dialog"]',
+  },
+  {
+    // Second image for the same marker as 20-08 -- inserted by hand next to
+    // it, the same way 03-101/03-102 and 08-75/08-76 were paired.
+    id: "20-09-shift-details-modal-phone",
+    doc: "20-september-2026-release-changes.md",
+    line: 430,
+    anchor: "not-auto-applied -- see 20-08, inserted by hand",
+    alt: "The Shift Details surface as a centred, inset modal at 390px phone width",
+    route: "/scheduling",
+    prepare: openStaffedShift((shift) => !shift.is_finalized),
+    viewport: "mobile",
+    selector: 'div[role="dialog"]',
   },
 ];
 
