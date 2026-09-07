@@ -476,6 +476,126 @@ class TestRateLimiter:
         assert is_limited is True
         assert "locked" in (reason or "").lower()
 
+    @pytest.mark.unit
+    def test_a_calling_keys_own_window_metadata_survives_its_own_forced_eviction(
+        self,
+    ):
+        """CI3-33-1a (Codex review of PR #2368): CI3-33-2's fix restores a
+        forced-evicted key's *request history* by capturing it before
+        _evict_stale runs, but the forced-eviction loop also pops
+        self._key_windows[key] for the same evicted keys, and nothing
+        restored that. A key whose window metadata goes missing this way
+        gets judged, on the *next* sweep, against whichever window_seconds
+        happened to trigger that later sweep — CI2-33-2's exact bug,
+        reintroduced by omission. Reproduced in two steps: first, force
+        eviction during the key's own call (window metadata must survive
+        that call); second, an unrelated short-window call's later sweep
+        must not evict the key's still-within-its-own-long-window history."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        limiter.requests["target"] = [now - 50]
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+            limiter._key_windows[f"other-{i}"] = 60
+
+        # "target"'s own call, with a long (3600s) window, forces eviction
+        # (over _MAX_KEYS) — which pops _key_windows["target"] as a side
+        # effect unless restored.
+        limiter.is_rate_limited("target", max_requests=100, window_seconds=3600)
+        assert limiter._key_windows.get("target") == 3600
+
+        # Isolate the *individual staleness* mechanism (stale_keys, judged
+        # against _key_windows.get(k, window_seconds)) from the unrelated
+        # forced-by-recency eviction by raising the cap so the latter can't
+        # fire on the next sweep.
+        limiter._MAX_KEYS = 10_000
+        now2 = time.time()
+        # "target" quiet for 65s — stale under a 60s window, well within its
+        # real 3600s one.
+        limiter.requests["target"] = [now2 - 65]
+        limiter._last_eviction = 0.0
+        limiter.is_rate_limited("login:5.6.7.8", max_requests=100, window_seconds=60)
+
+        assert "target" in limiter.requests
+        assert len(limiter.requests["target"]) > 0
+
+    @pytest.mark.unit
+    def test_lockouts_are_capped_independently_of_requests(self):
+        """CI3-33-1b (Codex review of PR #2368): CI3-33-1 stopped the
+        requests-eviction loop from also popping active lockouts, which
+        fixed the early-unlock bug — but that had been the *only* thing
+        bounding self.lockouts' size. Decoupled, self.lockouts has no cap of
+        its own: a flood of distinct keys each tripping the lockout (e.g.
+        during a Redis outage, this limiter's exact fallback window) grows
+        it unboundedly for the full lockout duration — CLAUDE.md Pitfall #9's
+        shape. Must be capped independently by _MAX_LOCKOUTS."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 100
+        limiter._MAX_LOCKOUTS = 100
+        limiter._EVICTION_INTERVAL = 0
+
+        for i in range(500):
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        assert len(limiter.lockouts) <= limiter._MAX_LOCKOUTS + 1
+
+    @pytest.mark.unit
+    def test_lockout_cap_eviction_removes_soonest_expiring_first(self):
+        """CI3-33-1b: eviction of over-cap lockouts must pick the
+        soonest-to-expire entries, not an arbitrary or recency-of-request
+        order — those cost the least "early unlock" impact, since they were
+        going to naturally expire soonest regardless of eviction."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        limiter.lockouts["soon-1"] = now + 5
+        limiter.lockouts["soon-2"] = now + 6
+        limiter.lockouts["late-1"] = now + 5000
+        limiter.lockouts["late-2"] = now + 6000
+        limiter.lockouts["late-3"] = now + 7000
+
+        limiter._last_eviction = 0.0
+        limiter.is_rate_limited("victim-check", max_requests=100, window_seconds=60)
+
+        assert set(limiter.lockouts.keys()) == {"late-1", "late-2", "late-3"}
+
+    @pytest.mark.unit
+    def test_a_calling_keys_own_active_lockout_survives_its_own_cap_eviction(self):
+        """CI3-33-1b: the new _MAX_LOCKOUTS eviction must not let a key
+        bypass its own still-active lockout via its own call's eviction pass
+        — the same self-eviction hazard CI3-33-2 closed for self.requests,
+        now also possible for self.lockouts since it is capped
+        independently."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # "victim" is locked out and would be the soonest-to-expire (and so
+        # the first eviction candidate) among the tracked lockouts.
+        limiter.lockouts["victim"] = now + 5
+        for i in range(4):
+            limiter.lockouts[f"other-{i}"] = now + 1000 + i
+
+        is_limited, reason = limiter.is_rate_limited(
+            "victim", max_requests=100, window_seconds=60, lockout_seconds=1800
+        )
+
+        assert is_limited is True
+        assert "locked" in (reason or "").lower()
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded

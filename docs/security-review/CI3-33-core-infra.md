@@ -2,8 +2,9 @@
 
 **Prefix:** `CI3` · **Iteration:** 33 · **Reviewed:** 2026-09-07 · **PR:** (opened this pass)
 
-**Backend:** `app/core/security_middleware.py` (1,450 L), `app/core/config.py`
-(1,041 L), `app/core/database.py` (257 L). Cross-referenced (not modified):
+**Backend:** `app/core/security_middleware.py` (1,450 L → 1,541 L after the
+Codex-caught follow-up round), `app/core/config.py` (1,041 L),
+`app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
 CI3-33-3.
@@ -14,9 +15,12 @@ This is the rotation's third pass on Core Infrastructure, following
 [`CI-33-core-infra.md`](./CI-33-core-infra.md) (2026-08-31, PR #2106/#2107 —
 17 findings across two prior passes, all fixed) and
 [`CI2-33-core-infra.md`](./CI2-33-core-infra.md) (2026-08-27, PR #1917 — 14
-findings, all fixed). **2 new findings, both fixed** (a previously-undetected
-defect class shared with `app/services/security_monitoring.py`'s
-tracker-cap logic, found independently in `RateLimiter`). **2 dead
+findings, all fixed). **4 new findings in `RateLimiter`, all fixed** (a
+previously-undetected defect class shared with
+`app/services/security_monitoring.py`'s tracker-cap logic, found
+independently here): CI3-33-1/2 in the round opened as PR #2368, and
+CI3-33-1a/1b — Codex-caught gaps in those same two fixes, found on review of
+the open PR and fixed in a follow-up round before merge. **2 dead
 config-switch findings, both flagged** — one HIGH (an access-control gate
 with zero effect), one LOW (four minor tuning knobs). All 17 prior findings
 re-verified still fixed, at current line numbers.
@@ -163,6 +167,101 @@ allowed path) rather than re-reading `self.requests[key]` afterward — the
 same read-before/write-after-evict shape already applied across
 `security_monitoring.py`'s five trackers. Reproduced and verified against
 pre-fix code (see Guard tests).
+
+### CI3-33-1a — MED — CI3-33-2's fix restored a forced-evicted key's request history but not its window metadata — ✅ FIXED (Codex review of PR #2368)
+
+**What:** CI3-33-2's fix captures `self.requests.get(key, [])` before
+`_evict_stale` runs and writes the filtered result back afterward, so a
+forced-evicted key's request history survives its own eviction pass. But
+`self._key_windows[key]` — set at the very top of `is_rate_limited`, i.e.
+_before_ `_evict_stale` runs, so it is just as visible to (and undoable by)
+the same forced-eviction loop, which pops it for every key it evicts — was
+never restored the same way.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.is_rate_limited` (the gap was between the `self._key_windows[key]
+= window_seconds` assignment near the top of the method and the eviction
+call a few lines later).
+
+**Failure scenario:** a long-window key (e.g. a 3600s `data_export` scope)
+gets force-evicted from `self.requests` during its own call because it
+ranks globally-oldest among an over-cap tracker. CI3-33-2 correctly
+restores `self.requests[key]` for _this_ call, but `self._key_windows[key]`
+is left missing. On the _next_ sweep — possibly triggered by an entirely
+different, short-window scope (e.g. 60s login) — `_evict_stale`'s
+individual staleness check reads `self._key_windows.get(k, window_seconds)`
+for this key; with no recorded window, it falls back to the _triggering
+call's_ `window_seconds` (60s) instead of the key's real one (3600s). If
+the key has been quiet for more than 60s (but well within its real 3600s
+window), it gets wiped — CI2-33-2's exact bug, reintroduced by omission in
+CI3-33-2's own fix. Reproduced directly: a key with a 3600s window, force-
+evicted once by its own over-cap call (window metadata confirmed missing
+immediately after), then wiped on the very next sweep triggered by an
+unrelated 60s-window call despite being only 65 seconds quiet.
+
+**Impact:** the same rate-limit weakening class as CI2-33-2 and CI3-33-2,
+reachable through the fix that was supposed to close CI3-33-2.
+
+**Fix:** `self._key_windows[key] = window_seconds` is now re-asserted
+immediately after `_evict_stale` returns (in addition to the existing
+assignment before it, which is still needed so the individual staleness
+check judges this key's _own_ prior entry, if any, against the correct
+window during that same sweep). The re-assignment after eviction is
+unconditional and a no-op when eviction didn't touch it, so it costs
+nothing on the common path. Reproduced and verified against pre-fix code
+(see Guard tests).
+
+### CI3-33-1b — MED — CI3-33-1's fix removed the only cap that had ever bounded `self.lockouts`' size — ✅ FIXED (Codex review of PR #2368)
+
+**What:** CI3-33-1 correctly stopped the `_MAX_KEYS` forced-eviction loop
+from popping `self.lockouts[key]` for evicted keys — necessary, since that
+was silently ending active lockouts early. But that pop had also been the
+_only_ mechanism that ever bounded `self.lockouts`' size: it was capped
+purely as a side effect of being removed whenever its matching
+`self.requests` entry was force-evicted. Decoupled, `self.lockouts` had no
+cap of its own — the exact shape CLAUDE.md Pitfall #9 exists to prevent
+("any in-memory dict/set used for tracking must have a maximum size cap").
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter._evict_stale` (the forced-eviction block CI3-33-1 modified had
+no independent bound on `self.lockouts`).
+
+**Failure scenario:** during a Redis outage (this limiter's fallback
+window — the same condition CI3-33-1/CI3-33-2 already establish as the one
+that matters most), a flood of distinct attacker IPs each trip the lockout.
+`self.requests` stays correctly bounded at `_MAX_KEYS`, but nothing bounds
+`self.lockouts` — it grows one entry per distinct attacker for the full
+`lockout_seconds` duration (up to 1800s by default, longer for some
+scopes), a memory-exhaustion DoS scaling with attack volume rather than a
+fixed cap. Reproduced directly: 500 distinct attacker IPs each tripping a
+1800s lockout against a `_MAX_KEYS=100` limiter left `self.requests` at
+exactly 100 entries but `self.lockouts` at all 500.
+
+**Impact:** an in-memory tracker with no cap, reachable during exactly the
+degraded-Redis window this limiter exists to protect — the same impact
+class Pitfall #9 documents, on a security-critical structure.
+
+**Fix:** a new, independent `_MAX_LOCKOUTS` cap (10,000, matching
+`_MAX_KEYS`'s scale). When `self.lockouts` exceeds it, `_evict_stale` evicts
+the _soonest-to-expire_ entries first — not by request recency (which
+would reintroduce CI3-33-1's mistake) and not by an arbitrary order: an
+entry about to expire naturally anyway costs the least "early unlock"
+impact to remove, while an entry expiring far in the future is the most
+valuable to an attacker to have lifted early, so it is evicted last. The
+eviction gate (`over_limit`) now also triggers immediately when
+`self.lockouts` alone exceeds its cap, not only when `self.requests` does,
+so an over-cap lockouts dict doesn't have to wait up to
+`_EVICTION_INTERVAL` (60s) while it keeps growing. To avoid reintroducing
+CI3-33-1's exact self-eviction hazard in a new form — a call evicting its
+_own_ still-active lockout via its _own_ call's cap-eviction pass —
+`is_rate_limited` now also captures `self.lockouts.get(key)` before
+`_evict_stale` runs and uses that captured value (restoring the dict entry
+if eviction removed it) rather than re-reading `self.lockouts[key]`
+afterward, mirroring CI3-33-2's read-before/write-after-evict pattern for
+lockouts as well as request history. Reproduced and verified against
+pre-fix code (see Guard tests), including the self-eviction case
+specifically (a key whose own lockout is the soonest-to-expire among an
+over-cap tracker must still see itself as locked out).
 
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
@@ -326,11 +425,36 @@ test_a_calling_keys_own_history_survives_its_own_forced_eviction`
   (CI3-33-2) — verified to **fail** against pre-fix code (`assert 1 == 3`,
   and the 4th call that should be blocked was allowed) and **pass** after
   the fix.
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_a_calling_keys_own_window_metadata_survives_its_own_forced_eviction`
+  (CI3-33-1a) — verified to **fail** against the pre-follow-up code
+  (`_key_windows["target"]` came back `None` immediately after its own
+  call, and the key's still-valid history was then wiped by an unrelated
+  short-window sweep) and **pass** after the fix.
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_lockouts_are_capped_independently_of_requests` (CI3-33-1b) — verified
+  to **fail** against the pre-follow-up code (500 distinct lockouts tracked
+  against a cap of 100) and **pass** after the fix.
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_lockout_cap_eviction_removes_soonest_expiring_first` (CI3-33-1b) —
+  verified to **fail** against the pre-follow-up code (the two
+  soonest-to-expire entries were not evicted, since no cap existed to evict
+  them) and **pass** after the fix.
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_a_calling_keys_own_active_lockout_survives_its_own_cap_eviction`
+  (CI3-33-1b, self-eviction guard) — passes against both the pre-follow-up
+  and fixed code (the pre-follow-up code has no `_MAX_LOCKOUTS` mechanism to
+  exhibit this specific hazard in, so there is nothing for it to fail
+  against; it stands as a regression guard against a future refactor
+  reintroducing the self-eviction shape CI3-33-1b's fix specifically avoids
+  for lockouts, the same role the analogous companion tests already play for
+  `_key_windows`/`self.requests` elsewhere in this class).
 
-Both were also demonstrated as real, exploitable bugs with standalone
-`python3` reproductions (not just the pytest assertions) before being
-accepted as findings, per this rotation's standing rule that a claimed
-defect must be reproduced, not inferred from reading the code.
+All four bug-reproducing tests (CI3-33-1/2/1a and one of 1b's two) were also
+demonstrated as real, exploitable bugs with standalone `python3`
+reproductions (not just the pytest assertions) before being accepted as
+findings, per this rotation's standing rule that a claimed defect must be
+reproduced, not inferred from reading the code.
 
 ## Completion gate
 
@@ -340,11 +464,11 @@ defect must be reproduced, not inferred from reading the code.
 | `black --check app/ tests/ alembic/` (26.5.1, CI-pinned)                                                                                                                                                                                                                                 | ✅ 1522 files unchanged                                                                                                                            |
 | `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned)                                                                                                                                                                                                                             | ✅ clean                                                                                                                                           |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                        | ✅ 435 revisions, single head `d3f8b6a24c91`, no schema change                                                                                     |
-| Scoped tests (`test_security_middleware.py`, `test_core_infra_boot_checks.py`, `test_database_manager.py`, `test_database_url_encoding.py`, `test_onboarding_rate_limit_scopes.py`, `test_startup_diagnostics.py`, `test_tls_required_config.py`)                                        | ✅ 173 passed (was 171 in CI-33; +2 new)                                                                                                           |
+| Scoped tests (`test_security_middleware.py`, `test_core_infra_boot_checks.py`, `test_database_manager.py`, `test_database_url_encoding.py`, `test_onboarding_rate_limit_scopes.py`, `test_startup_diagnostics.py`, `test_tls_required_config.py`)                                        | ✅ 177 passed (was 171 in CI-33; +2 CI3-33-1/2, +4 CI3-33-1a/1b in the follow-up round)                                                            |
 | Repo-tenancy guard suite (`test_endpoint_auth_coverage.py`, `test_require_permission_registry.py`, `test_scheduled_task_coverage.py`, `test_cron_org_loop_isolation.py`, `test_like_escaping.py`, `test_capacity_locking.py`, `test_csv_writer_sweep.py`, `test_org_scoping_ratchet.py`) | ✅ 63 passed                                                                                                                                       |
-| Full backend suite (`pytest tests/`)                                                                                                                                                                                                                                                     | ✅ 11,721 passed, 21 skipped, 0 failed (all skips pre-existing: Docker unavailable, optional `pywebpush` dependency, opt-in API-contract suite)    |
-| `tsc --noEmit` (bare, TS 5.9.3)                                                                                                                                                                                                                                                          | ✅ 0 errors                                                                                                                                        |
-| `npm run typecheck` (aliased TS 7.0.2, the actual build compiler)                                                                                                                                                                                                                        | ✅ 0 errors                                                                                                                                        |
+| Full backend suite (`pytest tests/`)                                                                                                                                                                                                                                                     | ✅ 11,725 passed, 21 skipped, 0 failed (all skips pre-existing: Docker unavailable, optional `pywebpush` dependency, opt-in API-contract suite)    |
+| `tsc --noEmit` (bare, TS 5.9.3)                                                                                                                                                                                                                                                          | ✅ 0 errors (unchanged by the follow-up round — no frontend file touched)                                                                          |
+| `npm run typecheck` (aliased TS 7.0.2, the actual build compiler)                                                                                                                                                                                                                        | ✅ 0 errors (unchanged by the follow-up round)                                                                                                     |
 | `npx eslint .`                                                                                                                                                                                                                                                                           | ✅ 0 errors, 2 pre-existing warnings (`CallTypeChips.tsx`, `react-refresh/only-export-components`, unrelated — no frontend file touched this pass) |
 
 **Sandbox note:** this worktree checkout had no `node_modules` of its own —
