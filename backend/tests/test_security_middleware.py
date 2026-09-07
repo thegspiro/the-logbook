@@ -892,10 +892,19 @@ class TestRateLimiter:
         eviction throttle. If the last periodic sweep was recent, entries
         that have since expired stay counted, so a new violator gets
         treated as hitting a genuinely full table when the real count of
-        *active* lockouts is lower (or zero). Fixed by using ">=" for the
-        lockouts term, so a table at exactly capacity always forces this
-        call's sweep to purge expired entries before the insertion
-        decision reads the count."""
+        *active* lockouts is lower (or zero).
+
+        Originally fixed by using ">=" for the lockouts term in
+        _evict_stale's own gate — that fix was itself replaced by
+        RL5-3 (round 6) with a narrower, lockouts-only prune at the
+        insertion decision, because ">=" forced the shared *three-dict*
+        sweep for every request sharing this limiter once the table merely
+        reached capacity, not only for the one request that needed an
+        accurate answer — see
+        test_saturated_lockout_table_does_not_force_a_full_sweep_for_every_request
+        below. This test still pins the original *symptom* (a stale count
+        must not cause a false saturation rejection); it is unaffected by
+        which mechanism closes it."""
         limiter = RateLimiter()
         limiter._MAX_LOCKOUTS = 3
         limiter._MAX_KEYS = 10_000
@@ -932,6 +941,106 @@ class TestRateLimiter:
 
         assert "login:violator" in limiter.lockouts
         assert limiter._saturation_reject_until.get("login", 0.0) == 0.0
+
+    @pytest.mark.unit
+    def test_saturated_lockout_table_does_not_force_a_full_sweep_for_every_request(
+        self,
+    ):
+        """RL5-3 (Codex review of PR #2370, round 6): RL5-2's fix changed
+        _evict_stale's over_limit gate to ">=" against _MAX_LOCKOUTS, so
+        once self.lockouts reaches exactly _MAX_LOCKOUTS *active* (not
+        stale) entries — the steady state during a sustained attack — every
+        single subsequent request, from any key, on any scope sharing this
+        one process-wide limiter, forced a full O(_MAX_KEYS +
+        _MAX_LOCKOUTS) three-dict sweep instead of respecting the normal
+        ~60s throttle. That's a CPU-amplification DoS: an attacker who
+        fills the table turns every request anyone makes into full-table-
+        scan work, for as long as the table stays full.
+
+        Fixed by reverting _evict_stale's own gate to ">" (a safety net
+        that should structurally never fire, since insertion is gated) and
+        moving the capacity-accuracy concern RL5-2 actually needed to a
+        narrow, lockouts-only _prune_expired_lockouts(), called only from
+        the one request that is itself about to attempt an insertion while
+        observing the table at/over capacity — not from every request that
+        merely finds it there.
+
+        This reproduces the bug directly: 200 distinct OBSERVER keys, none
+        of them anywhere near their own limit (so none attempt an
+        insertion), each make one call while self.lockouts sits at exactly
+        _MAX_LOCKOUTS with genuinely active entries. None of these 200
+        calls should force _evict_stale's full sweep body to run."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 60
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            limiter.lockouts["login:1.2.3.4"] = now + 1000
+            limiter.lockouts["login:1.2.3.5"] = now + 1000
+            limiter.lockouts["login:1.2.3.6"] = now + 1000
+
+            forced_sweep_count = 0
+            for i in range(200):
+                # A real (non-NaN) sentinel just under `now`, so the
+                # interval-throttle comparison behaves normally; only the
+                # sweep body itself overwrites _last_eviction to exactly
+                # `now`.
+                sentinel = now - 1.0
+                limiter._last_eviction = sentinel
+                limiter.is_rate_limited(
+                    f"pub_form_submit:9.9.9.{i}",
+                    max_requests=1_000_000,
+                    window_seconds=60,
+                    lockout_seconds=600,
+                )
+                if limiter._last_eviction != sentinel:
+                    forced_sweep_count += 1
+
+        assert forced_sweep_count == 0
+
+    @pytest.mark.unit
+    def test_genuine_saturation_still_rejects_new_lockouts_without_evicting_existing(
+        self,
+    ):
+        """RL5-3 companion guard: the fix for the CPU-amplification bug
+        must not weaken the genuine-saturation case RL5-2 protects. With 3
+        truly active (unexpired) lockouts at cap, a new violator's own
+        lockout still correctly fails to persist, and none of the existing
+        active entries are evicted to make room."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 60
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            limiter.lockouts["login:1.2.3.4"] = now + 1000
+            limiter.lockouts["login:1.2.3.5"] = now + 1000
+            limiter.lockouts["login:1.2.3.6"] = now + 1000
+            limiter._last_eviction = now
+
+            limiter.is_rate_limited(
+                "login:new-violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+            is_limited, reason = limiter.is_rate_limited(
+                "login:new-violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+        assert is_limited is True
+        assert "login:new-violator" not in limiter.lockouts
+        assert set(limiter.lockouts.keys()) == {
+            "login:1.2.3.4",
+            "login:1.2.3.5",
+            "login:1.2.3.6",
+        }
 
 
 # ---------------------------------------------------------------------------

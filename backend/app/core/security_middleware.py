@@ -107,16 +107,23 @@ class RateLimiter:
         # them alone must force an immediate sweep rather than wait up to
         # _EVICTION_INTERVAL while it keeps growing.
         #
-        # self.lockouts uses ">=", not ">": is_rate_limited's insertion
-        # decision (len(self.lockouts) < _MAX_LOCKOUTS) runs immediately
-        # after this method returns, so a table sitting at *exactly*
-        # capacity must still force this sweep — otherwise a lockout that
-        # expired since the last periodic sweep stays counted, and a new
-        # violator is wrongly treated as hitting a full table of active
-        # lockouts when the real count is lower (or zero).
+        # self.lockouts uses ">", matching self.requests/self._key_windows,
+        # NOT ">=": insertion is gated (is_rate_limited never lets
+        # self.lockouts exceed _MAX_LOCKOUTS), so this term should never
+        # fire in practice — it exists only as a safety net, not as the
+        # mechanism that keeps an at-capacity table's *count* accurate for
+        # an insertion decision. That accuracy need is handled by
+        # _prune_expired_lockouts, called only by the one request that is
+        # actually about to attempt an insertion. Forcing this full
+        # three-dict sweep merely because self.lockouts sits AT capacity
+        # (">=") turns every other request sharing this limiter — logins,
+        # public forms, anything — into an O(_MAX_KEYS + _MAX_LOCKOUTS)
+        # scan for as long as an attacker keeps the table full, a CPU-
+        # amplification DoS distinct from (and worse than) the accuracy gap
+        # this was originally written to close.
         over_limit = (
             len(self.requests) > self._MAX_KEYS
-            or len(self.lockouts) >= self._MAX_LOCKOUTS
+            or len(self.lockouts) > self._MAX_LOCKOUTS
             or len(self._key_windows) > self._MAX_KEYS
         )
         if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
@@ -189,6 +196,25 @@ class RateLimiter:
         orphaned_windows = [k for k in self._key_windows if k not in self.requests]
         for k in orphaned_windows:
             del self._key_windows[k]
+
+    def _prune_expired_lockouts(self, now: float) -> None:
+        """Remove self.lockouts entries that have genuinely expired.
+
+        A narrow, lockouts-only sweep — deliberately not the shared,
+        three-dict _evict_stale, and deliberately not gated by
+        _EVICTION_INTERVAL. Called only from is_rate_limited's insertion
+        decision, only when self.lockouts is observed at or over
+        _MAX_LOCKOUTS: without this, a count left stale by the periodic
+        throttle can make a table that is not actually saturated look
+        saturated. Scoping the extra work to lockouts only, and to only the
+        one call that is about to need an accurate answer (not every
+        request sharing this limiter), is what keeps this fix from
+        reintroducing the CPU-amplification cost _evict_stale's own gate
+        used to pay on every request once the table reached capacity.
+        """
+        expired = [k for k, v in self.lockouts.items() if now >= v]
+        for k in expired:
+            del self.lockouts[k]
 
     def is_rate_limited(
         self,
@@ -290,6 +316,16 @@ class RateLimiter:
             # decided that — and every subsequent request from this same
             # key keeps failing it for as long as its request history
             # survives (weaker, but real, fallback protection).
+            #
+            # A table observed at/over capacity here gets a targeted,
+            # lockouts-only prune before the decision below, rather than
+            # trusting a count that may only be accurate as of the last
+            # periodic sweep (up to _EVICTION_INTERVAL stale) — this is the
+            # one call that actually needs to know, so it is the one call
+            # that pays for finding out.
+            if len(self.lockouts) >= self._MAX_LOCKOUTS:
+                self._prune_expired_lockouts(current_time)
+
             if len(self.lockouts) < self._MAX_LOCKOUTS:
                 self.lockouts[key] = current_time + lockout_seconds
             else:
