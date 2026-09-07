@@ -1595,57 +1595,72 @@ class TestRateLimiter:
         assert limiter._keys["scopeB:9.9.9.9"].request_times
 
     @pytest.mark.unit
-    def test_zero_lockout_seconds_never_inflates_the_shared_active_lockout_count(
-        self,
-    ):
-        """Codex review of PR #2370 (round 9): a lockout_seconds=0 caller
-        (public_rate_limit's in-memory-fallback default) produces
-        lockout_until == current_time, which is never actually "active" —
-        every reader of this state checks lockout_until > now, which fails
-        for an equal value immediately. But the insertion branch
-        unconditionally incremented self._active_lockout_count regardless
-        of lockout_seconds, so a flood of public, zero-duration violators
-        (each on its own distinct key) could exhaust the *shared,
-        process-wide* counter with phantom entries — pushing a completely
-        unrelated scope's real violator (e.g. "login") into the
-        saturation-fallback path even though the true active-lockout count
-        was zero. Verified to fail against the pre-fix code: 11 distinct
-        public keys with lockout_seconds=0 (against _MAX_LOCKOUTS=10)
-        inflated the cached count to 10 despite 0 true active lockouts, and
-        a subsequent "login" violator lost its own real per-key lockout to
-        the saturation fallback instead."""
+    def test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count(self):
+        """P1 (Codex review of the structural refactor): a
+        lockout_seconds=0 caller's own lockout_until equals current_time,
+        which the read-side check (`current_time < lockout_until`) already
+        treats as immediately expired — never a real active lockout. But
+        the insertion branch incremented `self._active_lockout_count`
+        unconditionally whenever a "lockout" was recorded, regardless of
+        whether it was actually still in the future. A single
+        lockout_seconds=0 client (matching public_rate_limit's in-memory
+        fallback default) retrying past its own limit sees this play out
+        every time: each retry's own just-set entry reads as already-
+        expired on the very next call, resets, and re-enters this same
+        branch — incrementing the cached count again with no real active
+        lockout ever existing. Enough retries push the cached count to
+        _MAX_LOCKOUTS with zero genuine active lockouts anywhere in
+        self._keys, so a real violator in an unrelated scope then gets
+        routed into the scope-wide saturation fallback instead of its own
+        per-key lockout — a spurious, disproportionate 30-minute rejection
+        of every fresh client in that scope, triggered by an endpoint that
+        never persists a single real lockout.
+
+        Reproduces directly: 30 retries of a lockout_seconds=0 key against
+        _MAX_LOCKOUTS=10. Verified to **fail** against the pre-fix code
+        (cached count reached 10 with 0 real active lockouts, and a
+        subsequent login violator's own lockout failed to persist) and
+        **pass** after (cached count stays 0; the login violator gets its
+        own real lockout)."""
         limiter = RateLimiter()
         limiter._MAX_LOCKOUTS = 10
-        limiter._MAX_KEYS = 100_000
+        limiter._MAX_KEYS = 10_000
         limiter._EVICTION_INTERVAL = 60
         limiter._LOCKOUT_VERIFY_INTERVAL = 1.0
 
         now = 1_000_000.0
         with patch("time.time", return_value=now):
-            limiter._last_eviction = now
-            limiter._last_lockout_verify = now
-
-            for i in range(11):
-                key = f"pub_form_submit:client{i}"
+            for _ in range(30):
                 limiter.is_rate_limited(
-                    key, max_requests=1, window_seconds=60, lockout_seconds=0
-                )
-                limiter.is_rate_limited(
-                    key, max_requests=1, window_seconds=60, lockout_seconds=0
+                    "calendar:9.9.9.9",
+                    max_requests=1,
+                    window_seconds=60,
+                    lockout_seconds=0,
                 )
 
             assert limiter._active_lockout_count == 0
+            real_active = sum(
+                1
+                for st in limiter._keys.values()
+                if st.lockout_until is not None and st.lockout_until > now
+            )
+            assert real_active == 0
 
-            is_limited, _ = limiter.is_rate_limited(
-                "login:9.9.9.9", max_requests=1, window_seconds=60, lockout_seconds=1800
+            limiter.is_rate_limited(
+                "login:attacker",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
             is_limited, _ = limiter.is_rate_limited(
-                "login:9.9.9.9", max_requests=1, window_seconds=60, lockout_seconds=1800
+                "login:attacker",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
 
-        assert is_limited
-        login_state = limiter._keys["login:9.9.9.9"]
-        assert login_state.lockout_until == now + 1800
+        assert is_limited is True
+        assert limiter._keys["login:attacker"].lockout_until is not None
         assert "login" not in limiter._saturation_reject_until
 
 

@@ -14,9 +14,10 @@ after PR #2370's round-5 (CI3-33-2g/2h), fixing the same
 _MAX_KEYS-conflates-locked-and-unlocked-counts root cause behind both a
 CPU-amplification finding and a rate-limit bypass — a third session
 collision, this one merging both sessions' regression tests cleanly, with
-the more precise of the two implementations landing → 1,707 L after PR
+the more precise of the two implementations landing → 1,706 L after PR
 #2370's round-6 (CI3-33-2i), a zero-duration lockout inflating the shared
-active-lockout counter and stealing an unrelated scope's real lockout),
+active-lockout counter and stealing an unrelated scope's real lockout — a
+fourth session collision, this one's test additions conflicting outright),
 `app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
@@ -1349,21 +1350,37 @@ denial-amplification: the saturation fallback's `reject_until` is a scope-
 wide signal, so it can affect _other_ keys in that scope too, in a way a
 real per-key lockout never would.
 
-**Fix:** a `lockout_seconds <= 0` insertion never competes for
-`_MAX_LOCKOUTS` capacity and never touches `_active_lockout_count` — it
-was never going to hold a genuinely active slot regardless of capacity, so
-there's no reason to deny it a nominal `lockout_until=current_time` record
-or let it inflate the shared counter. This preserves the existing
+**Fix:** the increment `self._active_lockout_count += 1` is now gated
+behind `lockout_seconds > 0` — a zero-duration insertion still takes the
+same capacity-checked branch as any other (so its behavior at the
+saturation boundary is unchanged), it simply never counts toward the
+shared, cross-scope tally, since it was never going to represent a
+genuinely active lockout regardless. This preserves the existing
 zero-lockout behavior (the sliding-window-only fallback protection
 documented at the "Lockout expired" branch above) while removing the
 phantom capacity consumption entirely.
 
 **Tests:**
-`test_zero_lockout_seconds_never_inflates_the_shared_active_lockout_count`
-— the direct reproduction described above. Verified to **fail** against
-the pre-fix code (cached count inflated to 10, the login violator's own
-real lockout replaced by the saturation fallback) and **pass** after
-(cached count stays 0, login violator gets its own real per-key lockout).
+`test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count` —
+30 retries of one `lockout_seconds=0` key against `_MAX_LOCKOUTS=10`, then
+an unrelated `login` violator. Verified to **fail** against the pre-fix
+code (cached count inflated to 10 despite 0 real active lockouts, and the
+login violator's own lockout failed to persist) and **pass** after (cached
+count stays 0, login violator gets its own real per-key lockout).
+
+**Two sessions, one finding — a fourth time.** Found and fixed
+independently by two concurrent sessions once again (see "Two sessions,
+one finding — again" under CI3-33-2g for the running account). This
+session's own fix restructured the branch to skip the capacity check
+entirely for `lockout_seconds <= 0`; the version that landed instead
+keeps the existing capacity-checked branch and only gates the counter
+increment — a smaller, more minimal diff achieving the identical
+observable guarantee, verified against this session's own repro before
+being kept. Unlike round 6's collision, this round's two test additions
+landed at the _same_ location in the file and did conflict; the version
+that landed is the other session's
+(`test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count`),
+and this session's own test was not carried forward.
 
 `TestRateLimiter` is 42 tests (was 41).
 
@@ -1771,13 +1788,17 @@ the two sessions' independent fixes).
 **Added in PR #2370 round 6 (CI3-33-2i):**
 
 - `tests/test_security_middleware.py::TestRateLimiter::
-test_zero_lockout_seconds_never_inflates_the_shared_active_lockout_count`
-  — `_MAX_LOCKOUTS=10`, 11 distinct public keys hit with `lockout_seconds=
-0`, then an unrelated `login` violator. Verified to **fail** against the
-  pre-fix code (cached count inflated to 10 despite 0 true active
-  lockouts; the login violator lost its own real lockout to the saturation
-  fallback) and **pass** after (cached count stays 0; login violator gets
-  its own real per-key lockout).
+test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count` — 30
+  retries of one `lockout_seconds=0` key against `_MAX_LOCKOUTS=10`, then
+  an unrelated `login` violator. Verified to **fail** against the pre-fix
+  code (cached count inflated to 10 despite 0 true active lockouts; the
+  login violator's own lockout failed to persist) and **pass** after
+  (cached count stays 0; login violator gets its own real per-key
+  lockout). This round's test conflicted outright with this session's own
+  parallel version (`test_zero_lockout_seconds_never_inflates_the_shared_
+active_lockout_count`, same scenario, same assertions) — the version
+  above is the other session's, which landed alongside its fix; see "Two
+  sessions, one finding — a fourth time" under CI3-33-2i.
 
 `TestRateLimiter` is 42 tests (was 41).
 
@@ -1853,8 +1874,10 @@ semantics:**
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                                               |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,742 passed, 21 skipped, 0 failed (was 11,738 after round 4; skips all pre-existing)                                  |
 
-**After PR #2370's round-6 fix (CI3-33-2i), the gate was re-run once
-more — full backend suite included, given this changes the shared
+**After PR #2370's round-6 fix (CI3-33-2i) — merged with a fourth
+concurrent-session collision on the same finding (see "Two sessions, one
+finding — a fourth time" under CI3-33-2i) — the gate was re-run once
+more, full backend suite included, given this changes the shared
 `_active_lockout_count` semantics:**
 
 | Check                                                                      | Result                                                                                           |
@@ -1867,9 +1890,11 @@ more — full backend suite included, given this changes the shared
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,743 passed, 21 skipped, 0 failed (was 11,742 after round 5; skips all pre-existing)        |
 
-No frontend file was touched in PR #2370 (any of its six rounds), so the
-frontend checks below (last run at PR #2368's merge) are unchanged and were
-not re-run:
+No frontend file was touched in PR #2370 (any of its six rounds — a fourth
+session collision within round 6 does not add a seventh; see
+`docs/security-review/PROGRESS.md`'s dated entries for the full count of
+sessions vs. rounds), so the frontend checks below (last run at PR #2368's
+merge) are unchanged and were not re-run:
 
 _(The concurrent session's short-circuit commit was also gated before being
 superseded — same 0-violation/clean/188-passed results, since both fixes

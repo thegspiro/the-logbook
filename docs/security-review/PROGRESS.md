@@ -72,12 +72,46 @@ incremented the _shared, cross-scope_ `_active_lockout_count`, letting a
 public-endpoint flood of phantom zero-duration "lockouts" push an
 unrelated scope's real violator (e.g. "login") into the saturation
 fallback. Fixed by excluding `lockout_seconds <= 0` from the counter
-entirely. 1 more test (42 total). Rotation row 33 -> ✅
+entirely. 1 more test (42 total). Round 8 (a fourth session collision,
+same finding — see the "round 8" entry below): the other session's
+smaller, one-line-gate fix landed instead of this session's own
+branch-restructuring version; both verified equivalent. This round's two
+test additions conflicted outright (same location in the file), so the
+other session's test replaced this session's own (still 42 total, a swap
+not an addition). Rotation row 33 -> ✅
 (#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
 
 ---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 8: a fourth session collision, same CI3-33-2i finding; this round's test additions conflicted outright, the other session's version landed
+
+Pushing round 7's fix (commit `4a0c8915`, below) was rejected — a fourth
+instance of the collision pattern first seen at round 3b: a concurrent
+session (`session_01Xc3Cta6LjAV7DA5mTAbmdk` again — the same session that
+won round 6's collision) had independently found and fixed the identical
+CI3-33-2i finding, pushing first as commit `43cce5cd`. Fetched and merged
+rather than force-pushing.
+
+Both sessions' analysis and repros agree exactly (same root cause, same
+`_MAX_LOCKOUTS=10`/zero-active-lockouts reproduction shape). The fixes
+differ in size: this session's own fix restructured the branch so a
+`lockout_seconds<=0` insertion skips the capacity check entirely; the
+other session's fix is a one-line gate on the existing increment
+(`if lockout_seconds > 0: self._active_lockout_count += 1`), leaving the
+capacity-checked branch structure untouched. Verified the smaller fix
+against this session's own repro (identical result) before keeping it —
+minimal diff for an identical guarantee. Unlike round 6, this round's two
+test additions landed at the exact same location in the file and
+conflicted outright (not a clean auto-merge); the other session's test
+(`test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count`)
+was kept and this session's own version was not carried forward. Full
+completion gate re-run against the merged state: 195 scoped, 63 tenancy,
+11,743 full-suite passed — `TestRateLimiter` still 42 tests (a straight
+swap, not an addition, since both sessions added exactly one test for the
+same scenario). Full write-up: `docs/security-review/CI3-33-core-infra.md`
+(CI3-33-2i, "Two sessions, one finding — a fourth time").
 
 ### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 7: a zero-duration lockout could inflate the shared active-lockout counter and steal an unrelated scope's real lockout
 
