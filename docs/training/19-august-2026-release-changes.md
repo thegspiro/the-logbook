@@ -2205,11 +2205,7 @@ Open to any of `users.view_consents` (new this window, granted to the Historian
 and PIO), `notifications.manage`, `members.manage` or `users.edit`. It is
 excluded from the browser's response cache, like other member-identifying data.
 
-> **[SCREENSHOT NEEDED — `/communications/photo-use-consent`.** _Demo data:_ at
-> least one consented member, one who has refused and one with nothing
-> recorded, so all three states are visible. Capture with an account holding
-> `users.view_consents` and caption that — the page has four accepted
-> permissions and the reader will ask which one they need.**]**
+![Photo Use Consent roster: the granted/declined/not-answered summary tiles and coverage bar above a table showing all three states](./images/19-50-photo-use-consent.png)
 
 ## Meetings and minutes
 

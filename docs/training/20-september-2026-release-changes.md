@@ -49,12 +49,9 @@ My Checklists**; officers get **Fleet Readiness** beside it. That row is new,
 and it is a genuine improvement — before this, a member's only route to the
 checks they owed was a tab buried inside Shift Scheduling.
 
-> **Screenshot needed:**
-> _[The Operations section of the sidebar showing the new My Checklists and
-> Fleet Readiness rows, with the Equipment Checks tab visibly absent from the
-> Scheduling page behind it. Capture as a member account for My Checklists and
-> as an officer for Fleet Readiness — they are different rows with different
-> icons.]_
+![The sidebar as an ordinary member: Operations expanded, showing My Checklists with no Fleet Readiness row beside it](./images/20-15-sidebar-member-operations.png)
+
+![The sidebar as an officer: Operations with My Checklists and Fleet Readiness, and the Administration section's Scheduling Admin and Inventory Admin rows](./images/20-16-sidebar-officer-operations.png)
 
 > **Tell your crews about the notifications.** End-of-shift reminder
 > notifications **already sitting in members' bells** carry the old address and
@@ -392,11 +389,9 @@ know what the department calls a thing had nowhere to start.
   matched through the same alias table the impact planner uses — so "Large" on
   their record selects the row you stored as "L".
 
-> **Screenshot needed:**
-> _[The rebuilt gear request form at the product-selection step, showing the
-> category filters and one row per product with an on-hand count, then a second
-> capture of the size step with the member's recorded size preselected and an
-> out-of-stock size visibly selectable and labelled.]_
+![The Request Equipment modal's product-selection step: category filter chips above a scrollable product list, each row showing its on-hand count](./images/20-10-gear-request-product-step.png)
+
+![The size step of the same request, for a product carrying the member's own size preselected and a zero-stock size still selectable and labelled "none on hand"](./images/20-11-gear-request-size-step.png)
 
 **A member can now ask for gear that is out of stock, or not carried at all.**
 The form was pinned to items marked available, so the one need a quartermaster
@@ -503,11 +498,7 @@ over your whole time with the department — was not reported anywhere.
 - **Inline RSVP from the dashboard**, matching the sign-up open shifts already
   offered there.
 
-> **Screenshot needed:**
-> _[An event detail page as a member with attendee visibility switched on:
-> the going list showing names and status only, and the waitlist position
-> line. Capture the member view, not the organizer view — the point is what a
-> member can now see.]_
+![An event detail page as a member: the going list showing names and status only, and the member's own waitlist position beneath it](./images/20-12-event-attendee-visibility-member.png)
 
 > **⚠️ For administrators: guests occupy seats now.** `allow_guests` had been on
 > the model since the beginning and was read nowhere, so guests were accepted
@@ -780,11 +771,9 @@ Claude Desktop can ask questions of a department's Logbook.
 **It is off on every installation until an administrator connects it, and it
 answers nothing until an IT administrator issues a service key.**
 
-> **Screenshot needed:**
-> _[Integrations → Claude (MCP): the connect form with the access mode and the
-> three data switches (finance, medical, schedule) visibly **off** — that is the
-> shipped default and the point of the shot — and a second capture of the
-> Service key panel in its shown-once state, with the key itself redacted.]_
+![The Claude (MCP) connect form: read-only access selected and all three data switches (finance, medical, schedule) off, the shipped default](./images/20-13-claude-mcp-connect.png)
+
+![The Claude (MCP) service key panel in its shown-once state, the issued key redacted](./images/20-14-claude-mcp-service-key.png)
 
 What it can reach: 51 read tools over the roster, events, shifts, training and
 certifications, inventory, apparatus, facilities, meetings and published

@@ -35,6 +35,81 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Captured 2026-09-07 — the four deferred screens, 9 → 1 remaining
+
+Restart of the prior session. All four screens flagged as "highest-value next
+targets" (gear request, event attendee visibility, Claude MCP, plus the sidebar
+marker unique to guide 20) are now shot, applied and verified by eye. Only
+Settings → Email's Test Connection remains, and it is blocked on
+infrastructure this environment cannot provide (see below), not on seeding or
+locator work.
+
+**`seed_demo_data.py` gained three small steps**, none of which needed a new
+seeder subsystem:
+
+- **`seed_event_attendee_visibility_demo`** — a dedicated event ("Station
+  Grounds Cleanup"), `attendee_visibility: "members"`, `max_attendees: 2`.
+  Two ordinary members RSVP `going` first; the demo member (`nbelhaj`) answers
+  third and lands on the waitlist — exactly the state the placeholder asks
+  for ("the going list... and the waitlist position line"). Required
+  `rsvp_deadline` on the first attempt (a 422 the first run surfaced and the
+  second run, after the fix, cleared) — `requires_rsvp: True` needs one, unlike
+  the guest-checkin event elsewhere in the seeder which has RSVPs off entirely.
+- **`seed_photo_use_consents`** — two members signed in as themselves (there is
+  no admin "consent on behalf of" endpoint, by design: consent belongs to the
+  member) to grant and decline `photo_use`. Every other member is left
+  untouched, which is already "not answered" — nothing needed seeding for that
+  third state, only these two for the other two.
+- **A zeroed variant in `seed_inventory_variants`** — one size/colour of the
+  existing "Department Polo" (XL · Navy) is set to `quantity: 0` after
+  create-variants stocks every combination evenly. The gear request form's
+  size step needed a real out-of-stock chip, and nothing else in the seeded
+  catalog produces one. Scoped to one colour deliberately: the variant chip is
+  keyed on size *and* colour, so darkening only Navy-XL leaves White-XL
+  stocked and proves the chip is per-variant, not per-size.
+
+**`manifest.mjs` gained four `prepare` helpers** (`openGearRequestModal`,
+`openAttendeeVisibilityEvent`, `openClaudeMcpConnect`,
+`claudeMcpServiceKeyPanel`) and 13 shot entries: `05-83/84` + `20-10/11` (gear
+request, two images per marker — product step and size step), `04-50` +
+`20-12` (event attendee visibility), `16-08/09` + `20-13/14` (Claude MCP
+connect form and service key panel, two images per marker), `20-15/16`
+(sidebar as member / as officer, guide 20's own marker with no counterpart
+elsewhere), `19-50` (Photo Use Consent).
+
+**The Claude MCP service key is redacted in the DOM before the screenshot,
+not edited into the PNG afterward.** `claudeMcpServiceKeyPanel` overwrites the
+issued key's `<code>` text with a fixed placeholder
+(`sk-ant-mcp-••••••••••••••••••••••••••••••••`) right after it renders. The
+plaintext is a throwaway value from this disposable demo database and reveals
+nothing real, but the guide pictures the redacted "shown once" state
+specifically, and a script-driven overwrite is more reliable than a manual
+crop.
+
+**A real flake, caught by looking at the image rather than trusting the exit
+code.** The first two captures of `20-13-claude-mcp-connect` showed the
+integrations catalog with two stacked "Integration disconnected" toasts and no
+modal open at all — `openClaudeMcpConnect`'s disconnect-then-reconnect
+sequence apparently mis-fired, though a diagnostic pass (temporary
+`console.log`s counting button matches and clicks) showed exactly one click
+each time it was checked. Given the flake didn't reproduce on the third
+attempt, the fix taken was defensive rather than diagnostic: `page.reload()`
+immediately after disconnecting, before looking for the "Connect" button. A
+full reload clears any toast regardless of cause and removes the race between
+"disconnect resolved" and "the card re-rendered" that a same-page wait leaves
+open. Confirmed clean across two more re-captures of all four Claude MCP
+shots. This is the kind of failure the README's "look at the image, every
+time" rule exists for — `capture.mjs` reported success both times.
+
+**Settings → Email's Test Connection (guide 20's own remaining marker) is
+still blocked**, and specifically on the platform the placeholder names:
+Microsoft 365. The backend's `/settings/email/test` route signs in to the real
+provider — Gmail OAuth, Microsoft Graph, or a live SMTP host — there is no
+local stand-in for the Microsoft 365 path the way `smtplib`'s
+`DebuggingServer` could stand in for self-hosted SMTP, and the placeholder
+asks for **a successful test result**, not merely the form. Not attemptable
+against this disposable stack without real Microsoft 365 credentials.
+
 ## Captured 2026-09-07 — org chart, testing checklist, and 16 of the 25
 
 Same restart as the entry below, continued after the seed run it describes.
