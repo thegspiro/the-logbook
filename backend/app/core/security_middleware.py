@@ -143,13 +143,28 @@ class RateLimiter:
         against its own recorded window.
 
         Only runs at most once per _EVICTION_INTERVAL, unless the tracked
-        key count, or the tracked saturation-scope count, exceeds its own
-        safety limit — which must force an immediate sweep rather than
-        wait, or an unbounded flood of distinct keys/scopes grows memory
-        unchecked in between.
+        evictable (non-actively-locked-out) key count, or the tracked
+        saturation-scope count, exceeds its own safety limit — which must
+        force an immediate sweep rather than wait, or an unbounded flood of
+        distinct keys/scopes grows memory unchecked in between. Evictable
+        count is approximated as len(self._keys) - self._active_lockout_
+        count rather than computed exactly (which would cost the same
+        O(len(self._keys)) scan this throttle exists to bound): since
+        _active_lockout_count can only ever be a stale OVER-estimate (see
+        its own comment in __init__), this can only ever be a stale UNDER-
+        estimate of the true evictable count — so it can delay noticing an
+        evictable-count overshoot by up to _EVICTION_INTERVAL, the same
+        staleness tolerance already accepted for the periodic throttle
+        itself, but can never mistake a table saturated purely with active
+        lockouts for one needing eviction, which is what happens using
+        len(self._keys) alone once active lockouts fill _MAX_KEYS on their
+        own: this call's own body then re-runs its full O(len(self._keys))
+        scans on every single subsequent call, forever, since the
+        combined total never drops back at or under _MAX_KEYS while
+        lockouts stay saturated.
         """
         over_limit = (
-            len(self._keys) > self._MAX_KEYS
+            len(self._keys) - self._active_lockout_count > self._MAX_KEYS
             or len(self._saturation_reject_until) > self._MAX_SATURATION_SCOPES
         )
         if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
@@ -172,25 +187,40 @@ class RateLimiter:
         for k in stale:
             del self._keys[k]
 
-        # Enforce _MAX_KEYS via forced eviction by recency, among records
-        # with no active lockout only. This is what keeps _MAX_KEYS and
-        # _MAX_LOCKOUTS independently meaningful: an unrelated key's own
-        # over-cap call can never release someone else's active lockout
-        # early to make room, no matter how stale that key's own request
-        # history looks — there is no separate "pop the lockout too" step
-        # that could evict one piece of a key's state while leaving another.
+        # Enforce _MAX_KEYS against evictable (non-actively-locked-out)
+        # records only, and size the eviction off their own count — not
+        # off len(self._keys). Active lockouts already have their own
+        # independent cap (_MAX_LOCKOUTS); sizing this eviction off the
+        # combined total instead of the evictable count means that once
+        # active lockouts alone fill _MAX_KEYS (the two caps share the
+        # same default), _MAX_KEYS has no headroom left for ordinary
+        # request histories at all — every unlocked entry gets evicted on
+        # the very next call, before it can ever accumulate enough history
+        # to trip its own max_requests. Two keys alternating one request
+        # each then never see their own prior request, so neither ever
+        # reaches its limit no matter how many requests either sends —
+        # the count-based check is silently defeated for as long as
+        # lockouts stay saturated, precisely when the fallback needs to
+        # hold. Sizing eviction off the evictable count means unlocked
+        # entries keep their own full _MAX_KEYS worth of capacity
+        # regardless of how full the (independently-capped) lockout
+        # portion is — the two caps compose additively, as intended,
+        # rather than the lockout cap silently consuming the key cap.
         if len(self._keys) > self._MAX_KEYS:
             evictable = [
                 (k, st)
                 for k, st in self._keys.items()
                 if st.lockout_until is None or st.lockout_until <= now
             ]
-            evictable.sort(
-                key=lambda kv: kv[1].request_times[-1] if kv[1].request_times else 0.0
-            )
-            to_remove = len(self._keys) - self._MAX_KEYS
-            for k, _ in evictable[:to_remove]:
-                del self._keys[k]
+            to_remove = len(evictable) - self._MAX_KEYS
+            if to_remove > 0:
+                evictable.sort(
+                    key=lambda kv: (
+                        kv[1].request_times[-1] if kv[1].request_times else 0.0
+                    )
+                )
+                for k, _ in evictable[:to_remove]:
+                    del self._keys[k]
 
         # Remove expired saturation-reject entries, then — if a caller
         # somehow supplied enough distinct scopes to still be over cap —
