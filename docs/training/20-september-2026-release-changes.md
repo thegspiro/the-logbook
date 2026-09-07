@@ -317,10 +317,7 @@ rather than "Alarm / Good Intent", had no way to say so.
 **Administration → Scheduling Admin → General → Call types** renames, reorders,
 adds, retires and deletes them.
 
-> **Screenshot needed:**
-> _[The Call types editor in Scheduling Admin → General: the department's list
-> with rename and reorder controls, one type shown as retired, and the delete
-> control visibly unavailable on a type that has calls behind it.]_
+![The Call types editor in Scheduling Admin -> General: the department's list with rename and reorder controls, one type toggled off (retired), and the delete control disabled on a type with calls behind it](./images/20-07-call-types-editor.png)
 
 **Retire, don't delete, anything with history behind it.** The stored value on
 every call ever filed is the type's permanent slug, so deleting a type in use
@@ -358,10 +355,7 @@ ordered worst-first, and stepped through one at a time, with the numbers behind
 each status on the row: _"6 of 24 hours"_, _"Lapsed 41 days ago"_, _"Expires in
 26 days"_.
 
-> **Screenshot needed:**
-> _[The redesigned Compliance Matrix triage rail: members grouped by standing
-> with the worst first, one member's detail open showing the per-requirement
-> figures, and the status chip from a dashboard deep link visible above it.]_
+![The redesigned Compliance Matrix: a triage rail of members grouped by standing, worst first, with one member's per-requirement detail open and the non-compliant status chip from a dashboard deep link above the queue](./images/20-05-compliance-matrix-triage.png)
 
 > **⚠️ Your compliance percentages may move, in the favourable direction.** Two
 > grading defects were fixed:
@@ -427,10 +421,9 @@ at 32rem above phone width. It is now a **centred dialog**: 56rem on a laptop, a
 The wider desktop box gives the crew board and the close-out checklist's
 per-member hours inputs room they did not have at 512px.
 
-> **Screenshot needed:**
-> _[The Shift Details modal at laptop width with the crew board visible, and a
-> second capture at 390px phone width. It was a right-edge drawer before, so
-> every existing capture of this surface shows a layout that no longer exists.]_
+![The Shift Details surface as a centred modal at laptop width, with the crew board visible](./images/20-08-shift-details-modal-laptop.png)
+
+![The Shift Details surface as a centred, inset modal at 390px phone width](./images/20-09-shift-details-modal-phone.png)
 
 Escape inside the driver-blocked dialog no longer closes the shift behind it.
 Shift Details hand-rolled Escape on a listener that could not see the dialog

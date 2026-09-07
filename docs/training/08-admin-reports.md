@@ -2386,18 +2386,11 @@ structure is not an org chart, and a guessed diagram is one nobody recognises �
 correcting it would take longer than drawing it. Start with your top seat and
 work down.
 
-> **[SCREENSHOT NEEDED — the org chart, outline view.** _Demo data:_ a chart
-> four levels deep — Chief, two Deputy Chiefs sharing one seat, three Captains
-> under one of them, one seat with a non-member holder. Expand the branch
-> containing the shared seat so both names are visible.**]**
+![The org chart as an indented outline: Fire Chief, a Deputy Chief seat shared by two holders, three Captains reporting to it -- one seat naming a non-member holder -- and a Lieutenant a level below](./images/08-79-org-chart-outline.png)
 
-> **[SCREENSHOT NEEDED — the org chart, diagram view.** _Demo data:_ the same
-> chart. The two views are not interchangeable; one capture cannot stand in for
-> the other.**]**
+![The same chart as a boxes-and-connectors diagram](./images/08-80-org-chart-diagram.png)
 
-> **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
-> two member holders and one non-member holder, responsibility text filled in,
-> and the position link visible.**]**
+![The node editor open on Captain -- C Shift: two member holders and one non-member holder, responsibility text filled in, and the Captain position link visible](./images/08-81-org-chart-node-modal.png)
 
 ---
 
@@ -2430,9 +2423,7 @@ reappear the moment the module is on.
 checking an installation, not a decision a department needs to make while
 making every other one.
 
-> **[SCREENSHOT NEEDED — Settings → Modules with Testing Checklist off.**
-> _Demo data:_ the module list on a fresh install. This is the answer to "where
-> did /testing go".**]**
+![Settings -> Modules -> Additional Modules, with Testing Checklist listed as Disabled and an Enable button -- the answer to "where did /testing go"](./images/08-82-settings-modules-testing-off.png)
 
 ### Runs
 
@@ -2473,13 +2464,9 @@ That distinction is what makes this more than a list of tickboxes: it separates
 `j` / `k` move between boxes, `p` / `f` / `b` mark the focused one, `n` jumps
 to the next page with no mark.
 
-> **[SCREENSHOT NEEDED — Testing Home with a named run and the run picker
-> open.** _Demo data:_ a current run, one archived predecessor, a mix of pass /
-> fail / blocked marks, and at least one gate mismatch flagged.**]**
+![Testing Home on "Pre-launch, build 1.4" with the run picker showing two runs, the Core group expanded to a pass, a fail with a note, a blocked mark and a flagged gate mismatch on Org Chart](./images/08-83-testing-home-run-picker.png)
 
-> **[SCREENSHOT NEEDED — the printable testing report.** _Demo data:_ the same
-> run, with a failure carrying a note and a gate mismatch, so both sections
-> have content.**]**
+![The printable testing report for the current run: coverage summary, a failure carrying its note, and the Org Chart gate mismatch under permissions defects](./images/08-84-testing-report-print.png)
 
 ---
 

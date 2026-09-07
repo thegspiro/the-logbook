@@ -3308,10 +3308,7 @@ rather than "Alarm / Good Intent", had no way to say so.
 **Administration → Scheduling Admin → General → Call types** renames, reorders,
 adds, retires and deletes them.
 
-> **Screenshot needed:**
-> _[The Call types editor in Scheduling Admin → General: the department's list
-> with rename and reorder controls, one type shown as retired, and the delete
-> control visibly unavailable on a type that has calls behind it.]_
+![The Call types editor in Scheduling Admin -> General: the department's list with rename and reorder controls, one type toggled off (retired), and the delete control disabled on a type with calls behind it](./images/03-103-call-types-editor.png)
 
 **Retire, don't delete, anything with history behind it.** The stored value on
 every call ever filed is the type's permanent slug, so deleting a type in use

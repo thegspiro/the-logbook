@@ -151,6 +151,16 @@ export function enableTestingModuleThenGoto(route, afterEnable) {
     await page.goto(`${origin}/settings?tab=modules&page=additional`, {
       waitUntil: "domcontentloaded",
     });
+    // The module list loads via its own API call after mount, so checking
+    // for the Enable button immediately after domcontentloaded can find
+    // neither button yet -- and an empty count() then reads exactly like
+    // "already enabled". Wait for whichever state actually renders first.
+    await page
+      .locator(
+        '[aria-label="Enable Testing Checklist"], [aria-label="Disable Testing Checklist"]',
+      )
+      .first()
+      .waitFor({ timeout: 15_000 });
     const enableBtn = page.getByRole("button", {
       name: "Enable Testing Checklist",
     });
@@ -161,6 +171,14 @@ export function enableTestingModuleThenGoto(route, afterEnable) {
         { timeout: 10_000 },
       );
     }
+    // /testing/report/print calls window.print() 600ms after load (see
+    // 03-66-print-report above for the same fix): headless Chromium raises
+    // no dialog, but the capture still races the page against it. Stubbed
+    // unconditionally -- harmless on /testing, and addInitScript has to run
+    // before the navigation it should apply to.
+    await page.addInitScript(() => {
+      window.print = () => {};
+    });
     await page.goto(`${origin}${route}`, { waitUntil: "domcontentloaded" });
     if (afterEnable) await afterEnable(page);
   };
@@ -12750,13 +12768,22 @@ export const SHOTS = [
         timeout: 15_000,
       });
     },
+    // modal-panel-scroll caps the dialog at 100dvh - 2rem and scrolls
+    // internally past that -- at the normal 900px desktop viewport this
+    // form (link, title, reports-to, all three holders, THEN
+    // responsibility) cuts off after the first holder, well before either
+    // the second/third holder or responsibility comes into view. A tall
+    // enough viewport raises the dvh-relative cap past the form's actual
+    // content height, so the whole thing renders with no internal scroll
+    // and the single-element selector captures all of it at once.
+    viewport: { width: 1440, height: 1900 },
     selector: '[role="dialog"]',
   },
   {
     id: "19-47-settings-modules-testing-off",
     doc: "19-august-2026-release-changes.md",
     line: 1966,
-    anchor: "settings -> modules with testing checklist off",
+    anchor: "modules with testing checklist off",
     alt: 'Settings -> Modules -> Additional Modules, with Testing Checklist listed as Disabled and an Enable button -- the answer to "where did /testing go"',
     route: "/settings?tab=modules&page=additional",
     prepare: async (page) => {
@@ -12786,8 +12813,14 @@ export const SHOTS = [
     alt: 'Testing Home on "Pre-launch, build 1.4" with the run picker showing two runs, the Core group expanded to a pass, a fail with a note, a blocked mark and a flagged gate mismatch on Org Chart',
     route: "/testing",
     prepare: enableTestingModuleThenGoto("/testing", async (page) => {
+      // Not `getByRole('button', { name: /^Core$/ })`: the button's
+      // accessible name concatenates the heading, its (checked/total)
+      // count, the group description and the checklist-section line, so an
+      // exact "Core" match never matches. group.id "core" is stable (it is
+      // the registry's own key, not display text), so target the heading it
+      // renders (`#group-core`) and climb to its ancestor button instead.
       await page
-        .getByRole("button", { name: /^Core$/ })
+        .locator("button:has(#group-core)")
         .click({ timeout: 15_000 });
       await page.waitForSelector("text=Org Chart", { timeout: 15_000 });
     }),
@@ -13143,6 +13176,15 @@ export const SHOTS = [
         timeout: 15_000,
       });
     },
+    // modal-panel-scroll caps the dialog at 100dvh - 2rem and scrolls
+    // internally past that -- at the normal 900px desktop viewport this
+    // form (link, title, reports-to, all three holders, THEN
+    // responsibility) cuts off after the first holder, well before either
+    // the second/third holder or responsibility comes into view. A tall
+    // enough viewport raises the dvh-relative cap past the form's actual
+    // content height, so the whole thing renders with no internal scroll
+    // and the single-element selector captures all of it at once.
+    viewport: { width: 1440, height: 1900 },
     selector: '[role="dialog"]',
   },
 
@@ -13150,7 +13192,7 @@ export const SHOTS = [
     id: "08-82-settings-modules-testing-off",
     doc: "08-admin-reports.md",
     line: 2433,
-    anchor: "settings -> modules with testing checklist off",
+    anchor: "modules with testing checklist off",
     alt: 'Settings -> Modules -> Additional Modules, with Testing Checklist listed as Disabled and an Enable button -- the answer to "where did /testing go"',
     route: "/settings?tab=modules&page=additional",
     prepare: async (page) => {
@@ -13190,8 +13232,14 @@ export const SHOTS = [
     alt: 'Testing Home on "Pre-launch, build 1.4" with the run picker showing two runs, the Core group expanded to a pass, a fail with a note, a blocked mark and a flagged gate mismatch on Org Chart',
     route: "/testing",
     prepare: enableTestingModuleThenGoto("/testing", async (page) => {
+      // Not `getByRole('button', { name: /^Core$/ })`: the button's
+      // accessible name concatenates the heading, its (checked/total)
+      // count, the group description and the checklist-section line, so an
+      // exact "Core" match never matches. group.id "core" is stable (it is
+      // the registry's own key, not display text), so target the heading it
+      // renders (`#group-core`) and climb to its ancestor button instead.
       await page
-        .getByRole("button", { name: /^Core$/ })
+        .locator("button:has(#group-core)")
         .click({ timeout: 15_000 });
       await page.waitForSelector("text=Org Chart", { timeout: 15_000 });
     }),
@@ -13219,7 +13267,11 @@ export const SHOTS = [
     alt: "The Call types editor in Scheduling Admin -> General: the department's list with rename and reorder controls, one type toggled off (retired), and the delete control disabled on a type with calls behind it",
     route: "/scheduling/admin/settings/general",
     prepare: retireOneUnlockedCallType,
-    fullPage: true,
+    // Clipped to the card: General is a long settings page (overtime
+    // advisory, close-out rules, shift templates, department defaults,
+    // position names...), and the placeholder is about the Call types card
+    // specifically, not a scroll through everything around it.
+    selector: 'div.card-secondary:has(h3:text-is("Call types"))',
   },
   {
     id: "20-07-call-types-editor",
@@ -13229,7 +13281,11 @@ export const SHOTS = [
     alt: "The Call types editor in Scheduling Admin -> General: the department's list with rename and reorder controls, one type toggled off (retired), and the delete control disabled on a type with calls behind it",
     route: "/scheduling/admin/settings/general",
     prepare: retireOneUnlockedCallType,
-    fullPage: true,
+    // Clipped to the card: General is a long settings page (overtime
+    // advisory, close-out rules, shift templates, department defaults,
+    // position names...), and the placeholder is about the Call types card
+    // specifically, not a scroll through everything around it.
+    selector: 'div.card-secondary:has(h3:text-is("Call types"))',
   },
   {
     // Same screen, same shot as 02-107 -- the compliance matrix redesign this
@@ -13243,6 +13299,10 @@ export const SHOTS = [
     alt: "The redesigned Compliance Matrix: a triage rail of members grouped by standing, worst first, with one member's per-requirement detail open and the non-compliant status chip from a dashboard deep link above the queue",
     route: "/training/admin?page=dashboard&tab=compliance&status=noncompliant",
     fullPage: true,
+    // Same false positive as 02-107, which pictures the identical screen:
+    // a per-requirement row legitimately reading "No date on record" for
+    // anything with nothing filed yet, not a page-level empty state.
+    allowEmptyState: true,
   },
   {
     // Same modal, same interaction as 03-101/03-102 -- guide 20's own marker
