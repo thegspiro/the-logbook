@@ -16,11 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 34 (Frontend shared, pass 4)** — branch `claude/friendly-babbage-6japkr`,
-PR opening. 0 new findings; FE3-34-4 and FE3-34-5 (both HIGH) confirmed
-already fixed by intervening commits unrelated to this rotation; FE3-34-2
-(HIGH) re-verified still open, needs a product decision. See
-`docs/security-review/FE4-34-frontend-shared.md`. Once merged: rotation
+**Feature 34 (Frontend shared, pass 4)** — PR
+[#2379](https://github.com/thegspiro/the-logbook/pull/2379), branch
+`claude/friendly-babbage-6japkr`. 0 new findings; FE3-34-4 and FE3-34-5 (both
+HIGH) confirmed already fixed by intervening commits unrelated to this
+rotation; FE3-34-2 (HIGH) re-verified still open, needs a product decision.
+See `docs/security-review/FE4-34-frontend-shared.md`. Once merged: rotation
 wraps to 00 (cross-cutting baseline) for the next full pass.
 
 <details>
