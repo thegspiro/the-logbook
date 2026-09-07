@@ -687,6 +687,13 @@ class InventoryItemResponse(InventoryItemBase):
     # the same item see different values here, by design.
     pin_position: Optional[int] = None
 
+    # The group this row was filed under, when the request asked for a
+    # grouping. Reported by the server rather than re-derived in the browser:
+    # colour keys lower-cased, location follows a COALESCE, item_type lives on
+    # the category, and an enum keys to its value — a client reproducing any of
+    # those can drift, and a header whose key misses its rows shows no count.
+    group_key: Optional[str] = None
+
     model_config = _response_config
 
 

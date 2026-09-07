@@ -76,12 +76,26 @@ const CLASS_A = {
 };
 
 /** Two categories and a colour spread, so grouping has something to show. */
+// `group_key` is stamped by the server, so the mock supplies it too — the page
+// files each row by that key rather than re-deriving one.
 const MIXED = [
-  { ...item({ id: 'a-coat', name: 'Dress Coat' }), category_id: 'cat-a' },
-  { ...item({ id: 'a-trousers', name: 'Dress Trousers' }), category_id: 'cat-a' },
-  { ...item({ id: 'b-ls-m', name: 'Long Sleeve', size: 'm' }), category_id: 'cat-uniform' },
-  { ...item({ id: 'b-ls-l', name: 'Long Sleeve', size: 'l' }), category_id: 'cat-uniform' },
-  { ...item({ id: 'b-ss-m', name: 'Short Sleeve', size: 'm' }), category_id: 'cat-uniform' },
+  { ...item({ id: 'a-coat', name: 'Dress Coat' }), category_id: 'cat-a', group_key: 'cat-a' },
+  { ...item({ id: 'a-trousers', name: 'Dress Trousers' }), category_id: 'cat-a', group_key: 'cat-a' },
+  {
+    ...item({ id: 'b-ls-m', name: 'Long Sleeve', size: 'm' }),
+    category_id: 'cat-uniform',
+    group_key: 'cat-uniform',
+  },
+  {
+    ...item({ id: 'b-ls-l', name: 'Long Sleeve', size: 'l' }),
+    category_id: 'cat-uniform',
+    group_key: 'cat-uniform',
+  },
+  {
+    ...item({ id: 'b-ss-m', name: 'Short Sleeve', size: 'm' }),
+    category_id: 'cat-uniform',
+    group_key: 'cat-uniform',
+  },
 ];
 
 const MIXED_GROUPS = [
