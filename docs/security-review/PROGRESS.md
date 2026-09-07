@@ -16,15 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2368** — Feature 33 (Core infrastructure, pass 3): `claude/security-review-core-infra-pass3`.
-7 fixed (CI3-33-1/2 plus four Codex-caught follow-up rounds, CI3-33-1a/1b/1c/1d/1e,
-all in `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). All Codex
-review threads (6 total across 3 rounds) replied to and resolved. A structural
-refactor (collapsing `requests`/`lockouts`/`_key_windows` into one per-key
-record) was considered and deliberately deferred as a follow-up design item
-rather than attempted mid-incident — recorded in
-`docs/KNOWN_LIMITATIONS.md`. Subscribed for activity. Rotation row
-33 -> ✅ (pending merge). Next once merged: 34 Frontend shared.
+**None.** Feature 33 (Core infrastructure, pass 3)'s PR #2368 merged
+(`262f8730`) — all CI checks green, mergeable clean, all 6 Codex review
+threads across 3 rounds replied to and resolved, and the final Codex round
+(on the merged head) completed with no new findings. Rotation row
+33 -> ✅. Next: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure)'s PR #2368 merged, watchdog recorded it
+
+PR #2368 (pass 3: 7 fixed across the original round plus three Codex-caught
+follow-up rounds, all in `RateLimiter` — CI3-33-1/2/1a/1b/1c/1d/1e, plus
+CI3-33-1f, a comment-accuracy cleanup with no functional bug — 2 flagged,
+CI3-33-3 HIGH and CI3-33-4 LOW) went fully green with all 6 Codex review
+threads resolved and sat idle, so a 30-minute watchdog check merged it
+directly rather than leaving it idle. Next: 34 Frontend shared.
 
 ---
 
