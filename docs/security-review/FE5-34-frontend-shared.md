@@ -12,10 +12,12 @@ FE4's file list, restored here), `components/ProtectedRoute.tsx`,
 `stores/pendingSyncStore.ts`, `stores/skillsTestingStore.ts`,
 `components/ux/*`, plus a full-frontend sweep for new `api.get(`/`api.get<`
 call sites since the corrected baseline.
-**Backend:** read-only cross-reference — `backend/app/schemas/inventory.py`
+**Backend:** initially read-only cross-reference — `backend/app/schemas/inventory.py`
 and `backend/app/utils/color_names.py` (the FE4-2 caching claim), and
 `backend/app/api/v1/endpoints/inventory.py`'s `get_item_colors`/`/items/colors`
-route (org-scoping only — no code changed).
+route (org-scoping only). A follow-up commit (`f2250051`, after Codex review
+on this PR) then changed that route's permission dependency — see FE5-34-1
+below — and added `backend/tests/test_inventory_member_visibility.py::test_item_colors_requires_inventory_view`.
 **Migrations:** none.
 
 **This is not a new rotation pass over new code.** It is a corrective
@@ -420,6 +422,12 @@ needed or made.
 - `frontend/src/utils/apiCache.test.ts` — one new case for
   `/inventory/items/colors`, verified to fail pre-fix and pass post-fix (see
   Findings above).
+- `backend/tests/test_inventory_member_visibility.py::test_item_colors_requires_inventory_view` —
+  asserts `GET /items/colors`'s permission dependency is exactly
+  `{"inventory.view"}`, using the file's existing `_permission_set` helper
+  (same pattern as its sibling `test_members_inventory_roster_requires_quartermaster`).
+  Fails if the route's gate is ever loosened back to bare authentication (see
+  FE5-34-1 below).
 
 ## Completion gate
 
@@ -429,7 +437,9 @@ needed or made.
 | `npx eslint .` (whole frontend)                                                                                                                                                                       | ✅ 0 errors, 2 warnings (pre-existing `react-refresh/only-export-components` in `modules/scheduling/components/CallTypeChips.tsx`, unrelated to this feature, within the max-warnings 10 budget — same pre-existing warnings FE4 recorded) |
 | `apiCache.test.ts`                                                                                                                                                                                    | ✅ 88 passed (was 87 before this pass's new case)                                                                                                                                                                                          |
 | Scoped suite (`apiCache`, `apiClient`, `authStore`, `createApiClient`, `learningProgressStore`, `pendingSyncStore`, `skillsTestingStore`, `ProtectedRoute.module`, `breadcrumbRoutes`, `Breadcrumbs`) | ✅ 365 passed (10 files)                                                                                                                                                                                                                   |
-| Backend                                                                                                                                                                                               | n/a — no backend files changed; `inventory.py`/`color_names.py` read-only cross-reference for FE5-34-1                                                                                                                                     |
+| Backend `flake8`/`black --check`/`isort --check-only` (`inventory.py`, `test_inventory_member_visibility.py`)                                                                                       | ✅ clean, all three                                                                                                                                                                                                                        |
+| Backend `pytest tests/test_inventory_member_visibility.py`                                                                                                                                          | ✅ 15 passed (was 14; new case for `test_item_colors_requires_inventory_view`)                                                                                                                                                            |
+| Backend `pytest -k inventory` (full inventory-scoped suite, post permission change)                                                                                                                  | ✅ 781 passed, 1 skipped (`test_push_service.py`'s pre-existing, documented pywebpush/http-ece sandbox gap — unrelated)                                                                                                                    |
 
 `modules/scheduling/services/api.ts` and
 `modules/inventory/services/equipmentCheckApi.ts` have no dedicated test
