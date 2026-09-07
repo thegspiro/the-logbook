@@ -4,7 +4,8 @@
 
 **Backend:** `app/core/security_middleware.py` (1,450 L → 1,672 L at PR
 #2368's merge after four Codex-caught follow-up rounds → 1,605 L after PR
-#2369's fixes plus its comment-chronology trim), `app/core/config.py` (1,041 L),
+#2370's fixes plus its comment-chronology trim → 1,641 L after PR #2370's
+CI3-33-2c fix), `app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -32,11 +33,20 @@ was told about. **2 dead config-switch findings, both flagged** — one HIGH
 (an access-control gate with zero effect), one LOW (four minor tuning knobs).
 All 17 prior findings re-verified still fixed, at current line numbers.
 
-**Post-merge addendum (2026-09-07, PR #2369):** PR #2368 merged with two more
+**Post-merge addendum (2026-09-07, PR #2370):** PR #2368 merged with two more
 real Codex findings still open on `RateLimiter` — CI3-33-2a (P1, a
 cross-scope saturation DoS) and CI3-33-2b (P2, a stale-capacity false
 positive) — plus a comment-cleanup item, all fixed as a targeted follow-up.
-See the CI3-33-2a/2b write-ups below (after CI3-33-1f) and PR #2369.
+See the CI3-33-2a/2b write-ups below (after CI3-33-1f) and PR #2370.
+
+**Second post-merge addendum (2026-09-07, PR #2370):** review of PR #2370's
+own commit found CI3-33-2c (P1) — CI3-33-2b's fix itself forced a full
+three-dict sweep on _every_ request once the lockout table merely reached
+capacity, a CPU-amplification DoS. This is round six on this class of code;
+the "if a sixth round" trigger CI3-33-2a/2b's write-up set has been met,
+and the judgment call is made explicitly in CI3-33-2c's own write-up: the
+structural refactor is now recommended as the next piece of work on this
+file, not indefinitely deferred. See CI3-33-2c below and PR #2370.
 
 ---
 
@@ -518,15 +528,15 @@ the redesign as its own reviewed, tested change rather than a fifth
 same-PR patch. Recorded as a follow-up in
 `docs/KNOWN_LIMITATIONS.md` rather than left only in this file.
 
-**Addendum (2026-09-07, PR #2369):** PR #2368 merged with CI3-33-1e/1f's
+**Addendum (2026-09-07, PR #2370):** PR #2368 merged with CI3-33-1e/1f's
 comments still open — the merge landed roughly 50 seconds after Codex's
 next round of review posted, before anyone had seen it — and that next
 round turned out to be exactly the "fifth round" scenario this section
 weighed. See CI3-33-2a/CI3-33-2b below for what it found and how it was
-fixed as a targeted follow-up (PR #2369), and their own note on why the
+fixed as a targeted follow-up (PR #2370), and their own note on why the
 structural refactor was, again, deliberately not attempted there either.
 
-### CI3-33-2a — P1 — `_saturation_reject_until` was a single process-wide scalar shared by every rate-limit scope, not scoped to the one under attack — ✅ FIXED (Codex review of PR #2368, post-merge; fixed in PR #2369)
+### CI3-33-2a — P1 — `_saturation_reject_until` was a single process-wide scalar shared by every rate-limit scope, not scoped to the one under attack — ✅ FIXED (Codex review of PR #2368, post-merge; fixed in PR #2370)
 
 **What:** CI3-33-1e's `self._saturation_reject_until` is one scalar on the
 shared `rate_limiter` instance — the same in-memory fallback object backing
@@ -581,7 +591,7 @@ Reproduced and verified against pre-fix code (see Guard tests); also
 verified the _same_-scope protection CI3-33-1e added is unaffected — a
 saturated scope's own violators still fail closed past their own window.
 
-### CI3-33-2b — P2 — a strict `>` eviction-gate comparison let a stale, already-expired lockout count trigger an unnecessary saturation rejection — ✅ FIXED (Codex review of PR #2368, post-merge; fixed in PR #2369)
+### CI3-33-2b — P2 — a strict `>` eviction-gate comparison let a stale, already-expired lockout count trigger an unnecessary saturation rejection — ✅ FIXED (Codex review of PR #2368, post-merge; fixed in PR #2370)
 
 **What:** `is_rate_limited`'s insertion decision
 (`len(self.lockouts) < self._MAX_LOCKOUTS`) runs immediately after
@@ -613,10 +623,11 @@ saturated-table fallback (weaker per-key protection, or — before CI3-33-2a
 — a cross-scope DoS) even when it wasn't actually saturated, simply because
 of unlucky timing relative to the last periodic sweep.
 
-**Fix:** `_evict_stale`'s `over_limit` gate now uses `>=` for the
-`self.lockouts` term (the other two terms, `self.requests`/
-`self._key_windows` against `_MAX_KEYS`, are unchanged — this bug is
-specific to the immediately-following insertion decision, which only reads
+**Fix (original, this pass — corrected below by CI3-33-2c):**
+`_evict_stale`'s `over_limit` gate now uses `>=` for the `self.lockouts`
+term (the other two terms, `self.requests`/`self._key_windows` against
+`_MAX_KEYS`, are unchanged — this bug is specific to the
+immediately-following insertion decision, which only reads
 `self.lockouts`). A table at exactly capacity now always forces this call's
 sweep, which purges any lockouts that have genuinely expired since the last
 sweep, before the insertion decision reads the count. Reproduced and
@@ -624,6 +635,15 @@ verified against pre-fix code (see Guard tests); also verified the fix
 doesn't change behavior for the existing capping/eviction tests, all of
 which run with `_EVICTION_INTERVAL = 0` (always sweeps regardless of this
 gate) and were unaffected.
+
+**This fix was itself incomplete — see CI3-33-2c immediately below.** It
+correctly fixed the accuracy gap, but the mechanism it used — forcing
+`_evict_stale`'s full three-dict sweep merely because `self.lockouts` sat
+at capacity — meant **every** request sharing this limiter (not only the
+one that needed an accurate answer) paid for a full sweep, for as long as
+an attacker kept the table full: a CPU-amplification DoS. This section is
+left in place, uncorrected in its own text, as the record of what this
+round shipped; CI3-33-2c documents what replaced it and why.
 
 **Comment cleanup (no behavior change):** the in-code comments across
 `RateLimiter` had accumulated four rounds of PR numbers, finding IDs
@@ -638,21 +658,91 @@ in this file, which already has it in full. Verified no behavior changed:
 the full `TestRateLimiter` suite passes identically before and after the
 comment-only edits.
 
-**On the structural refactor, again:** this is now a fifth round finding a
-real gap in this same class of code — not, this time, the
-requests/lockouts/_key_windows eviction-drift shape the first four rounds
-shared, but a design gap in a _new_ mechanism (CI3-33-1e's saturation
-signal) added specifically to close round four's finding, plus a
-just-missed boundary condition in an existing gate. The same reasoning from
-CI3-33-1f's write-up still applies, arguably more strongly: every fix here
-has landed as a reactive, single-issue follow-up rather than a planned
-change, and a structural rewrite attempted under that same reactive pressure
-is a worse bet than another narrowly-scoped, individually-verified fix. Not
-attempted here. If a sixth round in this same file finds another gap of
-this general shape, that should be treated as a strong signal to stop
-patching and do the single-per-key-record refactor as its own planned,
-reviewed piece of work — see the `docs/KNOWN_LIMITATIONS.md` follow-up row,
-updated in this pass to note the round-5 recurrence.
+### CI3-33-2c — P1 — CI3-33-2b's own fix forced a full three-dict sweep on every request once the lockout table merely reached capacity — a CPU-amplification DoS — ✅ FIXED (Codex review of PR #2370, round 6)
+
+**What:** CI3-33-2b changed `_evict_stale`'s `over_limit` gate to `>=` for
+`self.lockouts`, so a table sitting at _exactly_ `_MAX_LOCKOUTS` forced an
+immediate sweep rather than waiting for the normal ~60-second throttle.
+That was correct as an accuracy fix for the one request that needed to know
+the real count — but the gate is evaluated unconditionally at the top of
+`is_rate_limited`, for _every_ call, regardless of whether that call is
+anywhere near its own limit. Once an attacker drives `self.lockouts` to
+exactly capacity — the steady state for the whole duration of a sustained
+attack — every single subsequent request sharing this one process-wide
+limiter (logins from other IPs, public form submissions, webhooks,
+anything) triggered a full `O(_MAX_KEYS + _MAX_LOCKOUTS)` scan across
+`self.requests`, `self.lockouts`, and `self._key_windows`.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter._evict_stale` (the `over_limit` gate's `self.lockouts` term)
+and `RateLimiter.is_rate_limited` (the insertion decision that actually
+needed the accurate count).
+
+**Failure scenario:** `_MAX_LOCKOUTS=3`, table filled with 3 genuinely
+active lockouts (the sustained-attack steady state, not CI3-33-2b's stale-
+count edge case). 200 distinct, unrelated keys — none anywhere near their
+own limit, none attempting to insert a lockout — each make one call. Under
+CI3-33-2b's fix, all 200 forced `_evict_stale`'s full sweep body to run
+(confirmed by tracking whether `_last_eviction` actually advances past the
+~60s throttle, not merely whether the method was called). Reproduced
+directly, and verified to fail against the CI3-33-2b code (200 of 200
+forced a full sweep) before accepting.
+
+**Impact:** an attacker who fills the in-memory fallback table (this
+limiter's exact Redis-outage failure mode) turns every request the
+application receives, on any scope, into full-table-scan work — a
+self-inflicted CPU-amplification denial of service triggered by, and
+compounding, the exact outage condition this fallback exists to survive.
+Materially worse than CI3-33-2b's own gap: that one degraded one violator's
+protection; this one degrades every request's latency.
+
+**Fix:** `_evict_stale`'s `over_limit` gate reverts `self.lockouts` to `>`
+(matching `self.requests`/`self._key_windows`) — a safety net that should
+structurally never fire, since insertion is gated and `self.lockouts`
+should never exceed `_MAX_LOCKOUTS` in the first place. The accuracy need
+CI3-33-2b actually had moves to a new, narrow `_prune_expired_lockouts()`
+method — lockouts-only, not gated by `_EVICTION_INTERVAL` — called from
+exactly one place: `is_rate_limited`'s insertion decision, and only when
+`self.lockouts` is observed at or over capacity _at that decision point_.
+This scopes the extra work to the one request that is actually about to
+need an accurate answer, not every request that merely happens to find the
+table full. The periodic three-dict sweep still cleans up expired lockouts
+as a side effect in the normal course (unaffected by this change), so
+`self.lockouts` isn't solely reliant on the targeted prune outside
+saturation. Reproduced and verified against the CI3-33-2b code (see Guard
+tests); also verified the genuine-saturation case (all-active lockouts at
+cap) is unaffected — a new violator's own lockout still correctly fails to
+persist, and no existing active entry is evicted to make room.
+
+**On the structural refactor — this is now round six, and the earlier
+"if a sixth round" trigger has been met.** CI3-33-1f (round 4) raised
+considering the refactor after a fourth round; CI3-33-2a/2b's write-up
+(round 5) explicitly named a sixth round of "this general shape" as the
+threshold for treating it as a strong signal rather than a suggestion.
+CI3-33-2c is that sixth round — and it is a direct regression introduced by
+round 5's _own_ fix, in the exact same capacity-accuracy code path, which
+is a materially stronger signal than "another dict disagreeing with
+another dict": the fixes themselves are now generating the next round's
+finding.
+
+**Judgment call, stated explicitly rather than deferred again: the
+refactor is now warranted, and should be the next piece of work on this
+file — not indefinitely deferred, and not attempted inside this fix.**
+Reasoning for not folding it into this commit: CI3-33-2c is a concrete,
+verified regression the coordinator asked to be addressed with the same
+rigor as every prior round (standalone repro, fail-before/pass-after test,
+full completion gate), and mixing a representation-changing rewrite into
+that same change is exactly the kind of scope creep that makes a fix
+harder to verify, not easier — the reasoning CI3-33-1f and CI3-33-2a/2b
+already gave for shipping narrow fixes under reactive pressure still holds
+for the fix itself. What has changed is the recommendation for what
+happens _next_: rather than "a follow-up design item" sitting in
+`docs/KNOWN_LIMITATIONS.md` indefinitely, this pass upgrades that row to
+recommend the refactor be scheduled as the very next piece of work touching
+this class — before, not after, whatever the seventh round would otherwise
+be. If another round of this general shape is found before the refactor
+lands, that is no longer a data point to weigh; it is confirmation the call
+made here was right.
 
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
@@ -885,7 +975,7 @@ reproductions (not just the pytest assertions) before being accepted as
 findings, per this rotation's standing rule that a claimed defect must be
 reproduced, not inferred from reading the code.
 
-**Added in PR #2369 (post-merge follow-up):**
+**Added in PR #2370 (post-merge follow-up):**
 
 - `tests/test_security_middleware.py::TestRateLimiter::
 test_saturation_reject_is_scoped_to_the_affected_rate_limit_scope`
@@ -912,11 +1002,41 @@ scalar → per-scope-dict representation change (two needed scope-consistent
 key names to keep testing same-scope behavior rather than trivially passing
 via the new cross-scope isolation).
 
+**Added in PR #2370 round 2 (CI3-33-2c):**
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_saturated_lockout_table_does_not_force_a_full_sweep_for_every_request`
+  (CI3-33-2c) — the direct reproduction: 200 distinct observer keys, none
+  anywhere near their own limit, each make one call while `self.lockouts`
+  sits at exactly `_MAX_LOCKOUTS` with genuinely active entries; none
+  should force `_evict_stale`'s full sweep body to run. Detection uses a
+  real (non-`NaN`) sentinel timestamp for `_last_eviction` before each call
+  — a `NaN` sentinel was tried first and rejected, since `NaN` compared
+  against anything is always `False`, which defeats the throttle condition
+  itself (`now - _last_eviction < _EVICTION_INTERVAL` becomes `False`
+  regardless of the fix under test) rather than correctly detecting whether
+  the sweep body ran. Verified to **fail** against the CI3-33-2b code (200
+  of 200 calls forced a full sweep) and **pass** after the fix (0 of 200).
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_genuine_saturation_still_rejects_new_lockouts_without_evicting_existing`
+  (CI3-33-2c companion guard) — with 3 truly active lockouts at cap, a new
+  violator's own lockout still correctly fails to persist and no existing
+  active entry is evicted; passes both before and after (a non-regression
+  guard confirming the CPU-amplification fix didn't weaken CI3-33-2b's own
+  protection, not a fail-before test in its own right).
+
+Both reproduced standalone before being accepted; the `test_lockout_
+saturation_check_purges_expired_entries_first` (CI3-33-2b) test's docstring
+was updated to note its fix was itself superseded by the narrower
+`_prune_expired_lockouts()` mechanism, without changing the test's own
+assertions — the symptom it pins (a stale count must not cause a false
+saturation rejection) is unaffected by which mechanism closes it, and the
+test still passes unmodified against the CI3-33-2c code.
+
 ## Completion gate
 
-The table below reflects PR #2368's final (merged) state. **PR #2369
-(post-merge follow-up, CI3-33-2a/2b) re-ran the backend gate** after its
-changes; results:
+The first table below reflects PR #2368's final (merged) state; the second
+reflects PR #2370's state after its round-2 fix (CI3-33-2c):
 
 | Check                                                                                                                                                                                                                                                                                    | Result                                                                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -928,14 +1048,27 @@ changes; results:
 | Repo-tenancy guard suite (`test_endpoint_auth_coverage.py`, `test_require_permission_registry.py`, `test_scheduled_task_coverage.py`, `test_cron_org_loop_isolation.py`, `test_like_escaping.py`, `test_capacity_locking.py`, `test_csv_writer_sweep.py`, `test_org_scoping_ratchet.py`) | ✅ 63 passed                                                                                                                                                                  |
 | Full backend suite (`pytest tests/`)                                                                                                                                                                                                                                                     | ✅ 11,732 passed, 21 skipped, 0 failed (was 11,730 at PR #2368 merge; skips all pre-existing: Docker unavailable, optional `pywebpush` dependency, opt-in API-contract suite) |
 
-No frontend file was touched in PR #2369, so the frontend checks below (last
-run at PR #2368's merge) are unchanged and were not re-run:
+**After PR #2370's round-2 fix (CI3-33-2c), the gate was re-run:**
 
-| Check                                                             | Result                                                                                                                                                |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tsc --noEmit` (bare, TS 5.9.3)                                   | ✅ 0 errors                                                                                                                                           |
-| `npm run typecheck` (aliased TS 7.0.2, the actual build compiler) | ✅ 0 errors                                                                                                                                           |
-| `npx eslint .`                                                    | ✅ 0 errors, 2 pre-existing warnings (`CallTypeChips.tsx`, `react-refresh/only-export-components`, unrelated — no frontend file touched in either PR) |
+| Check                                                                      | Result                                                                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                  |
+| `black --check` (both files)                                               | ✅ clean                                                                                         |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                       |
+| Scoped tests (same 7 files as above)                                       | ✅ 186 passed (was 184 after round 1; +2 for CI3-33-2c — `TestRateLimiter` now 33 tests, was 31) |
+| Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,734 passed, 21 skipped, 0 failed (was 11,732 after round 1; skips all pre-existing)        |
+
+No frontend file was touched in PR #2370 (either round), so the frontend
+checks below (last run at PR #2368's merge) are unchanged and were not
+re-run:
+
+| Check                                                             | Result                                                                                                                                                                  |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tsc --noEmit` (bare, TS 5.9.3)                                   | ✅ 0 errors                                                                                                                                                             |
+| `npm run typecheck` (aliased TS 7.0.2, the actual build compiler) | ✅ 0 errors                                                                                                                                                             |
+| `npx eslint .`                                                    | ✅ 0 errors, 2 pre-existing warnings (`CallTypeChips.tsx`, `react-refresh/only-export-components`, unrelated — no frontend file touched in any of the PRs in this pass) |
 
 **Sandbox note:** this worktree checkout had no `node_modules` of its own —
 `npx`/`npm` commands were silently resolving hoisted packages from the parent

@@ -16,26 +16,105 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2369** — Feature 33 (Core infrastructure, pass 3) follow-up:
+**#2370** — Feature 33 (Core infrastructure, pass 3) follow-up:
 `claude/fix-rate-limiter-saturation-scope`. #2368 merged (`262f8730`) with 3
 Codex review threads still open, posted ~50s before the merge landed and
 never seen by whoever merged it — this PR fixes them as a targeted
-follow-up, same pattern as PR #2367/#2365. 2 real fixes (CI3-33-2a P1 —
-`_saturation_reject_until` was a global scalar, not scoped per rate-limit
-scope, so saturating one scope's lockout table failed closed for every
-other scope sharing the process-wide limiter; CI3-33-2b P2 — a strict `>`
-eviction-gate comparison let a stale, already-expired lockout count trigger
-an unnecessary saturation rejection), plus a comment-chronology cleanup
-across the whole `RateLimiter` class (trimmed 4 rounds of finding-ID/PR-
-number references down to the invariants that matter, moved to the findings
-doc which already has the chronology). Rotation row 33 -> ✅ (#2368 already
-merged; this is a follow-up fix, not new rotation work — see CLAUDE.md
-Pitfall #24 on the fresh branch). Next once #2369 merges: 34 Frontend
-shared.
+follow-up, same pattern as PR #2367/#2365. Round 1: 2 real fixes (CI3-33-2a
+P1 — `_saturation_reject_until` was a global scalar, not scoped per
+rate-limit scope, so saturating one scope's lockout table failed closed for
+every other scope sharing the process-wide limiter; CI3-33-2b P2 — a strict
+`>` eviction-gate comparison let a stale, already-expired lockout count
+trigger an unnecessary saturation rejection), plus a comment-chronology
+cleanup across the whole `RateLimiter` class. Round 2 (Codex reviewed round
+1's own commit): CI3-33-2c P1 — CI3-33-2b's own fix forced a full
+three-dict sweep on every request once the lockout table merely reached
+capacity, a CPU-amplification DoS; fixed with a narrow, lockouts-only
+`_prune_expired_lockouts()` called only from the one request actually
+attempting an insertion, instead of forcing the shared sweep for every
+request that merely observes a full table. This is round 6 total on this
+class of code; the "sixth round" trigger set in round 5's write-up has been
+met, and the structural refactor is now recommended as the next piece of
+work on this file (not indefinitely deferred) — see
+`docs/KNOWN_LIMITATIONS.md`. Rotation row 33 -> ✅ (#2368 already merged;
+this is a follow-up fix, not new rotation work — see CLAUDE.md Pitfall #24
+on the fresh branch). Next once #2370 merges: 34 Frontend shared.
 
 ---
 
-### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368 merged before Codex's 5th round → new PR #2369
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 2: Codex found CI3-33-2b's own fix was a CPU-amplification DoS
+
+Codex reviewed PR #2370's round-1 commit (`4b5c6ac3`) and found one more
+real P1 issue: CI3-33-2b's fix (changing `_evict_stale`'s `over_limit` gate
+to `>=` for `self.lockouts`) closed the accuracy gap it targeted, but the
+mechanism it used forced the shared, three-dict `_evict_stale` sweep for
+**every** request sharing this limiter, not only the one that needed an
+accurate answer, once `self.lockouts` merely reached (not exceeded)
+capacity — the steady state for the whole duration of a sustained attack.
+An attacker who filled the fallback table turned every request anyone made
+into `O(_MAX_KEYS + _MAX_LOCKOUTS)` scan work, for as long as the table
+stayed full — a CPU-amplification DoS, worse in kind than the accuracy gap
+CI3-33-2b closed.
+
+Reproduced directly before fixing (and re-verified the repro's own
+methodology once, after a false negative: a first attempt used a `NaN`
+sentinel for `_last_eviction` to detect whether the sweep ran, but `NaN`
+compared against anything is always `False`, which defeats the
+interval-throttle condition itself regardless of the fix under test — a
+real, recent timestamp sentinel was needed instead). With the corrected
+repro: 200 distinct observer keys, none near their own limit, against a
+lockout table at exactly capacity with genuinely active entries — 200 of
+200 forced a full sweep under the CI3-33-2b code.
+
+Fixed by reverting `_evict_stale`'s own gate to `>` (a safety net that
+should structurally never fire, since insertion is gated) and moving the
+capacity-accuracy concern to a new, narrow `_prune_expired_lockouts()` —
+lockouts-only, not gated by `_EVICTION_INTERVAL` — called from exactly one
+place: `is_rate_limited`'s insertion decision, only when observed at/over
+capacity at that decision point. Verified: the CPU-amplification repro now
+shows 0 of 200 forced sweeps; the genuine-saturation case (all-active
+lockouts at cap) still correctly rejects a new violator's insertion without
+evicting existing entries; CI3-33-2b's own original repro (stale-expired
+count causing false saturation) still passes, unaffected.
+
+2 new regression tests (`TestRateLimiter` now 33, was 31): the direct
+CPU-amplification reproduction (verified to fail against the CI3-33-2b code
+and pass after) and a genuine-saturation companion guard (passes both
+before and after, confirming the fix didn't weaken CI3-33-2b's own
+protection). The existing `test_lockout_saturation_check_purges_expired_
+entries_first` test's docstring was updated to note its fix was
+superseded by the narrower mechanism, without changing its assertions.
+
+Completion gate re-run: flake8/black/isort clean; migrations validated
+(unchanged); scoped 186/186 (was 184); full backend suite 11,734/0 (was
+11,732). No frontend file touched. Pushed to the same `#2370` branch as a
+second commit. Replied to and resolved the Codex thread.
+
+**Structural refactor judgment call, made explicitly per the coordinator's
+request:** this is round six on this class of code — CI3-33-2a/2b's own
+write-up (round 5) named a sixth round as the trigger to stop patching and
+do the refactor. That trigger has now been met, and round 6 is a
+materially stronger signal than the prior rounds: it is round 5's _own fix_
+generating round 6's finding, in the exact same code path. The call: the
+refactor is now recommended as the **next piece of work on this file**, not
+an indefinitely-deferred item — but not folded into this fix itself, for
+the same reason narrow fixes have been preferred throughout this rotation
+(a verified regression fix under reactive pressure is not the moment to
+also change the class's internal representation). Findings doc
+(CI3-33-2c write-up, "On the structural refactor" section) and
+`docs/KNOWN_LIMITATIONS.md` (row upgraded from "design follow-up" to
+"RECOMMENDED NEXT PRIORITY") both updated to state this explicitly.
+
+**Also corrected in this pass:** the round-1 commit messages, this file,
+`docs/security-review/CI3-33-core-infra.md`, and `docs/KNOWN_LIMITATIONS.md`
+had mislabeled this PR as "#2369" throughout — the PR GitHub actually
+created is **#2370** (the replies posted to PR #2368's threads were
+unaffected; they correctly said "#2370" already). Swept and corrected every
+"#2369" reference across all three docs files in this pass.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368 merged before Codex's 5th round → new PR #2370
 
 Watchdog check found PR #2368 had merged (`262f8730`) with 3 more Codex
 review threads open (posted 2026-09-07T12:18:18Z–12:18:18Z, merge landed
@@ -43,7 +122,7 @@ review threads open (posted 2026-09-07T12:18:18Z–12:18:18Z, merge landed
 this round's fixes reached `main` through that PR. Per CLAUDE.md pitfall
 #24, opened a new branch (`claude/fix-rate-limiter-saturation-scope`) off
 current `main` rather than continuing to push to the now-merged
-`claude/security-review-core-infra-pass3`, and a new PR, #2369 — same
+`claude/security-review-core-infra-pass3`, and a new PR, #2370 — same
 pattern as PR #2367/#2365 and PR #2311/#2307.
 
 Verified all 3 findings against the actual merged code with standalone
@@ -100,8 +179,8 @@ backend suite 11,732/0 (was 11,730). No frontend file touched. Findings doc
 (`docs/security-review/CI3-33-core-infra.md`, new CI3-33-2a/2b sections plus
 a post-merge addendum note) and `docs/KNOWN_LIMITATIONS.md` (structural-
 refactor row updated to record the round-5 recurrence) both updated. PR
-#2369 opened, referencing #2368, and subscribed. Rotation row 33 stays as
-above. Next once #2369 merges: 34 Frontend shared.
+#2370 opened, referencing #2368, and subscribed. Rotation row 33 stays as
+above. Next once #2370 merges: 34 Frontend shared.
 
 ---
 
