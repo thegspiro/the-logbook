@@ -17,9 +17,53 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2368** — Feature 33 (Core infrastructure, pass 3): `claude/security-review-core-infra-pass3`.
-2 fixed (CI3-33-1/2, `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW).
-Subscribed for activity. Rotation row 33 -> ✅ (pending merge). Next once
-merged: 34 Frontend shared.
+4 fixed (CI3-33-1/2 plus Codex-caught follow-ups CI3-33-1a/1b, all in
+`RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). Both Codex review
+threads replied to and resolved. Subscribed for activity. Rotation row 33
+-> ✅ (pending merge). Next once merged: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368, Codex found 2 real gaps in CI3-33-1/2's own fixes, both fixed before merge
+
+Codex reviewed PR #2368 (commit `dacf07ad`) and left two P2 threads on
+`security_middleware.py`, both real, both verified against reproductions
+before fixing:
+
+- **CI3-33-1a** — CI3-33-2's fix restored a forced-evicted key's request
+  history but not `self._key_windows[key]` (set before `_evict_stale` runs
+  and popped by the same forced-eviction loop). A later sweep triggered by
+  a different, shorter-window scope would then judge the key's staleness
+  against the wrong window — CI2-33-2's bug, reintroduced by omission.
+  Reproduced directly (window metadata confirmed missing immediately after
+  the key's own forced eviction; its still-valid history then wiped by an
+  unrelated short-window sweep). Fixed by re-asserting the window metadata
+  unconditionally after eviction runs.
+- **CI3-33-1b** — CI3-33-1's fix (stop popping `self.lockouts[key]` during
+  forced eviction, to prevent early-unlock) removed the _only_ mechanism
+  that had ever bounded `self.lockouts`' size — it was capped purely as a
+  side effect of being popped alongside its matching `self.requests` entry.
+  Decoupled, a sustained flood of distinct keys tripping the lockout during
+  a Redis outage could grow it unboundedly for the full lockout duration —
+  CLAUDE.md Pitfall #9's exact shape. Reproduced directly (500 distinct
+  attacker IPs against a `_MAX_KEYS=100` limiter left `requests` at 100 but
+  `lockouts` at 500). Fixed with an independent `_MAX_LOCKOUTS` cap,
+  evicting soonest-to-expire entries first (least "early unlock" impact,
+  and not correlated with attacker value the way evicting by request
+  recency would be) — and, to avoid reintroducing CI3-33-1's own
+  self-eviction hazard in a new form, `is_rate_limited` now also captures
+  `self.lockouts.get(key)` before eviction runs and uses that value,
+  mirroring CI3-33-2's read-before/write-after-evict pattern for lockouts
+  as well as request history.
+
+Both verified to fail against the pre-follow-up code (3 of 4 new tests;
+the 4th is a self-eviction companion guard that passes both before and
+after, since the pre-follow-up code has no `_MAX_LOCKOUTS` mechanism to
+exhibit that specific hazard in) and pass after. Pushed as `f9763a6a`;
+scoped suite 177/177 (was 173), full suite 11,725/0 (was 11,721). Replied
+to both Codex threads explaining the fix and resolved both. PR body and
+`docs/security-review/CI3-33-core-infra.md` updated to record these as
+CI3-33-1a/1b, not folded silently into the original write-up.
 
 ---
 
