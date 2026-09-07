@@ -16,15 +16,92 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2368** — Feature 33 (Core infrastructure, pass 3): `claude/security-review-core-infra-pass3`.
-7 fixed (CI3-33-1/2 plus four Codex-caught follow-up rounds, CI3-33-1a/1b/1c/1d/1e,
-all in `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). All Codex
-review threads (6 total across 3 rounds) replied to and resolved. A structural
-refactor (collapsing `requests`/`lockouts`/`_key_windows` into one per-key
-record) was considered and deliberately deferred as a follow-up design item
-rather than attempted mid-incident — recorded in
-`docs/KNOWN_LIMITATIONS.md`. Subscribed for activity. Rotation row
-33 -> ✅ (pending merge). Next once merged: 34 Frontend shared.
+**#2369** — Feature 33 (Core infrastructure, pass 3) follow-up:
+`claude/fix-rate-limiter-saturation-scope`. #2368 merged (`262f8730`) with 3
+Codex review threads still open, posted ~50s before the merge landed and
+never seen by whoever merged it — this PR fixes them as a targeted
+follow-up, same pattern as PR #2367/#2365. 2 real fixes (CI3-33-2a P1 —
+`_saturation_reject_until` was a global scalar, not scoped per rate-limit
+scope, so saturating one scope's lockout table failed closed for every
+other scope sharing the process-wide limiter; CI3-33-2b P2 — a strict `>`
+eviction-gate comparison let a stale, already-expired lockout count trigger
+an unnecessary saturation rejection), plus a comment-chronology cleanup
+across the whole `RateLimiter` class (trimmed 4 rounds of finding-ID/PR-
+number references down to the invariants that matter, moved to the findings
+doc which already has the chronology). Rotation row 33 -> ✅ (#2368 already
+merged; this is a follow-up fix, not new rotation work — see CLAUDE.md
+Pitfall #24 on the fresh branch). Next once #2369 merges: 34 Frontend
+shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368 merged before Codex's 5th round → new PR #2369
+
+Watchdog check found PR #2368 had merged (`262f8730`) with 3 more Codex
+review threads open (posted 2026-09-07T12:18:18Z–12:18:18Z, merge landed
+~50s later) — the merge happened before anyone had seen them, so none of
+this round's fixes reached `main` through that PR. Per CLAUDE.md pitfall
+#24, opened a new branch (`claude/fix-rate-limiter-saturation-scope`) off
+current `main` rather than continuing to push to the now-merged
+`claude/security-review-core-infra-pass3`, and a new PR, #2369 — same
+pattern as PR #2367/#2365 and PR #2311/#2307.
+
+Verified all 3 findings against the actual merged code with standalone
+reproductions before fixing, same discipline as every prior round:
+
+- **P1 — cross-scope saturation DoS (CI3-33-2a):** confirmed real.
+  `self._saturation_reject_until` (CI3-33-1e's fix) was a single scalar on
+  the shared `rate_limiter` instance backing every rate-limit scope — login,
+  register, password-reset, token-refresh, password-change, and every
+  `public_rate_limit()` caller (public forms, legal pages, calendar/display
+  endpoints, webhooks). Reproduced directly: saturating the `login` scope's
+  3-entry lockout table, then a brand-new `pub_form_submit` key with zero
+  history was rejected too — a self-inflicted, attacker-triggerable DoS
+  across the entire app during exactly the condition (Redis outage + login
+  flood) the fallback exists to protect. Fixed by making the field
+  `dict[str, float]` keyed by rate-limit scope (the literal prefix each real
+  caller puts before the first `:` in its key, extracted by a new
+  `_scope_of()` helper). Confirmed by grep that every scope value across the
+  codebase is a hardcoded string literal, never derived from request
+  input — so the new dict needs no size cap, unlike the three
+  attacker-keyed dicts. Verified the fix does not weaken same-scope
+  protection (a saturated scope's own violators still fail closed past
+  their own window).
+- **P2 — stale-capacity false saturation (CI3-33-2b):** confirmed real.
+  `_evict_stale`'s `over_limit` gate used a strict `>` against
+  `_MAX_LOCKOUTS`, so a table sitting at _exactly_ capacity deferred to the
+  normal ~60s eviction throttle instead of forcing an immediate sweep —
+  entries that expired since the last periodic sweep stayed counted, so a
+  new violator's insertion decision (`len(self.lockouts) < _MAX_LOCKOUTS`)
+  read a stale, inflated count. Reproduced directly: 3 already-expired
+  lockouts plus a recent `_last_eviction` timestamp caused a genuinely empty
+  table to be read as saturated. Fixed by changing the lockouts term to
+  `>=`, forcing this call's own `_evict_stale` (which runs immediately
+  before the insertion decision) to purge expired entries first whenever the
+  table is at or over capacity.
+- **Minor — comment chronology (folded into the same fix):** the in-code
+  comments across `RateLimiter` had accumulated 4 rounds of PR numbers,
+  finding IDs (CI3-33-1a–1f), Codex round numbers, and failed-attempt
+  narratives. Trimmed every comment down to the invariant that still
+  matters; moved the chronology to the findings doc, which already has it
+  in full. Verified no behavior change: full `TestRateLimiter` suite passes
+  identically before and after the comment-only edits.
+
+2 new regression tests (`TestRateLimiter` now 31, was 29), both verified to
+fail against the merged pre-fix code and pass after; the 3 existing
+CI3-33-1e tests referencing `_saturation_reject_until` were updated for the
+scalar → per-scope-dict change (two needed scope-consistent key names to
+keep testing same-scope behavior, since bare unscoped keys would otherwise
+trivially pass via the new cross-scope isolation regardless of whether
+decay/live-history handling was correct). Completion gate re-run against
+current `main`: flake8/black/isort clean; migrations validated (435
+revisions, single head, no schema change); scoped 184/184 (was 182); full
+backend suite 11,732/0 (was 11,730). No frontend file touched. Findings doc
+(`docs/security-review/CI3-33-core-infra.md`, new CI3-33-2a/2b sections plus
+a post-merge addendum note) and `docs/KNOWN_LIMITATIONS.md` (structural-
+refactor row updated to record the round-5 recurrence) both updated. PR
+#2369 opened, referencing #2368, and subscribed. Rotation row 33 stays as
+above. Next once #2369 merges: 34 Frontend shared.
 
 ---
 
