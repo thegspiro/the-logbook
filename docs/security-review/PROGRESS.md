@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 33 (Core infrastructure, pass 3) follow-up PR #2370 merged
+(`86ec5795`) — CI fully green (17/17), `mergeable_state: clean`, all 11 Codex
+review threads across 10 rounds resolved. The final round's Codex re-review
+(on head `216cf625`) never completed cleanly — 11 consecutive attempts all
+returned "usage limits reached" rather than a pass/fail verdict over the
+~2 hours the PR was open — so this merge landed without that last
+confirmation. Every one of the 10 prior rounds had already been
+independently reproduced with a standalone `python3` repro before being
+accepted (see `CI3-33-core-infra.md`). Rotation row 33 -> ✅ (already
+reflected in the table below). Next: 34 Frontend shared.
+
+<details>
+<summary>Superseded — PR #2370's own in-progress narrative, preserved for history</summary>
+
 **#2370** — Feature 33 (Core infrastructure, pass 3) follow-up:
 `claude/fix-rate-limiter-saturation-scope`. #2368 merged (`262f8730`) with 3
 Codex review threads still open, posted ~50s before the merge landed and
@@ -88,6 +102,23 @@ Rotation row 33 -> ✅
 (#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
+
+</details>
+
+---
+
+### 2026-09-07 — Feature 33's follow-up PR #2370 merged, watchdog recorded it
+
+PR #2370 (10 rounds of Codex-driven fixes plus a structural `RateLimiter`
+refactor, `TestRateLimiter` grown from 29 to 43 tests) went fully green
+(17/17 checks, `mergeable_state: clean`) with all 11 Codex review threads
+resolved. Its final round's Codex re-review never completed cleanly — 11
+straight "usage limits reached" responses on the same head commit
+(`216cf625`) over roughly 2 hours. A 30-minute watchdog check had flagged
+this state (CI green, mergeable clean, Codex stuck on quota) rather than
+merge it unilaterally; the PR merged (`86ec5795`) shortly after. This entry
+records that merge and clears the stale Open PR row. Next: 34 Frontend
+shared.
 
 ---
 
@@ -10903,7 +10934,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | 🔄     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
