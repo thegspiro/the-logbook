@@ -23,8 +23,17 @@ across 3 rounds resolved (color-caching permission gap closed with
 to track the right PR, reviewed commit range pinned to an immutable SHA, a
 missing backend permission regression test added, and one hallucinated
 Codex citation — a commit SHA that does not exist in this repo — correctly
-identified and declined rather than blindly "fixed"). Rotation stays ✅
-through Feature 34; next iteration wraps to **00 (cross-cutting baseline)**.
+identified and declined rather than blindly "fixed"). That completed pass
+3's full lap through all 35 features.
+
+**Since then:** an out-of-band data-leakage sweep, PR
+[#2381](https://github.com/thegspiro/the-logbook/pull/2381), merged
+directly without ever occupying this row (it ran as a standalone review,
+not a rotation iteration); its findings are recorded as prior art in
+`SEC-00-cross-cutting-baseline.md` and **XC-4** in
+`docs/module-audit/CROSS-CUTTING.md` so pass 4's Feature 00 iteration
+doesn't rediscover them. The Rotation table below is now reset to ⬜ for
+**pass 4**, starting at **00 (cross-cutting baseline)**.
 
 <details>
 <summary>Superseded — PR #2382 (pass 5, corrective), preserved for history</summary>
