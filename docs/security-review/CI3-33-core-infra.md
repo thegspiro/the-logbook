@@ -4,8 +4,9 @@
 
 **Backend:** `app/core/security_middleware.py` (1,450 L → 1,672 L at PR
 #2368's merge after four Codex-caught follow-up rounds → 1,605 L after PR
-#2370's fixes plus its comment-chronology trim → 1,641 L after PR #2370's
-CI3-33-2c fix), `app/core/config.py` (1,041 L),
+#2370's round-1 fixes plus its comment-chronology trim → 1,641 L after PR
+#2370's round-2 (CI3-33-2c) fix → 1,638 L after PR #2370's round-3
+structural refactor, CI3-33-2d), `app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -47,6 +48,17 @@ the "if a sixth round" trigger CI3-33-2a/2b's write-up set has been met,
 and the judgment call is made explicitly in CI3-33-2c's own write-up: the
 structural refactor is now recommended as the next piece of work on this
 file, not indefinitely deferred. See CI3-33-2c below and PR #2370.
+
+**Third post-merge addendum (2026-09-07, PR #2370):** review of CI3-33-2c's
+own commit found CI3-33-2d (P1) — round seven, and a narrower version of
+the exact CPU-amplification gap CI3-33-2c had just closed, this time
+surviving one already-rejected key's own retries. The coordinator
+authorized the structural refactor at this point rather than an eighth
+incremental patch. `RateLimiter`'s `self.requests`/`self.lockouts`/
+`self._key_windows` are now one `dict[str, _KeyState]`, paired with a
+throttled (1-second) capacity-verification mechanism that closes CI3-33-2b,
+2c, and 2d together rather than one at a time. See CI3-33-2d and "The
+structural refactor" below, and PR #2370.
 
 ---
 
@@ -744,6 +756,201 @@ be. If another round of this general shape is found before the refactor
 lands, that is no longer a data point to weigh; it is confirmation the call
 made here was right.
 
+**Update: it was found, immediately, on this exact fix.** CI3-33-2d
+(immediately below) is round seven, found in review of this same commit —
+confirming the call above rather than merely testing it. The refactor
+described in this paragraph was not scheduled for later; it shipped as the
+fix for CI3-33-2d. See "The structural refactor" section after CI3-33-2d
+for what actually landed and why the coordinator authorized doing it now
+rather than deferring again.
+
+### CI3-33-2d — P1 — CI3-33-2c's own fix still let a single already-rejected key's retries repeatedly re-trigger the capacity scan — the seventh round of this defect class, and the trigger for the structural refactor — ✅ FIXED by structural refactor (Codex review of PR #2370, round 7)
+
+**What:** CI3-33-2c correctly narrowed the forced capacity scan to only run
+when the _current call_ needs to insert a lockout and the table is full —
+but a key that is already over its own request limit and retrying
+repeatedly re-enters that exact "needs to insert" branch on _every single
+retry_, since its own lockout could never be persisted (the table stayed
+saturated) and nothing distinguished "asking for the first time this
+second" from "asking for the two-hundredth time this second." The narrowing
+moved the CPU cost from "every request, from anyone" (CI3-33-2c's own bug)
+to "every retry, from the specific key most likely to actually retry" — a
+smaller blast radius, but not a closed one, and arguably the more
+realistic attack shape of the two.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.is_rate_limited` (the `_prune_expired_lockouts()` call site)
+and `RateLimiter._prune_expired_lockouts` itself.
+
+**Failure scenario:** lockout table saturated with 3 genuinely active
+entries; one already-rejected attacker key retries the same request 100
+times in immediate succession (a realistic "hammer the endpoint" shape, not
+a contrived one). Reproduced directly: all 100 retries each forced a fresh
+`O(_MAX_LOCKOUTS)` scan in `_prune_expired_lockouts`, confirmed by tracking
+real scan work (not merely call count) before accepting the finding.
+
+**Impact:** an attacker who is already known to be over their own limit —
+already the easiest and cheapest case to reject, needing nothing more than
+the request-count check already computed a few lines earlier — could still
+turn each of their own retries into full-table-scan work, for as long as
+they kept retrying. A narrower version of CI3-33-2c's own CPU-amplification
+concern, surviving inside the fix that closed the broader case.
+
+**This is round seven of the same defect class**, and the sixth-round
+trigger CI3-33-2a/2b's write-up set (see CI3-33-2c above) has now
+unambiguously fired: not a new mechanism finding a new kind of gap, but the
+_immediately preceding fix's own commit_ found to have a narrower version of
+the _same_ gap it had just closed. The coordinator authorized the
+structural refactor explicitly at this point, rather than a seventh
+incremental patch — see "The structural refactor" below for what shipped.
+
+## The structural refactor
+
+Rounds one through seven (CI3-33-1 through 2d) all trace to the same root
+cause, stated explicitly as early as CI3-33-1f (round 4) and reaffirmed at
+every round since: `self.requests`, `self.lockouts`, and `self._key_windows`
+were three independently-capped, independently-evicted dictionaries meant
+to describe the same key's state, plus a saturation-accuracy mechanism
+(`_prune_expired_lockouts` / the `>=` gate it replaced) bolted onto the
+outside of that shape across rounds five through seven, trying to answer
+"is the table really full" without a clean place to keep that answer
+current. Every round's fix closed the specific gap found and, in three
+separate instances (CI3-33-1a following CI3-33-2's fix, CI3-33-1c following
+CI3-33-1b's, CI3-33-2c/2d following CI3-33-2b's), the fix itself introduced
+the next round's finding in the same code path.
+
+**What changed:** `backend/app/core/security_middleware.py`'s `RateLimiter`
+now stores one record per key —
+
+```python
+@dataclass
+class _KeyState:
+    request_times: list[float] = field(default_factory=list)
+    window_seconds: int = 60
+    lockout_until: float | None = None
+```
+
+— in a single `dict[str, _KeyState]` (`self._keys`), replacing the three
+separate dicts entirely. `self._saturation_reject_until` (CI3-33-2a's
+per-scope dict) is unchanged and deliberately **not** folded into
+`_KeyState`: it is keyed by rate-limit _scope_, a fixed, finite set of
+string literals written into the codebase's own call sites, never by the
+attacker-influenceable per-client `key` the other three structures used —
+a fundamentally different key space, so collapsing it in would not close
+any bug class, only add an unrelated axis to the same structure.
+
+**Why this closes the whole class, not just CI3-33-2d specifically:** every
+round from 1 through 2c/2d was some variant of "a key's state exists in one
+structure but not another," or "a value cached in a fourth place drifts out
+of sync with the structures it was supposed to summarize." With one record
+per key, a key either has a `_KeyState` — in which case its request
+history, its own window, and its lockout status are the _same object_ and
+cannot desynchronize — or it has none. There is no longer a "restore the
+window metadata" step to forget (CI3-33-1a), no "also pop the lockout"
+step to get wrong in either direction (CI3-33-1/1b/1c), and no third
+dict's orphaned entries to leak (CI3-33-1d).
+
+**The capacity-accuracy problem (CI3-33-2b/2c/2d) needed a second, distinct
+idea, not just the merge.** Collapsing the three dicts does nothing by
+itself to answer "how many keys currently have an active lockout" cheaply
+and accurately — that answer still requires either scanning every record
+(expensive, the CI3-33-2c/2d shape) or maintaining a cached count that can
+go stale (the CI3-33-2b shape). The fix pairs the merge with a **throttled
+verification**, independent of and much shorter than the general periodic
+sweep:
+
+- `self._active_lockout_count`, an integer cache. Incremented immediately
+  on every successful insertion (so a burst of distinct violators within
+  one throttle window still sees each other's inserts). Corrected to an
+  exact value only by the periodic sweep (`_sweep`, ~60s, matching the old
+  `_EVICTION_INTERVAL`) and by a new, narrow `_refresh_active_lockout_count`
+  — called only when the cached count already reads at or over capacity,
+  throttled to at most once per `_LOCKOUT_VERIFY_INTERVAL` (1 second,
+  independent of and far shorter than the 60-second sweep interval).
+- Between refreshes, the cache can only ever be a stale **over**-estimate
+  (an expired-but-not-yet-rediscovered lockout still counts against
+  capacity) — never an under-estimate. This is the safe direction: it can
+  cause an unnecessary saturation-fallback determination for up to 1
+  second, but can never let the true `_MAX_LOCKOUTS` cap be exceeded.
+- The 1-second throttle bounds the scan cost to a fixed per-second rate
+  **regardless of who is asking** — the same over-limit key retrying
+  hundreds of times (CI3-33-2d), or hundreds of different first-time
+  violators arriving together (CI3-33-2c) — closing both shapes with the
+  same mechanism, rather than trying to distinguish "which caller" the way
+  CI3-33-2c's narrower scoping attempted and CI3-33-2d found the gap in.
+
+**Forced eviction by `_MAX_KEYS`, unified.** The old design's "don't also
+evict the lockout" step (CI3-33-1) becomes structural: the by-recency
+eviction pool for `_MAX_KEYS` pressure excludes any record with an
+unexpired `lockout_until` entirely — not just "removes the request history
+but not the lockout" (the old fix's own careful two-part behavior), but
+"does not consider this record for eviction at all." One consequence,
+deliberate and now explicitly documented: total tracked keys can exceed
+`_MAX_KEYS` by up to `_MAX_LOCKOUTS` worth of actively-locked-out records
+that the by-recency mechanism is not permitted to touch — the same combined
+bound the old three-dict design produced as a side effect, now stated as
+policy rather than emerging from how three independent caps happened to
+interact.
+
+**Testing.** Every existing behavior the 33-test `TestRateLimiter` suite
+locked in was read as a spec before writing a line of the new class (not
+after) — what each test was actually verifying about `is_rate_limited`'s
+externally-observable behavior, separate from how it happened to poke the
+old three-dict internals to set up its scenario. All 33 tests were then
+rewritten against the new `_KeyState`/`self._keys` shape (direct dict
+manipulation replaced with `_KeyState(...)` construction; assertions like
+`"key" in limiter.lockouts` replaced with `limiter._keys["key"].lockout_until
+is not None`), and **passed on the first full run against the new class** —
+no test needed a second round of fixing to match the refactor, which is
+strong evidence the translation preserved intent rather than accidentally
+relaxing what was being checked. Two tests were substantively repurposed
+rather than 1:1-translated, because their old premise no longer applies
+under the unified model:
+
+- `test_max_keys_evicts_associated_lockouts` (old, near-tautological once
+  request/lockout state can no longer split across dicts) became
+  `test_max_keys_eviction_never_touches_an_actively_locked_out_key` — 6
+  actively-locked-out keys under `_MAX_KEYS=3` pressure, asserting none are
+  evicted, exercising the "excluded from the eviction pool entirely"
+  behavior above.
+- `test_key_windows_does_not_grow_unbounded_from_locked_out_retries` (old,
+  a `self._key_windows`-specific leak that is now structurally impossible)
+  became `test_key_count_stays_bounded_by_max_keys_plus_max_lockouts_under_locked_out_retries`
+  — 2,000 distinct already-locked-out keys, each retrying once, asserting
+  `self._keys` stays at exactly 2,000 (no growth from the retries) and
+  within the documented combined bound.
+
+Two new tests close CI3-33-2d specifically and the class more broadly:
+
+- `test_round_7_retries_do_not_repeatedly_rescan_lockout_capacity` — the
+  direct reproduction: 100 retries of one already-rejected key against a
+  saturated table, both throttles pre-warmed to match a realistic
+  steady-state attacker (not the first request the process has ever
+  handled), asserting zero real scans occur among the 100, then that a
+  fresh verification is still reachable once real time passes the
+  throttle. Verified to fail against the CI3-33-2c/pre-refactor code
+  (reproduced with a standalone script against that code's actual
+  `_prune_expired_lockouts`, since the internal API changed too much for a
+  literal before/after pytest run against both) and pass after.
+- `test_fuzz_mixed_scopes_saturation_and_retries_keeps_internal_state_bounded`
+  — a seeded, deterministic property-style test: 4,000 calls against a
+  small pool of keys across 4 scopes, randomized request rates and forward-
+  moving time, asserting throughout that `is_rate_limited`'s own return
+  value never disagrees with the state it leaves behind (a "not limited"
+  result never coexists with a still-active `lockout_until`), and at the
+  end that `self._active_lockout_count` never _under_-counts the true
+  active count (only ever over-counts, the safe direction), that
+  `self._keys` stays within the documented `_MAX_KEYS + _MAX_LOCKOUTS`
+  bound, and that `self._saturation_reject_until` never grows past the
+  number of distinct scopes actually exercised.
+
+`TestRateLimiter` is 35 tests (was 33 before this round: two repurposed as
+above, two new). Full write-up of the `_last_lockout_verify`/
+`_active_lockout_count` mechanics is in `_refresh_active_lockout_count`'s
+own docstring in the source, which — per CI3-33-2c's own comment-chronology
+cleanup — is where the _invariant_ belongs; this document is where the
+_history of getting there_ belongs.
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1033,10 +1240,56 @@ assertions — the symptom it pins (a stale count must not cause a false
 saturation rejection) is unaffected by which mechanism closes it, and the
 test still passes unmodified against the CI3-33-2c code.
 
+**Added/changed in PR #2370 round 3 (CI3-33-2d, structural refactor):** all
+33 existing `TestRateLimiter` tests were read as a behavior spec and
+rewritten against the new `_KeyState`/`self._keys` shape — see "The
+structural refactor" section above for the two that were substantively
+repurposed rather than 1:1-translated. The rewritten suite passed in full
+on its first run against the new class (no second round of test-fixing was
+needed to match the refactor). New tests:
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_round_7_retries_do_not_repeatedly_rescan_lockout_capacity` (CI3-33-2d)
+  — the direct reproduction: 100 retries of one already-rejected key
+  against a saturated table, both throttles pre-warmed to a realistic
+  steady state; asserts zero real scans among the 100 retries, then that a
+  fresh verification is still reachable once real time passes the
+  1-second throttle. Verified to **fail** against the pre-refactor
+  (CI3-33-2c) code — via a standalone reproduction script against that
+  code's actual `_prune_expired_lockouts` (100 of 100 retries forced a real
+  scan), since the internal API changed too much for the same pytest test
+  to run against both — and **pass** after.
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_fuzz_mixed_scopes_saturation_and_retries_keeps_internal_state_bounded`
+  — a seeded (deterministic), property-style test hammering one limiter
+  with 4,000 calls across a small pool of keys in 4 scopes, randomized
+  request rates and forward-moving mocked time. Asserts throughout that a
+  "not limited" result never coexists with a still-active `lockout_until`
+  on that key's own record, and at the end that `self._active_lockout_count`
+  never under-counts the true active count (over-counting only — the safe
+  direction), that `self._keys` stays within the documented
+  `_MAX_KEYS + _MAX_LOCKOUTS` combined bound, and that
+  `self._saturation_reject_until` never grows past the number of distinct
+  scopes actually exercised (4). Not a fail-before/pass-after test in the
+  usual sense (there is no equivalent internal-state assertion expressible
+  against the old three-dict shape) — it is the class-level guard the
+  coordinator asked for, verifying the _invariants_ the refactor claims to
+  establish, at a scale and randomization no single hand-written scenario
+  reaches.
+
+Two existing tests were substantively repurposed (not merely renamed) for
+the reasons given in "The structural refactor" above:
+`test_max_keys_evicts_associated_lockouts` →
+`test_max_keys_eviction_never_touches_an_actively_locked_out_key`, and
+`test_key_windows_does_not_grow_unbounded_from_locked_out_retries` →
+`test_key_count_stays_bounded_by_max_keys_plus_max_lockouts_under_locked_out_retries`.
+`TestRateLimiter` is 35 tests (was 33 before this round).
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
-reflects PR #2370's state after its round-2 fix (CI3-33-2c):
+reflects PR #2370's state after its round-2 fix (CI3-33-2c); the third
+reflects PR #2370's state after its round-3 structural refactor (CI3-33-2d):
 
 | Check                                                                                                                                                                                                                                                                                    | Result                                                                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1060,9 +1313,25 @@ reflects PR #2370's state after its round-2 fix (CI3-33-2c):
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,734 passed, 21 skipped, 0 failed (was 11,732 after round 1; skips all pre-existing)        |
 
-No frontend file was touched in PR #2370 (either round), so the frontend
-checks below (last run at PR #2368's merge) are unchanged and were not
-re-run:
+**After PR #2370's round-3 structural refactor (CI3-33-2d), the gate was
+re-run in full — including the full backend suite, given the size of the
+change (the coordinator's own instruction: "run the full completion gate...
+before pushing given the blast radius"):**
+
+| Check                                                                      | Result                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                                                                                                                                                                                                                                                                   |
+| `black --check` (both files)                                               | ✅ clean (both files reformatted once by `black` after the initial write — a missing blank line and long lines — then re-verified)                                                                                                                                                                                                                |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                                                                                                                                                                                                                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                                                                                                                                                                                                                                                                        |
+| Scoped tests (same 7 files as above)                                       | ✅ 188 passed (was 186 after round 2; +2 for CI3-33-2d — `TestRateLimiter` now 35 tests, was 33; all 35 passed on the _first_ run against the rewritten class, no second round of test-fixing needed)                                                                                                                                             |
+| Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                                                                                                                                                                                                                                                                      |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,736 passed, 21 skipped, 0 failed (was 11,734 after round 2; skips all pre-existing)                                                                                                                                                                                                                                                         |
+| `python3 -m mypy app/core/security_middleware.py`                          | not part of this rotation's completion gate (844 pre-existing errors repo-wide, none introduced by this change) — checked anyway given the size of the refactor; the file's one hit (`HTTPConnection[State]` has no attribute `method`, an unrelated pre-existing line) was confirmed present, at a different line number, before this change too |
+
+No frontend file was touched in PR #2370 (any of its three rounds), so the
+frontend checks below (last run at PR #2368's merge) are unchanged and were
+not re-run:
 
 | Check                                                             | Result                                                                                                                                                                  |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

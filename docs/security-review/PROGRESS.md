@@ -32,13 +32,103 @@ three-dict sweep on every request once the lockout table merely reached
 capacity, a CPU-amplification DoS; fixed with a narrow, lockouts-only
 `_prune_expired_lockouts()` called only from the one request actually
 attempting an insertion, instead of forcing the shared sweep for every
-request that merely observes a full table. This is round 6 total on this
-class of code; the "sixth round" trigger set in round 5's write-up has been
-met, and the structural refactor is now recommended as the next piece of
-work on this file (not indefinitely deferred) — see
-`docs/KNOWN_LIMITATIONS.md`. Rotation row 33 -> ✅ (#2368 already merged;
-this is a follow-up fix, not new rotation work — see CLAUDE.md Pitfall #24
-on the fresh branch). Next once #2370 merges: 34 Frontend shared.
+request that merely observes a full table. Round 3 (Codex reviewed round
+2's own commit): CI3-33-2d P1 — round 2's own narrowing still let a single
+already-rejected key's own repeated retries re-trigger the capacity scan —
+round 7 total, and a narrower version of the exact gap round 2 had just
+closed. The coordinator authorized the structural refactor at this point:
+`self.requests`/`self.lockouts`/`self._key_windows` collapsed into one
+`dict[str, _KeyState]` per key, paired with a throttled (1s)
+`_active_lockout_count` verification that closes CI3-33-2b/2c/2d together.
+All 33 existing `TestRateLimiter` tests rewritten against the new shape and
+passed on the first run; 2 new tests added (35 total). Rotation row 33 -> ✅
+(#2368 already merged; this is a follow-up fix, not new rotation work — see
+CLAUDE.md Pitfall #24 on the fresh branch). Next once #2370 merges: 34
+Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3: round 7 found, structural refactor authorized and shipped
+
+Codex reviewed PR #2370's round-2 commit and found one more real P1 issue:
+CI3-33-2c had correctly narrowed the forced capacity scan to only run when
+the _current call_ needs to insert a lockout and the table is full — but a
+key that is already over its own request limit and retrying repeatedly
+re-enters that exact branch on every single retry, since its own lockout
+could never be persisted. Reproduced directly: 100 retries of one
+already-rejected key against a saturated table forced 100 real
+`O(_MAX_LOCKOUTS)` scans under the round-2 code. This is round 7 total on
+this class of code — and, more specifically, the immediately preceding
+fix's own commit found to have a narrower version of the exact gap it had
+just closed. The coordinator noted this was the second consecutive round
+where "the previous narrow fix left another path into the same
+CPU-amplification/edge-case class," judged the round-6 threshold for the
+structural refactor (set in round 5's own write-up) had now clearly been
+passed, and explicitly authorized doing the refactor now rather than a
+seventh incremental patch.
+
+**What shipped.** `backend/app/core/security_middleware.py`'s `RateLimiter`
+now stores one record per key — a `_KeyState` dataclass (`request_times`,
+`window_seconds`, `lockout_until`) in a single `dict[str, _KeyState]`
+(`self._keys`) — replacing `self.requests`, `self.lockouts`, and
+`self._key_windows` entirely. This closes the CI3-33-1-through-1e defect
+shape (a key's state split across structures that can disagree) by
+construction: a key either has a `_KeyState`, with everything traveling
+together, or it has none. `self._saturation_reject_until` (CI3-33-2a's
+per-scope dict) is unchanged and deliberately not folded in — a
+fundamentally different key space (scope literals, not attacker-influenceable
+per-client keys).
+
+The capacity-accuracy problem (CI3-33-2b/2c/2d) needed a second idea beyond
+the merge: a cached `self._active_lockout_count`, incremented immediately
+on every successful insertion, corrected to an exact value by the periodic
+sweep (~60s) and by a new `_refresh_active_lockout_count` — called only
+when the cached count already reads at/over capacity, throttled to at most
+once per `_LOCKOUT_VERIFY_INTERVAL` (1 second, independent of and far
+shorter than the general sweep). Between refreshes the count can only ever
+be a stale _over_-estimate (the safe direction) — it can cause an
+unnecessary saturation-fallback for up to 1 second, never let the true cap
+be exceeded. The 1-second throttle bounds the scan cost to a fixed
+per-second rate regardless of whether the repeated asks come from one key
+retrying (CI3-33-2d) or many different keys arriving together (CI3-33-2c),
+closing both with the same mechanism.
+
+**Testing discipline for a refactor of this size.** All 33 existing
+`TestRateLimiter` tests were read in full, as a behavior spec, before
+writing a line of the new class — what each test actually verified about
+`is_rate_limited`'s externally-observable behavior, separate from how it
+happened to poke the old three-dict internals for setup. All 33 were then
+rewritten against the new shape and **passed on the first full run against
+the new class** — no second round of test-fixing was needed, which is
+itself evidence the translation preserved intent. Two tests were
+substantively repurposed (their old premise no longer applies under the
+unified model, not merely renamed):
+`test_max_keys_evicts_associated_lockouts` →
+`test_max_keys_eviction_never_touches_an_actively_locked_out_key`, and
+`test_key_windows_does_not_grow_unbounded_from_locked_out_retries` →
+`test_key_count_stays_bounded_by_max_keys_plus_max_lockouts_under_locked_out_retries`.
+Two new tests: a direct reproduction of the round-7 finding (verified to
+fail against a standalone script run against the pre-refactor code's real
+`_prune_expired_lockouts`, and pass after — the internal API changed too
+much for one pytest test to run against both), and a seeded,
+deterministic, property-style fuzz test (4,000 calls, mixed scopes,
+saturation, and retries) asserting the class-level invariants the
+coordinator asked for: internal state stays within documented bounds, and
+`is_rate_limited`'s return value never disagrees with the state it leaves
+behind. `TestRateLimiter` is 35 tests, was 33.
+
+Full completion gate re-run, including the full backend suite per the
+coordinator's own instruction given the size of the change: flake8/black/
+isort clean; migrations validated (unchanged); scoped 188/188 (was 186);
+full backend suite 11,736/0 (was 11,734). `mypy` also checked given the
+size of the refactor (not part of this rotation's own gate — 844
+pre-existing repo-wide errors): the one hit in this file is unrelated and
+pre-existing, confirmed present before this change too. No frontend file
+touched. Pushed to the same `#2370` branch as a third commit. Replied to
+and resolved the Codex thread. Findings doc updated with a dedicated "The
+structural refactor" section (CI3-33-2d and everything that landed with
+it), and `docs/KNOWN_LIMITATIONS.md`'s row for this upgraded from
+"RECOMMENDED NEXT PRIORITY" to "✅ Resolved."
 
 ---
 
