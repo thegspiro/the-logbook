@@ -6,6 +6,7 @@ assignments, checkouts, maintenance, and reporting.
 """
 
 import copy
+import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
@@ -13,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy import and_, case, func, literal, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -72,6 +73,16 @@ from app.models.user import (
     user_positions,
 )
 from app.schemas.user import resolve_profile_visibility
+from app.utils.color_names import canonical_color, normalize_color
+from app.utils.garment_styles import (
+    FIT_NEUTRAL,
+    FIT_VALUES,
+    fit_of,
+    format_style_attributes,
+    normalize_style_attributes,
+    primary_style,
+    style_combinations,
+)
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
 from app.utils.model_updates import apply_updates
@@ -1542,6 +1553,43 @@ class InventoryService:
                     label=label,
                 )
 
+    @staticmethod
+    def _settle_style_fields(data: Dict[str, Any]) -> None:
+        """Make ``style`` and ``style_attributes`` one control rather than two.
+
+        The ten ``GarmentStyle`` values are four orthogonal axes, so a garment
+        carries several. ``style_attributes`` holds the whole list and ``style``
+        the derived primary, and whichever the caller supplied settles both —
+        the pair cannot drift, and every reader predating the axis model (the
+        list filter, the capsules, the stock matrix) keeps working untouched.
+
+        Returns early when the payload mentions neither key. That guard is
+        load-bearing on the update path: ``update_item`` dumps with
+        ``exclude_unset``, so writing ``style=None`` here would turn a PATCH
+        that only moves an item's location into one that also clears its style
+        (CLAUDE.md pitfall #1).
+        """
+        from app.models.inventory import GarmentStyle
+
+        has_attrs = "style_attributes" in data
+        has_style = "style" in data
+        if not (has_attrs or has_style):
+            return
+
+        if has_attrs:
+            source: Optional[List[str]] = data["style_attributes"]
+        else:
+            raw = data["style"]
+            source = [getattr(raw, "value", raw)] if raw else None
+
+        attributes = normalize_style_attributes(source)
+        # A new list object every time: plain Column(JSON) does not track
+        # in-place mutation, so an edit-in-place would be a silent no-op
+        # (CLAUDE.md pitfall #12).
+        data["style_attributes"] = list(attributes) if attributes else None
+        primary = primary_style(attributes)
+        data["style"] = GarmentStyle(primary) if primary else None
+
     async def create_item(
         self, organization_id: UUID, item_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
@@ -1590,6 +1638,12 @@ class InventoryService:
             if not item_data.get("barcode"):
                 item_data["barcode"] = await self._next_sequential_barcode(
                     organization_id
+                )
+
+            self._settle_style_fields(item_data)
+            if "color" in item_data:
+                item_data["color"] = canonical_color(
+                    item_data["color"], await self._known_colors(organization_id)
                 )
 
             item = InventoryItem(
@@ -1761,10 +1815,39 @@ class InventoryService:
             )
 
         if color:
-            query = query.where(InventoryItem.color == color)
+            # Case-insensitive, so this agrees with the catalog, which has
+            # always collapsed variants on `color.casefold()`. While they
+            # disagreed the quartermaster saw "Navy" and "navy" as two rows that
+            # could never be viewed together and the member saw one merged
+            # variant. Unindexed either way, so nothing is lost by lower().
+            query = query.where(func.lower(InventoryItem.color) == color.casefold())
 
         if style:
-            query = query.where(InventoryItem.style == style)
+            # Both halves are load-bearing. `style_attributes` is the authority:
+            # filtering by "Long Sleeve" has to find a men's long-sleeve polo,
+            # whose legacy `style` column says "polo". The scalar comparison
+            # covers rows the backfill never reached — `alembic upgrade head`
+            # alone does not produce a working schema (CLAUDE.md pitfall #26),
+            # so an installation whose column arrived through startup's column
+            # repair has it present and every row NULL.
+            #
+            # JSON_CONTAINS is portable across both engines CI runs (MySQL 8.0
+            # and MariaDB 10.11, which has had it since 10.2.3) and was verified
+            # against MariaDB 10.11 before being relied on here. It also avoids
+            # the trap a string match would walk into: `mens` is a substring of
+            # `womens`, but the quoted JSON candidates are not. It answers NULL
+            # against a NULL document rather than false, which is why the OR
+            # covers those rows instead of an explicit IS NULL branch.
+            query = query.where(
+                or_(
+                    InventoryItem.style == style,
+                    func.json_contains(
+                        InventoryItem.style_attributes,
+                        literal(json.dumps(style)),
+                    )
+                    == 1,
+                )
+            )
 
         if search:
             search_term = like_pattern(search)
@@ -2035,6 +2118,12 @@ class InventoryService:
             # INV-4 (XC-1): a re-pointed location/storage/variant-group/assignee
             # must be in the caller's org.
             await self._assert_item_fks_in_org(update_data, organization_id)
+
+            self._settle_style_fields(update_data)
+            if "color" in update_data:
+                update_data["color"] = canonical_color(
+                    update_data["color"], await self._known_colors(organization_id)
+                )
 
             apply_updates(item, update_data, skip={"id", "organization_id"})
 
@@ -5697,6 +5786,124 @@ class InventoryService:
     # Size Variant Quick-Create
     # ------------------------------------------------------------------
 
+    async def _known_colors(self, organization_id: UUID) -> List[str]:
+        """The colour spellings this organization already stocks.
+
+        Distinct over active items, which is both the vocabulary new writes fold
+        into and the source for the list screen's colour filter. That filter
+        previously derived its options from the page of items already loaded, so
+        a colour first appearing on item 51 was unfilterable, and choosing one
+        collapsed the dropdown to that colour alone — the filtered response was
+        the only thing it had to build the list from.
+        """
+        result = await self.db.execute(
+            select(InventoryItem.color)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.color.isnot(None),
+                InventoryItem.color != "",
+                InventoryItem.active.is_(True),
+            )
+            .distinct()
+        )
+        seen: Dict[str, str] = {}
+        for (value,) in result.all():
+            settled = normalize_color(value)
+            if settled is not None:
+                seen.setdefault(settled.casefold(), settled)
+        return sorted(seen.values(), key=str.casefold)
+
+    async def get_item_colors(self, organization_id: UUID) -> List[str]:
+        """Public wrapper for the colour filter's option list."""
+        return await self._known_colors(organization_id)
+
+    async def _find_variant_group_for_reuse(
+        self,
+        organization_id: UUID,
+        base_name: str,
+        category_id: Optional[str],
+    ) -> Optional["ItemVariantGroup"]:
+        """The active group this generator already built for this product.
+
+        Matched on casefolded name plus category, because that is what a
+        quartermaster means by "the same product" — and because group names are
+        not unique, so an exact-case match would miss "Dept Polo" when the
+        second run typed "dept polo".
+
+        Locked for update: deciding whether to create is a read-then-write, and
+        two admins generating at once would otherwise both read "no group" and
+        both create one (CLAUDE.md pitfall #27). The lock closes that for every
+        run after the first. It cannot close the case where the group does not
+        exist yet — there is no row to lock — so two simultaneous first runs can
+        still produce two groups; a unique index on
+        (organization_id, name, category_id) would close it, and needs a dedupe
+        migration against installations that already have duplicates.
+        """
+        query = (
+            select(ItemVariantGroup)
+            .where(
+                ItemVariantGroup.organization_id == str(organization_id),
+                func.lower(ItemVariantGroup.name) == base_name.strip().casefold(),
+                ItemVariantGroup.active.is_(True),
+            )
+            .order_by(ItemVariantGroup.created_at)
+            .limit(1)
+            .with_for_update()
+        )
+        if category_id is None:
+            query = query.where(ItemVariantGroup.category_id.is_(None))
+        else:
+            query = query.where(ItemVariantGroup.category_id == category_id)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def _existing_variant_keys(
+        self,
+        organization_id: UUID,
+        variant_group_id: Optional[str],
+        base_name: str,
+        category_id: Optional[str],
+    ) -> Set[Tuple[str, str, str]]:
+        """Identities of the items already stocked under this product.
+
+        Keyed through ``_variant_key`` — the catalog's own collapsing key —
+        rather than a comparison written a second time here. The two must agree:
+        anything this considers distinct and the catalog considers identical
+        becomes a duplicate line with summed stock, which is the bug the style
+        axes were introduced to fix.
+
+        A locking read, so the count this decides against is the committed one
+        rather than the snapshot taken before the group was locked (CLAUDE.md
+        pitfall #27).
+        """
+        query = select(InventoryItem).where(
+            InventoryItem.organization_id == str(organization_id),
+            InventoryItem.active.is_(True),
+        )
+        if variant_group_id:
+            query = query.where(InventoryItem.variant_group_id == variant_group_id)
+            result = await self.db.execute(query.with_for_update())
+            return {self._variant_key(item) for item in result.scalars().all()}
+
+        # Ungrouped generation still has a product: `_product_key` falls back to
+        # category plus the name behind the " — " suffix. Narrow in SQL to the
+        # category, then decide membership with `_product_key` itself — a LIKE
+        # on the base name would also match a different product that merely
+        # contains this one's name ("Polo" catching "Dept Polo").
+        query = query.where(InventoryItem.variant_group_id.is_(None))
+        if category_id is None:
+            query = query.where(InventoryItem.category_id.is_(None))
+        else:
+            query = query.where(InventoryItem.category_id == category_id)
+
+        target = f"nm:{category_id or ''}:{base_name.strip().casefold()}"
+        result = await self.db.execute(query.with_for_update())
+        return {
+            self._variant_key(item)
+            for item in result.scalars().all()
+            if self._product_key(item) == target
+        }
+
     async def create_size_variants(
         self,
         organization_id: UUID,
@@ -5707,23 +5914,46 @@ class InventoryService:
         styles: Optional[List[str]] = None,
         create_variant_group: bool = True,
         **kwargs: Any,
-    ) -> Tuple[List["InventoryItem"], Optional[str]]:
+    ) -> Tuple[List["InventoryItem"], Optional[str], int]:
         """Create pool items from a base name × sizes × colors × styles matrix.
 
-        Returns a tuple of (items_created, variant_group_id_or_None).
+        Idempotent: a combination already stocked under this product is skipped
+        rather than duplicated, so re-running adds only what is missing.
+
+        Returns (items_created, variant_group_id_or_None, skipped_count).
         """
-        from app.models.inventory import GarmentStyle, StandardSize
+        from app.models.inventory import StandardSize
 
-        # Build the combination matrix: (size, color|None, style|None)
-        combos: List[Tuple[str, Optional[str], Optional[str]]] = []
+        # Build the combination matrix: (size, color|None, style attributes).
+        #
+        # The style product runs ACROSS axes, never over the flat chip list.
+        # Long Sleeve + Men's + Polo is a sleeve, a fit and a neckline — one
+        # men's long-sleeve polo — and the old flat product turned that single
+        # intent into three unrelated items nobody ordered. Two picks inside one
+        # axis (short AND long sleeve) still multiply, which is the case the
+        # flat product happened to get right.
+        combos: List[Tuple[str, Optional[str], Optional[List[str]]]] = []
 
-        style_list = styles or [None]  # type: ignore[list-item]
-        color_list = colors or [None]  # type: ignore[list-item]
+        style_combos = style_combinations(styles)
+        # Fold each requested colour into the spelling the org already uses, so
+        # a second run typing "navy" extends the existing "Navy" rather than
+        # starting a rival spelling of it. Deduped after folding, because two
+        # spellings collapse to one colour.
+        color_list: List[Optional[str]] = [None]
+        if colors:
+            known = await self._known_colors(organization_id)
+            folded: List[Optional[str]] = []
+            for raw in colors:
+                settled = canonical_color(raw, known)
+                if settled is not None and settled not in folded:
+                    folded.append(settled)
+                    known.append(settled)
+            color_list = folded or [None]
 
         for size in sizes:
             for color in color_list:
-                for style in style_list:
-                    combos.append((size, color, style))
+                for attributes in style_combos:
+                    combos.append((size, color, attributes))
 
         # INV-4 (XC-1): the category/location/storage applied to every generated
         # item must belong to the caller's org (each is optional).
@@ -5752,15 +5982,31 @@ class InventoryService:
             label="storage area",
         )
 
-        # Optionally create a variant group to link all items
+        # Reuse the product this generator already built rather than starting a
+        # second one. Running it twice used to succeed silently and create a
+        # whole duplicate set under a second group with the same name, which
+        # `_product_key` keys on — so the member saw two identically-named
+        # products with the stock split between them, and fulfilment (which
+        # narrows by variant_group_id) could not answer a request against one
+        # from the other's shelf.
+        #
+        # Reusing also gives the department the "add 3XL to the polo we already
+        # stock" route, which until now had no path at all.
+        category_id = str(kwargs["category_id"]) if kwargs.get("category_id") else None
         variant_group_id: Optional[str] = None
+        existing_group: Optional[ItemVariantGroup] = None
         if create_variant_group:
+            existing_group = await self._find_variant_group_for_reuse(
+                organization_id, base_name, category_id
+            )
+
+        if existing_group is not None:
+            variant_group_id = existing_group.id
+        elif create_variant_group:
             group = ItemVariantGroup(
                 organization_id=str(organization_id),
                 name=base_name,
-                category_id=(
-                    str(kwargs["category_id"]) if kwargs.get("category_id") else None
-                ),
+                category_id=category_id,
                 base_price=kwargs.get("purchase_price"),
                 base_replacement_cost=kwargs.get("replacement_cost"),
                 unit_of_measure=kwargs.get("unit_of_measure"),
@@ -5771,9 +6017,17 @@ class InventoryService:
             await self.db.flush()
             variant_group_id = group.id
 
-        items_created: List[InventoryItem] = []
+        # Identity of what is already on the shelf, through the SAME key the
+        # catalog collapses on. A second hand-rolled comparison here is exactly
+        # how a men's and a women's polo came to look like one variant.
+        existing_keys = await self._existing_variant_keys(
+            organization_id, variant_group_id, base_name, category_id
+        )
 
-        for size, color, style in combos:
+        items_created: List[InventoryItem] = []
+        skipped_count = 0
+
+        for size, color, attributes in combos:
             # Sizes arrive as the stored codes ("l", "xxl", "one_size") because
             # that is what the size picker submits. Styles were already being
             # humanised here; sizes were not, so a coat came out named
@@ -5781,11 +6035,14 @@ class InventoryService:
             name_parts = [base_name, _size_label(size)]
             if color:
                 name_parts.append(color)
-            if style:
-                # Human-readable style label for the name
-                style_label = style.replace("_", " ").title()
-                name_parts.append(style_label)
-            item_name = " — ".join(name_parts)
+            if attributes:
+                # All attributes of one garment go in ONE trailing segment:
+                # they describe a single shirt, and a segment each would read
+                # "… — Long Sleeve — Men's — Polo" and push a long base name
+                # toward the 255-char cap. `_product_base_name` splits on the
+                # FIRST " — ", so the product name behind this is unaffected.
+                name_parts.append(format_style_attributes(attributes) or "")
+            item_name = " — ".join(part for part in name_parts if part)
 
             # Map size string to StandardSize enum if it matches
             std_size = None
@@ -5795,13 +6052,23 @@ class InventoryService:
                     std_size = member
                     break
 
-            # Map style string to GarmentStyle enum if it matches
-            garment_style = None
-            if style:
-                for member in GarmentStyle:
-                    if member.value == style:
-                        garment_style = member
-                        break
+            # One authority for the style pair, shared with create_item and
+            # update_item so this path cannot drift from those.
+            style_fields: Dict[str, Any] = {"style_attributes": attributes}
+            self._settle_style_fields(style_fields)
+
+            combo_key = (
+                self._normalize_size_key(std_size.value if std_size else size),
+                (color or "").casefold(),
+                ",".join(style_fields["style_attributes"] or []),
+            )
+            if combo_key in existing_keys:
+                skipped_count += 1
+                continue
+            # Guards the request against itself as well as against the shelf:
+            # `sizes` is deduped at the boundary, but two spellings of one
+            # colour ("Navy", "navy") normalize to the same variant.
+            existing_keys.add(combo_key)
 
             barcode = await self._next_sequential_barcode(organization_id)
 
@@ -5812,7 +6079,8 @@ class InventoryService:
                 size=size,
                 standard_size=std_size,
                 color=color,
-                style=garment_style,
+                style=style_fields["style"],
+                style_attributes=style_fields["style_attributes"],
                 tracking_type=TrackingType.POOL,
                 quantity=kwargs.get("quantity_per_variant", 0),
                 quantity_issued=0,
@@ -5845,7 +6113,7 @@ class InventoryService:
         for item in items_created:
             await self.db.refresh(item)
 
-        return items_created, variant_group_id
+        return items_created, variant_group_id, skipped_count
 
     # ------------------------------------------------------------------
     # Cost Recovery
@@ -7910,7 +8178,11 @@ class InventoryService:
         """
         name = (item.name or "").strip()
         carries_variant_axis = bool(
-            item.size or item.standard_size or item.color or item.style
+            item.size
+            or item.standard_size
+            or item.color
+            or item.style
+            or item.style_attributes
         )
         if carries_variant_axis and " — " in name:
             return name.split(" — ")[0].strip() or name
@@ -8432,6 +8704,24 @@ class InventoryService:
         return f"nm:{item.category_id or ''}:{base_name.casefold()}"
 
     @classmethod
+    def _style_identity(cls, item: InventoryItem) -> str:
+        """The garment's full style, as one comparable string.
+
+        The primary ``style`` alone is not an identity: a men's polo and a
+        women's polo both store ``polo``, so keying on it would collapse two
+        different garments into one catalog line, sum their stock, and let a
+        request raised against one be answered from the other (CLAUDE.md
+        pitfall #29). Falls back to the scalar column for rows written before
+        ``style_attributes`` existed, which makes this identical to the old key
+        for every pre-existing row.
+        """
+        attributes = normalize_style_attributes(item.style_attributes)
+        if not attributes:
+            scalar = cls._enum_value(item.style)
+            attributes = [scalar] if scalar else []
+        return ",".join(attributes)
+
+    @classmethod
     def _variant_key(cls, item: InventoryItem) -> Tuple[str, str, str]:
         """The variant a catalog row collapses into, within its product.
 
@@ -8442,7 +8732,7 @@ class InventoryService:
         return (
             cls._normalize_size_key(cls._item_stock_size_value(item)),
             (item.color or "").casefold(),
-            cls._enum_value(item.style) or "",
+            cls._style_identity(item),
         )
 
     @classmethod
@@ -8490,6 +8780,7 @@ class InventoryService:
                     ),
                     "member_size": None,
                     "suggested_size": None,
+                    "suggested_variant": None,
                     "total_available": 0,
                     "variants": [],
                     "_variants": {},
@@ -8513,6 +8804,19 @@ class InventoryService:
                     "size_label": _size_label(size_value) if size_value else None,
                     "color": item.color,
                     "style": cls._enum_value(item.style),
+                    # The full attribute list and its label, so a member picking
+                    # between a men's and a women's polo can tell them apart —
+                    # both carry the primary `style` "polo".
+                    "style_attributes": (
+                        normalize_style_attributes(item.style_attributes)
+                        or ([cls._enum_value(item.style)] if item.style else None)
+                    ),
+                    "style_label": (
+                        format_style_attributes(
+                            normalize_style_attributes(item.style_attributes)
+                            or ([cls._enum_value(item.style)] if item.style else None)
+                        )
+                    ),
                     "available": 0,
                 }
                 product["_variants"][variant_key] = variant
@@ -8533,7 +8837,9 @@ class InventoryService:
                 key=lambda variant: (
                     cls._variant_sort_key(variant["size"]),
                     (variant["color"] or ""),
-                    (variant["style"] or ""),
+                    # Sort on the whole garment, matching _style_identity: two
+                    # variants can share a primary style and differ by fit.
+                    ",".join(variant["style_attributes"] or []),
                 ),
             )
             product["variants"] = variants
@@ -8595,15 +8901,50 @@ class InventoryService:
         # cannot reconstruct.
         wanted = cls._normalize_size_key(member_size)
         member_qualifier = cls._size_qualifier(member_size)
-        for variant in product["variants"]:
-            if not variant["size"]:
-                continue
-            if cls._normalize_size_key(variant["size"]) != wanted:
-                continue
-            if cls._size_qualifier(variant["size"]) != member_qualifier:
-                continue
-            product["suggested_size"] = variant["size"]
+        candidates = [
+            variant
+            for variant in product["variants"]
+            if variant["size"]
+            and cls._normalize_size_key(variant["size"]) == wanted
+            and cls._size_qualifier(variant["size"]) == member_qualifier
+        ]
+        if not candidates:
             return
+
+        # Size alone stopped being enough to choose a variant the moment the
+        # style axes made a men's and a women's polo two catalog lines instead
+        # of one. Taking the first match is not neutral between them: variants
+        # sort by the comma-joined attribute string, so "long_sleeve,mens" sorts
+        # before "long_sleeve,womens" and the men's cut would win that tie for
+        # every member, forever. A member who recorded their fit gets it; one
+        # who did not is steered to a cut that fits anybody rather than to
+        # whichever cut sorts first.
+        member_fit = cls._member_fit(prefs)
+        chosen = None
+        if member_fit:
+            chosen = next(
+                (
+                    v
+                    for v in candidates
+                    if fit_of(v.get("style_attributes")) == member_fit
+                ),
+                None,
+            )
+        if chosen is None:
+            chosen = next(
+                (
+                    v
+                    for v in candidates
+                    if fit_of(v.get("style_attributes")) in (None, FIT_NEUTRAL)
+                ),
+                None,
+            )
+        # Falling through to the first candidate keeps the pre-fit behaviour for
+        # a catalog that stocks only one cut, which is most of them.
+        chosen = chosen or candidates[0]
+
+        product["suggested_size"] = chosen["size"]
+        product["suggested_variant"] = chosen
 
     # ============================================
     # Equipment Request Fulfillment
@@ -9127,6 +9468,24 @@ class InventoryService:
                 {"item_id": item.id, "name": item.name, "remaining": avail}
             )
         return by_size
+
+    @staticmethod
+    def _member_fit(prefs: Optional[MemberSizePreferences]) -> Optional[str]:
+        """The cut a member wears, or None when they have not said.
+
+        Reads ``garment_fit``. The deprecated ``shirt_style`` is consulted as a
+        fallback only when it happens to hold a fit value: the backfill moved
+        those across, but an installation whose column arrived through startup's
+        schema repair never ran it (CLAUDE.md pitfall #26), and a member's
+        recorded answer should not go quiet because of how a column was created.
+        """
+        if prefs is None:
+            return None
+        if prefs.garment_fit in FIT_VALUES:
+            return prefs.garment_fit
+        if prefs.shirt_style in FIT_VALUES:
+            return prefs.shirt_style
+        return None
 
     @staticmethod
     def _format_needed_size(

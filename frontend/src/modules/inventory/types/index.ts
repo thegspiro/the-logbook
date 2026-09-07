@@ -265,24 +265,136 @@ export function standardSizeCode(value: string | null | undefined): string {
   return SIZE_PICKER_VALUES.has(code) ? code : '';
 }
 
-/** Garment style options */
-export const GARMENT_STYLES = [
-  { value: 'short_sleeve', label: 'Short Sleeve' },
-  { value: 'long_sleeve', label: 'Long Sleeve' },
-  { value: 'mens', label: "Men's" },
-  { value: 'womens', label: "Women's" },
-  { value: 'unisex', label: 'Unisex' },
-  { value: 'v_neck', label: 'V-Neck' },
-  { value: 'crew_neck', label: 'Crew Neck' },
-  { value: 'polo', label: 'Polo' },
-  { value: 'button_down', label: 'Button Down' },
-  { value: 'quarter_zip', label: 'Quarter Zip' },
-] as const;
+/**
+ * The garment style axes — four orthogonal questions, not ten alternatives.
+ *
+ * Sleeve length, fit, neckline and closure each describe a different property
+ * of the same shirt, so one pick per axis is ONE garment. Variant generation
+ * used to product over the flat list below and turned a single men's
+ * long-sleeve polo into three unrelated items.
+ *
+ * Closure is its own axis rather than a fifth neckline: a quarter-zip has a
+ * neckline too, so folding it in would make "crew neck quarter zip" two items.
+ *
+ * Mirrors `GARMENT_STYLE_AXES` in `backend/app/utils/garment_styles.py`, which
+ * owns the taxonomy; `backend/tests/test_garment_style_axis_parity.py` reads
+ * this file and fails if the two drift.
+ */
+export const GARMENT_STYLE_AXES: ReadonlyArray<{
+  key: string;
+  label: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+}> = [
+  {
+    key: 'sleeve',
+    label: 'Sleeve',
+    options: [
+      { value: 'short_sleeve', label: 'Short Sleeve' },
+      { value: 'long_sleeve', label: 'Long Sleeve' },
+    ],
+  },
+  {
+    key: 'fit',
+    label: 'Fit',
+    options: [
+      { value: 'mens', label: "Men's" },
+      { value: 'womens', label: "Women's" },
+      { value: 'unisex', label: 'Unisex' },
+    ],
+  },
+  {
+    key: 'neckline',
+    label: 'Neckline',
+    options: [
+      { value: 'v_neck', label: 'V-Neck' },
+      { value: 'crew_neck', label: 'Crew Neck' },
+      { value: 'polo', label: 'Polo' },
+      { value: 'button_down', label: 'Button Down' },
+    ],
+  },
+  { key: 'closure', label: 'Closure', options: [{ value: 'quarter_zip', label: 'Quarter Zip' }] },
+];
+
+/**
+ * The flat style vocabulary, derived so it cannot drift from the axes.
+ *
+ * The flatten reproduces the hand-written list this replaced element for
+ * element and in the same order, so the filter select and the size-preferences
+ * picker are unaffected by the axes existing.
+ */
+export const GARMENT_STYLES = GARMENT_STYLE_AXES.flatMap((axis) => [...axis.options]);
+
+/**
+ * The fit axis on its own — the one style axis a member holds a standing
+ * preference about, since it describes them rather than what the department
+ * chose to stock. Derived from the axes so it cannot drift; mirrors
+ * `FIT_VALUES` in `backend/app/utils/garment_styles.py`.
+ */
+export const GARMENT_FIT_OPTIONS = GARMENT_STYLE_AXES.find((axis) => axis.key === 'fit')?.options ?? [];
+
+const STYLE_LABELS: Record<string, string> = Object.fromEntries(GARMENT_STYLES.map((s) => [s.value, s.label]));
+
+/** Canonical axis order, used to sort a stored list back into reading order. */
+const STYLE_RANK: Record<string, number> = Object.fromEntries(GARMENT_STYLES.map((s, i) => [s.value, i]));
+
+/** English puts the cut before the sleeve: "Men's Long Sleeve Polo". */
+const NAME_AXIS_ORDER = ['fit', 'sleeve', 'neckline', 'closure'];
+
+const AXIS_OF: Record<string, string> = Object.fromEntries(
+  GARMENT_STYLE_AXES.flatMap((axis) => axis.options.map((o) => [o.value, axis.key]))
+);
+
+/**
+ * One label for a garment's whole style: "Men's Long Sleeve Polo".
+ *
+ * Every screen showing a style is a projection of this rather than its own
+ * `replace(/_/g, ' ')` — four of them had drifted into rendering "Mens" and
+ * "V Neck" (CLAUDE.md pitfall #29).
+ *
+ * `fallbackStyle` is what makes a row written before `style_attributes`
+ * existed render correctly without a second code path at every call site.
+ */
+export function styleAttributesLabel(
+  attributes: readonly string[] | null | undefined,
+  fallbackStyle?: string | null
+): string {
+  const values = attributes?.length ? [...attributes] : fallbackStyle ? [fallbackStyle] : [];
+  if (values.length === 0) return '';
+  const known = values.filter((v) => v in AXIS_OF);
+  const unknown = values.filter((v) => !(v in AXIS_OF));
+  known.sort(
+    (a, b) =>
+      NAME_AXIS_ORDER.indexOf(AXIS_OF[a] ?? '') - NAME_AXIS_ORDER.indexOf(AXIS_OF[b] ?? '') ||
+      (STYLE_RANK[a] ?? 0) - (STYLE_RANK[b] ?? 0)
+  );
+  return [...known, ...unknown].map((v) => STYLE_LABELS[v] ?? v.replace(/_/g, ' ')).join(' ');
+}
+
+/**
+ * How many garments a style selection describes.
+ *
+ * The product runs ACROSS axes and multiplies only WITHIN one, so picking Long
+ * Sleeve + Men's + Polo is one item while adding Women's is two.
+ */
+export function styleCombinationCount(selected: readonly string[]): number {
+  return GARMENT_STYLE_AXES.reduce(
+    (total, axis) => total * (selected.filter((v) => axis.options.some((o) => o.value === v)).length || 1),
+    1
+  );
+}
 
 /** Fields shown per item type category */
 export const ITEM_TYPE_FIELDS: Record<string, string[]> = {
-  uniform: ['size', 'color', 'quantity', 'unit_of_measure'],
-  ppe: ['size', 'color', 'serial_number', 'inspection_interval_days', 'last_inspection_date', 'next_inspection_due'],
+  uniform: ['size', 'color', 'style', 'quantity', 'unit_of_measure'],
+  ppe: [
+    'size',
+    'color',
+    'style',
+    'serial_number',
+    'inspection_interval_days',
+    'last_inspection_date',
+    'next_inspection_due',
+  ],
   electronics: ['serial_number', 'model_number', 'manufacturer', 'warranty_expiration'],
   tool: ['serial_number', 'model_number', 'manufacturer'],
   equipment: ['serial_number', 'model_number', 'manufacturer', 'asset_tag'],

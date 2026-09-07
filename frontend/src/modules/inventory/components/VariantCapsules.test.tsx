@@ -49,13 +49,13 @@ describe('VariantCapsules', () => {
     render(<VariantCapsules item={makeItem({ standard_size: 'm', color: 'Black', style: 'v_neck' })} />);
     expect(screen.getByText('M')).toBeInTheDocument();
     expect(screen.getByText('Black')).toBeInTheDocument();
-    expect(screen.getByText('V Neck')).toBeInTheDocument();
+    expect(screen.getByText('V-Neck')).toBeInTheDocument();
   });
 
   it('prefixes each capsule with its attribute name when showLabels is set', () => {
     render(<VariantCapsules item={makeItem({ standard_size: 'm', color: 'Black', style: 'v_neck' })} showLabels />);
     expect(screen.getByText('Size: M')).toBeInTheDocument();
     expect(screen.getByText('Color: Black')).toBeInTheDocument();
-    expect(screen.getByText('Style: V Neck')).toBeInTheDocument();
+    expect(screen.getByText('Style: V-Neck')).toBeInTheDocument();
   });
 });

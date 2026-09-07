@@ -23,13 +23,14 @@ import type {
   Location,
   SizeVariantCreate,
 } from '../types';
+import GarmentStyleAxisPicker from './GarmentStyleAxisPicker';
 import {
   ITEM_TYPE_FIELDS,
   getItemTypeFromCategory,
   CUSTOM_SIZE_OPTION,
   SIZE_PICKER_GROUPS,
-  STANDARD_SIZES,
-  GARMENT_STYLES,
+  GARMENT_STYLE_AXES,
+  styleCombinationCount,
   standardSizeCode,
 } from '../types';
 
@@ -43,6 +44,8 @@ interface FD {
   barcode: string;
   /** Chosen `StandardSize` code, or `CUSTOM_SIZE_OPTION` when `size` holds free text. */
   standard_size: string;
+  /** Garment style attributes, flat across the four axes. */
+  style_attributes: string[];
   /** Free text, and only ever read when `standard_size` is `CUSTOM_SIZE_OPTION`. */
   size: string;
   color: string;
@@ -72,6 +75,7 @@ const EMPTY: FD = {
   asset_tag: '',
   barcode: '',
   standard_size: '',
+  style_attributes: [],
   size: '',
   color: '',
   purchase_price: '',
@@ -207,6 +211,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         asset_tag: editItem.asset_tag ?? '',
         barcode: editItem.barcode ?? '',
         standard_size: sizeCode || (editItem.size ? CUSTOM_SIZE_OPTION : ''),
+        // Fall back to the single `style` for a row written before the axes
+        // existed, so opening one does not silently blank its style on save.
+        style_attributes: editItem.style_attributes ?? (editItem.style ? [editItem.style] : []),
         size: sizeCode ? '' : (editItem.size ?? ''),
         color: editItem.color ?? '',
         purchase_price: editItem.purchase_price != null ? String(editItem.purchase_price) : '',
@@ -264,6 +271,19 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     setSelectedSizes((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
   }, []);
 
+  /** Single-item path: one value per axis, so picking a second in the same
+   *  axis replaces the first rather than making the item two things at once —
+   *  which the backend rejects with a 422 naming the axis. */
+  const toggleItemStyle = useCallback((value: string) => {
+    setF((prev) => {
+      const axis = GARMENT_STYLE_AXES.find((a) => a.options.some((o) => o.value === value));
+      const siblings = axis ? axis.options.map((o) => o.value) : [];
+      const already = prev.style_attributes.includes(value);
+      const kept = prev.style_attributes.filter((v) => !siblings.includes(v));
+      return { ...prev, style_attributes: already ? kept : [...kept, value] };
+    });
+  }, []);
+
   const toggleStyle = useCallback((value: string) => {
     setSelectedStyles((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
   }, []);
@@ -276,8 +296,9 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       .map((c) => c.trim())
       .filter(Boolean);
     const colorMult = colorList.length || 1;
-    const styleMult = selectedStyles.length || 1;
-    return selectedSizes.length * colorMult * styleMult;
+    // Across axes, not over the flat chip list: Long Sleeve + Men's + Polo is
+    // one men's long-sleeve polo, which this used to report as three items.
+    return selectedSizes.length * colorMult * styleCombinationCount(selectedStyles);
   }, [generateVariants, selectedSizes, selectedStyles, variantColors]);
 
   const submit = async (e: React.FormEvent) => {
@@ -315,7 +336,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           create_variant_group: true,
         };
         const result = await inventoryService.createSizeVariants(data);
-        toast.success(`Created ${result.created_count} variant items`);
+        toast.success(`Created ${result.created_count} variant item${result.created_count !== 1 ? 's' : ''}`);
         onSaved();
         onClose();
       } catch (err: unknown) {
@@ -358,6 +379,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         size: text(sizeText),
         standard_size: pick(sizeCode),
         color: text(f.color),
+        // An explicit null when every chip is cleared: update payloads are
+        // dumped with `exclude_unset`, so omitting the key means "leave this
+        // alone" and the clear would vanish behind a success toast
+        // (CLAUDE.md pitfall #1). On create, omit instead.
+        style_attributes: f.style_attributes.length ? f.style_attributes : isEdit ? null : undefined,
         purchase_price: num(f.purchase_price),
         current_value: num(f.current_value),
         purchase_date: pick(f.purchase_date),
@@ -426,7 +452,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       footer={
         <>
           <button type="submit" form="item-form" disabled={saving} className="btn-info btn-md ml-2">
-            {saving ? 'Saving...' : editItem ? 'Update' : generateVariants ? `Create ${variantCount} Items` : 'Create'}
+            {saving
+              ? 'Saving...'
+              : editItem
+                ? 'Update'
+                : generateVariants
+                  ? `Create ${variantCount} Item${variantCount === 1 ? '' : 's'}`
+                  : 'Create'}
           </button>
           <button type="button" onClick={onClose} className="btn-secondary btn-md">
             Cancel
@@ -547,22 +579,36 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Generate Sizes & Styles toggle (new uniform/PPE items only) */}
         {supportsVariants && (
           <fieldset>
-            <div className="mb-2">
-              <label className="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={generateVariants}
-                  onChange={(e) => setGenerateVariants(e.target.checked)}
-                  className="peer sr-only"
-                />
-                <div className="bg-theme-surface-secondary peer border-theme-surface-border h-5 w-9 rounded-full border peer-checked:bg-blue-500 after:absolute after:top-0.5 after:left-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full dark:after:bg-gray-200" />
-                <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
-              </label>
-            </div>
+            {/* The row is the switch, not just the track beside it.
+                The knob used to be an `::after` on a track that was never
+                `relative`, so it positioned against the 44px label instead of
+                the 20px track and floated above it — the visible defect. The
+                shared toggle-track/knob utilities fix that, but the shared
+                SettingsToggle button is only 24px tall, and the old markup met
+                the 44px touch minimum through the <label> wrapping its
+                checkbox. `mobile-create-edit.spec.ts` measures a button's own
+                box (its label exception is for checkbox/radio only), so the
+                whole row carries role="switch" and the 44px: the target is the
+                text as well as the track, which is the easier thing to hit. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={generateVariants}
+              onClick={() => setGenerateVariants(!generateVariants)}
+              className="mb-2 flex min-h-[44px] w-full items-center gap-2 text-left"
+            >
+              <span
+                aria-hidden="true"
+                className={`toggle-track-sm ${generateVariants ? 'bg-blue-600' : 'bg-theme-surface-border'}`}
+              >
+                <span className={`toggle-knob-sm ${generateVariants ? 'translate-x-6' : 'translate-x-1'}`} />
+              </span>
+              <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
+            </button>
             {generateVariants && (
               <p className="text-theme-text-muted mb-3 text-xs">
-                Select the sizes and styles below. One pool item will be created for each combination and grouped
-                together automatically.
+                Pick the sizes and styles below. Each style row describes a different property of the same garment, so
+                one pick per row creates one item; picking two in a row creates one item for each.
               </p>
             )}
           </fieldset>
@@ -577,16 +623,38 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               <span className={lbl} id="item-sizes-label">
                 Sizes *
               </span>
-              <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="item-sizes-label">
-                {STANDARD_SIZES.map((s) => (
-                  <button
-                    key={s.value}
-                    type="button"
-                    className={`${chipBase} ${selectedSizes.includes(s.value) ? chipOn : chipOff}`}
-                    onClick={() => toggleSize(s.value)}
-                  >
-                    {s.label}
-                  </button>
+              {/* Grouped like the style axes below, and for more than symmetry:
+                  the flat list was the letter sizes only, so a department
+                  stocking boots 8-13 or trousers in waist 30-40 had no way to
+                  generate them even though the API always accepted them. It
+                  also drops the "Custom" chip, which produced an item named
+                  "... - Custom" with nowhere to say what the custom size was. */}
+              <div className="mt-1 space-y-2">
+                {SIZE_PICKER_GROUPS.map((group) => (
+                  <div key={group.label}>
+                    <span
+                      className="text-theme-text-muted text-xs font-medium"
+                      id={`item-size-${group.label.replace(/\W+/g, '-').toLowerCase()}-label`}
+                    >
+                      {group.label}
+                    </span>
+                    <div
+                      className="mt-1 flex flex-wrap gap-1.5"
+                      role="group"
+                      aria-labelledby={`item-size-${group.label.replace(/\W+/g, '-').toLowerCase()}-label`}
+                    >
+                      {group.options.map((o) => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          className={`${chipBase} ${selectedSizes.includes(o.value) ? chipOn : chipOff}`}
+                          onClick={() => toggleSize(o.value)}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
               {selectedSizes.length > 0 && (
@@ -596,28 +664,12 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               )}
             </div>
 
-            {/* Styles */}
-            <div>
-              <span className={lbl} id="item-styles-label">
-                Styles
-              </span>
-              <div className="mt-1 flex flex-wrap gap-1.5" role="group" aria-labelledby="item-styles-label">
-                {GARMENT_STYLES.map((s) => (
-                  <button
-                    key={s.value}
-                    type="button"
-                    className={`${chipBase} ${selectedStyles.includes(s.value) ? chipOn : chipOff}`}
-                    onClick={() => toggleStyle(s.value)}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              {selectedStyles.length > 0 && (
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  {selectedStyles.length} style{selectedStyles.length !== 1 ? 's' : ''} selected
-                </p>
-              )}
+            {/* Styles — one labelled group per axis. A flat row of ten chips
+                read as ten alternatives and hid the rule that a sleeve, a fit
+                and a neckline describe one garment rather than three. */}
+            <div className="space-y-3">
+              <span className={lbl}>Styles</span>
+              <GarmentStyleAxisPicker selected={selectedStyles} onToggle={toggleStyle} idPrefix="item-style" />
             </div>
 
             {/* Colors (comma-separated text) */}
@@ -642,8 +694,10 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 </p>
                 <p className="text-theme-text-muted mt-0.5 text-xs">
                   {selectedSizes.length} size{selectedSizes.length !== 1 ? 's' : ''}
-                  {selectedStyles.length > 0 &&
-                    ` × ${selectedStyles.length} style${selectedStyles.length !== 1 ? 's' : ''}`}
+                  {GARMENT_STYLE_AXES.map((axis) => {
+                    const n = selectedStyles.filter((v) => axis.options.some((o) => o.value === v)).length;
+                    return n > 1 ? ` × ${n} ${axis.label.toLowerCase()} options` : '';
+                  }).join('')}
                   {(() => {
                     const n = variantColors.split(',').filter((c) => c.trim()).length;
                     return n > 0 ? ` × ${n} color${n !== 1 ? 's' : ''}` : '';
@@ -708,6 +762,21 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 </div>
               )}
             </div>
+            {/* Style, on the single-item path. The generator could write a
+                men's long-sleeve polo and nothing could then correct it: this
+                form had no style control at all, so a mis-picked chip meant
+                the item was stuck with it, and renaming only changed the label
+                while the catalog kept grouping on the columns. */}
+            {has('style') && (
+              <div className="mt-3">
+                <span className={lbl}>Style</span>
+                <GarmentStyleAxisPicker
+                  selected={f.style_attributes}
+                  onToggle={toggleItemStyle}
+                  idPrefix="item-physical-style"
+                />
+              </div>
+            )}
           </fieldset>
         )}
 

@@ -24,7 +24,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { MemberSizePreferencesCreate } from '../types';
-import { STANDARD_SIZES, SHOE_SIZES, GARMENT_STYLES } from '../types';
+import { STANDARD_SIZES, SHOE_SIZES, GARMENT_FIT_OPTIONS } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { Collapsible } from '../../../components/ux';
@@ -40,7 +40,7 @@ interface SizePreferencesModalProps {
 
 type FormState = {
   shirt_size: string;
-  shirt_style: string;
+  garment_fit: string;
   pant_waist: string;
   pant_inseam: string;
   jacket_size: string;
@@ -52,7 +52,7 @@ type FormState = {
 
 const EMPTY: FormState = {
   shirt_size: '',
-  shirt_style: '',
+  garment_fit: '',
   pant_waist: '',
   pant_inseam: '',
   jacket_size: '',
@@ -63,7 +63,7 @@ const EMPTY: FormState = {
 };
 
 /** Fields kept behind the "Additional sizes" disclosure. */
-const DETAIL_FIELDS = ['shirt_style', 'boot_width', 'glove_size', 'hat_size'] as const;
+const DETAIL_FIELDS = ['garment_fit', 'boot_width', 'glove_size', 'hat_size'] as const;
 
 const hasDetailValues = (state: FormState): boolean => DETAIL_FIELDS.some((field) => state[field].trim() !== '');
 
@@ -88,7 +88,7 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
         : await inventoryService.getMySizePreferences();
       const loaded: FormState = {
         shirt_size: prefs.shirt_size ?? '',
-        shirt_style: prefs.shirt_style ?? '',
+        garment_fit: prefs.garment_fit ?? '',
         pant_waist: prefs.pant_waist ?? '',
         pant_inseam: prefs.pant_inseam ?? '',
         jacket_size: prefs.jacket_size ?? '',
@@ -117,7 +117,7 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
     // Coerce empty strings to undefined so unset fields are omitted, not stored as "".
     const payload: MemberSizePreferencesCreate = {
       shirt_size: form.shirt_size || undefined,
-      shirt_style: form.shirt_style || undefined,
+      garment_fit: form.garment_fit || undefined,
       pant_waist: form.pant_waist.trim() || undefined,
       pant_inseam: form.pant_inseam.trim() || undefined,
       jacket_size: form.jacket_size || undefined,
@@ -228,19 +228,31 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Shirt Style</label>
+                {/* Fit, not "style". The old select offered all ten style
+                    values, which span four axes, so a member could say
+                    "Women's" or "Long Sleeve" but not both — and nothing read
+                    the answer either way. Fit is the one axis that describes
+                    the member rather than what the department stocks, and the
+                    request catalog now preselects the variant matching it. */}
+                <label className={labelClass} htmlFor="size-prefs-garment-fit">
+                  Fit
+                </label>
                 <select
-                  value={form.shirt_style}
-                  onChange={(e) => set('shirt_style', e.target.value)}
+                  id="size-prefs-garment-fit"
+                  value={form.garment_fit}
+                  onChange={(e) => set('garment_fit', e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">--</option>
-                  {GARMENT_STYLES.map((g) => (
+                  <option value="">No preference</option>
+                  {GARMENT_FIT_OPTIONS.map((g) => (
                     <option key={g.value} value={g.value}>
                       {g.label}
                     </option>
                   ))}
                 </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Used to pick the right cut when a garment is stocked in more than one.
+                </p>
               </div>
               <div>
                 <label className={labelClass}>Boot Width</label>

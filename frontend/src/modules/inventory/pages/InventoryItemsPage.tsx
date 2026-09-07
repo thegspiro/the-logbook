@@ -61,8 +61,8 @@ import type {
 import {
   STATUS_OPTIONS,
   ITEM_TYPES,
-  STANDARD_SIZES,
-  GARMENT_STYLES,
+  SIZE_PICKER_GROUPS,
+  GARMENT_STYLE_AXES,
   getStatusStyle,
   getConditionColor,
 } from '../types';
@@ -375,6 +375,10 @@ const InventoryItemsPage: React.FC = () => {
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
 
   const [items, setItems] = useState<InventoryItem[]>([]);
+  // Loaded once from the org's distinct colours rather than derived from
+  // `items`: that derivation was bounded by the loaded page AND narrowed by
+  // the colour filter itself, so choosing a colour left it as the only option.
+  const [colorOptions, setColorOptions] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -471,6 +475,43 @@ const InventoryItemsPage: React.FC = () => {
       /* non-critical */
     }
   }, []);
+
+  // The colour vocabulary, fetched once and only after the first load settles.
+  //
+  // Deliberately not inside the Promise.all above, and deliberately not racing
+  // it either. Two separate reasons, both learned the hard way:
+  //
+  // 1. A rejection inside that Promise.all skips every setter in it, so a
+  //    colours endpoint an older backend does not serve yet would empty the
+  //    category, location and storage-area pickers along with it.
+  // 2. That Promise.all is the gate that clears `loading`, and until it clears
+  //    the page renders neither its rows nor its empty state — which is where
+  //    the only "Add Item" button a phone shows lives. Adding a request to the
+  //    gate delayed it; adding one *beside* it still competed with the item
+  //    fetch for the connection. Either way `mobile-create-edit.spec.ts` looked
+  //    for that button before it existed, and its lookup has no retry.
+  //
+  // So it waits. A filter that populates a moment late costs nothing; the page
+  // taking longer to become usable costs a great deal.
+  const colorsRequested = useRef(false);
+  useEffect(() => {
+    if (loading || colorsRequested.current) return;
+    colorsRequested.current = true;
+    let cancelled = false;
+    void inventoryService
+      .getItemColors()
+      // Rendered straight into <option>s, so a shape that is not a list takes
+      // the whole page down rather than just the filter.
+      .then((colors) => {
+        if (!cancelled) setColorOptions(Array.isArray(colors) ? colors : []);
+      })
+      .catch(() => {
+        if (!cancelled) setColorOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading]);
 
   useRegisterPullToRefresh(async () => {
     await Promise.all([loadItems(true), loadSummary()]);
@@ -963,10 +1004,17 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFSize(e.target.value)}
           >
             <option value="">All Sizes</option>
-            {STANDARD_SIZES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+            {/* Grouped like the styles filter. The flat letter list also made
+                boot and waist sizes unfilterable, even for items created one
+                at a time through the Physical picker, which does offer them. */}
+            {SIZE_PICKER_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
           <select
@@ -976,13 +1024,11 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFColor(e.target.value)}
           >
             <option value="">All Colors</option>
-            {Array.from(new Set(items.map((i) => i.color).filter(Boolean)))
-              .sort()
-              .map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
+            {colorOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
           <select
             aria-label="Filter by style"
@@ -991,10 +1037,16 @@ const InventoryItemsPage: React.FC = () => {
             onChange={(e) => setFStyle(e.target.value)}
           >
             <option value="">All Styles</option>
-            {GARMENT_STYLES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+            {/* Grouped by axis, so "Long Sleeve" reads as a sleeve choice
+                rather than as a garment type. The posted value is unchanged. */}
+            {GARMENT_STYLE_AXES.map((axis) => (
+              <optgroup key={axis.key} label={axis.label}>
+                {axis.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

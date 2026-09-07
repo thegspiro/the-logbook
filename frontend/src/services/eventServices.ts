@@ -901,7 +901,10 @@ export interface InventoryItem {
   restricted_to_positions?: string[] | null;
   notes?: string;
   standard_size?: string;
+  /** The primary garment attribute, derived from `style_attributes`. */
   style?: string;
+  /** The garment's full style: sleeve / fit / neckline / closure. */
+  style_attributes?: string[] | null;
   variant_group_id?: string;
   active: boolean;
   created_at: string;
@@ -1049,6 +1052,9 @@ export interface RequestableVariant {
   size_label?: string | null;
   color?: string | null;
   style?: string | null;
+  style_attributes?: string[] | null;
+  /** Server-rendered composite label, e.g. "Men's Long Sleeve Polo". */
+  style_label?: string | null;
   available: number;
 }
 
@@ -1072,6 +1078,9 @@ export interface RequestableProduct {
   member_size?: string | null;
   /** The stocked variant size matching `member_size`, when there is one. */
   suggested_size?: string | null;
+  /** The variant to preselect, as a whole identity — a size alone cannot
+   *  choose between a men's and a women's cut of the same size. */
+  suggested_variant?: RequestableVariant | null;
   total_available: number;
   variants: RequestableVariant[];
 }
@@ -1196,6 +1205,9 @@ export interface InventoryItemCreate {
    *  rather than omitting the key, which `exclude_unset` reads as "leave alone". */
   standard_size?: string | null | undefined;
   style?: string | undefined;
+  /** Nullable for the same reason as `standard_size`: clearing the style on an
+   *  edit has to send an explicit null, not omit the key. */
+  style_attributes?: string[] | null | undefined;
   variant_group_id?: string | undefined;
 }
 
@@ -1271,7 +1283,10 @@ export interface MemberSizePreferences {
   organization_id: string;
   user_id: string;
   shirt_size?: string;
+  /** @deprecated Conflated four style axes into one value; use `garment_fit`. */
   shirt_style?: string;
+  /** The cut the member wears: mens | womens | unisex. */
+  garment_fit?: string;
   pant_waist?: string;
   pant_inseam?: string;
   jacket_size?: string;
@@ -1286,7 +1301,9 @@ export interface MemberSizePreferences {
 
 export interface MemberSizePreferencesCreate {
   shirt_size?: string | undefined;
+  /** @deprecated Still accepted so an older client does not start failing. */
   shirt_style?: string | undefined;
+  garment_fit?: string | undefined;
   pant_waist?: string | undefined;
   pant_inseam?: string | undefined;
   jacket_size?: string | undefined;

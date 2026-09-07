@@ -13,6 +13,7 @@ const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
 const mockRetireItem = vi.fn();
 const mockUpdateItem = vi.fn();
+const mockGetItemColors = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -21,6 +22,7 @@ vi.mock('../../../services/api', () => ({
     getSummaryByLocation: (...a: unknown[]) => mockGetSummaryByLocation(...a) as unknown,
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
     getStorageAreas: (...a: unknown[]) => mockGetStorageAreas(...a) as unknown,
+    getItemColors: (...a: unknown[]) => mockGetItemColors(...a) as unknown,
     retireItem: (...a: unknown[]) => mockRetireItem(...a) as unknown,
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
     exportItemsCsv: vi.fn(),
@@ -95,6 +97,7 @@ describe('InventoryItemsPage', () => {
     mockGetSummaryByLocation.mockResolvedValue([]);
     mockGetCategories.mockResolvedValue([]);
     mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
     mockGetLocations.mockResolvedValue([]);
     mockRetireItem.mockResolvedValue({});
     mockUpdateItem.mockResolvedValue({});
@@ -104,6 +107,28 @@ describe('InventoryItemsPage', () => {
   it('shows the empty state when there are no items', async () => {
     renderWithRouter(<InventoryItemsPage />);
     expect(await screen.findByText('No items found')).toBeInTheDocument();
+  });
+
+  it('offers the org colours in the filter, from the endpoint', async () => {
+    // Previously derived from the loaded page of items, which bounded it to the
+    // first page AND narrowed it by the colour filter itself — so choosing a
+    // colour left that colour as the only option.
+    mockGetItemColors.mockResolvedValue(['Navy', 'White']);
+    renderWithRouter(<InventoryItemsPage />);
+
+    const filter = await screen.findByLabelText('Filter by color');
+    await waitFor(() => expect(within(filter).getByRole('option', { name: 'Navy' })).toBeInTheDocument());
+    expect(within(filter).getByRole('option', { name: 'White' })).toBeInTheDocument();
+  });
+
+  it('keeps the page usable when the colours endpoint fails', async () => {
+    // An older backend does not serve this route. The filter may lose its
+    // options; the page may not lose its rows.
+    mockGetItemColors.mockRejectedValue(new Error('404'));
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    renderWithRouter(<InventoryItemsPage />);
+
+    expect(await screen.findByText('Cordless Drill')).toBeInTheDocument();
   });
 
   it('shows an error toast when items fail to load', async () => {
@@ -272,6 +297,8 @@ describe('InventoryItemsPage — the item_type URL filter', () => {
     mockGetCategories.mockResolvedValue([]);
     mockGetStorageAreas.mockReset();
     mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockReset();
+    mockGetItemColors.mockResolvedValue([]);
     mockGetLocations.mockReset();
     mockGetLocations.mockResolvedValue([]);
     mockCheckPermission.mockReset();

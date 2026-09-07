@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, Loader2, ChevronLeft, PackageSearch, Ruler, PencilLine } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { RequestableCategory, RequestableProduct, RequestableVariant } from '../types';
+import { styleAttributesLabel } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux';
@@ -33,11 +34,17 @@ interface RequestEquipmentModalProps {
 
 /** Identity for a variant inside one product; `size` alone is not unique. */
 const variantKey = (variant: RequestableVariant): string =>
-  [variant.size ?? '', variant.color ?? '', variant.style ?? ''].join('|');
+  [variant.size ?? '', variant.color ?? '', (variant.style_attributes ?? []).join('+') || (variant.style ?? '')].join(
+    '|'
+  );
 
 /** What a variant chip reads as: "L · Navy". */
 const variantLabel = (variant: RequestableVariant): string =>
-  [variant.size_label ?? variant.size, variant.color, variant.style?.replace(/_/g, ' ')]
+  [
+    variant.size_label ?? variant.size,
+    variant.color,
+    variant.style_label || styleAttributesLabel(variant.style_attributes, variant.style),
+  ]
     .filter((part): part is string => Boolean(part))
     .join(' · ') || 'Standard';
 
@@ -166,9 +173,17 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
       setSelectedVariant(product.variants[0] ? variantKey(product.variants[0]) : '');
       return;
     }
-    const suggested = product.suggested_size
-      ? product.variants.find((variant) => variant.size === product.suggested_size)
-      : undefined;
+    // Prefer the whole identity the server chose. `suggested_size` matched on
+    // size alone, so where a garment is stocked in more than one cut it landed
+    // on whichever sorted first — always the men's, since "mens" precedes
+    // "womens" — regardless of the fit the member recorded. The size fallback
+    // stays for a server that has not been redeployed yet.
+    const wanted = product.suggested_variant;
+    const suggested = wanted
+      ? product.variants.find((variant) => variantKey(variant) === variantKey(wanted))
+      : product.suggested_size
+        ? product.variants.find((variant) => variant.size === product.suggested_size)
+        : undefined;
     if (suggested) {
       setSelectedVariant(variantKey(suggested));
       return;

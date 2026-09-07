@@ -697,6 +697,28 @@ async def list_items(
     )
 
 
+@router.get("/items/colors", response_model=List[str])
+async def list_item_colors(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[str]:
+    """Every colour this organization stocks, for the list screen's filter.
+
+    The filter used to build its options from the items already loaded, so a
+    colour that first appears past the current page could not be selected, and
+    picking one narrowed the response to that colour — which was the only thing
+    the dropdown had to rebuild itself from, so it collapsed to a single option
+    and there was no way to switch colours without clearing the filter first.
+
+    Colour is free text by design (a department stocks what its supplier sells),
+    so unlike sizes and styles it has no constant to render from.
+
+    **Authentication required**
+    """
+    service = InventoryService(db)
+    return await service.get_item_colors(current_user.organization_id)
+
+
 @router.post(
     "/items", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED
 )
@@ -5421,7 +5443,7 @@ async def create_size_variants(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    items, variant_group_id = await service.create_size_variants(
+    items, variant_group_id, skipped_count = await service.create_size_variants(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
         base_name=data.base_name,
@@ -5451,6 +5473,7 @@ async def create_size_variants(
             "colors": data.colors,
             "styles": data.styles,
             "count": len(items),
+            "skipped": skipped_count,
             "variant_group_id": variant_group_id,
         },
         user_id=str(current_user.id),
@@ -5459,6 +5482,7 @@ async def create_size_variants(
 
     return SizeVariantCreateResponse(
         created_count=len(items),
+        skipped_count=skipped_count,
         items=[InventoryItemResponse.model_validate(i) for i in items],
         variant_group_id=variant_group_id,
     )
