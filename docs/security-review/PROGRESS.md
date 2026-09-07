@@ -62,11 +62,50 @@ saturated table forced a real sweep+sort on every retry (2g) and let two
 alternating keys evict each other's history, bypassing the limiter
 entirely (2h). Fixed by budgeting `_MAX_KEYS` against unlocked keys only
 (`_MAX_KEYS + self._active_lockout_count`). 2 more tests added (39 total).
-Rotation row 33 -> ✅ (#2368 already merged; this is a follow-up fix, not
+Round 6 (a third session collision, same finding — see the "round 6" entry
+below): the version that landed sizes the eviction off an exact evictable
+scan rather than the cached approximation; unlike round 3b's collision,
+both sessions' test additions merged with no conflict, so all 4 (39 + the
+other session's 2) are in the final suite (41 total). Rotation row 33 -> ✅
+(#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
 
 ---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 6: a third session collision on the same CI3-33-2g/2h finding; test additions merged cleanly this time, the more precise implementation landed
+
+Pushing round 5's fix (commit `186124ab`, below) was rejected — a third
+instance of the same collision pattern as CI3-33-2d/round 3b: a concurrent
+session (`session_01Xc3Cta6LjAV7DA5mTAbmdk`) had independently found and
+fixed the identical CI3-33-2g/2h finding, pushing first as commit
+`59863985`. Fetched and merged rather than force-pushing.
+
+This collision resolved more smoothly than round 3b's: the two sessions'
+**test additions merged with no conflict at all** (both appended new tests
+in non-overlapping locations in the file), so all 4 new tests — 2 from
+each session — are in the final suite and all pass against whichever
+implementation ships. Only `security_middleware.py` itself conflicted.
+Both implementations use the identical formula for `_sweep`'s
+forced-early-sweep gate (`_MAX_KEYS + self._active_lockout_count`, written
+as an addition in this session's fix and as an equivalent subtraction in
+the other); they differ in how `to_remove` is sized once the sweep body
+actually runs. This session's own fix reused the same (possibly stale)
+cached `_active_lockout_count` for the removal count too. The other
+session's fix instead computes the exact evictable set (already scanning
+`self._keys` for the stale-removal pass just above it) and sizes
+`to_remove` off that exact count, guarded by `if to_remove > 0` so a
+healthy table does no unnecessary sort/delete work. Verified both against
+this session's own two repro scripts (the saturated-table sweep-amplification
+case and the alternating-keys bypass case) — both produce identical
+correct results — before deciding the exact-count version is marginally
+more robust (immune to a stale `_active_lockout_count` under-sizing the
+removal) and keeping it via `git checkout --theirs` on the source file
+only. Full completion gate re-run against the merged state: 194 scoped
+(was 192), 63 tenancy, 11,742 full-suite passed (was 11,740) —
+`TestRateLimiter` now 41 tests (was 39). Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2g/2h, "Two sessions,
+one finding — again").
 
 ### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 5: the same review pass found _MAX_KEYS conflated locked-out and unlocked key counts — a CPU-amplification finding and a rate-limit bypass, same fix
 
