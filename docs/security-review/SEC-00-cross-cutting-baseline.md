@@ -49,10 +49,27 @@ Two findings, both fixed:
    this section is its only prior-art record. For the exact diff, see PR
    #2381's `frontend/src/utils/apiCache.ts` change.
 
-**Action for pass 4:** treat both as already-fixed prior art. Re-verify
-only that the 9 unratcheted routes above are still excluded (they have no
-automated regression guard), rather than re-running the full data-leakage
-sweep from zero.
+   **Four of the 18 are no-ops, not fixes.** `/apparatus/operators`,
+   `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`,
+   and `/apparatus/evoc-check/{apparatus_id}/{user_id}` are all requested
+   through `frontend/src/modules/apparatus/services/api.ts`'s own
+   `createApiClient()` instance, which carries no cache interceptor at
+   all — only the shared `services/apiClient.ts` instance does. These
+   routes were never cached, so excluding them from `apiCache.ts`'s
+   denylist closes nothing (the ratchet test's own scope note calls this
+   shape a harmless no-op). The other 14 routes are requested through
+   service files that import the shared `apiClient.ts` and were genuine
+   fixes.
+
+**Action for pass 4:** treat both as already-fixed prior art, but do not
+read this as limiting the sweep to re-verifying only these named routes —
+this file's whole-codebase sweeps re-run against whatever has landed
+_since_ PR #2381 too (see `PROGRESS.md`'s "35 iterations per full pass"
+note). At minimum: (a) re-verify the 9 unratcheted routes above are still
+excluded, since they have no automated regression guard, and (b) sweep
+any endpoint or module-service change landed after PR #2381 for the same
+two shapes (shared-container writes, cache-by-default exclusions) rather
+than assuming this list is exhaustive going forward.
 
 ## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
 

@@ -11048,11 +11048,19 @@ fixed two distinct findings, only one of which has a module-audit entry:
   `/training/instructors/validate/{user_id}/{course_id}`) are fixed but
   would cache again silently if their exclusion were ever removed, since
   neither the ratchet nor its (intentionally empty)
-  `api_cache_pii_baseline.txt` names them. For the exact scope, read the
-  `apiCache.ts` diff in PR #2381 directly rather than either count above.
+  `api_cache_pii_baseline.txt` names them. **Caveat:** 4 of the 18 (three
+  ratcheted apparatus routes plus `evoc-check`) are requested through the
+  apparatus module's own uncached `createApiClient()` instance, so their
+  denylist entry is a no-op, not a closed leak — see
+  `SEC-00-cross-cutting-baseline.md` for which. For the exact scope, read
+  the `apiCache.ts` diff in PR #2381 directly rather than either count
+  above.
 
 Pass 4's Feature 00 iteration should treat both as already-fixed prior
-art rather than rediscovering them.
+art rather than rediscovering them — and should still sweep code that
+landed after PR #2381 for the same two leak shapes, not just re-verify
+the routes named here (see `SEC-00-cross-cutting-baseline.md`'s "Action
+for pass 4").
 
 ### 2026-09-07 — Feature 34 (Frontend shared, pass 5, corrective) — PR #2382 merged, watchdog recorded it
 
