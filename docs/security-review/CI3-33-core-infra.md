@@ -7,7 +7,9 @@
 #2370's round-1 fixes plus its comment-chronology trim → 1,641 L after PR
 #2370's round-2 (CI3-33-2c) fix → 1,638 L after PR #2370's round-3
 structural refactor, CI3-33-2d — see the "Two sessions, one finding" note
-below for the parallel 1,657 L short-circuit fix this superseded),
+below for the parallel 1,657 L short-circuit fix this superseded → 1,664 L
+after PR #2370's round-4 (CI3-33-2e/2f), a bounded-saturation-map fix and a
+second comment-chronology trim on the refactor's own new code),
 `app/core/config.py` (1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
@@ -74,6 +76,29 @@ fix's own write-up is left below, unedited, as the record of what that
 session found and shipped — see "CI3-33-2d (superseded commit)" immediately
 following "The structural refactor" section, and
 `docs/security-review/PROGRESS.md`'s "round 3b" entry for the full account.
+
+**Fourth post-merge addendum (2026-09-07, PR #2370):** Codex reviewed the
+merge commit that landed the structural refactor as this branch's final
+state and left 4 new threads. Two were real findings against the refactor's
+own new code, both fixed: CI3-33-2e (P1) — `self._saturation_reject_until`
+had no size cap despite the merge's own comment claiming it "cannot be grown
+by an attacker," true only because every _current_ call site passes a
+literal scope, not because the interface enforces it — and CI3-33-2f (LOW,
+comment-chronology) — several of the refactor's own docstrings restated the
+CI3-33-1-through-2d review history inline rather than just the invariant,
+the same anti-pattern CI3-33-2c's own cleanup had just removed elsewhere in
+the file. The other two were verified, standalone, to already be closed by
+the refactor and required no further change: a zero-`lockout_seconds`
+retry-amplification variant of CI3-33-2d (moot — the refactor bounds the
+expensive verification by a fixed 1-second, per-process throttle
+independent of any caller's `lockout_seconds`, not by consulting
+`reject_until` the way the now-superseded short-circuit fix did) and a
+stale-capacity variant of CI3-33-2b (moot — `is_rate_limited` already
+re-verifies capacity via the same throttled mechanism immediately before
+deciding to extend the saturation signal, confirmed by a standalone repro
+showing a fresh violator gets a real per-key lockout, not an extended
+saturation fallback, once genuine capacity has freed up and the throttle
+has elapsed). See CI3-33-2e/2f below and PR #2370.
 
 ---
 
@@ -1041,6 +1066,83 @@ That recommendation was, in fact, acted on in the same round by the other
 concurrent session — see "The structural refactor" above and
 `docs/KNOWN_LIMITATIONS.md`, now marked Resolved.)_
 
+### CI3-33-2e — P1 — `_saturation_reject_until` had no size cap or eviction, contradicting its own comment — ✅ FIXED (Codex review of PR #2370, round 8)
+
+**What:** the structural refactor's `_saturation_reject_until` dict — kept
+deliberately separate from `_KeyState` because it is scoped per rate-limit
+_scope_, not per client key — had no maximum size and no eviction. Its own
+comment argued this was safe because "scope prefixes are a fixed, finite
+set of string literals written into the codebase's own call sites, never
+derived from request input" — true of every call site as of this review
+(confirmed by grepping every `check_rate_limit(scope=...)` and
+`public_rate_limit(key=...)` call site in `app/`), but the two functions'
+own signatures (`scope: str`, `key: str`) don't enforce that. Nothing stops
+a future caller from building a scope dynamically, and Pitfall #9 in
+`CLAUDE.md` requires every in-memory tracking structure to have a cap,
+periodic eviction, and a fallback — a requirement the merge's own comment
+argued its way out of rather than met.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.__init__` (`self._saturation_reject_until`) and `RateLimiter.
+_sweep`.
+
+**Failure scenario:** reproduced directly — 5,000 distinct dynamic scopes,
+each driven through the saturation branch once, grew
+`self._saturation_reject_until` to 5,000 entries with no cap and no
+eviction, confirming the comment's safety claim held only by convention at
+today's call sites, not by construction.
+
+**Fix:** a new `_MAX_SATURATION_SCOPES` cap (1,000 — call sites number in
+the dozens today, so this leaves generous headroom while still bounding
+memory against a future dynamic-scope caller). `_sweep` — already the
+mechanism that bounds `self._keys` — now also clears expired
+`_saturation_reject_until` entries first (an expired `reject_until`
+protects nothing, so removing it costs nothing) and, only if still over cap
+after that, evicts the soonest-to-expire remaining entries: those are also
+the ones closest to no longer mattering, so this loses the least
+fail-closed protection per entry removed. `_sweep`'s own forced-sweep
+trigger was extended to fire when `_saturation_reject_until` alone exceeds
+cap, not only when `self._keys` does, so a scope-only flood cannot rely on
+key-count pressure to ever trigger cleanup.
+
+**Impact:** with no current call site building a scope dynamically, this
+was latent — a defense-in-depth gap rather than an exploitable one today —
+but is exactly the pattern CLAUDE.md's Pitfall #9 exists to catch before a
+future caller (a per-integration or per-tenant scope, say) turns it live.
+
+**Tests:** `test_saturation_reject_until_is_bounded_under_a_dynamic_scope_flood`
+(the direct reproduction — verified to **fail** against the pre-fix code,
+5,000 entries with no cap, and **pass** after, bounded to
+`_MAX_SATURATION_SCOPES + 1`, the same one-call transient-overshoot
+tolerance already established for `_MAX_KEYS` elsewhere in this suite) and
+`test_sweep_clears_expired_saturation_entries_before_evicting_live_ones` (a
+companion guard: 5 scopes saturate and expire almost immediately under a
+cap of 5, then a 6th, genuinely live scope arrives after both the expiry
+and the eviction throttle have passed — the 5 expired entries are swept,
+not evicted-by-soonest, so the live entry never has to fight for room
+against entries that no longer protect anything). `TestRateLimiter` is 37
+tests (was 35).
+
+### CI3-33-2f — LOW — review chronology restated inline in the refactor's own docstrings — ✅ FIXED (Codex review of PR #2370, round 8)
+
+**What:** several of the structural refactor's new docstrings — `_KeyState`,
+the `_LOCKOUT_VERIFY_INTERVAL` class comment, `_sweep`'s `_MAX_KEYS`
+eviction comment, and `_refresh_active_lockout_count`'s docstring —
+restated the CI3-33-1-through-2d review history inline ("the root cause
+behind seven successive review rounds," "Two rounds of review found the
+two ways to get this wrong") rather than only the invariant the code must
+preserve. This is the same anti-pattern CI3-33-2c's own comment-chronology
+cleanup removed elsewhere in this file, reintroduced by the refactor that
+otherwise followed the convention this document states explicitly in its
+"Testing" section above ("this document is where the history of getting
+there belongs").
+
+**Fix:** trimmed each of the four to state only the rationale/invariant a
+future reader needs, with review history pointed at this document instead
+of restated (`_KeyState`'s docstring now reads "See
+docs/security-review/CI3-33-core-infra.md for the review history that led
+to this shape" rather than narrating it). No behavior change — comment-only.
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1390,6 +1492,23 @@ scope's retries do not repeat the full capacity scan — is what
 `test_round_7_retries_do_not_repeatedly_rescan_lockout_capacity` above
 verifies against the new `_KeyState` shape instead.
 
+**Added in PR #2370 round 4 (CI3-33-2e):**
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_saturation_reject_until_is_bounded_under_a_dynamic_scope_flood` — the
+  direct reproduction: 5,000 distinct dynamic scopes each driven through
+  the saturation branch once. Verified to **fail** against the pre-fix code
+  (5,000 tracked entries, no cap) and **pass** after (bounded to
+  `_MAX_SATURATION_SCOPES + 1`).
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_sweep_clears_expired_saturation_entries_before_evicting_live_ones` —
+  companion guard: expired entries are cleared before the soonest-to-expire
+  eviction fallback runs, so a live entry never has to fight already-moot
+  ones for room.
+
+`TestRateLimiter` is 37 tests (was 35 before this round). CI3-33-2f
+(comment-chronology cleanup) is comment-only and added no tests.
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
@@ -1434,7 +1553,19 @@ before pushing given the blast radius"):**
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,736 passed, 21 skipped, 0 failed (was 11,734 after round 2; skips all pre-existing)                                                                                                                                                                                                                                                         |
 | `python3 -m mypy app/core/security_middleware.py`                          | not part of this rotation's completion gate (844 pre-existing errors repo-wide, none introduced by this change) — checked anyway given the size of the refactor; the file's one hit (`HTTPConnection[State]` has no attribute `method`, an unrelated pre-existing line) was confirmed present, at a different line number, before this change too |
 
-No frontend file was touched in PR #2370 (any of its three rounds), so the
+**After PR #2370's round-4 fix (CI3-33-2e/2f), the gate was re-run once more:**
+
+| Check                                                                      | Result                                                                                           |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                  |
+| `black --check` (both files)                                               | ✅ clean (test file reformatted once by `black` after adding the 2 new tests, then re-verified)  |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                       |
+| Scoped tests (same 7 files as above)                                       | ✅ 190 passed (was 188 after round 3; +2 for CI3-33-2e — `TestRateLimiter` now 37 tests, was 35) |
+| Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,738 passed, 21 skipped, 0 failed (was 11,736 after round 3; skips all pre-existing)        |
+
+No frontend file was touched in PR #2370 (any of its four rounds), so the
 frontend checks below (last run at PR #2368's merge) are unchanged and were
 not re-run:
 

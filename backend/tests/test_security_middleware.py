@@ -1299,6 +1299,98 @@ class TestRateLimiter:
         # distinct scopes actually exercised.
         assert len(limiter._saturation_reject_until) <= len(scopes)
 
+    @pytest.mark.unit
+    def test_saturation_reject_until_is_bounded_under_a_dynamic_scope_flood(self):
+        """Codex review of PR #2370: today's call sites only ever pass a
+        fixed, finite set of literal scope prefixes, but check_rate_limit's
+        and public_rate_limit's own signatures don't enforce that — nothing
+        in the type system stops a future caller from building a scope
+        dynamically. Verified to fail against the pre-fix code: an
+        unbounded dict grew to one entry per distinct scope with no cap and
+        no eviction (5000 distinct dynamic scopes -> 5000 tracked entries)."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 1
+        limiter._MAX_SATURATION_SCOPES = 1_000
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            # One genuinely active lockout — the table is really at
+            # capacity, matching the cached counter exactly.
+            limiter._keys["login:1.2.3.4"] = _KeyState(
+                window_seconds=60, lockout_until=now + 1000
+            )
+            limiter._active_lockout_count = 1
+            limiter._last_eviction = now
+            limiter._last_lockout_verify = now
+
+            for i in range(5_000):
+                key = f"dynamic_scope_{i}:9.9.9.9"
+                # max_requests=1: the 2nd call from a fresh key already
+                # trips "too many requests" and hits the saturation branch,
+                # since the table above is already at _MAX_LOCKOUTS.
+                limiter.is_rate_limited(
+                    key, max_requests=1, window_seconds=60, lockout_seconds=1800
+                )
+                limiter.is_rate_limited(
+                    key, max_requests=1, window_seconds=60, lockout_seconds=1800
+                )
+
+        # _sweep evaluates over_limit *before* the triggering call's own
+        # insertion, same as _MAX_KEYS elsewhere in this file (see
+        # test_max_keys_enforced_on_eviction) — so the count can be one over
+        # cap for a single call before the next call's sweep catches it up.
+        assert (
+            len(limiter._saturation_reject_until) <= limiter._MAX_SATURATION_SCOPES + 1
+        )
+
+    @pytest.mark.unit
+    def test_sweep_clears_expired_saturation_entries_before_evicting_live_ones(self):
+        """The eviction-by-soonest-expiry fallback in _sweep only needs to
+        run at all once already-expired entries are cleared first — an
+        expired reject_until protects nothing, so clearing it first means a
+        flood that arrives and then ages out never forces a live entry to be
+        evicted in its place."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 1
+        limiter._MAX_SATURATION_SCOPES = 5
+
+        t0 = 1_000_000.0
+        with patch("time.time", return_value=t0):
+            limiter._keys["login:1.2.3.4"] = _KeyState(
+                window_seconds=60, lockout_until=t0 + 1000
+            )
+            limiter._active_lockout_count = 1
+            limiter._last_eviction = t0
+            limiter._last_lockout_verify = t0
+
+            # 5 scopes saturate and expire almost immediately (lockout_seconds=1).
+            for i in range(5):
+                key = f"short_lived_{i}:1.2.3.4"
+                limiter.is_rate_limited(
+                    key, max_requests=1, window_seconds=60, lockout_seconds=1
+                )
+                limiter.is_rate_limited(
+                    key, max_requests=1, window_seconds=60, lockout_seconds=1
+                )
+            assert len(limiter._saturation_reject_until) == 5
+
+        # Time passes both the reject_until expiry and the eviction
+        # throttle; a 6th, still-live scope arrives. The original lockout
+        # is still active (lockout_until = t0 + 1000, well past t1 below).
+        t1 = t0 + 120
+        with patch("time.time", return_value=t1):
+            key = "long_lived:5.6.7.8"
+            limiter.is_rate_limited(
+                key, max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                key, max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        # The 5 expired entries were swept, not evicted-by-soonest — the
+        # live entry survives and no now-pointless capacity fight happened.
+        assert set(limiter._saturation_reject_until.keys()) == {"long_lived"}
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded

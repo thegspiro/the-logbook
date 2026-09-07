@@ -32,17 +32,13 @@ from app.core.error_codes import CodedHTTPException, ErrorCode
 class _KeyState:
     """All state RateLimiter tracks for one key.
 
-    Replaces three previously-independent dicts (self.requests,
-    self.lockouts, self._key_windows) that could each hold, or not hold, an
-    entry for the same key in any combination — the root cause behind seven
-    successive review rounds (CI3-33-1 through 2c/round-7): eviction
-    removing one dict's entry for a key while another dict's entry for that
-    same key survived, in every possible pairing, plus a saturation-check
-    mechanism repeatedly bolted onto the outside of that shape rather than
-    scoped to real per-key state. One record per key makes the "state split
-    across structures" bug class structurally impossible: a key either has
-    a _KeyState, in which case its request history, its own window, and its
-    lockout status all travel together, or it has no record at all.
+    A key's request history, its own window, and its lockout status live in
+    one record, not split across independently-capped, independently-evicted
+    structures — eviction can never remove one piece of a key's state while
+    leaving another piece behind, in any combination. A key either has a
+    _KeyState, in which case all three travel together, or it has no record
+    at all. See docs/security-review/CI3-33-core-infra.md for the review
+    history that led to this shape.
     """
 
     request_times: list[float] = field(default_factory=list)
@@ -77,17 +73,25 @@ class RateLimiter:
 
     # Minimum interval between recomputing the exact active-lockout count
     # (seconds) — independent of, and much shorter than, _EVICTION_INTERVAL.
-    # This is the mechanism that replaced _prune_expired_lockouts: bounding
-    # the cost of an accurate "is the table really full" answer to at most
-    # one O(len(self._keys)) scan per second, regardless of how many times
-    # a caller asks in that window — whether that's the same over-limit key
-    # retrying (the CPU-amplification shape a narrower per-call scope still
-    # left open) or many different first-time violators arriving together.
-    # self._active_lockout_count can only ever be a stale OVER-estimate
-    # between refreshes (see its own comment in __init__), so gating a
-    # refresh on "only when the cached count already reads at/over
-    # capacity" cannot let an over-cap insertion slip through.
+    # Bounds the cost of an accurate "is the table really full" answer to at
+    # most one O(len(self._keys)) scan per second, regardless of how many
+    # times a caller asks in that window — one over-limit key retrying
+    # repeatedly, or many different first-time violators arriving together,
+    # cost the same fixed per-second rate either way. self._active_lockout_
+    # count can only ever be a stale OVER-estimate between refreshes (see its
+    # own comment in __init__), so gating a refresh on "only when the cached
+    # count already reads at/over capacity" cannot let an over-cap insertion
+    # slip through.
     _LOCKOUT_VERIFY_INTERVAL = 1.0
+
+    # Maximum number of distinct rate-limit scopes tracked in
+    # self._saturation_reject_until. Scope prefixes are a fixed, finite set
+    # of string literals at today's call sites (see _scope_of), but the
+    # public interface (check_rate_limit(scope), public_rate_limit(key))
+    # does not itself enforce that, so this cap and _sweep's eviction of it
+    # are defense in depth against a future dynamic-scope caller, not a
+    # bound this file's current callers can reach.
+    _MAX_SATURATION_SCOPES = 1_000
 
     def __init__(self):
         self._keys: dict[str, _KeyState] = {}
@@ -113,11 +117,10 @@ class RateLimiter:
         # "register", "pub_form_submit", etc. — see _scope_of), not
         # globally: a flood saturating one scope's lockout capacity must
         # not fail closed for every other scope sharing this one
-        # process-wide limiter instance. Not part of _KeyState and not
-        # capped like it — scope prefixes are a fixed, finite set of string
-        # literals written into the codebase's own call sites, never
-        # derived from request input, so this dict cannot be grown by an
-        # attacker.
+        # process-wide limiter instance. Not part of _KeyState — a
+        # fundamentally different key space (rate-limit scope, not
+        # attacker-influenceable client identifier) — but still bounded by
+        # _MAX_SATURATION_SCOPES and swept by _sweep, same as _keys.
         self._saturation_reject_until: dict[str, float] = {}
 
     @staticmethod
@@ -140,11 +143,15 @@ class RateLimiter:
         against its own recorded window.
 
         Only runs at most once per _EVICTION_INTERVAL, unless the tracked
-        key count exceeds its own safety limit — which must force an
-        immediate sweep rather than wait, or an unbounded flood of distinct
-        keys grows memory unchecked in between.
+        key count, or the tracked saturation-scope count, exceeds its own
+        safety limit — which must force an immediate sweep rather than
+        wait, or an unbounded flood of distinct keys/scopes grows memory
+        unchecked in between.
         """
-        over_limit = len(self._keys) > self._MAX_KEYS
+        over_limit = (
+            len(self._keys) > self._MAX_KEYS
+            or len(self._saturation_reject_until) > self._MAX_SATURATION_SCOPES
+        )
         if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
             return
         self._last_eviction = now
@@ -170,9 +177,8 @@ class RateLimiter:
         # _MAX_LOCKOUTS independently meaningful: an unrelated key's own
         # over-cap call can never release someone else's active lockout
         # early to make room, no matter how stale that key's own request
-        # history looks — the exact failure class CI3-33-1 was opened to
-        # fix, now structurally impossible to reintroduce by omission,
-        # since there is no separate "pop the lockout too" step to forget.
+        # history looks — there is no separate "pop the lockout too" step
+        # that could evict one piece of a key's state while leaving another.
         if len(self._keys) > self._MAX_KEYS:
             evictable = [
                 (k, st)
@@ -185,6 +191,26 @@ class RateLimiter:
             to_remove = len(self._keys) - self._MAX_KEYS
             for k, _ in evictable[:to_remove]:
                 del self._keys[k]
+
+        # Remove expired saturation-reject entries, then — if a caller
+        # somehow supplied enough distinct scopes to still be over cap —
+        # evict the soonest-to-expire remaining ones first: those are also
+        # the ones closest to no longer mattering, so this loses the least
+        # fail-closed protection per entry removed.
+        expired_scopes = [
+            scope
+            for scope, reject_until in self._saturation_reject_until.items()
+            if reject_until <= now
+        ]
+        for scope in expired_scopes:
+            del self._saturation_reject_until[scope]
+        if len(self._saturation_reject_until) > self._MAX_SATURATION_SCOPES:
+            to_remove = len(self._saturation_reject_until) - self._MAX_SATURATION_SCOPES
+            soonest = sorted(
+                self._saturation_reject_until.items(), key=lambda kv: kv[1]
+            )[:to_remove]
+            for scope, _ in soonest:
+                del self._saturation_reject_until[scope]
 
         # Full, exact recompute of the active-lockout count. This is the
         # other half (besides _refresh_active_lockout_count) of keeping
@@ -204,17 +230,17 @@ class RateLimiter:
         _EVICTION_INTERVAL (60 seconds).
 
         Called only when the cached count already reads at or over
-        capacity, immediately before an insertion decision. Two rounds of
-        review found the two ways to get this wrong: relying solely on the
-        60-second periodic sweep left a genuinely-emptied table reading as
-        saturated for up to 60 seconds (a stale count causing a false
-        rejection); re-scanning on every single call that merely observed
-        the table at capacity turned a sustained attacker's own repeated
-        retries — or any burst of first-time violators arriving together —
-        into unbounded full-table-scan work. Throttling the *verification*
-        itself to a short, fixed interval bounds the scan cost to a fixed
-        per-second rate regardless of call volume, while keeping the
-        worst-case staleness far below the general sweep's window.
+        capacity, immediately before an insertion decision. Relying solely
+        on the 60-second periodic sweep would leave a genuinely-emptied
+        table reading as saturated for up to 60 seconds (a stale count
+        causing a false rejection); refreshing on every single call that
+        merely observes the table at capacity would turn a sustained
+        attacker's own repeated retries — or any burst of first-time
+        violators arriving together — into unbounded full-table-scan work.
+        Throttling the *verification* itself to a short, fixed interval
+        bounds the scan cost to a fixed per-second rate regardless of call
+        volume, while keeping the worst-case staleness far below the
+        general sweep's window.
         """
         if now - self._last_lockout_verify < self._LOCKOUT_VERIFY_INTERVAL:
             return
