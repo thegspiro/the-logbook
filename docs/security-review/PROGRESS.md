@@ -16,9 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 31 (Scheduled tasks)'s PR #2362 merged (`ff8cf35c`) — fully
-green with a root-caused (not dismissed) intermittent test fix, no unresolved
-review threads. Rotation row 31 -> ✅. Next: 32 Locations & kiosk.
+**Feature 32 (Locations & kiosk, pass 3) — PR
+[#2365](https://github.com/thegspiro/the-logbook/pull/2365), branch
+`claude/security-review-locations-kiosk-pass3`.** Delta-focused pass: every
+backend file in this feature's surface was byte-identical to pass 2's
+baseline (`5e382921`, PR #2098) except `admin_hub_service.py`, which grew
++690 lines — two new administration-hub modules (`scheduling`, `storefront`)
+registered since pass 2 by the Scheduling Administration project. Read all
+13 new resolver functions end to end: correctly org-scoped throughout,
+permission gates match the underlying modules' own sensitivity, no
+injection surface, no PII/PHI, bounded queries, and both new modules already
+ship dedicated cross-org-isolation test coverage (54 tests). All five pass-2
+findings (LOC-32-1 through 5) and all pre-pass-1 findings (LOC-1/2/4)
+re-verified fixed against current code; LOC-3 re-confirmed still open,
+unchanged. **0 fixes, 0 new findings.** Full findings:
+`docs/security-review/LOC3-32-locations-kiosk.md`. Rotation row 32 -> ✅
+(pending PR merge). Next: 33 Core infrastructure, once this PR merges.
 
 ---
 
@@ -10029,7 +10042,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
@@ -10039,6 +10052,73 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-07 — Feature 32 (Locations & kiosk, pass 3)
+
+Feature 31's PR #2362 merged (`ff8cf35c`); a watchdog check (PR #2364) had
+already started recording that merge and marking row 32 in-progress, though
+that doc-only PR was still open (not yet merged to `main`) at the time this
+iteration began — its intended edits are folded into this entry above
+(**Open PR** row, row 31's log entry below) rather than left to land twice.
+
+Delta-focused pass per the established pass-3 convention. Pass 2's baseline
+is commit `5e382921` (PR #2098, 2026-08-31). `git diff --stat` scoped to
+every file in this feature's surface confirmed `locations.py`,
+`location_service.py`, `public/display.py`, `admin_hub.py`,
+`guest_check_in_service.py`, `schemas/location.py`, and both model files are
+byte-identical to what pass 2 reviewed — pass 2's verification of those
+carries forward directly. `admin_hub_service.py` (1,841 -> 2,531 lines) is
+the one file that changed: a pure +690-line addition, two new
+administration-hub modules (`scheduling`, `storefront`) registered by the
+Scheduling Administration project moving those modules' settings/metrics
+pages into the shared Administration frame this feature owns.
+
+Gave the addition full scrutiny per the brief (the "grown substantially
+since pass 2" case): read all 13 new resolver functions
+(`_scheduling_*` x6, `_store_*` x6, `_storefront_attention`) end to end.
+Every query is org-scoped, either directly or through a shared criteria
+tuple (`_store_open_orders_criteria`, `_store_pending_verification_criteria`,
+`closeout_backlog_halves` from `scheduling_service.py`) never called without
+the filter; no raw SQL or `.like()`/`.ilike()`; no PII/PHI in any new card
+text; `scheduling.manage`/`storefront.manage` match the sensitivity the
+underlying modules' own endpoints already gate on, so no XC-2 pattern; the
+existing `_sanitize`/`_render_metric` permission machinery (LOC2-32-2's fix)
+applies to both new modules with no special-casing needed since neither sets
+a metric-level permission narrower than its module's own. Both new modules
+already ship dedicated test files with explicit cross-org-isolation cases —
+`tests/test_admin_hub_scheduling.py` (36 tests) and
+`tests/test_admin_hub_storefront.py` (17 tests) — all passing, no fix
+needed.
+
+Re-verified all five pass-2 findings (LOC-32-1 through 5) directly against
+current code rather than assuming the zero-diff finding alone — each fix's
+signature line (the `begin_nested()`/`with_for_update()` pair, the
+`Organization.active` join, `model_fields_set`, the pre-cap rejection
+ordering, the `model_validator`) confirmed present at its current location.
+LOC-1/2/4 (pre-pass-1) re-confirmed unchanged. LOC-3 (`GET
+/locations/{id}/display`, dead code) re-confirmed still open with the same
+three gaps as pass 2 — no new drift found, already tracked in
+`docs/KNOWN_LIMITATIONS.md`.
+
+**0 fixes, 0 new findings.** flake8/black/isort clean on `app/`, `tests/`,
+`alembic/` at CI's pinned versions; migrations PASSED (432 revisions, single
+head); scoped tests 345/346 (1 skipped, pywebpush env-only); full suite
+11,645 passed, 21 skipped (pre-existing), 0 failed; frontend typecheck 0
+errors; eslint 0 errors, 2 pre-existing warnings in an unrelated scheduling
+component (`CallTypeChips.tsx`), under the max-warnings-10 threshold.
+Findings doc: `docs/security-review/LOC3-32-locations-kiosk.md`.
+
+---
+
+### 2026-09-07 — Feature 31 (Scheduled tasks) — PR #2362 merged, watchdog recorded it
+
+PR #2362 (pass 3: CRON3-31-1/CRON3-31-2 fixed, all prior open items
+re-confirmed unchanged) went fully green (17/17) and sat idle with no
+unresolved review threads (only the informational Codex usage-limit
+comment), so a 30-minute watchdog check merged it directly rather than
+leaving it idle. Next: 32 Locations & kiosk.
+
+---
 
 ### 2026-09-07 — Feature 30 (Onboarding, pass 3)
 
