@@ -411,11 +411,16 @@ new code in the rotation's ordinary sense.
 
 ## Schema & migration notes
 
-n/a — frontend-only fix; the one backend file read
-(`backend/app/schemas/inventory.py`) was read-only cross-reference, not
-modified. `color`'s existing `max_length=50` cap and nullability are
-already correct per CLAUDE.md Pitfall #2/#7's concerns — no schema change
-needed or made.
+No schema or migration change. `backend/app/schemas/inventory.py` was read
+only as cross-reference (`color`'s existing `max_length=50` cap and
+nullability are already correct per CLAUDE.md Pitfall #2/#7's concerns — no
+schema change needed or made). A follow-up commit (`f2250051`, after Codex
+review on this PR) did change backend *code* —
+`backend/app/api/v1/endpoints/inventory.py`'s `list_item_colors` dependency,
+from `get_current_user` to `require_permission("inventory.view")` — see
+FE5-34-1 above and the completion-gate table below. That is a permission-gate
+change, not a schema change: no column, constraint, or migration was
+touched.
 
 ## Guard tests added
 
