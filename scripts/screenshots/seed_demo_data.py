@@ -4677,6 +4677,23 @@ class Seeder:
             self.api.post("/inventory/items/create-variants", payload)
         groups = items(self.api.get("/inventory/variant-groups"), "variant_groups")
 
+        # One size of the Department Polo is left at zero stock on purpose.
+        # create-variants stocks every size/colour combination evenly, and the
+        # member-facing gear request form (guides 05 and 20) pictures an
+        # out-of-stock size as a selectable, labelled option -- nothing else
+        # here produces that state. Scoped to one colour: the size chip is
+        # keyed on size *and* colour, so this alone is enough to leave "XL"
+        # showing "none on hand" without darkening every size in the product.
+        polo_xl_navy = items(
+            self.api.get(
+                "/inventory/items?search=Department+Polo&size=xl&color=Navy&limit=5"
+            ),
+            "items",
+        )
+        for item in polo_xl_navy:
+            if pick(item, "quantity") != 0:
+                self.api.patch(f"/inventory/items/{pick(item, 'id')}", {"quantity": 0})
+
         requests = items(
             self.api.get("/inventory/reorder-requests"), "reorder_requests"
         )
@@ -9789,6 +9806,100 @@ class Seeder:
                         continue
                     raise
 
+    # Title of the dedicated small-capacity event used to picture a member's
+    # own waitlist position -- see seed_event_attendee_visibility_demo.
+    ATTENDEE_VISIBILITY_EVENT_TITLE = "Station Grounds Cleanup"
+
+    def seed_event_attendee_visibility_demo(self, members: list[dict]) -> None:
+        """An event a member can see the going-list and their own waitlist spot on.
+
+        Two things neither `seed_events` nor `seed_event_rsvps` produce on
+        their own: an event with `attendee_visibility: "members"` (every seeded
+        event inherits the organization default, which ships as
+        managers-only), and one small enough that a normal RSVP lands on the
+        waitlist rather than going straight to "going". `max_attendees: 2`
+        with three members answering does both at once -- the third is
+        waitlisted, and the demo member is deliberately the third so the
+        screenshot of "your own waitlist position" always has a subject.
+
+        Idempotent: re-running finds the event by title and patches it rather
+        than creating a duplicate, and re-RSVPing a member who is already
+        `going` or already waitlisted is a no-op on both counts.
+        """
+        title = self.ATTENDEE_VISIBILITY_EVENT_TITLE
+        existing = next(
+            (
+                e
+                for e in items(self.api.get("/events?limit=100"), "events")
+                if e.get("title") == title
+            ),
+            None,
+        )
+        start = (NOW + timedelta(days=10)).replace(
+            hour=9, minute=0, second=0, microsecond=0
+        )
+        payload = {
+            "event_type": "other",
+            "description": (
+                "Sweep the apparatus bay, wash the rigs and turn out the "
+                "grounds before the open house. Sign up early -- there is "
+                "only room for two crews' worth of hands at once."
+            ),
+            "requires_rsvp": True,
+            "rsvp_deadline": iso(start - timedelta(days=1)),
+            "attendee_visibility": "members",
+            "max_attendees": 2,
+            "start_datetime": iso(start),
+            "end_datetime": iso(start + timedelta(hours=3)),
+            "is_draft": False,
+        }
+        if existing and pick(existing, "id"):
+            event_id = pick(existing, "id")
+            self.api.patch(f"/events/{event_id}", payload)
+        else:
+            created = self.api.post("/events", {"title": title, **payload})
+            event_id = pick(created, "id")
+        if not event_id:
+            return
+
+        by_username = {m.get("username"): m for m in members}
+        # Two ordinary members fill the two seats; the demo member answers
+        # last and is the one the "your waitlist position" screenshot is of.
+        fillers = ["cfrazier", "isolberg"]
+        for username in [*fillers, DEMO_MEMBER_USERNAME]:
+            member = by_username.get(username)
+            if not member or not pick(member, "id"):
+                continue
+            member_api = self.member_session(self.base_url, pick(member, "id"), username)
+            try:
+                member_api.post(f"/events/{event_id}/rsvp", {"status": "going"})
+            except ApiError as exc:
+                if exc.code == 400 and RSVP_CLOSED.search(exc.detail):
+                    continue
+                raise
+
+    def seed_photo_use_consents(self, members: list[dict]) -> None:
+        """One member each in the granted and declined photo-use states.
+
+        Consent is `PUT /users/me/consents/photo_use`, member-only by design --
+        a coordinator ticking the box on someone's behalf would not be consent
+        -- so this signs in as each member the same way seed_event_rsvps does.
+        Every other member is left untouched, which is already "not
+        answered": nothing needs to be seeded to produce that state, only
+        these two to produce the other two.
+        """
+        decisions = {"cfrazier": True, "isolberg": False}
+        by_username = {m.get("username"): m for m in members}
+        for username, granted in decisions.items():
+            member = by_username.get(username)
+            if not member or not pick(member, "id"):
+                continue
+            member_api = self.member_session(self.base_url, pick(member, "id"), username)
+            member_api.put(
+                f"/users/me/consents/photo_use?granted={'true' if granted else 'false'}",
+                None,
+            )
+
     # -- skills tests --------------------------------------------------
 
     def _cancel_one_test(self, tests: list[dict]) -> None:
@@ -14822,6 +14933,14 @@ class Seeder:
         self.step(
             "event rsvps",
             lambda: self.seed_event_rsvps(self.base_url, events, members),
+        )
+        self.step(
+            "event attendee visibility demo",
+            lambda: self.seed_event_attendee_visibility_demo(members),
+        )
+        self.step(
+            "photo use consents",
+            lambda: self.seed_photo_use_consents(members),
         )
         self.step("platoons", lambda: self.seed_platoons(members))
         self.step(

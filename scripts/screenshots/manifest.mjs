@@ -1038,6 +1038,132 @@ export function openIntegrationConnect(providerName) {
 }
 
 /**
+ * Claude (MCP)'s card, in whichever state it happens to be in.
+ *
+ * There is no seeder step for an integration's connection state -- it is not
+ * seed data, it is a setting the demo department's own admin changes -- so
+ * two shots that need opposite states (disconnected to show the connect form,
+ * connected to show the service key) have to establish their own starting
+ * point rather than assume one left by a previous capture pass or by guide
+ * 20's duplicate of the same marker running first.
+ */
+function claudeMcpCard(page) {
+  return page.locator(".stat-card").filter({ hasText: "Claude (MCP)" }).first();
+}
+
+/**
+ * Opens the Claude (MCP) connect form, disconnecting first if some earlier
+ * capture (or this run's own guide-20 duplicate) already connected it.
+ * Every field defaults to the shipped-off state the placeholder asks for --
+ * read-only access, all three data switches off -- so nothing further needs
+ * to be touched once the form is open.
+ */
+function openClaudeMcpConnect() {
+  return async (page) => {
+    const card = claudeMcpCard(page);
+    await card.waitFor({ timeout: 10_000 });
+    const disconnect = card.getByRole("button", { name: /disconnect|deactivate/i });
+    if (await disconnect.count()) {
+      await disconnect.click({ timeout: 10_000 });
+      // Reloaded rather than waited-in-place: the disconnect success toast
+      // otherwise still sits on screen when the connect modal opens moments
+      // later, and a stray toast reading "Integration disconnected" over the
+      // connect form is not what this shot is about. A full reload clears it
+      // and leaves the card correctly showing "Connect".
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await card.waitFor({ timeout: 10_000 });
+    }
+    await card.getByRole("button", { name: "Connect" }).click({ timeout: 10_000 });
+  };
+}
+
+/**
+ * Connects Claude (MCP) if it is not already connected, then issues a
+ * service key and redacts its one-time plaintext in the DOM before the
+ * capture. The key is a throwaway value from this disposable demo database,
+ * but the guide pictures the redacted "shown once" state, not an invitation
+ * to publish a real secret's shape -- overwritten here rather than edited
+ * into the PNG afterward.
+ */
+function claudeMcpServiceKeyPanel() {
+  return async (page) => {
+    const card = claudeMcpCard(page);
+    await card.waitFor({ timeout: 10_000 });
+    if (await card.getByRole("button", { name: "Connect" }).count()) {
+      await card.getByRole("button", { name: "Connect" }).click({ timeout: 10_000 });
+      await page.getByTestId("connect-submit").click({ timeout: 10_000 });
+      await card.getByRole("button", { name: /service key/i }).waitFor({ timeout: 15_000 });
+    }
+    await card.getByRole("button", { name: /service key/i }).click({ timeout: 10_000 });
+    const panel = page.getByTestId("mcp-key-panel");
+    await panel.waitFor({ timeout: 10_000 });
+    await panel.getByTestId("mcp-issue-key").waitFor({ timeout: 10_000 });
+    await panel.getByTestId("mcp-issue-key").click({ timeout: 10_000 });
+    // A key already exists once this has run before in the same session --
+    // e.g. guide 20's duplicate reusing the connection guide 16 just made --
+    // and handleIssue then confirms before replacing it.
+    await page.waitForTimeout(300);
+    const replaceConfirm = page
+      .getByRole("dialog", { name: /replace the current service key/i })
+      .getByRole("button", { name: "Issue new key" });
+    if (await replaceConfirm.count()) {
+      await replaceConfirm.click({ timeout: 5_000 });
+    }
+    const issued = panel.getByTestId("mcp-issued-key");
+    await issued.waitFor({ timeout: 10_000 });
+    await issued.locator("code").evaluate((el) => {
+      el.textContent = "sk-ant-mcp-••••••••••••••••••••••••••••••••";
+    });
+  };
+}
+
+/**
+ * The rebuilt gear request form's product-selection step: opens the modal
+ * and, optionally, chooses a sized product to advance to the size step.
+ */
+function openGearRequestModal({ chooseSizedProduct = false } = {}) {
+  return async (page) => {
+    await page
+      .getByRole("button", { name: /^Request Equipment$/ })
+      .click({ timeout: 10_000 });
+    const modal = page.getByRole("dialog", { name: /request equipment/i });
+    await modal.waitFor({ timeout: 10_000 });
+    if (!chooseSizedProduct) return;
+    // "Department Polo" is seeded with sizes and one zeroed-out size (see
+    // seed_inventory_variants), which is what makes the out-of-stock chip on
+    // this step real rather than staged.
+    await modal
+      .getByRole("button", { name: /Department Polo/i })
+      .first()
+      .click({ timeout: 10_000 });
+    await modal.getByText("Size", { exact: true }).waitFor({ timeout: 10_000 });
+  };
+}
+
+/**
+ * The seeded "Station Grounds Cleanup" event -- max_attendees: 2,
+ * attendee_visibility: "members" -- with the demo member's own RSVP already
+ * waitlisted (see seed_event_attendee_visibility_demo). Found by title
+ * through the API rather than a hard-coded id, which changes every seed.
+ */
+function openAttendeeVisibilityEvent() {
+  return async (page) => {
+    await openFirstFromApi(
+      "/events?limit=100",
+      (id) => `/events/${id}`,
+      "events",
+      (event) => event.title === "Station Grounds Cleanup",
+    )(page);
+    // Two independent fetches fill this page -- the event itself (which
+    // carries the caller's own RSVP status) and the going-list attendees --
+    // so waiting on the waitlist line does not guarantee the list above it
+    // has also rendered.
+    await page.getByText(/on the waitlist/i).first().waitFor({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+  };
+}
+
+/**
  * Open the drawer of whichever applicant is currently at `stage`.
  *
  * Naming the applicant instead ties the shot to one seeding order: the
@@ -11796,6 +11922,17 @@ export const SHOTS = [
       "Members card lower on the page carries the three named applicants.",
   },
   {
+    id: "04-50-event-attendee-visibility-member",
+    doc: "04-events-meetings.md",
+    line: 1787,
+    anchor: "an event detail page as a member with attendee visibility switched on",
+    alt: "An event detail page as a member: the going list showing names and status only, and the member's own waitlist position beneath it",
+    auth: "member",
+    route: "/events",
+    prepare: openAttendeeVisibilityEvent(),
+    fullPage: true,
+  },
+  {
     // Signed-in member, not the guest kiosk -- the marker is explicit that a
     // guest account must not be used for this capture, since an anonymous
     // early arrival is blocked outright rather than admitted with a notice.
@@ -12839,6 +12976,15 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    id: "19-50-photo-use-consent",
+    doc: "19-august-2026-release-changes.md",
+    line: 2208,
+    anchor: "/communications/photo-use-consent",
+    alt: "Photo Use Consent roster: the granted/declined/not-answered summary tiles and coverage bar above a table showing all three states",
+    route: "/communications/photo-use-consent",
+    fullPage: true,
+  },
+  {
     // Applied through the picker rather than the API: the point of the pair is
     // that nothing in the confirmation says the voting method is about to
     // change, so the change has to arrive by the route a secretary takes.
@@ -13328,6 +13474,167 @@ export const SHOTS = [
     prepare: openStaffedShift((shift) => !shift.is_finalized),
     viewport: "mobile",
     selector: 'div[role="dialog"]',
+  },
+
+  // -- 2026-09-07: gear request, event attendee visibility, Claude MCP,
+  // photo use consent, member-view sidebar -- the five screens the prior
+  // pass identified as achievable but deferred pending a seeder extension
+  // (event attendee visibility needed a waitlisted event; photo use consent
+  // needed three members in three distinct consent states) or UI
+  // investigation (the gear request two-step flow; the Claude MCP connect
+  // form plus its shown-once, now-redacted service-key panel). Guides 05, 04
+  // and 16 carry the primary marker for the first three; 20 carries a
+  // duplicate of each, per the same-screen-separate-id convention used
+  // throughout this file. Guide 20's own My Checklists/Fleet Readiness
+  // sidebar marker has no counterpart elsewhere and is unique to it.
+  {
+    id: "05-83-gear-request-product-step",
+    doc: "05-inventory.md",
+    line: 2579,
+    anchor: "the rebuilt gear request form at the product-selection step",
+    alt: "The Request Equipment modal's product-selection step: category filter chips above a scrollable product list, each row showing its on-hand count",
+    auth: "member",
+    route: "/inventory/my-equipment",
+    prepare: openGearRequestModal(),
+    fullPage: false,
+  },
+  {
+    // Second image for the same marker as 05-83 -- inserted by hand
+    // underneath it, the same way 03-101/03-102 and 08-75/08-76 were paired.
+    id: "05-84-gear-request-size-step",
+    doc: "05-inventory.md",
+    line: 2579,
+    anchor: "not-auto-applied -- see 05-83, inserted by hand",
+    alt: "The size step of the same request, for a product carrying the member's own size preselected and a zero-stock size still selectable and labelled \"none on hand\"",
+    auth: "member",
+    route: "/inventory/my-equipment",
+    prepare: openGearRequestModal({ chooseSizedProduct: true }),
+    fullPage: false,
+  },
+  {
+    // Same two-step flow as 05-83/05-84, for guide 20's own duplicate marker.
+    id: "20-10-gear-request-product-step",
+    doc: "20-september-2026-release-changes.md",
+    line: 395,
+    anchor: "the rebuilt gear request form at the product-selection step",
+    alt: "The Request Equipment modal's product-selection step: category filter chips above a scrollable product list, each row showing its on-hand count",
+    auth: "member",
+    route: "/inventory/my-equipment",
+    prepare: openGearRequestModal(),
+    fullPage: false,
+  },
+  {
+    id: "20-11-gear-request-size-step",
+    doc: "20-september-2026-release-changes.md",
+    line: 395,
+    anchor: "not-auto-applied -- see 20-10, inserted by hand",
+    alt: "The size step of the same request, for a product carrying the member's own size preselected and a zero-stock size still selectable and labelled \"none on hand\"",
+    auth: "member",
+    route: "/inventory/my-equipment",
+    prepare: openGearRequestModal({ chooseSizedProduct: true }),
+    fullPage: false,
+  },
+  {
+    // Same event, same shot as 04-50, for guide 20's own duplicate marker.
+    id: "20-12-event-attendee-visibility-member",
+    doc: "20-september-2026-release-changes.md",
+    line: 506,
+    anchor: "an event detail page as a member with attendee visibility switched on",
+    alt: "An event detail page as a member: the going list showing names and status only, and the member's own waitlist position beneath it",
+    auth: "member",
+    route: "/events",
+    prepare: openAttendeeVisibilityEvent(),
+    fullPage: true,
+  },
+  {
+    id: "16-08-claude-mcp-connect",
+    doc: "16-integrations.md",
+    line: 779,
+    anchor: "integrations → claude (mcp): the connect form with the access mode and the",
+    alt: "The Claude (MCP) connect form: read-only access selected and all three data switches (finance, medical, schedule) off, the shipped default",
+    route: "/integrations",
+    prepare: openClaudeMcpConnect(),
+    fullPage: false,
+  },
+  {
+    // Second image for the same marker as 16-08 -- inserted by hand
+    // underneath it, the same way 03-101/03-102 and 08-75/08-76 were paired.
+    id: "16-09-claude-mcp-service-key",
+    doc: "16-integrations.md",
+    line: 779,
+    anchor: "not-auto-applied -- see 16-08, inserted by hand",
+    alt: "The Claude (MCP) service key panel in its shown-once state, the issued key redacted",
+    route: "/integrations",
+    prepare: claudeMcpServiceKeyPanel(),
+    selector: '[data-testid="mcp-key-panel"]',
+    fullPage: false,
+  },
+  {
+    // Same two shots as 16-08/16-09, for guide 20's own duplicate marker.
+    id: "20-13-claude-mcp-connect",
+    doc: "20-september-2026-release-changes.md",
+    line: 783,
+    anchor: "integrations → claude (mcp): the connect form with the access mode and the",
+    alt: "The Claude (MCP) connect form: read-only access selected and all three data switches (finance, medical, schedule) off, the shipped default",
+    route: "/integrations",
+    prepare: openClaudeMcpConnect(),
+    fullPage: false,
+  },
+  {
+    id: "20-14-claude-mcp-service-key",
+    doc: "20-september-2026-release-changes.md",
+    line: 783,
+    anchor: "not-auto-applied -- see 20-13, inserted by hand",
+    alt: "The Claude (MCP) service key panel in its shown-once state, the issued key redacted",
+    route: "/integrations",
+    prepare: claudeMcpServiceKeyPanel(),
+    selector: '[data-testid="mcp-key-panel"]',
+    fullPage: false,
+  },
+  {
+    // "My Checklists" carries no permission gate, so an ordinary member's
+    // sidebar shows it without Fleet Readiness beside it -- unlike 00-26,
+    // which is shot as the administrator and so shows both rows together.
+    id: "20-15-sidebar-member-operations",
+    doc: "20-september-2026-release-changes.md",
+    line: 52,
+    anchor: "the operations section of the sidebar showing the new my checklists and",
+    alt: "The sidebar as an ordinary member: Operations expanded, showing My Checklists with no Fleet Readiness row beside it",
+    auth: "member",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Operations$/ })
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+    },
+    viewport: { width: 1440, height: 1400 },
+    selector: "nav",
+  },
+  {
+    // Second image for the same marker as 20-15 -- inserted by hand
+    // underneath it. Same interaction as 00-26-sidebar-officer-checklists,
+    // which fills 00-getting-started.md's own separate marker for this
+    // screen; this is a fresh capture under guide 20's id rather than a
+    // shared file, per the convention this project already follows.
+    id: "20-16-sidebar-officer-operations",
+    doc: "20-september-2026-release-changes.md",
+    line: 52,
+    anchor: "not-auto-applied -- see 20-15, inserted by hand",
+    alt: "The sidebar as an officer: Operations with My Checklists and Fleet Readiness, and the Administration section's Scheduling Admin and Inventory Admin rows",
+    route: "/dashboard",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Operations$/ })
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+    },
+    viewport: { width: 1440, height: 2600 },
+    selector: "nav",
   },
 ];
 
