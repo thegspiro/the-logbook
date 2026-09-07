@@ -966,6 +966,9 @@ class TestPublishScheduledMessagesCommitFailureIsSurvivable:
         )
         db_session.add_all([bad, good])
         await db_session.commit()
+        # Captured now, not read off `good` after the call: see the
+        # `delivered_ids`/`good_id` comment below for why.
+        good_id = good.id
 
         # A user id that doesn't exist violates department_message_recipients'
         # FK on user_id — the commit right after materialize_recipients()
@@ -978,16 +981,43 @@ class TestPublishScheduledMessagesCommitFailureIsSurvivable:
         async def _targeted_users(self_, message, organization_id):
             return [ghost_user] if message.title == "bad" else []
 
+        # `message.id` is captured here, inside the mock, at call time —
+        # not via `deliver.await_args.args[0].id` after the function
+        # returns (CRON3-31-1, found while investigating a ~37% flake this
+        # exact assertion caused once the org-active filter's added JOIN
+        # started reordering the unordered "due" query's rows).
+        #
+        # When `good` is processed *before* `bad` in that unordered batch,
+        # `deliver(good)` runs and returns cleanly — but `bad`'s failure a
+        # moment later calls `db.rollback()`, which expires every
+        # persistent object in the session, `good` included, not just
+        # `bad`'s. Reading `good.id` (or the identical object handed to the
+        # mock) *after* the whole function has returned then needs an
+        # implicit lazy refresh outside the async greenlet bridge and
+        # raises `MissingGreenlet` — intermittently, only on the ~50% of
+        # runs where MySQL happens to return `good` first, which is exactly
+        # why this looked like a suite-scale flake rather than a
+        # deterministic bug: nothing here is expired at the moment
+        # `deliver()` actually runs, only later, and only for one of the
+        # two possible orderings.
+        delivered_ids: list[str] = []
+
+        async def _capture_deliver(message, *args, **kwargs):
+            delivered_ids.append(message.id)
+
         with patch.object(
             MessagingService, "_targeted_users", new=_targeted_users
-        ), patch.object(MessageDeliveryService, "deliver", new=AsyncMock()) as deliver:
+        ), patch.object(
+            MessageDeliveryService,
+            "deliver",
+            new=AsyncMock(side_effect=_capture_deliver),
+        ) as deliver:
             result = await run_publish_scheduled_messages(db_session)
 
         assert result["failed"] == 1
         assert result["published"] == 1
         deliver.assert_awaited_once()
-        delivered_message = deliver.await_args.args[0]
-        assert delivered_message.id == good.id
+        assert delivered_ids == [good_id]
 
 
 if __name__ == "__main__":  # pragma: no cover

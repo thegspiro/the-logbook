@@ -313,3 +313,105 @@ class TestTheSweepFindsThem:
 
         assert result["messages"] == 0
         assert calls == []
+
+    async def test_a_deactivated_orgs_message_is_not_re_delivered(
+        self, db_session, monkeypatch
+    ):
+        """Same reasoning as the deactivated-message case: a decommissioned
+        department is no reason to keep mailing its members (CRON3-31-1, the
+        same latent CRON-2 shape CRON2-31-11/CRON-31-5 found in other
+        org-keyed loops in this file — nothing sets Organization.active =
+        False today, so this only guards against a future regression)."""
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        org.active = False
+        author = await _user(db_session, org)
+        member = await _user(db_session, org)
+        message = await _message(db_session, org, author)
+        await _claim_row(db_session, message, member)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append(str(msg.id))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        assert result["messages"] == 0
+        assert calls == []
+
+    async def test_a_deactivated_orgs_stranded_claim_is_retired_not_left_pending(
+        self, db_session, monkeypatch
+    ):
+        """Excluding a decommissioned org's claim from the stranded scan alone
+        would leave it `pending` forever, sitting at the front of every
+        oldest-first scan without ever being processed. It must be retired,
+        the same as a deleted/deactivated message's claim."""
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        org.active = False
+        author = await _user(db_session, org)
+        member = await _user(db_session, org)
+        message = await _message(db_session, org, author)
+        claim = await _claim_row(db_session, message, member)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append(str(msg.id))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        assert result["retired"] == 1
+        assert calls == []
+        await db_session.refresh(claim)
+        assert claim.status == "failed"
+
+
+class TestPublishScheduledMessagesSkipsDeactivatedOrgs:
+    """`run_publish_scheduled_messages` shares `DepartmentMessage` with the
+    sweep above and had the identical gap (CRON3-31-1): a message due for a
+    decommissioned org's members would still be published and escalated.
+    Latent today — nothing sets Organization.active = False — but this task
+    fans mail/SMS/push out to members the same as every other org-keyed loop
+    in this file, and CRON2-31-11/CRON-31-5 already established that shape is
+    worth closing before it becomes reachable."""
+
+    async def test_a_deactivated_orgs_due_message_is_not_published(
+        self, db_session, monkeypatch
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        org.active = False
+        author = await _user(db_session, org)
+        message = await _message(db_session, org, author)
+        message.scheduled_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        await db_session.commit()
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append(str(msg.id))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_publish_scheduled_messages(db_session)
+
+        assert result["published"] == 0
+        assert calls == []
+        await db_session.refresh(message)
+        # Left alone entirely — still hidden, not silently claimed-but-unsent.
+        assert message.scheduled_at is not None

@@ -3755,15 +3755,27 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     # Lock and claim in one transaction. PostgreSQL and MySQL 8 skip rows
     # already held by another publisher; SQLAlchemy harmlessly degrades this
     # on engines (notably SQLite in tests) that do not implement row locks.
+    # Joined to Organization and filtered the same way every other org-scoped
+    # loop in this file is (isnot(False), not == True, so a row whose flag
+    # was never populated still counts as active) — this loop is keyed on
+    # DepartmentMessage.organization_id rather than a direct
+    # `select(Organization)`, the same shape CRON2-31-11/CRON-31-5 found
+    # skipping the filter elsewhere (CRON3-31-1).
     result = await db.execute(
         select(DepartmentMessage)
+        .join(Organization, Organization.id == DepartmentMessage.organization_id)
         .where(
             DepartmentMessage.scheduled_at.isnot(None),
             DepartmentMessage.scheduled_at <= now,
             DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
+            Organization.active.isnot(False),
         )
-        .with_for_update(skip_locked=True)
+        # `of=DepartmentMessage`: the join is a read-only filter, and locking
+        # the Organization row too would contend with every unrelated
+        # transaction that locks it (e.g. inventory_service's stock
+        # adjustments) for no reason this task needs.
+        .with_for_update(skip_locked=True, of=DepartmentMessage)
     )
     due = list(result.scalars().all())
     for message in due:
@@ -3906,6 +3918,13 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
     # ones behind it — a fix for one suppressed message suppressing others.
     # They are recorded as failed with the reason, which is also more honest
     # than an audit row that says an attempt is still in flight.
+    #
+    # A decommissioned org's message is undeliverable for the same reason as
+    # an inactive/deleted one, so it is retired here rather than left to sit
+    # excluded from both this query and the stranded scan below forever
+    # (CRON3-31-1 — same latent CRON-2 shape CRON2-31-11/CRON-31-5 found
+    # elsewhere: nothing sets Organization.active = False today, so this is
+    # provably a no-op against current data).
     undeliverable = (
         (
             await db.execute(
@@ -3914,12 +3933,17 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
                     DepartmentMessage,
                     DepartmentMessage.id == DepartmentMessageDelivery.message_id,
                 )
+                .join(
+                    Organization,
+                    Organization.id == DepartmentMessage.organization_id,
+                )
                 .where(
                     DepartmentMessageDelivery.status == "pending",
                     DepartmentMessageDelivery.attempted_at < cutoff,
                     or_(
                         DepartmentMessage.is_active.is_(False),
                         DepartmentMessage.deleted_at.isnot(None),
+                        Organization.active.is_(False),
                     ),
                 )
                 .limit(_STRANDED_CLAIM_SCAN_LIMIT)
@@ -3949,6 +3973,7 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
             DepartmentMessage,
             DepartmentMessage.id == DepartmentMessageDelivery.message_id,
         )
+        .join(Organization, Organization.id == DepartmentMessage.organization_id)
         .where(
             DepartmentMessageDelivery.status == "pending",
             DepartmentMessageDelivery.attempted_at < cutoff,
@@ -3956,6 +3981,10 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
             # bounded window is only ever spent on claims that can be recovered.
             DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
+            # isnot(False), not a bare truthy filter — a row whose flag was
+            # never populated (NULL) still counts as active, matching every
+            # other org-active filter in this file (CRON3-31-1).
+            Organization.active.isnot(False),
         )
         .order_by(DepartmentMessageDelivery.attempted_at.asc())
         .limit(_STRANDED_CLAIM_SCAN_LIMIT)
