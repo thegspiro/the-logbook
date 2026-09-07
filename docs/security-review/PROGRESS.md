@@ -16,15 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 30 (Onboarding, pass 3) — PR
-[#2358](https://github.com/thegspiro/the-logbook/pull/2358), branch
-`claude/security-review-onboarding-pass3`.** 1 fixed (LOW), 0 new
-flagged (every prior open item — ONB-7, ONB-30-3, ONB2-30-8, the reset-audit
-transaction boundary, role/position dedup, `/organization`'s missing
-`except Exception`, `ITTeamMemberRequest`'s loose `email: str` — re-confirmed
-unchanged, no regressions). Full findings:
-`docs/security-review/ONB3-30-onboarding.md`. Rotation row 30 -> ✅
-(pending PR merge). Next: 31 Scheduled tasks, once this PR merges.
+**None.** Feature 30 (Onboarding)'s PR #2358 merged (`f0bda691`) — fully
+green (17/17) and idle, merged directly by a 30-minute watchdog check per
+the established precedent (PR #2301, #2303, #2306). Rotation row 30 -> ✅.
+Next: 31 Scheduled tasks.
+
+---
+
+### 2026-09-07 — Feature 30 (Onboarding) — PR #2358 merged, watchdog recorded it
+
+PR #2358 (pass 3: ONB3-30-1 fixed, all prior open items re-confirmed
+unchanged) went fully green (17/17) and sat idle with no unresolved review
+threads (only the informational Codex usage-limit comment), so a
+30-minute watchdog check merged it directly rather than leaving it idle.
+Next: 31 Scheduled tasks.
 
 ---
 
@@ -9941,7 +9946,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
