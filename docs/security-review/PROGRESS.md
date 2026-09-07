@@ -16,11 +16,616 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 33 (Core infrastructure, pass 3)'s PR #2368 merged
-(`262f8730`) — all CI checks green, mergeable clean, all 6 Codex review
-threads across 3 rounds replied to and resolved, and the final Codex round
-(on the merged head) completed with no new findings. Rotation row
-33 -> ✅. Next: 34 Frontend shared.
+**#2370** — Feature 33 (Core infrastructure, pass 3) follow-up:
+`claude/fix-rate-limiter-saturation-scope`. #2368 merged (`262f8730`) with 3
+Codex review threads still open, posted ~50s before the merge landed and
+never seen by whoever merged it — this PR fixes them as a targeted
+follow-up, same pattern as PR #2367/#2365. Round 1: 2 real fixes (CI3-33-2a
+P1 — `_saturation_reject_until` was a global scalar, not scoped per
+rate-limit scope, so saturating one scope's lockout table failed closed for
+every other scope sharing the process-wide limiter; CI3-33-2b P2 — a strict
+`>` eviction-gate comparison let a stale, already-expired lockout count
+trigger an unnecessary saturation rejection), plus a comment-chronology
+cleanup across the whole `RateLimiter` class. Round 2 (Codex reviewed round
+1's own commit): CI3-33-2c P1 — CI3-33-2b's own fix forced a full
+three-dict sweep on every request once the lockout table merely reached
+capacity, a CPU-amplification DoS; fixed with a narrow, lockouts-only
+`_prune_expired_lockouts()` called only from the one request actually
+attempting an insertion, instead of forcing the shared sweep for every
+request that merely observes a full table. Round 3 (Codex reviewed round
+2's own commit): CI3-33-2d P1 — round 2's own scoping still let a single
+already-saturated key's repeated retries each pay the full prune scan —
+round 7 total, and a narrower version of the exact gap round 2 had just
+closed. **Two independent Claude sessions worked this same round-7 finding
+concurrently** (see the two dated entries below): one landed a narrow
+short-circuit fix first; the other, working from the coordinator's explicit
+authorization to do the structural refactor instead of an eighth narrow
+patch, merged that narrow fix's finding into a full rewrite —
+`self.requests`/`self.lockouts`/`self._key_windows` collapsed into one
+`dict[str, _KeyState]` per key, paired with a throttled (1s)
+`_active_lockout_count` verification that closes CI3-33-2b/2c/2d together —
+and that is the version that landed as the branch's final state. All 33
+existing `TestRateLimiter` tests rewritten against the new shape and passed
+on the first run; 2 new tests added (35 total). Round 4 (Codex reviewed the
+merge commit that landed the refactor): 4 new threads — 2 real (CI3-33-2e
+P1, `_saturation_reject_until` itself had no size cap/eviction, fixed with
+a `_MAX_SATURATION_SCOPES` cap folded into the existing `_sweep` pass;
+CI3-33-2f LOW, the refactor's own docstrings restated review chronology
+inline, trimmed to rationale-only) and 2 verified moot against the refactor
+with standalone repros (a zero-`lockout_seconds` retry variant of CI3-33-2d,
+a stale-capacity variant of CI3-33-2b — both already closed by the
+refactor's throttled-verification design). 2 more tests added (37 total).
+Round 5 (same review pass, 2 more threads shortly after): CI3-33-2g/2h —
+`_MAX_KEYS` compared the combined locked-out+unlocked key count against a
+flat cap, and the default config sets `_MAX_KEYS == _MAX_LOCKOUTS`, so a
+saturated table forced a real sweep+sort on every retry (2g) and let two
+alternating keys evict each other's history, bypassing the limiter
+entirely (2h). Fixed by budgeting `_MAX_KEYS` against unlocked keys only
+(`_MAX_KEYS + self._active_lockout_count`). 2 more tests added (39 total).
+Round 6 (a third session collision, same finding — see the "round 6" entry
+below): the version that landed sizes the eviction off an exact evictable
+scan rather than the cached approximation; unlike round 3b's collision,
+both sessions' test additions merged with no conflict, so all 4 (39 + the
+other session's 2) are in the final suite (41 total). Round 7: CI3-33-2i —
+a `lockout_seconds=0` insertion (public endpoints' default) unconditionally
+incremented the _shared, cross-scope_ `_active_lockout_count`, letting a
+public-endpoint flood of phantom zero-duration "lockouts" push an
+unrelated scope's real violator (e.g. "login") into the saturation
+fallback. Fixed by excluding `lockout_seconds <= 0` from the counter
+entirely. 1 more test (42 total). Round 8 (a fourth session collision,
+same finding — see the "round 8" entry below): the other session's
+smaller, one-line-gate fix landed instead of this session's own
+branch-restructuring version; both verified equivalent. This round's two
+test additions conflicted outright (same location in the file), so the
+other session's test replaced this session's own (still 42 total, a swap
+not an addition). Round 9: CI3-33-2j — the most severe finding in this
+class. Extending the scope-wide saturation signal from a merely-observed
+(not verified-this-call) count let a sub-second stale-read race commit a
+30-minute, scope-wide rejection that never self-corrected. Fixed by
+gating the signal's commit on a `just_verified` flag derived from
+`self._last_lockout_verify == current_time`. 1 more test (43 total).
+Rotation row 33 -> ✅
+(#2368 already merged; this is a follow-up fix, not
+new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
+once #2370 merges: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 9: the most severe finding in this class — an unverified stale count committed a 30-minute, scope-wide rejection from a sub-second race
+
+Codex reviewed the merged round-8 (CI3-33-2i) state and found one more
+real P1, worse than every prior round in this class: `_LOCKOUT_VERIFY_
+INTERVAL` throttles `_refresh_active_lockout_count` to at most once per
+second — an already-accepted tradeoff, since for up to that one second a
+genuinely-emptied table can still read as saturated in the cache. But the
+code acting on that possibly-stale read didn't scale its _consequence_ to
+match: the saturation branch extends `self._saturation_reject_until
+[scope]` to `current_time + lockout_seconds` (often 30 minutes)
+regardless of whether the count was just verified or a throttled-away,
+unconfirmed read — and because that signal is a stored value consulted
+(not re-verified) on every later request, a table that emptied moments
+before a fresh violator arrived committed a 30-minute, scope-wide
+rejection that never self-corrected, even once a subsequent call proved
+real capacity had been available the whole time.
+
+Reproduced directly: 3 real lockouts all expiring at t=10.0, a fresh
+violator at t=10.05 (0.45s after real expiry, inside the 1s verify
+throttle) set `_saturation_reject_until['login'] = 1810.05`. A second,
+completely unrelated fresh client (zero prior history) arriving a full
+second later at t=11.0 — well past both the real expiry and the verify
+throttle — was still rejected with "Account locked. Try again in 1799
+seconds," even though real capacity was unambiguously available by then.
+
+Fixed by having `_refresh_active_lockout_count` report whether it
+performed a real recompute, and deriving a `just_verified` flag in
+`is_rate_limited` from `self._last_lockout_verify == current_time`
+(checking the timestamp directly, since `_sweep`'s own periodic recompute
+— a separate code path — can just as validly make the cache fresh "as of
+right now"). The saturation branch only commits or extends the long-lived
+scope-wide signal when `just_verified` is true; an unverified read still
+rejects the current request via its own count-based check, but defers the
+broader signal to a call that can actually confirm saturation.
+
+1 new regression test, verified fail-before/pass-after. Also re-verified
+the full existing suite unmodified — every test exercising genuine,
+persistent saturation still passes, confirming the fix narrows only the
+unverified-read case, not real saturation protection. `TestRateLimiter`
+now 43 tests (was 42). Full completion gate re-run (full backend suite
+included): 196 scoped, 63 tenancy, 11,744 full-suite passed. Full
+write-up: `docs/security-review/CI3-33-core-infra.md` (CI3-33-2j).
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 8: a fourth session collision, same CI3-33-2i finding; this round's test additions conflicted outright, the other session's version landed
+
+Pushing round 7's fix (commit `4a0c8915`, below) was rejected — a fourth
+instance of the collision pattern first seen at round 3b: a concurrent
+session (`session_01Xc3Cta6LjAV7DA5mTAbmdk` again — the same session that
+won round 6's collision) had independently found and fixed the identical
+CI3-33-2i finding, pushing first as commit `43cce5cd`. Fetched and merged
+rather than force-pushing.
+
+Both sessions' analysis and repros agree exactly (same root cause, same
+`_MAX_LOCKOUTS=10`/zero-active-lockouts reproduction shape). The fixes
+differ in size: this session's own fix restructured the branch so a
+`lockout_seconds<=0` insertion skips the capacity check entirely; the
+other session's fix is a one-line gate on the existing increment
+(`if lockout_seconds > 0: self._active_lockout_count += 1`), leaving the
+capacity-checked branch structure untouched. Verified the smaller fix
+against this session's own repro (identical result) before keeping it —
+minimal diff for an identical guarantee. Unlike round 6, this round's two
+test additions landed at the exact same location in the file and
+conflicted outright (not a clean auto-merge); the other session's test
+(`test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count`)
+was kept and this session's own version was not carried forward. Full
+completion gate re-run against the merged state: 195 scoped, 63 tenancy,
+11,743 full-suite passed — `TestRateLimiter` still 42 tests (a straight
+swap, not an addition, since both sessions added exactly one test for the
+same scenario). Full write-up: `docs/security-review/CI3-33-core-infra.md`
+(CI3-33-2i, "Two sessions, one finding — a fourth time").
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 7: a zero-duration lockout could inflate the shared active-lockout counter and steal an unrelated scope's real lockout
+
+Codex reviewed the merged round-6 state and found one more real P1:
+`public_rate_limit`'s in-memory fallback defaults `lockout_seconds=0` for
+several unauthenticated public endpoints, and the insertion branch
+incremented `self._active_lockout_count` unconditionally regardless of
+`lockout_seconds` — even though `lockout_until = current_time + 0` is
+never actually "active" by the definition every other reader of this state
+uses (`lockout_until > now`). Since `_active_lockout_count` is a single
+counter shared across every scope on this one process-wide limiter
+instance, a flood of public, zero-duration violators (each landing on its
+own distinct key) could exhaust the shared counter with phantom entries —
+pushing a completely unrelated scope's real violator (e.g. "login") into
+the saturation-fallback path even though the true active-lockout count was
+zero. Reproduced directly: `_MAX_LOCKOUTS=10`, 11 distinct public keys hit
+with `lockout_seconds=0` inflated the cached count to 10 (0 true active),
+and a subsequent `login` violator lost its own real per-key lockout to the
+saturation fallback.
+
+Fixed by excluding `lockout_seconds <= 0` insertions from the capacity
+check and the counter entirely — such an insertion was never going to hold
+a genuinely active slot regardless of capacity, so there's no reason to
+deny it a nominal record or let it inflate the shared counter. 1 new test,
+verified fail-before/pass-after. `TestRateLimiter` now 42 tests (was 41).
+Full completion gate re-run (full backend suite included): 195 scoped, 63
+tenancy, 11,743 full-suite passed. Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2i).
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 6: a third session collision on the same CI3-33-2g/2h finding; test additions merged cleanly this time, the more precise implementation landed
+
+Pushing round 5's fix (commit `186124ab`, below) was rejected — a third
+instance of the same collision pattern as CI3-33-2d/round 3b: a concurrent
+session (`session_01Xc3Cta6LjAV7DA5mTAbmdk`) had independently found and
+fixed the identical CI3-33-2g/2h finding, pushing first as commit
+`59863985`. Fetched and merged rather than force-pushing.
+
+This collision resolved more smoothly than round 3b's: the two sessions'
+**test additions merged with no conflict at all** (both appended new tests
+in non-overlapping locations in the file), so all 4 new tests — 2 from
+each session — are in the final suite and all pass against whichever
+implementation ships. Only `security_middleware.py` itself conflicted.
+Both implementations use the identical formula for `_sweep`'s
+forced-early-sweep gate (`_MAX_KEYS + self._active_lockout_count`, written
+as an addition in this session's fix and as an equivalent subtraction in
+the other); they differ in how `to_remove` is sized once the sweep body
+actually runs. This session's own fix reused the same (possibly stale)
+cached `_active_lockout_count` for the removal count too. The other
+session's fix instead computes the exact evictable set (already scanning
+`self._keys` for the stale-removal pass just above it) and sizes
+`to_remove` off that exact count, guarded by `if to_remove > 0` so a
+healthy table does no unnecessary sort/delete work. Verified both against
+this session's own two repro scripts (the saturated-table sweep-amplification
+case and the alternating-keys bypass case) — both produce identical
+correct results — before deciding the exact-count version is marginally
+more robust (immune to a stale `_active_lockout_count` under-sizing the
+removal) and keeping it via `git checkout --theirs` on the source file
+only. Full completion gate re-run against the merged state: 194 scoped
+(was 192), 63 tenancy, 11,742 full-suite passed (was 11,740) —
+`TestRateLimiter` now 41 tests (was 39). Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2g/2h, "Two sessions,
+one finding — again").
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 5: the same review pass found _MAX_KEYS conflated locked-out and unlocked key counts — a CPU-amplification finding and a rate-limit bypass, same fix
+
+The same Codex review pass that produced round 4's 4 threads left 3 more
+shortly after. One (a `_KeyState` docstring restating review chronology)
+was a duplicate of CI3-33-2f, already fixed. The other two were real,
+distinct P1 findings against the structural refactor's `_MAX_KEYS`
+enforcement:
+
+- **CI3-33-2g:** `_sweep` compared the _combined_ locked-out + unlocked key
+  count against the flat `_MAX_KEYS` cap. The default config sets
+  `_MAX_KEYS == _MAX_LOCKOUTS`, so once active lockouts alone reached
+  capacity, the only evictable record was ever the triggering call's own
+  newly-recorded unlocked one — evicted and immediately rewritten by that
+  same call, forcing a real `O(N log N)` sweep+sort on _every_ retry from
+  one attacker, forever. Reproduced: 100 active lockouts, 50 retries of one
+  key, all 50 forced a real sweep (detected via `self._last_eviction`
+  actually advancing, with mocked time incremented slightly per retry).
+- **CI3-33-2h:** the same root cause, but a functional bypass rather than a
+  cost: an attacker alternating between two keys had each request evict the
+  _other_ key's one-entry history before either could accumulate past one
+  entry, so neither ever tripped its own lockout no matter how many
+  requests were sent. Reproduced: 40 alternating requests
+  (`max_requests=5`), 0 lockouts.
+
+Fixed by budgeting `_MAX_KEYS` against _unlocked_ keys specifically:
+threshold is `_MAX_KEYS + self._active_lockout_count` (the live count, not
+the static `_MAX_LOCKOUTS` cap) rather than a flat `_MAX_KEYS` against the
+combined total. A genuinely active lockout was never evictable to begin
+with, so excluding it from the budget costs nothing; an unlocked key only
+faces eviction pressure once unlocked keys themselves actually crowd the
+table. The overall worst-case combined bound is unchanged (`_MAX_KEYS +
+_MAX_LOCKOUTS`); only the trigger/removal math was wrong. 2 new tests
+(`TestRateLimiter` now 39, was 37), both verified fail-before/pass-after.
+Full completion gate re-run (full backend suite included, given this
+changes `_sweep`'s core threshold semantics): 192 scoped, 63 tenancy,
+11,740 full-suite passed. Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2g/2h).
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 4: Codex reviewed the merged refactor itself; one real cap/eviction gap fixed, one comment cleanup, two findings verified moot
+
+Codex reviewed the merge commit that landed the structural refactor as
+`claude/fix-rate-limiter-saturation-scope`'s final state (see the round-3b
+entry below) and left 4 new threads. Two were real findings against the
+refactor's own new code:
+
+- **CI3-33-2e (P1):** `self._saturation_reject_until` — kept deliberately
+  separate from `_KeyState` because it is scoped per rate-limit _scope_, a
+  different key space from the attacker-influenceable per-client keys the
+  rest of the class describes — had no size cap or eviction. Its own
+  comment argued this was safe because every current call site passes a
+  literal scope; true, but `check_rate_limit(scope: str)` and
+  `public_rate_limit(key: str)` don't enforce that at the interface level,
+  so nothing stops a future dynamic-scope caller from growing it
+  unboundedly — exactly the CLAUDE.md Pitfall #9 shape. Reproduced
+  directly: 5,000 distinct dynamic scopes grew the dict to 5,000 entries
+  with no cap. Fixed with a `_MAX_SATURATION_SCOPES` cap (1,000) folded
+  into the already-periodic `_sweep` pass — expired entries cleared first
+  (they protect nothing), then the soonest-to-expire evicted if still over
+  cap. 2 new regression tests, both verified fail-before/pass-after.
+- **CI3-33-2f (LOW):** several of the refactor's own docstrings
+  (`_KeyState`, `_LOCKOUT_VERIFY_INTERVAL`'s class comment, `_sweep`'s
+  `_MAX_KEYS` eviction comment, `_refresh_active_lockout_count`) restated
+  the CI3-33-1-through-2d review chronology inline rather than just the
+  invariant — the same anti-pattern CI3-33-2c's own comment-chronology
+  cleanup had removed elsewhere in this file, reintroduced by the refactor
+  itself. Trimmed to rationale-only, with review history pointed at
+  `docs/security-review/CI3-33-core-infra.md` instead of restated.
+  Comment-only, no behavior change.
+
+The other two threads were verified, standalone, to already be closed by
+the refactor and needed no further change:
+
+- A zero-`lockout_seconds` retry-amplification variant of CI3-33-2d
+  (`public_rate_limit`'s in-memory fallback defaults `lockout_seconds=0`,
+  which defeats a `reject_until`-based short-circuit). Moot against this
+  branch's code: the refactor bounds the expensive capacity verification by
+  a fixed 1-second, per-process throttle (`_LOCKOUT_VERIFY_INTERVAL`)
+  independent of any caller's `lockout_seconds` — it was never gated on
+  `reject_until` the way the now-superseded short-circuit fix was.
+  Reproduced: 0 real scans across 100 retries with `lockout_seconds=0`
+  against a saturated, pre-warmed table.
+- A stale-capacity variant of CI3-33-2b (extending the saturation signal
+  without rechecking whether the table has since been swept clear). Moot:
+  `is_rate_limited` already re-verifies capacity via the same throttled
+  mechanism immediately before deciding whether to extend the signal.
+  Reproduced: after real lockouts expire and the throttle elapses, a fresh
+  violator gets a genuine per-key lockout, not an extended saturation
+  fallback.
+
+`TestRateLimiter` is 37 tests (was 35). Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2e, CI3-33-2f, and the
+"Fourth post-merge addendum").
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3b: two concurrent sessions on the same round-7 finding; the structural refactor superseded the narrow fix
+
+Two Claude sessions worked PR #2370's round-3 (CI3-33-2d) finding at the
+same time, on the same branch, and diverged before either pushed — a
+session collision, not a mistake in either session's own work. The entry
+immediately below this one (chronologically the _first_ pushed, titled
+"round 3: Codex found CI3-33-2c's own fix...") landed a narrow
+short-circuit fix. This session's own instructions from the coordinator
+were more specific: explicit authorization to do the structural refactor
+"as part of closing this out, rather than a 7th narrow patch," received
+independently of (and before seeing) the other session's push.
+
+On pushing, this session's branch was rejected (`fetch first` — the other
+session's commit was already on the remote). Fetched, and merged rather
+than force-pushing over it (per this repo's own git safety rules): the
+code and test changes resolved in favor of the structural refactor — it is
+a strict superset that closes the other session's finding too (its
+`_active_lockout_count` + 1-second-throttled `_refresh_active_lockout_count`
+mechanism bounds the scan cost for _both_ "one key retrying repeatedly"
+and "many different keys arriving together" with the same throttle,
+verified directly for both shapes — see the refactor's own entry below).
+The other session's 2 regression tests (for its short-circuit-on-
+`_saturation_reject_until` approach) were not carried forward, since they
+assert internals (`self.lockouts`, `_prune_expired_lockouts` call counts)
+that no longer exist after the rewrite; the refactor's own round-7
+reproduction and fuzz test cover the same finding against the new shape.
+Docs (this file, the findings doc, `docs/KNOWN_LIMITATIONS.md`) merged by
+hand to keep both sessions' work visible in the record rather than
+silently overwritten — this entry and the "round 3: round 7 found,
+structural refactor authorized and shipped" entry below are both kept.
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3: round 7 found, structural refactor authorized and shipped
+
+Codex reviewed PR #2370's round-2 commit and found one more real P1 issue:
+CI3-33-2c had correctly narrowed the forced capacity scan to only run when
+the _current call_ needs to insert a lockout and the table is full — but a
+key that is already over its own request limit and retrying repeatedly
+re-enters that exact branch on every single retry, since its own lockout
+could never be persisted. Reproduced directly: 100 retries of one
+already-rejected key against a saturated table forced 100 real
+`O(_MAX_LOCKOUTS)` scans under the round-2 code. This is round 7 total on
+this class of code — and, more specifically, the immediately preceding
+fix's own commit found to have a narrower version of the exact gap it had
+just closed. The coordinator noted this was the second consecutive round
+where "the previous narrow fix left another path into the same
+CPU-amplification/edge-case class," judged the round-6 threshold for the
+structural refactor (set in round 5's own write-up) had now clearly been
+passed, and explicitly authorized doing the refactor now rather than a
+seventh incremental patch.
+
+**What shipped.** `backend/app/core/security_middleware.py`'s `RateLimiter`
+now stores one record per key — a `_KeyState` dataclass (`request_times`,
+`window_seconds`, `lockout_until`) in a single `dict[str, _KeyState]`
+(`self._keys`) — replacing `self.requests`, `self.lockouts`, and
+`self._key_windows` entirely. This closes the CI3-33-1-through-1e defect
+shape (a key's state split across structures that can disagree) by
+construction: a key either has a `_KeyState`, with everything traveling
+together, or it has none. `self._saturation_reject_until` (CI3-33-2a's
+per-scope dict) is unchanged and deliberately not folded in — a
+fundamentally different key space (scope literals, not attacker-influenceable
+per-client keys).
+
+The capacity-accuracy problem (CI3-33-2b/2c/2d) needed a second idea beyond
+the merge: a cached `self._active_lockout_count`, incremented immediately
+on every successful insertion, corrected to an exact value by the periodic
+sweep (~60s) and by a new `_refresh_active_lockout_count` — called only
+when the cached count already reads at/over capacity, throttled to at most
+once per `_LOCKOUT_VERIFY_INTERVAL` (1 second, independent of and far
+shorter than the general sweep). Between refreshes the count can only ever
+be a stale _over_-estimate (the safe direction) — it can cause an
+unnecessary saturation-fallback for up to 1 second, never let the true cap
+be exceeded. The 1-second throttle bounds the scan cost to a fixed
+per-second rate regardless of whether the repeated asks come from one key
+retrying (CI3-33-2d) or many different keys arriving together (CI3-33-2c),
+closing both with the same mechanism.
+
+**Testing discipline for a refactor of this size.** All 33 existing
+`TestRateLimiter` tests were read in full, as a behavior spec, before
+writing a line of the new class — what each test actually verified about
+`is_rate_limited`'s externally-observable behavior, separate from how it
+happened to poke the old three-dict internals for setup. All 33 were then
+rewritten against the new shape and **passed on the first full run against
+the new class** — no second round of test-fixing was needed, which is
+itself evidence the translation preserved intent. Two tests were
+substantively repurposed (their old premise no longer applies under the
+unified model, not merely renamed):
+`test_max_keys_evicts_associated_lockouts` →
+`test_max_keys_eviction_never_touches_an_actively_locked_out_key`, and
+`test_key_windows_does_not_grow_unbounded_from_locked_out_retries` →
+`test_key_count_stays_bounded_by_max_keys_plus_max_lockouts_under_locked_out_retries`.
+Two new tests: a direct reproduction of the round-7 finding (verified to
+fail against a standalone script run against the pre-refactor code's real
+`_prune_expired_lockouts`, and pass after — the internal API changed too
+much for one pytest test to run against both), and a seeded,
+deterministic, property-style fuzz test (4,000 calls, mixed scopes,
+saturation, and retries) asserting the class-level invariants the
+coordinator asked for: internal state stays within documented bounds, and
+`is_rate_limited`'s return value never disagrees with the state it leaves
+behind. `TestRateLimiter` is 35 tests, was 33.
+
+Full completion gate re-run, including the full backend suite per the
+coordinator's own instruction given the size of the change: flake8/black/
+isort clean; migrations validated (unchanged); scoped 188/188 (was 186);
+full backend suite 11,736/0 (was 11,734). `mypy` also checked given the
+size of the refactor (not part of this rotation's own gate — 844
+pre-existing repo-wide errors): the one hit in this file is unrelated and
+pre-existing, confirmed present before this change too. No frontend file
+touched. Pushed to the same `#2370` branch as a third commit. Replied to
+and resolved the Codex thread. Findings doc updated with a dedicated "The
+structural refactor" section (CI3-33-2d and everything that landed with
+it), and `docs/KNOWN_LIMITATIONS.md`'s row for this upgraded from
+"RECOMMENDED NEXT PRIORITY" to "✅ Resolved."
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3 (superseded commit): Codex found CI3-33-2c's own fix still let an already-saturated key's retries repeat the full prune scan
+
+Codex reviewed PR #2370's round-2 commit (`0588634`) and found one more
+real P1 issue: CI3-33-2c's fix correctly scoped the lockouts-only prune to
+only the one call that is itself about to attempt an insertion — but did
+not distinguish "the call that first discovers this scope is saturated"
+from "every later retry from the same already-rejected key." Once a key is
+over its own limit, `filtered_requests` never drops back below
+`max_requests` for it until its own request history ages out of
+`window_seconds`, so every retry re-enters the same insertion-attempt
+branch and repeats the full `O(_MAX_LOCKOUTS)` prune scan for as long as
+the attacker keeps retrying — the retry loop itself became the amplifier.
+
+Reproduced directly before fixing: `_MAX_LOCKOUTS=3` with 3 genuinely
+active lockouts, then a single already-over-limit key retries 100 times —
+99 of the 100 retries (all but the one establishing saturation) each
+independently ran the full prune scan under the CI3-33-2c code, confirmed
+by counting calls to `_prune_expired_lockouts` directly.
+
+Fixed by short-circuiting on this scope's own `_saturation_reject_until`
+before attempting the prune or the capacity check: once a call has already
+established the scope as saturated, a later call within that window skips
+straight to extending the signal — the same outcome the scope's fallback
+already promised this key, so this cannot make its protection any weaker.
+Verified: 100 retries now trigger only 1 prune call (down from 99), all
+still rejected; a companion guard confirms the short-circuit does not
+outlive `reject_until` — once it lapses, the next call over its limit
+re-runs the accurate check and a new violator's lockout persists again.
+
+2 new regression tests (`TestRateLimiter` now 35, was 33): the direct
+reproduction (verified to fail against the CI3-33-2c code and pass after)
+and the reject_until-lapse companion guard (non-regression). Completion
+gate re-run: flake8/black/isort clean; migrations validated (unchanged);
+scoped 188/188 (was 186); full backend suite 11,736/0 (was 11,734). No
+frontend file touched. Pushed to the same `#2370` branch as a third commit.
+Replied to and resolved the Codex thread.
+
+**On the structural refactor:** round 6's write-up said explicitly that a
+further round of this general shape would be confirmation, not a new data
+point to weigh — round 7 is that confirmation. The recommendation is
+unchanged (the refactor is the next piece of work on this file) but is now
+stated with a fourth consecutive round in the exact same insertion-attempt
+code path behind it. Findings doc (CI3-33-2d write-up) and
+`docs/KNOWN_LIMITATIONS.md` (row text updated to record round 7) both
+updated.
+
+**Superseded**, per the "round 3b" entry above: this commit's fix was
+correct and independently verified, but the structural refactor that
+landed immediately after on the same branch closes the same finding (and
+the rest of the class) more thoroughly, so it is the refactor, not this
+short-circuit, that is in the code as of this branch's final state. Left
+in place, uncorrected in its own text, as the record of what this session
+found and shipped, matching this rotation's standing convention for a
+superseded fix.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 2: Codex found CI3-33-2b's own fix was a CPU-amplification DoS
+
+Codex reviewed PR #2370's round-1 commit (`4b5c6ac3`) and found one more
+real P1 issue: CI3-33-2b's fix (changing `_evict_stale`'s `over_limit` gate
+to `>=` for `self.lockouts`) closed the accuracy gap it targeted, but the
+mechanism it used forced the shared, three-dict `_evict_stale` sweep for
+**every** request sharing this limiter, not only the one that needed an
+accurate answer, once `self.lockouts` merely reached (not exceeded)
+capacity — the steady state for the whole duration of a sustained attack.
+An attacker who filled the fallback table turned every request anyone made
+into `O(_MAX_KEYS + _MAX_LOCKOUTS)` scan work, for as long as the table
+stayed full — a CPU-amplification DoS, worse in kind than the accuracy gap
+CI3-33-2b closed.
+
+Reproduced directly before fixing (and re-verified the repro's own
+methodology once, after a false negative: a first attempt used a `NaN`
+sentinel for `_last_eviction` to detect whether the sweep ran, but `NaN`
+compared against anything is always `False`, which defeats the
+interval-throttle condition itself regardless of the fix under test — a
+real, recent timestamp sentinel was needed instead). With the corrected
+repro: 200 distinct observer keys, none near their own limit, against a
+lockout table at exactly capacity with genuinely active entries — 200 of
+200 forced a full sweep under the CI3-33-2b code.
+
+Fixed by reverting `_evict_stale`'s own gate to `>` (a safety net that
+should structurally never fire, since insertion is gated) and moving the
+capacity-accuracy concern to a new, narrow `_prune_expired_lockouts()` —
+lockouts-only, not gated by `_EVICTION_INTERVAL` — called from exactly one
+place: `is_rate_limited`'s insertion decision, only when observed at/over
+capacity at that decision point. Verified: the CPU-amplification repro now
+shows 0 of 200 forced sweeps; the genuine-saturation case (all-active
+lockouts at cap) still correctly rejects a new violator's insertion without
+evicting existing entries; CI3-33-2b's own original repro (stale-expired
+count causing false saturation) still passes, unaffected.
+
+2 new regression tests (`TestRateLimiter` now 33, was 31): the direct
+CPU-amplification reproduction (verified to fail against the CI3-33-2b code
+and pass after) and a genuine-saturation companion guard (passes both
+before and after, confirming the fix didn't weaken CI3-33-2b's own
+protection). The existing `test_lockout_saturation_check_purges_expired_
+entries_first` test's docstring was updated to note its fix was
+superseded by the narrower mechanism, without changing its assertions.
+
+Completion gate re-run: flake8/black/isort clean; migrations validated
+(unchanged); scoped 186/186 (was 184); full backend suite 11,734/0 (was
+11,732). No frontend file touched. Pushed to the same `#2370` branch as a
+second commit. Replied to and resolved the Codex thread.
+
+**Structural refactor judgment call, made explicitly per the coordinator's
+request:** this is round six on this class of code — CI3-33-2a/2b's own
+write-up (round 5) named a sixth round as the trigger to stop patching and
+do the refactor. That trigger has now been met, and round 6 is a
+materially stronger signal than the prior rounds: it is round 5's _own fix_
+generating round 6's finding, in the exact same code path. The call: the
+refactor is now recommended as the **next piece of work on this file**, not
+an indefinitely-deferred item — but not folded into this fix itself, for
+the same reason narrow fixes have been preferred throughout this rotation
+(a verified regression fix under reactive pressure is not the moment to
+also change the class's internal representation). Findings doc
+(CI3-33-2c write-up, "On the structural refactor" section) and
+`docs/KNOWN_LIMITATIONS.md` (row upgraded from "design follow-up" to
+"RECOMMENDED NEXT PRIORITY") both updated to state this explicitly.
+
+**Also corrected in this pass:** the round-1 commit messages, this file,
+`docs/security-review/CI3-33-core-infra.md`, and `docs/KNOWN_LIMITATIONS.md`
+had mislabeled this PR as "#2369" throughout — the PR GitHub actually
+created is **#2370** (the replies posted to PR #2368's threads were
+unaffected; they correctly said "#2370" already). Swept and corrected every
+"#2369" reference across all three docs files in this pass.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368 merged before Codex's 5th round → new PR #2370
+
+Watchdog check found PR #2368 had merged (`262f8730`) with 3 more Codex
+review threads open (posted 2026-09-07T12:18:18Z–12:18:18Z, merge landed
+~50s later) — the merge happened before anyone had seen them, so none of
+this round's fixes reached `main` through that PR. Per CLAUDE.md pitfall
+#24, opened a new branch (`claude/fix-rate-limiter-saturation-scope`) off
+current `main` rather than continuing to push to the now-merged
+`claude/security-review-core-infra-pass3`, and a new PR, #2370 — same
+pattern as PR #2367/#2365 and PR #2311/#2307.
+
+Verified all 3 findings against the actual merged code with standalone
+reproductions before fixing, same discipline as every prior round:
+
+- **P1 — cross-scope saturation DoS (CI3-33-2a):** confirmed real.
+  `self._saturation_reject_until` (CI3-33-1e's fix) was a single scalar on
+  the shared `rate_limiter` instance backing every rate-limit scope — login,
+  register, password-reset, token-refresh, password-change, and every
+  `public_rate_limit()` caller (public forms, legal pages, calendar/display
+  endpoints, webhooks). Reproduced directly: saturating the `login` scope's
+  3-entry lockout table, then a brand-new `pub_form_submit` key with zero
+  history was rejected too — a self-inflicted, attacker-triggerable DoS
+  across the entire app during exactly the condition (Redis outage + login
+  flood) the fallback exists to protect. Fixed by making the field
+  `dict[str, float]` keyed by rate-limit scope (the literal prefix each real
+  caller puts before the first `:` in its key, extracted by a new
+  `_scope_of()` helper). Confirmed by grep that every scope value across the
+  codebase is a hardcoded string literal, never derived from request
+  input — so the new dict needs no size cap, unlike the three
+  attacker-keyed dicts. Verified the fix does not weaken same-scope
+  protection (a saturated scope's own violators still fail closed past
+  their own window).
+- **P2 — stale-capacity false saturation (CI3-33-2b):** confirmed real.
+  `_evict_stale`'s `over_limit` gate used a strict `>` against
+  `_MAX_LOCKOUTS`, so a table sitting at _exactly_ capacity deferred to the
+  normal ~60s eviction throttle instead of forcing an immediate sweep —
+  entries that expired since the last periodic sweep stayed counted, so a
+  new violator's insertion decision (`len(self.lockouts) < _MAX_LOCKOUTS`)
+  read a stale, inflated count. Reproduced directly: 3 already-expired
+  lockouts plus a recent `_last_eviction` timestamp caused a genuinely empty
+  table to be read as saturated. Fixed by changing the lockouts term to
+  `>=`, forcing this call's own `_evict_stale` (which runs immediately
+  before the insertion decision) to purge expired entries first whenever the
+  table is at or over capacity.
+- **Minor — comment chronology (folded into the same fix):** the in-code
+  comments across `RateLimiter` had accumulated 4 rounds of PR numbers,
+  finding IDs (CI3-33-1a–1f), Codex round numbers, and failed-attempt
+  narratives. Trimmed every comment down to the invariant that still
+  matters; moved the chronology to the findings doc, which already has it
+  in full. Verified no behavior change: full `TestRateLimiter` suite passes
+  identically before and after the comment-only edits.
+
+2 new regression tests (`TestRateLimiter` now 31, was 29), both verified to
+fail against the merged pre-fix code and pass after; the 3 existing
+CI3-33-1e tests referencing `_saturation_reject_until` were updated for the
+scalar → per-scope-dict change (two needed scope-consistent key names to
+keep testing same-scope behavior, since bare unscoped keys would otherwise
+trivially pass via the new cross-scope isolation regardless of whether
+decay/live-history handling was correct). Completion gate re-run against
+current `main`: flake8/black/isort clean; migrations validated (435
+revisions, single head, no schema change); scoped 184/184 (was 182); full
+backend suite 11,732/0 (was 11,730). No frontend file touched. Findings doc
+(`docs/security-review/CI3-33-core-infra.md`, new CI3-33-2a/2b sections plus
+a post-merge addendum note) and `docs/KNOWN_LIMITATIONS.md` (structural-
+refactor row updated to record the round-5 recurrence) both updated. PR
+#2370 opened, referencing #2368, and subscribed. Rotation row 33 stays as
+above. Next once #2370 merges: 34 Frontend shared.
 
 ---
 
