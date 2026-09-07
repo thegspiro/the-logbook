@@ -35,6 +35,121 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Captured 2026-09-07 — org chart, testing checklist, and 16 of the 25
+
+Same restart as the entry below, continued after the seed run it describes.
+**25 → 9 remaining.** Guides 03 and 08 are now fully filled.
+
+**Org chart and Testing Checklist, both previously blocked purely on missing
+seed data, are unblocked for good.** `seed_demo_data.py` gained two steps:
+
+- `seed_org_chart` — a published, four-level tree (Fire Chief → a two-holder
+  Deputy Chief seat → three Captains → one Lieutenant) shaped so one chart
+  satisfies all three markers (outline, diagram, node-modal) in both guides
+  08 and 19 at once: the shared seat, the three Captains reporting to it, and
+  one seat (`Captain — C Shift`) carrying two member holders, one non-member
+  holder, responsibility text and a position link together, so the node-modal
+  shot needs one click to reach everything it asks for.
+- `seed_testing_checklist` — two runs (one archived) with a pass/fail/blocked/
+  gate-mismatch mix, every mark placed in the registry's "Core" group on
+  purpose so expanding one group shows the whole mix in a single frame rather
+  than four collapsed groups with one mark apiece. Toggles the `testing`
+  module on only for its own API calls and always restores it to the demo's
+  shipped-off default in a `finally`, which is what let the "Modules off"
+  shot and the "Testing Home with two runs" shot both come from the same seed
+  without one undoing the other.
+
+Captured and applied: `08-79/80/81` + `19-44/45/46` (org chart), `08-82/83/84`
++ `19-47/48/49` (Testing Checklist), `03-103` + `20-07` (call types editor —
+one type retired via a new `retireOneUnlockedCallType` helper, the rest
+locked by the seeded call-tracking data's calls-on-record), `20-05`
+(Compliance Matrix, reusing `02-107`'s route/prepare rather than re-shooting
+an already-verified screen), `20-08/09` (Shift Details modal, reusing
+`03-101`/`03-102` the same way — `20-09` inserted by hand beside `20-08`,
+matching how `03-102` and `08-76` were paired).
+
+### Three real bugs, each found by the capture failing rather than by reading code
+
+**The seeder's admin session had no recovery from a 401, only from a 429.**
+`ACCESS_TOKEN_EXPIRE_MINUTES` is 30, and a full seed run comfortably exceeds
+that once its own rate-limit pacing is doing its job — reproduced live: the
+token expired at the "forms" step and every one of the ~35 steps after it
+failed with `LB-AUTH-001` for the rest of that run, silently, because
+`self.step()` logs each failure and moves on rather than stopping. Fixed with
+`Api._recover_session()`, mirroring what the frontend's own axios interceptor
+already does — refresh first (the still-valid 7-day `refresh_token` cookie),
+fall back to a full `login_as()` replay if that also fails. A second full run
+afterward completed with zero auth failures.
+
+**`enableTestingModuleThenGoto`'s button check ran before the module list had
+loaded.** The list fetches asynchronously after mount, so `count()` on the
+Enable button immediately after `domcontentloaded` can find neither button
+yet — and an empty count reads exactly like "already enabled" while the
+module is actually still off. The capture then landed on `/testing`'s own
+"not enabled" refusal page, and every locator after it timed out looking for
+content that was never going to render. Now waits for either button state to
+actually appear before deciding.
+
+**The Core group's toggle button has no accessible name of just "Core."** The
+`<button>`'s name is computed from all its text content — the `h2` heading,
+the `(checked/total)` count, the description paragraph and the checklist-
+section line, concatenated — so `getByRole('button', { name: /^Core$/ })`
+never matched anything and the click timed out. Targets `#group-core` (the
+registry's own stable id, not display text) and climbs to the ancestor
+button instead.
+
+**Two manifest anchors used `"->"` where the guide text has a real `"→"`.**
+`apply_placeholders.py` matches by substring, and those are different bytes —
+`08-82` and `19-47` captured cleanly and then reported "no placeholder" on
+apply. Shortened to a character-safe substring (`"modules with testing
+checklist off"`) that does not depend on reproducing the arrow. Worth noting
+for the next anchor written against prose that contains one: a plain hyphen
+substring is never a safe stand-in for `→`.
+
+**One more shape worth knowing for next time:** fixing an anchor in
+`manifest.mjs` does not retroactively fix an already-written
+`capture-report.json` — `apply_placeholders.py` reads the report, not the
+live manifest, so the shot has to be re-captured (even though the PNG itself
+does not need to change) before the corrected anchor takes effect. Cost one
+extra capture round here.
+
+### Two shots needed a fix beyond "click the right thing"
+
+**The org-chart node-modal shot needed a taller viewport, not a different
+selector.** `modal-panel-scroll` caps the dialog at `100dvh - 2rem`, and the
+form (link → title → reports-to → all three holders → *then* responsibility)
+is taller than that at the usual 900px capture height — it cut off after the
+first holder, so two of the three holders and the responsibility text the
+placeholder asks for were never in frame. `viewport: { width: 1440, height:
+1900 }` raises the cap past the form's actual content height, so nothing
+scrolls internally and the single-element selector captures all of it.
+
+**The call-types-editor shots moved from `fullPage` to a card selector.**
+`/scheduling/admin/settings/general` is a long page — overtime advisory,
+close-out rules, shift templates, department defaults, position names — and
+the placeholder is about the Call types card specifically. The first capture
+technically satisfied the marker but buried it in four screens of unrelated
+settings a reader would have to scroll past; clipping to
+`div.card-secondary:has(h3:text-is("Call types"))` fixed that without a
+second seed or a different route.
+
+`status_report.py`: **551 of 560 placeholders filled, 9 remaining** (was
+534/559/25). `audit_images.py --baseline`: 551 images checked, no new
+findings. `check_docs_links.py`: 345 files, 0 broken links.
+
+### Still open — 9 placeholders, all previously-identified as needing more than a seeder fix
+
+Unchanged from the entry below's assessment, since this pass targeted the
+seeder-blocked and locator-fixable items specifically: **gear request form**
+(guides 05 + 20, two-step flow), **event attendee visibility as a member**
+(guides 04 + 20, needs an org-setting change plus a waitlisted event — no
+waitlist seeding exists yet), **Claude (MCP) connect form + service-key
+panel** (guides 16 + 20, the latter needs the key redacted by hand after
+capture), **Settings → Email Test Connection** (guide 20, needs a real SMTP
+target — not attemptable against this disposable stack), and
+**`/communications/photo-use-consent`** (guide 19, needs three members
+seeded into three distinct consent states, which nothing currently seeds).
+
 ## Restarted 2026-09-07 — the roster-settings move caught by a currency spot-check
 
 Watchdog restart. Bootstrap and seed ran against a freshly dropped database
