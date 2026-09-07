@@ -909,6 +909,21 @@ export interface InventoryItem {
   active: boolean;
   created_at: string;
   updated_at: string;
+  /**
+   * The requesting member's own pin position, 0-based, or null/absent when
+   * they have not pinned this item. Personal to the caller — two admins
+   * reading the same item see different values here, by design.
+   */
+  pin_position?: number | null;
+}
+
+/** One entry in a member's pinned inventory shortlist. */
+export interface ItemPin {
+  id: string;
+  item_id: string;
+  /** 0-based; 0 is the front of the list. Kept contiguous by the backend. */
+  position: number;
+  created_at: string;
 }
 
 export interface LowStockAlert {

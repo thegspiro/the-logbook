@@ -682,7 +682,36 @@ class InventoryItemResponse(InventoryItemBase):
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
 
+    # The requesting member's own pin position, 0-based, or null when they
+    # have not pinned this item. Personal to the caller: two members reading
+    # the same item see different values here, by design.
+    pin_position: Optional[int] = None
+
     model_config = _response_config
+
+
+class InventoryItemPinResponse(UTCResponseBase):
+    """One entry in a member's pinned shortlist."""
+
+    id: UUID
+    item_id: UUID
+    position: int
+    created_at: datetime
+
+    model_config = _response_config
+
+
+class ItemPinReorder(BaseModel):
+    """A full replacement order for the caller's pinned shortlist.
+
+    Must list every pinned item, not just the ones that moved -- a partial
+    list is indistinguishable from a stale tab dropping a pin, so the service
+    rejects it rather than guessing.
+    """
+
+    ordered_item_ids: List[str] = Field(
+        ..., description="Every pinned item id, front of the list first"
+    )
 
 
 # ============================================

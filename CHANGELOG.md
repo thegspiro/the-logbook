@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A quartermaster can front their own working set on the items list (2026-09-07)
+
+**Added**
+
+- **The inventory items list gains a per-member pinned shortlist.** The list is
+  alphabetical, and for a quartermaster a handful of items — the Class B polos,
+  the duty boots — carry nearly all the traffic while sitting scattered between
+  things touched once a year. Pinned items now appear in their own section above
+  Available and Unavailable, in an order the member arranges themselves, ahead
+  of whatever sort is active.
+- Pins are **per member**, not per organization: two quartermasters running
+  different supply lines front different gear, and one curating their list must
+  not reorder the other's page. A member with no pins sees exactly the page they
+  saw before — the default sort is still Name, ascending.
+- Reordering works by dragging a row or by the up/down arrows beside it. The
+  arrows are not a fallback: HTML5 drag events never fire on touch, so on a
+  phone they are the only way to reorder, and they are the path that works with
+  a keyboard and a screen reader on any device.
+- Capped at 25 pins per member. The list pages at 50 rows and pinned items sort
+  first, so an unbounded shortlist would fill the whole first page and make
+  "Load More" the only route to unpinned stock.
+
+**Fixed**
+
+- **The items list's section counts read as section totals when they were a
+  running tally.** The Available/Unavailable split happens client-side over the
+  rows loaded so far, so "(12)" appeared while 87 items matched the filters —
+  silently understating the department's stock for any list past one page. A
+  truncated section now reads "(12 so far)".
+- **The items list's sortable column headers carried no `aria-sort`.** The page
+  predates `components/ux/SortableHeader` and hand-rolls its sort buttons, so a
+  screen reader announced a plain button and never said which column the table
+  was ordered by.
+
+**Migration**
+
+- New `inventory_item_pins` table (`f2a91c7d4e86`). No backfill and no data
+  loss on downgrade — an empty pin table is the correct starting state, since
+  the absence of a pin means "not pinned", never "unknown".
+
 ### Administration-hub attention ages now use the department's own calendar (2026-09-07)
 
 **Fixed**

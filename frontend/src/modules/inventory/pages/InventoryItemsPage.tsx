@@ -31,6 +31,9 @@ import {
   ListPlus,
   Upload,
   Truck,
+  Pin,
+  PinOff,
+  GripVertical,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -134,10 +137,23 @@ interface ItemTableProps {
   toggleAll: () => void;
   toggleSort: (k: SortKey) => void;
   SortIc: React.FC<{ col: SortKey }>;
+  sortBy: SortKey;
+  sortOrd: 'asc' | 'desc';
   showStatus: boolean;
   canManage: boolean;
   onEdit: (item: InventoryItem) => void;
   onRetire: (item: InventoryItem) => void;
+  onTogglePin: (item: InventoryItem) => void;
+  /**
+   * True when the page has more matching items than it has loaded. The split
+   * into these sections happens client-side over the loaded rows, so the count
+   * is a running tally rather than a section total, and must not be shown as
+   * one.
+   */
+  truncated?: boolean;
+  /** Renders the drag handle and the move arrows. Pinned section only. */
+  pinnedMode?: boolean;
+  onMovePin?: (itemId: string, toIndex: number) => void;
 }
 
 const ItemTable: React.FC<ItemTableProps> = ({
@@ -151,29 +167,48 @@ const ItemTable: React.FC<ItemTableProps> = ({
   toggleAll,
   toggleSort,
   SortIc,
+  sortBy,
+  sortOrd,
   showStatus,
   canManage,
   onEdit,
   onRetire,
+  onTogglePin,
+  truncated = false,
+  pinnedMode = false,
+  onMovePin,
 }) => {
+  const [dragId, setDragId] = useState<string | null>(null);
+
   if (items.length === 0) return null;
 
   const allSelected = items.length > 0 && items.every((i) => selIds.has(i.id));
+  // `items` is what this page has LOADED, not what matches the filters — the
+  // three-way split is client-side over the loaded rows. Rendering a bare
+  // "(12)" while 87 match reads as a section total and silently understates
+  // the department's stock the moment the list runs past one page.
+  const countLabel = truncated ? `(${items.length} so far)` : `(${items.length})`;
+  const ariaSort = (col: SortKey): 'ascending' | 'descending' | 'none' =>
+    sortBy === col ? (sortOrd === 'asc' ? 'ascending' : 'descending') : 'none';
 
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
         {icon}
         <h2 className="text-theme-text-secondary text-sm font-semibold tracking-wide uppercase">{label}</h2>
-        <span className="text-theme-text-muted text-xs">({items.length})</span>
+        <span className="text-theme-text-muted text-xs">{countLabel}</span>
       </div>
       <div className="card-secondary overflow-x-auto">
         {/* Single responsive table: a table on >=md, stacked cards below.
             Cells marked `hidden` are mobile-only (revealed by the reflow);
             cells with no data-label are hidden in the stacked view. */}
-        <table className="rwd-table w-full text-sm">
+        {/* Named, because the page renders up to three of these and a screen
+            reader announcing "table" three times gives no way to tell the
+            pinned shortlist from the rest of the shelf. */}
+        <table aria-label={label} className="rwd-table w-full text-sm">
           <thead>
             <tr className="border-theme-surface-border border-b">
+              {pinnedMode && <th scope="col" className="w-24 px-2 py-3" />}
               <th scope="col" className="w-10 px-3 py-3 text-left">
                 <input
                   type="checkbox"
@@ -183,7 +218,11 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   aria-label={`Select all ${label.toLowerCase()}`}
                 />
               </th>
-              <th scope="col" className="px-3 py-3 text-left">
+              {/* aria-sort is set by hand because this page predates
+                  components/ux/SortableHeader and hand-rolls its sort buttons;
+                  without it a screen reader announces a plain button and never
+                  says which column the table is ordered by. */}
+              <th scope="col" aria-sort={ariaSort('name')} className="px-3 py-3 text-left">
                 <button
                   onClick={() => toggleSort('name')}
                   className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
@@ -192,7 +231,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                 </button>
               </th>
               {showStatus && (
-                <th scope="col" className="px-3 py-3 text-left">
+                <th scope="col" aria-sort={ariaSort('status')} className="px-3 py-3 text-left">
                   <button
                     onClick={() => toggleSort('status')}
                     className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
@@ -210,7 +249,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
               <th scope="col" className="text-theme-text-secondary px-3 py-3 text-center font-medium">
                 Qty
               </th>
-              <th scope="col" className="px-3 py-3 text-left">
+              <th scope="col" aria-sort={ariaSort('condition')} className="px-3 py-3 text-left">
                 <button
                   onClick={() => toggleSort('condition')}
                   className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
@@ -221,11 +260,11 @@ const ItemTable: React.FC<ItemTableProps> = ({
               <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
                 Location
               </th>
-              <th scope="col" className="w-10 px-3 py-3" />
+              <th scope="col" className="w-20 px-3 py-3" />
             </tr>
           </thead>
           <tbody className="divide-theme-surface-border divide-y">
-            {items.map((item) => {
+            {items.map((item, index) => {
               const cat = categories.find((ct) => ct.id === item.category_id);
               const loc = locLabel(item, locations);
               const manufacturer = [item.manufacturer, item.model_number].filter(Boolean).join(' ');
@@ -236,8 +275,51 @@ const ItemTable: React.FC<ItemTableProps> = ({
               return (
                 <tr
                   key={item.id}
-                  className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''}`}
+                  {...(pinnedMode
+                    ? {
+                        draggable: true,
+                        onDragStart: () => setDragId(item.id),
+                        onDragEnd: () => setDragId(null),
+                        onDragOver: (e: React.DragEvent) => e.preventDefault(),
+                        onDrop: (e: React.DragEvent) => {
+                          e.preventDefault();
+                          if (dragId && dragId !== item.id) onMovePin?.(dragId, index);
+                          setDragId(null);
+                        },
+                      }
+                    : {})}
+                  className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''} ${dragId === item.id ? 'opacity-60' : ''}`}
                 >
+                  {pinnedMode && (
+                    <td data-label="Order" className="text-theme-text-muted px-2 py-3">
+                      {/* Grip and arrows in ONE cell so the reflow keeps them
+                          together: split across the row's two ends, the arrows
+                          landed after ten stacked field rows on a phone, which
+                          is where they matter most — HTML5 drag never fires on
+                          touch, so there they are the only way to reorder. */}
+                      <div className="flex items-center gap-0.5">
+                        <GripVertical className="hidden h-4 w-4 cursor-grab md:block" aria-hidden="true" />
+                        <button
+                          type="button"
+                          onClick={() => onMovePin?.(item.id, index - 1)}
+                          disabled={index === 0}
+                          className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
+                          aria-label={`Move ${getDisplayName(item)} up`}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onMovePin?.(item.id, index + 1)}
+                          disabled={index === items.length - 1}
+                          className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
+                          aria-label={`Move ${getDisplayName(item)} down`}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                   <td data-label="" className="px-3 py-3">
                     <input
                       type="checkbox"
@@ -304,13 +386,28 @@ const ItemTable: React.FC<ItemTableProps> = ({
                     {cost || '--'}
                   </td>
                   <td className="px-3 py-3">
-                    <Link
-                      to={`/inventory/items/${item.id}`}
-                      className="text-theme-text-muted hover:text-theme-text-primary"
-                      aria-label={`View ${item.name}`}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onTogglePin(item)}
+                        className={`btn-icon-sm ${
+                          item.pin_position != null
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-theme-text-muted hover:text-theme-text-primary'
+                        }`}
+                        aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
+                        aria-pressed={item.pin_position != null}
+                      >
+                        {item.pin_position != null ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                      </button>
+                      <Link
+                        to={`/inventory/items/${item.id}`}
+                        className="text-theme-text-muted hover:text-theme-text-primary"
+                        aria-label={`View ${item.name}`}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
+                    </div>
                   </td>
                   {/* Mobile-only inline actions */}
                   {canManage && (
@@ -411,9 +508,23 @@ const InventoryItemsPage: React.FC = () => {
   const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  /* ---- split items by availability ---- */
-  const availableItems = useMemo(() => items.filter((i) => i.status === 'available'), [items]);
-  const unavailableItems = useMemo(() => items.filter((i) => i.status !== 'available'), [items]);
+  /* ---- split items into pinned / available / unavailable ----
+     A pinned item is REMOVED from the lower two tables rather than repeated in
+     both. Not cosmetic: `selIds` is a Set of ids, so one row rendered twice
+     would show two checkboxes for the same item and desynchronise
+     `toggleAll`. */
+  const pinnedItems = useMemo(
+    () => items.filter((i) => i.pin_position != null).sort((a, b) => (a.pin_position ?? 0) - (b.pin_position ?? 0)),
+    [items]
+  );
+  const availableItems = useMemo(
+    () => items.filter((i) => i.pin_position == null && i.status === 'available'),
+    [items]
+  );
+  const unavailableItems = useMemo(
+    () => items.filter((i) => i.pin_position == null && i.status !== 'available'),
+    [items]
+  );
 
   /* ---- helpers ---- */
   const filterParams = useCallback(
@@ -596,6 +707,53 @@ const InventoryItemsPage: React.FC = () => {
     return sortOrd === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
   };
 
+  /* ---- pinning ----
+     Pins are the caller's own shortlist, hoisted above the rest of the list by
+     the backend. Every mutation applies to local state first and reconciles
+     from the server afterwards, so the row moves under the tap rather than a
+     third of a second later. */
+  const togglePin = async (item: InventoryItem) => {
+    const wasPinned = item.pin_position != null;
+    try {
+      if (wasPinned) await inventoryService.unpinItem(item.id);
+      else await inventoryService.pinItem(item.id);
+      await loadItems(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, wasPinned ? 'Failed to unpin item' : 'Failed to pin item'));
+    }
+  };
+
+  const movePin = async (itemId: string, toIndex: number) => {
+    const current = pinnedItems.map((i) => i.id);
+    const from = current.indexOf(itemId);
+    if (from === -1) return;
+    const target = Math.max(0, Math.min(current.length - 1, toIndex));
+    if (from === target) return;
+
+    const next = [...current];
+    const [moved] = next.splice(from, 1);
+    if (moved === undefined) return;
+    next.splice(target, 0, moved);
+
+    // Optimistic: restamp pin_position locally so the row moves immediately.
+    const order = new Map(next.map((id, index) => [id, index]));
+    setItems((prev) => prev.map((i) => (order.has(i.id) ? { ...i, pin_position: order.get(i.id) ?? null } : i)));
+
+    try {
+      // Every pinned id, not just the ones that moved — the backend rejects a
+      // partial list rather than guessing which pins were dropped.
+      await inventoryService.reorderItemPins(next);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reorder pinned items'));
+      // Reload rather than restore a local snapshot. The rejection this path
+      // exists for is "your list no longer matches ours" — pinned on a phone a
+      // minute ago — and putting back the stale order the browser already had
+      // leaves every retry failing the same way. Refetching gives the next
+      // attempt the real set to reorder.
+      await loadItems(true);
+    }
+  };
+
   /* ---- selection ---- */
   const toggle = (id: string) =>
     setSelIds((p) => {
@@ -606,6 +764,16 @@ const InventoryItemsPage: React.FC = () => {
     });
 
   /* ---- section-level toggleAll helpers ---- */
+  const toggleAllPinned = () =>
+    setSelIds((prev) => {
+      const allSelected = pinnedItems.length > 0 && pinnedItems.every((i) => prev.has(i.id));
+      if (allSelected) {
+        const next = new Set(prev);
+        pinnedItems.forEach((i) => next.delete(i.id));
+        return next;
+      }
+      return new Set([...prev, ...pinnedItems.map((i) => i.id)]);
+    });
   const toggleAllAvailable = () =>
     setSelIds((prev) => {
       const allSelected = availableItems.length > 0 && availableItems.every((i) => prev.has(i.id));
@@ -1176,6 +1344,29 @@ const InventoryItemsPage: React.FC = () => {
           >=md, stacked cards below). */}
       {!loading && items.length > 0 && (
         <div className="space-y-6">
+          {/* Pinned first, and with Status shown: a pinned item that has gone
+              into maintenance is exactly what its owner needs to see. */}
+          <ItemTable
+            label="Pinned"
+            icon={<Pin className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            items={pinnedItems}
+            categories={categories}
+            locations={locations}
+            selIds={selIds}
+            toggle={toggle}
+            toggleAll={toggleAllPinned}
+            toggleSort={toggleSort}
+            SortIc={SortIc}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
+            showStatus
+            canManage={canManage}
+            onEdit={openEdit}
+            onRetire={retireOne}
+            onTogglePin={(item) => void togglePin(item)}
+            onMovePin={(id, to) => void movePin(id, to)}
+            pinnedMode
+          />
           <ItemTable
             label="Available"
             icon={<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
@@ -1187,10 +1378,14 @@ const InventoryItemsPage: React.FC = () => {
             toggleAll={toggleAllAvailable}
             toggleSort={toggleSort}
             SortIc={SortIc}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
             showStatus={false}
             canManage={canManage}
             onEdit={openEdit}
             onRetire={retireOne}
+            onTogglePin={(item) => void togglePin(item)}
+            truncated={hasMore}
           />
           <ItemTable
             label="Unavailable"
@@ -1203,10 +1398,14 @@ const InventoryItemsPage: React.FC = () => {
             toggleAll={toggleAllUnavailable}
             toggleSort={toggleSort}
             SortIc={SortIc}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
             showStatus
             canManage={canManage}
             onEdit={openEdit}
             onRetire={retireOne}
+            onTogglePin={(item) => void togglePin(item)}
+            truncated={hasMore}
           />
         </div>
       )}

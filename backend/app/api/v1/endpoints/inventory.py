@@ -105,6 +105,7 @@ from app.schemas.inventory import (
     InventoryItemBulkResult,
     InventoryItemCreate,
     InventoryItemCreateIfAbsentResult,
+    InventoryItemPinResponse,
     InventoryItemResponse,
     InventoryItemUpdate,
     InventoryLotBulkCreate,
@@ -132,6 +133,7 @@ from app.schemas.inventory import (
     ItemIssuanceResponse,
     ItemIssuanceReturnRequest,
     ItemRetireRequest,
+    ItemPinReorder,
     ItemsListResponse,
     ItemVariantGroupCreate,
     ItemVariantGroupDetailResponse,
@@ -681,6 +683,9 @@ async def list_items(
         active_only=active_only,
         sort_by=sort_by,
         sort_order=sort_order,
+        # The caller's own shortlist, never a query parameter: pins are
+        # personal, and reading another member's is not a feature.
+        pinned_for_user_id=current_user.id,
         skip=skip,
         limit=limit,
     )
@@ -1555,6 +1560,81 @@ async def import_items_csv(
         "errors": errors[:50],
         "warnings": warnings[:50],
     }
+
+
+# =====================================================================
+# Pinned shortlist
+#
+# Registered ahead of /items/{item_id} so "pins" is matched as a literal
+# segment rather than swallowed as an item id.
+# =====================================================================
+
+
+@router.get("/items/pins", response_model=List[InventoryItemPinResponse])
+async def list_item_pins(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """The calling member's pinned items, front of the list first."""
+    service = InventoryService(db)
+    return await service.list_pins(current_user.organization_id, current_user.id)
+
+
+@router.put("/items/pins/order", response_model=List[InventoryItemPinResponse])
+async def reorder_item_pins(
+    data: ItemPinReorder,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Rewrite the order of the calling member's pinned items."""
+    service = InventoryService(db)
+    try:
+        return await service.reorder_pins(
+            current_user.organization_id, current_user.id, data.ordered_item_ids
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/items/{item_id}/pin",
+    response_model=InventoryItemPinResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def pin_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Add an item to the calling member's shortlist, at the end of it."""
+    service = InventoryService(db)
+    try:
+        return await service.pin_item(
+            current_user.organization_id, current_user.id, item_id
+        )
+    except ValueError as e:
+        # "Item not found" is the cross-tenant case as well as the missing-row
+        # case, and deliberately reads the same either way: a 404 that only
+        # appears for ids in another organization confirms those ids exist.
+        message = str(e)
+        status_code = 404 if message == "Item not found" else 400
+        raise HTTPException(status_code=status_code, detail=safe_error_detail(e))
+
+
+@router.delete("/items/{item_id}/pin", status_code=status.HTTP_200_OK)
+async def unpin_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """Remove an item from the calling member's shortlist."""
+    service = InventoryService(db)
+    removed = await service.unpin_item(
+        current_user.organization_id, current_user.id, item_id
+    )
+    if not removed:
+        raise HTTPException(status_code=404, detail="Item is not pinned")
+    return {"ok": True}
 
 
 @router.get("/items/{item_id}", response_model=InventoryItemResponse)

@@ -4,6 +4,7 @@
 
 import api from './apiClient';
 import type {
+  ItemPin,
   UserCheckoutItem,
   UserInventoryResponse,
   InventoryCategory,
@@ -236,6 +237,33 @@ export const inventoryService = {
 
   async getItem(itemId: string): Promise<InventoryItem> {
     const response = await api.get<InventoryItem>(`/inventory/items/${itemId}`);
+    return response.data;
+  },
+
+  /**
+   * Pin an item to the caller's own shortlist, appended at the end.
+   *
+   * Idempotent server-side — pinning something already pinned returns the
+   * existing entry rather than erroring, so a double-tap is harmless.
+   */
+  async pinItem(itemId: string): Promise<ItemPin> {
+    const response = await api.post<ItemPin>(`/inventory/items/${itemId}/pin`);
+    return response.data;
+  },
+
+  async unpinItem(itemId: string): Promise<void> {
+    await api.delete(`/inventory/items/${itemId}/pin`);
+  },
+
+  /**
+   * Rewrite the shortlist order. Must carry EVERY pinned item id, not just the
+   * ones that moved: the backend rejects a partial list rather than guessing,
+   * because a short list is indistinguishable from a stale tab dropping a pin.
+   */
+  async reorderItemPins(orderedItemIds: string[]): Promise<ItemPin[]> {
+    const response = await api.put<ItemPin[]>('/inventory/items/pins/order', {
+      ordered_item_ids: orderedItemIds,
+    });
     return response.data;
   },
 

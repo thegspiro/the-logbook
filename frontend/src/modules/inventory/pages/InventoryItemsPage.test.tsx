@@ -14,6 +14,9 @@ const mockCheckPermission = vi.fn();
 const mockRetireItem = vi.fn();
 const mockUpdateItem = vi.fn();
 const mockGetItemColors = vi.fn();
+const mockPinItem = vi.fn();
+const mockUnpinItem = vi.fn();
+const mockReorderItemPins = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -25,6 +28,9 @@ vi.mock('../../../services/api', () => ({
     getItemColors: (...a: unknown[]) => mockGetItemColors(...a) as unknown,
     retireItem: (...a: unknown[]) => mockRetireItem(...a) as unknown,
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
+    pinItem: (...a: unknown[]) => mockPinItem(...a) as unknown,
+    unpinItem: (...a: unknown[]) => mockUnpinItem(...a) as unknown,
+    reorderItemPins: (...a: unknown[]) => mockReorderItemPins(...a) as unknown,
     exportItemsCsv: vi.fn(),
   },
   locationsService: {
@@ -559,5 +565,153 @@ describe('InventoryItemsPage — the location panel', () => {
     await waitFor(() => expect(lastItemsCall().location_id).toBe('loc-1'));
     // The size the user picked first is still on the request.
     expect(lastItemsCall().size).toBe('l');
+  });
+});
+
+describe('InventoryItemsPage — pinned shortlist', () => {
+  // Its own defaults rather than the neighbouring block's: vi.clearAllMocks()
+  // resets recorded calls but NOT implementations, so a block that configures
+  // nothing runs on whatever ran before it (CLAUDE.md pitfall #28).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockPinItem.mockReset();
+    mockUnpinItem.mockReset();
+    mockReorderItemPins.mockReset();
+
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ id: 'it-boots', name: 'Duty Boots', pin_position: 1 }),
+        makeItem({ id: 'it-polo', name: 'Class B Polo', pin_position: 0 }),
+        makeItem({ id: 'it-ladder', name: 'Attic Ladder' }),
+        makeItem({ id: 'it-saw', name: 'Rotary Saw', status: 'maintenance' }),
+      ],
+      total: 4,
+    });
+    mockGetSummary.mockResolvedValue({
+      total_items: 4,
+      non_medical_items: 4,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockPinItem.mockResolvedValue({ id: 'pin-1', item_id: 'it-ladder', position: 2 });
+    mockUnpinItem.mockResolvedValue(undefined);
+    mockReorderItemPins.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  /** The data rows of one section's table, header row dropped. */
+  const sectionRows = async (name: string) => {
+    const table = await screen.findByRole('table', { name });
+    return within(table).getAllByRole('row').slice(1);
+  };
+
+  it('renders a Pinned section ordered by pin_position, not by name', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+
+    const rows = await sectionRows('Pinned');
+    // Polo is pin_position 0 and Boots is 1. Alphabetically Boots comes first,
+    // so the pin order is the only thing that can produce this.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Class B Polo');
+    expect(rows[1]).toHaveTextContent('Duty Boots');
+  });
+
+  it('does not repeat a pinned item in the sections below', async () => {
+    // The same id in two tables would render two checkboxes for one row and
+    // desynchronise the bulk-selection Set.
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByRole('heading', { name: /^Pinned$/ });
+
+    const available = await sectionRows('Available');
+    expect(available).toHaveLength(1);
+    expect(available[0]).toHaveTextContent('Attic Ladder');
+    expect(screen.getAllByText('Class B Polo')).toHaveLength(1);
+  });
+
+  it('pins an unpinned item and reloads the list', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /^Pin Attic Ladder$/ }));
+    await waitFor(() => expect(mockPinItem).toHaveBeenCalledWith('it-ladder'));
+  });
+
+  it('unpins a pinned item', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /^Unpin Class B Polo$/ }));
+    await waitFor(() => expect(mockUnpinItem).toHaveBeenCalledWith('it-polo'));
+  });
+
+  it('sends every pinned id when a row is moved, not just the one that moved', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Move Duty Boots up/i }));
+    // A partial list is indistinguishable from a stale tab dropping a pin, so
+    // the backend rejects one — the page must send the whole order.
+    await waitFor(() => expect(mockReorderItemPins).toHaveBeenCalledWith(['it-boots', 'it-polo']));
+  });
+
+  it('disables Move up on the first pinned row and Move down on the last', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+
+    expect(await screen.findByRole('button', { name: /Move Class B Polo up/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Move Duty Boots down/i })).toBeDisabled();
+  });
+
+  it('warns and refetches the real order when the reorder is rejected', async () => {
+    mockReorderItemPins.mockRejectedValue(new Error('stale'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByRole('table', { name: 'Pinned' });
+    const callsBefore = mockGetItems.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: /Move Duty Boots up/i }));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+
+    // Refetched rather than rolled back to the browser's own stale copy: the
+    // rejection this path exists for is "your list no longer matches ours", so
+    // restoring what the browser already had leaves every retry failing.
+    await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(callsBefore));
+    const rows = await sectionRows('Pinned');
+    expect(rows[0]).toHaveTextContent('Class B Polo');
+  });
+
+  it('marks the sorted column with aria-sort', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    const nameHeaders = await screen.findAllByRole('columnheader', { name: /Name/ });
+    // Default sort is name ascending.
+    expect(nameHeaders[0]).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  it('says the count is a running tally when more items match than are loaded', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'it-ladder', name: 'Attic Ladder' })],
+      total: 87,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+
+    // A bare "(1)" would read as "there is one available item" when 87 match.
+    expect(await screen.findByText('(1 so far)')).toBeInTheDocument();
+  });
+
+  it('shows no Pinned section when the member has pinned nothing', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'it-ladder', name: 'Attic Ladder' })],
+      total: 1,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Attic Ladder');
+
+    expect(screen.queryByRole('heading', { name: /^Pinned$/ })).not.toBeInTheDocument();
   });
 });
