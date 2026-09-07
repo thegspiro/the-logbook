@@ -3337,16 +3337,51 @@ FE3-34-2); re-verified still open, unchanged, in
 `docs/security-review/FE4-34-frontend-shared.md` (pass 4).
 
 <!--
-FE3-34-4 and FE3-34-5 (both filed 2026-08-31) are resolved and removed per
-this page's own convention. Both fixes were already present in the commit
-that merged the FE3-34 doc, landed by unrelated feature work that happened
-to close them before the security-review PR calling them open had itself
-merged — see docs/security-review/FE4-34-frontend-shared.md ("Two findings
-resolved out from under the rotation") for the verification detail and the
-guard tests that now cover each. FE3-34-4's fix has its own CHANGELOG entry
+FE3-34-4 (filed 2026-08-31) is resolved and removed per this page's own
+convention. Its fix was already present in the commit that merged the
+FE3-34 doc, landed by unrelated feature work that happened to close it
+before the security-review PR calling it open had itself merged — see
+docs/security-review/FE4-34-frontend-shared.md ("One finding resolved out
+from under the rotation, one reopened on review") for the verification
+detail and the guard test that now covers it. Has its own CHANGELOG entry
 ("A successful edit no longer reads as though it had not happened",
-2026-09-04); FE3-34-5's does not (see FE4-34's Documentation corrections).
+2026-09-04).
 -->
+
+## FE3-34-5 — An Offline Queue Item Can Still Sync Under the Next Member's Identity if the Sign-In Purge Silently Fails (2026-08-31, reopened 2026-09-07)
+
+`claimDeviceForMember()` (`frontend/src/stores/authStore.ts:180-198`) awaits
+`purgeLocalMemberData()` before `isAuthenticated` is ever set on a device
+change, which does close the original timing race: there is no window where
+a new member's live session coexists with the previous member's still-queued
+items _as a race_. But `purgeLocalMemberData()`'s own contract (its
+file-level docstring) is to never throw and always settle, specifically so a
+purge failure can never block sign-in — every IndexedDB `clear()` call in
+`offlineQueue.ts`/`shiftReportOfflineQueue.ts`/`genericOfflineQueue.ts`
+resolves its `onerror` the same as its `onsuccess`, and the outer `bounded()`
+wrapper resolves with a fallback zero if a store takes longer than 3s. When
+IndexedDB is blocked, slow, or otherwise fails, the purge silently no-ops:
+`claimDeviceForMember` still proceeds to record the new member as device
+owner and the caller still authenticates them, while the previous member's
+queue entries can remain with no owner tag distinguishing them from
+anything queued afterward. If IndexedDB recovers later in the same session,
+the offline sync engine drains the queue under the new member's now-live
+cookies with no way to tell the entries apart.
+
+Originally found in `docs/security-review/FE3-34-frontend-shared.md`
+(pass 3), the fix above landed independently and was initially read as a
+full closure. Reopened by Codex review on PR #2379 (`docs/security-review/
+FE4-34-frontend-shared.md`, pass 4) once it identified the purge-failure gap
+the guard tests don't cover (they only assert `purgeLocalMemberData()` was
+called, not that the underlying clears succeeded).
+
+Not fixed because the safe remediation is a product/architecture decision:
+gating authentication on confirmed deletion would reintroduce the exact
+"member stuck signed in on a shared terminal" risk `purgeLocalMemberData()`
+was designed to avoid, so the correct direction is instead tagging each
+queued item with a validated owner checked at sync time — which needs a
+decision on how to treat already-queued, untagged legacy entries, not a
+drive-by patch.
 
 ## MS-7 — A Medical Screening Record Can Be Self-Created and Self-Cleared, With No Reviewer Distinct From the Subject (2026-09-02)
 

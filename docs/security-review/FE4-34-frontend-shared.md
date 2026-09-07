@@ -13,10 +13,14 @@ cache-exposure risk since the pass-3 baseline.
 `backend/app/api/v1/endpoints/auth.py`'s logout endpoint for FE3-34-2.
 **Migrations:** none.
 
-**0 new findings. 2 prior HIGH findings (FE3-34-4, FE3-34-5) confirmed fixed
-by intervening commits not authored by this rotation. 1 prior HIGH finding
-(FE3-34-2) re-verified still open — unchanged, still needs a product
-decision. All 9 FE2-34 findings and FE3-34-1/FE3-34-3 re-confirmed intact.**
+**0 new findings from the original pass. 1 prior HIGH finding (FE3-34-4)
+confirmed fixed by an intervening commit not authored by this rotation.
+1 prior HIGH finding (FE3-34-5) initially marked fixed by this pass, then
+reopened after Codex review on this PR found the fix covers the timing race
+but not the purge-failure case (see below) — disposition corrected to OPEN.
+1 prior HIGH finding (FE3-34-2) re-verified still open — unchanged, still
+needs a product decision. All 9 FE2-34 findings and FE3-34-1/FE3-34-3
+re-confirmed intact.**
 
 ---
 
@@ -172,17 +176,23 @@ code or the tradeoff has changed since. Re-confirmed, not re-derived: kept
 in `KNOWN_LIMITATIONS.md` (line numbers refreshed there in this pass, see
 Documentation corrections below).
 
-## Two findings resolved out from under the rotation
+## One finding resolved out from under the rotation, one reopened on review
 
-Both `FE3-34-4` and `FE3-34-5` are **fixed in current code**, each by a
-commit authored outside this security-review rotation (regular feature work
-that happened to close a flagged security gap) between the FE3-34 pass being
-written and its PR actually merging. Both fixes were **already present** in
-`b10ecfe3` — the very commit that landed the FE3-34 doc calling them open —
-so the doc was stale from the moment it merged, not from later drift. This
-class of race (two branches landing concurrently, one unaware of the other)
-is the same pattern `PROGRESS.md` documents elsewhere in this rotation for
-Alembic merge conflicts; here it produced a stale-on-arrival finding instead.
+`FE3-34-4` is **fixed in current code** by a commit authored outside this
+security-review rotation (regular feature work that happened to close a
+flagged security gap) between the FE3-34 pass being written and its PR
+actually merging. The fix was **already present** in `b10ecfe3` — the very
+commit that landed the FE3-34 doc calling it open — so the doc was stale
+from the moment it merged, not from later drift. This class of race (two
+branches landing concurrently, one unaware of the other) is the same
+pattern `PROGRESS.md` documents elsewhere in this rotation for Alembic merge
+conflicts; here it produced a stale-on-arrival finding instead.
+
+`FE3-34-5` looked like the same story initially — its cited fix
+(`claimDeviceForMember`) was also already present in `b10ecfe3` — but Codex's
+review of this PR found the fix only closes the timing race the original
+finding described, not the purge-failure path. See its full writeup below;
+it is reopened, not resolved.
 
 ### FE3-34-4 (HIGH) — a stale in-flight cacheable GET could write into the shared cache after a session-boundary `clearCache()` — ✅ CONFIRMED FIXED
 
@@ -212,7 +222,7 @@ FE3-34-4 scenario (a request in flight across a `clearCache()`/
 removed per its own stated convention ("When one is resolved... remove it
 here") — this doc is now the record of the fix.
 
-### FE3-34-5 (HIGH) — an offline queue item could sync under the next member's identity on a shared device — ✅ CONFIRMED FIXED
+### FE3-34-5 (HIGH) — an offline queue item could sync under the next member's identity on a shared device — ⚠️ PARTIALLY FIXED, REOPENED
 
 **Original defect:** none of the three offline queues
 (`genericOfflineQueue.ts`, `offlineQueue.ts`, `shiftReportOfflineQueue.ts`)
@@ -244,9 +254,44 @@ never-before-claimed device (the one-time upgrade cost); purges on an OAuth
 sign-in to an unclaimed device (the case a plain sign-in flag can't see,
 since the provider redirect reloads the module); leaves a live session's own
 data alone across a plain reload; purges on a reload when the recorded owner
-is a different member. All six pass against current code.
-**Disposition:** no longer open. `KNOWN_LIMITATIONS.md`'s FE3-34-5 entry
-removed per the same convention as FE3-34-4.
+is a different member. All six pass against current code — but every case
+only asserts that `purgeLocalMemberData()` was _called_, never that its
+underlying IndexedDB clears actually succeeded.
+
+**Reopened by Codex review on this PR** (`#2379`, comment on this file at the
+original `:239` line): the ordering fix above is real and does close the
+timing race this finding originally described — `claimDeviceForMember`
+`await`s the purge before `isAuthenticated` is ever set, so there is no
+window where B's live session coexists with A's still-queued items _as a
+race_. But `purgeLocalMemberData()`'s own contract (see its file-level
+docstring) is to **never throw and always settle**, precisely so a purge
+failure can never block sign-in — `clearAllQueuedChecks`/
+`clearAllQueuedReports`/`clearAllGenericQueued` each resolve their `clear()`
+request's `onerror` the same as `onsuccess` (never let a purge failure block
+logout"), and `purgeLocalMemberData`'s own `bounded()` wrapper resolves with
+a fallback zero if any store takes longer than 3s. So when IndexedDB is
+blocked, slow, or otherwise fails, the purge silently no-ops: it still
+resolves (satisfying the `await`), `claimDeviceForMember` still proceeds to
+record B as the device owner and the caller still authenticates B — while
+A's queue entries can remain in IndexedDB with no owner tag distinguishing
+them from anything B queues afterward. If IndexedDB recovers later in the
+same session, `useOfflineSyncEngine` drains the queue under B's now-live
+cookies with no way to tell A's stale entries apart from B's own.
+**Verified as a real, reachable gap, not merely theoretical:** none of the
+three queue stores tag an entry with the member who queued it, and none of
+`purgeLocalMemberData`'s call sites check its `PurgeResult` for a failure
+signal (the type doesn't even carry one) before proceeding — the design (per
+its own docstring) treats "purge attempted" and "purge succeeded" as
+interchangeable for the caller's purposes, which is correct for logout
+(never stranding a member signed in matters more than a delayed purge) but
+is exactly backwards for the sign-in side: gating _authentication_ on
+confirmed deletion, or tagging queue entries with a validated owner checked
+at sync time, would close this without reintroducing the logout-side risk.
+**Disposition: OPEN**, not fixed. Restored to `KNOWN_LIMITATIONS.md`. This is
+a product/architecture decision (which of the two remediations above, and
+how to treat already-queued untagged legacy entries), not a same-PR patch —
+correctly flagged rather than guessed at, matching this doc's own standard
+for FE3-34-2.
 
 ## Verified good ✅
 
@@ -293,25 +338,30 @@ of every prior open item.
 
 - **FE3-34-2** (HIGH) — remains open, needs a product decision (see above).
   Carried forward unchanged in `KNOWN_LIMITATIONS.md`.
+- **FE3-34-5** (HIGH) — reopened by Codex review on this PR (see full
+  writeup above); the timing-race fix is real but doesn't cover the
+  purge-failure path, and closing that gap properly needs an
+  owner-tagged-queue-entry design, not a drive-by patch. Restored to
+  `KNOWN_LIMITATIONS.md`.
 
 ## Documentation corrections
 
-- **`docs/KNOWN_LIMITATIONS.md`**: removed the `FE3-34-4` and `FE3-34-5`
-  entries (both confirmed fixed above) per the page's own stated convention
-  ("When one is resolved, move it to the relevant module doc / CHANGELOG and
-  remove it here" — the fix commits already carry their own CHANGELOG
-  entries, see below, so nothing further to add there). Refreshed the
-  `FE3-34-2` entry's backend line-number citation
-  (`auth.py:1197-1235` → `:1334-1372`) to match the endpoint's current
-  location; the described behavior is unchanged.
-- **CHANGELOG.md**: no new entry needed for FE3-34-4/FE3-34-5 — both fixes
-  already shipped with their own entries when they landed ("A successful
-  edit no longer reads as though it had not happened", 2026-09-04, covers
-  FE3-34-4's cache-generation fix). The FE3-34-5 fix (commit `fd2d5dbb`,
-  2026-09-01) does not have a matching CHANGELOG entry from its original
-  commit; not added retroactively here since this pass did not make that
-  change and the commit message already documents the reasoning in full —
-  flagged to the user in the final report rather than guessed at.
+- **`docs/KNOWN_LIMITATIONS.md`**: removed the `FE3-34-4` entry (confirmed
+  fixed above) per the page's own stated convention ("When one is resolved,
+  move it to the relevant module doc / CHANGELOG and remove it here" — the
+  fix commit already carries its own CHANGELOG entry, see below, so nothing
+  further to add there). The `FE3-34-5` entry was removed and then
+  **restored** within this same PR after Codex review reopened it (see
+  above) — its description updated to state the remaining gap precisely
+  (purge-failure path, not the timing race). Refreshed the `FE3-34-2`
+  entry's backend line-number citation (`auth.py:1197-1235` → `:1334-1372`)
+  to match the endpoint's current location; the described behavior is
+  unchanged.
+- **CHANGELOG.md**: no new entry needed for FE3-34-4 — it already shipped
+  with its own entry when it landed ("A successful edit no longer reads as
+  though it had not happened", 2026-09-04). FE3-34-5 has no CHANGELOG entry
+  because it is not actually resolved (see reopening above); nothing to add
+  there until a real fix lands.
 - **`docs/module-audit/frontend-shared.md`**, **`docs/app-review/
 frontend-shared.md`**: both re-read in full this pass. Nothing in either
   contradicts current code; no correction needed (the one prior correction,
