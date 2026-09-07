@@ -79,6 +79,21 @@ def test_members_inventory_roster_requires_quartermaster():
     assert "inventory.view" not in permissions
 
 
+def test_item_colors_requires_inventory_view():
+    """The colour filter's option list is catalog data, not open to anyone signed in.
+
+    ``list_item_colors`` was gated on ``get_current_user`` — bare
+    authentication — unlike every other read on this router. A custom
+    position without ``inventory.view`` could still call this one route and
+    read every colour the org's catalog carries. Regression guard for
+    FE5-34-1: fails if this route's dependency is ever loosened back to bare
+    authentication.
+    """
+    permissions = _permission_set("/items/colors", "GET")
+
+    assert permissions == {"inventory.view"}
+
+
 def _item(assigned_to: str | None) -> InventoryItemResponse:
     return InventoryItemResponse.model_construct(
         assigned_to_user_id=assigned_to,

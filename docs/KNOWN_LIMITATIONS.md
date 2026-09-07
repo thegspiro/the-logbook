@@ -3383,6 +3383,31 @@ queued item with a validated owner checked at sync time — which needs a
 decision on how to treat already-queued, untagged legacy entries, not a
 drive-by patch.
 
+## FE5-34-1 — The Inventory Item Catalog Serves Its Unconstrained `color` Field From a Client-Side Cache (2026-09-07)
+
+`InventoryItem.color` (`backend/app/schemas/inventory.py`) is `Optional[str]`,
+capped at 50 characters, with no fixed vocabulary — deliberate, per its own
+module docstring, since a department stocks whatever colour its supplier
+sells. `GET /inventory/items/colors` (the distinct-values endpoint used to
+populate the list screen's filter) was excluded from the frontend's
+stale-while-revalidate cache in `docs/security-review/FE5-34-frontend-shared.md`
+(`frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES`), and its
+permission dependency was tightened from `get_current_user` to
+`require_permission("inventory.view")` to match every sibling read on the
+router.
+
+Neither change touches `GET /inventory/items` itself (the list/detail catalog
+endpoints), which also serialize `color` per item and remain cacheable by
+design — that is the catalog every `inventory.view` holder is already
+authorized to read in full. Excluding it from caching entirely, to guard
+against an org typing sensitive free text into a field meant for colour
+names, is a broader trade (losing the stale-while-revalidate optimization on
+the catalog's primary screens for every organization) that needs a product
+decision — constrain/validate `color` at write time instead, or accept that
+it carries the same up-to-90-seconds staleness the rest of the catalog's
+already-cacheable fields do. Not fixed; correctly flagged rather than
+patched, per Codex review on PR #2382.
+
 ## MS-7 — A Medical Screening Record Can Be Self-Created and Self-Cleared, With No Reviewer Distinct From the Subject (2026-09-02)
 
 `medical_screening_service.py`'s `create_record`/`update_record` place no

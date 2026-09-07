@@ -741,7 +741,7 @@ async def list_items(
 @router.get("/items/colors", response_model=List[str])
 async def list_item_colors(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("inventory.view")),
 ) -> List[str]:
     """Every colour this organization stocks, for the list screen's filter.
 
@@ -752,9 +752,12 @@ async def list_item_colors(
     and there was no way to switch colours without clearing the filter first.
 
     Colour is free text by design (a department stocks what its supplier sells),
-    so unlike sizes and styles it has no constant to render from.
+    so unlike sizes and styles it has no constant to render from. Gated on
+    ``inventory.view`` like every other catalog read on this router — it was
+    previously ``get_current_user``, which let an authenticated member without
+    that permission read the values `GET /items` itself would deny them.
 
-    **Authentication required**
+    **Requires permission: inventory.view**
     """
     service = InventoryService(db)
     return await service.get_item_colors(current_user.organization_id)
