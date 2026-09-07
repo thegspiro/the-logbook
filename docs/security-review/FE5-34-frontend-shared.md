@@ -1,6 +1,6 @@
 # Security Review — Feature 34: Frontend Shared (pass 5, corrective)
 
-**Prefix:** `FE5` · **Iteration:** 34 · **Reviewed:** 2026-09-07 · **PR:** (opening)
+**Prefix:** `FE5` · **Iteration:** 34 · **Reviewed:** 2026-09-07 · **PR:** [#2382](https://github.com/thegspiro/the-logbook/pull/2382)
 
 **Frontend:** `utils/apiCache.ts`, `services/apiClient.ts`, `utils/createApiClient.ts`,
 `utils/errorHandling.ts`, `services/errorTracking.ts`, `services/api.ts` (global),
@@ -73,9 +73,11 @@ Codex's citations on faith. All three are real.
 1. **Established the correct baseline**: `796059dc`. Confirmed via
    `git log --oneline` that it is PR #2120's merge (the pass-3 closure), and
    that `b10ecfe3` is PR #2244's merge — unrelated, later.
-2. **Re-ran the file-owned diff** (`git diff --stat 796059dc..HEAD`) across
-   every file this feature owns, including the two FE4 omitted from its own
-   file list (`equipmentCheckApi.ts`, and the global `services/api.ts`
+2. **Re-ran the file-owned diff** (`git diff --stat 796059dc..f361ebe7` — this
+   branch's point of divergence from `main`, not the moving `HEAD`, so the
+   numbers below stay reproducible after this pass's own fix commit lands)
+   across every file this feature owns, including the two FE4 omitted from
+   its own file list (`equipmentCheckApi.ts`, and the global `services/api.ts`
    re-export barrel). Eight files differ, not three:
    `utils/apiCache.ts` (+85), `services/apiClient.ts` (+57),
    `stores/authStore.ts` (+106), `modules/scheduling/services/api.ts` (+136),
@@ -305,6 +307,40 @@ against the pre-fix `apiCache.ts` (`expected true to be false`) and passing
 after.
 **Disposition:** FIXED.
 
+### Codex follow-up on this PR: `list_item_colors` was gated on `get_current_user`, not `inventory.view`
+
+Codex's own review of this PR (`discussion_r3951737929`) correctly pointed out
+the cache exclusion above closes only the caching half of the exposure. Two
+more things were true of `GET /inventory/items/colors` at the time of that
+review:
+
+1. `list_item_colors` (`backend/app/api/v1/endpoints/inventory.py:744`, prior
+   to this fix) depended on `get_current_user` rather than
+   `require_permission("inventory.view")`, unlike every other read on this
+   router. `inventory.view` is baseline on the Member position, so in
+   practice this made almost no difference — but a custom position that
+   omits it (the same scenario every other `inventory.view` gate on this
+   router exists to cover) could still call this one endpoint and read every
+   colour in the org's catalog, the one inconsistency with the rest of the
+   router. **Fixed**: changed the dependency to
+   `require_permission("inventory.view")`, matching the sibling
+   `GET /items` route it exists to support. No test referenced this route by
+   name (`grep -rn "/items/colors" backend/` — only the route definition
+   itself), so nothing needed updating for the narrower population.
+2. Codex's broader ask — that `GET /inventory/items` list/detail responses
+   also serialize `color` and remain cacheable — is **not fixed here**, and
+   is being flagged rather than patched. `/inventory/items` is the item
+   catalog every `inventory.view` holder is already authorized to read in
+   full, including `color`; excluding it from caching is a different,
+   broader trade — it would remove the stale-while-revalidate optimization
+   from the catalog's primary list/detail screens for every organization, to
+   guard against an org choosing to type sensitive text into a field whose
+   whole purpose is free-text supplier colour names. That is a product
+   judgment (validate/constrain `color` at write time, or accept the
+   analogous 90s-stale exposure the rest of the already-cacheable catalog
+   already carries for every other field), not a drive-by cache-prefix
+   change, and is recorded in `docs/KNOWN_LIMITATIONS.md`.
+
 ## Re-verification of PROGRESS.md's own claims
 
 `PROGRESS.md`'s Open PR section and its 2026-09-07 Log entry for pass 4 both
@@ -403,10 +439,13 @@ modified by this PR.
 
 ## Commit range diffed
 
-`796059dc..HEAD` (as of this PR's branch point) for every file this feature
-owns, plus a full-frontend sweep over the same range for new `api.get(`/
-`api.get<` call sites. Explicitly **not** `b10ecfe3..HEAD` — that is the
-citation this pass corrects.
+`796059dc..f361ebe7` — `f361ebe7` is this branch's point of divergence from
+`main` (immutable, unlike `HEAD`, which moves with every follow-up commit on
+this PR) — for every file this feature owns, plus a full-frontend sweep over
+the same range for new `api.get(`/`api.get<` call sites. Explicitly **not**
+`b10ecfe3..HEAD` — that is the citation this pass corrects. The
+`UNCACHEABLE_PREFIXES` fix in commit `9c3ff748` is this pass's own change, on
+top of that reviewed range, not part of it.
 
 ## Next
 

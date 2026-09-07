@@ -16,6 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 34 (Frontend shared, pass 5, corrective)** — PR
+[#2382](https://github.com/thegspiro/the-logbook/pull/2382), branch
+`claude/fe34-pass5-baseline-fix`. Corrects three `chatgpt-codex-connector[bot]`
+findings that PR #2379 (pass 4) merged unaddressed: a wrong baseline commit
+citation (`b10ecfe3` instead of the real `796059dc`, which left ~400 lines
+across 8 files unreviewed by any pass — now read in full, no new gap found),
+`GET /inventory/items/colors` wrongly cleared as carrying no free-text data
+and left cacheable (fixed — added to `UNCACHEABLE_PREFIXES`), and this
+tracker's own stale FE3-34-5 disposition (already corrected above). Feature
+34 stays ✅ at pass 4's rotation position — this PR repairs pass 4's record,
+it does not open a new pass. See
+`docs/security-review/FE5-34-frontend-shared.md` for the full corrective
+review.
+
+<details>
+<summary>Superseded — PR #2379 (pass 4), preserved for history</summary>
+
 **Feature 34 (Frontend shared, pass 4)** — PR
 [#2379](https://github.com/thegspiro/the-logbook/pull/2379) merged. 0 new
 findings from the original pass; FE3-34-4 (HIGH) confirmed already fixed by an
@@ -28,9 +45,10 @@ product decision. Rotation wraps to 00 (cross-cutting baseline) for the next
 full pass.
 
 Three Codex findings on this PR went unaddressed at merge (wrong baseline
-citation, a caching gap, and this tracker's own stale FE3-34-5 disposition —
-now corrected above); see `docs/security-review/FE5-34-frontend-shared.md`
-for the corrective follow-up.
+citation, a caching gap, and this tracker's own stale FE3-34-5 disposition) —
+corrected by follow-up PR #2382 above.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note, preserved for history</summary>

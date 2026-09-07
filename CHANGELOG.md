@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that column is exactly what this globally-shared response echoes back for
   up to 90 seconds. Added to the client's cache-exclusion list alongside the
   other free-text fields already excluded there.
+- The same endpoint required only being signed in, not `inventory.view` like
+  every other read on the inventory router — a custom position without that
+  permission could still read every colour in the org's catalog through this
+  one route. Now gated on `inventory.view` to match its siblings.
 
 ### Grouping the items list by size no longer 500s the endpoint (2026-09-07)
 
