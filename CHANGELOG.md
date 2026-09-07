@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Members settings moved to Members Administration (2026-09-06)
+
+**Changed**
+
+- **Contact Visibility and Membership IDs now live at
+  `/members/admin/settings`.** They sat in the global settings page beside Email,
+  Storage and Authentication — platform choices an administrator makes once.
+  These are neither: they are decisions about the roster, made by whoever runs
+  the roster, and everything else that person does is under Members
+  Administration. `/settings?tab=members` redirects, carrying the sub-page across,
+  so existing links and bookmarks still land on the section they named.
+- **Each section states the permission its endpoint actually enforces.** Every
+  route under `/members/admin` stands on `members.manage`, and neither of these
+  saves through an endpoint that accepts it — contact visibility wants
+  `settings.manage`, `settings.manage_contact_visibility` or
+  `organization.update_settings`; membership IDs want `settings.edit` or
+  `organization.update_settings`. The screen lists only the sections an officer's
+  grants admit and says so when it can offer none, rather than presenting toggles
+  the server refuses. No permission was changed: this reports the gate that was
+  already there.
+- **A failed settings load says so.** Both sections render every toggle `false`
+  before their data arrives, which reads as a department that has turned the
+  feature off. They now report the failure and offer a retry instead.
 ### The set of paths that can create an account is now pinned (2026-09-06)
 
 **Added**

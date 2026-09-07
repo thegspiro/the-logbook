@@ -16,13 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 29 (Reports & analytics), pass 4 (round 2 / pass 5)** — branch
-`claude/security-review-reports-analytics-pass4`,
-[PR #2344](https://github.com/thegspiro/the-logbook/pull/2344). Extended with
-a second round rather than opened as a new PR — see the pass-5 log entry
-below. `subscribe_pr_activity` returned "could not subscribe" both times it
-was tried this round (possibly another watcher already on the PR); awaiting
-CI/review either way.
+**None.** Feature 30 (Onboarding)'s PR #2358 merged (`f0bda691`) — fully
+green (17/17) and idle, merged directly by a 30-minute watchdog check per
+the established precedent (PR #2301, #2303, #2306). Rotation row 30 -> ✅.
+Next: 31 Scheduled tasks.
+
+---
+
+### 2026-09-07 — Feature 30 (Onboarding) — PR #2358 merged, watchdog recorded it
+
+PR #2358 (pass 3: ONB3-30-1 fixed, all prior open items re-confirmed
+unchanged) went fully green (17/17) and sat idle with no unresolved review
+threads (only the informational Codex usage-limit comment), so a
+30-minute watchdog check merged it directly rather than leaving it idle.
+Next: 31 Scheduled tasks.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics) — PR #2344 merged, watchdog recorded it
+
+PR #2344 (pass 4/5) merged at 21:58:57Z (`main` is its merge commit
+`cf18d329`). No iteration had recorded the merge or cleared this row since;
+a 30-minute watchdog check found it and did so now rather than leaving the
+rotation idle. Next: 30 Onboarding.
 
 ---
 
@@ -9929,8 +9945,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -9941,6 +9957,75 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-07 — Feature 30 (Onboarding, pass 3)
+
+Delta-focused re-verification pass, per the established pass-3+ convention
+(Features 25-29). Pass 2's baseline is commit `e6a1eb45` (PR #2093,
+2026-08-31). `git diff --stat` scoped to this feature's files confirmed
+`services/onboarding.py`, `models/onboarding.py`, `utils/onboarding_
+security.py`, `template_service.py`, `org_template_service.py`, and
+`org_template_registry.py` are byte-identical to what pass 2 reviewed — every
+finding scoped to those files carries pass 2's verification forward, not
+merely assumed stable. `onboarding.py` itself grew 363 lines (email
+save/complete validation helpers, and a `save_session_roles` permission-merge
+rework); `email_test_helper.py` was rewritten (Microsoft 365 OAuth support,
+via two new util modules, `microsoft_oauth.py`/`email_providers.py`, neither
+reviewed under any prior onboarding pass). Re-enumerated all 24 routes
+directly against current code rather than carrying forward pass 2's table
+unchecked — unchanged, 24/24 accounted for.
+
+**1 fix, LOW severity:** **ONB3-30-1** — `RoleSetupItem.permissions` (a
+client-controlled `dict[str, RolePermission]` reached via `/session/roles`
+and `/session/positions`) had no size cap, unlike every sibling collection in
+the same schema module (`it_team` at 50 — ONB2-30-1; the outer `roles`/
+`positions` lists at 200 — ONB2-30-2). Capped at `max_length=50` (34 real
+modules exist today), with a guard test verified to fail without the cap and
+pass with it.
+
+**No new flagged findings.** Hand-traced the new `_merge_default_permissions`/
+`_untouched_modules` rework in `save_session_roles` (fixes a real correctness
+bug — a registry-seeded position with no pre-existing DB row, e.g. `emt`
+before its registry entry shipped, previously stored a role-type heuristic's
+raw checkbox output as an `is_system` row instead of the seed's full grant
+list) and confirmed it does not touch the boundary ONB-7 already flags — an
+arbitrary client-supplied `module_id` key still passes straight through
+`expand_module_checkboxes` with no allowlist. Verified the new Microsoft 365
+OAuth module validates `tenant_id`/`client_id` as a GUID or verified domain
+before interpolating into the authority URL (no SSRF/host-redirection
+surface), and that no secret is ever echoed back across the rewritten
+`email_test_helper.py`. Re-confirmed unchanged, no regressions: ONB-7,
+ONB-30-3 (self-hosted SMTP has no SSRF protection — the rewrite's core shape
+is unchanged), ONB2-30-8 (sliding session TTL), the reset-audit transaction
+boundary, role/position dedup, `/organization`'s missing `except Exception`,
+and `ITTeamMemberRequest`'s loose `email: str`. `KNOWN_LIMITATIONS.md`
+entries for all of these already existed from prior passes and needed no
+change.
+
+Frontend: `RoleSetup.tsx`/`positionTemplates.ts`/`seededPositionGrants.ts`
+(1,853 L combined, substantially rewritten since pass 2) were sampled for the
+risk classes that apply to onboarding's frontend (secrets in browser storage,
+`dangerouslySetInnerHTML`, blocking dialogs, hardcoded credentials) rather
+than read line-by-line — none found; `utils/storage.ts` still never persists
+the credential-bearing email config object, re-confirmed against the updated
+field set. Stated as a scope limit rather than a clean bill: a defect
+confined to the per-agency-type template tables with no server-side echo
+would not have been caught by this pass. `app/core/permissions.py`'s
+`equipment_check.*` → `inventory.check_*` rename (222 lines, a different
+feature's scope) was checked only for interaction with onboarding's seeded-
+role logic — clean, backward-compatible via `LEGACY_PERMISSION_ALIASES`, with
+its own migration and guard test.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (9.0.1,
+CI-pinned) clean across `app/ tests/ alembic/`; `validate_migrations.py
+--strict` — 432 revisions, single head; `pytest -k "onboard or org_template
+or template_service"` — 183 passed, 1 skipped; full backend suite — 11639
+passed, 21 skipped, 0 failures; frontend `typecheck` — 0 errors; `eslint` —
+0 errors, 2 pre-existing warnings in an unrelated file (`scheduling/
+components/CallTypeChips.tsx`, not touched this pass). Full writeup:
+`docs/security-review/ONB3-30-onboarding.md`.
+
+---
 
 - **(init, 2026-08-25)** Rotation created at the owner's request: a 30-minute
   loop running an application-wide, feature-by-feature security review with a

@@ -149,14 +149,15 @@ const ALL_ROUTES: RouteCheck[] = [
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
   //
-  // The remaining five are not listed, and each has a reason:
-  // /scheduling/admin/settings/*,
+  // The remaining six are not listed, and each has a reason:
+  // /scheduling/admin/settings/*, /members/admin/settings/*,
   // /elections/settings and /communications/email-templates carry non-shell debt
-  // of their own (17, 2 and 4 controls under 44px — mostly `toggle-track`, which
-  // is 44x24 at every one of its call sites app-wide), and the events and
+  // of their own (17, 1, 2 and 4 controls under 44px — mostly `toggle-track`,
+  // which is 44x24 at every one of its call sites app-wide), and the events and
   // department-setup panels render inside a hub route rather than at a path of
   // their own. Adding any of them means fixing that debt first, not raising a
-  // budget.
+  // budget. /members/admin/settings/visibility is the cheapest of them: one
+  // control, and the only thing between it and a budget of 0.
   { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
 ];

@@ -38,7 +38,13 @@ describe('SettingsPage autosave reporting', () => {
   // write that is not going to happen to the SMTP field being typed into.
   it('names the autosaved sections and shows the pill only on those', () => {
     const declared = source.slice(source.indexOf('const AUTOSAVED_SECTIONS'), source.indexOf('const DEFAULT_SUB_PAGE'));
-    for (const section of ['general', 'modules', 'members', 'ranks']) {
+    // `members` was on this list until 2026-09-06, when Contact Visibility and
+    // Membership IDs moved to /members/admin/settings. It is asserted absent
+    // rather than merely dropped from the loop: a key left here for a section
+    // that no longer exists is invisible — the `has()` simply never matches —
+    // and this is the assertion that would notice it coming back by accident.
+    expect(declared).not.toContain("'members'");
+    for (const section of ['general', 'modules', 'ranks']) {
       expect(declared).toContain(`'${section}'`);
     }
     for (const explicit of ['email', 'storage', 'labelPrinters', 'authentication']) {
