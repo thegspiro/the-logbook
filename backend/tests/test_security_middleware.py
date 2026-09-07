@@ -1391,6 +1391,112 @@ class TestRateLimiter:
         # live entry survives and no now-pointless capacity fight happened.
         assert set(limiter._saturation_reject_until.keys()) == {"long_lived"}
 
+    @pytest.mark.unit
+    def test_saturated_lockout_table_does_not_force_a_full_sweep_on_every_retry(
+        self,
+    ):
+        """Codex review of PR #2370: with the default config
+        (_MAX_KEYS == _MAX_LOCKOUTS), a fully-saturated lockout table left
+        no room for even one unlocked key without pushing len(self._keys)
+        over the old flat _MAX_KEYS threshold. The only evictable record
+        was ever the retrying attacker's own newly-recorded unlocked one,
+        so it was deleted and immediately rewritten by the very call that
+        triggered the sweep — forcing a real O(N log N) sweep+sort on
+        *every single retry*, forever, not just the first. Detected via
+        self._last_eviction actually advancing on every call (real sweep
+        ran) vs. only on the throttle's own schedule (it did not). Verified
+        to fail against the pre-fix code: with N=100 active lockouts at
+        capacity, all 50 retries of one already-over-limit key forced a
+        real sweep."""
+        limiter = RateLimiter()
+        n = 100
+        limiter._MAX_KEYS = n
+        limiter._MAX_LOCKOUTS = n
+        limiter._EVICTION_INTERVAL = 60
+
+        now = 1_000_000.0
+        for i in range(n):
+            limiter._keys[f"login:{i}"] = _KeyState(
+                window_seconds=60, lockout_until=now + 3600
+            )
+        limiter._active_lockout_count = n
+        limiter._last_eviction = now
+        limiter._last_lockout_verify = now
+
+        limiter._keys["login:attacker"] = _KeyState(
+            request_times=[now - 1], window_seconds=60
+        )
+
+        real_sweeps = 0
+        t = now
+        for _ in range(50):
+            # Advance real (mocked) time by less than _EVICTION_INTERVAL on
+            # each retry, so self._last_eviction only changes when a sweep
+            # is *forced* early, not on its own 60s schedule — a real sweep
+            # is otherwise indistinguishable from a no-op skip when time is
+            # held perfectly still.
+            t += 0.01
+            with patch("time.time", return_value=t):
+                before = limiter._last_eviction
+                limiter.is_rate_limited(
+                    "login:attacker",
+                    max_requests=1,
+                    window_seconds=60,
+                    lockout_seconds=1800,
+                )
+                if limiter._last_eviction != before:
+                    real_sweeps += 1
+
+        assert real_sweeps == 0
+        # None of the 100 genuinely active lockouts were ever at risk —
+        # they were never in the evictable pool to begin with.
+        assert all(f"login:{i}" in limiter._keys for i in range(n))
+
+    @pytest.mark.unit
+    def test_alternating_keys_cannot_evict_each_others_history_under_lockout_saturation(
+        self,
+    ):
+        """Codex review of PR #2370: the same flat _MAX_KEYS threshold that
+        caused CI3-33-2g's CPU amplification was also a rate-limit bypass —
+        once active lockouts alone reached _MAX_KEYS, the by-recency
+        eviction pool contained only ever-freshly-recorded unlocked keys,
+        so an attacker alternating between two keys had each request evict
+        the *other* key's one-entry history before either could accumulate
+        enough to trip its own lockout. Verified to fail against the
+        pre-fix code: 40 alternating requests (20 per key, max_requests=5)
+        produced 0 lockouts and both keys' histories were repeatedly wiped
+        rather than accumulating."""
+        limiter = RateLimiter()
+        n = 100
+        limiter._MAX_KEYS = n
+        limiter._MAX_LOCKOUTS = n
+        limiter._EVICTION_INTERVAL = 60
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            for i in range(n):
+                limiter._keys[f"login:{i}"] = _KeyState(
+                    window_seconds=60, lockout_until=now + 3600
+                )
+            limiter._active_lockout_count = n
+            limiter._last_eviction = now
+            limiter._last_lockout_verify = now
+
+            limited_count = 0
+            for i in range(40):
+                key = "scopeA:9.9.9.9" if i % 2 == 0 else "scopeB:9.9.9.9"
+                is_limited, _ = limiter.is_rate_limited(
+                    key, max_requests=5, window_seconds=60, lockout_seconds=1800
+                )
+                if is_limited:
+                    limited_count += 1
+
+        # Each key must actually accumulate its own history and trip its
+        # own limit repeatedly — not be wiped by the other key's requests.
+        assert limited_count > 0
+        assert limiter._keys["scopeA:9.9.9.9"].request_times
+        assert limiter._keys["scopeB:9.9.9.9"].request_times
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded

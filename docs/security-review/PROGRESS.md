@@ -55,11 +55,56 @@ inline, trimmed to rationale-only) and 2 verified moot against the refactor
 with standalone repros (a zero-`lockout_seconds` retry variant of CI3-33-2d,
 a stale-capacity variant of CI3-33-2b — both already closed by the
 refactor's throttled-verification design). 2 more tests added (37 total).
+Round 5 (same review pass, 2 more threads shortly after): CI3-33-2g/2h —
+`_MAX_KEYS` compared the combined locked-out+unlocked key count against a
+flat cap, and the default config sets `_MAX_KEYS == _MAX_LOCKOUTS`, so a
+saturated table forced a real sweep+sort on every retry (2g) and let two
+alternating keys evict each other's history, bypassing the limiter
+entirely (2h). Fixed by budgeting `_MAX_KEYS` against unlocked keys only
+(`_MAX_KEYS + self._active_lockout_count`). 2 more tests added (39 total).
 Rotation row 33 -> ✅ (#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
 
 ---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 5: the same review pass found _MAX_KEYS conflated locked-out and unlocked key counts — a CPU-amplification finding and a rate-limit bypass, same fix
+
+The same Codex review pass that produced round 4's 4 threads left 3 more
+shortly after. One (a `_KeyState` docstring restating review chronology)
+was a duplicate of CI3-33-2f, already fixed. The other two were real,
+distinct P1 findings against the structural refactor's `_MAX_KEYS`
+enforcement:
+
+- **CI3-33-2g:** `_sweep` compared the _combined_ locked-out + unlocked key
+  count against the flat `_MAX_KEYS` cap. The default config sets
+  `_MAX_KEYS == _MAX_LOCKOUTS`, so once active lockouts alone reached
+  capacity, the only evictable record was ever the triggering call's own
+  newly-recorded unlocked one — evicted and immediately rewritten by that
+  same call, forcing a real `O(N log N)` sweep+sort on _every_ retry from
+  one attacker, forever. Reproduced: 100 active lockouts, 50 retries of one
+  key, all 50 forced a real sweep (detected via `self._last_eviction`
+  actually advancing, with mocked time incremented slightly per retry).
+- **CI3-33-2h:** the same root cause, but a functional bypass rather than a
+  cost: an attacker alternating between two keys had each request evict the
+  _other_ key's one-entry history before either could accumulate past one
+  entry, so neither ever tripped its own lockout no matter how many
+  requests were sent. Reproduced: 40 alternating requests
+  (`max_requests=5`), 0 lockouts.
+
+Fixed by budgeting `_MAX_KEYS` against _unlocked_ keys specifically:
+threshold is `_MAX_KEYS + self._active_lockout_count` (the live count, not
+the static `_MAX_LOCKOUTS` cap) rather than a flat `_MAX_KEYS` against the
+combined total. A genuinely active lockout was never evictable to begin
+with, so excluding it from the budget costs nothing; an unlocked key only
+faces eviction pressure once unlocked keys themselves actually crowd the
+table. The overall worst-case combined bound is unchanged (`_MAX_KEYS +
+_MAX_LOCKOUTS`); only the trigger/removal math was wrong. 2 new tests
+(`TestRateLimiter` now 39, was 37), both verified fail-before/pass-after.
+Full completion gate re-run (full backend suite included, given this
+changes `_sweep`'s core threshold semantics): 192 scoped, 63 tenancy,
+11,740 full-suite passed. Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2g/2h).
 
 ### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 4: Codex reviewed the merged refactor itself; one real cap/eviction gap fixed, one comment cleanup, two findings verified moot
 

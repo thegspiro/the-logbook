@@ -9,8 +9,11 @@
 structural refactor, CI3-33-2d — see the "Two sessions, one finding" note
 below for the parallel 1,657 L short-circuit fix this superseded → 1,664 L
 after PR #2370's round-4 (CI3-33-2e/2f), a bounded-saturation-map fix and a
-second comment-chronology trim on the refactor's own new code),
-`app/core/config.py` (1,041 L),
+second comment-chronology trim on the refactor's own new code → 1,677 L
+after PR #2370's round-5 (CI3-33-2g/2h), fixing the same
+_MAX_KEYS-conflates-locked-and-unlocked-counts root cause behind both a
+CPU-amplification finding and a rate-limit bypass), `app/core/config.py`
+(1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -99,6 +102,24 @@ deciding to extend the saturation signal, confirmed by a standalone repro
 showing a fresh violator gets a real per-key lockout, not an extended
 saturation fallback, once genuine capacity has freed up and the throttle
 has elapsed). See CI3-33-2e/2f below and PR #2370.
+
+**Fifth post-merge addendum (2026-09-07, PR #2370):** the same Codex review
+pass left 3 more threads shortly after the first 4 (round 8 arrived in two
+batches). One was a duplicate of CI3-33-2f, filed independently against the
+same `_KeyState` docstring — already addressed by that fix, no further
+change. The other two were real, distinct P1 findings against the
+structural refactor's `_MAX_KEYS` enforcement, both fixed: CI3-33-2g — a
+fully-saturated lockout table (the default config has `_MAX_KEYS ==
+_MAX_LOCKOUTS`, so this is the out-of-the-box behavior, not an edge
+configuration) left no room for even one unlocked key without the flat
+`len(self._keys) > _MAX_KEYS` threshold tripping on every call, forcing a
+real `O(N log N)` sweep+sort on _every_ retry from a single attacker,
+forever — and CI3-33-2h, the same root cause but a rate-limit **bypass**,
+not just a CPU cost: an attacker alternating between two keys had each
+request evict the _other_ key's one-entry history before either could
+accumulate enough to trip its own limit, so neither ever locked out no
+matter how many requests were sent. Both close with the same fix — see
+CI3-33-2g/2h below and PR #2370.
 
 ---
 
@@ -1143,6 +1164,95 @@ of restated (`_KeyState`'s docstring now reads "See
 docs/security-review/CI3-33-core-infra.md for the review history that led
 to this shape" rather than narrating it). No behavior change — comment-only.
 
+### CI3-33-2g — P1 — a fully-saturated lockout table forced a real full-table sweep+sort on every retry, not just the first — ✅ FIXED (Codex review of PR #2370, round 8)
+
+**What:** `_sweep`'s forced-early-sweep trigger and its `_MAX_KEYS`
+enforcement both compared `len(self._keys)` — the _combined_ count of
+locked-out and unlocked records — against the flat `_MAX_KEYS` cap. The
+default configuration sets `_MAX_KEYS == _MAX_LOCKOUTS == 10,000`, so once
+active lockouts alone reached capacity, the combined total was already at
+`_MAX_KEYS` with zero room left for even one unlocked key. The very next
+request — any request, not necessarily an attacker's — pushed the total to
+`_MAX_KEYS + 1`, forcing a full sweep. Because every actively-locked-out
+record is excluded from the evictable pool by design (CI3-33-1's
+invariant), the _only_ evictable record was ever the triggering request's
+own newly-recorded unlocked one — which was then evicted and immediately
+rewritten by the very same call, so the next call started from the exact
+same over-cap state and forced another full sweep. This repeats forever: a
+single attacker retrying a saturated endpoint pays a real `O(N log N)`
+sweep+sort on every retry, not just an initial one.
+
+**Where:** `backend/app/core/security_middleware.py`, `RateLimiter._sweep`
+(the `over_limit` gate and the `_MAX_KEYS` eviction block).
+
+**Failure scenario:** reproduced directly — 100 genuinely active lockouts
+(`_MAX_KEYS = _MAX_LOCKOUTS = 100`), one already-over-limit key retrying:
+all 50 retries forced a real sweep (detected via `self._last_eviction`
+actually advancing on every call, with mocked time incremented slightly
+each retry so a real sweep is distinguishable from a throttled no-op).
+
+**Impact:** the exact CPU-amplification shape CI3-33-2c/2d/2e each closed
+for a _different_ mechanism (the capacity-verification scan), reopened for
+the memory-eviction scan by the same underlying cause — a threshold that
+conflated locked-out and unlocked key counts. Present in the refactor's
+default configuration, not a contrived edge case.
+
+**Fix:** `_MAX_KEYS` now budgets _unlocked_ keys specifically, not the
+combined total: the threshold is `_MAX_KEYS + self._active_lockout_count`
+(the live count, not the static `_MAX_LOCKOUTS` cap — using the cap would
+grant headroom for lockouts that don't yet exist; using the live count
+means the budget shrinks back down as lockouts genuinely expire). A
+genuinely active lockout was never evictable to begin with, so letting it
+stand outside this budget costs nothing; an unlocked key only faces
+eviction pressure once unlocked keys themselves are actually crowding the
+table — which is what `_MAX_KEYS` was always meant to bound. The overall
+worst-case combined total is unchanged (`_MAX_KEYS + _MAX_LOCKOUTS`, since
+`_active_lockout_count <= _MAX_LOCKOUTS` always); only the trigger/removal
+math was wrong.
+
+**Tests:**
+`test_saturated_lockout_table_does_not_force_a_full_sweep_on_every_retry` —
+the direct reproduction described above. Verified to **fail** against the
+pre-fix code (50 real sweeps across 50 retries) and **pass** after (0).
+
+### CI3-33-2h — P1 — the same threshold let an attacker alternating between two keys evict each other's history, bypassing the rate limit entirely — ✅ FIXED (Codex review of PR #2370, round 8)
+
+**What:** the same root cause as CI3-33-2g, but a functional bypass rather
+than a CPU cost. Once active lockouts alone filled `_MAX_KEYS`, the
+by-recency eviction pool for _any_ over-cap call contained only
+freshly-recorded unlocked keys — so an attacker alternating between two
+distinct keys (e.g. two IPs, or two scopes) from request to request had
+each request's forced sweep evict the _other_ key's one-entry request
+history before it could ever accumulate past one entry. Neither key's
+history could grow toward `max_requests`, so neither ever tripped a
+lockout, no matter how many requests were sent.
+
+**Where:** same code path as CI3-33-2g.
+
+**Failure scenario:** reproduced directly — same 100-active-lockout setup,
+then 40 requests alternating between two keys (`max_requests=5`): 0
+lockouts triggered, and inspecting the tracked state showed each key's
+history was being wiped rather than accumulating.
+
+**Impact:** a genuine rate-limit bypass under a condition (a saturated
+lockout table) that a real attack is more likely to produce, not less —
+the fallback protection this file exists to provide was unavailable
+exactly when it mattered most.
+
+**Fix:** the same CI3-33-2g fix closes this — once eviction pressure only
+applies to genuinely-crowding unlocked keys rather than firing on every
+call regardless of how many unlocked keys actually exist, two alternating
+keys' one-entry histories are no longer forced out from under them.
+
+**Tests:**
+`test_alternating_keys_cannot_evict_each_others_history_under_lockout_saturation`
+— the direct reproduction. Verified to **fail** against the pre-fix code
+(0 lockouts across 40 alternating requests, both histories empty/`None`)
+and **pass** after (both keys accumulate their own history and trip their
+own lockout repeatedly).
+
+`TestRateLimiter` is 39 tests (was 37).
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1509,6 +1619,26 @@ test_sweep_clears_expired_saturation_entries_before_evicting_live_ones` —
 `TestRateLimiter` is 37 tests (was 35 before this round). CI3-33-2f
 (comment-chronology cleanup) is comment-only and added no tests.
 
+**Added in PR #2370 round 5 (CI3-33-2g/2h):**
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_saturated_lockout_table_does_not_force_a_full_sweep_on_every_retry`
+  (CI3-33-2g) — 100 genuinely active lockouts at capacity, one
+  already-over-limit key retrying 50 times; a real sweep is detected via
+  `self._last_eviction` actually advancing (mocked time incremented
+  slightly each retry so a genuine sweep is distinguishable from a
+  throttled no-op). Verified to **fail** against the pre-fix code (50 real
+  sweeps) and **pass** after (0).
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_alternating_keys_cannot_evict_each_others_history_under_lockout_saturation`
+  (CI3-33-2h) — same 100-active-lockout setup, 40 requests alternating
+  between two keys. Verified to **fail** against the pre-fix code (0
+  lockouts triggered across 40 requests, both histories wiped rather than
+  accumulating) and **pass** after (both keys accumulate their own history
+  and trip their own lockout repeatedly).
+
+`TestRateLimiter` is 39 tests (was 37 before this round).
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
@@ -1565,7 +1695,21 @@ before pushing given the blast radius"):**
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,738 passed, 21 skipped, 0 failed (was 11,736 after round 3; skips all pre-existing)        |
 
-No frontend file was touched in PR #2370 (any of its four rounds), so the
+**After PR #2370's round-5 fix (CI3-33-2g/2h), the gate was re-run once
+more — full backend suite included, given this changes `_sweep`'s core
+threshold semantics:**
+
+| Check                                                                      | Result                                                                                              |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                     |
+| `black --check` (both files)                                               | ✅ clean                                                                                            |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                          |
+| Scoped tests (same 7 files as above)                                       | ✅ 192 passed (was 190 after round 4; +2 for CI3-33-2g/2h — `TestRateLimiter` now 39 tests, was 37) |
+| Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                        |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,740 passed, 21 skipped, 0 failed (was 11,738 after round 4; skips all pre-existing)           |
+
+No frontend file was touched in PR #2370 (any of its five rounds), so the
 frontend checks below (last run at PR #2368's merge) are unchanged and were
 not re-run:
 

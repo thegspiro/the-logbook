@@ -147,9 +147,20 @@ class RateLimiter:
         safety limit — which must force an immediate sweep rather than
         wait, or an unbounded flood of distinct keys/scopes grows memory
         unchecked in between.
+
+        _MAX_KEYS budgets *unlocked* keys, not the total tracked count: the
+        threshold below is ``_MAX_KEYS + self._active_lockout_count``, not
+        a flat ``_MAX_KEYS``. A genuinely active lockout is never
+        evictable, so it costs nothing extra to let it stand outside this
+        budget; an unlocked key only faces eviction pressure once unlocked
+        keys themselves are actually crowding the table, which is what
+        _MAX_KEYS is meant to bound. See
+        docs/security-review/CI3-33-core-infra.md for why comparing
+        against the flat total was unsafe.
         """
+        active_lockouts = self._active_lockout_count
         over_limit = (
-            len(self._keys) > self._MAX_KEYS
+            len(self._keys) > self._MAX_KEYS + active_lockouts
             or len(self._saturation_reject_until) > self._MAX_SATURATION_SCOPES
         )
         if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
@@ -172,14 +183,16 @@ class RateLimiter:
         for k in stale:
             del self._keys[k]
 
-        # Enforce _MAX_KEYS via forced eviction by recency, among records
-        # with no active lockout only. This is what keeps _MAX_KEYS and
-        # _MAX_LOCKOUTS independently meaningful: an unrelated key's own
-        # over-cap call can never release someone else's active lockout
-        # early to make room, no matter how stale that key's own request
-        # history looks — there is no separate "pop the lockout too" step
-        # that could evict one piece of a key's state while leaving another.
-        if len(self._keys) > self._MAX_KEYS:
+        # Enforce the budget via forced eviction by recency, among records
+        # with no active lockout only. This is what keeps the unlocked-key
+        # budget and _MAX_LOCKOUTS independently meaningful: an unrelated
+        # key's own over-budget call can never release someone else's
+        # active lockout early to make room, no matter how stale that
+        # key's own request history looks — there is no separate "pop the
+        # lockout too" step that could evict one piece of a key's state
+        # while leaving another.
+        budget = self._MAX_KEYS + active_lockouts
+        if len(self._keys) > budget:
             evictable = [
                 (k, st)
                 for k, st in self._keys.items()
@@ -188,7 +201,7 @@ class RateLimiter:
             evictable.sort(
                 key=lambda kv: kv[1].request_times[-1] if kv[1].request_times else 0.0
             )
-            to_remove = len(self._keys) - self._MAX_KEYS
+            to_remove = len(self._keys) - budget
             for k, _ in evictable[:to_remove]:
                 del self._keys[k]
 
