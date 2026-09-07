@@ -49,17 +49,24 @@ Two findings, both fixed:
    this section is its only prior-art record. For the exact diff, see PR
    #2381's `frontend/src/utils/apiCache.ts` change.
 
-   **Four of the 18 are no-ops, not fixes.** `/apparatus/operators`,
+   **Six of the 18 are no-ops, not fixes.** Four — `/apparatus/operators`,
    `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`,
-   and `/apparatus/evoc-check/{apparatus_id}/{user_id}` are all requested
-   through `frontend/src/modules/apparatus/services/api.ts`'s own
-   `createApiClient()` instance, which carries no cache interceptor at
-   all — only the shared `services/apiClient.ts` instance does. These
-   routes were never cached, so excluding them from `apiCache.ts`'s
-   denylist closes nothing (the ratchet test's own scope note calls this
-   shape a harmless no-op). The other 14 routes are requested through
-   service files that import the shared `apiClient.ts` and were genuine
-   fixes.
+   `/apparatus/evoc-check/{apparatus_id}/{user_id}` — are requested through
+   `frontend/src/modules/apparatus/services/api.ts`'s own
+   `createApiClient()` instance, which carries no cache interceptor at all
+   — only the shared `services/apiClient.ts` instance does. Two more —
+   `/inventory/clearances/{clearance_id}` and `/roles/{role_id:uuid}/users`
+   — have **no frontend caller at all** as of this pass:
+   `inventoryService.ts` calls only the `/inventory/clearances` list, and
+   `userServices.ts` calls `/roles/{roleId}` (the detail route) and
+   `/users/{userId}/roles`, never `/roles/{roleId}/users`. All six routes
+   were never held in the shared frontend cache, so excluding them from
+   `apiCache.ts`'s denylist closes nothing today (the ratchet test's own
+   scope note calls the client-mismatch shape a harmless no-op; an uncalled
+   route is the same outcome for a different reason — nothing to leak from
+   yet). The other **12** routes are requested through service files that
+   import the shared `apiClient.ts` and were genuine fixes to a real,
+   demonstrated cache leak.
 
 **Action for pass 4:** treat both as already-fixed prior art, but do not
 read this as limiting the sweep to re-verifying only these named routes —
