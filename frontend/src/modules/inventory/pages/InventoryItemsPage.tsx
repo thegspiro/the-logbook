@@ -128,45 +128,6 @@ type GroupKey = (typeof GROUP_COLS)[number]['key'];
 /** Header for the bucket of items with no value on the grouped dimension. */
 const UNSPECIFIED_GROUP = 'Unspecified';
 
-/**
- * The grouped value of one item, as the string the backend keyed its counts on.
- *
- * Must agree with `InventoryService._group_spec`, or a row lands under a header
- * whose count excludes it. Two agreements are load-bearing: colour is keyed
- * lower-cased (the colour filter has always matched case-insensitively, so
- * "Navy" and "navy" are one bucket), and location follows the same precedence
- * as the Location column rather than `location_id` alone.
- */
-function groupKeyOf(
-  item: InventoryItem,
-  dimension: GroupKey,
-  locs: Location[],
-  cats: InventoryCategory[]
-): string | null {
-  switch (dimension) {
-    case 'category':
-      return item.category_id ?? null;
-    case 'color':
-      return item.color ? item.color.toLowerCase() : null;
-    case 'size':
-      return item.standard_size ?? item.size ?? null;
-    case 'condition':
-      return item.condition ?? null;
-    case 'style':
-      return item.style ?? null;
-    case 'vendor':
-      return item.vendor_id ?? null;
-    case 'location':
-      return locLabel(item, locs) || null;
-    case 'item_type':
-      // Lives on the category, not the item — the backend groups it through
-      // the same join.
-      return cats.find((c) => c.id === item.category_id)?.item_type ?? null;
-    default:
-      return null;
-  }
-}
-
 function locLabel(item: InventoryItem, locs: Location[]): string {
   if (item.storage_location) return item.storage_location;
   if (item.location_id) return locs.find((l) => l.id === item.location_id)?.name ?? '';
@@ -381,9 +342,15 @@ const ItemTable: React.FC<ItemTableProps> = ({
               // Rows arrive ordered so a group's members are contiguous (the
               // backend sorts by the group key), so a header is emitted
               // wherever the key changes rather than by pre-bucketing.
-              const gKey = groupBy ? groupKeyOf(item, groupBy, locations, categories) : null;
+              // The key the SERVER filed this row under, not one re-derived
+              // here. Colour keys lower-cased, location follows a COALESCE over
+              // the whole locations table (this page's own lookup is capped at
+              // 100 rows), item_type lives on the category, and an enum keys to
+              // its value — reproducing any of those is a chance to disagree
+              // with the header's count (CLAUDE.md pitfall #29).
+              const gKey = groupBy ? (item.group_key ?? null) : null;
               const prev = index > 0 ? items[index - 1] : undefined;
-              const prevKey = groupBy && prev ? groupKeyOf(prev, groupBy, locations, categories) : undefined;
+              const prevKey = groupBy && prev ? (prev.group_key ?? null) : undefined;
               const startsGroup = Boolean(groupBy) && (index === 0 || gKey !== prevKey);
               const bucket = gKey ?? '';
               const isCollapsed = Boolean(groupBy) && (collapsed?.has(bucket) ?? false);
@@ -400,7 +367,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   {startsGroup && (
                     <tr className="bg-theme-surface-hover/60">
                       <th
-                        scope="colgroup"
+                        scope="rowgroup"
                         colSpan={20}
                         className="border-theme-surface-border border-y px-3 py-2 text-left"
                       >
@@ -416,7 +383,9 @@ const ItemTable: React.FC<ItemTableProps> = ({
                             <ChevronDown className="h-3.5 w-3.5" />
                           )}
                           <span className={gKey === null ? 'italic' : ''}>
-                            {gKey === null ? UNSPECIFIED_GROUP : (groupLabels?.get(bucket) ?? bucket)}
+                            {gKey === null
+                              ? UNSPECIFIED_GROUP
+                              : (groupLabels?.get(bucket) ?? bucket).replace(/_/g, ' ')}
                           </span>
                           {/* The backend's count, not the loaded rows': a
                               collapsed group must state its total, and a
@@ -702,9 +671,9 @@ const InventoryItemsPage: React.FC = () => {
   );
 
   /* ---- grouping lookups ----
-     Keyed on the same strings `groupKeyOf` produces, with '' standing for the
-     Unspecified bucket, so a header always finds the backend's count for the
-     rows beneath it. */
+     Keyed on the same strings the server stamps on each row's `group_key`,
+     with '' standing for the
+     Unspecified bucket, so a header always finds the count for its rows. */
   const groupAvailable = useMemo(() => {
     const m = new Map<string, number>();
     groupCounts.forEach((g) => m.set(g.key ?? '', g.available_count));

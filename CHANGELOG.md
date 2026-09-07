@@ -44,6 +44,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an empty baseline. CLAUDE.md stated this rule and nothing checked it, which
   is the same gap that let pitfall #16 regress after holding across 58 call
   sites on review discipline alone.
+### An inventory item's colour could be briefly cached even when it wasn't just a colour (2026-09-07)
+
+**Fixed**
+
+- `GET /inventory/items/colors` — the list a settings screen's colour filter
+  builds its dropdown from — was left cacheable on the assumption the field
+  is a plain colour name. It isn't constrained to one: `color` is free text up
+  to 50 characters with no fixed vocabulary (a department stocks whatever its
+  supplier sells), so whatever an inventory manager or a CSV import puts in
+  that column is exactly what this globally-shared response echoes back for
+  up to 90 seconds. Added to the client's cache-exclusion list alongside the
+  other free-text fields already excluded there.
+- The same endpoint required only being signed in, not `inventory.view` like
+  every other read on the inventory router — a custom position without that
+  permission could still read every colour in the org's catalog through this
+  one route. Now gated on `inventory.view` to match its siblings.
+
+### Grouping the items list by size no longer 500s the endpoint (2026-09-07)
+
+**Fixed**
+
+- **Grouping by Size crashed the items endpoint for any department stocking
+  boots or waist measurements.** `size` is deliberately free text — "10.5 EE",
+  "lg" — but SQLAlchemy infers a `COALESCE`'s result type from its _first_
+  argument, so `COALESCE(standard_size, size)` was typed `Enum(StandardSize)`
+  and every row went through the enum result processor on the way back. A
+  free-text value then raised `LookupError` and the whole list returned 500.
+  The grouping expression is now cast to text.
+- **Condition, Style and Size groups were keyed and labelled with a Python
+  repr.** `str()` on a `(str, Enum)` member renders `ItemCondition.GOOD`, not
+  `good` — which both headed the group with the repr and never matched the
+  value a row carried, so every one of those groups showed no count at all.
+  Keys and labels now use the enum's value.
+- **A row could be filed under a group the header did not count.** The page
+  re-derived each row's group key from its own fields plus a locations lookup
+  capped at 100 rows, so an item in a department's 101st location landed under
+  "Unspecified" while the backend counted it under its real name. The server now
+  stamps `group_key` on every row and the page consumes it — which also settles
+  colour's lower-cased key, location's `COALESCE` precedence and the `item_type`
+  join, each of which was a separate chance to disagree (pitfall #29).
+- The group header row declared `scope="colgroup"`, marking it a header for a
+  group of _columns_; it labels the rows beneath it, so it is now
+  `scope="rowgroup"`.
+
+**Known limitation**
+
+- When a single group holds more rows than the 50-row page, collapsing it hides
+  every loaded row while "Load More" keeps fetching more members of that same
+  hidden group. Pagination is row-wise, not group-wise. Not addressed here.
 
 ### A grouped items list stops repeating the grouped value on every row (2026-09-07)
 

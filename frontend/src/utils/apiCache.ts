@@ -95,6 +95,9 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/members/', // member size preferences — body measurements (PII)
   '/inventory/my/', // current user's own size preferences (PII)
   '/inventory/requestable-catalog', // request form: embeds the caller's own size preferences (PII)
+  '/inventory/items/colors', // free-text colour, unconstrained past a 50-char cap (normalize_color
+  // only collapses whitespace) -- whatever an inventory manager or a CSV import
+  // puts in the colour column, this dropdown-options endpoint echoes back
   '/inventory/charges', // per-member cost-recovery / financial liability (PII)
   '/inventory/allowances/check/', // GET /allowances/check/{user_id}/{category_id}: a named member's entitlement
   '/inventory/clearances', // departure clearances: who is leaving, departure type, notes, value still owed (PII)
