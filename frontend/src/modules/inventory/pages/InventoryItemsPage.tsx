@@ -474,21 +474,44 @@ const InventoryItemsPage: React.FC = () => {
     } catch {
       /* non-critical */
     }
+  }, []);
 
-    // Fetched on its own, deliberately not inside the Promise.all above: one
-    // rejection there skips every setter, so a colours endpoint an older
-    // backend does not serve yet would empty the category, location and
-    // storage-area pickers along with it. The colour filter is the only thing
-    // that should degrade when the colour call does.
-    try {
-      const colors = await inventoryService.getItemColors();
+  // The colour vocabulary, fetched once and only after the first load settles.
+  //
+  // Deliberately not inside the Promise.all above, and deliberately not racing
+  // it either. Two separate reasons, both learned the hard way:
+  //
+  // 1. A rejection inside that Promise.all skips every setter in it, so a
+  //    colours endpoint an older backend does not serve yet would empty the
+  //    category, location and storage-area pickers along with it.
+  // 2. That Promise.all is the gate that clears `loading`, and until it clears
+  //    the page renders neither its rows nor its empty state — which is where
+  //    the only "Add Item" button a phone shows lives. Adding a request to the
+  //    gate delayed it; adding one *beside* it still competed with the item
+  //    fetch for the connection. Either way `mobile-create-edit.spec.ts` looked
+  //    for that button before it existed, and its lookup has no retry.
+  //
+  // So it waits. A filter that populates a moment late costs nothing; the page
+  // taking longer to become usable costs a great deal.
+  const colorsRequested = useRef(false);
+  useEffect(() => {
+    if (loading || colorsRequested.current) return;
+    colorsRequested.current = true;
+    let cancelled = false;
+    void inventoryService
+      .getItemColors()
       // Rendered straight into <option>s, so a shape that is not a list takes
       // the whole page down rather than just the filter.
-      setColorOptions(Array.isArray(colors) ? colors : []);
-    } catch {
-      setColorOptions([]);
-    }
-  }, []);
+      .then((colors) => {
+        if (!cancelled) setColorOptions(Array.isArray(colors) ? colors : []);
+      })
+      .catch(() => {
+        if (!cancelled) setColorOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading]);
 
   useRegisterPullToRefresh(async () => {
     await Promise.all([loadItems(true), loadSummary()]);

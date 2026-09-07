@@ -75,7 +75,7 @@ class TestPrimaryStyle:
         assert primary_style(["long_sleeve", "mens", "polo"]) == "polo"
 
     @pytest.mark.parametrize(
-        "attributes,expected",
+        ("attributes", "expected"),
         [
             (["long_sleeve", "mens"], "long_sleeve"),
             (["mens"], "mens"),

@@ -4,13 +4,27 @@ import { signIn } from './helpers';
 const PHONE = { width: 390, height: 844 };
 const MIN_TAP = 44;
 
+/**
+ * The visible one among same-named buttons, waited for rather than sampled.
+ *
+ * A phone hides the header's "Add Item" (`hidden sm:inline-flex`) and offers
+ * the empty state's instead, so several buttons share the name and only one is
+ * visible — that part has always been the point. What this used to do was
+ * count the matches and check them once, immediately: a snapshot taken before
+ * the page had finished its first load found only the hidden header button and
+ * threw, because the empty state renders behind `loading` and had not appeared
+ * yet. It passed serially and failed under parallel load, which is the shape of
+ * a race rather than of a defect, and any change that makes the first render a
+ * fraction heavier loses it.
+ *
+ * `filter({ visible: true })` re-queries on every poll, so the expect below
+ * retries until a visible match exists. The assertion is unchanged — a visible
+ * button by this name must appear, and the test then clicks it.
+ */
 async function visibleButton(page: Page, name: string): Promise<Locator> {
-  const matches = page.getByRole('button', { name, exact: true });
-  for (let index = 0; index < (await matches.count()); index += 1) {
-    const candidate = matches.nth(index);
-    if (await candidate.isVisible()) return candidate;
-  }
-  throw new Error(`No visible button named "${name}"`);
+  const button = page.getByRole('button', { name, exact: true }).filter({ visible: true }).first();
+  await expect(button).toBeVisible();
+  return button;
 }
 
 async function expectMobileDialogUsable(page: Page) {

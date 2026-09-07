@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**264 tables · 4474 columns · 852 foreign keys**
+**264 tables · 4476 columns · 852 foreign keys**
 
 ---
 
@@ -316,7 +316,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 22 | Equipment Request model |
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
-| [`inventory_items`](#inventory_items) | `InventoryItem` | 51 | Inventory Item model |
+| [`inventory_items`](#inventory_items) | `InventoryItem` | 52 | Inventory Item model |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
@@ -327,7 +327,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`item_issuances`](#item_issuances) | `ItemIssuance` | 19 | Item Issuance model |
 | [`item_variant_groups`](#item_variant_groups) | `ItemVariantGroup` | 12 | Groups pool items that are size/color/style variants of the same |
 | [`maintenance_records`](#maintenance_records) | `MaintenanceRecord` | 24 | Maintenance Record model |
-| [`member_size_preferences`](#member_size_preferences) | `MemberSizePreferences` | 15 | Stores a member's preferred sizes for different garment types. |
+| [`member_size_preferences`](#member_size_preferences) | `MemberSizePreferences` | 16 | Stores a member's preferred sizes for different garment types. |
 | [`nfpa_exposure_records`](#nfpa_exposure_records) | `NFPAExposureRecord` | 15 | Tracks hazardous exposure events for NFPA-tracked PPE items. |
 | [`nfpa_inspection_details`](#nfpa_inspection_details) | `NFPAInspectionDetail` | 18 | NFPA-specific inspection fields extending a MaintenanceRecord. |
 | [`nfpa_item_compliance`](#nfpa_item_compliance) | `NFPAItemCompliance` | 20 | NFPA 1851/1852 compliance record for PPE and SCBA items. |
@@ -4786,6 +4786,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `standard_size` | ENUM(`xxs`, `xs`, `s`, `m`, `l`, `xl`, `xxl`, `xxxl`, `xxxxl`, `6`, `6.5`, `7`, `7.5`, `8`, `8.5`, `9`, `9.5`, `10`, `10.5`, `11`, `11.5`, `12`, `12.5`, `13`, `14`, `15`, `28`, `30`, `32`, `34`, `36`, `38`, `40`, `42`, `44`, `46`, `one_size`, `custom`) | yes |  |  |  |
 | `color` | VARCHAR(50) | yes |  |  |  |
 | `style` | ENUM(`short_sleeve`, `long_sleeve`, `mens`, `womens`, `unisex`, `v_neck`, `crew_neck`, `polo`, `button_down`, `quarter_zip`) | yes |  |  |  |
+| `style_attributes` | JSON | yes |  |  |  |
 | `weight` | FLOAT | yes |  |  |  |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
 | `storage_location` | VARCHAR(255) | yes |  |  |  |
@@ -5178,6 +5179,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shirt_size` | VARCHAR(20) | yes |  |  |  |
 | `shirt_style` | VARCHAR(30) | yes |  |  |  |
+| `garment_fit` | VARCHAR(20) | yes |  |  |  |
 | `pant_waist` | VARCHAR(10) | yes |  |  |  |
 | `pant_inseam` | VARCHAR(10) | yes |  |  |  |
 | `jacket_size` | VARCHAR(20) | yes |  |  |  |

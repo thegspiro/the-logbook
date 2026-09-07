@@ -23,7 +23,6 @@ import type {
   Location,
   SizeVariantCreate,
 } from '../types';
-import SettingsToggle from '../../../components/settings/SettingsToggle';
 import GarmentStyleAxisPicker from './GarmentStyleAxisPicker';
 import {
   ITEM_TYPE_FIELDS,
@@ -580,18 +579,32 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Generate Sizes & Styles toggle (new uniform/PPE items only) */}
         {supportsVariants && (
           <fieldset>
-            {/* The shared switch, not a hand-rolled one. The copy that lived
-                here put its knob in an `::after` on a track that was not
-                `relative`, so the knob positioned against the 44px label
-                instead of the 20px track and floated above it. */}
-            <div className="mb-2 flex min-h-[44px] items-center gap-2">
-              <SettingsToggle
-                checked={generateVariants}
-                onChange={setGenerateVariants}
-                label="Generate Sizes & Styles"
-              />
+            {/* The row is the switch, not just the track beside it.
+                The knob used to be an `::after` on a track that was never
+                `relative`, so it positioned against the 44px label instead of
+                the 20px track and floated above it — the visible defect. The
+                shared toggle-track/knob utilities fix that, but the shared
+                SettingsToggle button is only 24px tall, and the old markup met
+                the 44px touch minimum through the <label> wrapping its
+                checkbox. `mobile-create-edit.spec.ts` measures a button's own
+                box (its label exception is for checkbox/radio only), so the
+                whole row carries role="switch" and the 44px: the target is the
+                text as well as the track, which is the easier thing to hit. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={generateVariants}
+              onClick={() => setGenerateVariants(!generateVariants)}
+              className="mb-2 flex min-h-[44px] w-full items-center gap-2 text-left"
+            >
+              <span
+                aria-hidden="true"
+                className={`toggle-track-sm ${generateVariants ? 'bg-blue-600' : 'bg-theme-surface-border'}`}
+              >
+                <span className={`toggle-knob-sm ${generateVariants ? 'translate-x-6' : 'translate-x-1'}`} />
+              </span>
               <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
-            </div>
+            </button>
             {generateVariants && (
               <p className="text-theme-text-muted mb-3 text-xs">
                 Pick the sizes and styles below. Each style row describes a different property of the same garment, so
