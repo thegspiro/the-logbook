@@ -16,21 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 31 (Scheduled tasks, pass 3) — PR
-[#2362](https://github.com/thegspiro/the-logbook/pull/2362), branch
-`claude/security-review-scheduled-tasks-pass3`.** 2 fixed (both LOW —
-CRON3-31-1: the new `run_recover_stranded_message_deliveries` sweep and its
-pre-existing sibling `run_publish_scheduled_messages` had no
-`Organization.active` filter, same child-table-keyed CRON-2 shape
-CRON2-31-11/CRON-31-5 already closed elsewhere in this file; CRON3-31-2: a
-pre-existing test's own assertion held an ORM object handle across a
-rollback that could expire it, latent until CRON3-31-1's added `JOIN`
-started reordering rows often enough to expose it — full suite now a clean
-11,642/0). 0 new flagged (CRON-31-7, CRON-31-8, and the scheduler's
-Redis-down fallback all re-confirmed unchanged, considered trade-offs, not
-re-applied). Full findings: `docs/security-review/CRON3-31-scheduled-tasks.md`.
-Rotation row 31 -> ✅ (pending PR merge). Next: 32 Locations & kiosk, once
-this PR merges.
+**None.** Feature 31 (Scheduled tasks)'s PR #2362 merged (`ff8cf35c`) — fully
+green with a root-caused (not dismissed) intermittent test fix, no unresolved
+review threads. Rotation row 31 -> ✅. Next: 32 Locations & kiosk.
+
+---
+
+### 2026-09-07 — Feature 31 (Scheduled tasks) — PR #2362 merged, watchdog recorded it
+
+PR #2362 (pass 3: CRON3-31-1/2 fixed, all prior open items re-confirmed
+unchanged, full suite 11,642/0) merged; a 30-minute watchdog check recorded
+it and cleared the stale Open PR row. Next: 32 Locations & kiosk.
 
 ---
 
@@ -10033,7 +10029,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
