@@ -17,6 +17,7 @@ export type {
   CategoryPresetApplyResponse,
   LocationInventorySummary,
   InventoryItemsListResponse,
+  ItemGroupCount,
   InventoryImportResult,
   ItemIssuance,
   ItemHistoryEvent,

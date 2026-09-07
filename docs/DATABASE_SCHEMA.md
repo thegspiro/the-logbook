@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**264 tables · 4476 columns · 852 foreign keys**
+**265 tables · 4483 columns · 855 foreign keys**
 
 ---
 
@@ -316,6 +316,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 22 | Equipment Request model |
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
+| [`inventory_item_pins`](#inventory_item_pins) | `InventoryItemPin` | 7 | A member's own shortlist of items, hoisted to the top of the items list. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 52 | Inventory Item model |
 | [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
@@ -4754,6 +4755,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_impact_plans_org` (`organization_id`)
+
+### `inventory_item_pins`
+
+**InventoryItemPin** · `app/models/inventory.py`
+
+> A member's own shortlist of items, hoisted to the top of the items list. Per-user rather than per-organization: two quartermasters running different supply lines front different gear, and one curating their own list must not silently reorder the other's page. ``position`` is 0-based and ascending -- 0 is the front of the list. It is kept contiguous by the service on every unpin, so "move up" arithmetic never has to reason about gaps. ``organization_id`` is denormalized from the item so that every read is org-scoped without joining ``inventory_items`` (CLAUDE.md pitfall #14).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `item_id` | VARCHAR(36) | no | FK |  | → `inventory_items.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_item_pins_org_user_position` (`organization_id`, `user_id`, `position`)
+
+**Constraints**
+
+- UNIQUE `uq_item_pin_user_item` (`user_id`, `item_id`)
 
 ### `inventory_items`
 
@@ -9322,7 +9347,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (317 references)
+### → `users` (318 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9470,6 +9495,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `instructor_qualifications` | `verified_by` | SET NULL | yes |
 | `inventory_categories` | `created_by` | NO ACTION | yes |
 | `inventory_impact_plans` | `created_by` | SET NULL | yes |
+| `inventory_item_pins` | `user_id` | CASCADE | no |
 | `inventory_items` | `assigned_to_user_id` | SET NULL | yes |
 | `inventory_items` | `created_by` | NO ACTION | yes |
 | `inventory_lots` | `created_by` | SET NULL | yes |
@@ -9644,7 +9670,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (210 references)
+### → `organizations` (211 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9748,6 +9774,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
 | `inventory_categories` | `organization_id` | CASCADE | no |
 | `inventory_impact_plans` | `organization_id` | CASCADE | no |
+| `inventory_item_pins` | `organization_id` | CASCADE | no |
 | `inventory_items` | `organization_id` | CASCADE | no |
 | `inventory_lots` | `organization_id` | CASCADE | no |
 | `inventory_notification_queue` | `organization_id` | CASCADE | no |
@@ -9903,7 +9930,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `locations` | `facility_id` | SET NULL | yes |
 | `purchase_requests` | `facility_id` | SET NULL | yes |
 
-### → `inventory_items` (16 references)
+### → `inventory_items` (17 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9912,6 +9939,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `departure_clearance_items` | `item_id` | SET NULL | yes |
 | `equipment_kit_items` | `item_id` | SET NULL | yes |
 | `equipment_requests` | `item_id` | SET NULL | yes |
+| `inventory_item_pins` | `item_id` | CASCADE | no |
 | `inventory_lots` | `inventory_item_id` | CASCADE | no |
 | `inventory_notification_queue` | `item_id` | SET NULL | yes |
 | `inventory_write_offs` | `item_id` | SET NULL | yes |

@@ -2238,6 +2238,64 @@ class ItemVariantGroup(Base):
     )
 
 
+class InventoryItemPin(Base):
+    """A member's own shortlist of items, hoisted to the top of the items list.
+
+    Per-user rather than per-organization: two quartermasters running
+    different supply lines front different gear, and one curating their own
+    list must not silently reorder the other's page.
+
+    ``position`` is 0-based and ascending -- 0 is the front of the list. It is
+    kept contiguous by the service on every unpin, so "move up" arithmetic
+    never has to reason about gaps.
+
+    ``organization_id`` is denormalized from the item so that every read is
+    org-scoped without joining ``inventory_items`` (CLAUDE.md pitfall #14).
+    """
+
+    __tablename__ = "inventory_item_pins"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    position = Column(Integer, nullable=False, default=0, server_default="0")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    item = relationship("InventoryItem", foreign_keys=[item_id])
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        # One pin per member per item. Also what makes the outer join in
+        # get_items() at most 1:1, so hoisting pins cannot multiply rows and
+        # inflate the list's total count.
+        UniqueConstraint("user_id", "item_id", name="uq_item_pin_user_item"),
+        Index(
+            "idx_item_pins_org_user_position",
+            "organization_id",
+            "user_id",
+            "position",
+        ),
+    )
+
+
 class EquipmentKit(Base):
     """
     Kit/bundle template for issuing multiple items as a set.

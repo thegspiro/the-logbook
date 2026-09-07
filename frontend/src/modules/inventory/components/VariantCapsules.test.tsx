@@ -58,4 +58,31 @@ describe('VariantCapsules', () => {
     expect(screen.getByText('Color: Black')).toBeInTheDocument();
     expect(screen.getByText('Style: V-Neck')).toBeInTheDocument();
   });
+
+  describe('omit', () => {
+    const full = { standard_size: 'm', color: 'Black', style: 'v_neck' };
+
+    it('shows everything by default', () => {
+      // The guard on the five call sites that never pass `omit` — the items
+      // list is the only one that does, and its grouping must not quietly
+      // change what the item detail page or the pool list renders.
+      render(<VariantCapsules item={makeItem(full)} />);
+      expect(screen.getByText('M')).toBeInTheDocument();
+      expect(screen.getByText('Black')).toBeInTheDocument();
+      expect(screen.getByText('V-Neck')).toBeInTheDocument();
+    });
+
+    it('leaves out only what it is asked to', () => {
+      render(<VariantCapsules item={makeItem(full)} omit={['size']} />);
+      expect(screen.queryByText('M')).not.toBeInTheDocument();
+      expect(screen.getByText('Black')).toBeInTheDocument();
+      expect(screen.getByText('V-Neck')).toBeInTheDocument();
+    });
+
+    it('renders nothing when everything it would show is omitted', () => {
+      const { container } = render(<VariantCapsules item={makeItem(full)} omit={['size', 'color', 'style']} />);
+      // Not an empty bordered span sitting in the cell.
+      expect(container).toBeEmptyDOMElement();
+    });
+  });
 });

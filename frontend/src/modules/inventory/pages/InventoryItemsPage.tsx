@@ -31,6 +31,9 @@ import {
   ListPlus,
   Upload,
   Truck,
+  Pin,
+  PinOff,
+  GripVertical,
 } from 'lucide-react';
 import { inventoryService, locationsService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -49,10 +52,12 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import ReceiveStockModal from '../components/ReceiveStockModal';
 import BulkAddItemsModal from '../components/BulkAddItemsModal';
 import { VariantCapsules } from '../components/VariantCapsules';
-import { getDisplayName } from '../utils/variantHelpers';
+import type { VariantAttribute } from '../components/VariantCapsules';
+import { displaySize, getDisplayName } from '../utils/variantHelpers';
 import type {
   InventoryItem,
   InventoryCategory,
+  ItemGroupCount,
   InventorySummary,
   LocationInventorySummary,
   StorageAreaResponse,
@@ -100,6 +105,68 @@ const SORT_COLS = [
 ] as const;
 type SortKey = (typeof SORT_COLS)[number]['key'];
 
+/**
+ * Dimensions the list can be grouped by.
+ *
+ * Mirrors `InventoryService.GROUPABLE` on the backend, which owns the join and
+ * the counting for each. An unknown value degrades to an ungrouped list rather
+ * than erroring, so a stale link shows items instead of a failure page.
+ */
+const GROUP_COLS = [
+  { key: '', label: 'No grouping' },
+  { key: 'category', label: 'Category' },
+  { key: 'item_type', label: 'Item type' },
+  { key: 'color', label: 'Color' },
+  { key: 'size', label: 'Size' },
+  { key: 'condition', label: 'Condition' },
+  { key: 'style', label: 'Style' },
+  { key: 'location', label: 'Location' },
+  { key: 'vendor', label: 'Vendor' },
+] as const;
+type GroupKey = (typeof GROUP_COLS)[number]['key'];
+
+/** Header for the bucket of items with no value on the grouped dimension. */
+const UNSPECIFIED_GROUP = 'Unspecified';
+
+/**
+ * The grouped value of one item, as the string the backend keyed its counts on.
+ *
+ * Must agree with `InventoryService._group_spec`, or a row lands under a header
+ * whose count excludes it. Two agreements are load-bearing: colour is keyed
+ * lower-cased (the colour filter has always matched case-insensitively, so
+ * "Navy" and "navy" are one bucket), and location follows the same precedence
+ * as the Location column rather than `location_id` alone.
+ */
+function groupKeyOf(
+  item: InventoryItem,
+  dimension: GroupKey,
+  locs: Location[],
+  cats: InventoryCategory[]
+): string | null {
+  switch (dimension) {
+    case 'category':
+      return item.category_id ?? null;
+    case 'color':
+      return item.color ? item.color.toLowerCase() : null;
+    case 'size':
+      return item.standard_size ?? item.size ?? null;
+    case 'condition':
+      return item.condition ?? null;
+    case 'style':
+      return item.style ?? null;
+    case 'vendor':
+      return item.vendor_id ?? null;
+    case 'location':
+      return locLabel(item, locs) || null;
+    case 'item_type':
+      // Lives on the category, not the item — the backend groups it through
+      // the same join.
+      return cats.find((c) => c.id === item.category_id)?.item_type ?? null;
+    default:
+      return null;
+  }
+}
+
 function locLabel(item: InventoryItem, locs: Location[]): string {
   if (item.storage_location) return item.storage_location;
   if (item.location_id) return locs.find((l) => l.id === item.location_id)?.name ?? '';
@@ -134,10 +201,31 @@ interface ItemTableProps {
   toggleAll: () => void;
   toggleSort: (k: SortKey) => void;
   SortIc: React.FC<{ col: SortKey }>;
+  sortBy: SortKey;
+  sortOrd: 'asc' | 'desc';
   showStatus: boolean;
   canManage: boolean;
   onEdit: (item: InventoryItem) => void;
   onRetire: (item: InventoryItem) => void;
+  onTogglePin: (item: InventoryItem) => void;
+  /**
+   * True when the page has more matching items than it has loaded. The split
+   * into these sections happens client-side over the loaded rows, so the count
+   * is a running tally rather than a section total, and must not be shown as
+   * one.
+   */
+  truncated?: boolean;
+  /** Active grouping dimension, '' for none. */
+  groupBy?: GroupKey;
+  /** Whole-set counts keyed by group key; '' keys the Unspecified bucket. */
+  groupTotals?: Map<string, number>;
+  /** Display names per key — a category id is not a heading. */
+  groupLabels?: Map<string, string>;
+  collapsed?: Set<string>;
+  onToggleGroup?: (key: string) => void;
+  /** Renders the drag handle and the move arrows. Pinned section only. */
+  pinnedMode?: boolean;
+  onMovePin?: (itemId: string, toIndex: number) => void;
 }
 
 const ItemTable: React.FC<ItemTableProps> = ({
@@ -151,29 +239,71 @@ const ItemTable: React.FC<ItemTableProps> = ({
   toggleAll,
   toggleSort,
   SortIc,
+  sortBy,
+  sortOrd,
   showStatus,
   canManage,
   onEdit,
   onRetire,
+  onTogglePin,
+  truncated = false,
+  groupBy = '',
+  groupTotals,
+  groupLabels,
+  collapsed,
+  onToggleGroup,
+  pinnedMode = false,
+  onMovePin,
 }) => {
+  const [dragId, setDragId] = useState<string | null>(null);
+
   if (items.length === 0) return null;
 
   const allSelected = items.length > 0 && items.every((i) => selIds.has(i.id));
+  // `items` is what this page has LOADED, not what matches the filters — the
+  // three-way split is client-side over the loaded rows. Rendering a bare
+  // "(12)" while 87 match reads as a section total and silently understates
+  // the department's stock the moment the list runs past one page.
+  const countLabel = truncated ? `(${items.length} so far)` : `(${items.length})`;
+  const ariaSort = (col: SortKey): 'ascending' | 'descending' | 'none' =>
+    sortBy === col ? (sortOrd === 'asc' ? 'ascending' : 'descending') : 'none';
+
+  // One rule: the grouped dimension never appears in the row. The group header
+  // states it once; repeating it on every row beneath is dead width. It applies
+  // the same whether the dimension lives in a real column (Category, Condition,
+  // Location) or in a variant capsule (Colour, Size, Style).
+  const grouped = (dimension: GroupKey) => groupBy === dimension;
+  // Size earns a column of its own in the space a hidden column vacates — it is
+  // what a quartermaster scans for, and a chip wedged between colour and style
+  // is not scannable. Never when size IS the grouping, because then the header
+  // already says it and a column would be the very redundancy being removed.
+  const showSizeColumn = Boolean(groupBy) && !grouped('size');
+  const omitCapsules: VariantAttribute[] = [
+    // Whenever anything is grouped: either the Size column carries it, or the
+    // group header does.
+    ...(groupBy ? (['size'] as const) : []),
+    ...(grouped('color') ? (['color'] as const) : []),
+    ...(grouped('style') ? (['style'] as const) : []),
+  ];
 
   return (
     <div>
       <div className="mb-2 flex items-center gap-2">
         {icon}
         <h2 className="text-theme-text-secondary text-sm font-semibold tracking-wide uppercase">{label}</h2>
-        <span className="text-theme-text-muted text-xs">({items.length})</span>
+        <span className="text-theme-text-muted text-xs">{countLabel}</span>
       </div>
       <div className="card-secondary overflow-x-auto">
         {/* Single responsive table: a table on >=md, stacked cards below.
             Cells marked `hidden` are mobile-only (revealed by the reflow);
             cells with no data-label are hidden in the stacked view. */}
-        <table className="rwd-table w-full text-sm">
+        {/* Named, because the page renders up to three of these and a screen
+            reader announcing "table" three times gives no way to tell the
+            pinned shortlist from the rest of the shelf. */}
+        <table aria-label={label} className="rwd-table w-full text-sm">
           <thead>
             <tr className="border-theme-surface-border border-b">
+              {pinnedMode && <th scope="col" className="w-24 px-2 py-3" />}
               <th scope="col" className="w-10 px-3 py-3 text-left">
                 <input
                   type="checkbox"
@@ -183,7 +313,11 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   aria-label={`Select all ${label.toLowerCase()}`}
                 />
               </th>
-              <th scope="col" className="px-3 py-3 text-left">
+              {/* aria-sort is set by hand because this page predates
+                  components/ux/SortableHeader and hand-rolls its sort buttons;
+                  without it a screen reader announces a plain button and never
+                  says which column the table is ordered by. */}
+              <th scope="col" aria-sort={ariaSort('name')} className="px-3 py-3 text-left">
                 <button
                   onClick={() => toggleSort('name')}
                   className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
@@ -192,7 +326,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                 </button>
               </th>
               {showStatus && (
-                <th scope="col" className="px-3 py-3 text-left">
+                <th scope="col" aria-sort={ariaSort('status')} className="px-3 py-3 text-left">
                   <button
                     onClick={() => toggleSort('status')}
                     className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
@@ -201,31 +335,59 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   </button>
                 </th>
               )}
-              <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
-                Category
-              </th>
+              {!grouped('category') && (
+                <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                  Category
+                </th>
+              )}
               <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
                 Variant
               </th>
+              {/* Not sortable, deliberately: the backend's _SORTABLE_COLUMNS has
+                  no size key and silently falls back to name, so a sort button
+                  here would look live and do nothing. */}
+              {showSizeColumn && (
+                <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                  Size
+                </th>
+              )}
               <th scope="col" className="text-theme-text-secondary px-3 py-3 text-center font-medium">
                 Qty
               </th>
-              <th scope="col" className="px-3 py-3 text-left">
-                <button
-                  onClick={() => toggleSort('condition')}
-                  className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
-                >
-                  Condition <SortIc col="condition" />
-                </button>
-              </th>
-              <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
-                Location
-              </th>
-              <th scope="col" className="w-10 px-3 py-3" />
+              {/* Hiding this also hides its sort button, which is right:
+                  sorting by the dimension you are grouped by is meaningless
+                  (the group order dominates it), and the mobile Sort dropdown
+                  still offers Condition. */}
+              {!grouped('condition') && (
+                <th scope="col" aria-sort={ariaSort('condition')} className="px-3 py-3 text-left">
+                  <button
+                    onClick={() => toggleSort('condition')}
+                    className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 font-medium"
+                  >
+                    Condition <SortIc col="condition" />
+                  </button>
+                </th>
+              )}
+              {!grouped('location') && (
+                <th scope="col" className="text-theme-text-secondary px-3 py-3 text-left font-medium">
+                  Location
+                </th>
+              )}
+              <th scope="col" className="w-20 px-3 py-3" />
             </tr>
           </thead>
           <tbody className="divide-theme-surface-border divide-y">
-            {items.map((item) => {
+            {items.map((item, index) => {
+              // Rows arrive ordered so a group's members are contiguous (the
+              // backend sorts by the group key), so a header is emitted
+              // wherever the key changes rather than by pre-bucketing.
+              const gKey = groupBy ? groupKeyOf(item, groupBy, locations, categories) : null;
+              const prev = index > 0 ? items[index - 1] : undefined;
+              const prevKey = groupBy && prev ? groupKeyOf(prev, groupBy, locations, categories) : undefined;
+              const startsGroup = Boolean(groupBy) && (index === 0 || gKey !== prevKey);
+              const bucket = gKey ?? '';
+              const isCollapsed = Boolean(groupBy) && (collapsed?.has(bucket) ?? false);
+              const groupTotal = groupTotals?.get(bucket);
               const cat = categories.find((ct) => ct.id === item.category_id);
               const loc = locLabel(item, locations);
               const manufacturer = [item.manufacturer, item.model_number].filter(Boolean).join(' ');
@@ -234,100 +396,204 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   ? `$${formatNumber(item.purchase_price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : '';
               return (
-                <tr
-                  key={item.id}
-                  className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''}`}
-                >
-                  <td data-label="" className="px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selIds.has(item.id)}
-                      onChange={() => toggle(item.id)}
-                      className="form-checkbox"
-                      aria-label={`Select ${item.name}`}
-                    />
-                  </td>
-                  <td data-label="Name" className="px-3 py-3">
-                    <Link
-                      to={`/inventory/items/${item.id}`}
-                      className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
-                    >
-                      {getDisplayName(item)}
-                    </Link>
-                  </td>
-                  {/* Status: a desktop column only when showStatus, but always
-                      surfaced on mobile (where items aren't column-grouped). */}
-                  <td data-label="Status" className={`px-3 py-3 ${showStatus ? '' : 'md:hidden'}`}>
-                    <span
-                      className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(item.status)}`}
-                    >
-                      {item.status.replace(/_/g, ' ').toUpperCase()}
-                    </span>
-                  </td>
-                  <td data-label="Category" className="text-theme-text-muted px-3 py-3">
-                    {cat?.name ?? ''}
-                  </td>
-                  <td data-label="Variant" className="px-3 py-3">
-                    <VariantCapsules item={item} />
-                  </td>
-                  <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
-                    {qtyLabel(item)}
-                    {item.is_lot_stocked && (
-                      <span
-                        className="text-theme-text-muted block text-[10px] leading-tight"
-                        title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
+                <React.Fragment key={item.id}>
+                  {startsGroup && (
+                    <tr className="bg-theme-surface-hover/60">
+                      <th
+                        scope="colgroup"
+                        colSpan={20}
+                        className="border-theme-surface-border border-y px-3 py-2 text-left"
                       >
-                        in-date lots
-                      </span>
-                    )}
-                  </td>
-                  <td data-label="Condition" className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>
-                    {item.condition.replace(/_/g, ' ')}
-                  </td>
-                  <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
-                    {loc || '-'}
-                  </td>
-                  {/* Mobile-only detail cells (hidden on desktop, revealed by the reflow) */}
-                  <td data-label="Manufacturer" className="hidden">
-                    {manufacturer || '--'}
-                  </td>
-                  <td data-label="Serial #" className="hidden">
-                    {item.serial_number || '--'}
-                  </td>
-                  <td data-label="Asset Tag" className="hidden">
-                    {item.asset_tag || '--'}
-                  </td>
-                  <td data-label="Barcode" className="hidden">
-                    {item.barcode || '--'}
-                  </td>
-                  <td data-label="Cost" className="hidden">
-                    {cost || '--'}
-                  </td>
-                  <td className="px-3 py-3">
-                    <Link
-                      to={`/inventory/items/${item.id}`}
-                      className="text-theme-text-muted hover:text-theme-text-primary"
-                      aria-label={`View ${item.name}`}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  </td>
-                  {/* Mobile-only inline actions */}
-                  {canManage && (
-                    <td data-label="" className="hidden">
-                      <div className="flex flex-wrap gap-2">
-                        <button onClick={() => onEdit(item)} className="btn-secondary btn-sm">
-                          Edit
+                        <button
+                          type="button"
+                          onClick={() => onToggleGroup?.(bucket)}
+                          aria-expanded={!isCollapsed}
+                          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                          <span className={gKey === null ? 'italic' : ''}>
+                            {gKey === null ? UNSPECIFIED_GROUP : (groupLabels?.get(bucket) ?? bucket)}
+                          </span>
+                          {/* The backend's count, not the loaded rows': a
+                              collapsed group must state its total, and a
+                              tally of what arrived would understate it. */}
+                          <span className="text-theme-text-muted font-normal normal-case">({groupTotal ?? '—'})</span>
                         </button>
-                        {item.status !== 'retired' && (
-                          <button onClick={() => onRetire(item)} className="btn-secondary btn-sm">
-                            Retire
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                      </th>
+                    </tr>
                   )}
-                </tr>
+                  {!isCollapsed && (
+                    <tr
+                      {...(pinnedMode
+                        ? {
+                            draggable: true,
+                            onDragStart: () => setDragId(item.id),
+                            onDragEnd: () => setDragId(null),
+                            onDragOver: (e: React.DragEvent) => e.preventDefault(),
+                            onDrop: (e: React.DragEvent) => {
+                              e.preventDefault();
+                              if (dragId && dragId !== item.id) onMovePin?.(dragId, index);
+                              setDragId(null);
+                            },
+                          }
+                        : {})}
+                      className={`hover:bg-theme-surface-hover transition-colors ${selIds.has(item.id) ? 'bg-theme-surface-hover/50' : ''} ${dragId === item.id ? 'opacity-60' : ''}`}
+                    >
+                      {pinnedMode && (
+                        <td data-label="Order" className="text-theme-text-muted px-2 py-3">
+                          {/* Grip and arrows in ONE cell so the reflow keeps them
+                          together: split across the row's two ends, the arrows
+                          landed after ten stacked field rows on a phone, which
+                          is where they matter most — HTML5 drag never fires on
+                          touch, so there they are the only way to reorder. */}
+                          <div className="flex items-center gap-0.5">
+                            <GripVertical className="hidden h-4 w-4 cursor-grab md:block" aria-hidden="true" />
+                            <button
+                              type="button"
+                              onClick={() => onMovePin?.(item.id, index - 1)}
+                              disabled={index === 0}
+                              className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
+                              aria-label={`Move ${getDisplayName(item)} up`}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onMovePin?.(item.id, index + 1)}
+                              disabled={index === items.length - 1}
+                              className="btn-icon-sm mobile-touch-target hover:text-theme-text-primary disabled:opacity-30"
+                              aria-label={`Move ${getDisplayName(item)} down`}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                      <td data-label="" className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selIds.has(item.id)}
+                          onChange={() => toggle(item.id)}
+                          className="form-checkbox"
+                          aria-label={`Select ${item.name}`}
+                        />
+                      </td>
+                      <td data-label="Name" className="px-3 py-3">
+                        <Link
+                          to={`/inventory/items/${item.id}`}
+                          className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
+                        >
+                          {getDisplayName(item)}
+                        </Link>
+                      </td>
+                      {/* Status: a desktop column only when showStatus, but always
+                      surfaced on mobile (where items aren't column-grouped). */}
+                      <td data-label="Status" className={`px-3 py-3 ${showStatus ? '' : 'md:hidden'}`}>
+                        <span
+                          className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(item.status)}`}
+                        >
+                          {item.status.replace(/_/g, ' ').toUpperCase()}
+                        </span>
+                      </td>
+                      {!grouped('category') && (
+                        <td data-label="Category" className="text-theme-text-muted px-3 py-3">
+                          {cat?.name ?? ''}
+                        </td>
+                      )}
+                      <td data-label="Variant" className="px-3 py-3">
+                        <VariantCapsules item={item} omit={omitCapsules} />
+                      </td>
+                      {showSizeColumn && (
+                        <td data-label="Size" className="text-theme-text-primary px-3 py-3">
+                          {displaySize(item) || '--'}
+                        </td>
+                      )}
+                      <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
+                        {qtyLabel(item)}
+                        {item.is_lot_stocked && (
+                          <span
+                            className="text-theme-text-muted block text-[10px] leading-tight"
+                            title="Ready units across in-date stock lots. Expired lots are not counted — they cannot be issued or swapped onto an apparatus."
+                          >
+                            in-date lots
+                          </span>
+                        )}
+                      </td>
+                      {!grouped('condition') && (
+                        <td
+                          data-label="Condition"
+                          className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}
+                        >
+                          {item.condition.replace(/_/g, ' ')}
+                        </td>
+                      )}
+                      {!grouped('location') && (
+                        <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
+                          {loc || '-'}
+                        </td>
+                      )}
+                      {/* Mobile-only detail cells (hidden on desktop, revealed by the reflow) */}
+                      <td data-label="Manufacturer" className="hidden">
+                        {manufacturer || '--'}
+                      </td>
+                      <td data-label="Serial #" className="hidden">
+                        {item.serial_number || '--'}
+                      </td>
+                      <td data-label="Asset Tag" className="hidden">
+                        {item.asset_tag || '--'}
+                      </td>
+                      <td data-label="Barcode" className="hidden">
+                        {item.barcode || '--'}
+                      </td>
+                      <td data-label="Cost" className="hidden">
+                        {cost || '--'}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onTogglePin(item)}
+                            className={`btn-icon-sm ${
+                              item.pin_position != null
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-theme-text-muted hover:text-theme-text-primary'
+                            }`}
+                            aria-label={`${item.pin_position != null ? 'Unpin' : 'Pin'} ${getDisplayName(item)}`}
+                            aria-pressed={item.pin_position != null}
+                          >
+                            {item.pin_position != null ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                          </button>
+                          <Link
+                            to={`/inventory/items/${item.id}`}
+                            className="text-theme-text-muted hover:text-theme-text-primary"
+                            aria-label={`View ${item.name}`}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+                        </div>
+                      </td>
+                      {/* Mobile-only inline actions */}
+                      {canManage && (
+                        <td data-label="" className="hidden">
+                          <div className="flex flex-wrap gap-2">
+                            <button onClick={() => onEdit(item)} className="btn-secondary btn-sm">
+                              Edit
+                            </button>
+                            {item.status !== 'retired' && (
+                              <button onClick={() => onRetire(item)} className="btn-secondary btn-sm">
+                                Retire
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -398,6 +664,12 @@ const InventoryItemsPage: React.FC = () => {
   const [fStyle, setFStyle] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortOrd, setSortOrd] = useState<'asc' | 'desc'>('asc');
+  const [groupBy, setGroupBy] = useState<GroupKey>('');
+  const [groupCounts, setGroupCounts] = useState<ItemGroupCount[]>([]);
+  // Collapsed group keys, per section. A group collapsed under Available
+  // should not also vanish from Unavailable — they are different populations
+  // that happen to share a heading.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -411,9 +683,53 @@ const InventoryItemsPage: React.FC = () => {
   const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  /* ---- split items by availability ---- */
-  const availableItems = useMemo(() => items.filter((i) => i.status === 'available'), [items]);
-  const unavailableItems = useMemo(() => items.filter((i) => i.status !== 'available'), [items]);
+  /* ---- split items into pinned / available / unavailable ----
+     A pinned item is REMOVED from the lower two tables rather than repeated in
+     both. Not cosmetic: `selIds` is a Set of ids, so one row rendered twice
+     would show two checkboxes for the same item and desynchronise
+     `toggleAll`. */
+  const pinnedItems = useMemo(
+    () => items.filter((i) => i.pin_position != null).sort((a, b) => (a.pin_position ?? 0) - (b.pin_position ?? 0)),
+    [items]
+  );
+  const availableItems = useMemo(
+    () => items.filter((i) => i.pin_position == null && i.status === 'available'),
+    [items]
+  );
+  const unavailableItems = useMemo(
+    () => items.filter((i) => i.pin_position == null && i.status !== 'available'),
+    [items]
+  );
+
+  /* ---- grouping lookups ----
+     Keyed on the same strings `groupKeyOf` produces, with '' standing for the
+     Unspecified bucket, so a header always finds the backend's count for the
+     rows beneath it. */
+  const groupAvailable = useMemo(() => {
+    const m = new Map<string, number>();
+    groupCounts.forEach((g) => m.set(g.key ?? '', g.available_count));
+    return m;
+  }, [groupCounts]);
+  const groupUnavailable = useMemo(() => {
+    const m = new Map<string, number>();
+    groupCounts.forEach((g) => m.set(g.key ?? '', g.unavailable_count));
+    return m;
+  }, [groupCounts]);
+  const groupLabels = useMemo(() => {
+    const m = new Map<string, string>();
+    groupCounts.forEach((g) => {
+      if (g.label) m.set(g.key ?? '', g.label);
+    });
+    return m;
+  }, [groupCounts]);
+
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   /* ---- helpers ---- */
   const filterParams = useCallback(
@@ -431,8 +747,9 @@ const InventoryItemsPage: React.FC = () => {
       style: fStyle || undefined,
       sort_by: sortBy,
       sort_order: sortOrd,
+      group_by: groupBy || undefined,
     }),
-    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, sortBy, sortOrd]
+    [search, fCat, fStatus, fCond, fType, fLoc, vendorFilter, fSize, fColor, fStyle, sortBy, sortOrd, groupBy]
   );
 
   const loadItems = useCallback(
@@ -443,6 +760,9 @@ const InventoryItemsPage: React.FC = () => {
         const items = asArray(res.items);
         setItems(reset || s === 0 ? items : (prev) => [...prev, ...items]);
         setTotal(res.total ?? 0);
+        // Whole-set counts, so a collapsed header states a total rather than
+        // however much of the group happened to load.
+        setGroupCounts(asArray(res.groups ?? []));
         if (reset) setSkip(0);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load items'));
@@ -596,6 +916,53 @@ const InventoryItemsPage: React.FC = () => {
     return sortOrd === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />;
   };
 
+  /* ---- pinning ----
+     Pins are the caller's own shortlist, hoisted above the rest of the list by
+     the backend. Every mutation applies to local state first and reconciles
+     from the server afterwards, so the row moves under the tap rather than a
+     third of a second later. */
+  const togglePin = async (item: InventoryItem) => {
+    const wasPinned = item.pin_position != null;
+    try {
+      if (wasPinned) await inventoryService.unpinItem(item.id);
+      else await inventoryService.pinItem(item.id);
+      await loadItems(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, wasPinned ? 'Failed to unpin item' : 'Failed to pin item'));
+    }
+  };
+
+  const movePin = async (itemId: string, toIndex: number) => {
+    const current = pinnedItems.map((i) => i.id);
+    const from = current.indexOf(itemId);
+    if (from === -1) return;
+    const target = Math.max(0, Math.min(current.length - 1, toIndex));
+    if (from === target) return;
+
+    const next = [...current];
+    const [moved] = next.splice(from, 1);
+    if (moved === undefined) return;
+    next.splice(target, 0, moved);
+
+    // Optimistic: restamp pin_position locally so the row moves immediately.
+    const order = new Map(next.map((id, index) => [id, index]));
+    setItems((prev) => prev.map((i) => (order.has(i.id) ? { ...i, pin_position: order.get(i.id) ?? null } : i)));
+
+    try {
+      // Every pinned id, not just the ones that moved — the backend rejects a
+      // partial list rather than guessing which pins were dropped.
+      await inventoryService.reorderItemPins(next);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reorder pinned items'));
+      // Reload rather than restore a local snapshot. The rejection this path
+      // exists for is "your list no longer matches ours" — pinned on a phone a
+      // minute ago — and putting back the stale order the browser already had
+      // leaves every retry failing the same way. Refetching gives the next
+      // attempt the real set to reorder.
+      await loadItems(true);
+    }
+  };
+
   /* ---- selection ---- */
   const toggle = (id: string) =>
     setSelIds((p) => {
@@ -606,6 +973,16 @@ const InventoryItemsPage: React.FC = () => {
     });
 
   /* ---- section-level toggleAll helpers ---- */
+  const toggleAllPinned = () =>
+    setSelIds((prev) => {
+      const allSelected = pinnedItems.length > 0 && pinnedItems.every((i) => prev.has(i.id));
+      if (allSelected) {
+        const next = new Set(prev);
+        pinnedItems.forEach((i) => next.delete(i.id));
+        return next;
+      }
+      return new Set([...prev, ...pinnedItems.map((i) => i.id)]);
+    });
   const toggleAllAvailable = () =>
     setSelIds((prev) => {
       const allSelected = availableItems.length > 0 && availableItems.every((i) => prev.has(i.id));
@@ -1146,6 +1523,35 @@ const InventoryItemsPage: React.FC = () => {
         />
       )}
 
+      {/* Group-by — a view control, not a filter: it changes how rows are
+          arranged, never which ones match, so it sits with Sort rather than in
+          the filter card above. */}
+      {!loading && items.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <label htmlFor="group-by" className="text-theme-text-muted shrink-0 text-xs">
+            Group by:
+          </label>
+          <select
+            id="group-by"
+            className="form-input w-auto py-1.5 text-xs"
+            value={groupBy}
+            onChange={(e) => {
+              setGroupBy(e.target.value as GroupKey);
+              // Collapse state is keyed by group VALUE, and those values mean
+              // different things on a different dimension — a key collapsed
+              // under Colour must not silently collapse a Category.
+              setCollapsed(new Set());
+            }}
+          >
+            {GROUP_COLS.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Mobile sort controls — the table's header-sort buttons are hidden
           when rows reflow into cards on mobile, so expose sorting here. */}
       {!loading && items.length > 0 && (
@@ -1176,6 +1582,29 @@ const InventoryItemsPage: React.FC = () => {
           >=md, stacked cards below). */}
       {!loading && items.length > 0 && (
         <div className="space-y-6">
+          {/* Pinned first, and with Status shown: a pinned item that has gone
+              into maintenance is exactly what its owner needs to see. */}
+          <ItemTable
+            label="Pinned"
+            icon={<Pin className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            items={pinnedItems}
+            categories={categories}
+            locations={locations}
+            selIds={selIds}
+            toggle={toggle}
+            toggleAll={toggleAllPinned}
+            toggleSort={toggleSort}
+            SortIc={SortIc}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
+            showStatus
+            canManage={canManage}
+            onEdit={openEdit}
+            onRetire={retireOne}
+            onTogglePin={(item) => void togglePin(item)}
+            onMovePin={(id, to) => void movePin(id, to)}
+            pinnedMode
+          />
           <ItemTable
             label="Available"
             icon={<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
@@ -1187,10 +1616,19 @@ const InventoryItemsPage: React.FC = () => {
             toggleAll={toggleAllAvailable}
             toggleSort={toggleSort}
             SortIc={SortIc}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
             showStatus={false}
             canManage={canManage}
             onEdit={openEdit}
             onRetire={retireOne}
+            onTogglePin={(item) => void togglePin(item)}
+            truncated={hasMore}
+            groupBy={groupBy}
+            groupTotals={groupAvailable}
+            groupLabels={groupLabels}
+            collapsed={collapsed}
+            onToggleGroup={toggleGroup}
           />
           <ItemTable
             label="Unavailable"
@@ -1203,10 +1641,19 @@ const InventoryItemsPage: React.FC = () => {
             toggleAll={toggleAllUnavailable}
             toggleSort={toggleSort}
             SortIc={SortIc}
+            sortBy={sortBy}
+            sortOrd={sortOrd}
             showStatus
             canManage={canManage}
             onEdit={openEdit}
             onRetire={retireOne}
+            onTogglePin={(item) => void togglePin(item)}
+            truncated={hasMore}
+            groupBy={groupBy}
+            groupTotals={groupUnavailable}
+            groupLabels={groupLabels}
+            collapsed={collapsed}
+            onToggleGroup={toggleGroup}
           />
         </div>
       )}

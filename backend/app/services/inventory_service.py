@@ -14,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import and_, case, func, literal, or_, select, update
+from sqlalchemy import and_, case, delete, func, literal, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -33,6 +33,7 @@ from app.models.inventory import (
     InventoryCategory,
     InventoryImpactPlan,
     InventoryItem,
+    InventoryItemPin,
     InventoryLot,
     InventoryVendor,
     InventoryVendorContact,
@@ -1657,6 +1658,107 @@ class InventoryService:
             await self.db.rollback()
             return None, str(e)
 
+    # Dimensions the items list can be grouped by, as
+    # name -> (key expression, label expression, outer joins to add).
+    #
+    # Every join is an OUTER join and every dimension tolerates NULL: an item
+    # whose category was deleted (the FK is ondelete=SET NULL), or that simply
+    # has no colour recorded, must still appear -- under "Unspecified" -- not
+    # vanish from a list it matches the filters for.
+    @staticmethod
+    def _group_spec(group_by: str):
+        """Return (key, label, joins) for a grouping dimension, or None."""
+        if group_by == "category":
+            return (
+                InventoryCategory.id,
+                InventoryCategory.name,
+                [
+                    (
+                        InventoryCategory,
+                        InventoryItem.category_id == InventoryCategory.id,
+                    )
+                ],
+            )
+        if group_by == "item_type":
+            # Lives on the category, not the item.
+            return (
+                InventoryCategory.item_type,
+                InventoryCategory.item_type,
+                [
+                    (
+                        InventoryCategory,
+                        InventoryItem.category_id == InventoryCategory.id,
+                    )
+                ],
+            )
+        if group_by == "color":
+            # Lower-cased, to agree with the colour FILTER, which has always
+            # matched case-insensitively because the catalog collapses on
+            # `color.casefold()`. Grouping on the raw column would put "Navy"
+            # and "navy" in two buckets that can never be viewed together --
+            # exactly the split the filter exists to avoid.
+            # The label is a representative spelling from the data, not a
+            # canonical one: MIN() under a case-insensitive collation treats
+            # "Navy" and "navy" as equal, so which of them heads the group is
+            # unspecified when the data carries both. Either is correct -- the
+            # bucket and its count are what matter.
+            return (
+                func.lower(InventoryItem.color),
+                func.min(InventoryItem.color),
+                [],
+            )
+        if group_by == "size":
+            # COALESCE, matching the size filter, which accepts a hit on
+            # either column.
+            expr = func.coalesce(InventoryItem.standard_size, InventoryItem.size)
+            return (expr, expr, [])
+        if group_by == "condition":
+            return (InventoryItem.condition, InventoryItem.condition, [])
+        if group_by == "style":
+            return (InventoryItem.style, InventoryItem.style, [])
+        if group_by == "location":
+            # The SAME precedence the list's Location column uses
+            # (frontend locLabel: storage_location, then the location's name,
+            # then station). Grouping on `location_id` alone would file an item
+            # tagged "Shelf B-3" under Unassigned while the cell beside it
+            # plainly reads "Shelf B-3".
+            expr = func.coalesce(
+                InventoryItem.storage_location,
+                Location.name,
+                InventoryItem.station,
+            )
+            return (
+                expr,
+                expr,
+                [(Location, InventoryItem.location_id == Location.id)],
+            )
+        if group_by == "vendor":
+            return (
+                InventoryVendor.id,
+                InventoryVendor.name,
+                [(InventoryVendor, InventoryItem.vendor_id == InventoryVendor.id)],
+            )
+        return None
+
+    GROUPABLE = (
+        "category",
+        "item_type",
+        "color",
+        "size",
+        "condition",
+        "style",
+        "location",
+        "vendor",
+    )
+
+    # Ceiling on one member's pinned shortlist.
+    #
+    # Not arbitrary: the list endpoint pages at 50 rows and pinned items sort
+    # first, so an unbounded shortlist would fill the whole first page and make
+    # "Load More" the only route to unpinned stock -- the opposite of what
+    # pinning is for.
+    MAX_PINS = 25
+
     # Columns allowed for sort_by parameter
     _SORTABLE_COLUMNS = {
         "name": InventoryItem.name,
@@ -1711,7 +1813,7 @@ class InventoryService:
             cls._outside_domains(organization_id, exclude_item_types),
         )
 
-    async def get_items(
+    def _build_items_query(
         self,
         organization_id: UUID,
         category_id: Optional[UUID] = None,
@@ -1730,23 +1832,12 @@ class InventoryService:
         color: Optional[str] = None,
         style: Optional[str] = None,
         active_only: bool = True,
-        sort_by: Optional[str] = None,
-        sort_order: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 100,
-    ) -> Tuple[List[InventoryItem], int]:
-        """Get items with filtering, sorting, and pagination.
+    ) -> "Select":
+        """The filtered item select, with no ordering, joins or pagination.
 
-        ``unassigned_location`` restricts to items filed under no location at
-        all — the population the location panel labels "Unassigned". It is
-        ignored when ``location_id`` names a location, since the two ask for
-        disjoint sets and a request carrying both is asking for nothing.
-
-        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
-        out — that pair is what keeps the medical-supply page and the
-        gear-and-uniforms page from each listing the other's stock. Both are
-        applied server-side from the caller's permissions, never from a query
-        parameter, so a medical-only officer cannot widen their own view.
+        Extracted so ``get_items`` and ``get_item_group_counts`` cannot drift:
+        a second hand-maintained copy of a seventeen-parameter WHERE clause is
+        how a group header comes to disagree with the list it labels.
         """
         query = (
             select(InventoryItem)
@@ -1876,6 +1967,102 @@ class InventoryService:
         if active_only:
             query = query.where(InventoryItem.active.is_(True))
 
+        return query
+
+    async def get_items(
+        self,
+        organization_id: UUID,
+        category_id: Optional[UUID] = None,
+        status: Optional[ItemStatus] = None,
+        condition: Optional[ItemCondition] = None,
+        item_type: Optional[ItemType] = None,
+        item_types: Optional[Iterable[ItemType]] = None,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+        assigned_to: Optional[UUID] = None,
+        location_id: Optional[UUID] = None,
+        unassigned_location: bool = False,
+        storage_area_id: Optional[UUID] = None,
+        vendor_id: Optional[UUID] = None,
+        search: Optional[str] = None,
+        size: Optional[str] = None,
+        color: Optional[str] = None,
+        style: Optional[str] = None,
+        active_only: bool = True,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        pinned_for_user_id: Optional[UUID] = None,
+        group_by: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[InventoryItem], int]:
+        """Get items with filtering, sorting, and pagination.
+
+        ``unassigned_location`` restricts to items filed under no location at
+        all — the population the location panel labels "Unassigned". It is
+        ignored when ``location_id`` names a location, since the two ask for
+        disjoint sets and a request carrying both is asking for nothing.
+
+        ``item_types`` restricts to a domain, ``exclude_item_types`` carves one
+        out — that pair is what keeps the medical-supply page and the
+        gear-and-uniforms page from each listing the other's stock. Both are
+        applied server-side from the caller's permissions, never from a query
+        parameter, so a medical-only officer cannot widen their own view.
+
+        ``pinned_for_user_id`` hoists that member's pinned items to the front
+        of the result, ahead of whatever ``sort_by`` asks for, and stamps
+        ``pin_position`` on every returned row. It is the caller's own id, never
+        a request parameter -- a pin list is personal, and reading someone
+        else's is not a feature. A member with no pins gets an outer join that
+        matches nothing and the exact ordering they had before.
+
+        ``group_by`` names a dimension from ``GROUPABLE``. It does not change
+        WHICH items come back, only their order: rows are sorted so a group's
+        members are contiguous and therefore cannot be split across a page
+        boundary, which is what would make a collapsed group show half its
+        contents. The counts that label those groups come from
+        ``get_item_group_counts``, which measures the whole filtered set --
+        a header tallying only the loaded page would be worse than no header,
+        since "Class A Uniform (3)" reads as a total when 40 match.
+        """
+        query = self._build_items_query(
+            organization_id=organization_id,
+            category_id=category_id,
+            status=status,
+            condition=condition,
+            item_type=item_type,
+            item_types=item_types,
+            exclude_item_types=exclude_item_types,
+            assigned_to=assigned_to,
+            location_id=location_id,
+            unassigned_location=unassigned_location,
+            storage_area_id=storage_area_id,
+            vendor_id=vendor_id,
+            search=search,
+            size=size,
+            color=color,
+            style=style,
+            active_only=active_only,
+        )
+
+        group = self._group_spec(group_by) if group_by else None
+        if group is not None:
+            for target, onclause in group[2]:
+                query = query.outerjoin(target, onclause)
+
+        if pinned_for_user_id is not None:
+            # LEFT OUTER JOIN, so an unpinned item still appears. The
+            # uq_item_pin_user_item constraint makes the match at most 1:1,
+            # which is what keeps this join out of the count below: a row that
+            # could match twice would inflate `total` and break "Load More".
+            query = query.outerjoin(
+                InventoryItemPin,
+                and_(
+                    InventoryItemPin.item_id == InventoryItem.id,
+                    InventoryItemPin.user_id == str(pinned_for_user_id),
+                    InventoryItemPin.organization_id == str(organization_id),
+                ),
+            )
+
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
@@ -1885,16 +2072,40 @@ class InventoryService:
         # The id breaks ties (repeated uniforms share a name), so an offset
         # page never repeats or skips a row between calls.
         col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
+        order: List[Any] = []
+        if pinned_for_user_id is not None:
+            # Pinned rows first, in the member's own order, ahead of whatever
+            # sort_by asks for. `position IS NULL` ascending is written out
+            # rather than leaning on MySQL's NULLs-first default, so the
+            # ordering is stated by the query instead of inherited from the
+            # engine.
+            order = [
+                InventoryItemPin.position.is_(None),
+                InventoryItemPin.position.asc(),
+            ]
+        if group is not None:
+            # Availability first, then the group key, so every group's rows are
+            # contiguous and a group cannot straddle a page boundary -- which
+            # is what would make a collapsed group show half its contents.
+            order += [
+                case((InventoryItem.status == ItemStatus.AVAILABLE, 0), else_=1),
+                group[0].is_(None),
+                group[0].asc(),
+            ]
         if sort_order == "desc":
-            query = query.order_by(col.desc(), InventoryItem.id.desc())
+            order += [col.desc(), InventoryItem.id.desc()]
         else:
-            query = query.order_by(col.asc(), InventoryItem.id.asc())
+            order += [col.asc(), InventoryItem.id.asc()]
+        query = query.order_by(*order)
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         items = list(result.scalars().all())
 
         await self._attach_lot_stock(str(organization_id), items)
+        await self._attach_pin_positions(
+            str(organization_id), pinned_for_user_id, items
+        )
 
         return items, total
 
@@ -1921,6 +2132,235 @@ class InventoryService:
         for item in items:
             item.is_lot_stocked = item.id in totals
             item.lot_stock = totals.get(item.id)
+
+    async def get_item_group_counts(
+        self,
+        organization_id: UUID,
+        group_by: str,
+        **filters: Any,
+    ) -> List[Dict[str, Any]]:
+        """True per-(availability, group) counts over the whole filtered set.
+
+        Deliberately not a tally of the loaded page: the items list pages at
+        50 rows, so a header counting what arrived would read "Class A Uniform
+        (3)" while 40 match -- which is worse than no header at all, because a
+        bare number reads as a total.
+
+        Shares ``_build_items_query`` with ``get_items`` so the same filters
+        produce both, and an unknown ``group_by`` returns an empty list rather
+        than raising: a grouping the UI cannot render is a missing header, not
+        a failed request.
+        """
+        group = self._group_spec(group_by)
+        if group is None:
+            return []
+        key_expr, label_expr, joins = group
+
+        query = self._build_items_query(organization_id=organization_id, **filters)
+        for target, onclause in joins:
+            query = query.outerjoin(target, onclause)
+
+        avail = case((InventoryItem.status == ItemStatus.AVAILABLE, 1), else_=0).label(
+            "is_available"
+        )
+        # with_only_columns off the shared select, so every filter and join
+        # above is inherited rather than restated.
+        group_query = (
+            query.with_only_columns(
+                key_expr.label("group_key"),
+                label_expr.label("group_label"),
+                avail,
+                func.count(InventoryItem.id).label("item_count"),
+            )
+            .order_by(None)
+            .group_by(key_expr, avail)
+        )
+        rows = await self.db.execute(group_query)
+
+        tally: Dict[Any, Dict[str, Any]] = {}
+        for key, label, is_available, item_count in rows.all():
+            entry = tally.setdefault(
+                key,
+                {
+                    "key": None if key is None else str(key),
+                    "label": None if label is None else str(label),
+                    "available_count": 0,
+                    "unavailable_count": 0,
+                },
+            )
+            if is_available:
+                entry["available_count"] = item_count
+            else:
+                entry["unavailable_count"] = item_count
+
+        # NULL last: "Unspecified" is a real bucket -- an item with no colour
+        # recorded is not the same as no such items -- but it is not the one
+        # anybody is looking for first.
+        return sorted(
+            tally.values(),
+            key=lambda g: (g["label"] is None, (g["label"] or "").lower()),
+        )
+
+    async def _attach_pin_positions(
+        self,
+        organization_id: str,
+        user_id: Optional[UUID],
+        items: List[InventoryItem],
+    ) -> None:
+        """Stamp each row with the caller's pin position, or None.
+
+        A transient attribute rather than a mapped column, in the manner of
+        ``_attach_lot_stock`` above: nothing is persisted and no flush is
+        triggered, it exists to be read by ``InventoryItemResponse``.
+
+        Done as a second pass rather than by selecting the joined column,
+        because adding a column to the select turns ``result.scalars()`` into
+        a row tuple and every caller of ``get_items`` would have to be taught
+        about it. The lookup is one indexed query bounded by the page size.
+
+        Every row is stamped, including the unpinned ones -- leaving the
+        attribute unset would make ``getattr(item, "pin_position")`` raise
+        inside the response schema for any item this member has not pinned.
+        """
+        for item in items:
+            item.pin_position = None
+        if user_id is None or not items:
+            return
+        result = await self.db.execute(
+            select(InventoryItemPin.item_id, InventoryItemPin.position).where(
+                InventoryItemPin.organization_id == organization_id,
+                InventoryItemPin.user_id == str(user_id),
+                InventoryItemPin.item_id.in_([item.id for item in items]),
+            )
+        )
+        positions = {row[0]: row[1] for row in result.all()}
+        for item in items:
+            item.pin_position = positions.get(item.id)
+
+    async def list_pins(
+        self, organization_id: UUID, user_id: UUID
+    ) -> List[InventoryItemPin]:
+        """The member's pins, front of the list first."""
+        result = await self.db.execute(
+            select(InventoryItemPin)
+            .where(
+                InventoryItemPin.organization_id == str(organization_id),
+                InventoryItemPin.user_id == str(user_id),
+            )
+            .order_by(InventoryItemPin.position.asc(), InventoryItemPin.id.asc())
+        )
+        return list(result.scalars().all())
+
+    async def pin_item(
+        self, organization_id: UUID, user_id: UUID, item_id: UUID
+    ) -> InventoryItemPin:
+        """Add an item to the member's shortlist, at the end of it.
+
+        Idempotent: re-pinning an item already pinned returns the existing row
+        rather than adding a duplicate or raising. Two tabs pinning the same
+        item is a normal thing for a person to do, not an error to report.
+
+        Raises ``ValueError`` when the item is not in the caller's
+        organization -- an unvalidated client-supplied foreign key would
+        otherwise persist a cross-tenant reference (CLAUDE.md pitfall #14c) --
+        or when the shortlist is already full.
+        """
+        item = await self.get_item_by_id(item_id, organization_id)
+        if item is None:
+            raise ValueError("Item not found")
+
+        existing = await self.db.execute(
+            select(InventoryItemPin).where(
+                InventoryItemPin.organization_id == str(organization_id),
+                InventoryItemPin.user_id == str(user_id),
+                InventoryItemPin.item_id == str(item_id),
+            )
+        )
+        pin = existing.scalar_one_or_none()
+        if pin is not None:
+            return pin
+
+        pins = await self.list_pins(organization_id, user_id)
+        if len(pins) >= self.MAX_PINS:
+            raise ValueError(
+                f"You can pin at most {self.MAX_PINS} items. " "Unpin something first."
+            )
+
+        pin = InventoryItemPin(
+            organization_id=str(organization_id),
+            user_id=str(user_id),
+            item_id=str(item_id),
+            position=len(pins),
+        )
+        self.db.add(pin)
+        await self.db.commit()
+        await self.db.refresh(pin)
+        return pin
+
+    async def unpin_item(
+        self, organization_id: UUID, user_id: UUID, item_id: UUID
+    ) -> bool:
+        """Drop an item from the shortlist and close the gap it leaves.
+
+        Positions are compacted rather than left sparse so that "move up" is
+        always a swap with ``position - 1`` and never has to reason about
+        holes. Returns False when there was nothing pinned to remove, which
+        the endpoint reports as a 404.
+        """
+        result = await self.db.execute(
+            select(InventoryItemPin).where(
+                InventoryItemPin.organization_id == str(organization_id),
+                InventoryItemPin.user_id == str(user_id),
+                InventoryItemPin.item_id == str(item_id),
+            )
+        )
+        pin = result.scalar_one_or_none()
+        if pin is None:
+            return False
+
+        await self.db.execute(
+            delete(InventoryItemPin).where(InventoryItemPin.id == pin.id)
+        )
+        remaining = await self.db.execute(
+            select(InventoryItemPin)
+            .where(
+                InventoryItemPin.organization_id == str(organization_id),
+                InventoryItemPin.user_id == str(user_id),
+            )
+            .order_by(InventoryItemPin.position.asc(), InventoryItemPin.id.asc())
+        )
+        for index, row in enumerate(remaining.scalars().all()):
+            row.position = index
+        await self.db.commit()
+        return True
+
+    async def reorder_pins(
+        self, organization_id: UUID, user_id: UUID, ordered_item_ids: List[str]
+    ) -> List[InventoryItemPin]:
+        """Rewrite the shortlist order from a full list of item ids.
+
+        The submitted set must match the member's current pins exactly. A
+        partial list is rejected rather than applied, because the obvious
+        lenient reading -- order what you were given, leave the rest -- is
+        indistinguishable from a stale browser tab silently dropping a pin
+        somebody added on their phone a minute ago.
+        """
+        pins = await self.list_pins(organization_id, user_id)
+        by_item = {pin.item_id: pin for pin in pins}
+        submitted = [str(item_id) for item_id in ordered_item_ids]
+
+        if len(set(submitted)) != len(submitted):
+            raise ValueError("Order contains duplicate items")
+        if set(submitted) != set(by_item):
+            raise ValueError(
+                "Order must list exactly the items you have pinned. "
+                "Refresh and try again."
+            )
+
+        for index, item_id in enumerate(submitted):
+            by_item[item_id].position = index
+        await self.db.commit()
+        return await self.list_pins(organization_id, user_id)
 
     async def get_item_by_id(
         self,

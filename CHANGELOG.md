@@ -7,6 +7,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A grouped items list stops repeating the grouped value on every row (2026-09-07)
+
+**Changed**
+
+- **The dimension you group by no longer appears in the rows beneath.** Grouping
+  by Category left a CATEGORY column restating the same value under a header
+  that already said it — dead width on every row. The same now applies to
+  Condition and Location, and to the Colour and Style capsules, which grouping
+  previously did not touch at all. One rule: the group header states it once,
+  the rows do not repeat it.
+- **Size gets its own column whenever a grouping is active**, in the space the
+  hidden column vacates, and leaves the Variant capsules so it is not shown
+  twice. It is the attribute a quartermaster scans for, and a chip wedged
+  between colour and style is not scannable.
+
+Two behaviours fall out of the rule rather than being special cases:
+
+- Grouping **by Size** adds no Size column — the header already says it.
+- `Item type` and `Vendor` hide nothing, because neither has a column or a
+  capsule today; they still gain the Size column.
+
+The ungrouped view is unchanged, and a test asserts that.
+
+**Notes**
+
+- The Size column is deliberately **not sortable**. The backend's
+  `_SORTABLE_COLUMNS` has no `size` key and an unknown `sort_by` silently falls
+  back to `name`, so a sort button there would look live and do nothing.
+- Hiding the Condition column also hides its sort button, which is correct —
+  sorting by the dimension you are grouped by is meaningless, the group order
+  dominates it, and the mobile Sort dropdown still offers Condition.
+- `displaySize` moved to `utils/variantHelpers.ts`, shared by the new column and
+  the capsule. It had been inline in `VariantCapsules` and a second copy is
+  precisely how `styleAttributesLabel` came to render "Mens" and "V Neck"
+  (pitfall #29). `VariantCapsules` gains an optional `omit` prop that defaults
+  to showing everything, so its five other call sites are untouched.
+
+### The items list can be grouped by category, colour or any other attribute (2026-09-07)
+
+**Added**
+
+- **A "Group by" control on the inventory items list.** Choose Category, Item
+  type, Colour, Size, Condition, Style, Location or Vendor and the rows organise
+  into collapsible sections with counts — Class A in one group, Class B in
+  another. Groups nest inside the existing Available and Unavailable sections,
+  and the pinned shortlist stays above both.
+- **The counts are true totals, not a tally of what loaded.** The list pages at
+  50 rows, so a header counting the rows it received would read "Class A Uniform
+  (3)" while 40 matched — worse than no header, because a bare number reads as a
+  total. They come from a `GROUP BY` over the whole filtered set, split by
+  availability, and a collapsed group keeps its count.
+- Rows are ordered so a group's members are contiguous, so a group can never be
+  split across a page boundary and show half its contents under a header
+  claiming all of them.
+
+**Notes on two dimensions that could easily have been wrong**
+
+- **Colour groups case-insensitively.** The colour _filter_ has always matched
+  that way, because the requestable catalog collapses on `color.casefold()`;
+  grouping on the raw column would have put "Navy" and "navy" in two buckets
+  that can never be viewed together — reintroducing precisely the split the
+  filter exists to avoid. The header shows a real spelling from the data;
+  which one, when the data carries both, is unspecified.
+- **Location groups on the same precedence the Location column displays**
+  (`storage_location`, then the location's name, then station). Grouping on
+  `location_id` alone would file an item tagged "Shelf B-3" under _Unspecified_
+  while the cell beside it plainly reads "Shelf B-3".
+- An item with no value on the chosen dimension gets its own **"Unspecified"**
+  group, sorted last. It is a real bucket — an item with no colour recorded is
+  not the same as no such items — and must not vanish from a list it matches
+  the filters for.
+- An unrecognised `group_by` degrades to an ungrouped list rather than 400ing,
+  so a stale or hand-edited link shows the items instead of an error page.
+
+**Internal**
+
+- `InventoryService.get_items` keeps its two-value return and every existing
+  caller. The filter construction is extracted to `_build_items_query`, shared
+  with the new `get_item_group_counts`, so the counts cannot drift from the
+  list they label — a second hand-maintained copy of a seventeen-parameter
+  WHERE clause is how a header comes to disagree with the rows beneath it.
+
+### A quartermaster can front their own working set on the items list (2026-09-07)
+
+**Added**
+
+- **The inventory items list gains a per-member pinned shortlist.** The list is
+  alphabetical, and for a quartermaster a handful of items — the Class B polos,
+  the duty boots — carry nearly all the traffic while sitting scattered between
+  things touched once a year. Pinned items now appear in their own section above
+  Available and Unavailable, in an order the member arranges themselves, ahead
+  of whatever sort is active.
+- Pins are **per member**, not per organization: two quartermasters running
+  different supply lines front different gear, and one curating their list must
+  not reorder the other's page. A member with no pins sees exactly the page they
+  saw before — the default sort is still Name, ascending.
+- Reordering works by dragging a row or by the up/down arrows beside it. The
+  arrows are not a fallback: HTML5 drag events never fire on touch, so on a
+  phone they are the only way to reorder, and they are the path that works with
+  a keyboard and a screen reader on any device.
+- Capped at 25 pins per member. The list pages at 50 rows and pinned items sort
+  first, so an unbounded shortlist would fill the whole first page and make
+  "Load More" the only route to unpinned stock.
+
+**Fixed**
+
+- **The items list's section counts read as section totals when they were a
+  running tally.** The Available/Unavailable split happens client-side over the
+  rows loaded so far, so "(12)" appeared while 87 items matched the filters —
+  silently understating the department's stock for any list past one page. A
+  truncated section now reads "(12 so far)".
+- **The items list's sortable column headers carried no `aria-sort`.** The page
+  predates `components/ux/SortableHeader` and hand-rolls its sort buttons, so a
+  screen reader announced a plain button and never said which column the table
+  was ordered by.
+
+**Migration**
+
+- New `inventory_item_pins` table (`f2a91c7d4e86`). No backfill and no data
+  loss on downgrade — an empty pin table is the correct starting state, since
+  the absence of a pin means "not pinned", never "unknown".
+
 ### Administration-hub attention ages now use the department's own calendar (2026-09-07)
 
 **Fixed**
