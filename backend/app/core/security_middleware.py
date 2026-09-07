@@ -369,7 +369,19 @@ class RateLimiter:
 
             if self._active_lockout_count < self._MAX_LOCKOUTS:
                 lockout_until: float | None = current_time + lockout_seconds
-                self._active_lockout_count += 1
+                # A lockout_seconds=0 caller's own lockout_until equals
+                # current_time, which the read-side check (current_time <
+                # lockout_until) already treats as immediately expired —
+                # never a real active lockout. Counting it here anyway
+                # would let a single such key inflate the cached count
+                # without limit on repeated retries (each retry reads its
+                # own just-set entry as already-expired, resets, and
+                # re-enters this branch), eventually reaching capacity
+                # with zero genuine active lockouts and routing an
+                # unrelated scope's real violator into the saturation
+                # fallback instead of its own per-key lockout.
+                if lockout_seconds > 0:
+                    self._active_lockout_count += 1
             else:
                 # Saturated: this violator's own lockout can't be
                 # persisted. Extend this scope's saturation-reject signal
