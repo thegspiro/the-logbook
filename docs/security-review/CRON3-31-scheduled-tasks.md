@@ -1,6 +1,6 @@
 # Security Review — Feature 31: Scheduled Tasks (pass 3)
 
-**Prefix:** `CRON3` · **Iteration:** 31 (pass 3) · **Reviewed:** 2026-09-07 · **PR:** (opened this pass)
+**Prefix:** `CRON3` · **Iteration:** 31 (pass 3) · **Reviewed:** 2026-09-07 · **PR:** [#2362](https://github.com/thegspiro/the-logbook/pull/2362)
 
 **Backend:** `backend/app/api/v1/endpoints/scheduled.py` (58 L, 2 routes, unchanged),
 `backend/app/services/scheduled_tasks.py` (**6,040 L, 44 task runners** — grown

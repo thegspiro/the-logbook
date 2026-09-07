@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 31 (Scheduled tasks, pass 3) — PR (opening this iteration), branch
+**Feature 31 (Scheduled tasks, pass 3) — PR
+[#2362](https://github.com/thegspiro/the-logbook/pull/2362), branch
 `claude/security-review-scheduled-tasks-pass3`.** 2 fixed (both LOW —
 CRON3-31-1: the new `run_recover_stranded_message_deliveries` sweep and its
 pre-existing sibling `run_publish_scheduled_messages` had no
