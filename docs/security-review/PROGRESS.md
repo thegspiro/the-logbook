@@ -17,10 +17,60 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2368** — Feature 33 (Core infrastructure, pass 3): `claude/security-review-core-infra-pass3`.
-4 fixed (CI3-33-1/2 plus Codex-caught follow-ups CI3-33-1a/1b, all in
-`RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). Both Codex review
-threads replied to and resolved. Subscribed for activity. Rotation row 33
--> ✅ (pending merge). Next once merged: 34 Frontend shared.
+5 fixed (CI3-33-1/2 plus three Codex-caught follow-up rounds, CI3-33-1a/1b/1c,
+all in `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW). All 3 Codex
+review threads replied to and resolved. Subscribed for activity. Rotation row
+33 -> ✅ (pending merge). Next once merged: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368, Codex round 2: CI3-33-1b's own fix was itself still incomplete
+
+Codex reviewed the CI3-33-1b push (commit `98140d5f`) and found its fix —
+an independent `_MAX_LOCKOUTS` cap evicting soonest-to-expire lockout
+entries — was itself incomplete: it protected the _calling_ key's own
+lockout from self-eviction (via the read-before/write-after capture
+CI3-33-1b added), but not an _unrelated_ key's. An unrelated key's own
+over-cap call could still trigger a sweep that picks a genuinely
+different, currently locked-out victim's entry for eviction, releasing it
+early — combined with the victim's request history being separately
+evicted by the unrelated `_MAX_KEYS` mechanism in the same sweep, the
+victim's very next request came back `(False, None)`, not rate limited,
+mid-lockout. Reproduced exactly as Codex described (both caps at 3, an
+unrelated trigger removed `victim` from both dictionaries) before
+accepting — this is the identical failure class CI3-33-1 was opened to fix
+in the first place, reachable again at `_MAX_LOCKOUTS` scale instead of
+`_MAX_KEYS` scale.
+
+Per Codex's suggested direction, tried the direct fail-closed approach
+first rather than settling for a flagged limitation, and it was tractable:
+**removed by-size lockout eviction entirely.** `_evict_stale`'s
+`_MAX_LOCKOUTS` by-expiry block is gone; the only way an entry now leaves
+`self.lockouts` is the existing, always-safe expired-lockouts sweep
+(removes only genuinely expired entries — a state every reader already
+treats as "not locked out" anyway). The cap moved to _insertion_ time in
+`is_rate_limited`: once `self.lockouts` is genuinely saturated with active
+entries, a new lockout simply isn't persisted rather than displacing an
+existing one — the request is still rejected on this call regardless,
+since the count-based check already decided that independently, and
+subsequent requests from the same key keep failing that same check for as
+long as its request history survives (a materially weaker but still real
+fallback). This is a strictly stronger guarantee than the by-expiry
+scheme: `self.lockouts` stays provably bounded (insertion is gated, so it
+can never even transiently exceed the cap), and once a lockout is
+persisted it is never evicted early, at any scale, for any reason.
+
+3 of the CI3-33-1b round's regression tests asserted the removed
+by-expiry scheme's own behavior and are now obsolete; replaced with 4 new
+tests covering the corrected design (direct reproduction of Codex's exact
+scenario, bounded-growth, no-existing-entry-ever-displaced, and
+fail-closed-on-saturation). All verified to fail against the CI3-33-1b
+code and pass after. Pushed as `d6fd1947`; scoped suite 178/178 (was 177),
+full suite 11,726/0 (was 11,725). Replied to the third Codex thread and
+resolved it. PR title/body and
+`docs/security-review/CI3-33-core-infra.md` updated to record this as
+CI3-33-1c, with CI3-33-1b's own write-up left in place but annotated as
+superseded rather than silently rewritten.
 
 ---
 
