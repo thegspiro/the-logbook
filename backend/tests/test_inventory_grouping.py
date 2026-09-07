@@ -56,6 +56,9 @@ async def _item(
     color=None,
     status: str = "available",
     storage_location=None,
+    size=None,
+    standard_size=None,
+    style=None,
 ) -> str:
     item_id = str(uuid.uuid4())
     await db.execute(
@@ -63,9 +66,9 @@ async def _item(
             "INSERT INTO inventory_items "
             "(id, organization_id, category_id, name, color, `condition`, "
             "status, tracking_type, quantity, quantity_issued, "
-            "storage_location, active) "
+            "storage_location, size, standard_size, style, active) "
             "VALUES (:id, :org, :cat, :name, :color, 'good', :status, "
-            "'pool', 5, 0, :loc, 1)"
+            "'pool', 5, 0, :loc, :size, :ssize, :style, 1)"
         ),
         {
             "id": item_id,
@@ -75,6 +78,9 @@ async def _item(
             "color": color,
             "status": status,
             "loc": storage_location,
+            "size": size,
+            "ssize": standard_size,
+            "style": style,
         },
     )
     await db.flush()
@@ -216,6 +222,81 @@ class TestGroupCounts:
             )
             == []
         )
+
+
+class TestKeysAndLabels:
+    """Regressions for three ways a group key could be spelled wrongly.
+
+    All three shipped and none was caught by the original suite, because its
+    fixtures set no size and its smoke test asserted only that each dimension
+    RAN, never what it returned.
+    """
+
+    async def test_a_free_text_size_does_not_crash_the_endpoint(
+        self, service, db_session, org
+    ):
+        # `size` is deliberately free text -- "10.5 EE", "lg". Without a CAST,
+        # SQLAlchemy types the COALESCE from its first argument as
+        # Enum(StandardSize) and feeds every row through the enum result
+        # processor, so this raised LookupError and 500'd the whole items
+        # endpoint for any department stocking boots.
+        await _item(db_session, org, "Boots", size="10.5 EE")
+
+        groups = await service.get_item_group_counts(
+            organization_id=uuid.UUID(org), group_by="size"
+        )
+        assert [g["key"] for g in groups] == ["10.5 EE"]
+
+        items, _ = await service.get_items(
+            organization_id=uuid.UUID(org), group_by="size"
+        )
+        assert [i.group_key for i in items] == ["10.5 EE"]
+
+    async def test_enum_dimensions_key_to_their_value(self, service, db_session, org):
+        await _item(db_session, org, "Polo", standard_size="m", style="polo")
+
+        for dimension, expected in (
+            ("condition", "good"),
+            ("style", "polo"),
+            ("size", "m"),
+        ):
+            groups = await service.get_item_group_counts(
+                organization_id=uuid.UUID(org), group_by=dimension
+            )
+            keys = [g["key"] for g in groups]
+            # str() on a (str, Enum) member renders "ItemCondition.GOOD", which
+            # would both head the group with a Python repr and never match the
+            # value a row carries -- leaving every count unresolved.
+            assert expected in keys, f"{dimension} keyed {keys}"
+            assert not any(k and "." in k for k in keys), f"{dimension} keyed {keys}"
+
+    async def test_every_row_key_matches_a_counted_group(
+        self, service, db_session, org, classes
+    ):
+        await _item(db_session, org, "Boots", size="10.5 EE")
+        await _item(db_session, org, "Unsorted", storage_location="Shelf B-3")
+
+        for dimension in InventoryService.GROUPABLE:
+            items, _ = await service.get_items(
+                organization_id=uuid.UUID(org), group_by=dimension
+            )
+            groups = await service.get_item_group_counts(
+                organization_id=uuid.UUID(org), group_by=dimension
+            )
+            counted = {g["key"] for g in groups}
+            rendered = {i.group_key for i in items}
+            # A row whose key is absent from the counts renders under a header
+            # showing no total at all -- the failure mode is a silent "(—)",
+            # not an error.
+            assert (
+                rendered <= counted
+            ), f"{dimension}: rows keyed {rendered - counted} have no count"
+
+    async def test_ungrouped_rows_carry_no_group_key(self, service, org, classes):
+        items, _ = await service.get_items(organization_id=uuid.UUID(org))
+        # Stamped None rather than left unset, so the response schema does not
+        # raise reading an attribute that was never assigned.
+        assert all(i.group_key is None for i in items)
 
 
 class TestGroupOrdering:

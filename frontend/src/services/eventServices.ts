@@ -915,6 +915,13 @@ export interface InventoryItem {
    * reading the same item see different values here, by design.
    */
   pin_position?: number | null;
+  /**
+   * The group this row was filed under, when the request asked for a grouping.
+   * Reported by the server — never re-derived here, because colour keys
+   * lower-cased, location follows a COALESCE over the full locations table,
+   * item_type lives on the category and an enum keys to its value.
+   */
+  group_key?: string | null;
 }
 
 /**
