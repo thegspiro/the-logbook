@@ -291,9 +291,18 @@ methods surfaced while tracing the endpoint layer.
    and later uses Google gets matched by email; there is no explicit link or
    unlink UI, and no way to see which providers are attached. _Incomplete
    feature._
-5. **`REGISTRATION_REQUIRES_APPROVAL` has no admin queue in the UI.** The flag
-   is honored server-side but pending self-registrations are reachable only
-   through the members list. _Incomplete feature._
+5. **`REGISTRATION_REQUIRES_APPROVAL` is not honored anywhere — corrected
+   2026-09-07, security review CI3-33.** This bullet's original claim ("honored
+   server-side but pending self-registrations are reachable only through the
+   members list") is wrong, not merely incomplete: `settings
+.REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere in the backend, no
+   `UserStatus` value represents a pending/unapproved account, and
+   `register_user()` (`auth_service.py`) unconditionally sets `status=
+UserStatus.ACTIVE` and returns tokens that log the caller in immediately.
+   Every self-registered account is fully active and authenticated the moment
+   registration completes, regardless of this setting's value (default `True`).
+   See `docs/security-review/CI3-33-core-infra.md` (CI3-33-3) and
+   `docs/KNOWN_LIMITATIONS.md`.
 
 ## Completion gate
 

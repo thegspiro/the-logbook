@@ -400,6 +400,82 @@ class TestRateLimiter:
         assert "data-export:1.2.3.4" not in limiter.requests
         assert "data-export:1.2.3.4" not in limiter._key_windows
 
+    @pytest.mark.unit
+    def test_a_calling_keys_own_history_survives_its_own_forced_eviction(self):
+        """CI3-33-2: the MAX_KEYS forced eviction in _evict_stale ranks every
+        tracked key by its *last recorded* request time, and previously ran
+        before this call's own read of self.requests[key] — so if this exact
+        key's last activity happened to be the globally-oldest among an
+        over-cap tracker (plausible for a long-window scope sitting next to
+        a flood of short-window ones), its own call could wipe its own
+        history right before reading it, undercounting the request and
+        silently granting extra allowance. The read must be captured before
+        eviction runs and the result written back explicitly afterward."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # "target" already has 2 prior requests but is the globally-oldest
+        # tracked key (its own window is long enough that it isn't stale).
+        limiter.requests["target"] = [now - 50, now - 49]
+        limiter._key_windows["target"] = 200
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+
+        # 3rd request (2 prior + this) is still within a cap of 3 — allowed,
+        # but the history must be preserved, not reset to just this one call.
+        is_limited, _ = limiter.is_rate_limited(
+            "target", max_requests=3, window_seconds=200
+        )
+        assert is_limited is False
+        assert len(limiter.requests["target"]) == 3
+
+        # The 4th request must now be blocked — it would incorrectly be
+        # allowed if the 3rd call's own eviction pass had wiped its history.
+        is_limited2, _ = limiter.is_rate_limited(
+            "target", max_requests=3, window_seconds=200
+        )
+        assert is_limited2 is True
+
+    @pytest.mark.unit
+    def test_an_active_lockout_survives_a_forced_eviction_triggered_by_another_key(
+        self,
+    ):
+        """CI3-33-1: the MAX_KEYS forced eviction loop unconditionally popped
+        self.lockouts[key] for every key it evicted from self.requests,
+        purely by last-request-time recency — with no regard for whether
+        that lockout was still active, and regardless of which key's call
+        actually triggered the sweep. An attacker's lockout could therefore
+        be silently lifted early by unrelated traffic from other keys
+        pushing the tracker over _MAX_KEYS, well before the lockout's own
+        expiry. Evicting the request-history entry itself is harmless for a
+        locked-out key (is_rate_limited returns on the lockout check before
+        ever touching self.requests) — only the lockout dict entry matters,
+        and it must survive until it naturally expires."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # "attacker" is already locked out for a while longer, but its last
+        # recorded request (from before the lockout) is the globally-oldest
+        # entry in the tracker — lockouts don't touch self.requests.
+        limiter.requests["attacker"] = [now - 100]
+        limiter.lockouts["attacker"] = now + 1700
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+
+        # An unrelated key's call triggers the over-cap eviction sweep.
+        limiter.is_rate_limited("victim-check", max_requests=100, window_seconds=200)
+
+        assert "attacker" in limiter.lockouts
+        is_limited, reason = limiter.is_rate_limited(
+            "attacker", max_requests=5, window_seconds=60
+        )
+        assert is_limited is True
+        assert "locked" in (reason or "").lower()
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded

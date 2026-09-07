@@ -100,7 +100,18 @@ class RateLimiter:
             to_remove = len(self.requests) - self._MAX_KEYS
             for key, _ in by_recency[:to_remove]:
                 del self.requests[key]
-                self.lockouts.pop(key, None)
+                # Deliberately NOT popping self.lockouts[key] here (CI3-33-1).
+                # Anything still in self.lockouts at this point is an active
+                # lockout — expired ones were already removed by the sweep
+                # above — and evicting the *request-history* entry has no
+                # observable effect on a locked-out key: is_rate_limited()
+                # returns on the lockout check before ever touching
+                # self.requests. Popping the lockout too had one effect: it
+                # silently ended an active lockout early whenever that key's
+                # last request happened to rank oldest among an over-cap
+                # tracker, regardless of which key's call triggered this
+                # sweep — letting a locked-out attacker back in ahead of
+                # schedule via unrelated traffic.
                 self._key_windows.pop(key, None)
 
     def is_rate_limited(
@@ -129,6 +140,20 @@ class RateLimiter:
         # staleness against the wrong duration.
         self._key_windows[key] = window_seconds
 
+        # Read this call's own request history *before* eviction runs
+        # (CI3-33-2). _evict_stale's forced MAX_KEYS eviction ranks every
+        # tracked key by its last recorded activity and can remove the
+        # globally-oldest entries — which can include this exact key if it
+        # hasn't been as recently active as a flood of *other* keys, even
+        # though it is still well within its own window (e.g. a 3600s
+        # data_export key sitting next to thousands of 60s login keys).
+        # Capturing the history first, and writing the filtered result back
+        # explicitly below, means this call's own count is never silently
+        # reset to zero by its own eviction pass — the identical
+        # read-before-write-after-evict shape already fixed across
+        # app/services/security_monitoring.py's trackers.
+        existing_requests = self.requests.get(key, [])
+
         # Periodic eviction to bound memory usage
         self._evict_stale(current_time, window_seconds)
 
@@ -155,26 +180,32 @@ class RateLimiter:
                 # older than window_seconds by the time it expires, so the
                 # window filter below would drop them regardless.
                 if lockout_seconds > 0:
+                    existing_requests = []
                     self.requests.pop(key, None)
 
-        # Clean old requests outside window
-        self.requests[key] = [
+        # Clean old requests outside window, using the pre-eviction history
+        # captured above rather than re-reading self.requests[key] (which
+        # _evict_stale's forced eviction may have just deleted for this
+        # exact key).
+        filtered_requests = [
             req_time
-            for req_time in self.requests[key]
+            for req_time in existing_requests
             if current_time - req_time < window_seconds
         ]
 
         # Check rate limit
-        if len(self.requests[key]) >= max_requests:
+        if len(filtered_requests) >= max_requests:
             # Too many requests - apply lockout
             self.lockouts[key] = current_time + lockout_seconds
+            self.requests[key] = filtered_requests
             return (
                 True,
                 f"Too many requests. Account locked for {lockout_seconds // 60} minutes",
             )
 
         # Record this request
-        self.requests[key].append(current_time)
+        filtered_requests.append(current_time)
+        self.requests[key] = filtered_requests
 
         return False, None
 
