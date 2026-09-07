@@ -192,3 +192,63 @@ as part of the scoped and full suites below.
 | Full backend suite (`pytest tests/`)                     | ✅ 11,645 passed, 21 skipped (pre-existing), 0 failed                                                           |
 | `npm run typecheck` (aliased `tsc-native`)               | ✅ 0 errors                                                                                                     |
 | `npm run lint`                                           | ✅ 0 errors, 2 pre-existing warnings (unrelated file, `CallTypeChips.tsx`, under the max-warnings-10 threshold) |
+
+## Addendum (2026-09-07) — unresolved Codex findings from PR #2365, fixed as a follow-up
+
+PR #2365 (this pass) merged with three `chatgpt-codex-connector[bot]` review
+findings (all P2) still open — never replied to or addressed before merge.
+A separate watchdog session caught this after the merge; all three are
+resolved in a follow-up PR (`claude/fix-admin-hub-age-days-tz`), not by
+amending this record. Disposition of each:
+
+1. **Real bug, fixed — `_age_days` compared a bare UTC date against
+   `ctx.today`, which is org-local.** `_age_days` took `.date()` directly on
+   a `datetime` value with no conversion to the organization's timezone, then
+   compared it to `ctx.today` (already computed in the org's local calendar
+   by `_context()`). For an org whose local date differs from UTC's — the
+   common case for a US department in the evening, or any department just
+   after local midnight — this produced an off-by-one age. Codex's own
+   comment named only the two newest call sites (scheduling, storefront);
+   tracing every call site found the same bug at roughly 18 of them,
+   wherever the "oldest" value comes from a `DateTime(timezone=True)` column
+   (`created_at`, `submitted_at`, `payment_reported_at`, `closed_at`, …) —
+   the `Date`-only call sites (`ScreeningRecord.expiration_date`,
+   `TrainingRecord.expiration_date`, etc.) were never affected and are
+   unchanged. Fixed by converting to the org's timezone
+   (`ctx.timezone_name`, threaded through to every call site) before taking
+   `.date()`, using the same naive-value-is-UTC assumption `_as_utc` already
+   makes for this file's MySQL-backed `DateTime(timezone=True)` columns.
+   Regression test: `TestAgeDaysUsesTheDepartmentsLocalCalendar` in
+   `test_admin_hub_db.py` (Asia/Tokyo org, a training submission timestamped
+   just after local midnight) — verified to fail against the pre-fix code
+   (reported age 1) and pass after (age 0).
+
+2. **Real bug, fixed — `_short_staffed_shifts` had no `.limit()`.** The
+   "Bounded, not N+1" claim above is still true of what it checked — no
+   per-shift query in a loop — but the base `Shift` query itself carried no
+   cap, unlike its sibling `SchedulingService.get_open_shifts`, which bounds
+   the same shape of query with a `max_candidates: int = 500` parameter
+   specifically for pathological data. Fixed by adding the same parameter and
+   convention here (`.order_by(Shift.start_time.asc()).limit(max_candidates)`).
+   Regression test:
+   `test_max_candidates_bounds_a_pathological_number_of_shifts` in
+   `test_admin_hub_scheduling.py`.
+
+3. **This doc's own test-coverage claim was overstated — corrected here.**
+   "Verified good" above states `test_admin_hub_scheduling.py` has 36 tests
+   and `test_admin_hub_storefront.py` has 17 (54 total), and cites four named
+   cross-org-isolation tests as evidence the two new modules' resolvers are
+   isolation-tested. The actual counts, verified with
+   `pytest --collect-only`, are **33 and 15 (48 total)**. Scheduling's three
+   named isolation tests are accurate and cover their resolver families as
+   described. Storefront's is not: only one test,
+   `test_does_not_report_another_departments_store`, checked cross-org
+   isolation, and it exercises only `_storefront_attention` — none of the six
+   `_store_*` metric resolvers (`_store_open_orders`,
+   `_store_awaiting_payment`, `_store_outstanding_balance`,
+   `_store_pending_verification`, `_store_ready_for_pickup`,
+   `_store_active_products`) had a dedicated isolation test, despite each
+   independently filtering `organization_id` in its own query (confirmed
+   correct by reading all six). The follow-up PR adds six such tests
+   (`TestStoreMetricsCrossOrgIsolation` in `test_admin_hub_storefront.py`),
+   closing the gap rather than leaving the claim narrowed.

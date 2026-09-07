@@ -461,3 +461,118 @@ class TestStorefrontAttentionQueue:
         )
 
         assert await _queue(db_session, my_admin) == {}
+
+
+class TestStoreMetricsCrossOrgIsolation:
+    """The attention queue's isolation is covered above; the six metric cards
+    read the same `StoreOrder`/`StoreProduct` tables independently and were
+    never checked the same way (LOC3-32-locations-kiosk.md addendum). Each
+    resolver already filters `organization_id == ctx.organization_id` — these
+    assert that filter actually holds under a second, populated org.
+    """
+
+    async def test_open_orders_ignores_another_departments_orders(self, db_session):
+        mine = await _org(db_session)
+        theirs = await _org(db_session)
+        my_admin = await _admin(db_session, mine)
+        their_admin = await _admin(db_session, theirs)
+        await _order(db_session, theirs, their_admin, status=StoreOrderStatus.SUBMITTED)
+        await _order(
+            db_session, theirs, their_admin, status=StoreOrderStatus.READY_FOR_PICKUP
+        )
+
+        value, context = await _metric(db_session, my_admin, "open_orders")
+
+        assert value == "0"
+        assert context == "0 ready for pickup"
+
+    async def test_awaiting_payment_ignores_another_departments_orders(
+        self, db_session
+    ):
+        mine = await _org(db_session)
+        theirs = await _org(db_session)
+        my_admin = await _admin(db_session, mine)
+        their_admin = await _admin(db_session, theirs)
+        await _order(
+            db_session,
+            theirs,
+            their_admin,
+            payment_status=StorePaymentStatus.UNPAID,
+        )
+
+        value, _ = await _metric(db_session, my_admin, "awaiting_payment")
+
+        assert value == "0"
+
+    async def test_outstanding_balance_ignores_another_departments_debt(
+        self, db_session
+    ):
+        mine = await _org(db_session)
+        theirs = await _org(db_session)
+        my_admin = await _admin(db_session, mine)
+        their_admin = await _admin(db_session, theirs)
+        await _order(
+            db_session,
+            theirs,
+            their_admin,
+            payment_status=StorePaymentStatus.UNPAID,
+            total="500.00",
+        )
+
+        value, _ = await _metric(db_session, my_admin, "outstanding_balance")
+
+        assert value == "$0"
+
+    async def test_pending_verification_ignores_another_departments_orders(
+        self, db_session
+    ):
+        mine = await _org(db_session)
+        theirs = await _org(db_session)
+        my_admin = await _admin(db_session, mine)
+        their_admin = await _admin(db_session, theirs)
+        await _order(
+            db_session,
+            theirs,
+            their_admin,
+            payment_status=StorePaymentStatus.PENDING_VERIFICATION,
+            reported_at=NOW - timedelta(days=1),
+        )
+
+        value, _ = await _metric(db_session, my_admin, "pending_verification")
+
+        assert value == "0"
+
+    async def test_ready_for_pickup_ignores_another_departments_orders(
+        self, db_session
+    ):
+        mine = await _org(db_session)
+        theirs = await _org(db_session)
+        my_admin = await _admin(db_session, mine)
+        their_admin = await _admin(db_session, theirs)
+        await _order(
+            db_session, theirs, their_admin, status=StoreOrderStatus.READY_FOR_PICKUP
+        )
+
+        value, _ = await _metric(db_session, my_admin, "ready_for_pickup")
+
+        assert value == "0"
+
+    async def test_active_products_ignores_another_departments_catalog(
+        self, db_session
+    ):
+        mine = await _org(db_session)
+        theirs = await _org(db_session)
+        my_admin = await _admin(db_session, mine)
+        db_session.add(
+            StoreProduct(
+                id=str(uuid.uuid4()),
+                organization_id=theirs.id,
+                name=f"Their Job Shirt {uuid.uuid4().hex[:4]}",
+                status=StoreProductStatus.ACTIVE,
+            )
+        )
+        await db_session.flush()
+
+        value, _ = await _metric(db_session, my_admin, "active_products")
+
+        assert value == "0"

@@ -1267,6 +1267,72 @@ class TestOtherQueuesFindTheirRows:
         assert "below_par" not in await _queue(db_session, org, member, "inventory")
 
 
+class TestAgeDaysUsesTheDepartmentsLocalCalendar:
+    """`_age_days` took `.date()` on a UTC datetime with no conversion to the
+    org's local timezone, then compared it against `ctx.today` — which *is*
+    org-local. For a department whose local calendar date runs ahead of
+    UTC's, a row created just after local midnight still carried the prior
+    UTC date and read as a day older than it actually was.
+
+    Asia/Tokyo (UTC+9) is used because the two dates disagree for nine hours
+    of every day, not just across a narrow dateline instant. `ctx.today` is
+    built by hand rather than through `_context()`'s real
+    `datetime.now(timezone.utc)`, so the assertion is exact regardless of
+    when the suite happens to run — subclassing `datetime` to freeze that
+    clock was tried and rejected here, because the module's own
+    `isinstance(value, datetime)` checks (this one included) then stop
+    matching real, unpatched `datetime` instances coming back from the
+    database.
+    """
+
+    async def test_a_submission_just_after_local_midnight_ages_as_zero_not_one(
+        self, db_session
+    ):
+        from app.models.training import (
+            SubmissionStatus,
+            TrainingSubmission,
+            TrainingType,
+        )
+        from app.services.admin_hub_service import MetricContext
+
+        org = await _org(db_session, timezone="Asia/Tokyo")
+        member = await _member(db_session, org)
+        # 00:15 local on Jan 2 = 15:15 UTC on Jan 1 - just after local
+        # midnight, and still "today" (Jan 1) by a bare UTC date.
+        db_session.add(
+            TrainingSubmission(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                submitted_by=member.id,
+                course_name="Vehicle Extrication",
+                training_type=TrainingType.SKILLS_PRACTICE,
+                completion_date=date(2026, 1, 1),
+                hours_completed=4.0,
+                status=SubmissionStatus.PENDING_REVIEW,
+                submitted_at=datetime(2026, 1, 1, 15, 15, tzinfo=timezone.utc),
+            )
+        )
+        await db_session.flush()
+
+        # What `_context()` would compute for this org at 05:00 Tokyo time
+        # (20:00 UTC on Jan 1) — Tokyo's calendar has already turned to Jan 2.
+        ctx = MetricContext(
+            db=db_session,
+            organization_id=org.id,
+            user=member,
+            today=date(2026, 1, 2),
+            timezone_name="Asia/Tokyo",
+            local_midnight=datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc),
+            enabled_modules={"training"},
+        )
+
+        items = await MODULE_REGISTRY["training"].attention(ctx)
+        item = {i.key: i for i in items}["pending_submissions"]
+
+        # Pre-fix this read 1 (bare UTC date behind the org-local `today`).
+        assert item.oldest_age_days == 0
+
+
 class TestEventsAttendanceRateOrgScoping:
     """LOC2-32-1: _events_attendance_rate joins EventRSVP to Event and, before
     this fix, filtered organization_id only on the RSVP side — relying on the

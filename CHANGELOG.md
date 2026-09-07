@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Administration-hub attention ages now use the department's own calendar (2026-09-07)
+
+**Fixed**
+
+- **A shift swap, training submission, or overdue screening reported on the
+  administration hub's "Needs attention" queue could read a day older than it
+  actually was, for any department whose local calendar date differs from
+  UTC's.** `_age_days` took the date straight off a UTC timestamp and compared
+  it against the department's own local "today" without converting first —
+  wrong every evening for a department behind UTC, and for a few hours after
+  midnight for one ahead of it. Fixed by converting to the organization's
+  timezone before taking the date, matching the conversion already used
+  elsewhere on the same page.
+- **A department with an unusually large number of shifts starting in the
+  short-staffed lookback window could load every one of them into memory with
+  no cap.** `_short_staffed_shifts` now bounds the query the same way the
+  scheduling module's own open-shifts query already does.
+
 ### A garment's style is one description, not one item per adjective (2026-09-06)
 
 **Fixed**
@@ -93,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-sleeve polo and nothing could then correct it — the form had no style
   control at all, and renaming the item changed only its label while the catalog
   kept grouping on the columns.
+
 ### Scheduled department-message tasks now skip decommissioned organizations (2026-09-07)
 
 **Fixed**

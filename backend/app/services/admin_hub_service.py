@@ -174,10 +174,41 @@ class ModuleSpec:
 # ── Small helpers ───────────────────────────────────────────────────────────
 
 
-def _age_days(value: date | datetime | None, today: date) -> Optional[int]:
+def _age_days(
+    value: date | datetime | None, today: date, tz_name: str = "UTC"
+) -> Optional[int]:
+    """Age in whole days, measured in the organization's local calendar.
+
+    ``today`` is already ``ctx.today`` (the org-local date). A ``datetime``
+    value must be converted to that same local timezone before its ``.date()``
+    is taken — comparing a bare UTC date against a local ``today`` produces an
+    off-by-one whenever the org's local calendar date differs from UTC's (e.g.
+    evening in a timezone behind UTC, or just after local midnight in one
+    ahead of it). A plain ``date`` value has no time-of-day component, so
+    ``tz_name`` is a no-op for it.
+
+    ``value`` here is always the result of a raw ``func.min(date_column)``
+    aggregate (see ``_count_and_oldest``), never a hydrated ORM attribute —
+    so the ``Base``-level "load" listener that stamps ORM datetimes as UTC
+    (``app/core/database.py``) never runs on it, and MySQL's driver hands
+    back a naive value for these ``DateTime(timezone=True)`` columns. It is
+    stored as UTC, so a naive value is assumed to *be* UTC before converting
+    to the org's local timezone — the same assumption ``_as_utc`` below makes
+    for ORM-loaded timestamps.
+    """
     if value is None:
         return None
-    resolved = value.date() if isinstance(value, datetime) else value
+    if isinstance(value, datetime):
+        aware = (
+            value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        )
+        try:
+            org_tz: ZoneInfo | timezone = ZoneInfo(tz_name)
+        except ZoneInfoNotFoundError:
+            org_tz = timezone.utc
+        resolved = aware.astimezone(org_tz).date()
+    else:
+        resolved = value
     return max(0, (today - resolved).days)
 
 
@@ -433,7 +464,7 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         ).one()
         expired_count, oldest_expiry = int(expired_row[0] or 0), expired_row[1]
         if expired_count:
-            age = _age_days(oldest_expiry, ctx.today)
+            age = _age_days(oldest_expiry, ctx.today, ctx.timezone_name)
             items.append(
                 AdminAttentionItem(
                     key="expired_screenings",
@@ -524,7 +555,7 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         ).one()
         overdue_count, oldest_due = int(overdue_row[0] or 0), overdue_row[1]
         if overdue_count:
-            age = _age_days(oldest_due, ctx.today)
+            age = _age_days(oldest_due, ctx.today, ctx.timezone_name)
             items.append(
                 AdminAttentionItem(
                     key="overdue_screenings",
@@ -551,7 +582,7 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
             date_column=ProspectiveMember.created_at,
         )
         if stalled_count:
-            age = _age_days(oldest_applied, ctx.today)
+            age = _age_days(oldest_applied, ctx.today, ctx.timezone_name)
             items.append(
                 AdminAttentionItem(
                     key="stalled_prospects",
@@ -710,7 +741,7 @@ async def _training_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 )
             )
         ).scalar()
-        age = _age_days(oldest_submitted, ctx.today)
+        age = _age_days(oldest_submitted, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="pending_submissions",
@@ -779,7 +810,7 @@ async def _training_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=TrainingRecord.expiration_date,
     )
     if expired_count:
-        age = _age_days(oldest_expired, ctx.today)
+        age = _age_days(oldest_expired, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="expired_certifications",
@@ -909,7 +940,7 @@ async def _inventory_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=NFPAItemCompliance.expected_retirement_date,
     )
     if past_life_count:
-        age = _age_days(oldest_retirement, ctx.today)
+        age = _age_days(oldest_retirement, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="past_service_life",
@@ -1004,7 +1035,11 @@ async def _inventory_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 href="/inventory/admin/maintenance",
                 severity="critical" if overdue else "warning",
                 count=hydro_count,
-                oldest_age_days=_age_days(soonest, ctx.today) if overdue else None,
+                oldest_age_days=(
+                    _age_days(soonest, ctx.today, ctx.timezone_name)
+                    if overdue
+                    else None
+                ),
             )
         )
 
@@ -1016,7 +1051,7 @@ async def _inventory_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=EquipmentRequest.created_at,
     )
     if request_count:
-        age = _age_days(oldest_request, ctx.today)
+        age = _age_days(oldest_request, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="pending_equipment_requests",
@@ -1160,7 +1195,7 @@ async def _events_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=EventRequest.created_at,
     )
     if request_count:
-        age = _age_days(oldest_request, ctx.today)
+        age = _age_days(oldest_request, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="pending_event_requests",
@@ -1249,7 +1284,7 @@ async def _events_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=Event.end_datetime,
     )
     if unrecorded_count:
-        age = _age_days(oldest_unrecorded, ctx.today)
+        age = _age_days(oldest_unrecorded, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="unrecorded_attendance",
@@ -1306,7 +1341,10 @@ async def _scheduling_settings(ctx: MetricContext) -> dict:
 
 
 async def _short_staffed_shifts(
-    ctx: MetricContext, start: datetime, end: datetime
+    ctx: MetricContext,
+    start: datetime,
+    end: datetime,
+    max_candidates: int = 500,
 ) -> list[Shift]:
     """Shifts starting in the window that still have an open position.
 
@@ -1321,16 +1359,22 @@ async def _short_staffed_shifts(
     also drops slots marked ``required: false``, which a seat count includes, and
     normalizes the legacy list-of-strings form of the column.
 
-    The window is a week at most, so the rows are loaded and matched in Python.
+    The window is a week at most, so the rows are loaded and matched in
+    Python — but "a week at most" is the intended case, not a guarantee, so
+    ``max_candidates`` bounds pathological data the same way
+    ``SchedulingService.get_open_shifts`` bounds its own window query.
     """
     result = await ctx.db.execute(
-        select(Shift).where(
+        select(Shift)
+        .where(
             Shift.organization_id == ctx.organization_id,
             Shift.status != ShiftStatus.CANCELLED,
             Shift.is_finalized.is_(False),
             Shift.start_time >= start,
             Shift.start_time < end,
         )
+        .order_by(Shift.start_time.asc())
+        .limit(max_candidates)
     )
     shifts = list(result.scalars().all())
     if not shifts:
@@ -1369,8 +1413,12 @@ async def _scheduling_closeout_backlog(ctx: MetricContext) -> tuple[int, Optiona
     ages = [
         age
         for age in (
-            _age_days(oldest_ended, ctx.today),
-            _age_days(oldest_open + cushion if oldest_open else None, ctx.today),
+            _age_days(oldest_ended, ctx.today, ctx.timezone_name),
+            _age_days(
+                oldest_open + cushion if oldest_open else None,
+                ctx.today,
+                ctx.timezone_name,
+            ),
         )
         if age is not None
     ]
@@ -1460,8 +1508,8 @@ async def _scheduling_pending_requests(ctx: MetricContext) -> tuple[str, str]:
     ages = [
         age
         for age in (
-            _age_days(oldest_swap, ctx.today),
-            _age_days(oldest_time_off, ctx.today),
+            _age_days(oldest_swap, ctx.today, ctx.timezone_name),
+            _age_days(oldest_time_off, ctx.today, ctx.timezone_name),
         )
         if age is not None
     ]
@@ -1513,7 +1561,7 @@ async def _scheduling_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=ShiftSwapRequest.created_at,
     )
     if swap_count:
-        age = _age_days(oldest_swap, ctx.today)
+        age = _age_days(oldest_swap, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="scheduling_pending_swaps",
@@ -1538,7 +1586,7 @@ async def _scheduling_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=ShiftTimeOff.created_at,
     )
     if time_off_count:
-        age = _age_days(oldest_time_off, ctx.today)
+        age = _age_days(oldest_time_off, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="scheduling_pending_time_off",
@@ -1737,7 +1785,7 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=StoreOrder.payment_reported_at,
     )
     if verify_count:
-        age = _age_days(oldest_reported, ctx.today)
+        age = _age_days(oldest_reported, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="store_pending_verification",
@@ -1774,7 +1822,7 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=StorePaymentEvent.created_at,
     )
     if unsettled_count:
-        age = _age_days(oldest_event, ctx.today)
+        age = _age_days(oldest_event, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="store_unmatched_payments",
@@ -1819,7 +1867,7 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         date_column=StoreOrderWindow.closed_at,
     )
     if stale_count:
-        age = _age_days(oldest_close, ctx.today)
+        age = _age_days(oldest_close, ctx.today, ctx.timezone_name)
         items.append(
             AdminAttentionItem(
                 key="store_unfulfilled_windows",
