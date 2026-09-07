@@ -1982,10 +1982,12 @@ export const SHOTS = [
       await roster.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(500);
     },
-    // `div.drawer-panel`, not the `div.fixed.inset-0 > div` the modal shots
-    // use: the shift drawer is laid out inside the page's own main element,
-    // not as a fixed overlay, so that selector matches nothing here.
-    selector: "div.drawer-panel",
+    // `div.modal-panel`, the panel itself. Two nearby selectors are wrong
+    // here and both were tried: `div.drawer-panel` belongs to
+    // ApplicantDetailDrawer in prospective-members and matches nothing on
+    // this page, and `div[role='dialog']` resolves to the full-viewport
+    // backdrop (1425x1200) rather than the 896px panel inside it.
+    selector: "div.modal-panel",
     allowEmptyState:
       '"No calls logged for this shift." belongs to the Calls panel below ' +
       "the roster, and is true: this shift is five weeks away and has not " +
@@ -2015,11 +2017,11 @@ export const SHOTS = [
       // roster panel. Framed at the top instead, the pair would differ mostly
       // in where each one happens to be scrolled to.
       await page
-        .locator("div.drawer-panel")
+        .locator("div.modal-panel")
         .evaluate((el) => el.scrollTo(0, el.scrollHeight));
       await page.waitForTimeout(500);
     },
-    selector: "div.drawer-panel",
+    selector: "div.modal-panel",
     allowEmptyState:
       "The absence of the roster panel is the subject of the shot, and the " +
       "scheduler's copy beside it carries what this one withholds.",
@@ -6599,7 +6601,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the flat equipment check form on a mobile device showing a compartment header",
     alt: "The flat check form on a phone — a compartment heading, a bold section header beneath it, and the items it groups",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
@@ -6619,7 +6621,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the equipment check form on a mobile device showing check items with",
     alt: "Check items on a phone — a quantity stepper, the note panel open with its photo button, and a pass/fail item below",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
@@ -6664,7 +6666,7 @@ export const SHOTS = [
     anchor:
       'Screenshot of the "Set All to Par" confirmation dialog naming the items whose counts',
     alt: "The Set All to Par confirmation, naming each item it would raise and by how much",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
@@ -6730,7 +6732,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the equipment check form on a phone showing the carry-over banner",
     alt: "The check form's carry-over banner above a compartment of quantity items, each reading against par with its unit and none yet marked",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     prepare: async (page) => {
       // A check does not need a shift. "Unscheduled checklist" offers every
@@ -7904,9 +7906,9 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1329,
     anchor:
-      "Screenshot of the Equipment Checks tab showing a list of apparatus with",
-    alt: "Equipment checks tab listing apparatus with their check status",
-    route: "/scheduling?tab=equipment-checks",
+      "Screenshot of Fleet Readiness showing a list of apparatus with",
+    alt: "Fleet Readiness listing each apparatus with its check status",
+    route: "/inventory/checklists",
     fullPage: true,
   },
   {
@@ -8607,7 +8609,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of My Equipment Checklists with a part-answered check beside a finished one",
     alt: "My Equipment Checklists — one check part-answered with its progress and a Resume control, one finished, and the untouched ones offering Start Check",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     prepare: async (page) => {
       await page.waitForSelector("text=Engine Daily Check", {
@@ -8624,7 +8626,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the confirmation shown when submitting an equipment check with unanswered items",
     alt: "The confirmation before filing an incomplete equipment check — how many of the items are unanswered, and the choice between going back and submitting anyway",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     prepare: async (page) => {
       await clickByName("Unscheduled checklist")(page);
@@ -11634,7 +11636,7 @@ export const SHOTS = [
     line: 2819,
     anchor: "a submitted shift equipment check on a 390x844",
     alt: "One submitted engine check read back on a phone: passed overall, who signed it, when, and every item in the order the checklist walks the truck",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     viewport: { width: 390, height: 844 },
     prepare: openSubmittedCheck,
@@ -11646,7 +11648,7 @@ export const SHOTS = [
     line: 672,
     anchor: "a completed shift equipment check on a phone viewport",
     alt: "A completed check as one record on a phone — the state a replayed queue or a double-tapped Submit resolves to",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     viewport: { width: 390, height: 844 },
     prepare: openSubmittedCheck,
@@ -12293,7 +12295,7 @@ export const SHOTS = [
     line: 1478,
     anchor: "the seal panel on a check",
     alt: "Two sealed bags in one frame: the Drug Bag's tag matches the last count and offers Seal intact — clear 1 check, while the Trauma Bag's differs and offers only Record seal with a hand count",
-    route: "/scheduling?tab=equipment-checks",
+    route: "/inventory/checklists/my",
     auth: "member",
     viewport: { width: 1440, height: 2200 },
     prepare: openSealPanels,

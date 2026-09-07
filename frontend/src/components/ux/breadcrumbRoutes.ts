@@ -103,13 +103,21 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // ── Sections within a module ───────────────────────────────────────────
   '/finance/budgets': { permissions: ['finance.view'] },
   '/finance/check-requests': { permissions: ['finance.view'] },
-  '/finance/expenses': { permissions: ['finance.view'] },
+  // Registered for its label: the segment is "expenses" while the page's own
+  // heading, the detail page's back link and the testing registry all call it
+  // Expense Reports.
+  '/finance/expenses': { label: 'Expense Reports', permissions: ['finance.view'] },
   '/finance/purchase-requests': { permissions: ['finance.view'] },
   '/finance/settings': { permissions: ['finance.manage'] },
   '/grants/applications': { permissions: ['fundraising.view'] },
   '/inventory/admin/checklists': { permissions: ['inventory.check_manage'] },
   '/inventory/checklists': { permissions: ['inventory.check_view', 'scheduling.manage'] },
+  // Registered for their labels, and so the hub-card agreement test covers
+  // them: both are Inventory Administration cards sitting outside the hub's URL
+  // space, and "checkouts" is not what either the card or the page calls this.
+  '/inventory/checkouts': { label: 'Temporary Loans', permissions: ['inventory.manage'] },
   '/inventory/items': { permissions: ['inventory.manage'] },
+  '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
   // A leaf, registered for its label: the segment is "closeout" and the page
   // calls itself "Shift Close-Out", so the fallback would give the trail and
@@ -119,6 +127,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // A leaf, registered only for its label: the segment is "positions" and the
   // page calls itself "Who Can Fill What", so the fallback would give the trail
   // and the heading two different names for one screen.
+  '/members/admin/settings': { label: 'Settings', permissions: ['members.manage'] },
+  '/members/admin/settings/visibility': { label: 'Contact Visibility', permissions: ['members.manage'] },
+  '/members/admin/settings/ids': { label: 'Membership IDs', permissions: ['members.manage'] },
   '/scheduling/admin/positions': { label: 'Who Can Fill What', permissions: ['scheduling.manage'] },
   '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },
   '/scheduling/checkin': { label: 'Shift Check-In' },

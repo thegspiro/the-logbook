@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SchedulingPage from './SchedulingPage';
 import { schedulingService } from '../modules/scheduling/services/api';
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 // Mock scheduling module API
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -356,6 +357,163 @@ describe('SchedulingPage', () => {
       // initiate.
       await user.click(screen.getByRole('button', { name: 'Dismiss detail' }));
       expect(await screen.findByRole('heading', { name: 'Create Shift' })).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * A `?shift=` link that will not resolve.
+   *
+   * This is where the close-out queue's "Open the shift to close it" sends an
+   * officer, so the failure lands on somebody who came here to do one specific
+   * thing. The handler used to catch it, strip the parameter and render
+   * nothing — leaving them on the generic board with no error, no retry, and a
+   * URL that no longer said what they had asked for.
+   */
+  describe('a deep link that fails', () => {
+    const mockGetShift = vi.mocked(schedulingService.getShift);
+
+    beforeEach(() => {
+      mockGetShift.mockReset();
+      mockCheckPermission.mockReturnValue(true);
+    });
+
+    it('says the shift could not be opened rather than showing a bare schedule', async () => {
+      mockGetShift.mockRejectedValue(new Error('boom'));
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+
+      renderWithRouter(<SchedulingPage />);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/could not be opened/);
+    });
+
+    it('keeps the shift in the URL so a retry has something to retry', async () => {
+      mockGetShift.mockRejectedValue(new Error('boom'));
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+
+      renderWithRouter(<SchedulingPage />);
+      await screen.findByRole('alert');
+
+      // The parameter is the request. Dropping it on failure discarded what the
+      // officer asked for and left the URL describing a page they never chose.
+      expect(window.location.search).toContain('shift=shift-1');
+    });
+
+    it('retries the same shift, and clears the error when it works', async () => {
+      // Driven by a flag rather than `mockRejectedValueOnce`: the effect can run
+      // more than once for a single mount, which consumes a one-shot mock before
+      // Retry is ever clicked and leaves the test asserting the happy path twice.
+      let succeed = false;
+      mockGetShift.mockImplementation((() =>
+        succeed
+          ? Promise.resolve({ id: 'shift-1', shift_date: '2099-01-01' })
+          : Promise.reject(new Error('boom'))) as never);
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await screen.findByRole('alert');
+      succeed = true;
+
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Shift Details' })).toBeInTheDocument();
+      expect(screen.queryByText(/could not be opened/)).not.toBeInTheDocument();
+      // Stripped now that it resolved, which is the one point at which the
+      // request has actually been served.
+      expect(window.location.search).not.toContain('shift=shift-1');
+    });
+
+    it('lets the officer dismiss it and keep the schedule', async () => {
+      mockGetShift.mockRejectedValue(new Error('boom'));
+      window.history.pushState({}, '', '/scheduling?shift=shift-1');
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+      await screen.findByRole('alert');
+
+      await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+      expect(screen.queryByText(/could not be opened/)).not.toBeInTheDocument();
+      // Dismiss is the one deliberate way the parameter goes without success:
+      // the officer has said they are done with it, so a re-render must not
+      // reopen the same failure.
+      expect(window.location.search).not.toContain('shift=shift-1');
+    });
+  });
+
+  /**
+   * Every control in the Create Shift dialog is reachable by its visible label.
+   *
+   * The whole modal shipped with no htmlFor/id pair at all, so a screen reader
+   * announced nine unnamed fields and clicking a label focused nothing. This
+   * asserts the entire set rather than one field: that is the assertion that
+   * would have caught the original defect, and it fails loudly if a field is
+   * added later without a label.
+   */
+  describe('form labelling', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      // Templates reach the page through the shared store, and the template
+      // search box only renders past five of them.
+      useSchedulingStore.setState({
+        templates: Array.from({ length: 6 }, (_, i) => ({
+          id: `t${i}`,
+          name: `Template ${i}`,
+          is_active: true,
+          start_time_of_day: '08:00',
+          end_time_of_day: '16:00',
+        })) as never,
+        templatesLoaded: true,
+        // The Apparatus field renders only when the department has apparatus,
+        // and Shift Officer only alongside it.
+        apparatus: [{ id: 'a1', unit_number: 'Engine 1', is_active: true }] as never,
+        apparatusLoaded: true,
+        members: [{ id: 'm1', label: 'A Member' }] as never,
+        membersLoaded: true,
+      });
+    });
+
+    afterEach(() => {
+      // The page is still mounted and subscribed to the store here, so this
+      // reset re-renders it; unwrapped it emits React's act(...) warning, which
+      // would sit in the output of every later run and mask a real one.
+      act(() => {
+        useSchedulingStore.setState({
+          templates: [],
+          templatesLoaded: false,
+          apparatus: [],
+          apparatusLoaded: false,
+          members: [],
+          membersLoaded: false,
+        });
+      });
+    });
+
+    it('names every field in the Create Shift dialog', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      await screen.findByRole('heading', { name: 'Create Shift' });
+
+      expect(screen.getByLabelText('Shift Template')).toBeInTheDocument();
+      expect(screen.getByLabelText('Search shift templates')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Start Date/)).toBeInTheDocument();
+      expect(screen.getByLabelText('End Date')).toBeInTheDocument();
+
+      // Apparatus, the times and Notes live behind the collapsible section.
+      await user.click(screen.getByRole('button', { name: /Additional Options/ }));
+
+      expect(screen.getByLabelText(/Apparatus/)).toBeInTheDocument();
+      for (const field of ['Start Time', 'End Time']) {
+        for (const part of ['hour', 'minute', 'AM/PM']) {
+          expect(screen.getByRole('combobox', { name: `${field} ${part}` })).toBeInTheDocument();
+        }
+      }
+      expect(screen.getByLabelText(/Shift Officer/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+
+      // Custom Times heads a pair of fields rather than naming one, so it is a
+      // group rather than a label.
+      expect(screen.getByRole('group', { name: /Custom Times/ })).toBeInTheDocument();
     });
   });
 });

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { formatTime } from '../../utils/dateFormatting';
 
 const shift = {
@@ -34,25 +35,29 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
+// Hoisted so a test can restore it after making the lookup fail. The default is
+// one *incomplete* end-of-shift draft, which is what most of this file relies on.
+const DEFAULT_CHECKLISTS = vi.hoisted(() => [
+  {
+    templateId: 'end-check',
+    templateName: 'End check',
+    checkTiming: 'end_of_shift',
+    // Exercise defensive frontend handling of stale/mismatched API data:
+    // an incomplete draft can never become complete just because this flag
+    // was true.
+    isCompleted: true,
+    overallStatus: 'incomplete',
+    totalItems: 2,
+    completedItems: 1,
+    failedItems: 0,
+  },
+]);
+
 // Equipment-check calls moved to modules/inventory when checklists
 // became an Inventory feature; the scheduling service re-exports it.
 vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   equipmentCheckService: {
-    getShiftChecklists: vi.fn().mockResolvedValue([
-      {
-        templateId: 'end-check',
-        templateName: 'End check',
-        checkTiming: 'end_of_shift',
-        // Exercise defensive frontend handling of stale/mismatched API data:
-        // an incomplete draft can never become complete just because this flag
-        // was true.
-        isCompleted: true,
-        overallStatus: 'incomplete',
-        totalItems: 2,
-        completedItems: 1,
-        failedItems: 0,
-      },
-    ]),
+    getShiftChecklists: vi.fn().mockResolvedValue(DEFAULT_CHECKLISTS),
   },
 }));
 
@@ -121,6 +126,76 @@ describe('ShiftDetailPanel close-out equipment checks', () => {
     await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
 
     expect(screen.getByText(/1 end-of-shift checklist still pending/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close out shift' })).toBeDisabled();
+  });
+});
+
+/**
+ * The checklist lookup failing, which is not the same as no checks outstanding.
+ *
+ * `getShiftChecklists` wants `inventory.check_view` or `inventory.check_submit`,
+ * and `scheduling.manage` implies neither — so it 403s for an ordinary
+ * scheduling officer. The panel used to substitute `[]`, which reads as "nothing
+ * pending": the warning disappeared, the override control disappeared with it,
+ * and a department that blocks on those checks had the server refuse every
+ * finalize with nothing on screen to explain why.
+ */
+describe('ShiftDetailPanel when the equipment check status cannot be read', () => {
+  beforeEach(() => {
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockRejectedValue(new Error('403'));
+  });
+
+  afterEach(() => {
+    vi.mocked(equipmentCheckService.getShiftChecklists).mockResolvedValue(DEFAULT_CHECKLISTS);
+  });
+
+  it('says the status is unknown rather than reporting nothing outstanding', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+
+    expect(screen.getByText(/could not be read/)).toBeInTheDocument();
+    // Never silence: an absent answer presented as zero is the failure this
+    // whole series keeps re-finding, and it is what the empty list produced.
+    expect(screen.queryByText(/checklist still pending/)).not.toBeInTheDocument();
+  });
+
+  it('still offers the override, because the server may refuse', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+
+    expect(screen.getByLabelText(/Finalize anyway/)).toBeInTheDocument();
+  });
+
+  it('does not block close-out on a status nobody could read', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+
+    // Offered, not demanded. The server consults these checks only when the
+    // department enables them and is the authority either way; refusing here
+    // would shut an officer out of a close-out the API would have accepted —
+    // a worse failure than the one being fixed, and one an earlier attempt at
+    // this introduced.
+    expect(screen.getByRole('button', { name: 'Close out shift' })).toBeEnabled();
+  });
+
+  it('will not send an override with no reason on it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={shift as never} onClose={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Close out shift' }));
+    await user.click(screen.getByLabelText(/Finalize anyway/));
+
+    // `handleFinalize` drops an empty `override_reason`, so the audit event
+    // would record the checks bypassed with `null` where the screen promised a
+    // reason. Ticking the box is what makes the reason mandatory — not the
+    // checks being known-incomplete, which is why an unknown status reaches
+    // this branch at all.
     expect(screen.getByRole('button', { name: 'Close out shift' })).toBeDisabled();
   });
 });
@@ -672,13 +747,13 @@ describe('ShiftDetailPanel dialog shell', () => {
     const closeOnPhone = await screen.findByRole('button', { name: 'Close panel' });
     await user.click(closeOnPhone);
     closeOnPhone.focus();
-    expect(document.activeElement).toBe(closeOnPhone);
+    expect(closeOnPhone).toHaveFocus();
 
     await resizeTo('laptop');
 
     const closeOnLaptop = screen.getByRole('button', { name: 'Close panel' });
-    expect(document.activeElement).toBe(closeOnLaptop);
-    expect(document.activeElement).not.toBe(document.body);
+    expect(closeOnLaptop).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
   });
 
   it('closes on a backdrop click but not on a click inside the panel', async () => {

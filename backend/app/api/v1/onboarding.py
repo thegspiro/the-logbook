@@ -49,7 +49,12 @@ from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     OnboardingService,
 )
-from app.utils.email_providers import missing_for_enabled, required_field_message
+from app.utils.email_providers import (
+    MICROSOFT_AUTH_METHODS,
+    invalid_for_enabled,
+    missing_for_enabled,
+    required_field_message,
+)
 from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
@@ -173,7 +178,30 @@ def _incomplete_session_email(session_data: Optional[dict]) -> Optional[str]:
             f"{required_field_message(platform, missing)} Return to the email "
             "step and save it again, or choose Other to configure email later."
         )
+    invalid = invalid_for_enabled(mapped)
+    if invalid:
+        return f"{invalid} Return to the email step and correct it."
     return None
+
+
+def _validated_microsoft_auth_method(value: Any) -> Optional[str]:
+    """The submitted Microsoft auth method, or None when absent.
+
+    Refused rather than stored verbatim: every reader treats an unrecognized
+    method as App Password, so an unsupported value paired with an App
+    Password would pass the enabled check and persist — and the settings
+    schema, which every read rebuilds stored rows through, rejects it. The
+    organization would be locked out of the screen that could fix it, which
+    is the trap normalize_stored_platform exists to undo for platform.
+    """
+    if value is None or value == "":
+        return None
+    if value not in MICROSOFT_AUTH_METHODS:
+        raise ValueError(
+            "Microsoft 365 authentication method must be one of: "
+            f"{', '.join(MICROSOFT_AUTH_METHODS)}"
+        )
+    return value
 
 
 def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
@@ -199,7 +227,9 @@ def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
         "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
         "google_app_password": raw_config.get("googleAppPassword"),
         "microsoft_app_password": raw_config.get("microsoftAppPassword"),
-        "microsoft_auth_method": raw_config.get("microsoftAuthMethod"),
+        "microsoft_auth_method": _validated_microsoft_auth_method(
+            raw_config.get("microsoftAuthMethod")
+        ),
         "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
         "microsoft_client_id": raw_config.get("microsoftClientId"),
         "microsoft_client_secret": raw_config.get("microsoftClientSecret"),
@@ -526,7 +556,17 @@ class RoleSetupItem(BaseModel):
     description: str | None = Field(None, max_length=500)
     priority: int = Field(default=50, ge=0, le=100)
     permissions: dict[str, RolePermission] = Field(
-        default_factory=dict, description="Module permissions with view/manage flags"
+        default_factory=dict,
+        # The registry names 34 modules today; a client-supplied key is an
+        # arbitrary string (there is no allowlist — see ONB-7), so nothing
+        # else bounds how many `expand_module_checkboxes` turns into
+        # `{module}.view`/`{module}.manage`/`{module}.*` entries per role. The
+        # outer `RolesSetupRequest.roles`/`PositionsSetupRequest.positions`
+        # caps (ONB2-30-2) bound the number of roles in one request, not the
+        # size of any one role's own permission set — same rationale as
+        # `stations`/`apparatus`/`it_team`, headroom above the current count.
+        max_length=50,
+        description="Module permissions with view/manage flags",
     )
     is_custom: bool = Field(default=False, description="Whether this is a custom role")
 
@@ -818,6 +858,17 @@ async def _persist_session_data_to_org(
                     "Onboarding email config for {} is missing {}; stored disabled",
                     platform,
                     missing,
+                )
+                email_settings["enabled"] = False
+            # A malformed identifier is as unsendable as an absent one, and
+            # this is the path that cannot reject. Without it the comment
+            # above describes an invariant the code only half enforces.
+            invalid = invalid_for_enabled(email_settings)
+            if invalid:
+                logger.warning(
+                    "Onboarding email config for {} is unusable ({}); stored disabled",
+                    platform,
+                    invalid,
                 )
                 email_settings["enabled"] = False
             org_settings["email_service"] = email_settings
@@ -1615,6 +1666,12 @@ async def save_email_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=required_field_message(data.platform, missing),
         )
+    # Judged here rather than only at completion: an identifier that cannot
+    # be used is refused while the admin is still looking at the field, not
+    # after they have worked through the remaining steps and been sent back.
+    invalid = invalid_for_enabled(mapped)
+    if invalid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=invalid)
 
     # Encrypt sensitive config data (contains passwords, API keys, etc.)
     import json

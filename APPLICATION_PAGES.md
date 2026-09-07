@@ -162,7 +162,24 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/members/admin/edit/:userId`    | Admin Member Edit    | `members.manage`   |
 | `/members/admin/history/:userId` | Member Audit History | `members.manage`   |
 | `/members/admin/waivers`         | Waiver Management    | `members.manage`   |
+| `/members/admin/settings`        | Members Settings     | `members.manage`   |
+| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage` |
+| `/members/admin/settings/ids`    | Members Settings — Membership IDs | `members.manage`   |
 | `/members/check-in-station`      | Check-In Station     | `members.check_in` |
+
+> _(2026-09-06)_ **Members Settings** holds Contact Visibility and Membership
+> IDs, moved here from the global settings page — they are decisions about the
+> roster, not platform configuration. `/members/admin/settings` redirects to the
+> first section; `/settings?tab=members` redirects here, carrying the sub-page.
+>
+> **The route's permission is not the endpoint's, and this is the one page in
+> the app where that gap is load-bearing.** `members.manage` opens the screen;
+> neither section's save accepts it. Contact Visibility writes through
+> `PATCH /organization/settings/contact-info` (`settings.manage`,
+> `settings.manage_contact_visibility` or `organization.update_settings`) and
+> Membership IDs through `PATCH /organization/settings/membership-id`
+> (`settings.edit` or `organization.update_settings`). The page lists only the
+> sections the officer's grants admit, and says so when it can offer none.
 
 > **Admin Edit** provides full member editing (all fields, rank/station dropdowns, status, roles). **Audit History** shows timestamped change log. **Waiver Management** is a unified page covering training, meeting, and shift waivers with Active/Create/History tabs.
 
@@ -858,7 +875,7 @@ resumes rather than restarting:
 | `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`                                                       |
 | `/inventory/checklists/my`                          | My Equipment Checklists          | Authenticated                                                                |
 | `/inventory/admin/checklists`                       | Equipment Checklists admin       | `inventory.check_manage`                                                     |
-| `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`       |
+| `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `inventory.check_view`, `inventory.manage`                            |
 | `/inventory/admin/checklists/settings`              | Checklist Settings               | any of `settings.manage`, `organization.update_settings`                     |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory              | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
 | `/inventory/checklists`                             | Fleet Board                      | any of `inventory.check_view`, `scheduling.manage`                           |
@@ -901,10 +918,20 @@ scoped to a single apparatus as the Check log tab of Apparatus Detail.
 
 #### Expiring on Apparatus (`/inventory/admin/checklists/supply`) _(documented 2026-08-10)_
 
-The supply officer's worklist. Reached from **Scheduling → Supply** (the tile
-carries a count badge) and from the **Inventory Admin Hub**. Lists checklist
-positions that are expiring, expired, short of target, or reported used, each with
-the ready replacement stock behind it.
+The supply officer's worklist. Reached from the **Inventory Admin Hub**, the
+**Fleet Board** and **Apparatus Detail**. Lists checklist positions that are
+expiring, expired, short of target, or reported used, each with the ready
+replacement stock behind it.
+
+> **Narrowed 2026-09-06, for the reason the note above gives.** The route also
+> admitted `scheduling.manage`, which `GET /equipment-check/supply/expiring-items`
+> does not: a shift officer holding only it passed the guard and met a 403 on
+> load, reaching a page that rendered nothing but its failure state. Narrowed
+> rather than widening the endpoint, because the worklist is fleet-wide item
+> stock and expiry — inventory data, and a purely scheduling grant is not
+> authority to read it. The hub card and the two inbound links carried the same
+> over-wide reading and were corrected with it, so none of them now offers the
+> page to somebody it will refuse.
 
 | Control    | Options                                       |
 | ---------- | --------------------------------------------- |

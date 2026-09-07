@@ -93,6 +93,649 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-sleeve polo and nothing could then correct it — the form had no style
   control at all, and renaming the item changed only its label while the catalog
   kept grouping on the columns.
+### Members settings moved to Members Administration (2026-09-06)
+
+**Changed**
+
+- **Contact Visibility and Membership IDs now live at
+  `/members/admin/settings`.** They sat in the global settings page beside Email,
+  Storage and Authentication — platform choices an administrator makes once.
+  These are neither: they are decisions about the roster, made by whoever runs
+  the roster, and everything else that person does is under Members
+  Administration. `/settings?tab=members` redirects, carrying the sub-page across,
+  so existing links and bookmarks still land on the section they named.
+- **Each section states the permission its endpoint actually enforces.** Every
+  route under `/members/admin` stands on `members.manage`, and neither of these
+  saves through an endpoint that accepts it — contact visibility wants
+  `settings.manage`, `settings.manage_contact_visibility` or
+  `organization.update_settings`; membership IDs want `settings.edit` or
+  `organization.update_settings`. The screen lists only the sections an officer's
+  grants admit and says so when it can offer none, rather than presenting toggles
+  the server refuses. No permission was changed: this reports the gate that was
+  already there.
+- **A failed settings load says so.** Both sections render every toggle `false`
+  before their data arrives, which reads as a department that has turned the
+  feature off. They now report the failure and offer a retry instead.
+### The set of paths that can create an account is now pinned (2026-09-06)
+
+**Added**
+
+- **`backend/tests/test_account_creation_paths.py`** records every route that
+  can put a live account in the database, and what gates each one. `users.create`
+  reads like the answer to "who can create an account here" and is not: three
+  places in `app/` construct a `User` row, and five request-reachable routes
+  reach them — direct creation, prospect transfer, two auto-transfer routes
+  behind pipeline step completion, and self-registration behind the
+  `REGISTRATION_ENABLED` setting. None of them is a hole; the transfer paths
+  enforce the same rank and role ceilings as `POST /users` and refuse the same
+  administrative-class-plus-rank pair, and the auto-transfer routes pass neither
+  rank nor roles. What was missing was a record, so a sixth path could be added
+  without anyone noticing the answer had changed. An AST sweep now fails on a
+  new `User(...)` anywhere under `app/`, naming the file and function, and the
+  gate on each known route is asserted so a silent widening or narrowing fails
+  in CI rather than in a review that happens to look.
+
+### Events and Training record pages keep their trail in every state (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on nine Events and Training pages that had none.** #2314
+  gave the pages sitting _beside_ the two administration hubs their hub crumb;
+  these are the record and member-facing pages underneath, which it did not
+  reach. The event detail, edit, check-in monitoring and QR-analytics screens,
+  the cohort detail screen, and the training submit, programme-progress,
+  skill-test result and manual shift report screens now all show where they sit.
+- **A route away from a record that failed to load.** Every one of these pages
+  is reached by an id, and their loading and not-found branches had no
+  navigation at all — an event opened from a stale link left the browser's back
+  button as the only exit. The trail is defined once per page and rendered in
+  every branch, so it cannot go missing from one.
+
+**Fixed**
+
+- **The id-suffixed pages showed no trail at all, not merely a short one.**
+  `/events/:id` and its siblings skip the id when the trail is generated, which
+  leaves a single "Events" crumb — and a one-crumb generated trail suppresses
+  itself by design. These pages now pass explicit items naming the record, the
+  same repair `/elections/:electionId` needed.
+- **Two of them named a record they never load.** Check-in monitoring and the
+  QR analytics dashboard fetch statistics, not the event, so their middle crumb
+  links back to the record rather than inventing a title. The analytics page
+  renders no trail at all when it has no event id, because it also serves
+  platform-wide metrics where every crumb would be the page you are already on.
+
+### Add Member asked a permission that gates the prospect pipeline (2026-09-06)
+
+**Fixed**
+
+- **`members.create` does not gate creating a member, despite its name.**
+  Nothing that creates a member enforces it: `POST /users` requires
+  `users.create`, and the prospect-transfer path that also mints a user row
+  requires `members.manage` or `prospective_members.manage`. `members.create`
+  is enforced only on the prospect pipeline — `POST /prospects` and
+  `/prospects/check-existing`. Its registry description read "Create new
+  members", which is how the members admin hub came to gate its Add Member and
+  Import tabs on it; both tabs submit through `userService.createMember`, which
+  posts to `POST /users`. All four entry points — the hub's two tabs, the
+  roster toolbar and empty-state prompt, and the command palette's Add Member
+  action — now ask `users.create`. The two grants are held by the same seeded
+  positions and ranks, so no one's access changes; the affordances now name the
+  gate that decides them. The permission itself is unchanged: renaming it would
+  be a breaking config change for any department that granted it, so its
+  description moved instead.
+- **A comment in the membership pipeline cited `users.create_member`**, a
+  permission that has never existed, and the membership training guide named
+  `members.create` as the requirement for adding and importing members. Both
+  now name `users.create`.
+
+### Add Member was offered to three positions it did not work for (2026-09-06)
+
+**Fixed**
+
+- **The roster's Add Member and Import CSV buttons asked the wrong
+  permission.** They were gated on `members.manage`, but both navigate to tabs
+  on the members admin hub that are gated on `members.create` — and the hub
+  falls back to Member Management rather than erroring when a tab is not
+  openable. The Captain, Vice President and Assistant Secretary positions (and
+  the Captain rank) hold manage without create, so a captain tapping Add Member
+  landed on the management list with no error and no explanation. All three
+  entry points to that tab — the roster toolbar, the empty-state prompt and the
+  command palette's Add Member action — now ask `members.create`, the gate on
+  the tab they select. The management affordances those positions do hold, the
+  Hire Date column and the CSV export among them, are unchanged.
+- **The members administration screen's Add Member button** asked
+  `users.create`, a third name for the same action. It now matches the tab it
+  selects as well. The two grants are held by the same positions in every
+  seeded position and rank, so this changes no one's access today; it removes
+  the second name.
+
+### Staffing gaps inherits the fixes the close-out queue got (2026-09-06)
+
+**Fixed**
+
+- **The gaps list no longer answers for a range it did not read.** It fetched
+  one page of 200 shifts and reported the rest as staffed; a range with more now
+  says it was cut short rather than claiming every shift has the crew it asks
+  for. A **To** date earlier than **From** is refused instead of returning zero
+  rows and reading as a staffing assurance, and two overlapping range changes
+  can no longer leave the date controls describing one range while the list
+  describes another.
+- **The default range is the department's calendar day, not the browser's.** A
+  UTC browser viewing an America/Los_Angeles department late in its evening
+  opened on tomorrow; the opposite offset dropped the department's own current
+  day, hiding a shift that is short today.
+- **The list re-reads the clock.** A shift that became past while the page
+  stayed open never left it, and the count above stayed at the number first
+  drawn.
+- **Shift Planning's settings mirror says when it has not read anything.** A
+  failed load fell through to the built-in defaults — 12 hours, 4 people — and
+  rendered them as the department's own configuration, in a card whose every row
+  links to the page that edits it. It now says the values may be defaults and
+  offers a retry.
+
+### The mobile checks on Scheduling Administration were measuring nothing (2026-09-06)
+
+**Fixed**
+
+- **Three defects the mobile ratchet could not see.** Every route under
+  `/scheduling/admin` is gated on `scheduling.manage`, which the test fixture did
+  not hold, so all four measured the Access Denied screen — passing every budget
+  while testing nothing. With the grant in place: the administration hub was
+  white-screening on a summary that carried no attention list (`AdminHubFrame`
+  defaulted `metrics` but not `attention`); the scheduling reports tab bar pushed
+  **Call Volume** 85px off the right of a 375px screen, undeclared as a scroll
+  region and so not keyboard-reachable either; and Shift Planning's settings
+  mirror carried five 14px-tall links where a thumb needs 44.
+- **The close-out queue's row is now in the fixture.** Without a shift that has
+  ended and was never closed, that route's check measured the filter bar and the
+  empty state, never a queue row or its close-out control.
+
+### Two close-out failures that showed an officer nothing (2026-09-06)
+
+**Fixed**
+
+- **A shift's equipment check status now says when it could not be read.** The
+  checklist endpoint wants an Inventory grant that `scheduling.manage` does not
+  imply, so it refuses an ordinary scheduling officer — and the shift panel
+  substituted an empty list, which reads as "nothing outstanding". The warning
+  and the override control both disappeared, while a department that blocks
+  close-out on those checks had the server refuse every finalize with nothing on
+  screen to explain it. The panel now distinguishes unknown from none, offers
+  the override without demanding it, and will not send an override with no
+  reason attached whatever made the officer tick the box.
+- **A `?shift=` link that fails says so instead of vanishing.** The deep-link
+  handler caught the failure, stripped the parameter and rendered nothing,
+  dropping the officer on the generic schedule with no error and no way back to
+  the shift — the destination of the close-out queue's **Open the shift to close
+  it**. The parameter is now kept on failure, so Retry has something to retry,
+  and is stripped only once the shift has actually opened or the officer
+  dismisses the message.
+
+### Security: clearing a saved report's name could 500 instead of returning a clear error (2026-09-06)
+
+**Fixed**
+
+- **`PATCH /reports/saved/{id}` used a bare `setattr` loop instead of
+  `apply_updates`**, so an explicit `"name": null` — a valid value for the
+  request schema's `Optional[str]` field — reached `db.commit()` against the
+  NOT NULL `name` column and raised an uncaught `IntegrityError` (an
+  unhandled 500) instead of the 400 every other rejected value on this
+  endpoint returns. Switched to `apply_updates`, matching the sibling
+  `label_printer_service.update_printer`.
+- **Flagged, not fixed:** the "Compliance Status" report and the training
+  summary's per-requirement breakdown compute member compliance from
+  training-_program_ enrollment progress, while the dashboard and the
+  training compliance-matrix compute it from the shared, profile/waiver/
+  date-window-aware evaluator in `training_compliance.py` — two different
+  answers to "is this member compliant?" from the same `TrainingRequirement`
+  rows. See `docs/KNOWN_LIMITATIONS.md` (RPT5-29-1).
+- See `docs/security-review/RPT5-29-reports-analytics.md` for the full
+  writeup.
+
+### Nobody could run a finance approval chain (2026-09-06)
+
+**Fixed**
+
+- **The Treasurer can now reach the approval workflow.** `finance.approve` and
+  `finance.configure_approvals` gate nine endpoints — the approval queue and
+  the whole approval-chain settings screen — and no seeded position held
+  either. The only account that could reach them held the `*` wildcard, i.e.
+  the IT administrator. With no chain configured, `submit_purchase_request`
+  skips approval entirely, so requests quietly bypassed the workflow; configure
+  a chain, which needed that same unreachable screen, and every submitted
+  request landed in `pending_approval` with nobody able to action it. The
+  `treasurer` position now carries both grants, and a migration carries them to
+  departments that already onboarded — gated on the stored row still holding
+  exactly the finance grants the registry seeded, so a position an
+  administrator curated is left alone. `assert_different_person` still refuses
+  self-approval whoever holds the permission, so a Treasurer cannot walk their
+  own request through a chain.
+
+### Two permission gates that pointed at nothing (2026-09-06)
+
+**Fixed**
+
+- **The supply worklist no longer admits a grant its own endpoint refuses.**
+  `/inventory/admin/checklists/supply` was gated on `scheduling.manage`,
+  `inventory.check_view` or `inventory.manage`, but
+  `GET /equipment-check/supply/expiring-items` accepts only the latter two. A
+  shift officer holding just `scheduling.manage` passed the route guard and met
+  a 403 on load, reaching a page that rendered nothing but its failure state.
+  The route, the administration hub card and the two inbound links (the fleet
+  board and the apparatus detail page) now all match the endpoint. Narrowed
+  rather than widened deliberately: the worklist is fleet-wide item stock and
+  expiry, so the fix is to stop admitting a purely scheduling grant rather than
+  to disclose inventory data to one.
+- **The API contract suite's generated email addresses are now all addresses
+  Pydantic accepts.** The strategy behind OpenAPI's `email` format allowed a
+  hyphen anywhere inside a domain label, so it could emit `fa--jm.bfd` —
+  email-validator refuses two letters followed by two dashes at a label's third
+  and fourth characters, since IDNA reserves that shape for punycode's `xn--`.
+  Schemathesis reported the resulting 422 as "API rejected schema-compliant
+  request", which surfaced as a one-off red months after the strategy landed,
+  on an unrelated pull request. The pattern no longer emits two adjacent
+  hyphens; single hyphens still generate.
+
+### The program print sheet's Enrolled Members table could never render (2026-09-06)
+
+**Fixed**
+
+- **The printable training programme now loads its roster from
+  `GET /training/programs/programs/{id}/enrollments`.** It read
+  `program.enrollments`, and the programme response
+  (`ProgramWithPhasesAndRequirements`) carries phases, requirements and
+  milestones and no enrollments field — so the Enrolled Members section was
+  always skipped and the header always printed `Enrolled: 0`, on every sheet.
+  Nothing was missing on the backend: that endpoint already exists, is
+  org-scoped and permission-gated, and returns exactly the enriched shape the
+  table was written against, which is why the table already carried a cast for
+  `user_name`.
+
+- **A member who cannot read the roster gets an em dash, not a confident `0`.**
+  The route is gated on the training module alone while the endpoint needs
+  `training.view_all` or `training.manage`, so the call degrades — correctly,
+  since withholding the roster is the right privacy outcome. But degrading to an
+  empty list would have printed `Enrolled: 0` on paper for a programme with
+  twenty members on it. "Could not read" and "nobody enrolled" are now distinct.
+
+- **The Current Phase column shows the phase.**
+  `ProgramEnrollmentResponse` serializes `current_phase_id` and no nested phase
+  object, so reading `current_phase.name` would have printed an em dash for
+  every member even once the rows arrived. The name resolves from the
+  programme's own phases, the way the requirements table above it already
+  resolved its phase column.
+
+### Finance and Elections pages keep their trail in every state (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the six Finance section pages.** Budgets, Purchase
+  Requests, Expense Reports, Check Requests, Dues and Finance Settings had none,
+  while the detail and form pages beneath them did — so a trail appeared once
+  you opened a record and disappeared when you went back to the list it came
+  from.
+- **A trail on the election detail page, in all three of its states.** Its URL
+  is `/elections/:electionId`, and a generated trail skips the id and then
+  suppresses itself for having only one crumb, so the page showed nothing. Its
+  loading and not-found branches offered no route away at all — not even the
+  "Back to Elections" link the loaded page carries — which is what a member
+  following a stale election link landed on.
+
+**Fixed**
+
+- **Four Finance pages showed their trail only after loading finished.** The
+  three request forms and the approval-chain settings rendered `<Breadcrumbs />`
+  in the loaded branch and not in the skeleton branch above it. This is the
+  mirror of the defect fixed earlier in the same directory, where two detail
+  pages had a trail _while_ loading and lost it once the record arrived.
+- **The Expense Reports crumb no longer reads "Expenses".** The page heading,
+  the detail page's back link and the testing registry all call it Expense
+  Reports; only the URL segment says otherwise.
+
+**Changed**
+
+- **The finance breadcrumb test now checks every branch a page can return,
+  rather than the last one.** It was written against the first direction of this
+  defect and was blind to the second by construction, which is how four pages
+  kept a trail-less loading branch. Both directions are now covered, and the
+  failure names the branch index.
+
+### Notification Rules invited an officer to create one they cannot (2026-09-06)
+
+**Fixed**
+
+- **The empty Notification Rules tab addressed a button most of its readers
+  never see.** `notifications.view` opens the tab; creating a rule is
+  `notifications.manage` on the server, and those are not the same population
+  — 16 of the 21 seeded positions carrying view, among them captains,
+  lieutenants, the treasurer, the secretary and the training and safety
+  officers, stop short of manage. All of them read "Create your first
+  notification rule to start sending automated notifications." over a card with
+  no button on it. The heading "No Notification Rules" still answers everyone
+  who opens the tab, and a search that matches nothing is still reported to
+  everyone; it is the invitation that is now withheld.
+- **The Add Rule dialog rendered on its own open state**, so a session that
+  lost `notifications.manage` with the form open kept it on screen with a live
+  submit button. It is now gated on the same permission as the two buttons that
+  open it.
+
+### The Elections page pitched an election members cannot call (2026-09-06)
+
+**Fixed**
+
+- **A department with no elections showed members an empty panel captioned as
+  though something were missing.** Creating an election is `elections.manage` on
+  the server, and the Create Election button was already withheld, so the notice
+  spoke to a control the member could not see. With no elections and no status
+  filter applied, a member now gets a blank panel. A status filter that matches
+  nothing still reports that to everyone — that is feedback on what they asked
+  for, not an invitation.
+- **The Create Election dialog rendered on its own open state**, so a session
+  that lost `elections.manage` with the dialog open kept the form on screen and
+  its submit button live. It is now gated on the same permission as the button
+  that opens it, matching the fix applied to the Events, Members, Documents,
+  Scheduling and Minutes dialogs.
+- **A member's session no longer fetches three endpoints it has no use for.**
+  Meetings, upcoming events and operational ranks populate selectors that exist
+  only inside the create dialog, and were requested on every page load
+  regardless of permission — a member without `meetings.view` or `events.view`
+  got 403s that the page swallowed silently.
+
+### The hook-dependency guard could be escaped by a long enough array (2026-09-06)
+
+**Fixed**
+
+- **`effectDepsIntegrity` failed open on the arrays it exists to catch.** The
+  scan for a dependency array's closing bracket stopped 400 characters past the
+  suppression. Prettier puts one entry per line once an array is long, so nine
+  ordinary names already carry the bracket past that — and the array was then
+  skipped as though the suppression governed no dependency array at all. Longer
+  meant likelier to escape, the exact inverse of the rule's intent. The
+  lookahead now bounds the search for the _opening_ bracket only; the match for
+  the close runs to the end of the file. No suppression in the tree was being
+  skipped today, so the gap was latent rather than active.
+- **A legal five-entry array no longer fails the check.** Entries were counted
+  as top-level commas plus one, and Prettier leaves a trailing comma on an
+  expanded array — so five dependencies were reported as six, against a limit
+  that explicitly permits five. Non-empty top-level segments are counted
+  instead.
+
+### The Minutes page advertised a feature members cannot use (2026-09-06)
+
+**Fixed**
+
+- **The empty state sold recording minutes to people who cannot record them.**
+  With nothing recorded, the page showed three cards pitching what the feature
+  gets you — templates, action items, archives and search — above a card
+  telling the reader to "Start recording meeting minutes". Creating minutes is
+  `minutes.manage`-gated on the server and the buttons beside that copy were
+  already withheld, so a member read an advertisement with no way in. The cards
+  and the instruction are now shown only to someone who can act on them.
+
+- **The Record Minutes dialog outlived the permission that opened it.** It
+  rendered on its own open state, so losing `minutes.manage` with it open left
+  the form on screen. It is now gated like the controls that open it.
+
+**Changed**
+
+- **The page still reports "No Meeting Minutes" to everyone.** A member opened
+  it deliberately and deserves the answer; it is the pitch and the instruction
+  that are withheld, not the fact.
+
+### A member's own uniform sizes no longer need a permission (2026-09-06)
+
+**Fixed**
+
+- **`GET`/`PUT /inventory/my/size-preferences` required `inventory.view`.**
+  Both handlers key the row on the caller, so neither reaches another member's
+  sizes — and every sibling endpoint behind "My Issued Gear" (issued gear,
+  equipment requests, return requests, loan extension) requires only
+  authentication. The June 2026 changelog recorded these two the same way,
+  "self, login required", so the grant had drifted from the documented
+  contract. They now require authentication only.
+
+  The practical effect was the My Sizes button: it sits on a route that needs
+  no permission and was rendered unconditionally, so a member whose position
+  lacked `inventory.view` got a button that 403'd. Dormant for a baseline
+  member, who holds that grant.
+
+  **This is a widening.** The officer-facing endpoints for _another_ member's
+  sizes are untouched and keep their stricter gates — `inventory.view` to
+  read, `inventory.manage` to write — and a test now pins both halves.
+
+### The supply worklist stops offering a restock a viewer cannot do (2026-09-06)
+
+**Fixed**
+
+- **"Add stock" on the supply worklist is now gated on `inventory.manage`.**
+  Reading the worklist takes `inventory.check_view`, and the administration hub
+  offers it on that grant deliberately — knowing what is about to expire is the
+  checklist officer's business. Adding replacement stock is not:
+  `POST /inventory/items/{id}/lots` requires `inventory.manage`, so a
+  check_view holder got a 403 from a button the page had just offered them. The
+  control is now disabled rather than hidden, with a title naming who does it,
+  matching the Swap control on the apparatus inventory screen — the same
+  manage-gated stock write. Reading the worklist is unchanged.
+
+### Inventory and Members pages say which hub they belong to (2026-09-06)
+
+**Added**
+
+- **A breadcrumb trail on the Inventory and Members pages that sit beside their
+  administration hub rather than under it.** Most of these two modules' admin
+  pages do nest under `/inventory/admin` and `/members/admin` and already
+  reached their hub by the URL alone. Five did not: Temporary Loans, Storage
+  Areas and Import sit at `/inventory/…`, and the member ID scanner and the
+  Check-In Station at `/members/…`, so their trail stopped at the module landing
+  page — which for Inventory is the items catalogue, a different page from the
+  hub that links to them. Temporary Loans, Import, the scanner and the Check-In
+  Station had no trail at all.
+- **A derived check that an Inventory Administration card outside the hub's URL
+  space names its hub.** The hub crumb is opt-in per page, so a page that should
+  show it and does not simply will not, in silence. Inventory declares its cards
+  as data, which makes the obligation checkable: every card route not already
+  under `/inventory/admin` must carry the hub, and the test names any that does
+  not.
+
+**Fixed**
+
+- **The Inventory hub no longer offers an export the page it opens cannot
+  do.** The "Import / Export" card ("Bulk import from CSV or export inventory
+  data") pointed at `/inventory/import`, which only imports — export is a button
+  on the items list. The card now says "Import" and describes only that.
+- **Three pages no longer carry a second name in their trail.** The crumb for
+  `/inventory/checkouts` read "Checkouts" while the hub card and the page's own
+  heading both said "Temporary Loans"; `/members/check-in-station` title-cased to
+  "Check In Station" against a heading that hyphenates it. The hub-card
+  agreement test now covers Inventory as well as Scheduling, so a card and a
+  crumb naming one page differently fails rather than shipping.
+
+### The close-out queue and the number above it are one list now (2026-09-06)
+
+**Added**
+
+- **`GET /scheduling/shifts/needing-closeout`.** The shifts that have ended and
+  were never closed out, oldest first, gated on `scheduling.manage`. Ordered by
+  when each shift was actually over — `end_time`, or `start_time` plus the
+  department's open-ended cushion — because a shift with no recorded end was
+  over a cushion after it began, and ordering by the start interleaves it with
+  shifts that finished hours earlier. Unlike `GET /scheduling/shifts` it takes
+  `scheduling.manage` alone: it is the whole department's backlog with no
+  member filter applied.
+
+**Changed**
+
+- **The close-out queue reads the server's population instead of deriving its
+  own.** `/scheduling/admin/closeout` and the administration hub's **To close
+  out** card now read one predicate, `closeout_backlog_criteria`. They were two:
+  the metric has no earliest date while the page re-derived the set from a date
+  range it chose, so a shift left unclosed before that range began was counted
+  on the card and missing from the list it linked to.
+- **The queue's From and To controls are gone.** This page is the backlog, not
+  a query over it, and a range is what let it and the card describe different
+  populations. Three workarounds go with them: the six-month default, the
+  reversed-range guard, and the ten-page fetch loop that existed only because
+  the generic shifts endpoint returned mostly closed-out shifts and the unclosed
+  ones could sit on page three. The list is capped at one page of 200 and says
+  so when the backlog is longer, rather than letting a cap read as the end of
+  the work.
+- **The queue refreshes itself as shifts become eligible.** The page no longer
+  re-tests the server's answer against its own cached cushion — an officer who
+  lowered the cushion elsewhere made every other open tab drop rows the server
+  had just declared overdue, and the page then read "Every shift is closed out"
+  with a positive total beside it. Membership is the server's answer alone, so
+  the queue is re-read on the thirty-second clock the waiting badges already
+  run on. The refresh is skipped while a close-out wizard is open, so it cannot
+  unmount unsaved entries, and a failed refresh leaves the last good list on
+  screen rather than blanking a working page.
+
+### Equipment checklists: the "Add item" button on a phone could not be tapped (2026-09-06)
+
+**Fixed**
+
+- **Building an equipment checklist on a phone, the blue "Add item" button
+  at the bottom of a location could not be tapped.** It was drawn
+  underneath the checklist's own bottom bar and the app's bottom
+  navigation, so taps landed on those instead. Adding an item has moved
+  onto the checklist's bottom bar, where it stays reachable, follows the
+  location you last opened, and scrolls to that location when you use it.
+  Adding a _location_ is still on the same bar, now labelled "Location",
+  and remains available from the buttons below the list as before.
+- **Several buttons were smaller than a fingertip on a phone.** Buttons on
+  My Issued Gear, My Equipment Checklists, Reorder Requests and the
+  checklist builder now meet the 44-pixel minimum touch size on phones.
+- **A stray scrollbar under the tabs on an inventory item's page** has been
+  removed.
+
+### Create Shift: the dialog's fields had no names (2026-09-06)
+
+**Fixed**
+
+- **Nothing in the Create Shift dialog was announced by name.** All nine of its
+  controls — Shift Template, Start Date, End Date, Apparatus, Start Time, End
+  Time, Shift Officer, Notes and the template search box — sat next to a label
+  that was never associated with them, so a screen reader read out nine
+  anonymous fields ("edit text", "combo box") and gave no way to tell which was
+  which. Clicking a label also focused nothing, which is the same defect as seen
+  with a mouse. Every field now carries its label.
+- "Custom Times" heads the Start Time / End Time pair rather than naming a
+  single field, so it is announced as the group it is instead of claiming to be
+  one of them.
+- **The two time fields were announced as a time, not as a field.** Each is
+  three dropdowns (hour, minute, AM/PM) that name themselves, and the start
+  field named itself after whatever time the chosen template starts at — so a
+  screen reader offered "08:00 hour" where it should have said "Start Time
+  hour", and the end field fell back to a bare "Time". All six now carry the
+  visible field name.
+
+### CHANGELOG.md no longer conflicts on every concurrent pull request (2026-09-06)
+
+### CHANGELOG.md stops conflicting on local merges between branches (2026-09-06)
+
+**Fixed**
+
+- **`CHANGELOG.md` is marked `merge=union` in a new `.gitattributes`.** Every
+  PR adds its entry at the top of `## [Unreleased]`, so any two open at once
+  write different content at the same offset and git reports a conflict -- not
+  over substance, but because a textual merge has no rule for ordering two
+  additions. On 2026-09-06 this was the only conflict left across all ten open
+  PRs, hitting seven of them.
+
+  Union is sound for this file specifically because entries are independent and
+  additive: no PR edits another's entry, so taking both cannot drop an intended
+  change. It is deliberately **not** applied to
+  `scripts/screenshots/audit_baseline.txt`, the other file that had been
+  conflicting -- branches delete lines there, and union would silently
+  resurrect every deleted entry.
+
+  The tradeoff it does carry: two branches editing the _same_ entry get both
+  revisions as adjacent duplicate lines rather than a conflict. That is visible
+  in review, and is recorded in the `.gitattributes` comment.
+  **Scope, stated plainly because the first version of this entry overstated
+  it: this does not fix the "Merge pull request" button.** GitHub's server-side
+  merge does not apply `.gitattributes` merge drivers, so a PR whose only
+  conflict is this one is still reported as conflicted in the UI and still
+  refuses to merge. What the rule covers is every merge run by a _git client_ --
+  `git merge main` on a feature branch, `git pull`, and merging a PR branch
+  locally before pushing. That is where the seven were resolved.
+
+  **A second sharp edge, since it is not obvious:** git reads merge attributes
+  from the tree being merged **into**, not from either side's content. A branch
+  created before this commit therefore still hits the conflict when main is
+  merged into it, because its own checkout has no `.gitattributes`. Cherry-pick
+  this file onto such a branch first, then merge.
+
+  The tradeoff the rule itself carries: two branches editing the _same_ entry
+  get both revisions as adjacent duplicate lines rather than a conflict. That
+  is visible in review, and is recorded in the `.gitattributes` comment.
+
+### Email settings: the nine review findings on the Microsoft 365 OAuth work (2026-09-06)
+
+Codex raised these on #2206 as it merged, so none were addressed there.
+
+**Fixed**
+
+- **A stalled Microsoft token request could hold a thread forever.** `msal`
+  defaults to no timeout, and nothing above it supplied a deadline: the
+  connection test's `asyncio.timeout` abandons the future but not the worker
+  running it, and a real send goes through `asyncio.to_thread` with no outer
+  timeout at all, so repeated sends against an unreachable authority would
+  consume the executor and stall unrelated threaded work. The client is now
+  built with a finite timeout, as msal's own documentation advises.
+- **A cold cache let concurrent sends each build their own msal client.** The
+  cache lock was released before construction, so every thread in a
+  notification fan-out missed, built its own client and went to Entra ID
+  separately — the throttling the shared token cache exists to avoid.
+  Construction now happens under a per-registration lock with a re-check;
+  the lock is per key rather than global so one slow directory cannot block
+  another tenant's.
+- **A Cloudflare account check that never completed was reported as a verdict.**
+  When the account-scoped request failed with a network error and the
+  fallback user endpoint answered 401 or 403 — which an account-owned token
+  does even when it is perfectly good — the test told the administrator the
+  token was invalid on the strength of a check that never ran. A network
+  failure on either request is now reported as one.
+- **A transport failure was diagnosed as a missing mailbox grant.** The
+  Microsoft OAuth test keyed its "Exchange Online refused the token" message
+  off `connected`, which is true from the moment the socket opens and so
+  stays true for STARTTLS, EHLO, timeout and disconnect failures. The
+  handshake now records whether it was actually reached, before it can
+  raise, and only a real authentication rejection gets that message.
+- **Onboarding could persist a Microsoft auth method the settings screen
+  cannot read.** The mapper stored `microsoftAuthMethod` verbatim while every
+  reader treats an unknown value as App Password, so an unsupported value
+  paired with an App Password passed the enabled check and was written — and
+  the settings schema, which every read rebuilds stored rows through, then
+  rejects it, locking the organization out of the screen that would fix it.
+  The method is validated at that write boundary.
+- **A malformed tenant or client ID could save green and then fail every
+  send.** `missing_for_enabled` only asks whether a value is present, so an
+  application _name_, or the secret's ID instead of the secret, saved
+  successfully with email enabled. `invalid_for_enabled` now applies the
+  existing GUID validation on the write paths — writes only, because
+  rejecting a malformed _stored_ value on read would lock an organization
+  out of the screen where they would correct it.
+
+**Changed**
+
+- **`MicrosoftAuthMethod` moved to `constants/enums.ts`**, where this
+  project's frontend enums live, and every call site now uses the constant
+  instead of a `'oauth'` / `'app_password'` literal. It had been declared
+  beside a response interface in `types/user.ts`, which made a second enum
+  location.
+- **Both Microsoft OAuth setup guides now include the Exchange service
+  principal.** The backend's own contract records that an Exchange
+  administrator must register the application's service principal, and the
+  onboarding and settings instructions omitted it — an Entra ID registration
+  alone is not visible to Exchange, so an administrator following the printed
+  steps would obtain a token and still fail to sign in.
+- **The stale-connection-test guard is covered by behaviour rather than by
+  its own source.** The previous test asserted against the page's source
+  text, so it could pass on a matching string in dead code and proved nothing
+  about a result arriving after an edit. The logic moved into
+  `useEmailConnectionTest`, tested through `renderHook` with a controllable
+  promise: a result that lands after the form changed is now demonstrated to
+  be discarded rather than asserted to be.
 
 ### A hand-written hook dependency array can no longer drift (2026-09-06)
 
@@ -122,6 +765,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that omit a function identity, where there is no list to drift — and the one
   defect ran 11. A suppression is still the right call for those; what is
   banned is the array that is trying to be exhaustive by hand.
+
+### Declining your own shift no longer answers 403 (2026-09-06)
+
+**Added**
+
+- **`POST /scheduling/assignments/{id}/decline`** — the mirror of the existing
+  `confirm` route, self-scoped the same way: the assignment is resolved by
+  `user_id` as well as id, so a foreign id can never cross tenants. It clears
+  `confirmed_at` when a member withdraws an affirmation they had already given,
+  and only notifies the officer on the transition, so a retry after a dropped
+  response does not report the seat open twice.
+
+**Fixed**
+
+- **A member could not decline their own shift assignment.** Confirm and
+  Decline sit side by side on My Shifts and in the shift detail panel, and are
+  only ever offered on your own seat — but only Confirm had a route of its own.
+  Decline reached for `PATCH /assignments/{id}`, which requires
+  `scheduling.assign` or being the shift's officer, so a member holding neither
+  got a 403 from a button that was theirs to press. Both screens now call the
+  new endpoint. The PATCH route is unchanged and stays officer-only: it is how
+  an officer records a decline on somebody's behalf, and it carries edits a
+  member has no business making.
 
 ### Events and Training pages say which hub they belong to (2026-09-06)
 

@@ -109,6 +109,15 @@ DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 # DEMO_MEMBER_CREDENTIALS in manifest.mjs.
 DEMO_MEMBER_USERNAME = "nbelhaj"
 
+# EQUIPMENT_REQUESTS still describes each row by how the quartermaster hands the
+# item over, which is the useful thing to read. The API wants the member's side
+# of it: a radio goes back, gloves do not.
+REQUEST_DURATIONS = {
+    "checkout": "temporary",
+    "assignment": "ongoing",
+    "issuance": "ongoing",
+}
+
 # The visitor the guest sign-in seeds. Matched on email rather than name so a
 # re-run recognises its own guest instead of adding another every time.
 GUEST_EMAIL = "rosa.delgado@example.com"
@@ -231,11 +240,20 @@ POSITION_NOT_ELIGIBLE = re.compile(
 # contention path in `create_assignment`.
 SEAT_TAKEN = re.compile(r"was just claimed|filled after this request", re.IGNORECASE)
 
+# `_assignment_refusal` caps how many seats on one shift may go to
+# administrative members, counted under a locking read. The seeder's day pool
+# rotates every active member through the roster, so on a department with
+# several administrative members it reaches that cap by ordinary rotation —
+# the fifth way a seat is refused for a correct reason.
+ADMIN_SEATS_FULL = re.compile(
+    r"Administrative access seats were already filled", re.IGNORECASE
+)
+
 
 def is_expected_seat_refusal(exc: "ApiError") -> bool:
     """Whether a refused shift assignment is the application working correctly.
 
-    Four refusals are ordinary and must not fail the seed:
+    Five refusals are ordinary and must not fail the seed:
 
     * **A conflicting shift.** The night shift runs 19:00-07:00, so its crew is
       still on duty into the next date and the API declines to double-book
@@ -253,8 +271,11 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
       short; if that top-up runs twice (a re-run interrupted and restarted, or
       a manual assignment made between runs), the second attempt on the same
       seat is refused, not double-booked.
+    * **The shift's administrative seats are full.** A shift caps how many of
+      its seats may go to administrative members. The day pool rotates every
+      active member through, so it reaches that cap on its own.
 
-    All four leave the shift a seat short, which is what the Open Shifts tab
+    All five leave the shift a seat short, which is what the Open Shifts tab
     exists to show. Treating any of them as fatal aborted the whole scheduling
     step: a single refusal left the demo with 2 shifts and no scheduling
     apparatus, which silently blocked the close-out fixture, the batch report
@@ -267,6 +288,7 @@ def is_expected_seat_refusal(exc: "ApiError") -> bool:
         or DRIVER_NOT_QUALIFIED.search(exc.detail)
         or POSITION_NOT_ELIGIBLE.search(exc.detail)
         or SEAT_TAKEN.search(exc.detail)
+        or ADMIN_SEATS_FULL.search(exc.detail)
     )
 
 
@@ -1031,33 +1053,38 @@ class Seeder:
 
     # -- organization ------------------------------------------------
 
+    # The QA checklist is a staff tool for walking the app page by page, not a
+    # department feature, and no training guide documents it. Everything else
+    # ships to a real department, so the demo org turns it on.
+    MODULES_LEFT_OFF = {"testing"}
+
     def enable_all_modules(self) -> None:
-        # Screenshots cover every guide, including modules that ship disabled
-        # (grants, elections, storefront, …), so the demo org turns them all on.
-        self.api.patch(
-            "/organization/modules",
-            {
-                "training": True,
-                "inventory": True,
-                "scheduling": True,
-                "apparatus": True,
-                "communications": True,
-                "elections": True,
-                "minutes": True,
-                "reports": True,
-                "notifications": True,
-                "mobile": True,
-                "forms": True,
-                "integrations": True,
-                "facilities": True,
-                "incidents": True,
-                "hr_payroll": True,
-                "grants": True,
-                "storefront": True,
-                "prospective_members": True,
-                "public_info": True,
-            },
-        )
+        """Turn on every module the API knows about, bar the QA checklist.
+
+        Read the set from the API rather than listing it here. A hardcoded list
+        silently falls behind: this one carried 19 of the 23 modules the schema
+        defines, so finance, medical supplies and medical screening stayed off
+        and every call into them answered 403 — which the seeder then reported
+        as four failed steps, and the guides for those modules pictured nothing.
+        Deriving it means a module added later is enabled by the next run
+        instead of waiting for somebody to notice the gap.
+        """
+        current = self.api.get("/organization/modules")
+        settings = pick(current, "module_settings", "moduleSettings") or {}
+        wanted = {
+            name: True
+            for name, value in settings.items()
+            if isinstance(value, bool) and name not in self.MODULES_LEFT_OFF
+        }
+        if not wanted:
+            # An empty read means the response shape moved, not that there is
+            # nothing to enable. Fail loudly: seeding on top of a half-enabled
+            # org produces 403s in unrelated steps that are hard to trace back.
+            raise RuntimeError(
+                "GET /organization/modules returned no module flags — "
+                f"response keys: {sorted(current)}"
+            )
+        self.api.patch("/organization/modules", wanted)
 
     # -- people ------------------------------------------------------
 
@@ -4429,7 +4456,12 @@ class Seeder:
                 "item_name": name,
                 "item_id": pick(item, "id"),
                 "quantity": 1,
-                "request_type": request_type,
+                # The create schema takes how long the member needs the item,
+                # not how it will be handed over. `request_type` was removed;
+                # fulfilment still routes by the item's own tracking type
+                # server-side, so the tuple's value only has to say whether the
+                # member gives the item back.
+                "requested_duration": REQUEST_DURATIONS[request_type],
                 "priority": "normal",
                 "reason": reason,
             }
@@ -4645,6 +4677,12 @@ class Seeder:
 
         self._deploy_lots(positions, catalog)
         self._report_one_used(positions, str(pick(medic, "id")))
+        # Linking supply positions edits the template's items, which drafts it
+        # again — and this step runs *after* `seed_equipment_checks`, so that
+        # step's publish sweep has already been and gone. Without this the
+        # medic template stays inactive and the sealed-compartment check below
+        # cannot find it ("Template not found").
+        self._publish_seeded_templates()
         return {
             "template_id": pick(template, "id"),
             "apparatus_id": pick(medic, "id"),
@@ -5307,6 +5345,58 @@ class Seeder:
 
     # -- scheduling: equipment check templates and completed checks --
 
+    def _publish_seeded_templates(self) -> list[str]:
+        """Re-publish every check template this seeder drafted by editing it.
+
+        Editing a template's *content* is a draft operation: every compartment
+        and item mutation runs through the API's `_advance_content_revision`,
+        which bumps the revision and sets `is_active = False` so a crew cannot
+        answer a checklist that changed under them. Creating a template with
+        `is_active: True` and then adding a section header, linking a supply
+        position or repairing a check type therefore leaves it **inactive** —
+        and `_resolve_templates` skips inactive templates, so the check create
+        answers "Template is not applicable to this shift" and the whole
+        equipment-check step aborts.
+
+        That is exactly what happened: "Engine Daily Check" and "Medic 3 Supply
+        Check" both sat at `is_active = 0`, the member's My Checklists screen
+        read "No active checklists", and seven guide-03 captures had nothing to
+        photograph. The failure names the template, not the edit that drafted
+        it, which is why it read as a template/shift mismatch for weeks.
+
+        A sweep rather than a call beside each edit: the edits are spread over
+        three methods that run in an order this function does not control, and
+        the targeted version is one forgotten call away from silently
+        reproducing the bug. Publishing is the same PUT the template builder
+        issues when an editor presses Publish, and it does not advance the
+        revision, so it is safe to repeat and safe to run after the last edit.
+        """
+        published: list[str] = []
+        for template in items(
+            self.api.get("/equipment-checks/templates"), "templates"
+        ):
+            if pick(template, "is_active", "isActive"):
+                continue
+            template_id = pick(template, "id")
+            if not template_id:
+                continue
+            try:
+                self.api.put(
+                    f"/equipment-checks/templates/{template_id}",
+                    {"is_active": True},
+                )
+            except ApiError as exc:
+                # A template with no checkable item cannot be published, and
+                # the API says so. That is a template problem, not a publish
+                # problem, so name it and carry on rather than aborting every
+                # later template.
+                self.blocked.append(
+                    f"publish template {pick(template, 'name')}: {exc}"
+                )
+                continue
+            published.append(str(pick(template, "name") or template_id))
+        return published
+
     def _add_section_header(self, template_id: str | None) -> None:
         """Put one section header on the engine checklist.
 
@@ -5584,6 +5674,12 @@ class Seeder:
         # happened to work while the demo database returned engines first, and
         # crashed the whole step the first time a fresh seed ordered a medic
         # or ladder shift into the front of the list.
+        # Every content edit above returned its template to draft. Publish
+        # before resolving shifts: an inactive template is invisible to
+        # `_resolve_templates`, and the check create below then refuses with
+        # "Template is not applicable to this shift".
+        self._publish_seeded_templates()
+
         shifts = items(self.api.get("/scheduling/shifts?limit=20"), "shifts")
         target_shifts = [
             s for s in shifts if pick(s, "id") and apparatus_type_of(s) == "engine"
@@ -6604,15 +6700,17 @@ class Seeder:
         # re-seed that reported success.
         existing = items(self.api.get("/training/shift-reports/all?limit=50"))
 
-        demo_member_id = str(
-            pick(
-                next(
-                    (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
-                    {},
-                ),
-                "id",
-            )
+        # `str()` around a miss yields the *string* "None", which is truthy —
+        # so the "did we find her?" guards downstream all passed and "None"
+        # went to the API as a user id, which it rejected as a bad UUID.
+        demo_member_raw = pick(
+            next(
+                (m for m in members if pick(m, "username") == DEMO_MEMBER_USERNAME),
+                {},
+            ),
+            "id",
         )
+        demo_member_id = str(demo_member_raw) if demo_member_raw else ""
         recruit_ids = {
             str(pick(m, "id"))
             for m in members
@@ -14136,6 +14234,12 @@ class Seeder:
             sealed.append((pick(compartment, "id"), name))
         if len(sealed) < 2:
             return {"blocked": "expected two named compartments to seal"}
+
+        # Marking a compartment sealed is a content edit, so the two PUTs above
+        # just returned this template to draft — and the check POST below
+        # resolves the template by id among the *active* ones, answering
+        # "Template not found". Publish between the edit and the consumer.
+        self._publish_seeded_templates()
 
         # A prior count carrying both tags. Guarded on the seal history rather
         # than on the check list: the point of the fixture is that

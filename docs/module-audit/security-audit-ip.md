@@ -10,6 +10,14 @@ hash chain H4, hard-delete restriction M9, rate-limiter client-IP H5).
 **Audited:** iteration 23 — three parallel readers: (A) ip-security + enforcement,
 (B) security-monitoring, (C) audit-logs + error-logs + core/audit.
 
+**Scope correction (security-review SEC2-28, pass 3, 2026-09-06):**
+`services/audit_ship_service.py` (off-host audit-log shipping) shares the
+audit signing key and row serializer with `core/audit.py` and belongs in
+this surface's scope — it had never appeared in this list across the
+module audit or any of the three security-review passes. See
+`docs/security-review/SEC2-28-security-audit-ip.md` → Pass 3 for its
+review and the one fix it needed (SEC2-28-9, an unlocked watermark read).
+
 ## Verified good ✅
 
 - **H1 / H4 / M9 all confirmed intact.** Audit reads are org-scoped (via the

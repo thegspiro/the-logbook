@@ -2434,12 +2434,12 @@ Shift notifications automatically deep-link to the correct tab. For example, cli
 
 Equipment checks are no longer tied exclusively to active shifts. Members can now perform ad-hoc checks on any apparatus at any time:
 
-1. Navigate to **Scheduling > Equipment Checks** tab
+1. Navigate to **Operations > Fleet Readiness**
 2. Select the apparatus to check
 3. Complete the checklist as normal
 4. Submit — the check is saved without a shift association and appears in reports as "ad hoc"
 
-![Equipment checks tab listing apparatus with their check status](./images/03-25-equipment-checks-tab.png)
+![Fleet Readiness listing each apparatus with its check status](./images/03-25-equipment-checks-tab.png)
 
 ### Flat Scrollable Check Form
 

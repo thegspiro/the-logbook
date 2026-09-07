@@ -675,7 +675,7 @@ describe('EventDetailPage', () => {
 
       // Wait for page to load
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open the More dropdown, then click Cancel Event
@@ -723,7 +723,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown, then cancel modal
@@ -773,7 +773,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown then click Delete Event
@@ -797,7 +797,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown then Delete Event
@@ -826,7 +826,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown then Delete Event
@@ -867,7 +867,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown then click Duplicate
@@ -893,7 +893,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown then click Duplicate
@@ -916,7 +916,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       expect(screen.queryByRole('button', { name: /duplicate/i })).not.toBeInTheDocument();
@@ -970,7 +970,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
@@ -1006,7 +1006,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
 
       // Open More dropdown, then cancel modal
@@ -1086,7 +1086,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByText('Training Session Details')).not.toBeInTheDocument();
     });
@@ -1123,7 +1123,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByRole('heading', { name: /who's going/i })).not.toBeInTheDocument();
     });
@@ -1159,7 +1159,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByRole('heading', { name: /who's going/i })).not.toBeInTheDocument();
       expect(screen.queryByText(/nobody yet/i)).not.toBeInTheDocument();
@@ -1191,7 +1191,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(eventService.getEventAttendees).not.toHaveBeenCalled();
     });
@@ -1230,7 +1230,7 @@ describe('EventDetailPage', () => {
       renderWithRouter(<EventDetailPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Monthly Business Meeting');
       });
       expect(screen.queryByRole('button', { name: /i'm coming|rsvp now/i })).not.toBeInTheDocument();
     });
@@ -1356,7 +1356,7 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      await screen.findByText(mockEvent.title);
+      await screen.findByRole('heading', { level: 1, name: mockEvent.title });
       expect(screen.queryByText('Organized by')).not.toBeInTheDocument();
       expect(screen.queryByText('Sam Ortiz')).not.toBeInTheDocument();
     });
@@ -1369,7 +1369,7 @@ describe('EventDetailPage', () => {
 
       renderWithRouter(<EventDetailPage />);
 
-      await screen.findByText(mockEvent.title);
+      await screen.findByRole('heading', { level: 1, name: mockEvent.title });
       expect(screen.queryByText('Organized by')).not.toBeInTheDocument();
     });
   });

@@ -245,6 +245,22 @@ describe('CheckInStationPage', () => {
     expect(mockGetShifts).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['running', true],
+    ['turned off', false],
+  ])('renders its breadcrumb trail with cards %s', async (_label, connected) => {
+    // Both of this page's top-level returns share one `header`, so the trail
+    // cannot go missing from one of them. That is asserted rather than assumed:
+    // the Events templates page lost its trail in exactly the branch where a
+    // route away from the page mattered most.
+    mockIsConnected.mockReturnValue(connected);
+    window.history.replaceState({}, '', '/members/check-in-station');
+    renderWithRouter(<CheckInStationPage />);
+
+    expect(await screen.findByRole('navigation', { name: /breadcrumb/i })).toBeInTheDocument();
+    window.history.replaceState({}, '', '/');
+  });
+
   it('counts a tap as user activity so the session does not time out', async () => {
     // Web NFC fires no mouse, key, scroll or touch event, so a station in
     // constant use looked idle to the HIPAA session timer and logged itself

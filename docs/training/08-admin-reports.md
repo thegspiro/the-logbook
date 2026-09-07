@@ -115,6 +115,17 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 
 ### Contact Info Visibility
 
+**Moved _(2026-09-06)_.** This now lives at **Members > Administration >
+Settings > Contact Visibility** (`/members/admin/settings/visibility`), beside
+the roster it governs rather than beside Email and Storage. The old address
+redirects, so existing links and bookmarks still arrive at it.
+
+Changing it needs a settings grant — `settings.manage`,
+`settings.manage_contact_visibility` or `organization.update_settings` — which is
+separate from `members.manage`. An officer who runs the roster but holds none of
+those can see where the setting lives and is told who can change it, rather than
+meeting a toggle that reverts.
+
 Control which contact information fields are visible to members:
 
 - Toggle visibility of **email, phone and mobile**
@@ -136,6 +147,10 @@ never consented to appear in it. Leadership access to those fields is recorded
 in the audit log.
 
 ### Membership ID Settings
+
+**Moved _(2026-09-06)_.** Now at **Members > Administration > Settings >
+Membership IDs** (`/members/admin/settings/ids`). The old address redirects.
+Changing it needs `settings.edit` or `organization.update_settings`.
 
 Configure how membership IDs are assigned:
 

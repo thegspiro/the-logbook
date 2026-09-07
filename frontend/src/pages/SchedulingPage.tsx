@@ -246,6 +246,15 @@ const SchedulingPage: React.FC = () => {
 
   // Shift detail panel
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
+  // The deep link's own failure state. Nothing else on this page can report it:
+  // the board draws the range it fetched, so a shift that would not load simply
+  // is not there, and an officer sent here by a link lands on a generic board
+  // with no sign anything went wrong.
+  const [deepLinkFailed, setDeepLinkFailed] = useState<string | null>(null);
+  // Bumped by Retry. The effect keys on the search params, and the whole point
+  // of the fix is that a failure *keeps* them — so without this there is no
+  // change for it to react to.
+  const [deepLinkAttempt, setDeepLinkAttempt] = useState(0);
 
   // Deep-link: open shift detail panel when ?shift=<id> is in the URL.
   // Skip if a specific tab is targeted (e.g. shift-reports from a notification)
@@ -260,21 +269,28 @@ const SchedulingPage: React.FC = () => {
     const openShift = async () => {
       try {
         const shift = await schedulingService.getShift(shiftId);
-        if (!cancelled) {
-          setSelectedShift(shift);
-          searchParams.delete('shift');
-          setSearchParams(searchParams, { replace: true });
-        }
-      } catch {
+        if (cancelled) return;
+        setDeepLinkFailed(null);
+        setSelectedShift(shift);
+        // Stripped only on success. The parameter is the request; dropping it
+        // on failure discards what the officer asked for and leaves the URL
+        // describing a page they did not ask to be on.
         searchParams.delete('shift');
         setSearchParams(searchParams, { replace: true });
+      } catch {
+        // Said, not swallowed. This is the destination of the close-out queue's
+        // "Open the shift to close it", so the failure lands on an officer who
+        // was sent here to do something specific — and the old behaviour put
+        // them on the generic board with no error and no way back to the shift.
+        if (cancelled) return;
+        setDeepLinkFailed(shiftId);
       }
     };
     void openShift();
     return () => {
       cancelled = true;
     };
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, deepLinkAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effective templates: backend if available, otherwise fallbacks
   const effectiveTemplates = useMemo(() => {
@@ -433,6 +449,31 @@ const SchedulingPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        {deepLinkFailed && (
+          <div className="alert-warning mb-4 flex flex-wrap items-center gap-2 text-sm" role="alert">
+            <span className="min-w-0 flex-1">
+              That shift could not be opened. The board below shows the schedule, not the shift you followed a link to.
+            </span>
+            <button
+              type="button"
+              className="mobile-touch-target px-2 font-semibold underline"
+              onClick={() => setDeepLinkAttempt((n) => n + 1)}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="mobile-touch-target px-2 font-semibold underline"
+              onClick={() => {
+                setDeepLinkFailed(null);
+                searchParams.delete('shift');
+                setSearchParams(searchParams, { replace: true });
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <SchedulingHeader
           actions={
             canManage && activeTab === 'schedule' ? (
@@ -599,7 +640,9 @@ const SchedulingPage: React.FC = () => {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Shift Template</label>
+                      <label htmlFor="create-shift-template" className="form-label">
+                        Shift Template
+                      </label>
                       {effectiveTemplates.length > 5 && (
                         <input
                           autoCapitalize="none"
@@ -607,12 +650,14 @@ const SchedulingPage: React.FC = () => {
                           spellCheck={false}
                           type="text"
                           placeholder="Search templates..."
+                          aria-label="Search shift templates"
                           value={templateSearch}
                           onChange={(e) => setTemplateSearch(e.target.value)}
                           className="form-input mb-2 text-sm focus:ring-violet-500"
                         />
                       )}
                       <select
+                        id="create-shift-template"
                         value={shiftForm.shiftTemplate}
                         onChange={(e) => {
                           const tmpl = effectiveTemplates.find((t) => t.id === e.target.value);
@@ -777,8 +822,11 @@ const SchedulingPage: React.FC = () => {
                     {/* Start / End Date — always visible */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Date *</label>
+                        <label htmlFor="create-shift-start-date" className="form-label">
+                          Start Date *
+                        </label>
                         <input
+                          id="create-shift-start-date"
                           type="date"
                           value={shiftForm.startDate}
                           onChange={(e) => {
@@ -795,8 +843,11 @@ const SchedulingPage: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Date</label>
+                        <label htmlFor="create-shift-end-date" className="form-label">
+                          End Date
+                        </label>
                         <input
+                          id="create-shift-end-date"
                           type="date"
                           value={shiftForm.endDate}
                           onChange={(e) =>
@@ -827,12 +878,13 @@ const SchedulingPage: React.FC = () => {
                     {/* Apparatus Selection */}
                     {apparatusList.length > 0 && (
                       <div>
-                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                        <label htmlFor="create-shift-apparatus" className="form-label">
                           <span className="flex items-center gap-1.5">
                             <Truck className="h-4 w-4" /> Apparatus <span aria-hidden="true">*</span>
                           </span>
                         </label>
                         <select
+                          id="create-shift-apparatus"
                           value={shiftForm.apparatus_id}
                           onChange={(e) =>
                             setShiftForm({
@@ -927,33 +979,41 @@ const SchedulingPage: React.FC = () => {
                       {showAdvancedOptions && (
                         <div className="border-theme-surface-border space-y-4 border-t px-4 pt-1 pb-4">
                           {/* Custom Time Override */}
-                          <div>
-                            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                          <div role="group" aria-labelledby="create-shift-custom-times">
+                            <span id="create-shift-custom-times" className="form-label">
                               <span className="flex items-center gap-1.5">
                                 <Clock className="h-4 w-4" /> Custom Times
                               </span>
-                            </label>
+                            </span>
                             <p className="text-theme-text-muted mb-2 text-xs">
                               Override the template times for this shift
                             </p>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="text-theme-text-muted mb-1 block text-xs">Start Time</label>
+                                <label
+                                  htmlFor="create-shift-start-time"
+                                  className="text-theme-text-muted mb-1 block text-xs"
+                                >
+                                  Start Time
+                                </label>
                                 <TimeQuarterHour
+                                  id="create-shift-start-time"
+                                  aria-label="Start Time"
                                   value={shiftForm.customStartTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
-                                  placeholder={(() => {
-                                    const tmpl =
-                                      effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) ||
-                                      defaultTemplate;
-                                    return tmpl?.start_time_of_day || '';
-                                  })()}
                                   className="form-input"
                                 />
                               </div>
                               <div>
-                                <label className="text-theme-text-muted mb-1 block text-xs">End Time</label>
+                                <label
+                                  htmlFor="create-shift-end-time"
+                                  className="text-theme-text-muted mb-1 block text-xs"
+                                >
+                                  End Time
+                                </label>
                                 <TimeQuarterHour
+                                  id="create-shift-end-time"
+                                  aria-label="End Time"
                                   value={shiftForm.customEndTime}
                                   onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
                                   className="form-input"
@@ -974,12 +1034,13 @@ const SchedulingPage: React.FC = () => {
                           {/* Shift Officer Selection */}
                           {membersList.length > 0 && (
                             <div>
-                              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                              <label htmlFor="create-shift-officer" className="form-label">
                                 <span className="flex items-center gap-1.5">
                                   <Users className="h-4 w-4" /> Shift Officer
                                 </span>
                               </label>
                               <select
+                                id="create-shift-officer"
                                 value={shiftForm.shift_officer_id}
                                 onChange={(e) =>
                                   setShiftForm({
@@ -1001,8 +1062,11 @@ const SchedulingPage: React.FC = () => {
 
                           {/* Notes */}
                           <div>
-                            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Notes</label>
+                            <label htmlFor="create-shift-notes" className="form-label">
+                              Notes
+                            </label>
                             <textarea
+                              id="create-shift-notes"
                               value={shiftForm.notes}
                               onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
                               rows={2}

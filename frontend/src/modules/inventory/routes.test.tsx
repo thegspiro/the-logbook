@@ -100,6 +100,31 @@ vi.mock('../../components/ProtectedRoute', () => ({
 
 import { getInventoryRoutes } from './routes';
 
+/** The `requiredAnyPermission` (or `requiredPermission`) a route declares. */
+function guardOf(path: string): string[] | string | undefined {
+  let found: string[] | string | undefined;
+  const walk = (node: React.ReactNode): void => {
+    React.Children.forEach(node, (child) => {
+      if (!React.isValidElement(child)) return;
+      const props = child.props as {
+        path?: string;
+        element?: React.ReactElement;
+        children?: React.ReactNode;
+      };
+      if (props.path === path && React.isValidElement(props.element)) {
+        const guard = props.element.props as {
+          requiredAnyPermission?: string[];
+          requiredPermission?: string;
+        };
+        found = guard.requiredAnyPermission ?? guard.requiredPermission;
+      }
+      if (props.children) walk(props.children);
+    });
+  };
+  walk(getInventoryRoutes());
+  return found;
+}
+
 function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -204,6 +229,18 @@ describe('getInventoryRoutes', () => {
   it('renders expiring supply at /inventory/admin/checklists/supply', async () => {
     renderRoute('/inventory/admin/checklists/supply');
     expect(await screen.findByTestId('supply-expiring-page')).toBeInTheDocument();
+  });
+
+  // `ProtectedRoute` is a pass-through in this file, so a guard cannot be
+  // asserted by rendering. The props on the route's element are the real ones
+  // regardless of what the mocked component does with them.
+  it('gates the supply worklist on exactly what its endpoint accepts', () => {
+    // GET /equipment-check/supply/expiring-items takes inventory.check_view or
+    // inventory.manage. The route used to admit scheduling.manage as well, so
+    // a shift officer holding only that passed the guard and met a 403 on
+    // load — a page that rendered nothing but its failure state. Pinned as an
+    // exact set: re-adding a grant the endpoint refuses fails here.
+    expect(guardOf('/inventory/admin/checklists/supply')).toEqual(['inventory.check_view', 'inventory.manage']);
   });
 
   // The settings that decide when crews are prompted moved here from

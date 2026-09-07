@@ -59,6 +59,12 @@ def _authenticate(
 
     if username and oauth_token:
         auth_string = xoauth2_string(username, oauth_token)
+        # Recorded before the call, not after: a caller distinguishing a
+        # rejected credential from a transport failure needs to know the
+        # handshake was reached even when it raises. "connected" cannot
+        # answer that — it is set as soon as the socket opens, so it is
+        # still true for a STARTTLS, EHLO, timeout or disconnect failure.
+        details["auth_attempted"] = True
         server.auth("XOAUTH2", lambda challenge=None: auth_string)
         logger.info("SMTP XOAUTH2 authentication successful")
         details["authenticated"] = True
@@ -67,6 +73,7 @@ def _authenticate(
 
     password = config.get("smtpPassword")
     if username and password:
+        details["auth_attempted"] = True
         server.login(username, password)
         logger.info("SMTP authentication successful")
         details["authenticated"] = True
@@ -74,6 +81,7 @@ def _authenticate(
         return
 
     details["authenticated"] = False
+    details["auth_attempted"] = False
 
 
 def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
@@ -162,8 +170,22 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         logger.error("SMTP authentication failed: {}", e)
         error_str = str(e).lower()
 
+        # smtplib raises this for every AUTH status that is not 235 or 503,
+        # so it covers a temporary failure (454) and an unsupported mechanism
+        # (534) as well as a refused credential. Only the last of those means
+        # the server looked at the credential and said no, and only that
+        # should let a caller replace this message with a permissions
+        # diagnosis — 534 already has a more accurate one below.
+        code = getattr(e, "smtp_code", None)
+        if code == 535 or "username and password not accepted" in error_str:
+            details["auth_rejected"] = True
+
         # Provide user-friendly authentication error messages
-        if "535" in error_str or "username and password not accepted" in error_str:
+        if (
+            code == 535
+            or "535" in error_str
+            or ("username and password not accepted" in error_str)
+        ):
             message = "SMTP authentication failed. Verify your username and password are correct. For Gmail or Outlook, you may need an app-specific password."
         elif "534" in error_str:
             message = (
@@ -324,9 +346,13 @@ def _test_microsoft_oauth_connection(
     smtp_config["smtpOAuthToken"] = token
     success, message, details = test_smtp_connection(smtp_config)
     details["token_acquired"] = True
-    if not success and details.get("connected"):
-        # A token was issued and the server still refused it, so the app
+    if not success and details.get("auth_rejected"):
+        # A token was issued and the server refused it, so the app
         # registration is fine and the mailbox grant is what is missing.
+        # Gated on an actual rejection rather than on having reached the
+        # handshake: a connection that drops or times out mid-AUTH also
+        # reaches it, and that failure has its own accurate message which
+        # this would otherwise overwrite with an Exchange diagnosis.
         message = (
             "Entra ID issued an access token but Exchange Online refused it. "
             "Confirm the application has SendAs permission on this mailbox "
@@ -525,9 +551,17 @@ def test_cloudflare_email(
     if not user_check.ok:
         details["token_valid"] = False
         details["account_scope_verified"] = False
-        failed = user_check if user_check.network_error else account_check
-        if not user_check.network_error and user_check.http_status in (401, 403):
+        if account_check.network_error or user_check.network_error:
+            # Nothing was reachable, so nothing was learned about the token.
+            # Reporting the fallback's 401 here would tell an administrator
+            # their token is invalid on the strength of a check that never
+            # completed — and an account-owned token answers 401 at the user
+            # endpoint even when it is perfectly good.
+            failed = account_check if account_check.network_error else user_check
+        elif user_check.http_status in (401, 403):
             failed = user_check
+        else:
+            failed = account_check
         return False, _cloudflare_failure_message(failed), details
 
     details["token_valid"] = True

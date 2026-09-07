@@ -295,6 +295,7 @@ GET    /api/v1/scheduling/shifts/{id}               # Get shift by ID
 PATCH  /api/v1/scheduling/shifts/{id}               # Update shift (scheduling.manage)
 DELETE /api/v1/scheduling/shifts/{id}               # Delete shift (scheduling.manage)
 GET    /api/v1/scheduling/shifts/open               # Get upcoming open shifts
+GET    /api/v1/scheduling/shifts/needing-closeout   # Ended, never closed out, oldest first (scheduling.manage)
 GET    /api/v1/scheduling/calendar/week/{date}      # Week calendar view
 GET    /api/v1/scheduling/calendar/month/{y}/{m}    # Month calendar view
 ```
@@ -505,6 +506,16 @@ POST   /api/v1/scheduling/shifts/{id}/finalize              # Step 3 — confirm
 All four require `scheduling.manage` **or** being the shift's own officer
 (`_authorize_shift_management`). Each step writes as it advances, so an
 interrupted close-out resumes rather than restarting.
+
+`GET /scheduling/shifts/needing-closeout` is the list of shifts still owing one
+— the rows behind the administration hub's **To close out** metric. Both read
+`closeout_backlog_criteria` in `scheduling_service`, so the number on the card
+and the length of the queue are one population read twice; they were two while
+the page re-derived the set from a date range and the metric had none. It takes
+no date range for that reason, is ordered by when each shift was actually over
+(`end_time`, or `start_time` plus the department's open-ended cushion), and
+stands on `scheduling.manage` alone — unlike `GET /scheduling/shifts`, it is the
+whole department's backlog with no member filter applied.
 
 `GET …/closeout` → `CloseoutStateResponse`:
 
@@ -1620,7 +1631,7 @@ Invalid values fall back to the Schedule tab. This enables deep-linking from not
 Equipment checks are no longer tied exclusively to active shifts:
 
 - Members can perform ad-hoc checks on any apparatus at any time
-- Navigate to **Scheduling > Equipment Checks** tab to start
+- Navigate to **Operations > Fleet Readiness** to start
 - Checks saved without shift association appear in reports as "ad hoc"
 - Admin link added from Equipment Checks tab to template management
 
@@ -2159,7 +2170,7 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 
 | URL                                         | Page                                                                | Permission                                                                |
 | ------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `/inventory/admin/checklists/supply`        | Expiring on Apparatus — the supply worklist                         | any of `scheduling.manage`, `inventory.check_view`, `inventory.view`      |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus — the supply worklist                         | any of `inventory.check_view`, `inventory.manage`                         |
 | `/inventory/checklists/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which

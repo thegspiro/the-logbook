@@ -93,6 +93,46 @@ const notificationLogs = () => ({
   limit: 10,
 });
 
+/**
+ * One shift that ended yesterday and was never closed out.
+ *
+ * The close-out queue's whole subject. Without it the route's mobile ratchet
+ * entry measured the filter bar, the empty state and the settings mirror —
+ * never a queue row or its Close out control, which is the principal UI that
+ * route exists to render. A budget met by a page with nothing on it is not
+ * coverage.
+ *
+ * Dated relative to the run for the same reason `myShifts` is: a hard-coded
+ * date stops being "yesterday" the day after it is written, and the row would
+ * quietly leave the queue.
+ */
+const closeoutBacklog = () => {
+  const yesterday = new Date(Date.now() - 86_400_000);
+  const day = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(
+    yesterday.getDate()
+  ).padStart(2, '0')}`;
+  return {
+    shifts: [
+      {
+        id: 'closeout-1',
+        organization_id: 'org-1',
+        shift_date: day,
+        start_time: `${day}T08:00:00Z`,
+        end_time: `${day}T16:00:00Z`,
+        apparatus_unit_number: 'Engine 1',
+        shift_officer_name: SHIFT_OFFICER,
+        attendee_count: 3,
+        call_count: 0,
+        is_finalized: false,
+        created_at: `${day}T00:00:00Z`,
+      },
+    ],
+    total: 1,
+    skip: 0,
+    limit: 200,
+  };
+};
+
 const myShifts = () => {
   // Keep the shifts in the future relative to the run so the dashboard's
   // "upcoming" filtering keeps them; a hard-coded date silently empties this
@@ -173,6 +213,27 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
 
   ['**/api/v1/organization/modules', () => ({})],
 
+  // Every Administration hub reads this. Unmocked, the catch-all answered `{}`
+  // — truthy, so `AdminHubFrame` rendered the attention queue, but with no
+  // `attention` array, and the page died on `items.length`. No hub route had
+  // ever reached this code: they are all gated on a `*.manage` grant the base
+  // fixture does not hold, so the loop was measuring Access Denied and the
+  // crash sat behind it. A shape, not a stub, so the frame gets what the API
+  // actually promises.
+  [
+    '**/api/v1/admin-hub/*/summary**',
+    () => ({
+      moduleKey: 'scheduling',
+      generatedAt: new Date().toISOString(),
+      timezone: 'UTC',
+      metrics: [
+        { key: 'shifts_needing_closeout', label: 'To close out', value: '1', context: 'waiting 1 day', fixed: false },
+        { key: 'needs_attention', label: 'Needs attention', value: '0', context: 'nothing waiting', fixed: true },
+      ],
+      attention: [],
+    }),
+  ],
+
   ['**/api/v1/notifications/my', () => (empty ? { logs: [] } : notificationLogs())],
   ['**/api/v1/notifications/my?**', () => (empty ? { logs: [] } : notificationLogs())],
   ['**/api/v1/notifications/my/unread-count', () => ({ unread_count: empty ? 0 : 1 })],
@@ -183,6 +244,29 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
 
   ['**/api/v1/scheduling/my-shifts**', () => (empty ? { shifts: [], total: 0 } : myShifts())],
   ['**/api/v1/scheduling/shifts/open**', () => []],
+  // Registered after `/shifts/open` and before the generic entries below, the
+  // same ordering the real router needs: a literal segment behind a path
+  // parameter is unreachable.
+  [
+    '**/api/v1/scheduling/shifts/needing-closeout**',
+    () => (empty ? { shifts: [], total: 0, skip: 0, limit: 200 } : closeoutBacklog()),
+  ],
+  // Stated rather than left to the catch-all. `{}` happens to resolve, so the
+  // store marks the settings loaded and falls back to its defaults — the queue
+  // renders either way, but only by accident, and a fixture nobody can read is
+  // one nobody will maintain. `detailed` is the default mode, which is the
+  // branch where a row offers "Open the shift to close it".
+  [
+    '**/api/v1/scheduling/settings**',
+    () => ({
+      platoons_enabled: false,
+      require_end_of_shift_checks: false,
+      call_tracking: { mode: 'detailed', call_types: [] },
+      signup_closes_minutes_before: 0,
+      late_signup_grace_minutes: 60,
+      open_ended_shift_cushion_hours: 12,
+    }),
+  ],
   ['**/api/v1/scheduling/summary**', () => ({ hours_worked_this_month: 24 })],
   ['**/api/v1/scheduling/reports**', () => ({ reports: [], total: 0 })],
   [

@@ -182,6 +182,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [loading, setLoading] = useState(true);
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
   const [equipmentCheckSummaries, setEquipmentCheckSummaries] = useState<ShiftCheckSummary[]>([]);
+  // Distinct from an empty list, and that distinction is the whole point. The
+  // checklist endpoint wants `inventory.check_view` or `inventory.check_submit`,
+  // neither of which `scheduling.manage` implies, so it refuses an ordinary
+  // scheduling officer — and `[]` reads as "nothing outstanding", which hides
+  // both the warning and the override while the server refuses every finalize.
+  const [checksUnknown, setChecksUnknown] = useState(false);
   const [platoonRoster, setPlatoonRoster] = useState<PlatoonRosterEntry[]>([]);
 
   /** Extract HH:MM from an ISO datetime or time string in the user's local timezone. */
@@ -368,7 +374,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       try {
         const [assignData, checkData, attendanceData, allAttData, detail, handoffData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
-          equipmentCheckService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
+          equipmentCheckService.getShiftChecklists(shift.id).then(
+            (summaries) => ({ ok: true as const, summaries }),
+            () => ({ ok: false as const, summaries: [] as ShiftCheckSummary[] })
+          ),
           schedulingService.getMyAttendance(shift.id),
           schedulingService.getShiftAttendance(shift.id).catch(() => []),
           schedulingService.getShift(shift.id).catch(() => null),
@@ -376,7 +385,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         ]);
         if (!cancelled) {
           setAssignments(assignData);
-          setEquipmentCheckSummaries(checkData);
+          setEquipmentCheckSummaries(checkData.summaries);
+          setChecksUnknown(!checkData.ok);
           setMyAttendance(attendanceData);
           setAllAttendance(allAttData);
           setPlatoonRoster(detail?.platoon_roster ?? []);
@@ -614,6 +624,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     }
   };
 
+  // Declining is only ever offered on your own seat (AssignmentActions renders
+  // it under `isCurrentUser`; an officer acting on someone else uses Remove),
+  // so it goes through the self-scoped decline endpoint. `updateAssignment`
+  // requires scheduling.assign or being the shift's officer and 403s for a
+  // plain member answering their own roster.
   const handleDecline = async (assignmentId: string) => {
     if (pending.declining) return;
     setPendingFlag('declining', true);
@@ -622,7 +637,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       prev.map((a) => (a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a))
     );
     try {
-      await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
+      await schedulingService.declineAssignment(assignmentId);
       toast.success('Assignment declined');
       await refreshAssignments();
     } catch (err) {
@@ -895,10 +910,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
    * The panel tells an officer that overriding records a reason, so an empty box
    * cannot be allowed to pass: `handleFinalize` would drop `override_reason` and
    * the audit event would record `null` — the checks bypassed with none of the
-   * accountability the screen promised.
+   * accountability the screen promised. That now holds however the box came to
+   * be ticked, including when the status is merely unknown, which is why the
+   * empty-reason clause stands on `overrideChecks` rather than on the checks
+   * being known-incomplete.
+   *
+   * An unknown status deliberately does *not* block on its own. The server
+   * consults these checks only when `require_end_of_shift_checks` is on, and it
+   * is the authority either way; refusing to finalize because this panel could
+   * not read a status would shut an officer out of a close-out the API would
+   * have accepted. The override is offered, not demanded.
    */
   const overrideBlocked =
-    requireEndOfShiftChecks && hasIncompleteEquipmentChecks && (!overrideChecks || overrideReason.trim().length === 0);
+    requireEndOfShiftChecks &&
+    ((hasIncompleteEquipmentChecks && !overrideChecks) || (overrideChecks && overrideReason.trim().length === 0));
 
   /**
    * What Escape means here, handed to `useDialog` via DialogPanel rather than
@@ -1619,7 +1644,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     <p className="text-theme-text-muted text-[11px] font-semibold tracking-wide uppercase">
                       Noted on the record
                     </p>
-                    {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks ? (
+                    {checksUnknown ? (
+                      <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                        <div>
+                          <span className="font-medium text-amber-700 dark:text-amber-400">
+                            Equipment check status could not be read
+                          </span>
+                          <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
+                            This needs an Inventory checklist permission your account may not hold, so nothing below
+                            counts the outstanding checks.
+                            {requireEndOfShiftChecks
+                              ? ' Your department blocks close-out on them, so the server may still refuse this.'
+                              : ' Your department does not block close-out on them.'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : hasIncompleteEquipmentChecks && !requireEndOfShiftChecks ? (
                       <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
                         <div>
@@ -1771,8 +1812,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     />
                   </div>
 
-                  {/* Enforcement ON: block, or override with a logged reason. */}
-                  {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
+                  {/* Enforcement ON: block, or override with a logged reason.
+                      Also offered when the status could not be read — the server
+                      is the authority and may refuse, and without the control
+                      here the officer has no route through it. Offered, not
+                      demanded: an unknown status does not set `overrideBlocked`,
+                      so a department whose checks are in fact complete is not
+                      made to record a reason for nothing. */}
+                  {(hasIncompleteEquipmentChecks || checksUnknown) && requireEndOfShiftChecks && (
                     <div className="space-y-2 rounded-md border border-red-500/20 bg-red-500/5 p-2">
                       <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300">
                         <input
@@ -1781,7 +1828,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                           onChange={(e) => setOverrideChecks(e.target.checked)}
                           className="border-theme-surface-border rounded"
                         />
-                        Finalize anyway, with equipment checks outstanding
+                        {checksUnknown && !hasIncompleteEquipmentChecks
+                          ? 'Finalize anyway, without knowing the equipment check status'
+                          : 'Finalize anyway, with equipment checks outstanding'}
                       </label>
                       {overrideChecks && (
                         <>
@@ -1802,7 +1851,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                       )}
                       {!overrideChecks && (
                         <p className="text-xs text-red-600 dark:text-red-300">
-                          Complete the outstanding checks, or check the box above to override.
+                          {checksUnknown && !hasIncompleteEquipmentChecks
+                            ? 'If the server refuses this close-out, check the box above to override.'
+                            : 'Complete the outstanding checks, or check the box above to override.'}
                         </p>
                       )}
                     </div>

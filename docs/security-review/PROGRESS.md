@@ -16,33 +16,156 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 27 (Integrations), pass 3, Codex-round follow-up** — branch
-`claude/security-review-integrations-followup`,
-[PR #2311](https://github.com/thegspiro/the-logbook/pull/2311).
+**None.** Feature 30 (Onboarding)'s PR #2358 merged (`f0bda691`) — fully
+green (17/17) and idle, merged directly by a 30-minute watchdog check per
+the established precedent (PR #2301, #2303, #2306). Rotation row 30 -> ✅.
+Next: 31 Scheduled tasks.
 
-**PR #2307 merged (by the repo owner) before a Codex review round on it
-landed**, so its 6 review-thread fixes could not go into that PR — a new
-branch/PR was opened per CLAUDE.md pitfall #24 (never reuse a branch name
-after its PR merges; `claude/security-review-integrations` already had). All
-6 threads replied to on #2307 (still valid there as a record of what was
-found), 5 resolved, and their fixes carried forward into #2311 against
-current `main`.
+---
 
-**INT-7 is now ✅ FIXED** (the Codex round found the original "flagged, not
-fixed" call in #2307 was based on a false premise): `create_integration_
-client()`'s transport now wraps every connector's response stream and
-aborts once `MAX_RESPONSE_SIZE` (10 MB) is exceeded, enforced centrally with
-no connector call site changed. All of INT-1 through INT-6 re-verified
-intact. A narrower related gap (no wall-clock request deadline) is tracked
-separately in `KNOWN_LIMITATIONS.md`. Route inventory corrected to 21
-endpoints across six files (two public webhook routers,
-`salesforce_webhook.py`/`paypal_webhook.py`, were missed in passes 2-3 and
-are now reviewed and clean). The inbound-webhook body-size claim was also
-corrected: nginx is deployment-conditional, but the pre-existing, ASGI-level
-`RequestSizeLimitMiddleware` caps bodies at 60 MB regardless — no new
-finding needed. Full completion gate green against current `main` — see the
-Log and `docs/security-review/INT-27-integrations.md` for detail.
-Subscribed to #2311; awaiting CI/review.
+### 2026-09-07 — Feature 30 (Onboarding) — PR #2358 merged, watchdog recorded it
+
+PR #2358 (pass 3: ONB3-30-1 fixed, all prior open items re-confirmed
+unchanged) went fully green (17/17) and sat idle with no unresolved review
+threads (only the informational Codex usage-limit comment), so a
+30-minute watchdog check merged it directly rather than leaving it idle.
+Next: 31 Scheduled tasks.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics) — PR #2344 merged, watchdog recorded it
+
+PR #2344 (pass 4/5) merged at 21:58:57Z (`main` is its merge commit
+`cf18d329`). No iteration had recorded the merge or cleared this row since;
+a 30-minute watchdog check found it and did so now rather than leaving the
+rotation idle. Next: 30 Onboarding.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics, pass 5 — round 2 on PR #2344)
+
+PR #2344 (pass 4) was already open when this iteration started. Per the
+one-PR-per-feature rule, this round extends that same branch rather than
+opening a competing PR. Pass 4 was explicitly delta-only and named
+`reports_service.py`, `dashboard.py` and `label_service.py` as **not**
+re-read end to end since pass 3; this round supplied that full read.
+
+Found 2 real, verified gaps pass 4's delta-only scope could not have caught
+(both outside the delta it read) and fixed 1:
+
+1. **`compliance_status`/`training_summary`'s requirement breakdown re-derive
+   training compliance independently of the shared evaluator** in
+   `training_compliance.py` (profile scoping, waivers, date windows) —
+   Pitfall #29 shape: an org with no formal `ProgramEnrollment`s reads as
+   ~0% compliant on this report while `/dashboard/admin-summary` and the
+   compliance-matrix show the same members compliant, same day, same org.
+   Flagged (architecture/product decision), not fixed.
+2. **`PATCH /reports/saved/{id}`** used a bare `setattr` loop instead of
+   `apply_updates`, so an explicit `name: null` reached `db.commit()` against
+   a NOT NULL column and raised an uncaught `IntegrityError` (500) instead of
+   a 400. Fixed, matching the sibling `label_printer_service.update_printer`.
+
+Also re-verified pass 3's `list_waivers` org-scoping fix
+(`attendance_dashboard_service.py:309-320`) — still present, but landed via a
+_different_ feature's rotation pass (`6d784018`, meetings-minutes MM-14,
+since that service is also reached from `meetings.py`), not this one. Noted
+so as not to double-claim it.
+
+3 guard tests added
+(`TestSavedReportUpdateExplicitNull`). Full gate green: flake8/black/isort
+clean on `app/`, `tests/`, `alembic/` at CI's pinned versions; migrations
+PASSED (431 migrations, single head); 517/518 scoped tests pass (1 skipped,
+pywebpush env-only); frontend typecheck 0 errors, eslint 0 errors (no
+frontend files touched). Findings doc:
+`docs/security-review/RPT5-29-reports-analytics.md`. Rotation row 29 stays
+✅ (pending PR merge, unchanged from pass 4). Next: 30 Onboarding, once
+PR #2344 merges.
+
+---
+
+### 2026-09-06 — Feature 29 (Reports & analytics, pass 4)
+
+Feature 28's PR #2333 merged at 18:24:13Z (main is its merge commit
+`f7a9ad8d`), so the stale Open PR row above it was cleared and the rotation
+advanced. Pass 4 over Reports & analytics, **delta-focused by design**: pass 3
+(PR #2091, `b6c283a7`) read all ten files end to end one commit-range ago, so
+this pass read the full diff since it — 141 insertions across 5 files — plus a
+fresh enumeration of all 30 routes, the new `hidden_prospect_ids` surface, and
+targeted whole-feature sweeps. The bodies of `reports_service.py`,
+`dashboard.py` and `label_service.py` outside that delta were **not** re-read;
+that limit is stated in the findings doc rather than papered over.
+
+**No new findings, and no code changed.** Eight verified-good claims, each
+naming its mechanism. The three that took real work: (1) the
+`equipment_check.manage` → `inventory.check_manage` swap on the operations
+dashboard does **not** reach the baseline — resolved `DEFAULT_POSITIONS` and
+`OPERATIONAL_RANKS` live, `member` holds `check_submit`/`view` and
+`firefighter` holds `view`, neither holds `check_manage` nor the `inventory.*`
+wildcard that would grant it (Pitfall #23 clear); (2) the new
+`call_type_labels` in both call-volume reports resolves through
+`ShiftEligibilityService._get_org(org_id)` off `current_user.organization_id`,
+so it cannot cross tenants; (3) `PII_REPORT_PERMISSIONS` is complete for the
+current 13 generators — enumerated every ungated generator's output keys and
+confirmed the `"name"` fields in `apparatus_status`/`inventory_status` are
+asset names, not member names. An unbounded `awk` first suggested
+`event_attendance` carried `member_name`; bounding each function to its next
+`def` showed that hit belonged elsewhere, and the doc records the correction.
+
+Also verified: the label preset's new UNSET semantics keep the in-org FK check
+on `printer_id` (Pitfalls #1 and #14c both satisfied), and prospect
+self-access filtering reaches **all three** label paths including `print`,
+with `_filter_ids` normalizing both sides against the re-cased-UUID bypass.
+
+Full gate green on `f7a9ad8d`: flake8/black/isort clean across `app/`,
+`tests/`, `alembic/` at CI's pinned versions (verified rather than assumed —
+a missing `isort` passes silently); migrations PASSED; 816/816 scoped tests
+pass, 1 skipped (pywebpush, env-only); frontend typecheck 0 errors, eslint 0
+errors. Findings doc:
+`docs/security-review/RPT4-29-reports-analytics.md`. Rotation row 29 → ✅
+(pending PR merge). Next: 30 Onboarding.
+
+---
+
+### 2026-09-06 — Feature 28 (Security, audit & IP, pass 3)
+
+Re-verification pass: three parallel readers split by the same lines as
+pass 2 (audit chain/error logs; security monitoring/alerts; IP allowlist/
+geo-blocking). Every previously-FIXED item (SEC-1 through SEC-9, SEC2-28-1
+through SEC2-28-4) is intact; every previously-flagged, still-open item
+(SEC2-28-5 IP-allowlist enforcement gap, SEC2-28-6 TOCTOU, SEC2-28-7 alert
+visibility/severity) is unchanged, with SEC2-28-7's `Content-Length`
+exfiltration-detection gap now confirmed across all 16 `StreamingResponse`
+export call sites in the app (pass 2 had sampled 3 of 15). The 265-line
+growth in `services/security_monitoring.py` since pass 2 turned out to be
+three legitimate concurrency/correctness bug fixes (a read-before-evict
+race, a session-hijack rewrite) — re-verified, no regression. One new LOW
+finding: `analyze_request`/`_check_rate_limit`/`_check_injection_patterns`
+have zero production callers (flagged, not fixed). **Scope correction:**
+added `app/services/audit_ship_service.py` (off-host audit-log shipping)
+to this feature's file list — it had never been reviewed under this
+feature despite sharing the audit signing key/serializer with `core/
+audit.py`. Found and fixed **SEC2-28-9**: its singleton watermark read was
+a plain SELECT, not a locking read, so a scheduled run racing a manual
+`/scheduled/run-task?task=audit_log_ship` trigger could duplicate or
+regress the delivery watermark (CLAUDE.md pitfall #27's model, applied to
+a watermark rather than a capacity count) — fixed with `.with_for_update()`
+and a guard test proving both the failure (reverted, 5/5 runs) and the fix.
+Full completion gate green: flake8/black/isort clean across `app/`, `tests/`,
+`alembic/`; migrations validated (431 revisions, single head, no new
+migration); 335/335 scoped and 11,505/11,505 full backend suite pass;
+frontend n/a (no frontend file touched). Findings doc:
+`docs/security-review/SEC2-28-security-audit-ip.md` (Pass 3). Rotation row
+28 → ✅. Next: 29 Reports & analytics.
+
+---
+
+### 2026-09-06 — Feature 27 (Integrations, pass 3) ✅ merged — PR #2311
+
+Watchdog check found PR #2311 (the Codex-round follow-up recorded in this
+row) had merged at 2026-09-06T16:29:29Z — the "Open PR" note above was
+stale, still pointing at it as open. No new commits landed on `main` in the
+interim that would need re-verification against Feature 27's code. Rotation
+row 27 → ✅. Next: 28 Security, audit & IP.
 
 ---
 
@@ -9819,11 +9942,11 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
@@ -9834,6 +9957,75 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-07 — Feature 30 (Onboarding, pass 3)
+
+Delta-focused re-verification pass, per the established pass-3+ convention
+(Features 25-29). Pass 2's baseline is commit `e6a1eb45` (PR #2093,
+2026-08-31). `git diff --stat` scoped to this feature's files confirmed
+`services/onboarding.py`, `models/onboarding.py`, `utils/onboarding_
+security.py`, `template_service.py`, `org_template_service.py`, and
+`org_template_registry.py` are byte-identical to what pass 2 reviewed — every
+finding scoped to those files carries pass 2's verification forward, not
+merely assumed stable. `onboarding.py` itself grew 363 lines (email
+save/complete validation helpers, and a `save_session_roles` permission-merge
+rework); `email_test_helper.py` was rewritten (Microsoft 365 OAuth support,
+via two new util modules, `microsoft_oauth.py`/`email_providers.py`, neither
+reviewed under any prior onboarding pass). Re-enumerated all 24 routes
+directly against current code rather than carrying forward pass 2's table
+unchecked — unchanged, 24/24 accounted for.
+
+**1 fix, LOW severity:** **ONB3-30-1** — `RoleSetupItem.permissions` (a
+client-controlled `dict[str, RolePermission]` reached via `/session/roles`
+and `/session/positions`) had no size cap, unlike every sibling collection in
+the same schema module (`it_team` at 50 — ONB2-30-1; the outer `roles`/
+`positions` lists at 200 — ONB2-30-2). Capped at `max_length=50` (34 real
+modules exist today), with a guard test verified to fail without the cap and
+pass with it.
+
+**No new flagged findings.** Hand-traced the new `_merge_default_permissions`/
+`_untouched_modules` rework in `save_session_roles` (fixes a real correctness
+bug — a registry-seeded position with no pre-existing DB row, e.g. `emt`
+before its registry entry shipped, previously stored a role-type heuristic's
+raw checkbox output as an `is_system` row instead of the seed's full grant
+list) and confirmed it does not touch the boundary ONB-7 already flags — an
+arbitrary client-supplied `module_id` key still passes straight through
+`expand_module_checkboxes` with no allowlist. Verified the new Microsoft 365
+OAuth module validates `tenant_id`/`client_id` as a GUID or verified domain
+before interpolating into the authority URL (no SSRF/host-redirection
+surface), and that no secret is ever echoed back across the rewritten
+`email_test_helper.py`. Re-confirmed unchanged, no regressions: ONB-7,
+ONB-30-3 (self-hosted SMTP has no SSRF protection — the rewrite's core shape
+is unchanged), ONB2-30-8 (sliding session TTL), the reset-audit transaction
+boundary, role/position dedup, `/organization`'s missing `except Exception`,
+and `ITTeamMemberRequest`'s loose `email: str`. `KNOWN_LIMITATIONS.md`
+entries for all of these already existed from prior passes and needed no
+change.
+
+Frontend: `RoleSetup.tsx`/`positionTemplates.ts`/`seededPositionGrants.ts`
+(1,853 L combined, substantially rewritten since pass 2) were sampled for the
+risk classes that apply to onboarding's frontend (secrets in browser storage,
+`dangerouslySetInnerHTML`, blocking dialogs, hardcoded credentials) rather
+than read line-by-line — none found; `utils/storage.ts` still never persists
+the credential-bearing email config object, re-confirmed against the updated
+field set. Stated as a scope limit rather than a clean bill: a defect
+confined to the per-agency-type template tables with no server-side echo
+would not have been caught by this pass. `app/core/permissions.py`'s
+`equipment_check.*` → `inventory.check_*` rename (222 lines, a different
+feature's scope) was checked only for interaction with onboarding's seeded-
+role logic — clean, backward-compatible via `LEGACY_PERMISSION_ALIASES`, with
+its own migration and guard test.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (9.0.1,
+CI-pinned) clean across `app/ tests/ alembic/`; `validate_migrations.py
+--strict` — 432 revisions, single head; `pytest -k "onboard or org_template
+or template_service"` — 183 passed, 1 skipped; full backend suite — 11639
+passed, 21 skipped, 0 failures; frontend `typecheck` — 0 errors; `eslint` —
+0 errors, 2 pre-existing warnings in an unrelated file (`scheduling/
+components/CallTypeChips.tsx`, not touched this pass). Full writeup:
+`docs/security-review/ONB3-30-onboarding.md`.
+
+---
 
 - **(init, 2026-08-25)** Rotation created at the owner's request: a 30-minute
   loop running an application-wide, feature-by-feature security review with a

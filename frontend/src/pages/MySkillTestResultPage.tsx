@@ -39,6 +39,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
 import { SkeletonPage } from '../components/ux/Skeleton';
+import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState } from '../components/ux/EmptyState';
 
 export const MySkillTestResultPage: React.FC = () => {
@@ -74,15 +75,20 @@ export const MySkillTestResultPage: React.FC = () => {
   }, [currentTest, discardPracticeTest, navigate]);
 
   if (testLoading || !currentTest) {
-    return testLoading ? (
-      <SkeletonPage />
-    ) : (
-      <EmptyState
-        icon={ClipboardCheck}
-        title="Result not available"
-        description="This skills test either doesn't exist or isn't one of yours."
-        actions={[{ label: 'Back to My Training', onClick: () => void navigate('/training/my-training') }]}
-      />
+    return (
+      <div className="space-y-4">
+        <Breadcrumbs />
+        {testLoading ? (
+          <SkeletonPage />
+        ) : (
+          <EmptyState
+            icon={ClipboardCheck}
+            title="Result not available"
+            description="This skills test either doesn't exist or isn't one of yours."
+            actions={[{ label: 'Back to My Training', onClick: () => void navigate('/training/my-training') }]}
+          />
+        )}
+      </div>
     );
   }
 
@@ -102,6 +108,8 @@ export const MySkillTestResultPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <Breadcrumbs />
+
       <button
         onClick={() => void navigate('/training/my-training')}
         className="hover:bg-theme-surface-hover -ml-2 flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"

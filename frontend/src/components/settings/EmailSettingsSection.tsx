@@ -1,7 +1,8 @@
 import React from 'react';
 import { SettingsToggle as Toggle } from './SettingsToggle';
 import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff } from 'lucide-react';
-import type { EmailServiceSettings, MicrosoftAuthMethod } from '../../types/user';
+import { MicrosoftAuthMethod } from '../../constants/enums';
+import type { EmailServiceSettings } from '../../types/user';
 
 interface EmailSettingsSectionProps {
   emailSettings: EmailServiceSettings;
@@ -73,8 +74,9 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
   // A stored row written before OAuth existed carries no method and signs in
   // with a password, so absence has to read as App Password here exactly as
   // it does on the backend.
-  const microsoftAuthMethod: MicrosoftAuthMethod = emailSettings.microsoft_auth_method || 'app_password';
-  const showMicrosoftOAuth = isMicrosoft && microsoftAuthMethod === 'oauth';
+  const microsoftAuthMethod: MicrosoftAuthMethod =
+    emailSettings.microsoft_auth_method || MicrosoftAuthMethod.APP_PASSWORD;
+  const showMicrosoftOAuth = isMicrosoft && microsoftAuthMethod === MicrosoftAuthMethod.OAUTH;
   const busy = savingEmail || testingEmail;
 
   return (
@@ -132,7 +134,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                   // an App Password saved keeps the method it is working
                   // with — the redacted marker counts as saved.
                   ...(p.id === 'microsoft' && s.platform !== 'microsoft' && !s.microsoft_app_password
-                    ? { microsoft_auth_method: 'oauth' as const }
+                    ? { microsoft_auth_method: MicrosoftAuthMethod.OAUTH }
                     : {}),
                 }))
               }
@@ -186,8 +188,16 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {(
                   [
-                    { id: 'oauth', label: 'App registration (OAuth)', hint: 'Recommended' },
-                    { id: 'app_password', label: 'App Password', hint: 'Basic auth — retiring' },
+                    {
+                      id: MicrosoftAuthMethod.OAUTH,
+                      label: 'App registration (OAuth)',
+                      hint: 'Recommended',
+                    },
+                    {
+                      id: MicrosoftAuthMethod.APP_PASSWORD,
+                      label: 'App Password',
+                      hint: 'Basic auth — retiring',
+                    },
                   ] as const
                 ).map((m) => (
                   <button
@@ -268,9 +278,12 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
               <div className="text-theme-text-muted flex items-start gap-2 text-xs">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  Register an application in Entra ID, give it the <span className="font-medium">SMTP.SendAsApp</span>{' '}
-                  application permission for Office 365 Exchange Online, and grant it{' '}
-                  <span className="font-medium">SendAs</span> on this mailbox. Copy the secret{' '}
+                  Register an application in Entra ID and give it the{' '}
+                  <span className="font-medium">SMTP.SendAsApp</span> application permission for Office 365 Exchange
+                  Online, with admin consent. Your Exchange administrator then registers that application&apos;s{' '}
+                  <span className="font-medium">service principal</span> in Exchange Online PowerShell — an Entra ID
+                  registration alone is not visible to Exchange, and skipping this yields a token that still fails to
+                  sign in — and grants it <span className="font-medium">SendAs</span> on this mailbox. Copy the secret{' '}
                   <span className="font-medium">value</span> — not its ID — into the field above.{' '}
                   <a
                     href="https://entra.microsoft.com/"

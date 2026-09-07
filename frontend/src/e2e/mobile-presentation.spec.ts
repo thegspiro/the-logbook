@@ -66,6 +66,15 @@ interface RouteCheck {
 /** Granted for every route; see the per-route `permissions` note above. */
 const BASE_PERMISSIONS = ['inventory.manage', 'facilities.manage'];
 
+//: What every route under Scheduling Administration is gated on.
+//:
+//: `ProtectedRoute` asks for `scheduling.manage` and that alone is what decides
+//: whether these pages render — the API is mocked here, so no server-side grant
+//: is in play. `scheduling.view` rides along because permission matching is
+//: literal (`manage` never implies `view`) and a real scheduling officer holds
+//: both; a fixture that held only one would be modelling a role nobody has.
+const SCHEDULING_ADMIN = ['scheduling.manage', 'scheduling.view'];
+
 const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
@@ -82,18 +91,15 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling/admin', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0 },
-  // Without this the fixture holds only the base grants and the loop measures
-  // ProtectedRoute's Access Denied screen, which passes every budget while
-  // testing nothing about the page.
-  {
-    path: '/scheduling/admin/closeout',
-    maxSmallTargets: 0,
-    maxTinyText: 0,
-    permissions: ['scheduling.manage', 'scheduling.view'],
-  },
-  { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0 },
+  // Every route under /scheduling/admin is gated on `scheduling.manage`, which
+  // is not in BASE_PERMISSIONS — so without these the loop measured
+  // ProtectedRoute's Access Denied screen on all four. That passes every budget
+  // while testing nothing about the page, which is the worst state a ratchet can
+  // be in: it reports coverage it does not have.
+  { path: '/scheduling/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  { path: '/scheduling/admin/closeout', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
@@ -143,14 +149,15 @@ const ALL_ROUTES: RouteCheck[] = [
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
   //
-  // The remaining five are not listed, and each has a reason:
-  // /scheduling/admin/settings/*,
+  // The remaining six are not listed, and each has a reason:
+  // /scheduling/admin/settings/*, /members/admin/settings/*,
   // /elections/settings and /communications/email-templates carry non-shell debt
-  // of their own (17, 2 and 4 controls under 44px — mostly `toggle-track`, which
-  // is 44x24 at every one of its call sites app-wide), and the events and
+  // of their own (17, 1, 2 and 4 controls under 44px — mostly `toggle-track`,
+  // which is 44x24 at every one of its call sites app-wide), and the events and
   // department-setup panels render inside a hub route rather than at a path of
   // their own. Adding any of them means fixing that debt first, not raising a
-  // budget.
+  // budget. /members/admin/settings/visibility is the cheapest of them: one
+  // control, and the only thing between it and a budget of 0.
   { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
 ];

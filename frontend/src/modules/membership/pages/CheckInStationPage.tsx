@@ -57,6 +57,7 @@ import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegration
 import { signalUserActivity } from '../../../hooks/useIdleTimer';
 import { NfcCheckInDirection, NfcCheckInTarget } from '../../../constants/enums';
 import type { NfcStationCheckInResult } from '../types/idCard';
+import { Breadcrumbs } from '../../../components/ux';
 
 interface TargetOption {
   id: string;
@@ -438,16 +439,24 @@ const CheckInStationPage: React.FC = () => {
 
   const selectedTarget = targets.find((t) => t.id === targetId);
 
+  // The trail lives inside `header`, not beside it: this page has two
+  // top-level returns and a trail added to only one of them is the defect
+  // pattern that cost the Events templates page its route out of an error
+  // state. One definition cannot go missing from a branch.
   const header = (
-    <div className="flex items-center gap-3">
-      <Link to="/members" className="btn-icon" aria-label="Back to members">
-        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-      </Link>
-      <div>
-        <h1 className="text-theme-text-primary text-2xl font-bold">Check-In Station</h1>
-        <p className="text-theme-text-secondary text-sm">Members tap their ID card to be checked in.</p>
+    <>
+      <Breadcrumbs underHub="/members/admin" />
+
+      <div className="flex items-center gap-3">
+        <Link to="/members" className="btn-icon" aria-label="Back to members">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </Link>
+        <div>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Check-In Station</h1>
+          <p className="text-theme-text-secondary text-sm">Members tap their ID card to be checked in.</p>
+        </div>
       </div>
-    </div>
+    </>
   );
 
   // The endpoint refuses while the integration is off, so an armed-looking

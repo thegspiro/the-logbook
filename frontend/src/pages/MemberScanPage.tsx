@@ -26,6 +26,7 @@ import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from '../components/ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
 import { describeCameraError, QR_SCAN_CONFIG } from '../constants/camera';
+import { Breadcrumbs } from '../components/ux';
 
 export const MemberScanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -108,6 +109,8 @@ export const MemberScanPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 py-8">
+      <Breadcrumbs underHub="/members/admin" />
+
       {/* Header */}
       <div className="mb-6">
         <Link

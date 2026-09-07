@@ -16,6 +16,7 @@ from app.api.v1.onboarding import (
     ITTeamMemberRequest,
     ITTeamRequest,
     PositionsSetupRequest,
+    RolePermission,
     RoleSetupItem,
     RolesSetupRequest,
 )
@@ -58,6 +59,33 @@ class TestPositionsSetupRequestCap:
     def test_rejects_over_the_cap(self):
         with pytest.raises(ValidationError):
             PositionsSetupRequest(positions=[_role(i) for i in range(201)])
+
+
+class TestRoleSetupItemPermissionsCap:
+    """ONB3-30-1: a role/position's own ``permissions`` dict had no cap.
+
+    ``RoleSetupItem.permissions`` keys are arbitrary client-supplied module
+    ids (there is no server-side allowlist — see ONB-7), so nothing bounded
+    how many `{module}.view`/`{module}.manage`/`{module}.*` entries one role
+    could carry. The outer `roles`/`positions` list caps (ONB2-30-2) bound
+    the number of roles per request, not the size of any single role's own
+    permission set.
+    """
+
+    def test_accepts_up_to_the_cap(self):
+        RoleSetupItem(
+            id="role-1",
+            name="Role 1",
+            permissions={f"module{i}": RolePermission() for i in range(50)},
+        )
+
+    def test_rejects_over_the_cap(self):
+        with pytest.raises(ValidationError):
+            RoleSetupItem(
+                id="role-1",
+                name="Role 1",
+                permissions={f"module{i}": RolePermission() for i in range(51)},
+            )
 
 
 if __name__ == "__main__":  # pragma: no cover
