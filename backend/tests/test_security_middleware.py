@@ -729,7 +729,9 @@ class TestRateLimiter:
         key that would otherwise look like a fresh, no-evidence request
         (filtered_requests empty). Established with live history *before*
         saturation is triggered, then checked again while saturation is
-        still active."""
+        still active. Both keys share the "login" scope, so this is a
+        same-scope check, not a by-product of RL5-1's cross-scope
+        isolation."""
         limiter = RateLimiter()
         limiter._MAX_LOCKOUTS = 3
         limiter._MAX_KEYS = 10_000
@@ -737,27 +739,37 @@ class TestRateLimiter:
 
         now = 1_000_000.0
         with patch("time.time", return_value=now):
-            limiter.lockouts["existing-1"] = now + 1000
-            limiter.lockouts["existing-2"] = now + 1000
-            limiter.lockouts["existing-3"] = now + 1000
+            limiter.lockouts["login:existing-1"] = now + 1000
+            limiter.lockouts["login:existing-2"] = now + 1000
+            limiter.lockouts["login:existing-3"] = now + 1000
             # legit-user establishes live history before any saturation
             # event has happened at all.
             limiter.is_rate_limited(
-                "legit-user", max_requests=5, window_seconds=60, lockout_seconds=1800
+                "login:legit-user",
+                max_requests=5,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
-            # A violator trips saturation.
+            # A violator, same scope, trips saturation.
             limiter.is_rate_limited(
-                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+                "login:violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
             limiter.is_rate_limited(
-                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+                "login:violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
-            assert limiter._saturation_reject_until > now
+            assert limiter._saturation_reject_until.get("login", 0.0) > now
 
             # legit-user's second call, still comfortably within its own
-            # 60s window, in the same instant saturation became active.
+            # 60s window, in the same instant saturation became active for
+            # its own ("login") scope.
             is_limited, reason = limiter.is_rate_limited(
-                "legit-user",
+                "login:legit-user",
                 max_requests=5,
                 window_seconds=60,
                 lockout_seconds=1800,
@@ -769,8 +781,10 @@ class TestRateLimiter:
     @pytest.mark.unit
     def test_saturation_fail_closed_decays_once_the_window_passes(self):
         """CI3-33-1e: the saturation-reject signal must not linger forever
-        — once self._saturation_reject_until has passed, a key with no
-        history is treated as an ordinary fresh request again."""
+        — once its scope's reject-until has passed, a key with no history
+        is treated as an ordinary fresh request again. Both keys share the
+        "login" scope, so this exercises decay within one scope, not
+        RL5-1's cross-scope isolation."""
         limiter = RateLimiter()
         limiter._MAX_LOCKOUTS = 3
         limiter._MAX_KEYS = 10_000
@@ -778,20 +792,26 @@ class TestRateLimiter:
 
         now = 1_000_000.0
         with patch("time.time", return_value=now):
-            limiter.lockouts["existing-1"] = now + 1000
-            limiter.lockouts["existing-2"] = now + 1000
-            limiter.lockouts["existing-3"] = now + 1000
+            limiter.lockouts["login:existing-1"] = now + 1000
+            limiter.lockouts["login:existing-2"] = now + 1000
+            limiter.lockouts["login:existing-3"] = now + 1000
             limiter.is_rate_limited(
-                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+                "login:violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
             limiter.is_rate_limited(
-                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+                "login:violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
             )
-            saturation_until = limiter._saturation_reject_until
+            saturation_until = limiter._saturation_reject_until["login"]
 
         with patch("time.time", return_value=saturation_until + 1):
             is_limited, reason = limiter.is_rate_limited(
-                "brand-new-key",
+                "login:brand-new-key",
                 max_requests=5,
                 window_seconds=60,
                 lockout_seconds=1800,
@@ -799,6 +819,119 @@ class TestRateLimiter:
 
         assert is_limited is False
         assert reason is None
+
+    @pytest.mark.unit
+    def test_saturation_reject_is_scoped_to_the_affected_rate_limit_scope(self):
+        """RL5-1 (Codex review of PR #2368 after merge): CI3-33-1e's
+        self._saturation_reject_until was a single process-wide scalar on
+        the shared rate_limiter instance that backs every scope (login,
+        register, password-reset, token-refresh, password-change, and
+        every public_rate_limit() caller). Saturating ONE scope's lockout
+        table (e.g. a login-lockout flood during a Redis outage) then
+        failed closed for every OTHER scope too — a self-inflicted,
+        attacker-triggerable DoS across the whole app. Keys are built as
+        f"{scope}:{identifier}" by every real caller (check_rate_limit,
+        public_rate_limit); the fix scopes the reject signal to the prefix
+        before the first ":"."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            # Saturate the "login" scope's lockout table.
+            limiter.lockouts["login:1.2.3.4"] = now + 1000
+            limiter.lockouts["login:1.2.3.5"] = now + 1000
+            limiter.lockouts["login:1.2.3.6"] = now + 1000
+            limiter.is_rate_limited(
+                "login:attacker",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+            limiter.is_rate_limited(
+                "login:attacker",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+            # An unrelated scope, brand-new key, no live history, nothing
+            # to do with the login flood.
+            is_limited, reason = limiter.is_rate_limited(
+                "pub_form_submit:9.9.9.9",
+                max_requests=10,
+                window_seconds=60,
+                lockout_seconds=600,
+            )
+
+        assert is_limited is False
+        assert reason is None
+
+        with patch("time.time", return_value=now + 61):
+            # The saturated scope itself must still fail closed — the fix
+            # must not weaken same-scope protection while fixing isolation.
+            is_limited, reason = limiter.is_rate_limited(
+                "login:attacker",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+        assert is_limited is True
+        assert "locked" in (reason or "").lower()
+
+    @pytest.mark.unit
+    def test_lockout_saturation_check_purges_expired_entries_first(self):
+        """RL5-2 (Codex review of PR #2368 after merge): the insertion
+        guard's strict "<" comparison (len(self.lockouts) < _MAX_LOCKOUTS)
+        reads self.lockouts *after* _evict_stale runs in the same call —
+        but _evict_stale's own over_limit gate used a strict ">" against
+        _MAX_LOCKOUTS, so a table sitting at *exactly* capacity did not
+        force an immediate sweep and instead deferred to the normal ~60s
+        eviction throttle. If the last periodic sweep was recent, entries
+        that have since expired stay counted, so a new violator gets
+        treated as hitting a genuinely full table when the real count of
+        *active* lockouts is lower (or zero). Fixed by using ">=" for the
+        lockouts term, so a table at exactly capacity always forces this
+        call's sweep to purge expired entries before the insertion
+        decision reads the count."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        # Non-zero interval, matching production — the throttle this bug
+        # exploits.
+        limiter._EVICTION_INTERVAL = 60
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            # 3 lockouts that are already expired, filling the table to
+            # exactly _MAX_LOCKOUTS.
+            limiter.lockouts["login:1.2.3.4"] = now - 10
+            limiter.lockouts["login:1.2.3.5"] = now - 10
+            limiter.lockouts["login:1.2.3.6"] = now - 10
+            # Simulate a recent periodic sweep, so the 60s throttle alone
+            # would otherwise block another one from happening.
+            limiter._last_eviction = now
+
+            # A new violator trips the limit. All 3 existing entries are
+            # already expired — there are zero *active* lockouts in the
+            # way, so this violator's own lockout must persist normally.
+            limiter.is_rate_limited(
+                "login:violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+            limiter.is_rate_limited(
+                "login:violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+        assert "login:violator" in limiter.lockouts
+        assert limiter._saturation_reject_until.get("login", 0.0) == 0.0
 
 
 # ---------------------------------------------------------------------------
