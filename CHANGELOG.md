@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two data-leakage fixes: separation reports, and the response cache (2026-09-07)
+
+**Security**
+
+- **A property-return report no longer publishes a departed member's home
+  address to the whole department.** When a member was dropped, the generated
+  report — which names them, quotes the reason for the separation (involuntary
+  ones included) and prints their home address so the letter can be posted —
+  was filed in the `Reports` system folder. That folder is
+  organization-visible, so every holder of plain `documents.view` could read
+  it. Reports now go to a new leadership-only **Member Separations** folder,
+  and the folder is resolved before the document is written rather than
+  falling back to `folder_id = NULL`, which `can_access_document` also treats
+  as organization-level. This is the hazard `publish_minutes` already refuses
+  for executive minutes (MM2-1); it is now refused here by the same mechanism.
+
+  A migration creates the folder for existing departments and moves reports
+  already filed in `Reports` into it. **Visible change:** members who could
+  previously open these reports no longer can. The downgrade restores the
+  prior arrangement exactly, disclosure included, so it is for a schema
+  rollback rather than a decision to undo.
+
+- **Ten member-PII endpoints were being held in the frontend response cache.**
+  `apiCache.ts` is cache-by-default with a denylist, so an endpoint added to
+  the backend is cached unless someone remembers to edit a TypeScript file in
+  the other half of the repository — and ten had not been. Among them:
+  `/inventory/items/{id}/exposures` (a member's contamination and decon
+  history), `/inventory/clearances` (who is leaving and what they still owe),
+  `/inventory/items/{id}/history` and `/roles/{id}/users`. All are now
+  excluded.
+
+  `backend/tests/test_api_cache_pii_exclusions.py` resolves every GET route's
+  response schema and fails on a new one that carries member PII and is not
+  excluded — a ratchet, in the manner of `test_org_scoping_ratchet.py`, with
+  an empty baseline. CLAUDE.md stated this rule and nothing checked it, which
+  is the same gap that let pitfall #16 regress after holding across 58 call
+  sites on review discipline alone.
+
 ### A grouped items list stops repeating the grouped value on every row (2026-09-07)
 
 **Changed**

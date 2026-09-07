@@ -42,6 +42,11 @@ const UNCACHEABLE_PREFIXES = [
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
+  '/apparatus/operators', // per-member driving qualification: name, licence restrictions, restriction notes (PII)
+  '/apparatus/driver-exceptions', // name + the justification and restrictions behind an exception — health-adjacent free text (PII); covers /approvers too
+  '/apparatus/evoc-check/', // GET /evoc-check/{apparatus_id}/{user_id}: a named member's driving eligibility
+  '/inventory/reorder-requests', // requester_name on the list and the detail (PII)
+  '/operational-ranks/validate', // resolves member_name for each rank being validated (PII)
   '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
@@ -56,6 +61,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/module-config/my-training', // current user's full training record
   '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
+  '/training/instructors/validate/', // GET /validate/{user_id}/{course_id}: a named member's qualification verdict
   '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
   '/training/competency-matrix', // org-wide per-member competency heat map (names + status) — same shape as compliance-matrix above
   '/training/dashboard-summary', // dashboard widgets: per-member names on at-risk/needs-intervention lists
@@ -90,6 +96,11 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/my/', // current user's own size preferences (PII)
   '/inventory/requestable-catalog', // request form: embeds the caller's own size preferences (PII)
   '/inventory/charges', // per-member cost-recovery / financial liability (PII)
+  '/inventory/allowances/check/', // GET /allowances/check/{user_id}/{category_id}: a named member's entitlement
+  '/inventory/clearances', // departure clearances: who is leaving, departure type, notes, value still owed (PII)
+  '/inventory/requests', // equipment requests: requesting member + their free-text notes (PII)
+  '/inventory/return-requests', // requester_name, member_notes, reviewer_name, review_notes (PII)
+  '/inventory/write-offs', // requester_name, reviewer_name, review_notes (PII)
   '/store/', // member orders: names, email/phone, shipping addresses, payment references, amounts owed (PII)
   '/documents', // private organizational documents (list + detail)
   '/compliance/', // compliance attestations, member compliance data (PII)
@@ -121,6 +132,24 @@ const UNCACHEABLE_SUBSTRINGS = [
   '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)
+  // The three PII sub-resources of an inventory item. Substrings rather than a
+  // '/inventory/items/' prefix on purpose: the item list and item detail carry
+  // no member data and are the module's hottest reads, so excluding the whole
+  // subtree would cost every screen in Inventory to protect three routes.
+  '/issuances', // who currently holds a pool item (member names) — the same
+  // disclosure '/inventory/checkout/' and '/inventory/users/' are already
+  // excluded for, reached through the item instead of through the member.
+  '/exposures', // NFPA exposure records: user_id, exposure type, incident
+  // number, decon status and free-text description — a member's contamination
+  // history, which is health data however it is filed.
+  '/users', // any sub-resource that enumerates members — GET /roles/{id}/users
+  // returns each holder's first/last name and email. The '/users' *prefix*
+  // above only covers the top-level roster; a nested one is a different URL
+  // disclosing the same columns.
+  '/history', // "who did what to this, and why": /inventory/items/{id}/history
+  // resolves user_name, assignment reason and return notes. Deliberately broad
+  // — a history endpoint is a member-attributed audit trail by construction, so
+  // a new one should have to opt *in* to caching rather than silently inherit it.
   '/fulfillment-options', // not PII: the picker reports what is issuable *right now*, and
   // a 30s-stale count is how a quartermaster is offered stock another one just issued.
   // Nothing in the cache's URL-prefix invalidation connects an issuance recorded under

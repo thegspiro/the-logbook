@@ -1,0 +1,31 @@
+# Cached GET routes that return member PII — tolerated exceptions.
+#
+# Owned by tests/test_api_cache_pii_exclusions.py, which explains what is in
+# scope and — more importantly — what is not, so an empty file is not mistaken
+# for proof that no PII is cached.
+#
+# ── The file is empty, and that is the intended state ────────────────────────
+#
+# Every route the sweep found on 2026-09-07 was excluded in apiCache.ts rather
+# than baselined. There were seven, all genuine member PII, and fixing seven
+# was cheaper than writing seven justifications. Keep it that way: a line here
+# is the fallback, not the first move.
+#
+# ── When a line does belong here ─────────────────────────────────────────────
+#
+# When the matched field is departmental rather than personal, and excluding
+# the route would cost caching for no privacy gain. A vendor's phone number, a
+# station's street address and a service provider's licence number all read as
+# PII to a name-based sweep and are ordinary organizational records. None of
+# them currently matches, because PII_FIELDS is deliberately narrow; if one
+# starts to, this is where it goes.
+#
+# ── Format ───────────────────────────────────────────────────────────────────
+#
+# One URL per line, exactly as the failure message prints it, with the reason
+# on a comment line immediately above — the treatment
+# test_endpoint_auth_coverage.py gives an addition to ALLOWLISTED_PUBLIC.
+# Adding a line is a deliberate privacy decision and should be reviewed as one.
+#
+# A baselined route that stops flagging fails the build too
+# (test_baseline_has_no_stale_entries), so this list can only shrink.
