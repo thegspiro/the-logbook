@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 34 (Frontend shared, pass 4)** — PR
+[#2379](https://github.com/thegspiro/the-logbook/pull/2379), branch
+`claude/friendly-babbage-6japkr`. 0 new findings; FE3-34-4 and FE3-34-5 (both
+HIGH) confirmed already fixed by intervening commits unrelated to this
+rotation; FE3-34-2 (HIGH) re-verified still open, needs a product decision.
+See `docs/security-review/FE4-34-frontend-shared.md`. Once merged: rotation
+wraps to 00 (cross-cutting baseline) for the next full pass.
+
+<details>
+<summary>Superseded — prior Open PR note, preserved for history</summary>
+
+**None.** Feature 33 (Core infrastructure, pass 3) follow-up PR #2370 merged
+(`86ec5795`) — CI fully green (17/17), `mergeable_state: clean`, all 11 Codex
+review threads across 10 rounds resolved. The final round's Codex re-review
+(on head `216cf625`) never completed cleanly — 11 consecutive attempts all
+returned "usage limits reached" rather than a pass/fail verdict over the
+~2 hours the PR was open — so this merge landed without that last
+confirmation. Every one of the 10 prior rounds had already been
+independently reproduced with a standalone `python3` repro before being
+accepted (see `CI3-33-core-infra.md`). Rotation row 33 -> ✅ (already
+reflected in the table below). Next: 34 Frontend shared.
+
+<details>
+<summary>Superseded — PR #2370's own in-progress narrative, preserved for history</summary>
+
 **#2370** — Feature 33 (Core infrastructure, pass 3) follow-up:
 `claude/fix-rate-limiter-saturation-scope`. #2368 merged (`262f8730`) with 3
 Codex review threads still open, posted ~50s before the merge landed and
@@ -88,6 +113,25 @@ Rotation row 33 -> ✅
 (#2368 already merged; this is a follow-up fix, not
 new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
 once #2370 merges: 34 Frontend shared.
+
+</details>
+
+</details>
+
+---
+
+### 2026-09-07 — Feature 33's follow-up PR #2370 merged, watchdog recorded it
+
+PR #2370 (10 rounds of Codex-driven fixes plus a structural `RateLimiter`
+refactor, `TestRateLimiter` grown from 29 to 43 tests) went fully green
+(17/17 checks, `mergeable_state: clean`) with all 11 Codex review threads
+resolved. Its final round's Codex re-review never completed cleanly — 11
+straight "usage limits reached" responses on the same head commit
+(`216cf625`) over roughly 2 hours. A 30-minute watchdog check had flagged
+this state (CI green, mergeable clean, Codex stuck on quota) rather than
+merge it unilaterally; the PR merged (`86ec5795`) shortly after. This entry
+records that merge and clears the stale Open PR row. Next: 34 Frontend
+shared.
 
 ---
 
@@ -10903,7 +10947,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -10911,6 +10955,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-07 — Feature 34 (Frontend shared, pass 4) — 0 new findings; 2 prior HIGH findings confirmed already fixed, 1 re-confirmed still open
+
+4th pass over this feature (`utils/apiCache.ts`, `services/apiClient.ts`,
+`utils/createApiClient.ts`, `components/ProtectedRoute.tsx`, all 4 global
+stores, all 13 module axios instances). Established the pass-3 baseline
+(`b10ecfe3`, the merge that landed `FE3-34-frontend-shared.md`) and diffed
+every file this feature owns against it: only `utils/apiCache.ts` (+5),
+`stores/authStore.ts` (+19), and `modules/scheduling/services/api.ts` (+50,
+own `createApiClient()` instance, no caching logic) differ at all — every
+other file this feature owns is byte-identical to what pass 3 already read
+in full.
+
+Re-verified all 9 FE2-34 findings and FE3-34-1/FE3-34-3 against current
+code: all still hold. Re-verified FE3-34-2 (HIGH — a failed client-side
+logout leaves the session cookies live while showing an unauthenticated UI):
+**still open**, unchanged; the backend counterpart moved
+(`auth.py:1197-1235` → `:1334-1372`) but the logic is identical. Still a
+product decision, not a same-pass patch — carried forward.
+
+**FE3-34-4 and FE3-34-5 (both HIGH) are fixed** — each by a commit authored
+outside this rotation (regular feature work: `a8f160ec` "Version cache
+writes against mutations, not only against full clears" for FE3-34-4;
+`fd2d5dbb` "fix: repair CI, an assigned-item rewrite, and two access leaks"
+for FE3-34-5) that happened to close a gap this rotation had flagged. Both
+fixes were already present in `b10ecfe3` itself — the commit that landed the
+FE3-34 doc calling them open — so the doc was stale on arrival, not from
+later drift (two branches landing concurrently, same class of race
+`PROGRESS.md` documents elsewhere for Alembic merges). Both verified against
+current code with their guard tests passing: `apiClient.test.ts`'s three
+cache-boundary cases (FE3-34-4) and `authStore.test.ts`'s six device-claim
+cases (FE3-34-5). Removed both from `KNOWN_LIMITATIONS.md` per its own
+"when resolved, remove it" convention; refreshed FE3-34-2's line-number
+citation there.
+
+Diff-swept the whole frontend (not just this feature's files) for new
+cache-exposure risk since the baseline: one new endpoint
+(`GET /inventory/items/colors`, a plain colour-name list, no PII) correctly
+left cacheable; every other "new" `api.get` call in the diff was already
+covered by an exclusion added between FE3-34 being written and merging.
+Zero new gaps. `components/ux/*` (in scope per FE3-34) diffed too:
+`breadcrumbRoutes.ts`/`Breadcrumbs.tsx` (new, fail-closed allowlist with its
+own drift test) and a `CommandPalette.tsx` permission-string change
+(cosmetic — a UX filter, not an access-control boundary) — no findings.
+
+Findings doc: `docs/security-review/FE4-34-frontend-shared.md`. Gate:
+`npm run typecheck` 0 errors; `eslint .` 0 errors / 2 pre-existing warnings
+(unrelated `CallTypeChips.tsx`, within budget); scoped tests 239 passed
+across 9 files. No backend files touched. Rotation row 34 -> ✅ — **every
+row (00-34) is now ✅**, so this closes the current full pass; the rotation
+wraps to **00 (cross-cutting baseline)** next, for a fresh sweep over
+whatever has landed since `SEC-00`'s pass 3 (2026-09-01).
 
 ### 2026-09-07 — Feature 32 (Locations & kiosk, pass 3)
 
