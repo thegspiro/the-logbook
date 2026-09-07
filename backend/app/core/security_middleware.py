@@ -323,10 +323,27 @@ class RateLimiter:
             # periodic sweep (up to _EVICTION_INTERVAL stale) — this is the
             # one call that actually needs to know, so it is the one call
             # that pays for finding out.
-            if len(self.lockouts) >= self._MAX_LOCKOUTS:
+            #
+            # But only the *first* such call per scope pays it (Codex
+            # review of this same PR): an already-rejected key keeps
+            # retrying — filtered_requests never drops below max_requests
+            # for it until its history ages out of window_seconds — so
+            # every retry re-enters this branch. Without a short-circuit,
+            # each one repeats the full prune scan for as long as the
+            # attacker keeps retrying, turning its own retry loop into the
+            # amplifier this branch was just narrowed to avoid being for
+            # everyone else. Once this scope's own reject_until is in the
+            # future, the table was already established saturated as of
+            # that call; treating it as still saturated until reject_until
+            # lapses skips the scan and goes straight to extending the
+            # signal below — which cannot make this key's own fallback
+            # protection any weaker than reject_until already promises it.
+            reject_until = self._saturation_reject_until.get(scope, 0.0)
+            already_saturated = current_time < reject_until
+            if not already_saturated and len(self.lockouts) >= self._MAX_LOCKOUTS:
                 self._prune_expired_lockouts(current_time)
 
-            if len(self.lockouts) < self._MAX_LOCKOUTS:
+            if not already_saturated and len(self.lockouts) < self._MAX_LOCKOUTS:
                 self.lockouts[key] = current_time + lockout_seconds
             else:
                 # Saturated: this violator's own lockout can't be
@@ -337,8 +354,7 @@ class RateLimiter:
                 # through with the sliding window's much shorter
                 # protection. See the check below.
                 self._saturation_reject_until[scope] = max(
-                    self._saturation_reject_until.get(scope, 0.0),
-                    current_time + lockout_seconds,
+                    reject_until, current_time + lockout_seconds
                 )
             self.requests[key] = filtered_requests
             return (

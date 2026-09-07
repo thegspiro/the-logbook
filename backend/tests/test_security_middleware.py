@@ -1042,6 +1042,126 @@ class TestRateLimiter:
             "login:1.2.3.6",
         }
 
+    @pytest.mark.unit
+    def test_saturated_scope_does_not_repeat_full_prune_scan_on_retry(self):
+        """RL5-4 (Codex review of PR #2370, round 7): RL5-3's fix scoped the
+        lockouts-only prune to only the one call that is itself about to
+        attempt an insertion — but an already-rejected key keeps retrying
+        (filtered_requests never drops below max_requests for it until its
+        own history ages out of window_seconds), so every retry from that
+        SAME key re-enters the branch and repeats the full O(_MAX_LOCKOUTS)
+        prune scan for as long as it keeps retrying. The attacker's own
+        retry loop became the amplifier RL5-3 had just narrowed away from
+        everyone else.
+
+        Reproduces directly: self.lockouts at exactly _MAX_LOCKOUTS with 3
+        genuinely active (non-expired) entries, then a single already-
+        saturated key retries 100 times. Before the fix, 99 of those 100
+        retries (all but the first, which is the one establishing
+        saturation) each pay a full prune scan.
+
+        Fixed by short-circuiting on this scope's own
+        _saturation_reject_until: once a call has already established the
+        scope as saturated, a later call within reject_until skips the
+        prune and the capacity check entirely and goes straight to
+        extending the signal — cannot make this key's own fallback
+        protection weaker than reject_until already promised it."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 60
+
+        now = 1_000_000.0
+        prune_calls = 0
+        original_prune = limiter._prune_expired_lockouts
+
+        def counting_prune(current_time):
+            nonlocal prune_calls
+            prune_calls += 1
+            return original_prune(current_time)
+
+        limiter._prune_expired_lockouts = counting_prune
+
+        with patch("time.time", return_value=now):
+            limiter.lockouts["login:1.2.3.4"] = now + 1000
+            limiter.lockouts["login:1.2.3.5"] = now + 1000
+            limiter.lockouts["login:1.2.3.6"] = now + 1000
+            limiter._last_eviction = now
+
+            results = [
+                limiter.is_rate_limited(
+                    "pub_form_submit:9.9.9.9",
+                    max_requests=1,
+                    window_seconds=60,
+                    lockout_seconds=600,
+                )
+                for _ in range(100)
+            ]
+
+        assert prune_calls == 1
+        assert all(is_limited for is_limited, _ in results[1:])
+
+    @pytest.mark.unit
+    def test_saturation_short_circuit_re_checks_capacity_once_reject_until_lapses(
+        self,
+    ):
+        """RL5-4 companion guard: the short-circuit added above must not
+        outlive the scope's own reject_until — once it lapses, the next
+        call over its limit must re-run the accurate prune/capacity check
+        rather than treating the scope as saturated forever. With capacity
+        freed (the 3 active lockouts replaced by expired ones) and
+        reject_until in the past, a new violator's own lockout is
+        persisted again."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 60
+
+        saturation_time = 1_000_000.0
+        with patch("time.time", return_value=saturation_time):
+            limiter.lockouts["login:1.2.3.4"] = saturation_time + 1
+            limiter.lockouts["login:1.2.3.5"] = saturation_time + 1
+            limiter.lockouts["login:1.2.3.6"] = saturation_time + 1
+            limiter._last_eviction = saturation_time
+            # First call just records the request (filtered_requests starts
+            # empty); the second is the one that exceeds max_requests=1 and
+            # actually attempts — and fails — the insertion, establishing
+            # this scope's reject_until.
+            limiter.is_rate_limited(
+                "login:short-lockout-violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1,
+            )
+            limiter.is_rate_limited(
+                "login:short-lockout-violator",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1,
+            )
+            reject_until = limiter._saturation_reject_until["login"]
+
+        later = reject_until + 1
+        with patch("time.time", return_value=later):
+            limiter._last_eviction = later
+            # Same two-call shape: the second call is the one that exceeds
+            # its own limit and reaches the short-circuit under test.
+            limiter.is_rate_limited(
+                "login:new-violator-after-lapse",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+            is_limited, _ = limiter.is_rate_limited(
+                "login:new-violator-after-lapse",
+                max_requests=1,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+        assert is_limited is True
+        assert "login:new-violator-after-lapse" in limiter.lockouts
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded

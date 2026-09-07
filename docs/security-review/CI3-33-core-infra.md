@@ -5,7 +5,8 @@
 **Backend:** `app/core/security_middleware.py` (1,450 L → 1,672 L at PR
 #2368's merge after four Codex-caught follow-up rounds → 1,605 L after PR
 #2370's fixes plus its comment-chronology trim → 1,641 L after PR #2370's
-CI3-33-2c fix), `app/core/config.py` (1,041 L),
+CI3-33-2c fix → 1,657 L after PR #2370's CI3-33-2d fix), `app/core/config.py`
+(1,041 L),
 `app/core/database.py` (257 L). Cross-referenced (not modified):
 `app/services/auth_service.py`, `app/api/v1/endpoints/auth.py`,
 `app/models/user.py` — reached from a `config.py` dead-switch check, see
@@ -47,6 +48,16 @@ the "if a sixth round" trigger CI3-33-2a/2b's write-up set has been met,
 and the judgment call is made explicitly in CI3-33-2c's own write-up: the
 structural refactor is now recommended as the next piece of work on this
 file, not indefinitely deferred. See CI3-33-2c below and PR #2370.
+
+**Third post-merge addendum (2026-09-07, PR #2370):** review of PR #2370's
+CI3-33-2c commit found CI3-33-2d (P1) — CI3-33-2c's own scoping still let an
+already-saturated key's repeated retries each pay the full prune scan, since
+"the one call that needs an accurate answer" is not one call when the
+attacker controls the retry rate. Fixed by short-circuiting on the scope's
+own `_saturation_reject_until` once already established. Round seven on this
+class of code — exactly the confirmation CI3-33-2c's own write-up said a
+further round would be, not a new data point. See CI3-33-2d below and PR
+#2370.
 
 ---
 
@@ -744,6 +755,60 @@ be. If another round of this general shape is found before the refactor
 lands, that is no longer a data point to weigh; it is confirmation the call
 made here was right.
 
+### CI3-33-2d — P1 — CI3-33-2c's own scoping left an already-saturated key's retries each paying the full prune scan — ✅ FIXED (Codex review of PR #2370, round 7)
+
+**What:** CI3-33-2c correctly scoped the lockouts-only prune to only the one
+call that is itself about to attempt an insertion — but did not distinguish
+"the call that first discovers this scope is saturated" from "every later
+retry from the same already-rejected key." Once a key is over its own limit,
+`filtered_requests` never drops back below `max_requests` for it until its
+own request history ages out of `window_seconds`, so every retry re-enters
+the same insertion-attempt branch and repeats the full
+`O(_MAX_LOCKOUTS)` `_prune_expired_lockouts` scan — for as long as the
+attacker keeps retrying. The one call CI3-33-2c scoped the cost to is not
+one call at all when the caller controls the retry rate; it is exactly as
+many calls as the attacker chooses to make.
+
+**Where:** `backend/app/core/security_middleware.py`,
+`RateLimiter.is_rate_limited`, the insertion-attempt branch CI3-33-2c
+introduced.
+
+**Failure scenario:** `_MAX_LOCKOUTS=3`, table filled with 3 genuinely
+active lockouts. A single already-over-limit key retries 100 times against
+the same scope. Reproduced directly against the CI3-33-2c code: 99 of the
+100 retries (all but the one that already recorded its first, unlimited
+request) each independently ran the full prune scan — confirmed by counting
+calls to `_prune_expired_lockouts` directly, not merely observing the
+outcome.
+
+**Impact:** narrower than CI3-33-2c (one key, one scope, not every request
+sharing the process-wide limiter) but the same CPU-amplification shape, and
+fully attacker-controlled: the retry loop itself is the amplifier, with no
+rate limit of its own gating how often it can be paid.
+
+**Fix:** short-circuit on this scope's own `_saturation_reject_until` before
+attempting the prune or the capacity check at all. Once a call has already
+established the scope as saturated (`current_time < reject_until` for that
+scope), a later call within that window skips straight to extending the
+signal — the same outcome the scope's saturation-reject fallback already
+promised this key, so the short-circuit cannot make its protection any
+weaker. Verified the short-circuit does not outlive `reject_until`: once it
+lapses, the next call over its limit re-runs the accurate prune/capacity
+check rather than treating the scope as saturated forever (guard test).
+Reproduced and verified against the CI3-33-2c code (100 retries -> 1 prune
+call, all still rejected) before accepting.
+
+**On the structural refactor — round 7, and CI3-33-2c's own closing line
+has now happened.** CI3-33-2c said explicitly: "if another round of this
+general shape is found before the refactor lands, that is no longer a data
+point to weigh; it is confirmation the call made here was right." This is
+that round — a fix to the exact same insertion-attempt branch, found by
+reviewing the fix that preceded it, for the fourth time running (CI3-33-1d/
+1e, CI3-33-2a/2b, CI3-33-2c, now CI3-33-2d). The refactor recommendation in
+`docs/KNOWN_LIMITATIONS.md` is not changed further by this finding — it
+already reads "RECOMMENDED NEXT PRIORITY" — but this round is the
+confirmation that row anticipated, not a new data point weighing toward it.
+
 ### CI3-33-3 — HIGH — `REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere; every self-registered account is immediately active — FLAGGED
 
 **What:** `config.py:300` declares `REGISTRATION_REQUIRES_APPROVAL: bool =
@@ -1033,6 +1098,28 @@ assertions — the symptom it pins (a stale count must not cause a false
 saturation rejection) is unaffected by which mechanism closes it, and the
 test still passes unmodified against the CI3-33-2c code.
 
+**Added in PR #2370 round 3 (CI3-33-2d):**
+
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_saturated_scope_does_not_repeat_full_prune_scan_on_retry` (CI3-33-2d) —
+  the direct reproduction: a single already-over-limit key retries 100
+  times against a scope whose lockout table is at `_MAX_LOCKOUTS` with
+  genuinely active entries; only the first retry (the one establishing
+  saturation) should pay the prune scan. Verified to **fail** against the
+  CI3-33-2c code (99 of 100 retries each independently ran the scan,
+  confirmed by counting calls to `_prune_expired_lockouts` directly) and
+  **pass** after the fix (1 of 100).
+- `tests/test_security_middleware.py::TestRateLimiter::
+test_saturation_short_circuit_re_checks_capacity_once_reject_until_lapses`
+  (CI3-33-2d companion guard) — once the scope's `reject_until` lapses and
+  capacity has genuinely freed up, a new violator's own lockout is
+  persisted again rather than the scope being treated as permanently
+  saturated; a non-regression guard, not a fail-before test in its own
+  right.
+
+Both reproduced standalone before being accepted, same discipline as every
+prior round.
+
 ## Completion gate
 
 The first table below reflects PR #2368's final (merged) state; the second
@@ -1060,7 +1147,18 @@ reflects PR #2370's state after its round-2 fix (CI3-33-2c):
 | Repo-tenancy guard suite (same 8 files as above)                           | ✅ 63 passed                                                                                     |
 | Full backend suite (`pytest tests/`)                                       | ✅ 11,734 passed, 21 skipped, 0 failed (was 11,732 after round 1; skips all pre-existing)        |
 
-No frontend file was touched in PR #2370 (either round), so the frontend
+**After PR #2370's round-3 fix (CI3-33-2d), the gate was re-run again:**
+
+| Check                                                                      | Result                                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `flake8 app/core/security_middleware.py tests/test_security_middleware.py` | ✅ 0 violations                                                                                  |
+| `black --check` (both files)                                               | ✅ clean                                                                                         |
+| `isort --check-only` (both files)                                          | ✅ clean                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                          | ✅ 435 revisions, single head `d3f8b6a24c91`, unchanged — no schema change                       |
+| Scoped tests (same 7 files as above)                                       | ✅ 188 passed (was 186 after round 2; +2 for CI3-33-2d — `TestRateLimiter` now 35 tests, was 33) |
+| Full backend suite (`pytest tests/`)                                       | ✅ 11,736 passed, 21 skipped, 0 failed (was 11,734 after round 2; skips all pre-existing)        |
+
+No frontend file was touched in PR #2370 (any round), so the frontend
 checks below (last run at PR #2368's merge) are unchanged and were not
 re-run:
 

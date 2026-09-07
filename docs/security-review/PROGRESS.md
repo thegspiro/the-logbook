@@ -32,13 +32,68 @@ three-dict sweep on every request once the lockout table merely reached
 capacity, a CPU-amplification DoS; fixed with a narrow, lockouts-only
 `_prune_expired_lockouts()` called only from the one request actually
 attempting an insertion, instead of forcing the shared sweep for every
-request that merely observes a full table. This is round 6 total on this
-class of code; the "sixth round" trigger set in round 5's write-up has been
-met, and the structural refactor is now recommended as the next piece of
-work on this file (not indefinitely deferred) — see
-`docs/KNOWN_LIMITATIONS.md`. Rotation row 33 -> ✅ (#2368 already merged;
-this is a follow-up fix, not new rotation work — see CLAUDE.md Pitfall #24
-on the fresh branch). Next once #2370 merges: 34 Frontend shared.
+request that merely observes a full table. Round 3 (Codex reviewed round
+2's own commit): CI3-33-2d P1 — CI3-33-2c's own scoping still let an
+already-saturated key's repeated retries each pay the full prune scan,
+since a caller controlling its own retry rate makes "the one call that
+needs an accurate answer" mean as many calls as it chooses; fixed by
+short-circuiting on the scope's own `_saturation_reject_until` once already
+established, verified not to outlive `reject_until`. This is round 7 total
+on this class of code — exactly the confirmation round 6's write-up said a
+further round would be, not a new data point — and the structural refactor
+remains the recommended next piece of work on this file (not indefinitely
+deferred) — see `docs/KNOWN_LIMITATIONS.md`. Rotation row 33 -> ✅ (#2368
+already merged; this is a follow-up fix, not new rotation work — see
+CLAUDE.md Pitfall #24 on the fresh branch). Next once #2370 merges: 34
+Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3: Codex found CI3-33-2c's own fix still let an already-saturated key's retries repeat the full prune scan
+
+Codex reviewed PR #2370's round-2 commit (`0588634`) and found one more
+real P1 issue: CI3-33-2c's fix correctly scoped the lockouts-only prune to
+only the one call that is itself about to attempt an insertion — but did
+not distinguish "the call that first discovers this scope is saturated"
+from "every later retry from the same already-rejected key." Once a key is
+over its own limit, `filtered_requests` never drops back below
+`max_requests` for it until its own request history ages out of
+`window_seconds`, so every retry re-enters the same insertion-attempt
+branch and repeats the full `O(_MAX_LOCKOUTS)` prune scan for as long as
+the attacker keeps retrying — the retry loop itself became the amplifier.
+
+Reproduced directly before fixing: `_MAX_LOCKOUTS=3` with 3 genuinely
+active lockouts, then a single already-over-limit key retries 100 times —
+99 of the 100 retries (all but the one establishing saturation) each
+independently ran the full prune scan under the CI3-33-2c code, confirmed
+by counting calls to `_prune_expired_lockouts` directly.
+
+Fixed by short-circuiting on this scope's own `_saturation_reject_until`
+before attempting the prune or the capacity check: once a call has already
+established the scope as saturated, a later call within that window skips
+straight to extending the signal — the same outcome the scope's fallback
+already promised this key, so this cannot make its protection any weaker.
+Verified: 100 retries now trigger only 1 prune call (down from 99), all
+still rejected; a companion guard confirms the short-circuit does not
+outlive `reject_until` — once it lapses, the next call over its limit
+re-runs the accurate check and a new violator's lockout persists again.
+
+2 new regression tests (`TestRateLimiter` now 35, was 33): the direct
+reproduction (verified to fail against the CI3-33-2c code and pass after)
+and the reject_until-lapse companion guard (non-regression). Completion
+gate re-run: flake8/black/isort clean; migrations validated (unchanged);
+scoped 188/188 (was 186); full backend suite 11,736/0 (was 11,734). No
+frontend file touched. Pushed to the same `#2370` branch as a third commit.
+Replied to and resolved the Codex thread.
+
+**On the structural refactor:** round 6's write-up said explicitly that a
+further round of this general shape would be confirmation, not a new data
+point to weigh — round 7 is that confirmation. The recommendation is
+unchanged (the refactor is the next piece of work on this file) but is now
+stated with a fourth consecutive round in the exact same insertion-attempt
+code path behind it. Findings doc (CI3-33-2d write-up) and
+`docs/KNOWN_LIMITATIONS.md` (row text updated to record round 7) both
+updated.
 
 ---
 
