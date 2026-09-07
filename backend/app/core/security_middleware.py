@@ -41,6 +41,28 @@ class RateLimiter:
     # Maximum number of tracked keys before forced eviction
     _MAX_KEYS = 10_000
 
+    # Independent cap on self.lockouts (CI3-33-1b/1c, Codex review of PR
+    # #2368). CI3-33-1 stopped the requests-eviction loop from also popping
+    # active lockouts (an active lockout must not be lifted early just
+    # because its matching request-history entry ranked oldest in an
+    # unrelated sweep). That was the *only* thing that had ever bounded
+    # self.lockouts' size — capped purely as a side effect of piggybacking
+    # on self.requests' eviction. Decoupled, self.lockouts has no cap of its
+    # own: a sustained flood of distinct keys each tripping the lockout
+    # (e.g. during a Redis outage, this limiter's exact fallback window) can
+    # grow it unboundedly for the full lockout duration — a
+    # memory-exhaustion DoS, the shape CLAUDE.md Pitfall #9 exists to
+    # prevent.
+    #
+    # Enforced at *insertion* time in is_rate_limited (CI3-33-1c), not by
+    # evicting existing entries: CI3-33-1b's first attempt evicted by
+    # soonest-expiry when over this cap, which is itself unsafe — it can
+    # silently release an unrelated, still-active victim's lockout early,
+    # the exact failure class CI3-33-1 exists to prevent. See the "not
+    # evicted by size" comment in _evict_stale and the insertion-site
+    # comment in is_rate_limited for the corrected design.
+    _MAX_LOCKOUTS = 10_000
+
     # Minimum interval between eviction scans (seconds)
     _EVICTION_INTERVAL = 60
 
@@ -54,6 +76,20 @@ class RateLimiter:
         # own window, not whichever call happened to trigger the sweep.
         self._key_windows: dict[str, int] = {}
         self._last_eviction: float = 0.0
+        # Bounded, O(1) fail-closed signal (CI3-33-1e, Codex-caught
+        # correction of CI3-33-1c). CI3-33-1c stopped persisting a lockout
+        # at all once self.lockouts is saturated — correct as far as it
+        # went (an existing active lockout is never displaced), but it left
+        # a saturated-table violator with *no* memory of the violation
+        # beyond self.requests' own window_seconds, materially weaker than
+        # the lockout_seconds they were told about ("Account locked for 30
+        # minutes" followed by unlimited access again ~60-120s later).
+        # Extended to the latest lockout_seconds any saturated insertion
+        # would have used, this lets is_rate_limited fail closed for keys
+        # it has no other record of at all — see its use there — without
+        # needing per-key state of its own, so it cannot itself be a source
+        # of unbounded growth.
+        self._saturation_reject_until: float = 0.0
 
     def _evict_stale(self, now: float, window_seconds: int) -> None:
         """Remove entries that have no recent requests and expired lockouts.
@@ -67,8 +103,18 @@ class RateLimiter:
         growth under DDoS with many unique source IPs).
         """
         # Only run eviction at most once per _EVICTION_INTERVAL to avoid overhead,
-        # unless the key count exceeds the safety limit.
-        over_limit = len(self.requests) > self._MAX_KEYS
+        # unless any tracked dict exceeds its own safety limit (CI3-33-1b:
+        # self.lockouts is capped independently of self.requests now, so an
+        # over-cap lockouts dict must force an immediate sweep too, not wait
+        # up to _EVICTION_INTERVAL while it keeps growing. CI3-33-1d:
+        # self._key_windows can grow past _MAX_KEYS even while self.requests
+        # stays small — see the orphan cleanup below — so it needs the same
+        # urgency trigger).
+        over_limit = (
+            len(self.requests) > self._MAX_KEYS
+            or len(self.lockouts) > self._MAX_LOCKOUTS
+            or len(self._key_windows) > self._MAX_KEYS
+        )
         if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
             return
         self._last_eviction = now
@@ -100,8 +146,74 @@ class RateLimiter:
             to_remove = len(self.requests) - self._MAX_KEYS
             for key, _ in by_recency[:to_remove]:
                 del self.requests[key]
-                self.lockouts.pop(key, None)
+                # Deliberately NOT popping self.lockouts[key] here (CI3-33-1).
+                # Anything still in self.lockouts at this point is an active
+                # lockout — expired ones were already removed by the sweep
+                # above — and evicting the *request-history* entry has no
+                # observable effect on a locked-out key: is_rate_limited()
+                # returns on the lockout check before ever touching
+                # self.requests. Popping the lockout too had one effect: it
+                # silently ended an active lockout early whenever that key's
+                # last request happened to rank oldest among an over-cap
+                # tracker, regardless of which key's call triggered this
+                # sweep — letting a locked-out attacker back in ahead of
+                # schedule via unrelated traffic.
                 self._key_windows.pop(key, None)
+
+        # self.lockouts is intentionally NOT evicted by size here (CI3-33-1c,
+        # Codex-caught — a correction of CI3-33-1b's own attempt below).
+        #
+        # CI3-33-1b's first cut at bounding self.lockouts evicted the
+        # soonest-to-expire entries once over _MAX_LOCKOUTS. That protected
+        # the *calling* key's own lockout (via the read-before-evict capture
+        # in is_rate_limited) but not anyone else's: an unrelated key's own
+        # over-cap call could still pick a genuinely different, currently
+        # locked-out victim's entry for eviction — silently releasing an
+        # active lockout early, the identical failure class CI3-33-1
+        # started this whole chain by fixing, just requiring _MAX_LOCKOUTS
+        # scale instead of _MAX_KEYS scale to reach. Reproduced: with
+        # self.requests[victim] also evicted by the unrelated _MAX_KEYS
+        # sweep in the same call, victim's very next request came back
+        # (False, None) — not rate limited, mid-lockout.
+        #
+        # An active lockout is a security *decision* already made, not a
+        # soft activity cache like self.requests — losing it early is a
+        # materially worse failure than losing a few seconds of request
+        # history, so it is never evicted here for size, only for having
+        # genuinely expired (the sweep above, which is always safe: an
+        # expired entry reads identically to one this method would also
+        # treat as "not locked out"). The cap is enforced at *insertion*
+        # time instead, in is_rate_limited — see the comment there.
+
+        # Remove self._key_windows entries orphaned by self.requests no
+        # longer holding the key (CI3-33-1d, Codex-caught). is_rate_limited()
+        # sets self._key_windows[key] on *every* call for that key,
+        # including a call made purely to retry against an already-active
+        # lockout — which never writes self.requests[key] (the method
+        # returns early on the lockout check, before that write). Neither
+        # existing cleanup path notices this: the stale-keys sweep above and
+        # the forced _MAX_KEYS eviction both pop self._key_windows[k] only
+        # as a *side effect* of popping self.requests[k], so a key that is
+        # only ever locked out — never separately over its own request
+        # count — leaves a permanent self._key_windows entry the moment it
+        # stops calling, with nothing to ever evict it. Confirmed by direct
+        # reproduction: 2,000 distinct keys, each already locked out, each
+        # making one retry call, left self.requests at 0 entries but
+        # self._key_windows at 2,000 — fully unbounded by _MAX_KEYS.
+        #
+        # The condition is keyed on self.requests alone, not self.lockouts:
+        # self._key_windows is read in exactly one place (the stale_keys
+        # comprehension above), which only ever looks a value up for a key
+        # that is *currently in self.requests* — a key present only in
+        # self.lockouts never has its window consulted at all, so keeping
+        # the entry around for that reason serves nothing. Unlike
+        # self.lockouts, a self._key_windows entry is not a security
+        # decision, only a fallback for judging self.requests[k]'s own
+        # staleness, so it is safe to drop the instant self.requests no
+        # longer needs it, regardless of self.lockouts or recency.
+        orphaned_windows = [k for k in self._key_windows if k not in self.requests]
+        for k in orphaned_windows:
+            del self._key_windows[k]
 
     def is_rate_limited(
         self,
@@ -129,17 +241,67 @@ class RateLimiter:
         # staleness against the wrong duration.
         self._key_windows[key] = window_seconds
 
+        # Read this call's own request history *before* eviction runs
+        # (CI3-33-2). _evict_stale's forced MAX_KEYS eviction ranks every
+        # tracked key by its last recorded activity and can remove the
+        # globally-oldest entries — which can include this exact key if it
+        # hasn't been as recently active as a flood of *other* keys, even
+        # though it is still well within its own window (e.g. a 3600s
+        # data_export key sitting next to thousands of 60s login keys).
+        # Capturing the history first, and writing the filtered result back
+        # explicitly below, means this call's own count is never silently
+        # reset to zero by its own eviction pass — the identical
+        # read-before-write-after-evict shape already fixed across
+        # app/services/security_monitoring.py's trackers.
+        existing_requests = self.requests.get(key, [])
+
+        # Read this key's own lockout state *before* eviction runs too
+        # (CI3-33-1f, Codex-caught correction of CI3-33-1c's own comment
+        # here). Originally added under CI3-33-1b to protect this exact
+        # key's still-active lockout from _evict_stale's by-expiry cap
+        # eviction — but CI3-33-1c removed that eviction path entirely, so
+        # an *active* lockout can no longer disappear during this
+        # synchronous call, and the write-back that used to "restore it in
+        # case eviction removed it" was dead code once that happened
+        # (verified: the only remaining self.lockouts mutation in
+        # _evict_stale is the expired-lockouts sweep, which by construction
+        # can never remove an entry this check is about to find
+        # unexpired). The capture is still needed for a different reason:
+        # _evict_stale's expired-lockouts sweep can independently clean up
+        # this exact key's entry between calls — the periodic sweep, or
+        # another key's call, may beat this one to noticing the expiry —
+        # and reading self.lockouts.get(key) only *after* eviction would
+        # silently skip the request-history reset below whenever the sweep
+        # won that race, since the entry would already be gone by the time
+        # this method looked.
+        existing_lockout_expiry = self.lockouts.get(key)
+
         # Periodic eviction to bound memory usage
         self._evict_stale(current_time, window_seconds)
 
-        # Check if currently locked out
-        if key in self.lockouts:
-            if current_time < self.lockouts[key]:
-                remaining = int(self.lockouts[key] - current_time)
+        # Restore this key's window metadata if the forced MAX_KEYS eviction
+        # above just popped it (CI3-33-1a, Codex review of PR #2368): the
+        # assignment above ran *before* _evict_stale, so it was visible to
+        # (and could be undone by) that same eviction pass. Without this, a
+        # later sweep triggered by a different, shorter-window scope would
+        # fall back to judging this key's staleness against the wrong
+        # window — CI2-33-2's exact bug, reintroduced by omission.
+        self._key_windows[key] = window_seconds
+
+        # Check if currently locked out — using the pre-eviction value
+        # captured above (see comment there), not self.lockouts[key], which
+        # the new _MAX_LOCKOUTS eviction inside _evict_stale could have just
+        # removed for this exact key despite it still being active.
+        if existing_lockout_expiry is not None:
+            if current_time < existing_lockout_expiry:
+                # Still locked out. (No write-back needed here — see the
+                # capture comment above: _evict_stale can no longer have
+                # removed this entry, since it is still unexpired.)
+                remaining = int(existing_lockout_expiry - current_time)
                 return True, f"Account locked. Try again in {remaining} seconds"
             else:
                 # Lockout expired
-                del self.lockouts[key]
+                self.lockouts.pop(key, None)
                 # Only reset history for a lockout that actually cooled
                 # something down (Codex, PR #2106). A caller with
                 # lockout_seconds=0 — public_rate_limit's in-memory fallback,
@@ -155,26 +317,86 @@ class RateLimiter:
                 # older than window_seconds by the time it expires, so the
                 # window filter below would drop them regardless.
                 if lockout_seconds > 0:
+                    existing_requests = []
                     self.requests.pop(key, None)
 
-        # Clean old requests outside window
-        self.requests[key] = [
+        # Clean old requests outside window, using the pre-eviction history
+        # captured above rather than re-reading self.requests[key] (which
+        # _evict_stale's forced eviction may have just deleted for this
+        # exact key).
+        filtered_requests = [
             req_time
-            for req_time in self.requests[key]
+            for req_time in existing_requests
             if current_time - req_time < window_seconds
         ]
 
         # Check rate limit
-        if len(self.requests[key]) >= max_requests:
-            # Too many requests - apply lockout
-            self.lockouts[key] = current_time + lockout_seconds
+        if len(filtered_requests) >= max_requests:
+            # Too many requests - apply lockout, capped at insertion time
+            # rather than by evicting an existing entry (CI3-33-1c,
+            # Codex-caught correction of CI3-33-1b). By this point `key` is
+            # guaranteed not to already hold an unexpired lockout — the
+            # branch above already returned early if it did, and popped it
+            # if it had merely expired — so this is always a *new* entry.
+            # Once self.lockouts is genuinely saturated with active
+            # lockouts, fail closed: don't persist the new one rather than
+            # bumping an existing, still-active one out early to make room.
+            # This request is rejected either way — the count-based check
+            # just above already decided that on its own, independent of
+            # whether the lockout gets remembered — and every subsequent
+            # request from this same key keeps failing that same
+            # count-based check for as long as its request history survives
+            # (a materially weaker, but still real, fallback), rather than
+            # this call silently costing some *other*, unrelated victim
+            # their still-active lockout.
+            if len(self.lockouts) < self._MAX_LOCKOUTS:
+                self.lockouts[key] = current_time + lockout_seconds
+            else:
+                # Saturated: this violator's own lockout can't be
+                # persisted (CI3-33-1e, Codex-caught correction of
+                # CI3-33-1c). Extend the shared saturation-reject signal so
+                # a *later* call from this same key — after self.requests'
+                # own window_seconds has naturally cleared it, and even if
+                # an unrelated key's _MAX_KEYS sweep evicts this key's
+                # request-history entry entirely in the meantime — still
+                # fails closed instead of silently sailing through with
+                # the sliding window's much shorter protection. See the
+                # check below, in the allowed branch, and the field's own
+                # comment in __init__.
+                self._saturation_reject_until = max(
+                    self._saturation_reject_until, current_time + lockout_seconds
+                )
+            self.requests[key] = filtered_requests
             return (
                 True,
                 f"Too many requests. Account locked for {lockout_seconds // 60} minutes",
             )
 
+        # Fail closed during an active saturation event (CI3-33-1e,
+        # Codex-caught correction of CI3-33-1c): this call is about to be
+        # allowed because filtered_requests shows nothing within window —
+        # but that is exactly indistinguishable from "a saturated-table
+        # violator whose earlier lockout couldn't be persisted, and whose
+        # last request has now aged out of window_seconds," the precise gap
+        # Codex demonstrated (a key told "Account locked for 30 minutes"
+        # sailing through again ~61s later). filtered_requests, not raw
+        # dict membership, is the right signal: a key with *any* live
+        # in-window history still gets ordinary treatment below, so this
+        # can only ever make a request stricter than it would otherwise be
+        # — never looser — and it costs nothing once
+        # self._saturation_reject_until has passed.
+        if not filtered_requests and current_time < self._saturation_reject_until:
+            # Deliberately does not write self.requests[key] here (unlike
+            # every other return path) — this is stateless by design, keyed
+            # only on the shared scalar, so it doesn't grow self.requests
+            # for an otherwise-untracked key precisely when the tracker is
+            # already under the memory pressure that triggered saturation.
+            remaining = int(self._saturation_reject_until - current_time)
+            return True, f"Account locked. Try again in {remaining} seconds"
+
         # Record this request
-        self.requests[key].append(current_time)
+        filtered_requests.append(current_time)
+        self.requests[key] = filtered_requests
 
         return False, None
 

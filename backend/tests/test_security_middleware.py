@@ -400,6 +400,406 @@ class TestRateLimiter:
         assert "data-export:1.2.3.4" not in limiter.requests
         assert "data-export:1.2.3.4" not in limiter._key_windows
 
+    @pytest.mark.unit
+    def test_a_calling_keys_own_history_survives_its_own_forced_eviction(self):
+        """CI3-33-2: the MAX_KEYS forced eviction in _evict_stale ranks every
+        tracked key by its *last recorded* request time, and previously ran
+        before this call's own read of self.requests[key] — so if this exact
+        key's last activity happened to be the globally-oldest among an
+        over-cap tracker (plausible for a long-window scope sitting next to
+        a flood of short-window ones), its own call could wipe its own
+        history right before reading it, undercounting the request and
+        silently granting extra allowance. The read must be captured before
+        eviction runs and the result written back explicitly afterward."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # "target" already has 2 prior requests but is the globally-oldest
+        # tracked key (its own window is long enough that it isn't stale).
+        limiter.requests["target"] = [now - 50, now - 49]
+        limiter._key_windows["target"] = 200
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+
+        # 3rd request (2 prior + this) is still within a cap of 3 — allowed,
+        # but the history must be preserved, not reset to just this one call.
+        is_limited, _ = limiter.is_rate_limited(
+            "target", max_requests=3, window_seconds=200
+        )
+        assert is_limited is False
+        assert len(limiter.requests["target"]) == 3
+
+        # The 4th request must now be blocked — it would incorrectly be
+        # allowed if the 3rd call's own eviction pass had wiped its history.
+        is_limited2, _ = limiter.is_rate_limited(
+            "target", max_requests=3, window_seconds=200
+        )
+        assert is_limited2 is True
+
+    @pytest.mark.unit
+    def test_an_active_lockout_survives_a_forced_eviction_triggered_by_another_key(
+        self,
+    ):
+        """CI3-33-1: the MAX_KEYS forced eviction loop unconditionally popped
+        self.lockouts[key] for every key it evicted from self.requests,
+        purely by last-request-time recency — with no regard for whether
+        that lockout was still active, and regardless of which key's call
+        actually triggered the sweep. An attacker's lockout could therefore
+        be silently lifted early by unrelated traffic from other keys
+        pushing the tracker over _MAX_KEYS, well before the lockout's own
+        expiry. Evicting the request-history entry itself is harmless for a
+        locked-out key (is_rate_limited returns on the lockout check before
+        ever touching self.requests) — only the lockout dict entry matters,
+        and it must survive until it naturally expires."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # "attacker" is already locked out for a while longer, but its last
+        # recorded request (from before the lockout) is the globally-oldest
+        # entry in the tracker — lockouts don't touch self.requests.
+        limiter.requests["attacker"] = [now - 100]
+        limiter.lockouts["attacker"] = now + 1700
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+
+        # An unrelated key's call triggers the over-cap eviction sweep.
+        limiter.is_rate_limited("victim-check", max_requests=100, window_seconds=200)
+
+        assert "attacker" in limiter.lockouts
+        is_limited, reason = limiter.is_rate_limited(
+            "attacker", max_requests=5, window_seconds=60
+        )
+        assert is_limited is True
+        assert "locked" in (reason or "").lower()
+
+    @pytest.mark.unit
+    def test_a_calling_keys_own_window_metadata_survives_its_own_forced_eviction(
+        self,
+    ):
+        """CI3-33-1a (Codex review of PR #2368): CI3-33-2's fix restores a
+        forced-evicted key's *request history* by capturing it before
+        _evict_stale runs, but the forced-eviction loop also pops
+        self._key_windows[key] for the same evicted keys, and nothing
+        restored that. A key whose window metadata goes missing this way
+        gets judged, on the *next* sweep, against whichever window_seconds
+        happened to trigger that later sweep — CI2-33-2's exact bug,
+        reintroduced by omission. Reproduced in two steps: first, force
+        eviction during the key's own call (window metadata must survive
+        that call); second, an unrelated short-window call's later sweep
+        must not evict the key's still-within-its-own-long-window history."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        limiter.requests["target"] = [now - 50]
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+            limiter._key_windows[f"other-{i}"] = 60
+
+        # "target"'s own call, with a long (3600s) window, forces eviction
+        # (over _MAX_KEYS) — which pops _key_windows["target"] as a side
+        # effect unless restored.
+        limiter.is_rate_limited("target", max_requests=100, window_seconds=3600)
+        assert limiter._key_windows.get("target") == 3600
+
+        # Isolate the *individual staleness* mechanism (stale_keys, judged
+        # against _key_windows.get(k, window_seconds)) from the unrelated
+        # forced-by-recency eviction by raising the cap so the latter can't
+        # fire on the next sweep.
+        limiter._MAX_KEYS = 10_000
+        now2 = time.time()
+        # "target" quiet for 65s — stale under a 60s window, well within its
+        # real 3600s one.
+        limiter.requests["target"] = [now2 - 65]
+        limiter._last_eviction = 0.0
+        limiter.is_rate_limited("login:5.6.7.8", max_requests=100, window_seconds=60)
+
+        assert "target" in limiter.requests
+        assert len(limiter.requests["target"]) > 0
+
+    @pytest.mark.unit
+    def test_lockouts_are_capped_independently_of_requests(self):
+        """CI3-33-1b/1c (Codex review of PR #2368): CI3-33-1 stopped the
+        requests-eviction loop from also popping active lockouts, which
+        fixed the early-unlock bug — but that had been the *only* thing
+        bounding self.lockouts' size. Decoupled, self.lockouts has no cap of
+        its own: a flood of distinct keys each tripping the lockout (e.g.
+        during a Redis outage, this limiter's exact fallback window) grows
+        it unboundedly for the full lockout duration — CLAUDE.md Pitfall #9's
+        shape. Capped at insertion time by _MAX_LOCKOUTS (CI3-33-1c) — never
+        by evicting an existing entry, so the dict can never exceed the cap
+        even by one."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 100
+        limiter._MAX_LOCKOUTS = 100
+        limiter._EVICTION_INTERVAL = 0
+
+        for i in range(500):
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        assert len(limiter.lockouts) <= limiter._MAX_LOCKOUTS
+
+    @pytest.mark.unit
+    def test_an_already_persisted_lockout_is_never_evicted_once_saturated(self):
+        """CI3-33-1b: once self.lockouts reaches its cap, the FIRST attackers
+        to have been locked out (persisted before saturation) must keep
+        their lockouts for the rest of a sustained flood — the cap must bind
+        *new* insertions, never bump an existing active lockout to make
+        room."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 100
+        limiter._MAX_LOCKOUTS = 100
+        limiter._EVICTION_INTERVAL = 0
+
+        for i in range(500):
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                f"attacker-{i}", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        # The first 100 attackers were persisted before the table saturated
+        # — none of them should have been displaced by the 400 that came
+        # after.
+        assert all(f"attacker-{i}" in limiter.lockouts for i in range(100))
+
+    @pytest.mark.unit
+    def test_an_active_lockout_is_never_evicted_by_an_unrelated_keys_sweep(self):
+        """CI3-33-1c (Codex review of PR #2368, correcting CI3-33-1b's own
+        fix): CI3-33-1b's first attempt at bounding self.lockouts evicted
+        the soonest-to-expire entries once over _MAX_LOCKOUTS. That
+        protected the *calling* key's own lockout (via read-before-evict)
+        but not anyone else's — an unrelated key's own over-cap call could
+        still pick a genuinely different, currently locked-out victim's
+        entry for eviction, silently releasing an active lockout early
+        (the identical failure class CI3-33-1 started this chain by fixing,
+        just at _MAX_LOCKOUTS scale instead of _MAX_KEYS scale). Reproduced
+        by Codex: with self.requests[victim] also evicted by the unrelated
+        _MAX_KEYS sweep in the same call, victim's very next request came
+        back (False, None) — not rate limited, mid-lockout. An active
+        lockout must never be evicted for size, only for having genuinely
+        expired."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 3
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # "victim" is locked out and has request history, but is NOT the key
+        # making the triggering call below. Its lockout was, under the old
+        # (buggy) by-expiry policy, the first eviction candidate.
+        limiter.requests["victim"] = [now - 100]
+        limiter.lockouts["victim"] = now + 5
+        for i in range(4):
+            limiter.requests[f"other-{i}"] = [now - 10 + i]
+            limiter.lockouts[f"other-{i}"] = now + 1000 + i
+
+        # An unrelated key's call triggers the over-cap sweep on both dicts.
+        limiter.is_rate_limited("trigger-key", max_requests=100, window_seconds=60)
+
+        assert "victim" in limiter.lockouts
+
+        is_limited, reason = limiter.is_rate_limited(
+            "victim", max_requests=5, window_seconds=60, lockout_seconds=1800
+        )
+        assert is_limited is True
+        assert "locked" in (reason or "").lower()
+
+    @pytest.mark.unit
+    def test_a_saturated_lockout_table_fails_closed_without_evicting_anyone(self):
+        """CI3-33-1c: once self.lockouts is genuinely at capacity with
+        active entries, a *new* key that trips the limit is still rejected
+        this call (the count-based check already decided that on its own
+        merits) but its lockout is simply not persisted — the existing
+        entries are left completely untouched rather than one being bumped
+        to make room."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        limiter.lockouts["existing-1"] = now + 1000
+        limiter.lockouts["existing-2"] = now + 1000
+        limiter.lockouts["existing-3"] = now + 1000
+
+        # First call for "new-violator" is allowed (establishes 1 request in
+        # its window); the second exceeds max_requests=1 and should trip a
+        # lockout it can't persist, since the table is already saturated.
+        limiter.is_rate_limited(
+            "new-violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+        )
+        is_limited, reason = limiter.is_rate_limited(
+            "new-violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+        )
+
+        # Rejected this call regardless of whether the lockout could be
+        # persisted.
+        assert is_limited is True
+        # But the table is untouched — no existing lockout was evicted, and
+        # the new one was not force-inserted over the cap.
+        assert set(limiter.lockouts.keys()) == {
+            "existing-1",
+            "existing-2",
+            "existing-3",
+        }
+        assert "new-violator" not in limiter.lockouts
+
+    @pytest.mark.unit
+    def test_key_windows_does_not_grow_unbounded_from_locked_out_retries(self):
+        """CI3-33-1d (Codex-caught, round 3): is_rate_limited() sets
+        self._key_windows[key] on *every* call, including a call that only
+        retries against an already-active lockout — which never writes
+        self.requests[key] (the method returns early on the lockout check).
+        Neither existing cleanup path notices this: the stale-keys sweep and
+        the forced _MAX_KEYS eviction both pop self._key_windows[k] only as
+        a side effect of popping self.requests[k]. A key that is only ever
+        locked out, never separately over its own request count, therefore
+        left a permanent self._key_windows entry with nothing to evict it —
+        fully unbounded by _MAX_KEYS despite self.requests and self.lockouts
+        both being capped."""
+        limiter = RateLimiter()
+        limiter._MAX_KEYS = 50
+        limiter._MAX_LOCKOUTS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        for i in range(2000):
+            key = f"attacker-{i}"
+            limiter.lockouts[key] = now + 1800
+            limiter.is_rate_limited(
+                key, max_requests=5, window_seconds=60, lockout_seconds=1800
+            )
+
+        assert len(limiter.requests) == 0
+        assert len(limiter._key_windows) <= limiter._MAX_KEYS
+
+    @pytest.mark.unit
+    def test_a_saturated_table_violator_stays_rejected_past_its_own_window(self):
+        """CI3-33-1e (Codex-caught, round 3): CI3-33-1c correctly stopped
+        persisting a lockout once self.lockouts is saturated, but left the
+        violator with *no* memory of the violation beyond self.requests' own
+        (much shorter) window_seconds — so a retry after the sliding window
+        naturally clears, but long before lockout_seconds has elapsed,
+        sailed through unlimited despite having just been told "Account
+        locked for 30 minutes". Reproduced exactly as Codex described: with
+        the lockouts table saturated, a violator's retry 61 seconds after a
+        60-second window returned (False, None)."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            limiter.lockouts["existing-1"] = now + 1000
+            limiter.lockouts["existing-2"] = now + 1000
+            limiter.lockouts["existing-3"] = now + 1000
+            limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+        assert "violator" not in limiter.lockouts  # table was saturated
+
+        with patch("time.time", return_value=now + 61):
+            is_limited, reason = limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+
+        assert is_limited is True
+        assert "locked" in (reason or "").lower()
+
+    @pytest.mark.unit
+    def test_saturation_fail_closed_does_not_affect_a_key_with_live_history(self):
+        """CI3-33-1e: the saturation-reject signal must never intercept a
+        key that has genuine, current in-window request history — only a
+        key that would otherwise look like a fresh, no-evidence request
+        (filtered_requests empty). Established with live history *before*
+        saturation is triggered, then checked again while saturation is
+        still active."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            limiter.lockouts["existing-1"] = now + 1000
+            limiter.lockouts["existing-2"] = now + 1000
+            limiter.lockouts["existing-3"] = now + 1000
+            # legit-user establishes live history before any saturation
+            # event has happened at all.
+            limiter.is_rate_limited(
+                "legit-user", max_requests=5, window_seconds=60, lockout_seconds=1800
+            )
+            # A violator trips saturation.
+            limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            assert limiter._saturation_reject_until > now
+
+            # legit-user's second call, still comfortably within its own
+            # 60s window, in the same instant saturation became active.
+            is_limited, reason = limiter.is_rate_limited(
+                "legit-user",
+                max_requests=5,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+        assert is_limited is False
+        assert reason is None
+
+    @pytest.mark.unit
+    def test_saturation_fail_closed_decays_once_the_window_passes(self):
+        """CI3-33-1e: the saturation-reject signal must not linger forever
+        — once self._saturation_reject_until has passed, a key with no
+        history is treated as an ordinary fresh request again."""
+        limiter = RateLimiter()
+        limiter._MAX_LOCKOUTS = 3
+        limiter._MAX_KEYS = 10_000
+        limiter._EVICTION_INTERVAL = 0
+
+        now = 1_000_000.0
+        with patch("time.time", return_value=now):
+            limiter.lockouts["existing-1"] = now + 1000
+            limiter.lockouts["existing-2"] = now + 1000
+            limiter.lockouts["existing-3"] = now + 1000
+            limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            limiter.is_rate_limited(
+                "violator", max_requests=1, window_seconds=60, lockout_seconds=1800
+            )
+            saturation_until = limiter._saturation_reject_until
+
+        with patch("time.time", return_value=saturation_until + 1):
+            is_limited, reason = limiter.is_rate_limited(
+                "brand-new-key",
+                max_requests=5,
+                window_seconds=60,
+                lockout_seconds=1800,
+            )
+
+        assert is_limited is False
+        assert reason is None
+
 
 # ---------------------------------------------------------------------------
 # daily_cap_exceeded
