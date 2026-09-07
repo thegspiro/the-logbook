@@ -11012,16 +11012,22 @@ review performed this iteration.
 Between that prior entry and this one, PR
 [#2381](https://github.com/thegspiro/the-logbook/pull/2381) ("Fix two
 data-leakage findings: separation reports, response cache") merged
-directly (human-merged, `thegspiro`, `9926c404`) without ever appearing in
-this tracker's **Open PR** row — it was run as a standalone review, not a
-rotation iteration, so it never got a row here to clear. It is exactly
-Feature 00's shape (whole-codebase data-leakage sweep) and its finding is
-already recorded as **XC-4** in `docs/module-audit/CROSS-CUTTING.md`
-(property-return reports filed into an organization-visible folder;
-10 member-PII endpoints missing from `UNCACHEABLE_PREFIXES`/
-`UNCACHEABLE_SUBSTRINGS`, now closed with a ratchet test,
-`test_api_cache_pii_exclusions.py`). Pass 4's Feature 00 iteration should
-treat XC-4 as already-fixed prior art rather than rediscovering it.
+directly (human-merged, `thegspiro`, merge commit `85cfc6a9`) without ever
+appearing in this tracker's **Open PR** row — it was run as a standalone
+review, not a rotation iteration, so it never got a row here to clear. It
+is exactly Feature 00's shape (whole-codebase data-leakage sweep) and
+fixed two distinct findings, only one of which has a module-audit entry:
+
+- Property-return reports filed into an organization-visible folder —
+  recorded as **XC-4** in `docs/module-audit/CROSS-CUTTING.md`.
+- Ten member-PII endpoints missing from `UNCACHEABLE_PREFIXES`/
+  `UNCACHEABLE_SUBSTRINGS` in `frontend/src/utils/apiCache.ts` — fixed and
+  now guarded by a ratchet test, `backend/tests/test_api_cache_pii_exclusions.py`,
+  but **not** covered by XC-4 or any other cross-cutting entry.
+
+Pass 4's Feature 00 iteration should treat both as already-fixed prior art
+rather than rediscovering them — the cache fix by reading the ratchet
+test's baseline, not by way of XC-4.
 
 ### 2026-09-07 — Feature 34 (Frontend shared, pass 5, corrective) — PR #2382 merged, watchdog recorded it
 
