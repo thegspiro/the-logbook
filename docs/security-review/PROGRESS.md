@@ -11037,18 +11037,13 @@ fixed two distinct findings, only one of which has a module-audit entry:
   denylist, not a raw pattern match — newly exclude **18 routes**. Every
   one of the 18 was individually traced to its frontend caller: **10 are
   genuine fixes** to a route actually held in the shared cache; **8 are
-  no-ops** that closed nothing today (4 requested through the apparatus
-  module's own uncached `createApiClient()` instance, 4 more with a
-  wrapper on the cached client but zero call sites anywhere in the
-  frontend). Of the 10 genuine fixes, only 4 (`/inventory/reorder-requests`,
-  `/inventory/return-requests`, `/inventory/write-offs`,
-  `/operational-ranks/validate`) are protected by the new ratchet test,
-  `backend/tests/test_api_cache_pii_exclusions.py`; the other 6 are fixed
-  but would cache again silently if their exclusion were ever removed,
-  since neither the ratchet nor its (intentionally empty)
-  `api_cache_pii_baseline.txt` names them. Full per-route breakdown (which
-  10, which 8, and why) is in `SEC-00-cross-cutting-baseline.md` — read
-  that rather than re-deriving this from the `apiCache.ts` diff.
+  no-ops** that closed nothing today (4 apparatus routes on an uncached
+  client, 2 routes with no frontend wrapper at all, 2 wrappers on the
+  cached client with zero call sites). Ratchet-test coverage does not line
+  up with that split — some no-ops are ratchet-protected and some genuine
+  fixes are not. Full per-route table, exact ratchet breakdown, and
+  pass-4 priorities are in `SEC-00-cross-cutting-baseline.md` — read that
+  rather than re-deriving any of this from the `apiCache.ts` diff.
 
 Pass 4's Feature 00 iteration should treat both as already-fixed prior
 art rather than rediscovering them — and should still sweep code that

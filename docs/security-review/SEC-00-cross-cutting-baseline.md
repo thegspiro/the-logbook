@@ -46,40 +46,59 @@ Two findings, both fixed:
      still have zero call sites — the wrapper itself was never cached
      because nothing invokes it.
 
-   | Outcome                                                            | Count  | Routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-   | ------------------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | **Genuine fix** — real call site through the cached `apiClient.ts` | **10** | `/inventory/allowances/check/{user_id}/{category_id}` (`checkAllowance`), `/inventory/clearances` (`getClearances`), `/inventory/items/{item_id}/exposures` (`getExposureRecords`), `/inventory/items/{item_id}/history` (`getItemHistory`), `/inventory/items/{item_id}/issuances` (`getItemIssuances`), `/inventory/requests` (`getEquipmentRequests`), `/inventory/reorder-requests` (`getReorderRequests`), `/inventory/return-requests` (`getReturnRequests`), `/inventory/write-offs` (`getWriteOffRequests`), `/operational-ranks/validate` (`validateRanks`) |
-   | No-op — apparatus module's uncached `createApiClient()`            | **4**  | `/apparatus/operators`, `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`, `/apparatus/evoc-check/{apparatus_id}/{user_id}`                                                                                                                                                                                                                                                                                                                                                                                                                   |
-   | No-op — wrapper exists on the cached client, zero call sites       | **4**  | `/inventory/clearances/{clearance_id}` (no caller at all), `/inventory/reorder-requests/{request_id}` (`getReorderRequest` — declared, never called; only plural `getReorderRequests` is), `/roles/{role_id:uuid}/users` (no caller at all), `/training/instructors/validate/{user_id}/{course_id}` (`validateInstructor` — declared, never called)                                                                                                                                                                                                                  |
+   | Outcome                                                              | Count  | Routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+   | -------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | **Genuine fix** — real call site through the cached `apiClient.ts`   | **10** | `/inventory/allowances/check/{user_id}/{category_id}` (`checkAllowance`), `/inventory/clearances` (`getDepartureClearances`), `/inventory/items/{item_id}/exposures` (`getExposureRecords`), `/inventory/items/{item_id}/history` (`getItemHistory`), `/inventory/items/{item_id}/issuances` (`getItemIssuances`), `/inventory/requests` (`getEquipmentRequests`), `/inventory/reorder-requests` (`getReorderRequests`), `/inventory/return-requests` (`getReturnRequests`), `/inventory/write-offs` (`getWriteOffRequests`), `/operational-ranks/validate` (`validateRanks`) |
+   | No-op — apparatus module's uncached `createApiClient()`              | **4**  | `/apparatus/operators`, `/apparatus/driver-exceptions`, `/apparatus/driver-exceptions/approvers`, `/apparatus/evoc-check/{apparatus_id}/{user_id}`                                                                                                                                                                                                                                                                                                                                                                                                                            |
+   | No-op — **no wrapper exists at all**, on any client                  | **2**  | `/inventory/clearances/{clearance_id}`, `/roles/{role_id:uuid}/users`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+   | No-op — wrapper exists on the cached client, but **zero call sites** | **2**  | `/inventory/reorder-requests/{request_id}` (`getReorderRequest` — declared, never called; only plural `getReorderRequests` is), `/training/instructors/validate/{user_id}/{course_id}` (`validateInstructor` — declared, never called)                                                                                                                                                                                                                                                                                                                                        |
 
    **10 genuine fixes, 8 no-ops.** The 8 no-ops still closed nothing today
    — but "no-op today" is not "safe to leave excluded without a guard": the
-   apparatus module could gain a cache interceptor, or a product feature
-   could start calling one of the four unused wrappers, and the exclusion
-   would then be doing real work with no test asserting it stays in place.
+   apparatus module could gain a cache interceptor, a wrapper could gain a
+   caller, or a wrapper could be written for one of the two currently
+   wrapper-less routes, and the exclusion would then be doing real work
+   with no test asserting it stays in place.
 
-   Of the 10 genuine fixes, only **4** — `/inventory/reorder-requests`,
+   **Ratchet coverage does not track the genuine-fix/no-op split** —
+   `test_api_cache_pii_exclusions.py` only checks `response_model` +
+   `PII_FIELDS`, which is blind to which axios client serves a route or
+   whether anything calls it. Of the 18, **9 are ratchet-protected**: 4 of
+   the 10 genuine fixes (`/inventory/reorder-requests`,
    `/inventory/return-requests`, `/inventory/write-offs`,
-   `/operational-ranks/validate` — have both a `response_model` and a
-   `PII_FIELDS`-matching field name, so only those 4 are protected by the
-   new ratchet test, `backend/tests/test_api_cache_pii_exclusions.py`. The
-   other **6** — `/inventory/allowances/check/{user_id}/{category_id}`,
-   `/inventory/clearances`, `/inventory/items/{item_id}/exposures`,
-   `/inventory/items/{item_id}/history`, `/inventory/items/{item_id}/issuances`,
-   `/inventory/requests` — are genuine fixes but are **not** covered by the
-   ratchet or by `api_cache_pii_baseline.txt` (which lists tolerated
-   exceptions, not fixed routes, and is intentionally empty): a future
-   regression on any of these 6 would not be caught automatically.
+   `/operational-ranks/validate`) and, incidentally, 5 of the 8 no-ops
+   (`/apparatus/operators`, `/apparatus/driver-exceptions`,
+   `/apparatus/driver-exceptions/approvers`,
+   `/inventory/reorder-requests/{request_id}`,
+   `/roles/{role_id:uuid}/users`). The **9 unratcheted** routes split into
+   two different priorities:
+
+   - **6 genuine fixes with no regression guard** — a real leak that would
+     reopen silently if its exclusion were ever removed:
+     `/inventory/allowances/check/{user_id}/{category_id}`,
+     `/inventory/clearances`, `/inventory/items/{item_id}/exposures`,
+     `/inventory/items/{item_id}/history`,
+     `/inventory/items/{item_id}/issuances`, `/inventory/requests`.
+   - **3 no-ops with no regression guard** — inert today, but nothing
+     would catch it if that stopped being true:
+     `/apparatus/evoc-check/{apparatus_id}/{user_id}`,
+     `/inventory/clearances/{clearance_id}`,
+     `/training/instructors/validate/{user_id}/{course_id}`.
+
+   Neither set is covered by `api_cache_pii_baseline.txt` either (it lists
+   tolerated exceptions, not fixed routes, and is intentionally empty).
 
 **Action for pass 4:** treat both as already-fixed prior art, but do not
 read this as limiting the sweep to re-verifying only these named routes —
 this file's whole-codebase sweeps re-run against whatever has landed
 _since_ PR #2381 too (see `PROGRESS.md`'s "35 iterations per full pass"
-note). At minimum: (a) re-verify the 9 unratcheted routes above are still
-excluded, since they have no automated regression guard, and (b) sweep
-any endpoint or module-service change landed after PR #2381 for the same
-two shapes (shared-container writes, cache-by-default exclusions) rather
-than assuming this list is exhaustive going forward.
+note). At minimum: (a) re-verify the 6 unratcheted genuine fixes above are
+still excluded, since a regression there is a real leak the ratchet
+cannot catch; (b) spot-check the 3 unratcheted no-ops haven't gained a
+caller or a cache interceptor, which is lower priority but not zero; and
+(c) sweep any endpoint or module-service change landed after PR #2381 for
+the same two shapes (shared-container writes, cache-by-default
+exclusions) rather than assuming this list is exhaustive going forward.
 
 ## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
 
