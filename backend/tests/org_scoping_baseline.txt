@@ -164,11 +164,6 @@ app/services/push_service.py::_subscribe_once::PushSubscription::peeked_id
 app/services/push_service.py::_subscribe_once::User::uid
 
 # Reviewed 2026-09-06: safe unless noted.
-#   - set_user_roles::User::user_id
-#     UNREACHABLE — no caller in app/, tests only. Unscoped throughout, and the role_ids are not org-checked either. See docs/ORG_SCOPING_SWEEP.md section 4c: not exploitable today, but it must be scoped or deleted before anything wires it up
-app/services/role_service.py::set_user_roles::User::user_id
-
-# Reviewed 2026-09-06: safe unless noted.
 #   - resolve_check_templates::Apparatus::apparatus_id
 #     caller passes shift.apparatus_id from an org-scoped shift, alongside the same organization_id
 #   - resolve_check_templates::ApparatusType::app_type_id
