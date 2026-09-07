@@ -35,6 +35,14 @@ unchanged. **0 fixes, 0 new findings.** Full findings:
 
 ---
 
+### 2026-09-07 — Feature 31 (Scheduled tasks) — PR #2362 merged, watchdog recorded it
+
+PR #2362 (pass 3: CRON3-31-1/2 fixed, all prior open items re-confirmed
+unchanged, full suite 11,642/0) merged; a 30-minute watchdog check recorded
+it and cleared the stale Open PR row. Next: 32 Locations & kiosk.
+
+---
+
 ### 2026-09-07 — Feature 31 (Scheduled tasks, pass 3)
 
 Feature 30's PR #2358 merged (`f0bda691`); a watchdog check (PR #2359,
