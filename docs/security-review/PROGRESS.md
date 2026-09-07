@@ -11020,9 +11020,21 @@ fixed two distinct findings, only one of which has a module-audit entry:
 
 - Property-return reports filed into an organization-visible folder —
   recorded as **XC-4** in `docs/module-audit/CROSS-CUTTING.md`.
-- Ten member-PII endpoints missing from `UNCACHEABLE_PREFIXES`/
-  `UNCACHEABLE_SUBSTRINGS` in `frontend/src/utils/apiCache.ts` — fixed and
-  now guarded by a ratchet test, `backend/tests/test_api_cache_pii_exclusions.py`,
+- Member-PII endpoints missing from `UNCACHEABLE_PREFIXES`/
+  `UNCACHEABLE_SUBSTRINGS` in `frontend/src/utils/apiCache.ts` — the PR
+  description says "ten," but the diff adds 15 patterns (11 prefixes, 4
+  substrings) and a naive URL-match count against those patterns comes to
+  18 registered GET routes, most of which are false positives once
+  actually checked against a response schema (e.g. `/equipment-checks/*/history`
+  and several `/users/*` routes match only the broad `/history` and
+  `/users` substrings and carry no member PII). Re-running the ratchet
+  test's own schema-based matcher against the before/after diff of
+  `apiCache.ts` finds 9 routes whose response schema newly matches
+  `PII_FIELDS` and is now excluded — close to but not exactly "ten," and
+  neither figure this entry could produce is fully reconciled with the
+  other. Rather than assert a specific count, read the `apiCache.ts` diff
+  in PR #2381 directly for the exact scope. Fixed and now guarded by a
+  ratchet test, `backend/tests/test_api_cache_pii_exclusions.py`,
   but **not** covered by XC-4 or any other cross-cutting entry.
 
 Pass 4's Feature 00 iteration should treat both as already-fixed prior art
