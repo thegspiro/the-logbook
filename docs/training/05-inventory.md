@@ -206,6 +206,9 @@ The **Items** tab lists all inventory items. You can:
 
 - **Search** by item name, serial number, or asset tag
 - **Filter** by category, status (available, assigned, checked out, in maintenance, lost, stolen, retired)
+- **Sort** any column by clicking its header
+- **Group by** Category, Item type, Colour, Size, Condition, Style, Location or Vendor _(2026-09-07)_ — rows collapse into labelled sections with true totals for the whole filtered set, not just the rows loaded so far
+- **Pin** an item to a personal shortlist _(2026-09-07)_ — the pin icon beside each row moves it into its own section above Available and Unavailable, reordered by dragging or the up/down arrows. Pins are per member (capped at 25) and default to none, so a member who has never pinned anything sees the same page as before
 
 Click on any item to open its edit form, where you can view and modify:
 

@@ -35,6 +35,96 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Recaptured 2026-09-07 — the inventory items list, after the grouping/pinning merge
+
+The previous entry's "no drift" verdict was true only because `origin/main`'s
+tip was exactly the branch's merge-base at that moment. A rebase since then
+pulled in 6 new `main` commits, the relevant one being
+`InventoryItemsPage.tsx`'s grouping/sorting/pinning rewrite (PRs behind "The
+items list can be grouped by category, colour or any other attribute" and "A
+quartermaster can front their own working set on the items list", both
+2026-09-07 in `CHANGELOG.md`) plus an unrelated `apiCache.ts` change (new
+`UNCACHEABLE_PREFIXES` entries — cache exclusions only, checked and confirmed
+to have no visible effect on any screenshot).
+
+**`audit_images.py --baseline` reported no new findings** before touching
+anything — only the pre-known 45-line scrollbar-gutter baseline. That check
+alone would have missed this: the drift here is new UI elements rendering
+correctly, not a pixel-level style regression, which is a different failure
+mode than what that script looks for.
+
+**Bootstrap hit a real inconsistency worth flagging, not fixing.**
+`bootstrap_demo.py`'s first run failed with a password-policy 400 after already
+staging the organization row. A second run then got a 403 "Onboarding has
+already been completed" from `POST /onboarding/start` — but
+`GET /onboarding/status` still reported `needs_onboarding: true`. The cause:
+`get_or_create_session` in `app/api/v1/onboarding.py` gates on "does any
+`organizations` row exist at all" (a stricter, independent check), while
+`/status` and `/start`'s own top check gate on the onboarding-steps tracker
+being complete. A partially-staged org from a failed run satisfies the first
+and not the second, and the session got wedged with no way forward through the
+API. Worked around by deleting the orphaned `organizations` /
+`onboarding_sessions` / `onboarding_status` rows directly (a disposable demo
+database, not a fix to anything used against a real one) and re-running
+bootstrap clean. Not fixed in application code per this job's scope — flagging
+it here in case another session hits the same wedge.
+
+**Capturing `--only 05-` surfaced a real false positive in the pipeline's own
+empty-state detector, not in the app.** `EMPTY_STATE`'s standalone-short-"No
+…"-line alternative (added for cases like "No certifications expiring within
+90 days") matched the new "Group by" control's default option text, "No
+grouping", literally rendered on the page by the closed `<select>`. Five shots
+that are fully populated —`05-01-inventory-items`, `05-02-inventory-dashboard`,
+`05-05-item-form-modal`, and both `05-53-*` — got flagged as empty and held
+back from every one of the last several capture attempts a person would have
+made against this branch. Fixed with a narrow, exact-match exception list in
+`capture.mjs` (`EMPTY_STATE_LINE_EXCEPTIONS`) rather than touching the
+regex itself, since the regex's existing behavior is right far more often than
+it is wrong. This is screenshot-pipeline tooling, not application code, so it
+was in scope to fix directly rather than only report.
+
+**Recaptured all of guide 05** (`--only 05-`, 58 of 60 manifest shots reached;
+the setup-workflow pair is captured separately by `inventory-setup.mjs` per the
+README). 44 images came out different from what was on disk. Looked at a
+representative sample by eye rather than trusting the exit codes alone — the
+main list (`05-01`), both `05-53` variants, the item detail page, and the
+equipment-kit edit modal — and all read correctly: the new "Group by" dropdown
+and a pin icon on every row are visible and match the CHANGELOG description,
+and the item-detail/kit-modal deltas are ordinary seed-data drift (a different
+"first" item resolved via `openFirstFromApi`, more maintenance history, fuller
+kit line items), not corruption. The remaining ~14 `05-*` shots came back
+byte-identical or were left alone as already-flagged empty states
+(`05-46-size-preferences`, a real "no preference recorded" state, unrelated to
+this pass).
+
+**Two pre-existing, unrelated shots still fail on this branch — not caused by
+the inventory rewrite, not fixed here.** `05-62-generate-variants` (a
+`.check()` timeout on the Add Item modal's size/style toggle) and
+`05-09-receive-stock-modal` (a `.click()` timeout) both failed identically
+before and after the `capture.mjs` fix above. Neither `ItemFormModal.tsx` nor
+`ReceiveStockModal.tsx` is touched by the 6 commits this session is
+investigating, and the on-disk images for both are untouched (git shows no
+diff) — they were left exactly as they were. Worth a look in a future session,
+but out of scope for this pass: the failure predates the change this session
+was sent to check.
+
+**Prose fix, not just images.** `05-inventory.md`'s "Browsing Items" section
+listed Search and Filter but had never mentioned Sort, and had no coverage at
+all of the new Group-by control or per-member pinning — both now visibly
+present in `05-01`'s picture. Added three bullets (Sort, Group by, Pin) dated
+`_(2026-09-07)_` in the same section, matching the guide's existing style for
+noting a specific-dated addition rather than rewriting the paragraph.
+
+**apiCache.ts checked and cleared.** The new `UNCACHEABLE_PREFIXES` /
+`UNCACHEABLE_SUBSTRINGS` entries only remove endpoints from the cache (stricter
+exclusion, never looser), so the only possible effect on a screenshot is
+fresher data, never staler — confirmed by reading the diff rather than by
+capturing every guide to check.
+
+**Not run:** the full `capture.mjs` (all guides). The diff pulled in by this
+rebase is scoped to `InventoryItemsPage.tsx` and `apiCache.ts`; nothing else
+touched a route, a style, or shared component that any other guide pictures.
+
 ## Audited 2026-09-07 — no drift, nothing recaptured
 
 Routine maintenance pass per the currency job's standing brief, not a
