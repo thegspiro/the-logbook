@@ -16,10 +16,76 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 32 (Locations & kiosk, pass 3)'s PR #2365 merged
-(`3ac9cd4a`) — fully green (17/17 checks), mergeable clean, Codex completed
-with no actionable findings. Rotation row 32 -> ✅. Next: 33 Core
-infrastructure.
+**#2368** — Feature 33 (Core infrastructure, pass 3): `claude/security-review-core-infra-pass3`.
+2 fixed (CI3-33-1/2, `RateLimiter`), 2 flagged (CI3-33-3 HIGH, CI3-33-4 LOW).
+Subscribed for activity. Rotation row 33 -> ✅ (pending merge). Next once
+merged: 34 Frontend shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368 opened
+
+Feature 32's PR #2365 had already merged and the rotation row was already
+cleared to ✅ by a prior watchdog check before this iteration began (see the
+entry immediately below). Re-verified all 17 prior findings from
+`CI-33-core-infra.md` (2026-08-31, PR #2106/#2107) and
+`CI2-33-core-infra.md` (2026-08-27, PR #1917) against current code, all
+still holding at (mostly unchanged) line numbers. Read `config.py` end to
+end for the first time in this rotation's own words — CI-33 pass 3 had
+explicitly scoped it to four spot-checked fix locations plus a `git diff`
+proof rather than a fresh full read.
+
+Found and fixed 2 new defects in `RateLimiter` — a bug class this rotation
+already spent five review rounds fixing in `app/services/security_
+monitoring.py`'s trackers (`SEC-00-cross-cutting-baseline.md`'s five-round
+tracker-cap saga), found here independently and never previously flagged in
+this file: **CI3-33-1** (the `_MAX_KEYS` forced-eviction sweep
+unconditionally popped `self.lockouts[key]` for every evicted key with no
+check for an active lockout, letting an attacker's lockout be silently
+lifted early by unrelated traffic once the shared in-memory fallback
+limiter exceeded 10,000 keys) and **CI3-33-2** (`is_rate_limited` read its
+own key's request history _after_ eviction ran, so a key's own triggering
+call could wipe its own history via its own eviction pass, undercounting
+the request). Both reproduced standalone with a throwaway script before
+being accepted as findings, both verified to fail against pre-fix code via
+`git stash`, and both covered by new regression tests in `TestRateLimiter`
+(scoped suite: 171 -> 173).
+
+Also found, via an exhaustive per-field reference sweep of every `config
+.py` setting, **CI3-33-3 (HIGH, flagged)**: `REGISTRATION_REQUIRES_
+APPROVAL` (default `True`) has no reader anywhere in the backend, and there
+is no mechanism it could be wired into — `UserStatus` has no
+pending/unapproved value, and `register_user()` unconditionally sets
+`status=UserStatus.ACTIVE` with `POST /auth/register` immediately issuing
+tokens and logging the caller in. Every self-registered account bypasses
+admin approval entirely, contradicting the setting's own doc comment and
+the endpoint's own docstring. `docs/app-review/auth-session.md` had a prior
+note claiming this was "honored server-side" — that claim was itself wrong
+and is corrected in the same change. **CI3-33-4 (LOW, flagged)**: four more
+dead settings (`RATE_LIMIT_PER_MINUTE`, `MAX_FILE_SIZE`, `STORAGE_TYPE`,
+`DB_POOL_MIN`) — tuning knobs, not access-control gates. Both mirrored into
+`docs/KNOWN_LIMITATIONS.md`; also re-verified (not new) that the existing
+`REFRESH_ROTATION_GRACE_SECONDS` row is still accurate and corrected its
+two drifted line-number citations.
+
+**Sandbox artifact caught and fixed before trusting the eslint gate:** the
+worktree had no `node_modules` of its own — hoisted packages resolved via
+Node's ancestor-directory walk up into the parent checkout, but `@types
+/node` (not hoisted) did not, so `npx eslint .` initially reported 1,116
+`@typescript-eslint/no-unsafe-*` warnings on 15 existing guard-test files
+importing `node:fs`/`node:path`, not a real regression from SEC-00 pass 3's
+"0 warnings." `npm install` from the worktree root fixed it (verified
+byte-for-byte on one file: 51 warnings -> 0); the true result is the
+expected 0 errors / 2 pre-existing warnings. `package-lock.json`'s
+incidental npm-metadata-normalization diff from that install was reverted
+before committing.
+
+flake8/black/isort clean on `app/`, `tests/`, `alembic/` at CI's pinned
+versions; migrations PASSED (435 revisions, single head); scoped tests
+173/173; repo-tenancy guard suite 63/63; full suite 11,721/0 (21 skipped,
+all pre-existing); frontend typecheck 0 errors (both TS 5.9.3 and the
+aliased TS 7.0.2 build compiler); eslint 0 errors/2 pre-existing warnings.
+Findings doc: `docs/security-review/CI3-33-core-infra.md`.
 
 ---
 
