@@ -1717,14 +1717,9 @@ of an area without asking three people first. Editing needs
 `orgchart.manage` or `settings.manage`; without either, the page simply opens
 read-only and shows no edit controls.
 
-> **[SCREENSHOT NEEDED — the org chart, outline view.** _Demo data:_ a chart
-> four levels deep — Chief, two Deputy Chiefs sharing one seat, three Captains
-> under one of them, and one seat with a non-member holder. Expand the branch
-> that contains the shared seat so both names are visible.**]**
+![The org chart as an indented outline: Fire Chief, a Deputy Chief seat shared by two holders, three Captains reporting to it -- one seat naming a non-member holder -- and a Lieutenant a level below](./images/19-44-org-chart-outline.png)
 
-> **[SCREENSHOT NEEDED — the org chart, diagram view.** _Demo data:_ the same
-> chart. The two views are not interchangeable and one capture cannot stand in
-> for the other.**]**
+![The same chart as a boxes-and-connectors diagram](./images/19-45-org-chart-diagram.png)
 
 ### A seat can hold more than one person
 
@@ -1756,10 +1751,7 @@ The link is an *assist*, not the box's identity — most departments' org charts
 and permission structures do not match, and the chart has to be able to say
 what is actually true rather than what the permissions imply.
 
-> **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
-> two member holders and one non-member holder, its responsibility text filled
-> in, and the position link visible. This is the screen that answers both
-> questions reviewers ask.**]**
+![The node editor open on Captain -- C Shift: two member holders and one non-member holder, responsibility text filled in, and the Captain position link visible](./images/19-46-org-chart-node-modal.png)
 
 ### It starts empty, and that is on purpose
 
@@ -1963,10 +1955,7 @@ switched-off module behaves.
 checking an installation, not a decision a department needs to make while
 making every other one.
 
-> **[SCREENSHOT NEEDED — Settings → Modules with Testing Checklist off.**
-> _Demo data:_ the module list on a fresh install. This is the answer to "where
-> did /testing go", and it is the single most useful new capture in this
-> window.**]**
+![Settings -> Modules -> Additional Modules, with Testing Checklist listed as Disabled and an Enable button -- the answer to "where did /testing go"](./images/19-47-settings-modules-testing-off.png)
 
 ### Testing now works in runs
 
@@ -1997,9 +1986,7 @@ testing. When you mark it:
 That distinction is why this is more than a list of tickboxes: it separates
 "this screen is broken" from "this screen is visible to the wrong people".
 
-> **[SCREENSHOT NEEDED — Testing Home with a named run and the run picker
-> open.** _Demo data:_ a current run, one archived predecessor, a mix of pass /
-> fail / blocked marks, and at least one gate mismatch flagged.**]**
+![Testing Home on "Pre-launch, build 1.4" with the run picker showing two runs, the Core group expanded to a pass, a fail with a note, a blocked mark and a flagged gate mismatch on Org Chart](./images/19-48-testing-home-run-picker.png)
 
 ### Getting it out of the app
 
@@ -2009,9 +1996,7 @@ That distinction is why this is more than a list of tickboxes: it separates
   their notes, gate mismatches, and coverage by area. Save it as a PDF.
 - **Markdown**, unchanged.
 
-> **[SCREENSHOT NEEDED — the printable testing report.** _Demo data:_ the same
-> run, with at least one failure carrying a note and one gate mismatch, so both
-> sections of the report have content.**]**
+![The printable testing report for the current run: coverage summary, a failure carrying its note, and the Org Chart gate mismatch under permissions defects](./images/19-49-testing-report-print.png)
 
 ### Marking with the keyboard
 
