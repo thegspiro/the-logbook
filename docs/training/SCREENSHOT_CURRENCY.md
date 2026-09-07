@@ -35,6 +35,20 @@ The other eleven manifest entries routed at `/inventory/items` open a modal over
 the page and are cropped to it, so they were deliberately left alone: churning
 PNGs whose content did not change buries the six that did.
 
+## Audited 2026-09-07 — no drift, nothing recaptured (second pass)
+
+Routine maintenance pass per the currency job's standing brief. The branch was
+rebased onto `origin/main` (10 commits: `e691044` → `34e6fa7`) to clear drift
+against the base branch. All 10 are `docs(security-review): ...` commits —
+`git diff --stat` confirms the only files touched are
+`docs/security-review/PROGRESS.md` and
+`docs/security-review/SEC-00-cross-cutting-baseline.md`. Nothing under
+`frontend/src`, `backend/app`, or any route/style/shared-component path
+changed, so there was no frontend state for any of the 565 captured
+placeholders to drift against. Servers were not started and `capture.mjs` was
+not run — with no upstream UI change, there was nothing to cross-reference.
+`SCREENSHOT_STATUS.md` remains 565/565.
+
 ## Recaptured 2026-09-07 — the inventory items list, after the grouping/pinning merge
 
 The previous entry's "no drift" verdict was true only because `origin/main`'s
