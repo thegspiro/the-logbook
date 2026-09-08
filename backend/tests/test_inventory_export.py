@@ -30,6 +30,7 @@ from app.models.inventory import (
     ItemType,
 )
 from app.models.user import Organization
+from app.services.inventory_service import InventoryService
 
 # A real database: the export's population is decided by a NOT IN subquery over
 # categories and by offset paging over a sorted select, neither of which a
@@ -259,3 +260,29 @@ class TestFormulaInjection:
         rows = await _export(db_session, org.id)
 
         assert _names(rows) == ["'=cmd|'/C calc'!A0"]
+
+
+class TestTheExportDoesNotCount:
+    """``get_items`` COUNTs the whole filtered set and the export discards it.
+
+    Harmless when the export stopped at one capped page; once the cap came off,
+    it became one catalogue-wide count per 500 rows.
+    """
+
+    async def test_the_counting_entry_point_is_never_reached(self, db_session, org):
+        category = await _category(db_session, org, "Bulk", ItemType.EQUIPMENT)
+        for i in range(7):
+            await _item(db_session, org, f"Item {i:02d}", category_id=category.id)
+
+        # Patched to raise rather than asserted on afterwards: a call count
+        # says the count happened, this says the export cannot be written to
+        # depend on it. One coroutine, so pitfall #22 does not apply.
+        with patch.object(
+            InventoryService,
+            "get_items",
+            side_effect=AssertionError("the export must not run the COUNT path"),
+        ):
+            with patch.object(inventory_endpoints, "_EXPORT_PAGE_SIZE", 3):
+                rows = await _export(db_session, org.id, sort_by="name")
+
+        assert _names(rows) == [f"Item {i:02d}" for i in range(7)]

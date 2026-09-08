@@ -25,6 +25,10 @@
  *            that cannot contain real credentials in the demo database
  *   prepare  optional async (page) => void that drives the UI into the pictured
  *            state (open a modal, switch a tab, expand a panel)
+ *   cleanup  optional async (page) => void run after the shot, success or
+ *            failure. Needed only when a prepare step PERSISTS something —
+ *            pins, a saved preference — since `--only <id>` may mean the later
+ *            shot that would have tidied up never runs
  *   selector optional CSS/locator to clip to instead of the full viewport
  *   fullPage capture the whole scroll height rather than the viewport
  *   viewport 'mobile' to shoot at phone width instead of desktop
@@ -1835,6 +1839,23 @@ export function openCallVolumeReport(mode) {
     await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
     await page.waitForTimeout(500);
   };
+}
+
+/**
+ * Clear every pin the signed-in member holds on the items list.
+ *
+ * Pins are per-member rows in the database and survive between runs, so a shot
+ * that pins has to both start from a known state and hand one back: without the
+ * first, a second run pins three MORE items and the section grows every time;
+ * without the second, `--only 05-02` leaves them for whatever is captured next.
+ */
+async function unpinEverything(page) {
+  for (;;) {
+    const unpin = page.getByRole("button", { name: /^Unpin / }).first();
+    if (!(await unpin.count())) break;
+    await unpin.click();
+    await page.waitForTimeout(600);
+  }
 }
 
 export const SHOTS = [
@@ -5428,27 +5449,32 @@ export const SHOTS = [
     // a quartermaster does, and pinning by hand also proves the control is
     // reachable at this viewport.
     prepare: async (page) => {
-      // Pins are stored per member and survive between runs, so clear them
-      // first: without this a second run pins three MORE items and the section
-      // grows every time the shot is taken.
-      for (;;) {
-        const unpin = page.getByRole("button", { name: /^Unpin / }).first();
-        if (!(await unpin.count())) break;
-        await unpin.click();
-        await page.waitForTimeout(600);
-      }
+      await unpinEverything(page);
       for (let i = 0; i < 3; i += 1) {
         const pin = page.getByRole("button", { name: /^Pin / }).first();
         await pin.click();
         // Each click reloads the list, so the next unpinned row is only
         // addressable once the Pinned section has absorbed the last one.
+        //
+        // Counted rather than waiting for the Pinned TABLE, which only proves
+        // anything on the first pin: after that the table already exists and
+        // the wait returns instantly, leaving a bare timeout to cover the
+        // reload. And deliberately not caught -- a swallowed timeout here
+        // publishes a picture of one pin, or none, under a caption that says
+        // three, and the empty-state check cannot see that: the list is fully
+        // populated either way.
         await page
           .getByRole("table", { name: "Pinned" })
-          .waitFor({ timeout: 10_000 })
-          .catch(() => {});
+          .getByRole("button", { name: /^Unpin / })
+          .nth(i)
+          .waitFor({ timeout: 10_000 });
         await page.waitForTimeout(600);
       }
     },
+    // Pins persist per member, so this shot tidies up after itself rather than
+    // leaning on 05-03 to do it: `--only 05-02` would otherwise leave three
+    // behind for whatever /inventory/items shot is captured next.
+    cleanup: unpinEverything,
   },
   {
     id: "05-03-items-grouped",
@@ -5458,23 +5484,24 @@ export const SHOTS = [
     alt: "The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column",
     route: "/inventory/items",
     prepare: async (page) => {
-      // Unpin first. Pins are stored per member and 05-02 leaves three behind,
-      // so without this the Pinned section eats the frame and the group
-      // headings this shot exists to picture fall below the fold.
-      for (;;) {
-        const unpin = page.getByRole("button", { name: /^Unpin / }).first();
-        if (!(await unpin.count())) break;
-        await unpin.click();
-        await page.waitForTimeout(600);
-      }
+      // Unpin first. 05-02 now cleans up after itself, so this is defence in
+      // depth rather than the thing that makes 05-02 safe -- but a stray pin
+      // from a hand-driven session would still push the group headings this
+      // shot exists to picture below the fold.
+      await unpinEverything(page);
       await page.getByLabel("Group by:").selectOption("category");
       // The grouping is applied only once rows fetched FOR that dimension
       // arrive, so wait for a heading rather than for the select to settle.
+      //
+      // Not caught. If the grouping never lands, this shot photographs an
+      // ordinary ungrouped list and files it under "grouped by Category" --
+      // and nothing downstream can tell: the empty-state detector sees a full
+      // list, and the guide ends up with a picture contradicting its own text.
+      // Letting the wait reject makes the capture loop report it failed.
       await page
         .getByRole("button", { name: /\(\d+\)/ })
         .first()
-        .waitFor({ timeout: 10_000 })
-        .catch(() => {});
+        .waitFor({ timeout: 10_000 });
       await page.waitForTimeout(600);
       // Bring the Group by control to the top of the frame so the control and
       // the headings it produces are in the same picture.

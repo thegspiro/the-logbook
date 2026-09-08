@@ -1041,12 +1041,30 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
 });
 
 describe('InventoryItemsPage — CSV export', () => {
-  // This block sets its own mock implementations rather than inheriting
-  // whatever ran before it (CLAUDE.md pitfall #28: `vi.clearAllMocks()` clears
-  // calls, not implementations).
+  // This block states every mock implementation it depends on rather than
+  // inheriting whatever ran before it, and resets each one before installing
+  // the default (CLAUDE.md pitfall #28). `vi.clearAllMocks()` is not enough on
+  // its own: it clears recorded calls but leaves implementations in place, and
+  // an unconsumed `...Once` queued by an earlier block is still handed out
+  // ahead of a `mockResolvedValue` set here. Resetting only the two mocks this
+  // block asserts on left the other seven able to serve a leaked one-shot, so
+  // these tests could pass or fail differently focused than in place.
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetItems.mockReset();
+    for (const mock of [
+      mockGetItems,
+      mockGetSummary,
+      mockGetSummaryByLocation,
+      mockGetCategories,
+      mockGetStorageAreas,
+      mockGetLocations,
+      mockGetItemColors,
+      mockCheckPermission,
+      mockExportItemsCsv,
+    ]) {
+      mock.mockReset();
+    }
+
     mockGetItems.mockResolvedValue({ items: [], total: 0 });
     mockGetSummary.mockResolvedValue({
       total_items: 0,
@@ -1061,7 +1079,6 @@ describe('InventoryItemsPage — CSV export', () => {
     mockGetLocations.mockResolvedValue([{ id: 'loc-1', name: 'Station 1' }]);
     mockGetItemColors.mockResolvedValue(['Navy']);
     mockCheckPermission.mockReturnValue(true);
-    mockExportItemsCsv.mockReset();
     mockExportItemsCsv.mockResolvedValue(new Blob(['Name\n'], { type: 'text/csv' }));
 
     // jsdom implements neither, and the handler calls both around the download.
@@ -1105,7 +1122,10 @@ describe('InventoryItemsPage — CSV export', () => {
     await user.click(screen.getByRole('button', { name: /Export/ }));
     await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
 
-    const listCall = mockGetItems.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    // `mock.calls` off an untyped `vi.fn()` is `any[][]`, so `.at()` on it is
+    // an unsafe call the type-aware lint rejects. Narrowed once, here.
+    const calls = mockGetItems.mock.calls as unknown as Record<string, unknown>[][];
+    const listCall = calls[calls.length - 1]?.[0] ?? {};
     // Paging is the list's own concern; `group_by` orders rows on screen and a
     // spreadsheet regroups for itself. Everything else must match.
     const { skip: _skip, limit: _limit, group_by: _groupBy, ...expected } = listCall;

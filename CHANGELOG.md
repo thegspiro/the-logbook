@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Review follow-ups on the items CSV export (2026-09-08)
+
+Five findings from the Codex review of `77ff82fd`, all verified against the code
+before fixing.
+
+**Fixed**
+
+- **A swallowed readiness wait could publish the wrong picture.** Both new
+  screenshot shots ended their `waitFor` in `.catch(() => {})`, so a grouping
+  that never applied produced a photograph of an ordinary ungrouped list filed
+  under the caption "grouped by Category" — and nothing downstream could tell,
+  because the empty-state detector sees a fully populated list either way. Both
+  waits now reject, so the capture loop reports the shot failed. `05-02`'s wait
+  also now counts pinned rows rather than waiting for the Pinned table to exist,
+  which only proved anything on the first of its three pins.
+- **`05-02-items-pinned` left three pins in the database.** Only `05-03`'s
+  preparation cleaned them up, so `capture.mjs --only 05-02` — a documented
+  workflow — left them for whatever `/inventory/items` shot ran next. Shots now
+  take an optional `cleanup` hook, run in a `finally` after the screenshot, and
+  `05-02` uses it to tidy up after itself.
+- **The export ran a full `COUNT` per page and discarded it.** `get_items`
+  counts the whole filtered set before fetching a page; the streaming export
+  never uses the total, so removing the row cap turned that into one
+  catalogue-wide count per 500 rows. `InventoryService.get_items_page` is the
+  same fetch without the count, sharing `_joined_items_query` and
+  `_run_items_page` — and through them `_build_items_query` — with `get_items`,
+  whose signature and return type are unchanged.
+- **The new frontend test block reset two of the nine mocks it configured.**
+  Per CLAUDE.md pitfall #28 an unconsumed `...Once` survives
+  `vi.clearAllMocks()`, so the block could behave differently focused than in
+  place. Every mock it defaults is now reset first.
+
+**Notes**
+
+- The export still holds one session for the whole response, deliberately: it
+  makes the file a single consistent snapshot. A session per page would release
+  the pooled connection at each yield but let an item added or deleted mid-run
+  shift the `OFFSET`, silently skipping or repeating a row in a file somebody is
+  reconciling stock against. The pool is 10 plus 20 overflow; that is the
+  accepted risk, and it is now stated at the call site.
+
 ### Inventory: the items CSV is the list it was exported from (2026-09-08)
 
 **Fixed**
@@ -77,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than dropped silently.
 - The eleven other manifest entries routed at `/inventory/items` open a modal
   over the page and are cropped to it; they were left alone deliberately.
+
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 
 **Fixed**

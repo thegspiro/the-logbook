@@ -621,6 +621,25 @@ async function main() {
         error: String(error).split("\n")[0],
       });
       console.log(`  ! ${shot.id}: ${String(error).split("\n")[0]}`);
+    } finally {
+      if (shot.cleanup) {
+        // Undo state a prepare step PERSISTED, so a shot that has to write to
+        // the database is self-contained. Manifest order is not a safe place
+        // to put that undo: `--only <id>` is a documented workflow, so the
+        // later shot that would have tidied up may never run, and the leftover
+        // then shows up in whatever is captured next.
+        //
+        // In a `finally` because a shot that fails half-way has still done
+        // whatever its prepare step managed before failing, and the cleanup is
+        // wrapped so its own error cannot replace the failure being reported.
+        try {
+          await shot.cleanup(page);
+        } catch (error) {
+          console.log(
+            `      cleanup after ${shot.id} failed: ${String(error).split("\n")[0]}`,
+          );
+        }
+      }
     }
   }
 

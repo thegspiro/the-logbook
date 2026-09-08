@@ -1077,11 +1077,24 @@ async def export_items_csv(
         writer.writerow(_EXPORT_COLUMNS)
         yield drain()
 
+        # One session, held for the whole response, deliberately. It means a
+        # pooled connection (10 + 20 overflow) stays checked out while the
+        # server writes each chunk to a possibly slow client -- the cost of
+        # exporting the whole catalogue as ONE snapshot. A session per page
+        # would release the connection at every yield and make the file
+        # non-atomic instead: an item added or deleted mid-export shifts the
+        # OFFSET, so a row is silently skipped or repeated in a file somebody
+        # is reconciling stock against. Consistency wins; the pool is the
+        # accepted risk.
         async with async_session_factory() as db:
             service = InventoryService(db)
             skip = 0
             while True:
-                items, _ = await service.get_items(
+                # get_items_page, not get_items: the latter COUNTs the whole
+                # filtered set before every page and this loop discards the
+                # total each time -- which, with no row cap left, is one
+                # catalogue-wide count per 500 rows.
+                items = await service.get_items_page(
                     organization_id=organization_id,
                     category_id=category_id,
                     status=status_enum,

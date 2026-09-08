@@ -2060,8 +2060,10 @@ class InventoryService:
         a header tallying only the loaded page would be worse than no header,
         since "Class A Uniform (3)" reads as a total when 40 match.
         """
-        query = self._build_items_query(
+        query = self._joined_items_query(
             organization_id=organization_id,
+            group=self._group_spec(group_by) if group_by else None,
+            pinned_for_user_id=pinned_for_user_id,
             category_id=category_id,
             status=status,
             condition=condition,
@@ -2080,7 +2082,80 @@ class InventoryService:
             active_only=active_only,
         )
 
-        group = self._group_spec(group_by) if group_by else None
+        # Get total count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
+
+        items = await self._run_items_page(
+            query,
+            organization_id=organization_id,
+            group_by=group_by,
+            pinned_for_user_id=pinned_for_user_id,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            skip=skip,
+            limit=limit,
+        )
+        return items, total
+
+    async def get_items_page(
+        self,
+        organization_id: UUID,
+        *,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        pinned_for_user_id: Optional[UUID] = None,
+        group_by: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+        **filters: Any,
+    ) -> List[InventoryItem]:
+        """The page ``get_items`` would return, without the total it computes.
+
+        A streaming export pages until it runs out of rows and throws the total
+        away every time, so ``get_items``' COUNT over the whole filtered set is
+        pure waste -- and once the export lost its row cap, waste repeated once
+        per page. This shares ``_joined_items_query`` and ``_run_items_page``
+        (and through them ``_build_items_query``) with ``get_items``, so the
+        file an export produces cannot come to disagree with the list it was
+        exported from.
+
+        ``**filters`` are ``_build_items_query``'s, as in
+        ``get_item_group_counts``.
+        """
+        return await self._run_items_page(
+            self._joined_items_query(
+                organization_id=organization_id,
+                group=self._group_spec(group_by) if group_by else None,
+                pinned_for_user_id=pinned_for_user_id,
+                **filters,
+            ),
+            organization_id=organization_id,
+            group_by=group_by,
+            pinned_for_user_id=pinned_for_user_id,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            skip=skip,
+            limit=limit,
+        )
+
+    def _joined_items_query(
+        self,
+        organization_id: UUID,
+        group: Optional[Any],
+        pinned_for_user_id: Optional[UUID],
+        **filters: Any,
+    ) -> "Select":
+        """The filtered select plus the group and pin joins. No order, no page.
+
+        Split out so the counting and non-counting entry points inherit one
+        set of joins: the pin join in particular has to stay outside the count
+        (see below), and a second hand-maintained copy is how that invariant
+        would quietly be lost.
+        """
+        query = self._build_items_query(organization_id=organization_id, **filters)
+
         if group is not None:
             for target, onclause in group[2]:
                 query = query.outerjoin(target, onclause)
@@ -2099,10 +2174,22 @@ class InventoryService:
                 ),
             )
 
-        # Get total count
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        return query
+
+    async def _run_items_page(
+        self,
+        query: "Select",
+        *,
+        organization_id: UUID,
+        group_by: Optional[str],
+        pinned_for_user_id: Optional[UUID],
+        sort_by: Optional[str],
+        sort_order: Optional[str],
+        skip: int,
+        limit: int,
+    ) -> List[InventoryItem]:
+        """Order, page, execute and decorate a query from ``_joined_items_query``."""
+        group = self._group_spec(group_by) if group_by else None
 
         # Apply sorting
         # The id breaks ties (repeated uniforms share a name), so an offset
@@ -2144,7 +2231,7 @@ class InventoryService:
         )
         await self._attach_group_keys(str(organization_id), group_by, items)
 
-        return items, total
+        return items
 
     async def _attach_lot_stock(
         self, organization_id: str, items: List[InventoryItem]
