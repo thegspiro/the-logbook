@@ -30,7 +30,19 @@ def provisioning_uri(secret: str, account_name: str, issuer: str) -> str:
 
 
 def verify_totp(secret: str, code: str) -> bool:
-    """Verify a 6-digit TOTP code, allowing one step of clock drift (±30s)."""
+    """Verify a 6-digit TOTP code, allowing one step of clock drift (±30s).
+
+    **Not for use by application code — see ``verify_totp_get_timestep``.**
+    This variant answers "is this code currently valid?" and records nothing,
+    so a code it accepts stays valid at ``POST /auth/mfa/login`` for the rest
+    of its window. That is exactly the replay AUTH-7 found across three MFA
+    management routes: every route in ``app/`` must instead go through
+    ``auth._verify_and_consume_totp``, which verifies **and** marks the
+    time-step spent under a row lock. Kept only as the primitive
+    ``verify_totp_get_timestep`` is tested against;
+    ``tests/test_mfa_verification_consumes.py`` fails if anything under
+    ``app/`` calls it.
+    """
     if not secret or not code:
         return False
     code = code.strip().replace(" ", "")

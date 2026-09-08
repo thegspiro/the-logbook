@@ -90,10 +90,24 @@ _MUST_CHANGE_PW_ALLOWED_SUFFIXES = (
 
 # Paths an un-enrolled user may reach while their org requires MFA, so they can
 # complete enrollment without being locked out.
+#
+# `/auth/change-password` is on BOTH lists on purpose. The two gates below run
+# in sequence against the same request, so a member who is flagged
+# must_change_password *and* un-enrolled in an org that requires MFA can only
+# reach the intersection of the two lists. Without this entry that intersection
+# held no remediation path at all: the password gate refused every
+# `/auth/mfa/*` enrollment route, and the MFA gate refused the one route the
+# password gate allows — leaving every admin-created member (`users.py` and
+# onboarding both set must_change_password=True) permanently unable to either
+# change their password or enrol, from the moment an org turned MFA on.
+# Password first is also the right order: binding an authenticator to an
+# account still on the temporary password an administrator chose is worse than
+# the reverse. Guarded by tests/test_auth_gate_remediation_paths.py.
 _MFA_ENROLL_ALLOWED_SUFFIXES = (
     "/auth/mfa/setup",
     "/auth/mfa/verify-setup",
     "/auth/mfa/status",
+    "/auth/change-password",
     "/auth/me",
     "/auth/logout",
     "/auth/refresh",
