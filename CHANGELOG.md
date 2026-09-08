@@ -273,6 +273,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
 ### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
+### Clearing a medical screening record or requirement field silently kept the old value (2026-09-08)
+
+**Security**
+
+- **Blanking a provider name, result summary, note, date, description, role
+  list, or recurrence on an existing screening record or requirement did not
+  clear it.** Both edit forms built their save payload the same way as their
+  create form, converting an emptied field to `undefined` — which never
+  reaches the server as JSON — instead of an explicit `null`. The backend's
+  update path only clears a column when the key is present with a `null`
+  value; an omitted key means "leave this alone." So unchecking a screening's
+  recurrence, or clearing an incorrect provider name, result summary, or
+  note — three PHI fields — showed a success toast while the old value stayed
+  in the database. Fixed by sending an explicit `null` for a blanked field on
+  the edit path only, matching the repo's `blankToNull` convention; the
+  create path is unchanged (a blank field is still omitted). Guarded by
+  `ScreeningFormClearGuards.test.tsx`, confirmed to fail against the pre-fix
+  code.
 
 **Security**
 

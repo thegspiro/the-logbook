@@ -9,6 +9,7 @@ import { useDialog } from '../../../hooks/useDialog';
 import { X } from 'lucide-react';
 import { ScreeningType, SCREENING_TYPE_LABELS } from '../types';
 import type { ScreeningRequirement, ScreeningRequirementCreate, ScreeningRequirementUpdate } from '../types';
+import { blankToNull } from '../../../utils/formValues';
 
 interface ScreeningRequirementFormProps {
   requirement: ScreeningRequirement | null;
@@ -54,16 +55,34 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
       .map((r) => r.trim())
       .filter(Boolean);
 
-    const data: ScreeningRequirementCreate = {
-      name: name.trim(),
-      screening_type: screeningType as ScreeningRequirementCreate['screening_type'],
-      description: description.trim() || undefined,
-      frequency_months: isOneTime ? undefined : Number(frequencyMonths),
-      applies_to_roles: roles.length > 0 ? roles : undefined,
-      is_active: isActive,
-      grace_period_days: Number(gracePeriodDays) || 30,
-    };
-    await onSave(data);
+    if (requirement) {
+      // Edit path sends an explicit null for a blanked/cleared field. The
+      // backend dumps update payloads with exclude_unset, so `undefined`
+      // here means "leave this alone" — unchecking "recurring" or clearing
+      // the roles list would otherwise silently leave the old value in
+      // place behind the "Requirement updated" toast (CLAUDE.md pitfall #1).
+      const data: ScreeningRequirementUpdate = {
+        name: name.trim(),
+        screening_type: screeningType as ScreeningRequirementUpdate['screening_type'],
+        description: blankToNull(description),
+        frequency_months: isOneTime ? null : Number(frequencyMonths),
+        applies_to_roles: roles.length > 0 ? roles : null,
+        is_active: isActive,
+        grace_period_days: Number(gracePeriodDays) || 30,
+      };
+      await onSave(data);
+    } else {
+      const data: ScreeningRequirementCreate = {
+        name: name.trim(),
+        screening_type: screeningType as ScreeningRequirementCreate['screening_type'],
+        description: description.trim() || undefined,
+        frequency_months: isOneTime ? undefined : Number(frequencyMonths),
+        applies_to_roles: roles.length > 0 ? roles : undefined,
+        is_active: isActive,
+        grace_period_days: Number(gracePeriodDays) || 30,
+      };
+      await onSave(data);
+    }
     setIsSaving(false);
   };
 
