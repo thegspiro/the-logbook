@@ -631,6 +631,9 @@ class TestProspectProgression:
             "items": [{"id": "background", "label": "Background check"}],
             "require_all": True,
         }
+        # A required stage refuses the skip before its own gate is consulted;
+        # this case is about what a skip does once it is allowed to happen.
+        steps[0].required = False
         await db_session.commit()
 
         prospect = await svc.create_prospect(
@@ -687,6 +690,9 @@ class TestProspectProgression:
                 "step_type": "checkbox",
                 "sort_order": 0,
                 "is_final_step": True,
+                # Skippable on purpose: a required stage is refused outright,
+                # and the point here is that an allowed skip does not transfer.
+                "required": False,
             },
         )
         await svc.add_step(

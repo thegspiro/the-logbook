@@ -795,3 +795,142 @@ class TestMeetingAutoAdvanceOnStaffCheckIn:
 
         assert attendee.checked_in is True
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestMeetingStageNeedsRealAttendance:
+    """The reported bug, from four directions.
+
+    A meeting stage marked Required, ticked "auto-advance when attendance is
+    recorded" and auto-linked to a meeting six days away advanced an applicant
+    who had not been anywhere near it. A meeting stage was the one stage type
+    with no completion gate: the validator had no case for it, so anything that
+    reached complete_step completed it, and the auto-advance helper never asked
+    what *kind* of stage it was advancing.
+    """
+
+    @staticmethod
+    async def _meeting_stage(db_session: AsyncSession, org: str):
+        return await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="meeting",
+            config={
+                "meeting_type": "business_meeting",
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+
+    async def test_a_document_upload_is_not_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        """The frontend sends whatever stage the applicant is parked on as the
+        upload's step_id, so before the type check any upload completed the
+        meeting stage the applicant happened to be sitting on."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+
+        await _upload_document(svc, prospect, org, "Background Check", gate.id)
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_a_recorded_interview_is_not_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        """An interview submitted without a stage defaults to the current one,
+        which was the second way into the same hole."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+
+        await svc.create_interview(
+            prospect_id=prospect.id,
+            organization_id=org,
+            interviewer_id=None,
+            notes="Chatted at the open house",
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_a_check_in_to_a_meeting_that_has_not_started_does_not_advance(
+        self, db_session: AsyncSession, org
+    ):
+        """Staff may record attendance whenever they need to, including ahead
+        of the event. What must not follow is a pipeline advance: the meeting
+        has not happened, so nobody has attended it."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        future = _make_event(
+            org,
+            title="Monthly Prospective Member Interest Meeting",
+            start_datetime=now + timedelta(days=6),
+            end_datetime=now + timedelta(days=6, hours=2),
+        )
+        attendee = EventExternalAttendee(
+            id=_uid(),
+            organization_id=org,
+            event_id=str(future.id),
+            name="Dana Reed",
+            email=f"staff-{_uid()[:8]}@example.com",
+            prospect_id=prospect.id,
+            checked_in=True,
+            checked_in_at=now,
+        )
+        db_session.add_all([future, attendee])
+        await db_session.commit()
+
+        advanced = await GuestCheckInService(
+            db_session
+        ).try_advance_attendance_pipeline(str(prospect.id), future)
+
+        assert advanced is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_the_auto_linked_event_is_not_itself_evidence(
+        self, db_session: AsyncSession, org
+    ):
+        """Entering a meeting stage auto-links the next *future* matching
+        event. Treating that link as attendance would put the bug straight
+        back, so the gate reads check-in records and never the link."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        upcoming = _make_event(
+            org,
+            start_datetime=now + timedelta(days=6),
+            end_datetime=now + timedelta(days=6, hours=2),
+        )
+        db_session.add(upcoming)
+        await db_session.commit()
+        await svc.link_event(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            event_id=str(upcoming.id),
+            linked_by=None,
+        )
+
+        advanced = await svc._try_auto_advance_step(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            step_id=str(gate.id),
+            completed_by=None,
+            trigger="event check-in",
+            for_step_types={PipelineStepType.MEETING},
+        )
+
+        assert advanced is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_a_coordinator_can_still_advance_by_hand(
+        self, db_session: AsyncSession, org
+    ):
+        """The gate is for automated advances only. A coordinator who watched
+        the applicant walk in is better evidence than any record, and gating
+        the Advance button would make it useless on the stage type it exists
+        for."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+
+        await svc.advance_prospect(
+            prospect_id=str(prospect.id),
+            organization_id=org,
+            advanced_by=None,
+            notes="Attended; sign-in sheet was not entered",
+        )
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)

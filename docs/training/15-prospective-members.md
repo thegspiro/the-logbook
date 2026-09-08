@@ -89,7 +89,19 @@ Each pipeline stage has a type that determines its behavior:
 | **Election Vote**   | Vote        | Members vote on the applicant (creates election package) | No — depends on election result                |
 | **Automated Email** | Mail        | System sends email to applicant on entry                 | Yes — auto-advances immediately after send     |
 | **Form Dropdown**   | ListChecks  | Coordinator selects a form for the applicant to fill     | No — manual action required                    |
-| **Meeting**         | Calendar    | Schedule an interview, orientation, or ride-along        | No — manual action required                    |
+| **Meeting**         | Calendar    | Schedule an interview, orientation, or ride-along        | Optional — when attendance is recorded         |
+
+> **What counts as attendance on a Meeting stage.** A meeting stage set to
+> auto-advance moves the applicant on when they are **checked in at the
+> meeting**, and not before the meeting has started. Recording attendance ahead
+> of time — a coordinator adding the expected guests to next Monday's meeting —
+> records the attendance but does not advance anybody; nor does linking the
+> event to the applicant, which the stage does for itself when they reach it.
+> The applicant must be checked in at an event matching the stage's
+> **Auto-Link Event Type** (and category, if one is set).
+>
+> If someone attended and it was not recorded, use **Advance** — a coordinator's
+> manual advance is not gated on the attendance record.
 
 ### Stage Configuration Options
 
@@ -98,12 +110,20 @@ Each stage can be configured with:
 | Setting                                    | Description                                                                       |
 | ------------------------------------------ | --------------------------------------------------------------------------------- |
 | **Auto-Advance**                           | Automatically move to next stage when this stage's condition is met               |
+| **Required**                               | The stage must be completed — it cannot be skipped                                |
 | **Inactivity Timeout Override**            | Custom timeout for this stage (overrides pipeline default)                        |
 | **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link |
 | **Form ID** (form stages)                  | Which form to link                                                                |
 | **Event Type** (meeting stage)             | Interview, orientation, or ride-along                                             |
+| **Auto-Link Event Type** (meeting stage)   | Which event type the stage waits on, and which attendance can advance it          |
 | **Scheduling** (meeting stage)             | _Manual_ or _Cal.com self-scheduling_ — shown only when Cal.com is connected      |
 | **Collection Method** (document stage)     | _Upload_ or _Documenso e-signature_ — shown only when Documenso is connected      |
+
+**Required stages cannot be skipped.** The **Skip** action on an applicant is
+refused on a stage marked Required, and the button is disabled with an
+explanation. To bypass one, un-tick **Required** on the stage first — that is a
+deliberate change to the pipeline everyone can see, rather than a quiet
+exception made for one applicant. Stages are Required by default.
 
 ### Using Cal.com and Documenso in Stages
 
@@ -114,7 +134,12 @@ If your department has connected the **Cal.com** or **Documenso** integrations (
 1. Edit a **Meeting** stage and set **Scheduling** to _Cal.com_
 2. Paste your Cal.com booking link (e.g., `https://cal.com/your-department/interview`)
 3. Applicants on this stage see a **Schedule** button on their public status page and pick their own time
-4. If a **Webhook Secret** is configured on the Cal.com integration, booking auto-advances the applicant to the next stage — otherwise the coordinator advances them manually after the interview
+4. If a **Webhook Secret** is configured on the Cal.com integration **and the Cal.com webhook is subscribed to `MEETING_ENDED`**, the applicant advances once the booked meeting has finished — otherwise the coordinator advances them manually after the interview
+
+> **The booking is not the meeting.** Advancing on `BOOKING_CREATED` moved an
+> applicant on the moment they picked a slot, three weeks before the interview
+> they had booked. Subscribe **`MEETING_ENDED`** on the Cal.com webhook; a
+> booking on its own no longer advances anyone.
 
 **Document Upload stage → Documenso e-signature**
 

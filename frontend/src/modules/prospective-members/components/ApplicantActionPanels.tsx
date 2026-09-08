@@ -64,6 +64,15 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
         ? `Required screenings: ${screenings.map((screening) => screening.replace(/_/g, ' ')).join(', ')}.`
         : null;
     }
+    case StageType.MEETING: {
+      // Only when auto-advance is on: that is the setting whose gate the
+      // coordinator can be surprised by, because it will not fire until the
+      // meeting has actually started and the applicant is checked in.
+      const autoAdvance = 'auto_advance' in config ? config.auto_advance : false;
+      return autoAdvance
+        ? 'Advances on its own once the applicant is checked in at the meeting — not before the meeting starts. Advance by hand if they attended and it was not recorded.'
+        : null;
+    }
     default:
       return null;
   }
@@ -78,6 +87,10 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
 }) => {
   const navigate = useNavigate();
   const stageRequirementHint = getStageRequirementHint(applicant);
+  // The server refuses a skip on a required stage; disabling the button here
+  // says so before the click rather than after it. The refusal is the
+  // authority — this only saves the round trip.
+  const isCurrentStageRequired = applicant.current_stage_required === true;
 
   const {
     advanceApplicant,
@@ -373,9 +386,13 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
             {!isLastStage && (
               <button
                 onClick={() => setShowSkipConfirm(true)}
-                disabled={isActionInProgress}
+                disabled={isActionInProgress || isCurrentStageRequired}
                 className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 px-3 py-2 text-sm text-purple-700 transition-colors hover:bg-purple-500/10 disabled:opacity-50 dark:text-purple-400"
-                title="Skip this stage and advance"
+                title={
+                  isCurrentStageRequired
+                    ? 'This stage is marked Required and cannot be skipped. Complete it, or un-tick Required on the stage first.'
+                    : 'Skip this stage and advance'
+                }
               >
                 {isSkipping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
                 <span className="action-label">Skip</span>

@@ -31,13 +31,19 @@ def _normalize_base_url(api_base_url: str) -> str:
 # Cal.com webhook triggers that mean a new booking was made.
 BOOKING_CREATED_EVENTS = frozenset({"BOOKING_CREATED"})
 
+# Cal.com webhook triggers that mean the booked meeting actually happened.
+# A booking is an intention; only this says the meeting took place, which is
+# what a membership pipeline's meeting stage is waiting on.
+MEETING_ENDED_EVENTS = frozenset({"MEETING_ENDED"})
+
 
 def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
     """Extract the fields we care about from a Cal.com webhook body.
 
     Cal.com posts ``{"triggerEvent": "...", "payload": {...}}``. We surface the
-    trigger, whether it represents a new booking, the booking uid, and the
-    attendee emails so a booking can be correlated back to a prospect.
+    trigger, whether it represents a new booking (``created``) or a meeting
+    that has finished (``attended``), the booking uid, and the attendee emails
+    so a booking can be correlated back to a prospect.
     """
     trigger = str(payload.get("triggerEvent") or "")
     data = payload.get("payload") or {}
@@ -53,6 +59,7 @@ def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "trigger": trigger,
         "created": trigger.upper() in BOOKING_CREATED_EVENTS,
+        "attended": trigger.upper() in MEETING_ENDED_EVENTS,
         "booking_uid": str(data.get("uid") or ""),
         "event_type_slug": str(event_type.get("slug") or data.get("type") or ""),
         "attendee_emails": emails,

@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A meeting stage advanced applicants who had not attended the meeting (2026-09-08)
+
+**Fixed**
+
+- **"Auto-advance when attendance is recorded" advanced applicants with no
+  attendance recorded, off meetings that had not happened yet.** A meeting
+  stage was the one stage type with no completion requirement at all: the
+  validator that grades interviews, checklists, approvals, references,
+  documents and screenings had no case for it, so anything reaching completion
+  completed it. Nothing in the pipeline ever read an attendance record or
+  compared a meeting's date to the present. An automated advance off a meeting
+  stage now requires attendance — the applicant checked in at an event the
+  stage accepts, and that event actually under way or over. A coordinator's
+  manual **Advance** is unchanged: someone who watched the applicant walk in is
+  better evidence than any record.
+- **An upload or an interview satisfied a stage that asks for attendance.** The
+  auto-advance helper checked only that the stage had auto-advance enabled and
+  was the applicant's current stage — never what kind of stage it was. A
+  document upload sends whatever stage the applicant is parked on, and an
+  interview recorded without a stage defaults to the same, so either one
+  completed a meeting stage. Each trigger now advances only the kind of stage
+  it is evidence for.
+- **Marking a stage Required did nothing.** The flag was stored and badged in
+  the stage list but read by no logic, so a required stage could be skipped
+  like any other. **Breaking:** a required stage can no longer be skipped —
+  complete it, or un-tick Required on the stage first. Stages default to
+  required, so departments that skip stages routinely will need to un-tick the
+  ones they skip.
+- **Two stages could share a position in the pipeline.** New stages were
+  numbered from the count of existing stages while deleting a stage left a gap,
+  so after any mid-pipeline deletion the next stage added collided with a live
+  one — and a tie decided both the board's column order and where an advance
+  went, differently from one page load to the next. The server now appends a
+  new stage after the last one, closes the gap when a stage is deleted, and a
+  migration renumbers the pipelines that already drifted. Adding a stage is
+  also guarded against a double-click creating two.
+
+**Changed**
+
+- **Cal.com advances a meeting stage when the meeting ends, not when it is
+  booked.** `BOOKING_CREATED` is a booking, not attendance: an applicant who
+  picked a slot three weeks out advanced the moment they picked it.
+  **Action required** for departments using Cal.com self-scheduling: subscribe
+  `MEETING_ENDED` on the Cal.com webhook, or the stage will wait for a manual
+  advance.
+- Both integration webhooks recorded the advance against a descriptive
+  placeholder ("integration:calcom") in a column that is a foreign key to the
+  users table, so on MySQL the advance failed on the constraint and the webhook
+  quietly did nothing. The acting integration is recorded in the step's result
+  and the audit event instead.
+
 ### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
 
 **Security**

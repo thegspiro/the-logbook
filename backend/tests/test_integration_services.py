@@ -683,3 +683,37 @@ class TestWebhookParsing:
         )
         assert parsed["created"] is False
         assert parsed["attendee_emails"] == []
+
+    def test_a_booking_is_not_attendance(self):
+        """Booking a slot three weeks out is an intention, not a meeting that
+        happened — and the pipeline stage it advances advertises "auto-advance
+        when attendance is recorded". Advancing on BOOKING_CREATED made the act
+        of booking count as having turned up."""
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "BOOKING_CREATED",
+                "payload": {
+                    "uid": "bk-3",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [{"email": "x@y.com"}],
+                },
+            }
+        )
+        assert parsed["created"] is True
+        assert parsed["attended"] is False
+
+    def test_a_finished_meeting_is_attendance(self):
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "MEETING_ENDED",
+                "payload": {
+                    "uid": "bk-3",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [{"email": "x@y.com"}],
+                },
+            }
+        )
+        assert parsed["attended"] is True
+        assert parsed["created"] is False
+        assert parsed["event_type_slug"] == "membership-interview"
+        assert parsed["attendee_emails"] == ["x@y.com"]

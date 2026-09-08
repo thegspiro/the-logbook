@@ -352,6 +352,7 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
       ? mapStepTypeToFrontend(data.current_step.step_type, data.current_step.action_type)
       : undefined,
     current_stage_config: (data.current_step?.config as StageConfig | null) ?? undefined,
+    current_stage_required: data.current_step?.required,
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
     stage_entered_at:
