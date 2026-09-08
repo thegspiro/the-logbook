@@ -89,6 +89,66 @@ PII_FIELDS = {
 #: model without walking the entire schema graph from every route.
 MAX_DEPTH = 4
 
+#: Routes whose exclusion was decided by a human sweep and which the schema
+#: scan above structurally cannot re-derive: a handler with no
+#: ``response_model`` is invisible to it, and a response schema that resolves
+#: member data into a field this file's ``PII_FIELDS`` does not name (a
+#: ``notes`` column, a ``user_id`` the frontend joins against the roster) does
+#: not flag either.
+#:
+#: The 2026-09-07 out-of-band sweep (PR #2381) excluded 18 routes; 9 of them
+#: flag through ``PII_FIELDS`` and so are already ratcheted by the two tests
+#: below. These 9 do not, which meant deleting a line from
+#: ``UNCACHEABLE_PREFIXES`` would have reopened the leak with a green suite —
+#: the ratchet cannot see a route it never flagged in the first place. Pinning
+#: them by URL is the only guard that fits, and it is deliberately a *frozen
+#: list of decisions*, not a rule: it says these nine stay excluded, and says
+#: nothing about any other route.
+#:
+#: Six carried a live disclosure through the shared cached axios instance; the
+#: other three are inert today only because of where they sit on the frontend
+#: (an uncached module client, or a wrapper nothing calls). "Inert today" is
+#: exactly what a guard is for — the apparatus module can gain a cache
+#: interceptor and a wrapper can gain a caller, neither of which touches this
+#: file.
+PINNED_EXCLUSIONS = {
+    # -- Live in the cache before PR #2381 (real fixes, no other guard) --
+    "/inventory/allowances/check/{user_id}/{category_id}": (
+        "a named member's entitlement, keyed by user_id in the URL"
+    ),
+    "/inventory/clearances": (
+        "departure clearances: who is leaving, departure type, notes, "
+        "outstanding value"
+    ),
+    "/inventory/items/{item_id}/exposures": (
+        "NFPA exposure records: user_id, exposure type, decon status, "
+        "free-text description — a member's contamination history"
+    ),
+    "/inventory/items/{item_id}/history": (
+        "resolves user_name, assignment reason and return notes; no "
+        "response_model, so the schema scan is blind to it"
+    ),
+    "/inventory/items/{item_id}/issuances": (
+        "who currently holds a pool item, by name"
+    ),
+    "/inventory/requests": (
+        "equipment requests: the requesting member and their free-text "
+        "notes; no response_model"
+    ),
+    # -- Inert today, guarded so it stays a decision rather than an accident --
+    "/apparatus/evoc-check/{apparatus_id}/{user_id}": (
+        "a named member's driving eligibility; served today by the apparatus "
+        "module's own uncached createApiClient() instance"
+    ),
+    "/inventory/clearances/{clearance_id}": (
+        "one departure clearance in full; no frontend wrapper exists today"
+    ),
+    "/training/instructors/validate/{user_id}/{course_id}": (
+        "a named member's qualification verdict; validateInstructor is "
+        "declared on the cached client with zero call sites today"
+    ),
+}
+
 
 def _schema_classes() -> dict[str, dict]:
     """Every Pydantic class in ``app/schemas`` with its bases and annotations."""
@@ -268,6 +328,46 @@ def test_baseline_has_no_stale_entries():
         "flag — they were excluded from the cache, removed, or their schema "
         "changed. Delete these lines (and the comment above each):\n"
         + "\n".join(f"  {url}" for url in stale)
+    )
+
+
+def test_pinned_pii_routes_stay_excluded_from_the_frontend_cache():
+    """The nine hand-judged exclusions cannot be deleted silently.
+
+    ``test_new_pii_route_is_excluded_from_the_frontend_cache`` above only ever
+    sees a route whose ``response_model`` names a field in ``PII_FIELDS``.
+    These nine name none, so removing their line from ``apiCache.ts`` would
+    put member data back in a 90s shared-tab cache with the whole suite green.
+    """
+    still_cached = {
+        url: why for url, why in PINNED_EXCLUSIONS.items() if not _is_excluded(url)
+    }
+    assert not still_cached, (
+        "Route(s) a prior sweep excluded from the frontend response cache are "
+        "cacheable again — their pattern is gone from UNCACHEABLE_PREFIXES or "
+        "UNCACHEABLE_SUBSTRINGS in frontend/src/utils/apiCache.ts.\n\n"
+        "Restore the pattern. If the route genuinely no longer returns member "
+        "data, remove it from PINNED_EXCLUSIONS in this file in the same "
+        "change, so the deletion is a stated decision rather than a "
+        "side effect.\n\n"
+        + "\n".join(f"  {url}  ({why})" for url, why in sorted(still_cached.items()))
+    )
+
+
+def test_pinned_routes_all_still_exist():
+    """A pin whose route is gone must be deleted, not left as decoration.
+
+    Same reason ``test_baseline_has_no_stale_entries`` exists: a list that only
+    grows stops describing the system it is meant to guard. A renamed route
+    fails here, which is the moment to re-check where its replacement sits.
+    """
+    known = {url for url, _module, _handler, _model in _get_routes()}
+    missing = sorted(set(PINNED_EXCLUSIONS) - known)
+    assert not missing, (
+        "PINNED_EXCLUSIONS names route(s) that no longer exist under any "
+        "v1 router. Delete the entry — and if the route was renamed rather "
+        "than removed, pin the new URL and add its pattern to "
+        "frontend/src/utils/apiCache.ts:\n" + "\n".join(f"  {url}" for url in missing)
     )
 
 

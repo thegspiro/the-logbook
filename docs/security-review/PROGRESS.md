@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 00 (Cross-cutting baseline, pass 4)** — PR
+[#2387](https://github.com/thegspiro/the-logbook/pull/2387), branch
+`claude/security-review-cross-cutting-pass4`. Opens pass 4. Three findings,
+all fixed, none needing an owner decision: **SEC4-3 (MED)** — the nine cache
+exclusions PR #2381 added that no automated check could see are now pinned by
+a guard test (verified red by deleting one denylist line, then restored);
+**SEC4-1 (LOW)** and **SEC4-2 (LOW)** — two handlers returning raw Python
+exception text to the client, found by a `safe_error_detail`-coverage AST
+sweep that is new to this file. Twelve standing sweep classes re-verified
+clean against a tree that has grown to 437 Alembic revisions and 1521 routes.
+PR #2381's pass-4 action item (a)/(b)/(c) is discharged in full and marked
+done in `SEC-00-cross-cutting-baseline.md`, so pass 5 should not re-derive
+it. Full write-up: the **Pass 4** section of
+`docs/security-review/SEC-00-cross-cutting-baseline.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (pass 3 complete, rotation reset for pass 4), preserved for history</summary>
+
 **None.** Feature 34 (Frontend shared, pass 5, corrective)'s PR #2382 merged
 (`f53258ee`) — fully green (17/17) and idle, all 6 Codex review threads
 across 3 rounds resolved (color-caching permission gap closed with
@@ -34,6 +52,8 @@ not a rotation iteration); its findings are recorded as prior art in
 `docs/module-audit/CROSS-CUTTING.md` so pass 4's Feature 00 iteration
 doesn't rediscover them. The Rotation table below is now reset to ⬜ for
 **pass 4**, starting at **00 (cross-cutting baseline)**.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2382 (pass 5, corrective), preserved for history</summary>
@@ -10967,7 +10987,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
@@ -11009,6 +11029,71 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 00 (Cross-cutting baseline, pass 4) — PR #2387 opened
+
+Pass 4 starts. No security-review PR was open, and the Rotation table's first
+⬜ row was 00, so this is a feature iteration rather than a tend pass.
+
+**3 findings, all fixed, 0 flagged.** Nothing needed a migration or an owner
+decision, so `KNOWN_LIMITATIONS.md` is untouched.
+
+- **SEC4-3 (MED)** — the nine cache exclusions from PR #2381 that
+  `test_api_cache_pii_exclusions.py` structurally cannot see (four whose
+  response schema names none of its 20 `PII_FIELDS`, two with no
+  `response_model` at all, three inert-today no-ops) had **no** regression
+  guard: deleting `'/inventory/clearances'` from `apiCache.ts` left the whole
+  suite green while putting who-is-leaving-and-what-they-owe back into a 90s
+  cache keyed with no user identity. Now pinned by URL, with the reason each
+  was pinned in the failure message, plus a second test that fails when a
+  pinned route stops existing so the list shrinks rather than rots. Verified
+  by making it go red and restoring.
+- **SEC4-1 (LOW)** — `POST /training/skills-testing/tests/{id}/email-results`
+  put `str(e)` from a bare `except Exception` around `send_email` into the
+  500 body: the configured SMTP host's name and the provider's auth-failure
+  response, handed to any `training.manage` holder. Now
+  `safe_error_detail(e, fallback="Failed to send email")`.
+- **SEC4-2 (LOW)** — `integrations._validate_config` caught **any** exception
+  from constructing the config model and reported it as a 422 with the raw
+  Python message, so a server-side fault (an `AttributeError` in a field
+  validator, reachable through the PATCH path's stored-config merge) was both
+  disclosed and misclassified as the caller's mistake. Narrowed to
+  `except ValidationError`.
+
+Both LOW findings came from a sweep class this file had not run before: an
+AST walk of every broad `except` in `app/` looking for the bound exception
+inside an `HTTPException(detail=...)`. 64 sites matched; 62 are custom domain
+exceptions whose curated message is the point of raising them, and those are
+recorded as deliberate rather than left ambiguous.
+
+**PR #2381's pass-4 action item is discharged in full**, and
+`SEC-00-cross-cutting-baseline.md`'s "Action for pass 4" note now says so, so
+pass 5 does not repeat it: (a) all six unratcheted genuine fixes still
+excluded — and re-confirmed still unratcheted by re-running the ratchet's own
+analysis with the denylist ignored, rather than taking the earlier count on
+trust; (b) all three no-ops still inert on both axes (the apparatus module
+still builds its client from `createApiClient`, and the cache functions are
+still imported by exactly one file); (c) the post-#2381 diff — 10 files —
+carries neither leak shape, and its one endpoint change _tightened_ a gate.
+
+Twelve standing sweep classes re-verified clean (CSV/`SafeCsvWriter`, `SET
+NULL` nullability, proxy-IP attribution, Alembic chain — now 437 revisions,
+single head `b1e7c3a92f45` — LIKE escaping, `BaseHTTPMiddleware`, in-memory
+trackers, blocking browser dialogs, JSON shallow-copy, org-scoping ratchet,
+capacity locking, route auth coverage). The tracker sweep was widened over
+pass 3's: it now walks `ast.AnnAssign` as well as `ast.Assign`, which is how
+the annotated declarations (`self._cache: Dict[...] = {}`) get seen at all —
+all 25 trackers are bounded, and sweep 7 names the bound for each rather than
+asserting the class. Uploads, send-time SSRF re-validation and PII in audit
+payloads were also checked and are recorded as clean with the mechanism
+named, so a later pass can re-check them cheaply.
+
+Gate: flake8 / black / isort (9.0.1, CI's pin) / `validate_migrations
+--strict` all clean; 174 scoped backend tests and 115 cross-cutting guard
+tests pass. No frontend source changed, so `tsc` / `eslint` are recorded as
+n/a rather than as a gate that ran.
+
+Next: 01 Auth & session lifecycle.
 
 ### 2026-09-07 — Pass 3 complete; rotation reset to ⬜ for pass 4; out-of-band PR #2381 credited toward Feature 00
 

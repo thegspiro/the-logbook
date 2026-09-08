@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Error messages stopped naming the mail server, and the cache denylist got a guard (2026-09-08)
+
+**Security**
+
+- **A failed results email no longer reports the mail server's own error to
+  the officer who sent it.** Emailing a skills-test scorecard to a candidate
+  wrapped the send in a catch-all that put the transport's exception text
+  straight into the response — the configured SMTP hostname when DNS could
+  not resolve it, the provider's verbatim rejection when credentials were
+  wrong. It now reports "Failed to send email" and the real error goes to the
+  server log, where it was already going.
+
+- **A broken integration config now reads as a server error instead of your
+  mistake.** Saving an integration's settings caught _any_ failure while
+  validating them and returned it as a 422 with the raw Python message
+  attached, so an internal fault looked like a complaint about what you
+  typed. Only Pydantic's own validation verdict is shown now; anything else
+  is a 500, which is both accurate and something the operators get alerted
+  about.
+
+- **Nine endpoints excluded from the response cache now have a test holding
+  them there.** The 2026-09-07 sweep excluded 18 PII-carrying routes;
+  the ratchet added alongside it can only see routes whose response schema
+  names a known personal field, which left nine — among them
+  `/inventory/clearances` (who is leaving and what they still owe) and
+  `/inventory/items/{id}/history` — held in place by nothing but the comment
+  next to them. A deletion from that 90-line list would have passed every
+  test in the repository. It now fails, naming the route and why it was
+  excluded.
+
 ### Two data-leakage fixes: separation reports, and the response cache (2026-09-07)
 
 **Security**
