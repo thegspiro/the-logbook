@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 06 (Elections & ballots, pass 4)'s PR #2400 merged
+(`de8db76d`, squash) by a 30-minute watchdog check — fully green (17/17
+checks including `CI Success`), `mergeable_state: clean`, Codex review
+completed on the final commit with nothing further raised, all review
+threads resolved. Two fixes this pass: ELEC-41 (HIGH — the public ballot
+rate limiters were completely inert, an unawaited coroutine) and ELEC-42
+(MED — found by Codex once ELEC-41 made the limiters actually run: both
+wrappers shared one rate-limit bucket instead of tracking reads and votes
+separately). See the superseded note below for the full write-up. Next: 07
+Users & organizations.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06 pass 4, PR #2400), preserved for history</summary>
+
 **Feature 06 (Elections & ballots, pass 4)** — PR
 [#2400](https://github.com/thegspiro/the-logbook/pull/2400), branch
 `claude/security-review-elections-ballots`. Two fixes: **ELEC-41 (HIGH)** —
@@ -44,8 +58,9 @@ flake8/black/isort clean; migration validator passed (no migration this
 pass); scoped pytest 555 passed; full backend suite 11,850 passed, 21
 pre-existing skips, 0 failed; frontend typecheck/lint both clean (no
 frontend file changed). See `docs/security-review/ELEC-06-elections-ballots.md`
-pass 4 for the full write-up. Next feature (once this PR merges): 07 Users &
-organizations.
+pass 4 for the full write-up.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05 pass 4, PR #2398 merged), preserved for history</summary>
@@ -11369,6 +11384,18 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 06 (Elections & ballots, pass 4)'s PR #2400 merged, watchdog recorded it
+
+PR #2400 was fully green (17/17 checks including `CI Success`),
+`mergeable_state: clean`, and Codex's review of the final commit (`676da49`,
+the ELEC-42 fix) completed with nothing further raised. Both review threads
+(ELEC-42, and the placeholder-link finding on an earlier commit) were
+resolved. Merged directly (`de8db76d`, squash) by a 30-minute watchdog check
+rather than left idle, matching the bar prior watchdog merges in this log
+have used (Features 04, 05, 23, 25, 33, 34). **Open PR** row cleared,
+rotation row 06 confirmed ✅ (it was already marked ✅ pending merge when the
+PR opened). Next: 07 Users & organizations.
 
 ### 2026-09-08 — Feature 06 (Elections & ballots, pass 4) — 2 fixed (HIGH + MED), 0 flagged — PR opened, then a Codex round fixed ELEC-42
 
