@@ -117,6 +117,34 @@ describe('MedicalSuppliesPage', () => {
     mockRetireItem.mockResolvedValue(undefined);
   });
 
+  /**
+   * The overview is five counters and every one of them renders. A response
+   * that is valid JSON but not this shape — a captive portal answering 200, an
+   * endpoint mid-rename — used to mark the section loaded and draw five zeros
+   * under an "Expiring within undefinedd" heading: a plausible all-clear over
+   * stock nobody had counted, which is the one wrong answer this screen must
+   * not give.
+   *
+   * Asserted through what the officer sees, not through the guard's internals,
+   * so the test survives a rewrite of how the shape is checked.
+   *
+   * The stale-data half — a malformed *refresh* leaving the previous numbers up
+   * behind the error — is not covered here: this page's only refresh is the
+   * pull-to-refresh gesture, registered through `useRegisterPullToRefresh` and
+   * driven by a provider that `AppLayout` mounts, so there is no control in
+   * this component to click. It would take mounting the layout, which is a
+   * different test than this one.
+   */
+  it('reports an unreadable overview rather than drawing it as zeros', async () => {
+    mockGetSummary.mockResolvedValue({});
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByText(/Could not load the overview/i)).toBeInTheDocument();
+    // The counters must not render at all: a "0" here is the failure mode.
+    expect(screen.queryByText(/Expiring within/i)).not.toBeInTheDocument();
+  });
+
   it('names the page for the domain it holds', async () => {
     renderWithRouter(<MedicalSuppliesPage />);
 

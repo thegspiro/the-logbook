@@ -79,21 +79,21 @@ const ShiftReportPrintPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <main id="main-content" className="flex min-h-screen items-center justify-center">
         <p className="text-gray-500" role="status" aria-live="polite">
           Loading report...
         </p>
-      </div>
+      </main>
     );
   }
 
   if (error || !report) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <main id="main-content" className="flex min-h-screen items-center justify-center">
         <p className="text-red-600" role="alert">
           {error || 'Report not found'}
         </p>
-      </div>
+      </main>
     );
   }
 

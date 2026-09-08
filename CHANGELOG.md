@@ -78,6 +78,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   broken. Both are documented in the spec.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
+### An adaptive fill needs an adaptive foreground, not a fixed shade (2026-09-08)
+
+**Fixed**
+
+- **Replacing the adaptive theme tokens with fixed shades traded one contrast
+  failure for another.** `bg-blue-800` clears AA against white text, but it is
+  only **2.02:1 against the dark theme's background** — and on the rank selector
+  the fill _is_ the eligibility indicator, so the selected state became hard to
+  find in the mode it was supposed to fix. The tokens are back, each paired with
+  a foreground that flips with them (`text-white dark:text-slate-950`). That
+  clears both bars everywhere: **7.93:1** text and **7.02:1** non-text in dark,
+  against 2.02:1 for the fixed shade. High-contrast carries the `.dark` class
+  too, so one variant covers both. Nothing looks different from `main` now.
+- **21 render branches across 10 public pages had no `<main>` at all**, so the
+  skip link pointed nowhere in every loading, error and submitted state — the
+  states people wait in. The previous check required the target on every
+  `<main>` it found, which passes a branch that renders none. It now walks each
+  component-level return; a branch routed through a shared shell that carries
+  the target (`FinanceApprovalPage`) still passes.
+- **The contrast sweep resolved a foreground once and reused it across themes**,
+  so `text-slate-950 dark:text-white` on a light fill was missed and the
+  `dark:`-variant fix would have been reported as a false failure. Resolved per
+  theme now. Its standalone-literal prefilter also required a numeric shade,
+  which discarded `const badge = 'bg-theme-… text-white'` before the semantic
+  check ran.
+
+**Testing**
+
+- A regression test for the malformed medical-supplies summary: `{}` must
+  surface the overview error rather than render five zeros.
+- `checkSweepContrast.test.ts` carries `slate-600`. That entry is now unused —
+  reverting to the adaptive tokens took `bg-slate-600` back out of the sweep
+  files — but it is left in place: the guard throws on an _unknown_ shade, not
+  an unmeasured one, so the entry costs nothing and the next change that reaches
+  for that shade finds it measured. Recorded with it, because it is the reason
+  that guard went red at all: `vitest related` follows import edges, so a
+  **source-sweeping test is invisible to it** — it reads the file off disk
+  rather than importing it. Page-markup changes need the full suite, not the
+  related one.
+
 ### Semantic theme fills were never contrast-checked, and the skip-link sweep read only one branch (2026-09-08)
 
 **Fixed**

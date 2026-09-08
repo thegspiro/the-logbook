@@ -102,6 +102,9 @@ const readPalette = (): Record<string, { r: number; g: number; b: number }> => {
   return palette;
 };
 
+/** The stylesheet, read once: the sweeps below consult it thousands of times. */
+const INDEX_CSS = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
+
 const PALETTE = readPalette();
 
 /**
@@ -126,7 +129,7 @@ const THEME_TOKENS: Array<{ theme: string; selector: string }> = [
 ];
 
 const themeValues = (): Map<string, Map<string, string>> => {
-  const css = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
+  const css = INDEX_CSS;
   const resolved = new Map<string, Map<string, string>>();
 
   for (const { theme, selector } of THEME_TOKENS) {
@@ -170,15 +173,29 @@ const THEME_VALUES = themeValues();
  * the raw one. Read the alias so a renamed token is followed rather than
  * guessed at.
  */
+const SEMANTIC_CACHE = new Map<string, Map<string, string>>();
+
 const semanticFill = (name: string): Map<string, string> => {
-  const css = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
+  // Memoised, and the stylesheet read once. This is called per fill per
+  // segment across ~500 files; re-reading and re-parsing a 2,000-line
+  // stylesheet each time took the test from 2s standalone to a 5s timeout
+  // under a loaded CI runner, which is a failure that only ever appears where
+  // it is hardest to read.
+  const cached = SEMANTIC_CACHE.get(name);
+  if (cached) return cached;
+
+  const css = INDEX_CSS;
   const alias = new RegExp(`--color-${name}\\s*:\\s*var\\((--[\\w-]+)\\)`).exec(css);
   const resolved = new Map<string, string>();
-  if (!alias?.[1]) return resolved;
+  if (!alias?.[1]) {
+    SEMANTIC_CACHE.set(name, resolved);
+    return resolved;
+  }
   for (const { theme } of THEME_TOKENS) {
     const value = THEME_VALUES.get(theme)?.get(alias[1]);
     if (value) resolved.set(theme, value);
   }
+  SEMANTIC_CACHE.set(name, resolved);
   return resolved;
 };
 
@@ -255,7 +272,7 @@ describe('primary fill contrast', () => {
    * it is added, and an unknown shade fails loudly instead of being skipped.
    */
   it('gives every shared white-on-fill utility a AAA background', () => {
-    const css = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
+    const css = INDEX_CSS;
 
     const failures = [...css.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].flatMap(([, name, body]) => {
       if (!body?.includes('text-white')) return [];
@@ -369,44 +386,96 @@ describe('primary fill contrast', () => {
         }
       }
 
-      // The semantic fills, measured in every theme.
+      // The semantic fills, measured in every theme, foreground included.
       //
       // These carry no shade number, so the numeric pattern above cannot see
       // one — and they are the fills most likely to be wrong, because their
-      // value flips between themes while the `text-white` beside them does not.
-      // Both live failures were that shape: `bg-theme-accent-blue` is blue-900
-      // in light (10.36:1) and a light blue in dark (2.54:1) and high-contrast
-      // (2.17:1); `bg-theme-text-muted` is `#ffffff` in dark, which made the
-      // control white on white.
+      // value flips between themes. `bg-theme-accent-blue` is blue-900 in light
+      // and a light blue in dark and high-contrast; `bg-theme-text-muted` is
+      // `#ffffff` in dark, which made one control white on white.
+      //
+      // The foreground is resolved per theme, not once. `dark:` is the variant
+      // a call site uses to answer a flipping fill — `text-white
+      // dark:text-slate-950` is the correct pairing for these tokens — so
+      // picking one foreground up front and reusing it across all three themes
+      // both misses the dark-mode failure of `text-slate-950 dark:text-white`
+      // and reports a false one for the fix. High-contrast carries the `.dark`
+      // class too (ThemeContext adds both), so a `dark:` foreground applies
+      // there as well.
       //
       // Same segment discipline as above, and for the same reason: a ternary
       // puts a muted fill and a white foreground from two different branches on
       // one line, and reading them as one pairing is how this sweep reported
       // nine surfaces that render nothing of the kind.
-      for (const [, variant, token] of segment.matchAll(/\b((?:[a-z-]+:)*)bg-(theme-[a-z-]+)\b(?!\/)/g)) {
+      const THEME_VARIANT: Record<string, string> = {
+        light: '',
+        dark: 'dark:',
+        'high-contrast': 'dark:',
+      };
+
+      // The trailing `(?!-)` rejects a class name built by interpolation. A
+      // surface utility with a `${...}` suffix would otherwise capture with a
+      // dangling hyphen and report twenty "resolves to no theme value" findings
+      // for classes Tailwind never generates, since it needs whole class names
+      // at build time.
+      //
+      // Written without a literal example on purpose: `themeTokenIntegrity`
+      // sweeps this source too, and an illustrative half-token in a comment is
+      // indistinguishable to it from the real thing — which is how this comment
+      // took that test red.
+      for (const [, variant, token] of segment.matchAll(/\b((?:[a-z-]+:)*)bg-(theme-[a-z]+(?:-[a-z]+)*)\b(?![/-])/g)) {
         const prefix = variant ?? '';
-        const fg = candidatePrefixes(prefix)
-          .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
-          .find((value) => value !== undefined);
-        if (fg !== 'white') continue;
         const perTheme = semanticFill(token ?? '');
         if (perTheme.size === 0) {
-          offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} resolves to no theme value`);
+          // Only report a token nothing renders if something did pair a
+          // foreground with it; an unknown token with no text is not this
+          // check's business.
+          const anyForeground = candidatePrefixes(prefix)
+            .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
+            .find((value) => value !== undefined);
+          if (anyForeground !== undefined) {
+            offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} resolves to no theme value`);
+          }
           continue;
         }
+
         for (const [theme, value] of perTheme) {
+          // The foreground this theme actually paints: the `dark:`-prefixed one
+          // where the theme has that class, falling back to the unprefixed.
+          const themePrefix = THEME_VARIANT[theme] ?? '';
+          const fg = candidatePrefixes(`${themePrefix}${prefix}`)
+            .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
+            .find((candidateValue) => candidateValue !== undefined);
+
+          // Still only `text-white`, evaluated per theme rather than once.
+          //
+          // That per-theme evaluation is the whole point: `dark:text-slate-950`
+          // is how a call site answers a fill that flips, so a single
+          // resolution either misses the dark-mode failure of
+          // `text-slate-950 dark:text-white` or reports a false one against the
+          // fix. Keeping the white gate keeps the scope: this measures a label
+          // on a filled control, not every icon that happens to sit on a
+          // surface token — widening it to any foreground turns 7 findings into
+          // 150, nearly all of them icons at 3:1 non-text contrast, which is a
+          // different question than the one this check answers.
+          if (fg !== 'white') continue;
+          const foreground = { r: 255, g: 255, b: 255 };
+
           const rgb = hexToRgb(value);
           // A translucent token over a gradient has no single value to measure.
-          // Reported rather than skipped: a white-on-translucent pairing is not
-          // something this check can clear, and silence would read as a pass.
+          // Reported rather than skipped: such a pairing is not something this
+          // check can clear, and silence would read as a pass.
           if (!rgb) {
             offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} is ${value} in ${theme}, unmeasurable`);
             continue;
           }
-          const themeRatio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+          const themeRatio = contrastRatio(
+            relativeLuminance(rgb.r, rgb.g, rgb.b),
+            relativeLuminance(foreground.r, foreground.g, foreground.b)
+          );
           if (themeRatio < 4.5) {
             offenders.push(
-              `${path.relative(SRC, file)}:${line} — ${prefix}white on bg-${token} is ${themeRatio.toFixed(2)}:1 in ${theme}`
+              `${path.relative(SRC, file)}:${line} — ${fg} on bg-${token} is ${themeRatio.toFixed(2)}:1 in ${theme}`
             );
           }
         }
@@ -479,7 +548,12 @@ describe('primary fill contrast', () => {
       for (const match of source.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)) {
         const index = match.index ?? 0;
         const value = match[1] ?? match[2] ?? match[3] ?? '';
-        if (!/\bbg-[a-z]+-\d{2,3}\b/.test(value)) continue;
+        // Both fill shapes, or the semantic check below never sees a class
+        // map. A numeric-only prefilter discarded
+        // `const badge = 'bg-theme-alert-danger-icon text-white'` before
+        // `inspect` ran, leaving the standalone literals this pass exists to
+        // cover unguarded for exactly the tokens that flip between themes.
+        if (!/\bbg-(?:[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*)\b/.test(value)) continue;
         if (covered.some((range) => index >= range.start && index < range.end)) continue;
         found.push({ value, line: source.slice(0, index).split('\n').length });
       }

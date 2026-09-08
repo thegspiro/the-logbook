@@ -64,7 +64,7 @@ export const AdminAttentionQueue: React.FC<AdminAttentionQueueProps> = ({ items,
           Needs attention
         </h2>
         <span
-          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-800 px-1.5 text-[11px] font-bold text-white tabular-nums"
+          className="bg-theme-alert-danger-icon inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white tabular-nums dark:text-slate-950"
           aria-label={`${items.length} ${items.length === 1 ? 'exception' : 'exceptions'} in ${moduleLabel}`}
         >
           {items.length}

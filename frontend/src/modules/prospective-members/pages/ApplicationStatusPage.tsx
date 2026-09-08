@@ -74,26 +74,30 @@ export const ApplicationStatusPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div
+      <main
+        id="main-content"
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
         role="status"
         aria-live="polite"
       >
         <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
         <span className="sr-only">Loading application status...</span>
-      </div>
+      </main>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="w-full max-w-md text-center">
           <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-amber-700 dark:text-amber-400" aria-hidden="true" />
           <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Application Not Found</h1>
           <p className="text-theme-text-secondary">{error}</p>
         </div>
-      </div>
+      </main>
     );
   }
 

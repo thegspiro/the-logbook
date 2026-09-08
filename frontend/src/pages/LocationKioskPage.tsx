@@ -136,25 +136,31 @@ const LocationKioskPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen items-center justify-center bg-linear-to-br">
+      <main
+        id="main-content"
+        className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen items-center justify-center bg-linear-to-br"
+      >
         <div className="text-center">
           <div className="mb-6 inline-block h-16 w-16 animate-spin rounded-full border-t-4 border-b-4 border-red-500" />
           <p className="text-theme-text-primary text-xl">Loading display...</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   // Error state (permanent — bad code)
   if (error && !data) {
     return (
-      <div className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen items-center justify-center bg-linear-to-br p-8">
+      <main
+        id="main-content"
+        className="from-theme-nav-bg via-theme-surface to-theme-nav-bg flex min-h-screen items-center justify-center bg-linear-to-br p-8"
+      >
         <div className="max-w-md text-center">
           <MapPin className="text-theme-text-muted mx-auto mb-6 h-16 w-16" />
           <h1 className="text-theme-text-primary mb-4 text-2xl font-bold">Display Unavailable</h1>
           <p className="text-theme-text-secondary">{error}</p>
         </div>
-      </div>
+      </main>
     );
   }
 

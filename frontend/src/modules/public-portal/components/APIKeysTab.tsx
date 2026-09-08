@@ -162,7 +162,10 @@ const KeyDisplayModal: React.FC<KeyDisplayModalProps> = ({ isOpen, apiKey, onClo
   };
 
   const footer = (
-    <button onClick={onClose} className="btn-primary rounded-md px-4 py-2">
+    <button
+      onClick={onClose}
+      className="bg-theme-nav-bg text-theme-text-primary hover:bg-theme-surface-hover rounded-md px-4 py-2"
+    >
       I've Saved the Key
     </button>
   );

@@ -190,29 +190,69 @@ describe('skip link target', () => {
   });
 
   it('is present in every render branch of every page outside AppLayout', () => {
-    // Every `<main>` in the file, not "the file mentions the id somewhere".
-    //
-    // A substring check passes a page that carries the target in one branch and
-    // drops it in the others, which is exactly what these pages did:
-    // `ForgotPasswordPage` had it on the success screen and not on the form,
-    // and `ResetPasswordPage` had it only while validating the token — so the
-    // skip link pointed nowhere in the states people actually sit in, while
-    // this sweep reported them covered. A page that renders its own shell
-    // renders one `<main>` per branch, and the target belongs on all of them.
+    /**
+     * Each component-level `return (<jsx>)`, not "the file mentions the id".
+     *
+     * Two weaker versions shipped before this one, and both passed a page whose
+     * skip link went nowhere. A substring check over the file cleared
+     * `ForgotPasswordPage`, which had the target on its success screen and not
+     * on the form. Requiring it on every `<main>` then cleared `BallotVotingPage`,
+     * whose loading, error and submitted branches render a full-screen `<div>`
+     * and no `<main>` at all — so there was no tag for that rule to fail on. A
+     * render state with no landmark is the same defect as one with an
+     * unlabelled landmark; the user cannot skip to content either way.
+     */
     const findings = pages.flatMap((page) => {
-      const source = fs.readFileSync(path.join(SRC, page), 'utf8');
-      // Brace-aware, because a `<main>` tag's props contain `{...}` expressions
-      // that can hold a `>`.
-      const tags = source.match(/<main\b(?:[^>{]|\{[^}]*\})*?>/gs) ?? [];
-      if (tags.length === 0) return [`${page} — renders no <main> at all`];
-      const untargeted = tags.filter((tag) => !tag.includes('id="main-content"')).length;
-      return untargeted > 0 ? [`${page} — ${untargeted} of ${tags.length} <main> elements lack the target`] : [];
+      const source = read(page);
+      const lines = source.split('\n');
+      const missing: number[] = [];
+
+      lines.forEach((line, index) => {
+        // A component-level return, by indentation: the component body sits at
+        // 2, an `if` branch inside it at 4. Deeper is a `.map()` callback or a
+        // nested helper, which renders a fragment rather than a page.
+        const opener = /^(\s*)return \($/.exec(line);
+        if (!opener || (opener[1] ?? '').length > 4) return;
+
+        // Balance the parens to take the whole returned expression.
+        let depth = 0;
+        const body: string[] = [];
+        for (let k = index; k < lines.length; k++) {
+          const current = lines[k] ?? '';
+          depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
+          body.push(current);
+          if (depth <= 0) break;
+        }
+        const jsx = body.slice(1).join('\n');
+
+        // Only a branch that returns markup directly. A helper returning an
+        // object whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is
+        // not a render state, and OnboardingCheck has one.
+        if (!/^\s*</.test(jsx)) return;
+        if (jsx.includes('id="main-content"')) return;
+
+        // A root that is a local component can carry the target itself —
+        // `FinanceApprovalPage` renders every branch through one `<Shell>`.
+        const root = /<([A-Z]\w+)/.exec(jsx);
+        if (root?.[1]) {
+          const declaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
+          if (declaration && source.slice(declaration.index, declaration.index + 2000).includes('id="main-content"')) {
+            return;
+          }
+        }
+        missing.push(index + 1);
+      });
+
+      return missing.length > 0
+        ? [`${page} — no skip-link target in the branch(es) returning at line ${missing.join(', ')}`]
+        : [];
     });
 
     expect(
       findings,
       "these pages render their own root, so each must provide the skip link's target itself, " +
-        'in every branch that renders: give each <main> id="main-content" as the onboarding steps do'
+        'in every state that renders: give each branch\'s root <main id="main-content">, ' +
+        'or route the branches through one shared shell that has it'
     ).toEqual([]);
   });
 });
