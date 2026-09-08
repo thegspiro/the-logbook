@@ -1764,6 +1764,28 @@ class StorefrontService:
             if blocked:
                 raise ValueError(blocked)
 
+        settles_payment = (
+            status == StoreOrderStatus.PAID
+            and order.payment_status
+            not in (
+                StorePaymentStatus.PAID,
+                StorePaymentStatus.WAIVED,
+            )
+        )
+        if settles_payment:
+            # SoD (same control as mark_order_paid/record_payment/
+            # waive_order_payment, SF-6): this branch settles the ledger the
+            # same way those three do, and is reachable independently of them
+            # through a plain status update -- POST /orders/{order_id}/status
+            # and its bulk sibling both call this method directly -- so it
+            # needs the same guard, checked before any mutation.
+            assert_different_person(
+                actor_id,
+                order.user_id,
+                action="mark paid via a status update on",
+                record="order",
+            )
+
         previous = order.status
         order.status = status
         if status == StoreOrderStatus.FULFILLED:
@@ -1771,10 +1793,7 @@ class StorefrontService:
             order.fulfilled_by = actor_id
             for item in order.items:
                 item.fulfilled_quantity = item.quantity
-        elif status == StoreOrderStatus.PAID and order.payment_status not in (
-            StorePaymentStatus.PAID,
-            StorePaymentStatus.WAIVED,
-        ):
+        elif settles_payment:
             # Marking an order "paid" from the fulfillment side means the money
             # landed; keep the payment ledger consistent with it.
             order.payment_status = StorePaymentStatus.PAID

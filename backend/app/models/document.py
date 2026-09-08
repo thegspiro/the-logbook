@@ -152,6 +152,23 @@ SYSTEM_FOLDERS = [
         "icon": "calendar",
         "color": "text-rose-400",
     },
+    {
+        "slug": "member-separations",
+        "name": "Member Separations",
+        "description": "Property-return reports for departed members",
+        "sort_order": 11,
+        "icon": "user-minus",
+        "color": "text-stone-400",
+        # A property-return report names the departed member, quotes the
+        # reason for the separation (involuntary ones included) and prints
+        # their home address so the report can be posted to them. Filing that
+        # in "Reports" — ORGANIZATION visibility, i.e. every documents.view
+        # holder — published a dropped member's address and the grounds for
+        # their removal to the whole department. Same hazard, and the same
+        # answer, as executive minutes: see the MM2-1 note in
+        # DocumentService.publish_minutes.
+        "visibility": FolderVisibility.LEADERSHIP,
+    },
 ]
 
 

@@ -145,6 +145,274 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 43 AAA-only contrast findings remain at individual call sites, held by the
   per-route budget. The shared utilities are all AAA.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+### The budget summary and approval-chain preview always returned "not found" (2026-09-08)
+
+**Fixed**
+
+- **The finance module's budget summary and approval-chain preview endpoints
+  never worked.** Both were registered after a same-shaped `/{id}` route in
+  the API, so every request to them was intercepted by the by-id lookup
+  instead — with the fixed word ("summary", "preview") treated as an id that
+  never matched a real record, always answering "not found." Reordering the
+  routes makes both reachable; a test now fails if either is ever shadowed
+  again. Previewing an approval chain for parameters that genuinely match
+  none now correctly answers "not found" rather than a generic server error.
+
+### A department store manager can no longer settle their own order's balance (2026-09-08)
+
+**Security**
+
+- **Advancing a store order's status to "Paid" no longer lets a manager clear
+  their own balance.** Marking an order paid, waiving it, and refunding it
+  already required a second person when the manager placing the order and the
+  manager approving the payment were the same member — but changing the
+  order's status directly to "Paid" settled the same balance to zero through
+  a separate code path that carried no such check. A `storefront.manage`
+  holder who had also placed a personal order could zero it out, alone, with
+  no money changing hands. That path now requires a different person too,
+  matching every other way a store order gets marked paid.
+
+### The public portal's data whitelist works, and its hourly key limit holds (2026-09-08)
+
+**Fixed**
+
+- **The public website API no longer returns an error when only some fields
+  are shared.** A department chooses field by field what its public website may
+  read — name, phone, description, member count and so on — and nothing is
+  shared until somebody enables it. That starting state, and every state short
+  of "everything enabled", made the organization-information and
+  organization-statistics endpoints answer with an error instead of the empty
+  or partial document they were supposed to return. A department that had
+  shared only its name and phone number got nothing at all. Both now return
+  exactly the fields that are enabled, with the rest left empty.
+
+- **Fields a department has not shared no longer come back as explicit
+  nulls, or partial shares as every unshared field alongside them.** Making
+  the endpoints tolerate an unshared field (above) left them serialising it
+  as `"field": null` instead of omitting it outright, and a partial share
+  returned every field that was _not_ enabled right alongside the ones that
+  were — both endpoints now return only the fields actually enabled.
+
+**Security**
+
+- **A public-website API request that the server ultimately rejects can no
+  longer be recorded in the access log as having succeeded.** The log entry
+  was written before the response was fully checked, so a request whose
+  reply failed a late check still landed in the log as a success — hiding
+  exactly the failures an administrator or the portal's own abuse detection
+  would want to see.
+
+- **A public-website API key can no longer exceed its hourly request
+  allowance.** The allowance is counted in memory and periodically reconciled
+  against the recorded request log. Because that log only ever kept requests
+  that finished successfully, a caller whose requests were being refused —
+  every request is refused while the portal is switched off — had its running
+  count reset to zero each time it approached the ceiling, and so never reached
+  it. The reconciliation can still correct the count upwards, which is what it
+  is for across multiple server processes, but it can no longer push it down.
+  That reconciliation check also compared against the wrong time window,
+  which could freeze a key's count too high for the rest of the hour right
+  after the hour changed; it now compares against the same hour the count
+  itself tracks.
+
+- **The public portal's access log now records the requests that failed.** The
+  log is what an administrator reads to spot abuse, and what the portal's own
+  anomaly detection reads to flag it. Entries written for a refused or failed
+  request were discarded along with the rest of that request's database work,
+  so the log showed only traffic that had succeeded — the least interesting
+  half. Refusals and failures are now kept.
+
+### Read-only permissions stopped counting as write permission, and a rank reorder got a ceiling (2026-09-08)
+
+**Security**
+
+- **A view-only grant can no longer authorize a change to a restricted
+  document folder.** A folder can require a permission before anyone may open
+  it — a facility's insurance and lease folder requires the sensitive-records
+  grant — and the check that decides whether someone may _change_ such a
+  folder is supposed to ignore the read-only entries in that list. It worked
+  out which entries those were from the permission's name, and two of the
+  department's read permissions are spelled in a way it did not recognise, so
+  it would have accepted either as proof of write authority. No folder in the
+  application names either permission today, so nothing was actually exposed;
+  the rule is now right for the next folder somebody sets up, and a test holds
+  every permission's read-or-write classification against its own written
+  description.
+
+- **Reordering the department's rank list is now capped at 500 ranks per
+  request.** The screen sends the whole list back when an administrator drags
+  a rank, and the server looked each one up individually with no limit on how
+  many it would accept — a single crafted request could have tied up a server
+  process for a very long time. No real rank ladder comes close to the cap.
+
+- **Two unused role-assignment helpers now refuse to work across
+  departments.** Neither is reachable from any screen, which is exactly why
+  they were fixed: each took a member and a position with no check that either
+  belonged to the caller's department, so the first screen wired up to them
+  would have crossed that line in a one-line change nobody would have thought
+  to question.
+
+### Turning on the MFA requirement no longer locks out everyone still on a temporary password (2026-09-08)
+
+**Fixed**
+
+- **A member who must change their password can now do so even when the
+  department requires two-factor authentication.** Two separate rules restrict
+  what an account in an unfinished state may reach: one confines a member with
+  a temporary password to the change-password screen, the other confines an
+  un-enrolled member to the two-factor setup screens when the department
+  requires 2FA. A member in both states at once — which is every account an
+  administrator has created, every bulk-imported member, and every prospect
+  converted to a member — could reach neither. Switching on the department-wide
+  2FA requirement permanently locked all of them out of everything except
+  their own profile, with no way back for them or for an administrator short
+  of switching the requirement off again. Changing the password is now allowed
+  under both rules, so the sequence completes: change the password, then
+  enrol.
+
+**Security**
+
+- **Every two-factor code check is now held to single use by a test, not by
+  review.** Three earlier fixes established that verifying an authenticator
+  code must also spend it, so the same code cannot be replayed at the sign-in
+  screen seconds later. Nothing enforced that, and the older non-consuming
+  check was still available under the more obvious name. A sweep now fails the
+  build if any part of the application verifies a code without spending it, if
+  a second place gains the ability to spend one, or if the TOTP library is
+  used outside the one module that wraps it.
+
+### Error messages stopped naming the mail server, and the cache denylist got a guard (2026-09-08)
+
+**Security**
+
+- **A failed results email no longer reports the mail server's own error to
+  the officer who sent it.** Emailing a skills-test scorecard to a candidate
+  wrapped the send in a catch-all that put the transport's exception text
+  straight into the response — the configured SMTP hostname when DNS could
+  not resolve it, the provider's verbatim rejection when credentials were
+  wrong. It now reports "Failed to send email" and the real error goes to the
+  server log, where it was already going.
+
+- **A broken integration config now reads as a server error instead of your
+  mistake.** Saving an integration's settings caught _any_ failure while
+  validating them and returned it as a 422 with the raw Python message
+  attached, so an internal fault looked like a complaint about what you
+  typed. Only Pydantic's own validation verdict is shown now; anything else
+  is a 500, which is both accurate and something the operators get alerted
+  about.
+
+- **Nine endpoints excluded from the response cache now have a test holding
+  them there.** The 2026-09-07 sweep excluded 18 PII-carrying routes;
+  the ratchet added alongside it can only see routes whose response schema
+  names a known personal field, which left nine — among them
+  `/inventory/clearances` (who is leaving and what they still owe) and
+  `/inventory/items/{id}/history` — held in place by nothing but the comment
+  next to them. A deletion from that 90-line list would have passed every
+  test in the repository. It now fails, naming the route and why it was
+  excluded.
+
+### Two data-leakage fixes: separation reports, and the response cache (2026-09-07)
+
+**Security**
+
+- **A property-return report no longer publishes a departed member's home
+  address to the whole department.** When a member was dropped, the generated
+  report — which names them, quotes the reason for the separation (involuntary
+  ones included) and prints their home address so the letter can be posted —
+  was filed in the `Reports` system folder. That folder is
+  organization-visible, so every holder of plain `documents.view` could read
+  it. Reports now go to a new leadership-only **Member Separations** folder,
+  and the folder is resolved before the document is written rather than
+  falling back to `folder_id = NULL`, which `can_access_document` also treats
+  as organization-level. This is the hazard `publish_minutes` already refuses
+  for executive minutes (MM2-1); it is now refused here by the same mechanism.
+
+  A migration creates the folder for existing departments and moves reports
+  already filed in `Reports` into it. **Visible change:** members who could
+  previously open these reports no longer can. The downgrade restores the
+  prior arrangement exactly, disclosure included, so it is for a schema
+  rollback rather than a decision to undo.
+
+- **Ten member-PII endpoints were being held in the frontend response cache.**
+  `apiCache.ts` is cache-by-default with a denylist, so an endpoint added to
+  the backend is cached unless someone remembers to edit a TypeScript file in
+  the other half of the repository — and ten had not been. Among them:
+  `/inventory/items/{id}/exposures` (a member's contamination and decon
+  history), `/inventory/clearances` (who is leaving and what they still owe),
+  `/inventory/items/{id}/history` and `/roles/{id}/users`. All are now
+  excluded.
+
+  `backend/tests/test_api_cache_pii_exclusions.py` resolves every GET route's
+  response schema and fails on a new one that carries member PII and is not
+  excluded — a ratchet, in the manner of `test_org_scoping_ratchet.py`, with
+  an empty baseline. CLAUDE.md stated this rule and nothing checked it, which
+  is the same gap that let pitfall #16 regress after holding across 58 call
+  sites on review discipline alone.
+
+### An inventory item's colour could be briefly cached even when it wasn't just a colour (2026-09-07)
+
+**Fixed**
+
+- `GET /inventory/items/colors` — the list a settings screen's colour filter
+  builds its dropdown from — was left cacheable on the assumption the field
+  is a plain colour name. It isn't constrained to one: `color` is free text up
+  to 50 characters with no fixed vocabulary (a department stocks whatever its
+  supplier sells), so whatever an inventory manager or a CSV import puts in
+  that column is exactly what this globally-shared response echoes back for
+  up to 90 seconds. Added to the client's cache-exclusion list alongside the
+  other free-text fields already excluded there.
+- The same endpoint required only being signed in, not `inventory.view` like
+  every other read on the inventory router — a custom position without that
+  permission could still read every colour in the org's catalog through this
+  one route. Now gated on `inventory.view` to match its siblings.
+
+### Grouping the items list by size no longer 500s the endpoint (2026-09-07)
+
+**Fixed**
+
+- **Grouping by Size crashed the items endpoint for any department stocking
+  boots or waist measurements.** `size` is deliberately free text — "10.5 EE",
+  "lg" — but SQLAlchemy infers a `COALESCE`'s result type from its _first_
+  argument, so `COALESCE(standard_size, size)` was typed `Enum(StandardSize)`
+  and every row went through the enum result processor on the way back. A
+  free-text value then raised `LookupError` and the whole list returned 500.
+  The grouping expression is now cast to text.
+- **Condition, Style and Size groups were keyed and labelled with a Python
+  repr.** `str()` on a `(str, Enum)` member renders `ItemCondition.GOOD`, not
+  `good` — which both headed the group with the repr and never matched the
+  value a row carried, so every one of those groups showed no count at all.
+  Keys and labels now use the enum's value.
+- **A row could be filed under a group the header did not count.** The page
+  re-derived each row's group key from its own fields plus a locations lookup
+  capped at 100 rows, so an item in a department's 101st location landed under
+  "Unspecified" while the backend counted it under its real name. The server now
+  stamps `group_key` on every row and the page consumes it — which also settles
+  colour's lower-cased key, location's `COALESCE` precedence and the `item_type`
+  join, each of which was a separate chance to disagree (pitfall #29).
+- The group header row declared `scope="colgroup"`, marking it a header for a
+  group of _columns_; it labels the rows beneath it, so it is now
+  `scope="rowgroup"` — and each group is rendered as its own `<tbody>`. The
+  scope change alone was not enough: `rowgroup` binds a header to its row
+  group, so with every heading in one `<tbody>` each claimed the rows to the
+  end of the table rather than its own.
+- **A department's own group names were being rewritten for display.**
+  Underscores were opened out unconditionally to humanise enum values like
+  `in_maintenance`, which also rewrote a station really called `Station_1` or a
+  category `SCBA_Equipment`. Only enum-backed dimensions are humanised now;
+  size uses the existing `sizeLabel`, and category, colour, location and vendor
+  names render exactly as typed.
+- **Changing the grouping dimension briefly rendered the previous dimension's
+  keys.** `group_by` changes with the dropdown, but the loaded rows keep the
+  key the server stamped for the dimension they were fetched for until the
+  debounced request lands — and indefinitely if it fails. The table now renders
+  against the dimension its rows were actually fetched for, so it shows the
+  last consistent state rather than a mixture of two.
+
+**Known limitation**
+
+- When a single group holds more rows than the 50-row page, collapsing it hides
+  every loaded row while "Load More" keeps fetching more members of that same
+  hidden group. Pagination is row-wise, not group-wise. Not addressed here.
 
 ### A grouped items list stops repeating the grouped value on every row (2026-09-07)
 

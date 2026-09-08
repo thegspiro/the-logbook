@@ -724,8 +724,8 @@ describe('InventoryItemsPage — grouping', () => {
     mockGetItems.mockReset();
     mockGetItems.mockResolvedValue({
       items: [
-        makeItem({ id: 'a-coat', name: 'Dress Coat', category_id: 'cat-a' }),
-        makeItem({ id: 'b-polo', name: 'Class B Polo', category_id: 'cat-b' }),
+        makeItem({ id: 'a-coat', name: 'Dress Coat', category_id: 'cat-a', group_key: 'cat-a' }),
+        makeItem({ id: 'b-polo', name: 'Class B Polo', category_id: 'cat-b', group_key: 'cat-b' }),
       ],
       total: 2,
       groups: [
@@ -807,7 +807,7 @@ describe('InventoryItemsPage — grouping', () => {
 
   it('heads the no-value bucket "Unspecified" rather than dropping it', async () => {
     mockGetItems.mockResolvedValue({
-      items: [makeItem({ id: 'x', name: 'Unsorted Helmet' })],
+      items: [makeItem({ id: 'x', name: 'Unsorted Helmet', group_key: null })],
       total: 1,
       groups: [{ key: null, label: null, available_count: 1, unavailable_count: 0 }],
     });
@@ -817,6 +817,68 @@ describe('InventoryItemsPage — grouping', () => {
     // not vanish from a list it matches the filters for.
     expect(await screen.findByRole('button', { name: /Unspecified/ })).toBeInTheDocument();
     expect(screen.getByText('Unsorted Helmet')).toBeInTheDocument();
+  });
+
+  it("files a row under the server's key even when local data would disagree", async () => {
+    // The regression this guards: the page used to re-derive the group key
+    // from the row's own fields plus a locations lookup capped at 100 rows.
+    // Colour keys lower-cased, location follows a COALESCE, item_type lives on
+    // the category — every one a chance to disagree with the header's count,
+    // and the failure is a silent missing total (CLAUDE.md pitfall #29).
+    mockGetItems.mockResolvedValue({
+      items: [
+        // Nothing on this row spells 'far-loc'; only the server knows it.
+        makeItem({ id: 'far', name: 'Distant Nozzle', group_key: 'far-loc' }),
+      ],
+      total: 1,
+      groups: [{ key: 'far-loc', label: 'Shelf Z-9', available_count: 7, unavailable_count: 0 }],
+    });
+    await chooseGrouping('location');
+
+    const header = await screen.findByRole('button', { name: /Shelf Z-9/ });
+    expect(header).toHaveTextContent('(7)');
+    expect(screen.getByText('Distant Nozzle')).toBeInTheDocument();
+    // Not stranded under Unspecified with no count.
+    expect(screen.queryByRole('button', { name: /Unspecified/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves a department-authored name exactly as typed', async () => {
+    // Underscore-opening is for enum values like `in_maintenance`. Category,
+    // colour, location and vendor names are typed by the department, so an
+    // unconditional replace rewrites their own data.
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 's1', name: 'Nozzle', group_key: 'cat-s1' })],
+      total: 1,
+      groups: [{ key: 'cat-s1', label: 'Station_1', available_count: 1, unavailable_count: 0 }],
+    });
+    await chooseGrouping('category');
+
+    expect(await screen.findByRole('button', { name: /Station_1/ })).toBeInTheDocument();
+  });
+
+  it('opens out underscores in an enum-backed value', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'm1', name: 'Saw', group_key: 'in_maintenance' })],
+      total: 1,
+      groups: [{ key: 'in_maintenance', label: 'in_maintenance', available_count: 0, unavailable_count: 1 }],
+    });
+    await chooseGrouping('condition');
+
+    expect(await screen.findByRole('button', { name: /in maintenance/i })).toBeInTheDocument();
+  });
+
+  it('gives each group its own row group', async () => {
+    const user = await chooseGrouping('category');
+    expect(user).toBeDefined();
+
+    // Wait for the grouped fetch: grouping does not apply until rows fetched
+    // for that dimension arrive.
+    await screen.findByRole('button', { name: /Class A Uniform/ });
+    const table = screen.getByRole('table', { name: 'Available' });
+    // thead plus one tbody per group. A single tbody would bind every
+    // scope="rowgroup" header to the rows of the whole table rather than its
+    // own, handing a screen reader the wrong group-to-row map.
+    expect(within(table).getAllByRole('rowgroup')).toHaveLength(3);
   });
 
   it('renders no group headers when grouping is off', async () => {
@@ -839,6 +901,7 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
           id: 'a-coat',
           name: 'Dress Coat',
           category_id: 'cat-a',
+          group_key: 'cat-a',
           size: 'l',
           standard_size: 'l',
           color: 'Navy',
@@ -848,6 +911,7 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
           id: 'b-polo',
           name: 'Class B Polo',
           category_id: 'cat-b',
+          group_key: 'cat-b',
           size: 'l',
           standard_size: 'l',
           color: 'Navy',
@@ -878,12 +942,20 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
     mockCheckPermission.mockReturnValue(true);
   });
 
+  const lastItemsCall = (): Record<string, unknown> =>
+    (mockGetItems.mock.calls[mockGetItems.mock.calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+
   const groupBy = async (value: string) => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryItemsPage />);
     await screen.findByLabelText('Group by:');
     await user.selectOptions(screen.getByLabelText('Group by:'), value);
-    await screen.findByRole('columnheader', { name: 'Variant' });
+    // Grouping deliberately does not apply until rows fetched FOR that
+    // dimension arrive — otherwise the previous dimension's keys are rendered
+    // under the new dimension's headings. So wait for the request to carry it
+    // and for a group heading to appear, rather than asserting mid-flight.
+    await waitFor(() => expect(lastItemsCall().group_by).toBe(value));
+    await screen.findByRole('button', { name: /Class A Uniform/ });
     return user;
   };
 

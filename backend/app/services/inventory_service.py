@@ -14,7 +14,18 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import and_, case, delete, func, literal, or_, select, update
+from sqlalchemy import (
+    String,
+    and_,
+    case,
+    cast,
+    delete,
+    func,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1710,7 +1721,18 @@ class InventoryService:
         if group_by == "size":
             # COALESCE, matching the size filter, which accepts a hit on
             # either column.
-            expr = func.coalesce(InventoryItem.standard_size, InventoryItem.size)
+            #
+            # CAST to text is load-bearing, not tidiness. SQLAlchemy infers a
+            # COALESCE's result type from its FIRST argument, so without the
+            # cast this expression is typed Enum(StandardSize) and every row is
+            # fed through the enum result processor on the way back. `size` is
+            # deliberately free text -- "10.5 EE", "lg" -- and any such value
+            # then raises LookupError, which 500s the whole items endpoint for
+            # any department stocking boots or waist measurements.
+            expr = cast(
+                func.coalesce(InventoryItem.standard_size, InventoryItem.size),
+                String,
+            )
             return (expr, expr, [])
         if group_by == "condition":
             return (InventoryItem.condition, InventoryItem.condition, [])
@@ -1739,6 +1761,20 @@ class InventoryService:
                 [(InventoryVendor, InventoryItem.vendor_id == InventoryVendor.id)],
             )
         return None
+
+    @staticmethod
+    def _group_key_str(value: Any) -> Optional[str]:
+        """One spelling of a group key, for both the counts and the rows.
+
+        Enum columns come back as members, and ``str()`` on a ``(str, Enum)``
+        renders "ItemCondition.GOOD", not "good" -- which would head the group
+        with a Python repr AND never match the value the row carries, leaving
+        every count unresolved. ``.value`` is the spelling the rest of the API
+        uses.
+        """
+        if value is None:
+            return None
+        return str(getattr(value, "value", value))
 
     GROUPABLE = (
         "category",
@@ -2106,6 +2142,7 @@ class InventoryService:
         await self._attach_pin_positions(
             str(organization_id), pinned_for_user_id, items
         )
+        await self._attach_group_keys(str(organization_id), group_by, items)
 
         return items, total
 
@@ -2180,10 +2217,10 @@ class InventoryService:
         tally: Dict[Any, Dict[str, Any]] = {}
         for key, label, is_available, item_count in rows.all():
             entry = tally.setdefault(
-                key,
+                self._group_key_str(key),
                 {
-                    "key": None if key is None else str(key),
-                    "label": None if label is None else str(label),
+                    "key": self._group_key_str(key),
+                    "label": self._group_key_str(label),
                     "available_count": 0,
                     "unavailable_count": 0,
                 },
@@ -2236,6 +2273,48 @@ class InventoryService:
         positions = {row[0]: row[1] for row in result.all()}
         for item in items:
             item.pin_position = positions.get(item.id)
+
+    async def _attach_group_keys(
+        self,
+        organization_id: str,
+        group_by: Optional[str],
+        items: List[InventoryItem],
+    ) -> None:
+        """Stamp each row with the group it belongs to, or None.
+
+        The row reports the key the SERVER grouped it under rather than
+        leaving the browser to re-derive it (CLAUDE.md pitfall #29). Every
+        dimension had a way to disagree: colour is keyed lower-cased, location
+        follows a COALESCE the client can only reproduce if it happens to hold
+        every location row (its lookup is capped at 100), item_type lives on a
+        joined table, and an enum keys to its value. A header whose key does
+        not match its rows shows no count at all, and the mismatch is invisible
+        until somebody's list is big enough.
+
+        A second indexed pass rather than an added select column, in the manner
+        of ``_attach_lot_stock`` above: adding a column turns ``scalars()``
+        into row tuples and every caller of ``get_items`` would have to be
+        taught about it.
+        """
+        for item in items:
+            item.group_key = None
+        if not group_by or not items:
+            return
+        group = self._group_spec(group_by)
+        if group is None:
+            return
+        key_expr, _label_expr, joins = group
+
+        query = select(InventoryItem.id, key_expr).where(
+            InventoryItem.organization_id == organization_id,
+            InventoryItem.id.in_([item.id for item in items]),
+        )
+        for target, onclause in joins:
+            query = query.outerjoin(target, onclause)
+        rows = await self.db.execute(query)
+        keys = {row[0]: self._group_key_str(row[1]) for row in rows.all()}
+        for item in items:
+            item.group_key = keys.get(item.id)
 
     async def list_pins(
         self, organization_id: UUID, user_id: UUID

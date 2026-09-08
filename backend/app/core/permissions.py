@@ -832,16 +832,46 @@ def permission_matches_any(required: Iterable[str], granted: set[str]) -> bool:
     return any(permission_matches(p, granted) for p in required)
 
 
+#: Read-only permissions whose action word does not contain ``view`` at all.
+#:
+#: The heuristic below reads the naming convention, and two grants in this
+#: catalog do not follow it. Listing them by name is the only honest way to
+#: classify them: there is no rule in ``scheduling.report`` that says "read",
+#: and guessing from a substring would misfile the next write permission that
+#: happens to contain a reading verb.
+#:
+#: Under-detecting a read is the direction that costs something:
+#: ``permission_matches_any_write`` keeps only the entries it believes are
+#: writes, so a read left out of this set is offered as proof of write
+#: authority. Over-detecting only withholds a write from somebody who should
+#: have had it, which fails closed. That asymmetry is why this set is
+#: maintained explicitly and pinned by
+#: ``tests/test_permission_read_write_tiers.py``.
+_READ_ONLY_PERMISSION_EXCEPTIONS: frozenset[str] = frozenset(
+    {
+        "scheduling.report",  # "View shift reports and analytics"
+    }
+)
+
+
 def is_read_only_permission(name: str) -> bool:
     """True if a permission's action names a read, not a write.
 
-    The naming convention every permission family in this file follows:
+    The naming convention most permission families in this file follow:
     ``<module>.view`` / ``<module>.view_<detail>`` (e.g. ``users.view_contact``,
     ``facilities.view_sensitive``) read a resource; every other action
     (``create``, ``edit``, ``update``, ``delete``, ``manage``, ...) writes it.
+
+    ``view`` is matched as a **word** in the action rather than as a prefix,
+    because the convention also produces two-word actions on a nested
+    resource: ``inventory.check_view`` is the read half of the equipment-check
+    family and a prefix test filed it as a write. Anything the convention
+    cannot express is named in ``_READ_ONLY_PERMISSION_EXCEPTIONS``.
     """
     action = name.rsplit(".", 1)[-1] if "." in name else name
-    return action == "view" or action.startswith("view_")
+    if name in _READ_ONLY_PERMISSION_EXCEPTIONS:
+        return True
+    return "view" in action.split("_")
 
 
 def permission_matches_any_write(required: Iterable[str], granted: set[str]) -> bool:

@@ -9225,7 +9225,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `token` | VARCHAR(512) | no | UQ, UQ-IDX |  |  |
-| `refresh_token` | VARCHAR(512) | yes |  |  |  |
+| `refresh_token` | VARCHAR(512) | yes | IDX |  |  |
 | `previous_refresh_token` | VARCHAR(512) | yes | IDX |  |  |
 | `previous_refresh_expires_at` | DATETIME | yes |  |  |  |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
@@ -9239,6 +9239,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_sessions_expires_at` (`expires_at`)
 - `ix_sessions_previous_refresh_token` (`previous_refresh_token`)
+- `ix_sessions_refresh_token` (`refresh_token`)
 - UNIQUE `ix_sessions_token` (`token`)
 - `ix_sessions_user_id` (`user_id`)
 

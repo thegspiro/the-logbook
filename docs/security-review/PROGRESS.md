@@ -16,11 +16,1018 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 33 (Core infrastructure, pass 3)'s PR #2368 merged
-(`262f8730`) — all CI checks green, mergeable clean, all 6 Codex review
-threads across 3 rounds replied to and resolved, and the final Codex round
-(on the merged head) completed with no new findings. Rotation row
-33 -> ✅. Next: 34 Frontend shared.
+**Feature 05 (Finance & approvals, pass 4)** — PR
+[#2398](https://github.com/thegspiro/the-logbook/pull/2398), branch
+`claude/security-review-finance-approvals`. No backend finance file had
+changed since pass 3's closing commit, so this pass re-verified pass 3's own
+fixes (FIN-19 through FIN-26) against current code and worked the full
+checklist fresh rather than trusting three clean prior passes. Four fixes,
+one flagged: **FIN-27 (MED, fixed)** — `GET /budgets/summary` and
+`GET /approval-chains/preview` were both permanently unreachable, shadowed
+by an earlier-registered `/{id}` route of the same method and shape
+(Starlette dispatches to the first full match in registration order); both
+endpoints had been silently 404ing since whenever they were added. Fixed by
+reordering route registration, with a whole-router-sweep guard test.
+**FIN-28 (LOW, fixed)** — `get_pending_approvals` round-tripped a `Decimal`
+amount through `float()` for no reason; removed. **FIN-29 (MED, fixed,
+found by Codex review on this PR)** — once FIN-27 made
+`GET /approval-chains/preview` reachable, its own 404-for-no-match was
+raised inside a `try` whose trailing `except Exception` caught it and
+replaced it with a 500; moved the check outside the `try`/`except`. Also
+corrected three stale "still flagged" claims in
+`docs/module-audit/finance.md`'s FIN-7 entry (and its mirrors) that current
+code had already resolved — unbounded export and no overspend guard were
+fully fixed; in-memory pagination was only _mostly_ fixed. **FIN-30 (LOW,
+flagged, also found by Codex)** — that correction's own first draft
+overclaimed "every list method" paginates: `list_dues_payments`
+(`GET /dues/{dues_id}/payments`) does not, and is left flagged (a
+per-member-scoped unbounded ledger) rather than fixed, since pagination
+would change the endpoint's response shape. All doc corrections now name
+this exception. Subscribed to PR activity.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04 pass 4 merged), preserved for history</summary>
+
+**None.** Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged
+(`c71b5fb2`) by a 30-minute watchdog check — fully green (17/17 checks),
+`mergeable_state: clean`, Codex review completed with nothing further raised,
+idle since CI finished with no owner action needed. One finding this pass:
+**SF-7 (MED, fixed)** — `update_order_status` had its own, unguarded path to
+self-settle a payment; see the superseded note below for the full write-up.
+Next: 05 Finance & approvals.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2395 (pass 4), preserved for history</summary>
+
+**Feature 04 (Storefront & payments, pass 4)** — PR
+[#2395](https://github.com/thegspiro/the-logbook/pull/2395), branch
+`claude/security-review-storefront-payments`. This module is the most
+heavily-audited in the codebase (a dedicated module audit, two app-review
+passes, and three prior security-review passes) — scoped by `git diff`
+against pass 3's own closing merge (`59b8ccff1`, PR #2138) across the full
+domain those passes established, the same method pass 3 used and for the
+same reason. **One finding: SF-7 (MED, fixed).** `update_order_status` — a
+route distinct from `record_payment`/`mark_order_paid`/`waive_order_payment`,
+all three guarded by SF-6 — has its own branch that performs the identical
+ledger settlement (`payment_status = PAID`, `amount_paid = order.total`,
+`paid_at = now()`) whenever a caller advances an order's fulfillment status
+to `PAID`, and carried none of the other four's separation-of-duties check.
+A `storefront.manage` holder who also placed their own order could call
+`POST /orders/{their_own_order_id}/status` with `{"status": "paid"}` (or the
+bulk-status sibling, across an entire selection) and zero their own balance
+with no money moved and no second person involved — the exact scenario SF-6's
+own write-up named, reached through a fourth path that fix never touched.
+Fixed with the same `assert_different_person` guard, positioned before any
+mutation. Also reviewed and confirmed clean this pass: a new
+`exclude_cancelled` order-list filter (additive to an already org-scoped
+query); the admin console's move into Inventory Administration and adoption
+of the shared `AdminHubFrame`/`AdminMetricsSettings` (all six new metric
+resolvers and the attention-queue function are org-scoped from
+`MetricContext`, and the endpoint layer resolves the module's own
+`storefront.manage` permission before any of it runs); and a 1,875-line
+cross-feature grant-restoration migration that pattern-matches on
+`storefront.*` dozens of times but changes no storefront-specific policy (a
+false positive of the same shape MP-08/ELEC-06/GF-22 already reported for
+their own domains against the same migration). Full write-up: the **Pass 4**
+section of `docs/security-review/SF-04-storefront-payments.md`.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03 pass 4 merged), preserved for history</summary>
+
+**None.** Feature 03 (Public surface & webhooks, pass 4)'s PR #2393 merged
+(`d03530fc`) — 4 findings from the original pass (3 fixed, 1 flagged, one of
+the four flagged in part) plus 3 more real findings from two further Codex
+rounds after the PR opened, all fixed. **PUB-5 (MED, fixed)** was the one that
+mattered originally — `check_rate_limit` reconciled its in-memory per-API-key
+hourly tally against a `COUNT(*)` over `public_portal_access_log` by
+**assigning** the database's answer, letting a department with its portal
+switched off (503 to every call, nothing persisted) reset its tally to zero
+every time it neared the ceiling. Fixed with
+`max(current_count, db_count)` — but Codex then found **PUB-5b**: that
+reconciliation query still counted a rolling "last 60 minutes" window while
+the tally and `X-RateLimit-Reset` both key off a fixed clock-hour bucket, so
+right after an hour turned over the rolling window could pull in the previous
+bucket's traffic, and the now-monotonic `max()` would let that inflated count
+stick for the rest of the new hour, 429ing legitimate requests. Fixed by
+scoping the query to the same clock-hour bucket. Also from the original pass:
+**PUB-6 (LOW, fixed)** — every field on the two whitelist-filtered portal
+response models was a required Pydantic-v2 `Optional[T]` with no default, so
+the data whitelist's default-deny state made `/organization/info` and
+`/organization/stats` 500 on every request instead of returning the empty
+document they should. Codex then found **PUB-9**: the PUB-6 fix's defaults
+made an unwhitelisted field round-trip back out as an explicit `null` instead
+of being omitted (and a partial whitelist leaked every field it had _not_
+enabled), because neither route set `response_model_exclude_unset=True`.
+Fixed. **PUB-8's** first half (LOW, fixed) committed the access log's
+error-path rows instead of letting them roll back with the request
+transaction — Codex then found **PUB-10**: all three success paths logged 200
+_before_ the response value was actually validated, so a response-validation
+failure downstream (concretely reachable via PUB-7 on `/events/public`) still
+recorded as a 200 the client never received. Fixed by constructing (and
+thereby validating) the response before logging success. Flagged, unchanged:
+**PUB-7 (LOW)** — `GET /events/public` 500s whenever an events field is
+whitelisted, because the handler's keys and `PublicEvent`'s required fields
+disagree on three names, and repairing it means choosing between two
+documented contracts; and **PUB-8's** second half — nothing has ever written a
+401 access-log row, and wiring it up needs two `nullable=False` FK columns
+made nullable. Both mirrored into `docs/KNOWN_LIMITATIONS.md`. This was the
+first pass on this feature to read all 13 files in full rather than the diff,
+and every finding — the original four plus the three Codex found after —
+predates pass 3. Full write-up: the **Pass 4** section of
+`docs/security-review/PUB-03-public-surface-webhooks.md`. Next: 04 Storefront
+& payments.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2393 (pass 4), preserved for history</summary>
+
+**Feature 03 (Public surface & webhooks, pass 4)** — PR
+[#2393](https://github.com/thegspiro/the-logbook/pull/2393), branch
+`claude/security-review-public-surface-webhooks-pass4`. Pass 4's fourth
+feature, and the rotation's highest-risk category — every route here is
+reachable with zero credentials. **Four findings: three fixed, one flagged
+(plus one of the four flagged in part).** The one that matters is **PUB-5
+(MED, fixed)** — `check_rate_limit` reconciled its in-memory per-API-key
+hourly tally against a `COUNT(*)` over `public_portal_access_log` by
+**assigning** the database's answer, and that table only ever carried requests
+that committed: `get_db` rolls the session back on any raised exception, and a
+401/429 never reaches the handler that writes the row at all. A department
+with its portal switched off answers 503 to every call, persists nothing, and
+so reset its tally to zero every time it neared the ceiling — the hourly key
+quota was never reached. Now `max(current_count, db_count)`: the database can
+still raise a per-process tally to the cross-process truth, but never lower
+it. Also fixed: **PUB-6 (LOW)** — every field on the two whitelist-filtered
+portal response models was a Pydantic-v2 `Optional[T]` with no default, i.e.
+**required**, so the data whitelist's default-deny state (the one every
+deployment starts in — nothing seeds the table) made
+`/organization/info` and `/organization/stats` answer 500 to every request
+rather than the empty document they are supposed to return; and **PUB-8's**
+first half (LOW) — the access log's error-path rows were rolled back with the
+request transaction, so the log an operator reads to spot abuse recorded only
+traffic that had succeeded. Flagged: **PUB-7 (LOW)** — `GET /events/public`
+500s whenever an events field is whitelisted, because the handler's keys and
+`PublicEvent`'s required fields disagree on three names, and repairing it
+means choosing between two documented contracts; and **PUB-8's** second half
+— nothing has ever written a 401 access-log row, so `detect_anomalies`'
+failed-auth branch is unreachable, and wiring it up needs two `nullable=False`
+FK columns made nullable. Both mirrored into `docs/KNOWN_LIMITATIONS.md`.
+This is the first pass on this feature to read all 13 files in full rather
+than the diff, and all four findings predate pass 3. Full write-up: the
+**Pass 4** section of
+`docs/security-review/PUB-03-public-surface-webhooks.md`.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02 pass 4 merged), preserved for history</summary>
+
+**None.** Feature 02 (Permissions & roles, pass 4)'s PR #2391 merged
+(`a96b7370`) — 4 findings, 3 fixed, 1 flagged. The one that matters is
+**PERM-5** (MED, flagged) — the three user↔position assignment routes carry
+two guards and neither compares the caller to the target, letting a
+low-privileged Secretary or Membership Coordinator strip the department's only
+wildcard `*` holder with an irreversible empty-list role removal; flagged
+because the obvious fix also blocks a legitimate offboarding case. CI caught
+one real issue mid-PR: a `PT006` flake8-pytest-style violation (comma-string
+`@pytest.mark.parametrize` argnames instead of a tuple) in the new guard test,
+fixed and verified against the CI-pinned plugin (the plain `flake8` on `PATH`
+resolves to an isolated `uv tool` install that doesn't see it — same
+shadowing class already documented for `black`). Merged once CI was fully
+green and Codex's review completed clean on the fix commit. Full write-up:
+the **Pass 4** section of `docs/security-review/PERM-02-permissions-roles.md`.
+Next: 03 Public surface & webhooks.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2391 (pass 4), preserved for history</summary>
+
+**Feature 02 (Permissions & roles, pass 4)** — PR
+[#2391](https://github.com/thegspiro/the-logbook/pull/2391), branch
+`claude/security-review-permissions-roles-pass4`. Pass 4's third feature.
+**Four findings: three fixed, one flagged.** The one that matters is **PERM-5
+(MED, flagged)** — the three user↔position assignment routes carry two guards
+and neither compares the caller to the target: the grant ceiling walks the
+_incoming_ roles (so `role_ids: []` is a no-op) and the continuity guard only
+counts whether _somebody_ still holds `members.manage`. The seeded Secretary
+and Membership Coordinator hold both assignment grants plus `members.manage`
+and none of `settings.manage` / `security.manage` / `positions.*`, so either
+can strip the wildcard `it_manager` position from the department's only `*`
+holder — and it cannot be undone through the API, because re-granting `*`
+requires already holding it and `create_role` rejects wildcards outright.
+Reproduced against the real helpers before being written up; flagged rather
+than fixed because the obvious guard also blocks the offboarding case a
+Membership Coordinator exists for, and the three options are not equivalent.
+Fixed: **PERM-6 (LOW)** — `is_read_only_permission` filed `inventory.check_view`
+and `scheduling.report` as writes, which `permission_matches_any_write` would
+have accepted as write authority on a document folder (latent: no folder names
+either permission today); **PERM-7 (LOW)** — the two single-assignment helpers
+`a9063055` left behind when it scoped `set_user_roles`, still unscoped and
+still callerless; **PERM-8 (LOW)** — an uncapped rank-reorder list against a
+one-query-per-item loop. Also the first pass on this feature to read all ten
+principal files in full rather than the diff, which is how PERM-5 — older than
+pass 3 — was reached. Full write-up: the **Pass 4** section of
+`docs/security-review/PERM-02-permissions-roles.md`.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01 pass 4 merged), preserved for history</summary>
+
+**None.** Feature 01 (Auth & session lifecycle, pass 4)'s PR #2389 merged
+(`a68d674d`) — 6 findings, 4 fixed, 2 flagged (the real fix is **AUTH-14**
+MED: the two account-state gates in `get_current_user` had no intersecting
+remediation route, permanently locking out any account still holding a
+temporary password once org-wide MFA was required; **AUTH-19** LOW, an
+unindexed hot-path column Codex caught mid-review, is the other functional
+fix). This PR is also on record for the guard test it landed
+(`test_mfa_verification_consumes.py`, AUTH-16): five consecutive Codex review
+rounds each found one more real gap in that AST sweep's alias resolution —
+plain aliasing, cross-scope leakage, same-scope reordering, control-flow
+(conditional rebindings), and finally `match` arms plus single-hop assignment
+aliasing — each verified against an injected repro before being accepted,
+none dismissed. A sixth suggestion (resolve attribute-call receivers to their
+real module) was verified and deliberately declined, documented in the
+function's own docstring rather than implemented, since it would trade a
+real guarantee for cosmetic precision against a collision that doesn't exist
+in this codebase. Merged once CI went fully green (16/16) and Codex's own
+review began failing on usage limits rather than surfacing anything new —
+same precedent as Feature 33's PR #2370. Full write-up: the **Pass 4** section
+of `docs/security-review/AUTH-01-auth-session.md`. Next: 02 Permissions &
+roles.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2389 (pass 4), preserved for history</summary>
+
+**Feature 01 (Auth & session lifecycle, pass 4)** — PR
+[#2389](https://github.com/thegspiro/the-logbook/pull/2389), branch
+`claude/security-review-auth-session-pass4`. Pass 4's second feature. **Five
+findings: three fixed, two flagged.** The one that matters is **AUTH-14
+(MED)** — the two account-state gates in `get_current_user`
+(`must_change_password`, and org-wide `mfa_required` while un-enrolled) run in
+sequence and their allowlists did not intersect on any remediation route, so
+switching on the department MFA requirement permanently locked out every
+account still holding a temporary password, with no way back for the member
+_or_ an administrator. Reproduced against the real dependency, fixed with one
+allowlist entry, and now guarded by a test that drives the dependency rather
+than asserting list membership. **AUTH-16 (LOW)** puts a machine check behind
+the verify-implies-consume invariant that AUTH-7/9/13 spent three review
+rounds establishing and that nothing enforced. Two flagged for an owner
+decision: **AUTH-15 (MED)** — the HIPAA maximum password age is enforced only
+in the browser, unlike its server-enforced sibling — and **AUTH-17 (LOW)** —
+expired `sessions` rows are never reaped. Both mirrored into
+`docs/KNOWN_LIMITATIONS.md`. Full write-up: the **Pass 4** section of
+`docs/security-review/AUTH-01-auth-session.md`.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00 pass 4 merged), preserved for history</summary>
+
+**None.** Feature 00 (Cross-cutting baseline, pass 4)'s PR #2387 merged
+(`96aa60f1`) — a 30-minute watchdog check found it fully green (17/17 checks,
+`mergeable_state: clean`) and idle, with Codex's review completed and no
+findings, and merged it directly rather than leaving it idle. Rotation row 00
+was already ✅ in the PR itself. Next: 01 Auth & session lifecycle.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2387 (pass 4), preserved for history</summary>
+
+**Feature 00 (Cross-cutting baseline, pass 4)** — PR
+[#2387](https://github.com/thegspiro/the-logbook/pull/2387), branch
+`claude/security-review-cross-cutting-pass4`. Opens pass 4. Three findings,
+all fixed, none needing an owner decision: **SEC4-3 (MED)** — the nine cache
+exclusions PR #2381 added that no automated check could see are now pinned by
+a guard test (verified red by deleting one denylist line, then restored);
+**SEC4-1 (LOW)** and **SEC4-2 (LOW)** — two handlers returning raw Python
+exception text to the client, found by a `safe_error_detail`-coverage AST
+sweep that is new to this file. Twelve standing sweep classes re-verified
+clean against a tree that has grown to 437 Alembic revisions and 1521 routes.
+PR #2381's pass-4 action item (a)/(b)/(c) is discharged in full and marked
+done in `SEC-00-cross-cutting-baseline.md`, so pass 5 should not re-derive
+it. Full write-up: the **Pass 4** section of
+`docs/security-review/SEC-00-cross-cutting-baseline.md`.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (pass 3 complete, rotation reset for pass 4), preserved for history</summary>
+
+**None.** Feature 34 (Frontend shared, pass 5, corrective)'s PR #2382 merged
+(`f53258ee`) — fully green (17/17) and idle, all 6 Codex review threads
+across 3 rounds resolved (color-caching permission gap closed with
+`require_permission("inventory.view")`, tracker's Open PR section corrected
+to track the right PR, reviewed commit range pinned to an immutable SHA, a
+missing backend permission regression test added, and one hallucinated
+Codex citation — a commit SHA that does not exist in this repo — correctly
+identified and declined rather than blindly "fixed"). That completed pass
+3's full lap through all 35 features.
+
+**Since then:** an out-of-band data-leakage sweep, PR
+[#2381](https://github.com/thegspiro/the-logbook/pull/2381), merged
+directly without ever occupying this row (it ran as a standalone review,
+not a rotation iteration); its findings are recorded as prior art in
+`SEC-00-cross-cutting-baseline.md` and **XC-4** in
+`docs/module-audit/CROSS-CUTTING.md` so pass 4's Feature 00 iteration
+doesn't rediscover them. The Rotation table below is now reset to ⬜ for
+**pass 4**, starting at **00 (cross-cutting baseline)**.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2382 (pass 5, corrective), preserved for history</summary>
+
+**Feature 34 (Frontend shared, pass 5, corrective)** — PR
+[#2382](https://github.com/thegspiro/the-logbook/pull/2382), branch
+`claude/fe34-pass5-baseline-fix`. Corrects three `chatgpt-codex-connector[bot]`
+findings that PR #2379 (pass 4) merged unaddressed: a wrong baseline commit
+citation (`b10ecfe3` instead of the real `796059dc`, which left ~400 lines
+across 8 files unreviewed by any pass — now read in full, no new gap found),
+`GET /inventory/items/colors` wrongly cleared as carrying no free-text data
+and left cacheable (fixed — added to `UNCACHEABLE_PREFIXES`), and this
+tracker's own stale FE3-34-5 disposition (already corrected above). Feature
+34 stays ✅ at pass 4's rotation position — this PR repairs pass 4's record,
+it does not open a new pass. See
+`docs/security-review/FE5-34-frontend-shared.md` for the full corrective
+review.
+
+</details>
+
+<details>
+<summary>Superseded — PR #2379 (pass 4), preserved for history</summary>
+
+**Feature 34 (Frontend shared, pass 4)** — PR
+[#2379](https://github.com/thegspiro/the-logbook/pull/2379) merged. 0 new
+findings from the original pass; FE3-34-4 (HIGH) confirmed already fixed by an
+intervening commit unrelated to this rotation. FE3-34-5 (HIGH) was initially
+marked fixed the same way, then **reopened** after Codex review on this PR
+found the fix closes only the timing race, not the purge-failure path — see
+`docs/security-review/FE4-34-frontend-shared.md` and
+`docs/KNOWN_LIMITATIONS.md`. FE3-34-2 (HIGH) re-verified still open, needs a
+product decision. Rotation wraps to 00 (cross-cutting baseline) for the next
+full pass.
+
+Three Codex findings on this PR went unaddressed at merge (wrong baseline
+citation, a caching gap, and this tracker's own stale FE3-34-5 disposition) —
+corrected by follow-up PR #2382 above.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note, preserved for history</summary>
+
+**None.** Feature 33 (Core infrastructure, pass 3) follow-up PR #2370 merged
+(`86ec5795`) — CI fully green (17/17), `mergeable_state: clean`, all 11 Codex
+review threads across 10 rounds resolved. The final round's Codex re-review
+(on head `216cf625`) never completed cleanly — 11 consecutive attempts all
+returned "usage limits reached" rather than a pass/fail verdict over the
+~2 hours the PR was open — so this merge landed without that last
+confirmation. Every one of the 10 prior rounds had already been
+independently reproduced with a standalone `python3` repro before being
+accepted (see `CI3-33-core-infra.md`). Rotation row 33 -> ✅ (already
+reflected in the table below). Next: 34 Frontend shared.
+
+<details>
+<summary>Superseded — PR #2370's own in-progress narrative, preserved for history</summary>
+
+**#2370** — Feature 33 (Core infrastructure, pass 3) follow-up:
+`claude/fix-rate-limiter-saturation-scope`. #2368 merged (`262f8730`) with 3
+Codex review threads still open, posted ~50s before the merge landed and
+never seen by whoever merged it — this PR fixes them as a targeted
+follow-up, same pattern as PR #2367/#2365. Round 1: 2 real fixes (CI3-33-2a
+P1 — `_saturation_reject_until` was a global scalar, not scoped per
+rate-limit scope, so saturating one scope's lockout table failed closed for
+every other scope sharing the process-wide limiter; CI3-33-2b P2 — a strict
+`>` eviction-gate comparison let a stale, already-expired lockout count
+trigger an unnecessary saturation rejection), plus a comment-chronology
+cleanup across the whole `RateLimiter` class. Round 2 (Codex reviewed round
+1's own commit): CI3-33-2c P1 — CI3-33-2b's own fix forced a full
+three-dict sweep on every request once the lockout table merely reached
+capacity, a CPU-amplification DoS; fixed with a narrow, lockouts-only
+`_prune_expired_lockouts()` called only from the one request actually
+attempting an insertion, instead of forcing the shared sweep for every
+request that merely observes a full table. Round 3 (Codex reviewed round
+2's own commit): CI3-33-2d P1 — round 2's own scoping still let a single
+already-saturated key's repeated retries each pay the full prune scan —
+round 7 total, and a narrower version of the exact gap round 2 had just
+closed. **Two independent Claude sessions worked this same round-7 finding
+concurrently** (see the two dated entries below): one landed a narrow
+short-circuit fix first; the other, working from the coordinator's explicit
+authorization to do the structural refactor instead of an eighth narrow
+patch, merged that narrow fix's finding into a full rewrite —
+`self.requests`/`self.lockouts`/`self._key_windows` collapsed into one
+`dict[str, _KeyState]` per key, paired with a throttled (1s)
+`_active_lockout_count` verification that closes CI3-33-2b/2c/2d together —
+and that is the version that landed as the branch's final state. All 33
+existing `TestRateLimiter` tests rewritten against the new shape and passed
+on the first run; 2 new tests added (35 total). Round 4 (Codex reviewed the
+merge commit that landed the refactor): 4 new threads — 2 real (CI3-33-2e
+P1, `_saturation_reject_until` itself had no size cap/eviction, fixed with
+a `_MAX_SATURATION_SCOPES` cap folded into the existing `_sweep` pass;
+CI3-33-2f LOW, the refactor's own docstrings restated review chronology
+inline, trimmed to rationale-only) and 2 verified moot against the refactor
+with standalone repros (a zero-`lockout_seconds` retry variant of CI3-33-2d,
+a stale-capacity variant of CI3-33-2b — both already closed by the
+refactor's throttled-verification design). 2 more tests added (37 total).
+Round 5 (same review pass, 2 more threads shortly after): CI3-33-2g/2h —
+`_MAX_KEYS` compared the combined locked-out+unlocked key count against a
+flat cap, and the default config sets `_MAX_KEYS == _MAX_LOCKOUTS`, so a
+saturated table forced a real sweep+sort on every retry (2g) and let two
+alternating keys evict each other's history, bypassing the limiter
+entirely (2h). Fixed by budgeting `_MAX_KEYS` against unlocked keys only
+(`_MAX_KEYS + self._active_lockout_count`). 2 more tests added (39 total).
+Round 6 (a third session collision, same finding — see the "round 6" entry
+below): the version that landed sizes the eviction off an exact evictable
+scan rather than the cached approximation; unlike round 3b's collision,
+both sessions' test additions merged with no conflict, so all 4 (39 + the
+other session's 2) are in the final suite (41 total). Round 7: CI3-33-2i —
+a `lockout_seconds=0` insertion (public endpoints' default) unconditionally
+incremented the _shared, cross-scope_ `_active_lockout_count`, letting a
+public-endpoint flood of phantom zero-duration "lockouts" push an
+unrelated scope's real violator (e.g. "login") into the saturation
+fallback. Fixed by excluding `lockout_seconds <= 0` from the counter
+entirely. 1 more test (42 total). Round 8 (a fourth session collision,
+same finding — see the "round 8" entry below): the other session's
+smaller, one-line-gate fix landed instead of this session's own
+branch-restructuring version; both verified equivalent. This round's two
+test additions conflicted outright (same location in the file), so the
+other session's test replaced this session's own (still 42 total, a swap
+not an addition). Round 9: CI3-33-2j — the most severe finding in this
+class. Extending the scope-wide saturation signal from a merely-observed
+(not verified-this-call) count let a sub-second stale-read race commit a
+30-minute, scope-wide rejection that never self-corrected. Fixed by
+gating the signal's commit on a `just_verified` flag derived from
+`self._last_lockout_verify == current_time`. 1 more test (43 total).
+Rotation row 33 -> ✅
+(#2368 already merged; this is a follow-up fix, not
+new rotation work — see CLAUDE.md Pitfall #24 on the fresh branch). Next
+once #2370 merges: 34 Frontend shared.
+
+</details>
+
+</details>
+
+---
+
+### 2026-09-07 — Feature 33's follow-up PR #2370 merged, watchdog recorded it
+
+PR #2370 (10 rounds of Codex-driven fixes plus a structural `RateLimiter`
+refactor, `TestRateLimiter` grown from 29 to 43 tests) went fully green
+(17/17 checks, `mergeable_state: clean`) with all 11 Codex review threads
+resolved. Its final round's Codex re-review never completed cleanly — 11
+straight "usage limits reached" responses on the same head commit
+(`216cf625`) over roughly 2 hours. A 30-minute watchdog check had flagged
+this state (CI green, mergeable clean, Codex stuck on quota) rather than
+merge it unilaterally; the PR merged (`86ec5795`) shortly after. This entry
+records that merge and clears the stale Open PR row. Next: 34 Frontend
+shared.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 9: the most severe finding in this class — an unverified stale count committed a 30-minute, scope-wide rejection from a sub-second race
+
+Codex reviewed the merged round-8 (CI3-33-2i) state and found one more
+real P1, worse than every prior round in this class: `_LOCKOUT_VERIFY_
+INTERVAL` throttles `_refresh_active_lockout_count` to at most once per
+second — an already-accepted tradeoff, since for up to that one second a
+genuinely-emptied table can still read as saturated in the cache. But the
+code acting on that possibly-stale read didn't scale its _consequence_ to
+match: the saturation branch extends `self._saturation_reject_until
+[scope]` to `current_time + lockout_seconds` (often 30 minutes)
+regardless of whether the count was just verified or a throttled-away,
+unconfirmed read — and because that signal is a stored value consulted
+(not re-verified) on every later request, a table that emptied moments
+before a fresh violator arrived committed a 30-minute, scope-wide
+rejection that never self-corrected, even once a subsequent call proved
+real capacity had been available the whole time.
+
+Reproduced directly: 3 real lockouts all expiring at t=10.0, a fresh
+violator at t=10.05 (0.45s after real expiry, inside the 1s verify
+throttle) set `_saturation_reject_until['login'] = 1810.05`. A second,
+completely unrelated fresh client (zero prior history) arriving a full
+second later at t=11.0 — well past both the real expiry and the verify
+throttle — was still rejected with "Account locked. Try again in 1799
+seconds," even though real capacity was unambiguously available by then.
+
+Fixed by having `_refresh_active_lockout_count` report whether it
+performed a real recompute, and deriving a `just_verified` flag in
+`is_rate_limited` from `self._last_lockout_verify == current_time`
+(checking the timestamp directly, since `_sweep`'s own periodic recompute
+— a separate code path — can just as validly make the cache fresh "as of
+right now"). The saturation branch only commits or extends the long-lived
+scope-wide signal when `just_verified` is true; an unverified read still
+rejects the current request via its own count-based check, but defers the
+broader signal to a call that can actually confirm saturation.
+
+1 new regression test, verified fail-before/pass-after. Also re-verified
+the full existing suite unmodified — every test exercising genuine,
+persistent saturation still passes, confirming the fix narrows only the
+unverified-read case, not real saturation protection. `TestRateLimiter`
+now 43 tests (was 42). Full completion gate re-run (full backend suite
+included): 196 scoped, 63 tenancy, 11,744 full-suite passed. Full
+write-up: `docs/security-review/CI3-33-core-infra.md` (CI3-33-2j).
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 8: a fourth session collision, same CI3-33-2i finding; this round's test additions conflicted outright, the other session's version landed
+
+Pushing round 7's fix (commit `4a0c8915`, below) was rejected — a fourth
+instance of the collision pattern first seen at round 3b: a concurrent
+session (`session_01Xc3Cta6LjAV7DA5mTAbmdk` again — the same session that
+won round 6's collision) had independently found and fixed the identical
+CI3-33-2i finding, pushing first as commit `43cce5cd`. Fetched and merged
+rather than force-pushing.
+
+Both sessions' analysis and repros agree exactly (same root cause, same
+`_MAX_LOCKOUTS=10`/zero-active-lockouts reproduction shape). The fixes
+differ in size: this session's own fix restructured the branch so a
+`lockout_seconds<=0` insertion skips the capacity check entirely; the
+other session's fix is a one-line gate on the existing increment
+(`if lockout_seconds > 0: self._active_lockout_count += 1`), leaving the
+capacity-checked branch structure untouched. Verified the smaller fix
+against this session's own repro (identical result) before keeping it —
+minimal diff for an identical guarantee. Unlike round 6, this round's two
+test additions landed at the exact same location in the file and
+conflicted outright (not a clean auto-merge); the other session's test
+(`test_zero_duration_lockouts_do_not_inflate_the_active_lockout_count`)
+was kept and this session's own version was not carried forward. Full
+completion gate re-run against the merged state: 195 scoped, 63 tenancy,
+11,743 full-suite passed — `TestRateLimiter` still 42 tests (a straight
+swap, not an addition, since both sessions added exactly one test for the
+same scenario). Full write-up: `docs/security-review/CI3-33-core-infra.md`
+(CI3-33-2i, "Two sessions, one finding — a fourth time").
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 7: a zero-duration lockout could inflate the shared active-lockout counter and steal an unrelated scope's real lockout
+
+Codex reviewed the merged round-6 state and found one more real P1:
+`public_rate_limit`'s in-memory fallback defaults `lockout_seconds=0` for
+several unauthenticated public endpoints, and the insertion branch
+incremented `self._active_lockout_count` unconditionally regardless of
+`lockout_seconds` — even though `lockout_until = current_time + 0` is
+never actually "active" by the definition every other reader of this state
+uses (`lockout_until > now`). Since `_active_lockout_count` is a single
+counter shared across every scope on this one process-wide limiter
+instance, a flood of public, zero-duration violators (each landing on its
+own distinct key) could exhaust the shared counter with phantom entries —
+pushing a completely unrelated scope's real violator (e.g. "login") into
+the saturation-fallback path even though the true active-lockout count was
+zero. Reproduced directly: `_MAX_LOCKOUTS=10`, 11 distinct public keys hit
+with `lockout_seconds=0` inflated the cached count to 10 (0 true active),
+and a subsequent `login` violator lost its own real per-key lockout to the
+saturation fallback.
+
+Fixed by excluding `lockout_seconds <= 0` insertions from the capacity
+check and the counter entirely — such an insertion was never going to hold
+a genuinely active slot regardless of capacity, so there's no reason to
+deny it a nominal record or let it inflate the shared counter. 1 new test,
+verified fail-before/pass-after. `TestRateLimiter` now 42 tests (was 41).
+Full completion gate re-run (full backend suite included): 195 scoped, 63
+tenancy, 11,743 full-suite passed. Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2i).
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 6: a third session collision on the same CI3-33-2g/2h finding; test additions merged cleanly this time, the more precise implementation landed
+
+Pushing round 5's fix (commit `186124ab`, below) was rejected — a third
+instance of the same collision pattern as CI3-33-2d/round 3b: a concurrent
+session (`session_01Xc3Cta6LjAV7DA5mTAbmdk`) had independently found and
+fixed the identical CI3-33-2g/2h finding, pushing first as commit
+`59863985`. Fetched and merged rather than force-pushing.
+
+This collision resolved more smoothly than round 3b's: the two sessions'
+**test additions merged with no conflict at all** (both appended new tests
+in non-overlapping locations in the file), so all 4 new tests — 2 from
+each session — are in the final suite and all pass against whichever
+implementation ships. Only `security_middleware.py` itself conflicted.
+Both implementations use the identical formula for `_sweep`'s
+forced-early-sweep gate (`_MAX_KEYS + self._active_lockout_count`, written
+as an addition in this session's fix and as an equivalent subtraction in
+the other); they differ in how `to_remove` is sized once the sweep body
+actually runs. This session's own fix reused the same (possibly stale)
+cached `_active_lockout_count` for the removal count too. The other
+session's fix instead computes the exact evictable set (already scanning
+`self._keys` for the stale-removal pass just above it) and sizes
+`to_remove` off that exact count, guarded by `if to_remove > 0` so a
+healthy table does no unnecessary sort/delete work. Verified both against
+this session's own two repro scripts (the saturated-table sweep-amplification
+case and the alternating-keys bypass case) — both produce identical
+correct results — before deciding the exact-count version is marginally
+more robust (immune to a stale `_active_lockout_count` under-sizing the
+removal) and keeping it via `git checkout --theirs` on the source file
+only. Full completion gate re-run against the merged state: 194 scoped
+(was 192), 63 tenancy, 11,742 full-suite passed (was 11,740) —
+`TestRateLimiter` now 41 tests (was 39). Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2g/2h, "Two sessions,
+one finding — again").
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 5: the same review pass found _MAX_KEYS conflated locked-out and unlocked key counts — a CPU-amplification finding and a rate-limit bypass, same fix
+
+The same Codex review pass that produced round 4's 4 threads left 3 more
+shortly after. One (a `_KeyState` docstring restating review chronology)
+was a duplicate of CI3-33-2f, already fixed. The other two were real,
+distinct P1 findings against the structural refactor's `_MAX_KEYS`
+enforcement:
+
+- **CI3-33-2g:** `_sweep` compared the _combined_ locked-out + unlocked key
+  count against the flat `_MAX_KEYS` cap. The default config sets
+  `_MAX_KEYS == _MAX_LOCKOUTS`, so once active lockouts alone reached
+  capacity, the only evictable record was ever the triggering call's own
+  newly-recorded unlocked one — evicted and immediately rewritten by that
+  same call, forcing a real `O(N log N)` sweep+sort on _every_ retry from
+  one attacker, forever. Reproduced: 100 active lockouts, 50 retries of one
+  key, all 50 forced a real sweep (detected via `self._last_eviction`
+  actually advancing, with mocked time incremented slightly per retry).
+- **CI3-33-2h:** the same root cause, but a functional bypass rather than a
+  cost: an attacker alternating between two keys had each request evict the
+  _other_ key's one-entry history before either could accumulate past one
+  entry, so neither ever tripped its own lockout no matter how many
+  requests were sent. Reproduced: 40 alternating requests
+  (`max_requests=5`), 0 lockouts.
+
+Fixed by budgeting `_MAX_KEYS` against _unlocked_ keys specifically:
+threshold is `_MAX_KEYS + self._active_lockout_count` (the live count, not
+the static `_MAX_LOCKOUTS` cap) rather than a flat `_MAX_KEYS` against the
+combined total. A genuinely active lockout was never evictable to begin
+with, so excluding it from the budget costs nothing; an unlocked key only
+faces eviction pressure once unlocked keys themselves actually crowd the
+table. The overall worst-case combined bound is unchanged (`_MAX_KEYS +
+_MAX_LOCKOUTS`); only the trigger/removal math was wrong. 2 new tests
+(`TestRateLimiter` now 39, was 37), both verified fail-before/pass-after.
+Full completion gate re-run (full backend suite included, given this
+changes `_sweep`'s core threshold semantics): 192 scoped, 63 tenancy,
+11,740 full-suite passed. Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2g/2h).
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 4: Codex reviewed the merged refactor itself; one real cap/eviction gap fixed, one comment cleanup, two findings verified moot
+
+Codex reviewed the merge commit that landed the structural refactor as
+`claude/fix-rate-limiter-saturation-scope`'s final state (see the round-3b
+entry below) and left 4 new threads. Two were real findings against the
+refactor's own new code:
+
+- **CI3-33-2e (P1):** `self._saturation_reject_until` — kept deliberately
+  separate from `_KeyState` because it is scoped per rate-limit _scope_, a
+  different key space from the attacker-influenceable per-client keys the
+  rest of the class describes — had no size cap or eviction. Its own
+  comment argued this was safe because every current call site passes a
+  literal scope; true, but `check_rate_limit(scope: str)` and
+  `public_rate_limit(key: str)` don't enforce that at the interface level,
+  so nothing stops a future dynamic-scope caller from growing it
+  unboundedly — exactly the CLAUDE.md Pitfall #9 shape. Reproduced
+  directly: 5,000 distinct dynamic scopes grew the dict to 5,000 entries
+  with no cap. Fixed with a `_MAX_SATURATION_SCOPES` cap (1,000) folded
+  into the already-periodic `_sweep` pass — expired entries cleared first
+  (they protect nothing), then the soonest-to-expire evicted if still over
+  cap. 2 new regression tests, both verified fail-before/pass-after.
+- **CI3-33-2f (LOW):** several of the refactor's own docstrings
+  (`_KeyState`, `_LOCKOUT_VERIFY_INTERVAL`'s class comment, `_sweep`'s
+  `_MAX_KEYS` eviction comment, `_refresh_active_lockout_count`) restated
+  the CI3-33-1-through-2d review chronology inline rather than just the
+  invariant — the same anti-pattern CI3-33-2c's own comment-chronology
+  cleanup had removed elsewhere in this file, reintroduced by the refactor
+  itself. Trimmed to rationale-only, with review history pointed at
+  `docs/security-review/CI3-33-core-infra.md` instead of restated.
+  Comment-only, no behavior change.
+
+The other two threads were verified, standalone, to already be closed by
+the refactor and needed no further change:
+
+- A zero-`lockout_seconds` retry-amplification variant of CI3-33-2d
+  (`public_rate_limit`'s in-memory fallback defaults `lockout_seconds=0`,
+  which defeats a `reject_until`-based short-circuit). Moot against this
+  branch's code: the refactor bounds the expensive capacity verification by
+  a fixed 1-second, per-process throttle (`_LOCKOUT_VERIFY_INTERVAL`)
+  independent of any caller's `lockout_seconds` — it was never gated on
+  `reject_until` the way the now-superseded short-circuit fix was.
+  Reproduced: 0 real scans across 100 retries with `lockout_seconds=0`
+  against a saturated, pre-warmed table.
+- A stale-capacity variant of CI3-33-2b (extending the saturation signal
+  without rechecking whether the table has since been swept clear). Moot:
+  `is_rate_limited` already re-verifies capacity via the same throttled
+  mechanism immediately before deciding whether to extend the signal.
+  Reproduced: after real lockouts expire and the throttle elapses, a fresh
+  violator gets a genuine per-key lockout, not an extended saturation
+  fallback.
+
+`TestRateLimiter` is 37 tests (was 35). Full write-up:
+`docs/security-review/CI3-33-core-infra.md` (CI3-33-2e, CI3-33-2f, and the
+"Fourth post-merge addendum").
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3b: two concurrent sessions on the same round-7 finding; the structural refactor superseded the narrow fix
+
+Two Claude sessions worked PR #2370's round-3 (CI3-33-2d) finding at the
+same time, on the same branch, and diverged before either pushed — a
+session collision, not a mistake in either session's own work. The entry
+immediately below this one (chronologically the _first_ pushed, titled
+"round 3: Codex found CI3-33-2c's own fix...") landed a narrow
+short-circuit fix. This session's own instructions from the coordinator
+were more specific: explicit authorization to do the structural refactor
+"as part of closing this out, rather than a 7th narrow patch," received
+independently of (and before seeing) the other session's push.
+
+On pushing, this session's branch was rejected (`fetch first` — the other
+session's commit was already on the remote). Fetched, and merged rather
+than force-pushing over it (per this repo's own git safety rules): the
+code and test changes resolved in favor of the structural refactor — it is
+a strict superset that closes the other session's finding too (its
+`_active_lockout_count` + 1-second-throttled `_refresh_active_lockout_count`
+mechanism bounds the scan cost for _both_ "one key retrying repeatedly"
+and "many different keys arriving together" with the same throttle,
+verified directly for both shapes — see the refactor's own entry below).
+The other session's 2 regression tests (for its short-circuit-on-
+`_saturation_reject_until` approach) were not carried forward, since they
+assert internals (`self.lockouts`, `_prune_expired_lockouts` call counts)
+that no longer exist after the rewrite; the refactor's own round-7
+reproduction and fuzz test cover the same finding against the new shape.
+Docs (this file, the findings doc, `docs/KNOWN_LIMITATIONS.md`) merged by
+hand to keep both sessions' work visible in the record rather than
+silently overwritten — this entry and the "round 3: round 7 found,
+structural refactor authorized and shipped" entry below are both kept.
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3: round 7 found, structural refactor authorized and shipped
+
+Codex reviewed PR #2370's round-2 commit and found one more real P1 issue:
+CI3-33-2c had correctly narrowed the forced capacity scan to only run when
+the _current call_ needs to insert a lockout and the table is full — but a
+key that is already over its own request limit and retrying repeatedly
+re-enters that exact branch on every single retry, since its own lockout
+could never be persisted. Reproduced directly: 100 retries of one
+already-rejected key against a saturated table forced 100 real
+`O(_MAX_LOCKOUTS)` scans under the round-2 code. This is round 7 total on
+this class of code — and, more specifically, the immediately preceding
+fix's own commit found to have a narrower version of the exact gap it had
+just closed. The coordinator noted this was the second consecutive round
+where "the previous narrow fix left another path into the same
+CPU-amplification/edge-case class," judged the round-6 threshold for the
+structural refactor (set in round 5's own write-up) had now clearly been
+passed, and explicitly authorized doing the refactor now rather than a
+seventh incremental patch.
+
+**What shipped.** `backend/app/core/security_middleware.py`'s `RateLimiter`
+now stores one record per key — a `_KeyState` dataclass (`request_times`,
+`window_seconds`, `lockout_until`) in a single `dict[str, _KeyState]`
+(`self._keys`) — replacing `self.requests`, `self.lockouts`, and
+`self._key_windows` entirely. This closes the CI3-33-1-through-1e defect
+shape (a key's state split across structures that can disagree) by
+construction: a key either has a `_KeyState`, with everything traveling
+together, or it has none. `self._saturation_reject_until` (CI3-33-2a's
+per-scope dict) is unchanged and deliberately not folded in — a
+fundamentally different key space (scope literals, not attacker-influenceable
+per-client keys).
+
+The capacity-accuracy problem (CI3-33-2b/2c/2d) needed a second idea beyond
+the merge: a cached `self._active_lockout_count`, incremented immediately
+on every successful insertion, corrected to an exact value by the periodic
+sweep (~60s) and by a new `_refresh_active_lockout_count` — called only
+when the cached count already reads at/over capacity, throttled to at most
+once per `_LOCKOUT_VERIFY_INTERVAL` (1 second, independent of and far
+shorter than the general sweep). Between refreshes the count can only ever
+be a stale _over_-estimate (the safe direction) — it can cause an
+unnecessary saturation-fallback for up to 1 second, never let the true cap
+be exceeded. The 1-second throttle bounds the scan cost to a fixed
+per-second rate regardless of whether the repeated asks come from one key
+retrying (CI3-33-2d) or many different keys arriving together (CI3-33-2c),
+closing both with the same mechanism.
+
+**Testing discipline for a refactor of this size.** All 33 existing
+`TestRateLimiter` tests were read in full, as a behavior spec, before
+writing a line of the new class — what each test actually verified about
+`is_rate_limited`'s externally-observable behavior, separate from how it
+happened to poke the old three-dict internals for setup. All 33 were then
+rewritten against the new shape and **passed on the first full run against
+the new class** — no second round of test-fixing was needed, which is
+itself evidence the translation preserved intent. Two tests were
+substantively repurposed (their old premise no longer applies under the
+unified model, not merely renamed):
+`test_max_keys_evicts_associated_lockouts` →
+`test_max_keys_eviction_never_touches_an_actively_locked_out_key`, and
+`test_key_windows_does_not_grow_unbounded_from_locked_out_retries` →
+`test_key_count_stays_bounded_by_max_keys_plus_max_lockouts_under_locked_out_retries`.
+Two new tests: a direct reproduction of the round-7 finding (verified to
+fail against a standalone script run against the pre-refactor code's real
+`_prune_expired_lockouts`, and pass after — the internal API changed too
+much for one pytest test to run against both), and a seeded,
+deterministic, property-style fuzz test (4,000 calls, mixed scopes,
+saturation, and retries) asserting the class-level invariants the
+coordinator asked for: internal state stays within documented bounds, and
+`is_rate_limited`'s return value never disagrees with the state it leaves
+behind. `TestRateLimiter` is 35 tests, was 33.
+
+Full completion gate re-run, including the full backend suite per the
+coordinator's own instruction given the size of the change: flake8/black/
+isort clean; migrations validated (unchanged); scoped 188/188 (was 186);
+full backend suite 11,736/0 (was 11,734). `mypy` also checked given the
+size of the refactor (not part of this rotation's own gate — 844
+pre-existing repo-wide errors): the one hit in this file is unrelated and
+pre-existing, confirmed present before this change too. No frontend file
+touched. Pushed to the same `#2370` branch as a third commit. Replied to
+and resolved the Codex thread. Findings doc updated with a dedicated "The
+structural refactor" section (CI3-33-2d and everything that landed with
+it), and `docs/KNOWN_LIMITATIONS.md`'s row for this upgraded from
+"RECOMMENDED NEXT PRIORITY" to "✅ Resolved."
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 3 (superseded commit): Codex found CI3-33-2c's own fix still let an already-saturated key's retries repeat the full prune scan
+
+Codex reviewed PR #2370's round-2 commit (`0588634`) and found one more
+real P1 issue: CI3-33-2c's fix correctly scoped the lockouts-only prune to
+only the one call that is itself about to attempt an insertion — but did
+not distinguish "the call that first discovers this scope is saturated"
+from "every later retry from the same already-rejected key." Once a key is
+over its own limit, `filtered_requests` never drops back below
+`max_requests` for it until its own request history ages out of
+`window_seconds`, so every retry re-enters the same insertion-attempt
+branch and repeats the full `O(_MAX_LOCKOUTS)` prune scan for as long as
+the attacker keeps retrying — the retry loop itself became the amplifier.
+
+Reproduced directly before fixing: `_MAX_LOCKOUTS=3` with 3 genuinely
+active lockouts, then a single already-over-limit key retries 100 times —
+99 of the 100 retries (all but the one establishing saturation) each
+independently ran the full prune scan under the CI3-33-2c code, confirmed
+by counting calls to `_prune_expired_lockouts` directly.
+
+Fixed by short-circuiting on this scope's own `_saturation_reject_until`
+before attempting the prune or the capacity check: once a call has already
+established the scope as saturated, a later call within that window skips
+straight to extending the signal — the same outcome the scope's fallback
+already promised this key, so this cannot make its protection any weaker.
+Verified: 100 retries now trigger only 1 prune call (down from 99), all
+still rejected; a companion guard confirms the short-circuit does not
+outlive `reject_until` — once it lapses, the next call over its limit
+re-runs the accurate check and a new violator's lockout persists again.
+
+2 new regression tests (`TestRateLimiter` now 35, was 33): the direct
+reproduction (verified to fail against the CI3-33-2c code and pass after)
+and the reject_until-lapse companion guard (non-regression). Completion
+gate re-run: flake8/black/isort clean; migrations validated (unchanged);
+scoped 188/188 (was 186); full backend suite 11,736/0 (was 11,734). No
+frontend file touched. Pushed to the same `#2370` branch as a third commit.
+Replied to and resolved the Codex thread.
+
+**On the structural refactor:** round 6's write-up said explicitly that a
+further round of this general shape would be confirmation, not a new data
+point to weigh — round 7 is that confirmation. The recommendation is
+unchanged (the refactor is the next piece of work on this file) but is now
+stated with a fourth consecutive round in the exact same insertion-attempt
+code path behind it. Findings doc (CI3-33-2d write-up) and
+`docs/KNOWN_LIMITATIONS.md` (row text updated to record round 7) both
+updated.
+
+**Superseded**, per the "round 3b" entry above: this commit's fix was
+correct and independently verified, but the structural refactor that
+landed immediately after on the same branch closes the same finding (and
+the rest of the class) more thoroughly, so it is the refactor, not this
+short-circuit, that is in the code as of this branch's final state. Left
+in place, uncorrected in its own text, as the record of what this session
+found and shipped, matching this rotation's standing convention for a
+superseded fix.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2370 round 2: Codex found CI3-33-2b's own fix was a CPU-amplification DoS
+
+Codex reviewed PR #2370's round-1 commit (`4b5c6ac3`) and found one more
+real P1 issue: CI3-33-2b's fix (changing `_evict_stale`'s `over_limit` gate
+to `>=` for `self.lockouts`) closed the accuracy gap it targeted, but the
+mechanism it used forced the shared, three-dict `_evict_stale` sweep for
+**every** request sharing this limiter, not only the one that needed an
+accurate answer, once `self.lockouts` merely reached (not exceeded)
+capacity — the steady state for the whole duration of a sustained attack.
+An attacker who filled the fallback table turned every request anyone made
+into `O(_MAX_KEYS + _MAX_LOCKOUTS)` scan work, for as long as the table
+stayed full — a CPU-amplification DoS, worse in kind than the accuracy gap
+CI3-33-2b closed.
+
+Reproduced directly before fixing (and re-verified the repro's own
+methodology once, after a false negative: a first attempt used a `NaN`
+sentinel for `_last_eviction` to detect whether the sweep ran, but `NaN`
+compared against anything is always `False`, which defeats the
+interval-throttle condition itself regardless of the fix under test — a
+real, recent timestamp sentinel was needed instead). With the corrected
+repro: 200 distinct observer keys, none near their own limit, against a
+lockout table at exactly capacity with genuinely active entries — 200 of
+200 forced a full sweep under the CI3-33-2b code.
+
+Fixed by reverting `_evict_stale`'s own gate to `>` (a safety net that
+should structurally never fire, since insertion is gated) and moving the
+capacity-accuracy concern to a new, narrow `_prune_expired_lockouts()` —
+lockouts-only, not gated by `_EVICTION_INTERVAL` — called from exactly one
+place: `is_rate_limited`'s insertion decision, only when observed at/over
+capacity at that decision point. Verified: the CPU-amplification repro now
+shows 0 of 200 forced sweeps; the genuine-saturation case (all-active
+lockouts at cap) still correctly rejects a new violator's insertion without
+evicting existing entries; CI3-33-2b's own original repro (stale-expired
+count causing false saturation) still passes, unaffected.
+
+2 new regression tests (`TestRateLimiter` now 33, was 31): the direct
+CPU-amplification reproduction (verified to fail against the CI3-33-2b code
+and pass after) and a genuine-saturation companion guard (passes both
+before and after, confirming the fix didn't weaken CI3-33-2b's own
+protection). The existing `test_lockout_saturation_check_purges_expired_
+entries_first` test's docstring was updated to note its fix was
+superseded by the narrower mechanism, without changing its assertions.
+
+Completion gate re-run: flake8/black/isort clean; migrations validated
+(unchanged); scoped 186/186 (was 184); full backend suite 11,734/0 (was
+11,732). No frontend file touched. Pushed to the same `#2370` branch as a
+second commit. Replied to and resolved the Codex thread.
+
+**Structural refactor judgment call, made explicitly per the coordinator's
+request:** this is round six on this class of code — CI3-33-2a/2b's own
+write-up (round 5) named a sixth round as the trigger to stop patching and
+do the refactor. That trigger has now been met, and round 6 is a
+materially stronger signal than the prior rounds: it is round 5's _own fix_
+generating round 6's finding, in the exact same code path. The call: the
+refactor is now recommended as the **next piece of work on this file**, not
+an indefinitely-deferred item — but not folded into this fix itself, for
+the same reason narrow fixes have been preferred throughout this rotation
+(a verified regression fix under reactive pressure is not the moment to
+also change the class's internal representation). Findings doc
+(CI3-33-2c write-up, "On the structural refactor" section) and
+`docs/KNOWN_LIMITATIONS.md` (row upgraded from "design follow-up" to
+"RECOMMENDED NEXT PRIORITY") both updated to state this explicitly.
+
+**Also corrected in this pass:** the round-1 commit messages, this file,
+`docs/security-review/CI3-33-core-infra.md`, and `docs/KNOWN_LIMITATIONS.md`
+had mislabeled this PR as "#2369" throughout — the PR GitHub actually
+created is **#2370** (the replies posted to PR #2368's threads were
+unaffected; they correctly said "#2370" already). Swept and corrected every
+"#2369" reference across all three docs files in this pass.
+
+---
+
+### 2026-09-07 — Feature 33 (Core infrastructure, pass 3) — PR #2368 merged before Codex's 5th round → new PR #2370
+
+Watchdog check found PR #2368 had merged (`262f8730`) with 3 more Codex
+review threads open (posted 2026-09-07T12:18:18Z–12:18:18Z, merge landed
+~50s later) — the merge happened before anyone had seen them, so none of
+this round's fixes reached `main` through that PR. Per CLAUDE.md pitfall
+#24, opened a new branch (`claude/fix-rate-limiter-saturation-scope`) off
+current `main` rather than continuing to push to the now-merged
+`claude/security-review-core-infra-pass3`, and a new PR, #2370 — same
+pattern as PR #2367/#2365 and PR #2311/#2307.
+
+Verified all 3 findings against the actual merged code with standalone
+reproductions before fixing, same discipline as every prior round:
+
+- **P1 — cross-scope saturation DoS (CI3-33-2a):** confirmed real.
+  `self._saturation_reject_until` (CI3-33-1e's fix) was a single scalar on
+  the shared `rate_limiter` instance backing every rate-limit scope — login,
+  register, password-reset, token-refresh, password-change, and every
+  `public_rate_limit()` caller (public forms, legal pages, calendar/display
+  endpoints, webhooks). Reproduced directly: saturating the `login` scope's
+  3-entry lockout table, then a brand-new `pub_form_submit` key with zero
+  history was rejected too — a self-inflicted, attacker-triggerable DoS
+  across the entire app during exactly the condition (Redis outage + login
+  flood) the fallback exists to protect. Fixed by making the field
+  `dict[str, float]` keyed by rate-limit scope (the literal prefix each real
+  caller puts before the first `:` in its key, extracted by a new
+  `_scope_of()` helper). Confirmed by grep that every scope value across the
+  codebase is a hardcoded string literal, never derived from request
+  input — so the new dict needs no size cap, unlike the three
+  attacker-keyed dicts. Verified the fix does not weaken same-scope
+  protection (a saturated scope's own violators still fail closed past
+  their own window).
+- **P2 — stale-capacity false saturation (CI3-33-2b):** confirmed real.
+  `_evict_stale`'s `over_limit` gate used a strict `>` against
+  `_MAX_LOCKOUTS`, so a table sitting at _exactly_ capacity deferred to the
+  normal ~60s eviction throttle instead of forcing an immediate sweep —
+  entries that expired since the last periodic sweep stayed counted, so a
+  new violator's insertion decision (`len(self.lockouts) < _MAX_LOCKOUTS`)
+  read a stale, inflated count. Reproduced directly: 3 already-expired
+  lockouts plus a recent `_last_eviction` timestamp caused a genuinely empty
+  table to be read as saturated. Fixed by changing the lockouts term to
+  `>=`, forcing this call's own `_evict_stale` (which runs immediately
+  before the insertion decision) to purge expired entries first whenever the
+  table is at or over capacity.
+- **Minor — comment chronology (folded into the same fix):** the in-code
+  comments across `RateLimiter` had accumulated 4 rounds of PR numbers,
+  finding IDs (CI3-33-1a–1f), Codex round numbers, and failed-attempt
+  narratives. Trimmed every comment down to the invariant that still
+  matters; moved the chronology to the findings doc, which already has it
+  in full. Verified no behavior change: full `TestRateLimiter` suite passes
+  identically before and after the comment-only edits.
+
+2 new regression tests (`TestRateLimiter` now 31, was 29), both verified to
+fail against the merged pre-fix code and pass after; the 3 existing
+CI3-33-1e tests referencing `_saturation_reject_until` were updated for the
+scalar → per-scope-dict change (two needed scope-consistent key names to
+keep testing same-scope behavior, since bare unscoped keys would otherwise
+trivially pass via the new cross-scope isolation regardless of whether
+decay/live-history handling was correct). Completion gate re-run against
+current `main`: flake8/black/isort clean; migrations validated (435
+revisions, single head, no schema change); scoped 184/184 (was 182); full
+backend suite 11,732/0 (was 11,730). No frontend file touched. Findings doc
+(`docs/security-review/CI3-33-core-infra.md`, new CI3-33-2a/2b sections plus
+a post-merge addendum note) and `docs/KNOWN_LIMITATIONS.md` (structural-
+refactor row updated to record the round-5 recurrence) both updated. PR
+#2370 opened, referencing #2368, and subscribed. Rotation row 33 stays as
+above. Next once #2370 merges: 34 Frontend shared.
 
 ---
 
@@ -10262,6 +11269,10 @@ data-carrying modules, then the supporting infrastructure.
 again (PRs #1924–#2118, see the Log for detail on each). Reset to ⬜ for
 pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 
+**Pass 3 complete (2026-09-01 → 2026-09-07):** every row below went ✅
+again (PRs #2128–#2382, see the Log for detail on each). Reset to ⬜ for
+pass 4 — each row's prior PR is recorded in the Log, not repeated here.
+
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
@@ -10270,34 +11281,34 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                           | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -10306,6 +11317,719 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 05 (Finance & approvals, pass 4) — 4 fixes, 1 flagged — PR opened, then a Codex round fixed FIN-29 and corrected FIN-30
+
+No backend finance file had changed since pass 3's closing commit (`git log
+--since="2026-09-01"` on the module's paths surfaces only a breadcrumb/
+navigation-trail commit touching ten frontend page files, cosmetic). Re-
+verified pass 3's own fixes (FIN-19–26) present and unchanged, then worked
+the full checklist fresh rather than trusting three clean prior passes.
+
+**FIN-27 (MED, fixed) — `GET /budgets/summary` and `GET /approval-chains/
+preview` were both permanently unreachable**, shadowed by an earlier-
+registered `/{id}` route of the same method and segment shape (Starlette
+dispatches to the first full match in registration order, and does not
+prefer a fixed path over a same-shaped dynamic one). Both endpoints have
+been silently 404ing since whenever they were added. Fixed by reordering
+route registration (no handler/auth/schema change); guard test
+`tests/test_finance_route_resolution.py` (5 tests, one a whole-router sweep)
+confirmed red against the pre-fix order, green after.
+
+**FIN-28 (LOW, fixed) — `get_pending_approvals` round-tripped a `Decimal`
+amount through `float()`** before Pydantic re-validated it as `Decimal`; not
+a live bug at this table's value range, but a needless precision hazard
+inconsistent with the module's otherwise-consistent `Decimal` money math.
+Removed.
+
+**Documentation correction, no code change** — `docs/module-audit/
+finance.md`'s FIN-7 entry (and its mirrors in `docs/app-review/finance.md`
+and `docs/KNOWN_LIMITATIONS.md`) still described three items as open that
+were already fixed on `main`, landed incidentally by earlier finance-
+approvals security-review passes and never threaded back into the older
+audit doc: unbounded transaction export (now capped at 10,000 rows,
+streamed in batches), in-memory list pagination, and no overspend guard
+(`_mutate_budget` already enforces the ceiling, fail-closed). The pagination
+half of this correction was itself wrong, caught by the Codex round below.
+
+**Codex round on PR #2398** caught two real issues in the diff above.
+**FIN-29 (MED, fixed)** — the route reorder above made
+`GET /approval-chains/preview` reachable for the first time, which exposed a
+pre-existing bug in the same handler: its own `if not chain: raise
+HTTPException(404, ...)` sat inside the same `try` block as the service
+call, and that block's trailing `except Exception` (no `except
+HTTPException` ahead of it) caught the 404 and replaced it with a 500 for
+every genuinely no-match preview. Moved the check outside the
+`try`/`except`, matching every other by-id 404 in this file; 3 new guard
+tests in `tests/test_finance_approval_chain_preview.py`, confirmed red
+against the pre-fix ordering (500 instead of 404) and green after.
+**FIN-30 (LOW, flagged)** — the in-memory-pagination correction above
+overclaimed "every list method" paginates: `list_dues_payments`
+(`GET /dues/{dues_id}/payments`) does not — it eager-loads one member's
+entire payment ledger with no `.offset()`/`.limit()`. Left flagged rather
+than fixed (pagination would change the endpoint's response shape, a
+frontend-contract decision), and all three doc corrections above now name
+this exception instead of asserting none exists. Both threads resolved.
+
+**Local-environment note:** this session's sandbox initially resolved a
+stale, unrelated `node_modules` (a worktree with none of its own falls back
+to the main checkout's install one directory up), producing 1116 false
+`@typescript-eslint/no-unsafe-*` warnings on a first `eslint .` run across
+41 files this pass never touched. `npm ci` at the worktree root fixed it (2
+pre-existing warnings after, matching a green `main` CI run on the same
+commit). Recorded in the findings file so it doesn't get mistaken for a
+regression by a later pass reading this log.
+
+Completion gate (re-run after the Codex round): flake8/black/isort clean on
+`app/ tests/ alembic/` (isort 9.0.1, CI's pin); `validate_migrations.py
+--strict` (438 revisions, single head); scoped `pytest -k "finance or dues
+or approval or budget or export"` 311 passed (303 pre-existing + 8 new)/1
+skipped (pre-existing)/0 failed; full backend suite 11843 passed/21 skipped
+(pre-existing)/0 failed; `tsc --noEmit` 0 errors; `eslint .` 0 errors/2
+pre-existing warnings (well under `--max-warnings 10`); `vitest run
+src/modules/finance/` 108 passed (frontend gate re-checked though the Codex
+round touched no frontend file). Rotation row 05 → ✅ (pending PR merge).
+Next: 06 elections & ballots.
+
+### 2026-09-08 — Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged, watchdog recorded it
+
+No security-review PR had gone through a normal tend iteration since #2395
+opened. On this pass the PR was fully green (17/17 checks, `mergeable_state:
+clean`), Codex's review had completed with nothing further raised, and it had
+sat idle for roughly 3 hours since CI finished — the same "green, idle, Codex
+clean" bar prior watchdog merges in this log have used (Features 23, 25, 33,
+34). Merged directly (`c71b5fb2`, squash) rather than left open. **Open PR**
+row cleared, rotation row 04 confirmed ✅ (it was already marked ✅ pending
+merge when the PR opened). Next: 05 Finance & approvals.
+
+### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) — PR #2395 opened
+
+The **Open PR** row read "None" and 04 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass. Scoped by `git diff` between pass
+3's closing merge (`59b8ccff1`, PR #2138) and current `HEAD`, the same method
+pass 3 used: two small backend additions (`exclude_cancelled` order filter),
+a real UI move (the admin console relocating into Inventory Administration
+onto the shared `AdminHubFrame`), and a large cross-feature grant-restoration
+migration confirmed a false positive by content, matching what MP-08/ELEC-06/
+GF-22 already found for their own domains against the same migration.
+
+**One finding, MED, fixed: SF-7.** `update_order_status` settles an order's
+payment ledger (`payment_status = PAID`, `amount_paid = total`, `paid_at =
+now()`) through its own branch, independent of the four methods SF-6 already
+guarded (`record_payment`/`mark_order_paid`/`waive_order_payment`, plus
+`record_payment` itself once SF-6 closed the wrapper-only gap) — and carried
+none of their `assert_different_person` check. A `storefront.manage` holder
+who also owned the order could call `POST /orders/{id}/status`
+(`{"status": "paid"}`) or its bulk sibling and self-settle with no money
+moved and no second person, exactly the scenario SF-6 already named as
+plausible. Fixed with the same guard, positioned before any mutation; guard
+tests confirmed red against the pre-fix method, then green. Full write-up:
+the **Pass 4** section of `docs/security-review/SF-04-storefront-payments.md`.
+
+Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
+438 revisions, single head; scoped backend tests (`-k "storefront or
+payment"`) 718 passed, 1 skipped (environment-only); full backend suite
+11,835 passed, 21 skipped (all environment-only); cross-cutting guard tests
+(org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep,
+endpoint-auth coverage) 56 passed; `npm run typecheck` 0 errors; `npm run
+lint` 0 errors, 2 pre-existing warnings (unrelated `CallTypeChips.tsx`,
+within budget — see the findings doc for a worktree `node_modules` false
+signal encountered and root-caused before this result); `vitest run
+src/modules/storefront/ src/components/admin/` 205 passed (18 files).
+Rotation row 04 -> ✅. Next: 05 Finance & approvals.
+
+### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) ✅ merged — PR #2393
+
+Two further Codex rounds landed after the PR opened, both real, both fixed:
+
+**Round 2 (PUB-9, PUB-10):** PUB-6's null-default fix let an unwhitelisted
+field round-trip back out as an explicit `null` instead of being omitted (and
+a partial whitelist leaked every field it had _not_ enabled) because neither
+organization route set `response_model_exclude_unset=True` — fixed by adding
+it to both. Separately, all three success paths logged 200 _before_ the
+response value was actually validated against `response_model`, so a
+validation failure downstream (concretely reachable via the already-flagged
+PUB-7 on `/events/public`) still recorded as a 200 the client never received —
+fixed by constructing (and thereby validating) the response before calling
+`log_public_api_request`, still inside the `try`. `/events/public` now builds
+a `PublicEvent` per event inside the loop instead of appending the raw dict.
+
+**Round 3 (PUB-5b):** the PUB-5 fix's reconciliation query still counted a
+rolling "last 60 minutes" window while the tally and `X-RateLimit-Reset` both
+key off a fixed clock-hour bucket. Right after an hour turned over, the
+rolling window could still include the previous bucket's traffic, and because
+the reconciled count can only raise the in-memory tally and never lower it, an
+inflated `db_count` would stick for the rest of the new hour — 429ing
+legitimate requests until the bucket rolled over again. Fixed by scoping the
+query to `datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)` instead of
+`now - timedelta(hours=1)`. Added
+`test_reconciliation_query_scopes_to_the_current_hour_bucket`, which captures
+the compiled query's actual lower-bound literal; verified red against the
+rolling-window version first.
+
+Both rounds' write-ups added to `PUB-03-public-surface-webhooks.md` (PUB-9,
+PUB-10, PUB-5b) and `CHANGELOG.md`. CI green (17/17) on the final head, Codex's
+review of that commit found nothing further, all three review threads
+resolved, no merge conflict. Merged (`d03530fc`). Rotation row 03 stays ✅
+(already marked at PR-open per convention). Next: 04 Storefront & payments.
+
+### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) — PR #2393 opened
+
+The **Open PR** row read "None" and 03 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass.
+
+**4 findings: 3 fixed, 1 flagged** (PUB-8 is fixed in one half and flagged in
+the other, so the flagged column really reads "one and a half"). Both flagged
+items are mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Read in full, not diffed — and that is the whole story of this pass.**
+`git log 9f7e3f314..main -- backend/app/api/public/
+backend/app/core/public_portal_security.py` (pass 3's own closing commit, with
+the file set pass 3 corrected itself into using) returns two commits, both
+feature 27's Integrations work on the webhook transports and one docstring.
+A diff-scoped pass — which is what passes 2 and 3 were — would have had
+nothing to look at and would have closed clean for the third time running.
+Reading all 13 files end to end instead, the same methodology change PERM-02's
+pass 4 made, found four defects, every one of them older than pass 3, and
+three of them in code passes 1–3 had summarised as verified good. Route count
+re-derived and unchanged at 20; file count unchanged at 12.
+
+- **PUB-5 (MED, fixed)** — `check_rate_limit` keeps a per-process in-memory
+  tally per API key and, at 90 % of the key's hourly limit, replaces it with a
+  `COUNT(*)` over `public_portal_access_log` — **assigning** the database's
+  answer rather than reconciling with it. That table only ever carried
+  requests that committed: `get_db` rolls the request's session back on any
+  raised exception (asserted with a real `TestClient` request in the guard
+  test rather than assumed), every non-200 answer on this router is an
+  `HTTPException`, and a 401/429 is raised from the dependency before the
+  handler that writes the row runs at all. So for a caller whose requests
+  error the count is 0 forever: a department with its portal switched off
+  answers 503 to every call, the in-memory tally climbs to 900 of 1 000, the
+  query answers 0, the tally resets to 0, and the loop repeats — the per-key
+  hourly quota is never reached, leaving only the per-IP 100/min limiter,
+  which permits ~6 000 requests/hour against a 1 000/hour ceiling. Fixed with
+  `max(current_count, db_count)`: the database can still raise a per-process
+  tally to the cross-process truth, which is the multi-worker case the query
+  exists for, but it can no longer lower one.
+- **PUB-6 (LOW, fixed)** — under Pydantic v2, `Optional[T]` with no default is
+  a **required** field that merely accepts `None`, and every field on
+  `PublicOrganizationInfo` and `PublicOrganizationStats` was declared that
+  way. `portal.py` constructs both from a whitelist-filtered dictionary, and
+  nothing seeds `public_portal_data_whitelist` — rows exist only once an
+  administrator adds them, and `bulk-update` updates rather than creates. So
+  the default-deny state every deployment starts in produced
+  `Model(**{})` → `ValidationError` → the handler's own `except Exception` →
+  **500 on every request** to `/organization/info` and `/organization/stats`;
+  a partially-whitelisted department fared no better, since all nine (and all
+  six) fields had to be enabled, and even a complete whitelist could still
+  500 because `mailing_address` was typed `Dict[str, str]` against a dict the
+  handler builds with a `None` `line2`. Two prior audits recorded "whitelist
+  is default-deny" on the strength of the filter alone, without ever
+  exercising the model it feeds. Fixed by defaulting every field and widening
+  the address value type — the shape `docs/PUBLIC_API_DOCUMENTATION.md`
+  already documents, and nothing new is exposed because the filter upstream is
+  untouched.
+- **PUB-8 (LOW, half fixed / half flagged)** — `log_access` ends at
+  `db.flush()`, so all six `except` branches in `portal.py` wrote an
+  access-log row for the 503/404/500 they were about to raise and then had it
+  rolled back on the way out; the log an operator reads to spot abuse, and
+  that `detect_anomalies` reads on every request, held only traffic that had
+  succeeded. The row is now committed, guarded, so a failed audit write is
+  logged and rolled back rather than replacing the answer the caller was owed
+  (safe because these handlers write nothing else and the session is
+  `expire_on_commit=False`). The other half is flagged: **nothing in `app/`
+  has ever written a 401 row** — `authenticate_api_key` raises from the
+  dependency — so `detect_anomalies`' failed-auth branch is unreachable, and
+  writing one needs `PublicPortalAccessLog.organization_id` and `config_id`
+  made nullable (an unknown key cannot be attributed to an organization),
+  which is a migration plus a decision about how an unattributable row is
+  scoped for the per-organization admin read.
+- **PUB-7 (LOW, flagged)** — `GET /events/public`'s handler emits
+  `{title, description, start_datetime, end_datetime, location, event_type}`
+  while `response_model=list[PublicEvent]` requires
+  `{id, title, description, event_type, start_time, end_time, location,
+is_public}`, all required, three of the names absent from what the handler
+  produces. With nothing whitelisted `filtered_event` is `{}` and the guard
+  skips it, so the route returns `[]` — which is why this has never surfaced.
+  Whitelist one events field with one upcoming public-education event and
+  FastAPI's response serialisation raises outside the handler's `try`: the
+  department's public website gets a 500 exactly when an administrator
+  finishes configuring it. Flagged rather than fixed because the repair is a
+  public-contract decision — the published documentation carries the
+  **schema's** names, so re-keying the handler voids whitelist rows an
+  administrator may already have created and forces a call on whether the
+  internal event `id` and `is_public` become whitelistable on an
+  unauthenticated surface, while re-declaring `PublicEvent` contradicts the
+  docs and any client written against them.
+
+**Re-verified still current:** all four webhook receivers verify before they
+act and fail closed when unconfigured (HMAC over the raw body with
+`compare_digest` for Salesforce/Cal.com, either that or the shared secret for
+Documenso, PayPal's own verify API treating anything but `SUCCESS` as
+untrusted); none of the four trusts the payload for tenancy, all resolving the
+organization from a row selected by `(id, integration_type, enabled)`; replay
+fingerprinting is ordered after verification at all four and, at Salesforce,
+still after payload-shape validation, which is PUB-1 round 2's fix; the
+finance token path still holds `with_for_update()`, the PENDING re-check, the
+expiry check and PUB-4's `EMAIL`-approver self-approval guard, with the token
+cleared before the flush; `display.py`'s two rejection gates still precede the
+atomic daily-cap `INCR`. Zero `csv.writer` and zero `like`/`ilike` anywhere in
+the 13 files. No public response is reachable by the frontend response cache —
+re-derived at all seven `/api/public/v1/...` call sites, each of which uses
+bare `axios`, bare `fetch`, or a `createApiClient()` instance. Five things
+were checked and deliberately **not** raised (the naive/aware
+`token_expires_at` comparison, which `core/database.py`'s global `load`
+listener already settles; the legacy-prefix bcrypt fan-out PP-4 already
+recorded; `get_user_by_calendar_token` not filtering `is_active`;
+`PublicFormResponse` returning `form.id`; and a non-dict JSON body reaching
+`payload.get` on the signed-only Salesforce route) — recorded in the write-up
+so pass 5 does not spend the time again.
+
+**Completion gate:** flake8 / black / isort all clean on `app/ tests/
+alembic/` at CI's pinned versions (7.3.0 with flake8-pytest-style 2.2.0 /
+26.5.1 / 9.0.1) — PT006 caught two `@pytest.mark.parametrize` calls in the new
+guard tests, this time in the _opposite_ direction to PR #2391's (a single
+argname wants a plain string, not a one-element tuple), fixed before commit;
+`validate_migrations.py --strict` single head `1603bd9c59e7`;
+`test_org_scoping_ratchet.py` + endpoint-auth + LIKE + CSV + capacity ratchets
+56 passed; scoped tests 495 passed, 1 skipped (`py_vapid`, pre-existing);
+**full backend suite 11 831 passed, 21 skipped, 0 failed**;
+`check_docs_links.py` 351 files, 0 broken links. No frontend file modified, so
+`tsc`/`eslint` are n/a.
+
+### 2026-09-08 — Feature 02 (Permissions & roles, pass 4)'s PR #2391 merged, watchdog recorded it
+
+CI's Backend Lint job caught a real `PT006` flake8-pytest-style violation in
+the PR's own new guard test (`@pytest.mark.parametrize("name,description",
+...)` needed a tuple, not a comma-string, matching this suite's existing
+convention elsewhere) — fixed and verified against the CI-pinned plugin
+version directly, not just re-read (the plain `flake8` on `PATH` resolves to
+an isolated `uv tool` install that doesn't see it, same shadowing class this
+rotation already documented for `black`). Codex's review completed clean on
+both the original and the fix commit, with 0 findings. Merged (`a96b7370`)
+once CI was fully green. This entry records the merge and clears the stale
+Open PR row. Next: 03 Public surface & webhooks.
+
+### 2026-09-08 — Feature 02 (Permissions & roles, pass 4) — PR #2391 opened
+
+The **Open PR** row read "None" and 02 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass.
+
+**4 findings: 3 fixed, 1 flagged.** The flagged one is mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+**This is the first pass on this feature to read all ten principal files in
+full rather than the diff, and that is what produced the only finding that
+matters.** Passes 2 and 3 both scoped themselves to what had changed —
+correctly, and pass 3 even corrected its own diff range mid-review — but the
+escalation questions this feature is asked are answered by how
+`users.py`'s assignment handlers, `roles.py`'s ceilings and
+`admin_continuity_service`'s counting interact, not by any one file's diff.
+PERM-5 predates pass 3 and was reachable only that way. (The diff range was
+still computed and is recorded: pass 3's merge is `074f6a79`; three of ten
+files changed, seven byte-identical. The repository started this session as a
+shallow clone whose history began after pass 3, so it took a
+`git fetch --deepen` before the range existed at all.)
+
+- **PERM-5 (MED, flagged)** — `PUT /users/{id}/roles`,
+  `POST /users/{id}/roles/{role_id}` and `DELETE /users/{id}/roles/{role_id}`
+  carry two guards and neither compares the caller to the target.
+  `_enforce_role_grant_ceiling` walks the **incoming** roles, so it is a no-op
+  on a removal — `{"role_ids": []}` passes trivially — and
+  `assert_positions_retain_administrator` only asks whether _somebody_ in the
+  organization would still hold `members.manage`. The seeded **Secretary** and
+  **Membership Coordinator** positions hold both assignment grants plus
+  `members.manage` and hold none of `settings.manage`, `security.manage` or
+  `positions.*`, so either can strip the wildcard `it_manager` position from
+  the department's only `*` holder and the continuity guard still passes,
+  because the remover is the second administrator it counts. **It cannot be
+  undone through the API**: re-granting runs the ceiling, which requires
+  already holding `*`, and `create_role`/`update_role` validate against
+  `get_all_permissions()`, which contains no wildcard —
+  `admin_continuity_service`'s own docstring says recovery from that state
+  "needs a database administrator". Reproduced by driving both real helpers
+  with the seeded permission sets, not reasoned from the signatures. The
+  neighbouring paths **do** ask this question — `_enforce_role_edit_ceiling`
+  (ORU-7) on a position's permission list, `_enforce_account_reset_ceiling` on
+  a credential reset — so this is an inconsistency rather than a design.
+  Flagged because the obvious guard also blocks the legitimate case a
+  Membership Coordinator exists for, offboarding a departing chief, and the
+  three options (full demotion ceiling / narrow last-`*`-holder guard /
+  accept-and-make-recoverable) are not equivalent.
+- **PERM-6 (LOW, fixed)** — `is_read_only_permission` decided a permission's
+  tier with `action == "view" or action.startswith("view_")`, and two
+  catalogued reads do not match that shape: `inventory.check_view` (a two-word
+  action on a nested resource) and `scheduling.report` ("View shift reports and
+  analytics"). `permission_matches_any_write` authorizes a mutation by keeping
+  only what it believes are the write-tier entries of a folder's required
+  permissions, so a read filed as a write is handed over as proof of write
+  authority. Latent rather than live, and verified as such: the only writer of
+  `DocumentFolder.required_permissions` in `app/` stores
+  `FACILITY_SENSITIVE_PERMISSIONS`, all three classified correctly, and no
+  request schema exposes the column. `view` is now matched as a word in the
+  action, plus a named exception set for the one grant no naming rule can
+  express. The guard test checks the classifier against an **independent**
+  signal — each `Permission`'s hand-written description — rather than
+  restating the implementation, and was verified red against the pre-fix
+  version (4 of 11 tests, including the end-to-end matcher assertion).
+- **PERM-7 (LOW, fixed)** — when `a9063055` gave `set_user_roles` a required
+  keyword-only `organization_id` ("an unreachable bulk role-replacement that
+  would have crossed tenants the moment an endpoint wired it up"), its two
+  siblings on the same service were left as they were: `assign_role_to_user`
+  and `remove_role_from_user`, no org parameter, no in-org check on either
+  client-supplied id, zero callers in `app/`. Same landmine shape as AUTH-6
+  and AUTH-16. Both now take the same required keyword-only parameter and run
+  `assert_in_org` over the member and the position before any write, and their
+  docstrings name what they still do **not** enforce (the grant ceiling on
+  assignment, the continuity guard on removal) and which live endpoints do.
+- **PERM-8 (LOW, fixed)** — `RankReorderRequest.ranks` had `min_length=1` and
+  no `max_length` against a `reorder_ranks` loop that issues one org-scoped
+  query per item, so the list length was a query count bounded only by the
+  60 MB request-body limit at ~60 bytes an item. Capped at 500 (the seed writes
+  8). The loop is deliberately left alone — collapsing it into one query would
+  have to reproduce MySQL's case-insensitive id comparison in Python to be
+  behaviour-preserving, and a cap is the change that cannot be subtly wrong.
+
+**Re-verified still current:** PERM-1's `settings.manage` gate on
+`GET /operational-ranks/validate`, PERM-2's savepoint-based `seed_defaults`,
+PERM-3's and PERM-4's `_enforce_rank_grant_ceiling` wiring (all four call
+sites, and `User.rank` confirmed by grep to have exactly one widening write
+path so those four are the complete set), and the officers/org-chart
+XC-1/XC-3 conclusions from passes 1–2 on the seven files that have not
+changed since. All three seeded-grant changes since pass 3 shipped the
+Pitfall #23 migration, each with the scoping its direction requires — a
+revocation unconditional and `is_system`-scoped, an addition gated on positive
+evidence the row is an unrepaired seed. Six things were checked and
+deliberately **not** raised (the two authentication-only rank reads,
+`get_user_permissions` omitting rank defaults in the nav-only admin probe, the
+per-position count query in `list_roles`, unvalidated `eligible_positions`,
+the `it_manager` wildcard, and `get_request_enabled_modules` swallowing an
+invalid-credential exception) — recorded in the write-up so the next pass does
+not spend the time again. `GET /org-chart` returns member names, emails and
+phones and is not in `UNCACHEABLE_PREFIXES`; verified a no-op today because
+the governance module builds its client with `createApiClient()`, which has no
+cache interceptor — the same shape PR #2381 recorded for three routes rather
+than excluding them, and recorded the same way here.
+
+**Completion gate:** flake8 / black / isort all clean on `app/ tests/
+alembic/` at CI's pinned versions (7.3.0 / 26.5.1 / 9.0.1);
+`validate_migrations.py --strict` 438 revisions, single head `1603bd9c59e7`;
+`test_org_scoping_ratchet.py` 12 passed; the four permission-registry and
+auth-coverage guards 18 passed; scoped tests 1 348 passed; **full backend
+suite 11 815 passed, 21 skipped, 0 failed**; `check_docs_links.py` 351 files,
+0 broken links. No frontend file modified, so `tsc`/`eslint` are n/a.
+
+### 2026-09-08 — Feature 01 (Auth & session lifecycle, pass 4)'s PR #2389 merged, watchdog recorded it
+
+PR #2389 went through five consecutive rounds of Codex review, all against
+its own new guard test (`test_mfa_verification_consumes.py`, AUTH-16) — each
+round found one more real gap in that AST sweep's alias resolution (plain
+aliasing → cross-scope leakage → same-scope reordering → control-flow →
+`match` arms and single-hop assignment aliasing), and each was verified
+against an injected repro of the exact scenario before being fixed and
+pushed. A sixth suggestion (resolve attribute-call receivers to their real
+module) was verified and deliberately declined with reasoning documented in
+the function's own docstring, not implemented — narrowing there would trade
+a real guarantee for cosmetic precision against a collision that doesn't
+exist in this codebase. Codex's review then started failing on usage limits
+rather than surfacing anything new. With CI fully green (16/16 checks),
+`mergeable_state: clean`, and all 8 review threads resolved, this was judged
+equivalent to Feature 33's PR #2370 precedent (Codex stuck on quota after
+real findings were already addressed) and merged directly (`a68d674d`)
+rather than left idle. Also fixed mid-PR: **AUTH-19** (LOW) — Codex caught
+this pass's own AUTH-17 write-up wrongly claiming `sessions.refresh_token`
+was indexed; it wasn't, despite being the column the hot refresh-token
+lookup filters on every request. Indexed it via a real migration
+(`1603bd9c59e7`), verified against the live database in both directions.
+This entry records the merge and clears the stale Open PR row. Next: 02
+Permissions & roles.
+
+### 2026-09-08 — Feature 01 (Auth & session lifecycle, pass 4) — PR #2389 opened
+
+The **Open PR** row read "None" and 01 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass.
+
+**5 findings: 3 fixed, 2 flagged.** Both flagged items are mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+- **AUTH-14 (MED, fixed)** — `get_current_user` runs two account-state
+  refusals in sequence, each with its own allowlist of path suffixes: one for
+  `must_change_password`, one for an un-enrolled member in an org that
+  requires MFA. A member in **both** states can only reach the intersection,
+  and the intersection held no remediation route: gate 1 refused every
+  `/auth/mfa/*` enrollment path, gate 2 refused `/auth/change-password`. So
+  switching on the department-wide MFA requirement permanently locked out
+  every account still holding a temporary password — which is every member an
+  administrator created, every bulk-imported member, and every converted
+  prospect — with no way back for the member or for an administrator
+  (`admin_reset_password` re-sets the flag; `admin_reset_mfa` clears an
+  enrollment that never existed). Fixed by putting `/auth/change-password` on
+  both lists, which is also the right ordering: binding an authenticator to
+  an account still on the administrator's temporary password is worse than
+  the reverse. Reproduced against the real dependency across all four state
+  combinations before the fix, not reasoned from the tuples.
+- **AUTH-16 (LOW, fixed)** — AUTH-7, AUTH-9 and AUTH-13 spent three review
+  rounds establishing that every second-factor check must verify **and**
+  consume under a row lock, and nothing enforced it: the non-consuming
+  `mfa_service.verify_totp` was still exported with zero `app/` callers under
+  the most obvious name in the module — AUTH-6's landmine shape, on the exact
+  primitive AUTH-7 had to remove from three routes. A new AST sweep now
+  asserts `verify_totp` has no call sites, that each consuming primitive has
+  exactly **one** named caller, and that `pyotp` is imported only by
+  `mfa_service.py` (which catches a hand-rolled check that would bypass both
+  helpers without naming either). Deleting `verify_totp` was considered and
+  rejected — the guard covers strictly more than removal would.
+- **AUTH-18 (NIT, fixed, docs only)** — three claims in this feature's own
+  record had drifted: the route split is 14 public / 12 private (passes 1–3
+  said 11 / 15, while pass 1's own table already listed 14 unauthenticated
+  rows); AUTH-12's "`mfa_setup` is the only place that writes `mfa_secret`
+  outside `mfa_disable`" missed `users.py`'s `admin_reset_mfa` (the fix is
+  still sufficient, but for a different reason than the one recorded); and
+  pass 1's "no dead endpoints" no longer holds for `/check`, whose sole
+  frontend wrapper now has zero callers.
+- **AUTH-15 (MED, flagged)** — `HIPAA_MAXIMUM_PASSWORD_AGE_DAYS` (default 90)
+  has three readers and none refuses a request; the only thing acting on it is
+  `ProtectedRoute.tsx`. Its sibling `must_change_password` **is** gated in
+  `get_current_user`, with a comment saying the API must not rely on the
+  frontend — and no matching gate exists for `password_expired`. A 400-day-old
+  password gets a full session from `curl`. Flagged rather than fixed because
+  the gate locks out every over-age member the day it deploys; the rollout is
+  an owner decision.
+- **AUTH-17 (LOW, flagged)** — `sessions` rows are deleted on four events and
+  never reaped otherwise; a session that simply expires is never touched
+  again, keeping its `ip_address` and `user_agent` indefinitely in an app that
+  sets a deliberate 7-year window on its audit log. `scheduled_tasks.py` has
+  retention jobs for the two neighbouring tables and none for this one.
+  Flagged: a reaper needs a retention window (a product decision, since these
+  rows are the data behind any future "where am I signed in" screen) and a new
+  scheduled task, which is feature 31's surface.
+
+Re-verified still current: AUTH-1's OAuth org-active fix and its guard test,
+AUTH-3's stale-response guard, AUTH-4's reasoning, AUTH-7/9/12/13's MFA
+consumption and locking, and AUTH-6's removal. Also recorded four things
+checked and deliberately **not** raised (the 5-minute `mfa_pending` window's
+org-active and replay properties, `roster()`'s pagination, and why
+`enforce_suspicious_ip` covers only the two login routes) so pass 5 does not
+re-derive them.
+
+**`git log` carries no usable history for this feature** — the repository is
+squashed at `2aa66b8e`, which is the root commit for every path in scope — so
+unlike passes 2 and 3 this one could not diff against the prior reviewed
+state. It re-read the code instead and says so, rather than reporting a
+diff-scoped verdict it could not compute.
+
+Gate: flake8 / black (26.5.1, CI's pin — the 26.3.1 on `PATH` was shadowed,
+so the gate ran as `python3 -m black`) / isort (9.0.1, CI's pin) /
+`validate_migrations --strict` (437 revisions, single head `b1e7c3a92f45`)
+all clean; 600 scoped backend tests pass (2 skipped, both pre-existing
+environment gaps), plus 44 standing guard tests and
+`scripts/check_docs_links.py`. No frontend source changed, so `tsc` / `eslint`
+are recorded as n/a rather than as a gate that ran.
+
+Next: 02 Permissions & roles.
+
+### 2026-09-08 — Feature 00 (Cross-cutting baseline, pass 4)'s PR #2387 merged, watchdog recorded it
+
+PR #2387 went fully green (17/17 checks, `mergeable_state: clean`) with
+Codex's review completed and no findings posted. A 30-minute watchdog check
+found it idle in that state and merged it directly (`96aa60f1`) rather than
+leaving it to sit. This entry records that merge and clears the stale Open
+PR row. Next: 01 Auth & session lifecycle.
+
+### 2026-09-08 — Feature 00 (Cross-cutting baseline, pass 4) — PR #2387 opened
+
+Pass 4 starts. No security-review PR was open, and the Rotation table's first
+⬜ row was 00, so this is a feature iteration rather than a tend pass.
+
+**3 findings, all fixed, 0 flagged.** Nothing needed a migration or an owner
+decision, so `KNOWN_LIMITATIONS.md` is untouched.
+
+- **SEC4-3 (MED)** — the nine cache exclusions from PR #2381 that
+  `test_api_cache_pii_exclusions.py` structurally cannot see (four whose
+  response schema names none of its 20 `PII_FIELDS`, two with no
+  `response_model` at all, three inert-today no-ops) had **no** regression
+  guard: deleting `'/inventory/clearances'` from `apiCache.ts` left the whole
+  suite green while putting who-is-leaving-and-what-they-owe back into a 90s
+  cache keyed with no user identity. Now pinned by URL, with the reason each
+  was pinned in the failure message, plus a second test that fails when a
+  pinned route stops existing so the list shrinks rather than rots. Verified
+  by making it go red and restoring.
+- **SEC4-1 (LOW)** — `POST /training/skills-testing/tests/{id}/email-results`
+  put `str(e)` from a bare `except Exception` around `send_email` into the
+  500 body: the configured SMTP host's name and the provider's auth-failure
+  response, handed to any `training.manage` holder. Now
+  `safe_error_detail(e, fallback="Failed to send email")`.
+- **SEC4-2 (LOW)** — `integrations._validate_config` caught **any** exception
+  from constructing the config model and reported it as a 422 with the raw
+  Python message, so a server-side fault (an `AttributeError` in a field
+  validator, reachable through the PATCH path's stored-config merge) was both
+  disclosed and misclassified as the caller's mistake. Narrowed to
+  `except ValidationError`.
+
+Both LOW findings came from a sweep class this file had not run before: an
+AST walk of every broad `except` in `app/` looking for the bound exception
+inside an `HTTPException(detail=...)`. 64 sites matched; 62 are custom domain
+exceptions whose curated message is the point of raising them, and those are
+recorded as deliberate rather than left ambiguous.
+
+**PR #2381's pass-4 action item is discharged in full**, and
+`SEC-00-cross-cutting-baseline.md`'s "Action for pass 4" note now says so, so
+pass 5 does not repeat it: (a) all six unratcheted genuine fixes still
+excluded — and re-confirmed still unratcheted by re-running the ratchet's own
+analysis with the denylist ignored, rather than taking the earlier count on
+trust; (b) all three no-ops still inert on both axes (the apparatus module
+still builds its client from `createApiClient`, and the cache functions are
+still imported by exactly one file); (c) the post-#2381 diff — 10 files —
+carries neither leak shape, and its one endpoint change _tightened_ a gate.
+
+Twelve standing sweep classes re-verified clean (CSV/`SafeCsvWriter`, `SET
+NULL` nullability, proxy-IP attribution, Alembic chain — now 437 revisions,
+single head `b1e7c3a92f45` — LIKE escaping, `BaseHTTPMiddleware`, in-memory
+trackers, blocking browser dialogs, JSON shallow-copy, org-scoping ratchet,
+capacity locking, route auth coverage). The tracker sweep was widened over
+pass 3's: it now walks `ast.AnnAssign` as well as `ast.Assign`, which is how
+the annotated declarations (`self._cache: Dict[...] = {}`) get seen at all —
+all 25 trackers are bounded, and sweep 7 names the bound for each rather than
+asserting the class. Uploads, send-time SSRF re-validation and PII in audit
+payloads were also checked and are recorded as clean with the mechanism
+named, so a later pass can re-check them cheaply.
+
+Gate: flake8 / black / isort (9.0.1, CI's pin) / `validate_migrations
+--strict` all clean; 174 scoped backend tests and 115 cross-cutting guard
+tests pass. No frontend source changed, so `tsc` / `eslint` are recorded as
+n/a rather than as a gate that ran.
+
+Next: 01 Auth & session lifecycle.
+
+### 2026-09-07 — Pass 3 complete; rotation reset to ⬜ for pass 4; out-of-band PR #2381 credited toward Feature 00
+
+Watchdog pass. No security-review PR was open (the **Open PR** row already
+read "None" from the prior entry below). Every row in the Rotation table
+read ✅ — pass 3 finished its lap through all 35 features — so per this
+skill's Step 1 the table is reset to ⬜ here for pass 4, with no feature
+review performed this iteration.
+
+Between that prior entry and this one, PR
+[#2381](https://github.com/thegspiro/the-logbook/pull/2381) ("Fix two
+data-leakage findings: separation reports, response cache") merged
+directly (human-merged, `thegspiro`, merge commit `85cfc6a9`) without ever
+appearing in this tracker's **Open PR** row — it was run as a standalone
+review, not a rotation iteration, so it never got a row here to clear. It
+is exactly Feature 00's shape (whole-codebase data-leakage sweep) and
+fixed two distinct findings, only one of which has a module-audit entry:
+
+- Property-return reports filed into an organization-visible folder —
+  recorded as **XC-4** in `docs/module-audit/CROSS-CUTTING.md`.
+- Member-PII endpoints missing from `UNCACHEABLE_PREFIXES`/
+  `UNCACHEABLE_SUBSTRINGS` in `frontend/src/utils/apiCache.ts` — not
+  covered by XC-4 or any other cross-cutting entry. The PR description
+  says "ten"; the diff adds 15 patterns (11 prefixes, 4 substrings), which
+  — verified by diffing the full route inventory against the old vs. new
+  denylist, not a raw pattern match — newly exclude **18 routes**. Every
+  one of the 18 was individually traced to its frontend caller: **10 are
+  genuine fixes** to a route actually held in the shared cache; **8 are
+  no-ops** that closed nothing today (4 apparatus routes on an uncached
+  client, 2 routes with no frontend wrapper at all, 2 wrappers on the
+  cached client with zero call sites). Ratchet-test coverage does not line
+  up with that split — some no-ops are ratchet-protected and some genuine
+  fixes are not. Full per-route table, exact ratchet breakdown, and
+  pass-4 priorities are in `SEC-00-cross-cutting-baseline.md` — read that
+  rather than re-deriving any of this from the `apiCache.ts` diff.
+
+Pass 4's Feature 00 iteration should treat both as already-fixed prior
+art rather than rediscovering them — and should still sweep code that
+landed after PR #2381 for the same two leak shapes, not just re-verify
+the routes named here (see `SEC-00-cross-cutting-baseline.md`'s "Action
+for pass 4").
+
+### 2026-09-07 — Feature 34 (Frontend shared, pass 5, corrective) — PR #2382 merged, watchdog recorded it
+
+PR #2382 (corrective follow-up to pass 4's PR #2379, which merged with 3
+`chatgpt-codex-connector[bot]` findings unaddressed) went fully green (17/17)
+with all 6 review threads across 3 rounds resolved: the wrong-baseline
+re-review found no new gap, the color-caching fix was completed (permission
+dependency tightened to `require_permission("inventory.view")`, with a new
+backend regression test), the tracker's Open PR pointer and reviewed-range
+citation were corrected, and one Codex citation referencing a commit SHA
+that does not exist anywhere in this repo's history was verified against
+`git cat-file`/`git log --all` and correctly declined rather than
+"fixed" on faith. A 30-minute watchdog check merged it and records that
+here. Next: 00 (cross-cutting baseline).
+
+### 2026-09-07 — Feature 34 (Frontend shared, pass 4) — 0 new findings; 1 prior HIGH finding confirmed fixed, 1 re-confirmed still open, 1 initially marked fixed then reopened
+
+**Corrected 2026-09-07 (pass 5):** this entry originally read "2 prior HIGH
+findings confirmed already fixed" and said below that FE3-34-5 "are fixed."
+That was true only until later the same day, when Codex review on PR #2379
+found the FE3-34-5 fix closes just the timing race, not the purge-failure
+path, and it was reopened (commit `9d745075`) — correctly, in
+`FE4-34-frontend-shared.md` and `KNOWN_LIMITATIONS.md`, but this entry was
+never updated to match. Corrected in place below. See
+`docs/security-review/FE5-34-frontend-shared.md` for the full corrective
+follow-up, including the wrong-baseline-citation defect this same PR left
+unresolved and the caching gap that citation caused to go unreviewed.
+
+4th pass over this feature (`utils/apiCache.ts`, `services/apiClient.ts`,
+`utils/createApiClient.ts`, `components/ProtectedRoute.tsx`, all 4 global
+stores, all 13 module axios instances). Established the pass-3 baseline
+(`b10ecfe3`, the merge that landed `FE3-34-frontend-shared.md`) and diffed
+every file this feature owns against it: only `utils/apiCache.ts` (+5),
+`stores/authStore.ts` (+19), and `modules/scheduling/services/api.ts` (+50,
+own `createApiClient()` instance, no caching logic) differ at all — every
+other file this feature owns is byte-identical to what pass 3 already read
+in full.
+
+Re-verified all 9 FE2-34 findings and FE3-34-1/FE3-34-3 against current
+code: all still hold. Re-verified FE3-34-2 (HIGH — a failed client-side
+logout leaves the session cookies live while showing an unauthenticated UI):
+**still open**, unchanged; the backend counterpart moved
+(`auth.py:1197-1235` → `:1334-1372`) but the logic is identical. Still a
+product decision, not a same-pass patch — carried forward.
+
+**FE3-34-4 (HIGH) is fixed** — by a commit authored outside this rotation
+(regular feature work: `a8f160ec` "Version cache writes against mutations,
+not only against full clears") that happened to close a gap this rotation
+had flagged. The fix was already present in `b10ecfe3` itself — the commit
+that landed the FE3-34 doc calling it open — so the doc was stale on
+arrival, not from later drift (two branches landing concurrently, same class
+of race `PROGRESS.md` documents elsewhere for Alembic merges). Verified
+against current code with its guard tests passing:
+`apiClient.test.ts`'s three cache-boundary cases. Removed from
+`KNOWN_LIMITATIONS.md` per its own "when resolved, remove it" convention;
+refreshed FE3-34-2's line-number citation there.
+
+**FE3-34-5 (HIGH) looked like the same story** — its fix (`fd2d5dbb` "fix:
+repair CI, an assigned-item rewrite, and two access leaks") was also already
+present in `b10ecfe3` — and was _initially_ marked fixed here on that basis,
+verified against `authStore.test.ts`'s six device-claim cases. **Corrected
+same day, on this same PR:** Codex review found the fix closes only the
+timing race the original finding described, not the purge-failure path —
+`purgeLocalMemberData()` is designed to never throw and always settle, so a
+blocked/slow IndexedDB can leave a member's queued items behind while the
+device is claimed for the next member anyway. Reopened (commit `9d745075`),
+restored to `KNOWN_LIMITATIONS.md` with the precise remaining gap. **OPEN**,
+not fixed — this section previously said otherwise and is corrected here.
+
+Diff-swept the whole frontend (not just this feature's files) for new
+cache-exposure risk since the baseline: one new endpoint
+(`GET /inventory/items/colors`) was assessed as "a plain colour-name list, no
+PII" and left cacheable; every other "new" `api.get` call in the diff was
+already covered by an exclusion added between FE3-34 being written and
+merging. **This assessment was wrong** — `color` is unconstrained free
+text, not a fixed vocabulary — and is fixed in
+`docs/security-review/FE5-34-frontend-shared.md`, not here.
+`components/ux/*` (in scope per FE3-34) diffed too:
+`breadcrumbRoutes.ts`/`Breadcrumbs.tsx` (new, fail-closed allowlist with its
+own drift test) and a `CommandPalette.tsx` permission-string change
+(cosmetic — a UX filter, not an access-control boundary) — no findings.
+
+Findings doc: `docs/security-review/FE4-34-frontend-shared.md`. Gate:
+`npm run typecheck` 0 errors; `eslint .` 0 errors / 2 pre-existing warnings
+(unrelated `CallTypeChips.tsx`, within budget); scoped tests 239 passed
+across 9 files. No backend files touched. Rotation row 34 -> ✅ — **every
+row (00-34) is now ✅**, so this closes the current full pass; the rotation
+wraps to **00 (cross-cutting baseline)** next, for a fresh sweep over
+whatever has landed since `SEC-00`'s pass 3 (2026-09-01).
 
 ### 2026-09-07 — Feature 32 (Locations & kiosk, pass 3)
 

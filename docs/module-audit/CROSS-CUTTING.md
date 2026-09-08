@@ -116,3 +116,42 @@ tighter, so removing it is safe (MP-1); (b) the read genuinely needs a
 status/type gate keyed on the existing `.manage` permission (MM-3). **Action:**
 for each module, confirm the intended audience of sensitive reads vs the
 permission required; DOC-4 remains an open decision.
+
+## XC-4 — A record written into a shared container inherits that container's audience
+
+_Second-pass data-leakage sweep, 2026-09-07._
+
+**Seen in:** documents (`PropertyReturnService.save_as_document` filed a
+property-return report — departed member's name, home address, and the stated
+reason for the separation — into the `Reports` system folder, whose default
+`organization` visibility makes it readable by every `documents.view` holder —
+**✅ FIXED**: reports now go to a leadership-only `member-separations` folder,
+with a migration relocating the ones already written). The same hazard was
+already recognised and refused one module over: `DocumentService.publish_minutes`
+raises rather than copy executive-session minutes into the meeting-minutes
+folder (MM2-1).
+
+Distinct from XC-2, and that distinction is what let this survive the first
+rotation. XC-2 is a read gated too broadly. Here **no read is mis-gated at
+all** — `documents.view` is exactly right for the documents module, and the
+documents module's own ACL works correctly. The leak is that a _different_
+module wrote sensitive content into a container whose audience it never
+examined. Neither module's audit sees it: the writer's audit reads a call to a
+documents API, and the reader's audit reads a folder ACL that is enforced
+correctly.
+
+Two aggravating shapes to check for specifically:
+
+1. **The fallback fails open.** `save_as_document` set `folder_id = None` when
+   the target folder was missing, and `can_access_document` treats a folderless
+   document as organization-level. The error path was more disclosing than the
+   success path.
+2. **Access control lives on the container, not the record.** `documents` has
+   no per-row ACL; `document_folders` has all of it. So "which folder" _is_ the
+   entire access decision for a generated document, and it was being made by a
+   `name == "Reports"` lookup in an inventory-adjacent service.
+
+**Action:** when a module writes into documents, notifications, a shared export
+folder, or any other cross-module store, state the intended audience at the
+write and pick the container from it. Grep for `source_type=` to enumerate the
+generated-document writers; there are two, and both are now accounted for.

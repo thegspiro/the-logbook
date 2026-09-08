@@ -797,6 +797,83 @@ class TestPayments:
         )
         assert updated.payment_status == StorePaymentStatus.PAID
 
+    async def test_cannot_settle_your_own_order_via_status_update(self, db_session):
+        # security-review (SF-04, pass 4): update_order_status has its own
+        # branch that settles the ledger when status flips to PAID --
+        # payment_status, amount_paid and paid_at all move exactly as they do
+        # in record_payment -- but it is a separate method from record_payment/
+        # mark_order_paid/waive_order_payment and, before this fix, carried no
+        # SoD check at all. A storefront.manage holder who also owned the
+        # order could zero their own balance with POST
+        # /orders/{order_id}/status ({"status": "paid"}), bypassing the guard
+        # SF-6 already put on the other three settlement paths.
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        with pytest.raises(SeparationOfDutiesError):
+            await service.update_order_status(
+                order.id,
+                org.id,
+                StoreOrderStatus.PAID,
+                str(member.id),
+                notify_member=False,
+            )
+
+        # The guard fired before any mutation -- confirm nothing was left
+        # half-applied on the in-memory object or persisted.
+        unchanged = await service.get_order(order.id, org.id)
+        assert unchanged is not None
+        assert unchanged.status != StoreOrderStatus.PAID
+        assert unchanged.payment_status != StorePaymentStatus.PAID
+        assert unchanged.amount_paid == Decimal("0.00")
+
+    async def test_an_officer_may_settle_someone_elses_order_via_status_update(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        officer = await _make_member(db_session, org, first="Casey", last="Officer")
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.update_order_status(
+            order.id,
+            org.id,
+            StoreOrderStatus.PAID,
+            str(officer.id),
+            notify_member=False,
+        )
+        assert updated.payment_status == StorePaymentStatus.PAID
+        assert updated.amount_paid == Decimal("45.00")
+        assert updated.paid_at is not None
+
+    async def test_reconciliation_may_settle_via_status_update_with_no_actor(
+        self, db_session
+    ):
+        # No production caller passes actor_id=None into update_order_status
+        # today, but the exemption is part of the shared control (SF-6) and
+        # must hold here too if one ever does.
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.update_order_status(
+            order.id, org.id, StoreOrderStatus.PAID, None, notify_member=False
+        )
+        assert updated.payment_status == StorePaymentStatus.PAID
+
     async def test_a_member_report_never_settles_the_ledger(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
