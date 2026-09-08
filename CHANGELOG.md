@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The public ballot endpoints' rate limit never actually ran (2026-09-08)
+
+**Security**
+
+- **Elections' public, token-based ballot routes had no working rate limit.**
+  `POST /elections/ballot/lookup`, `POST /elections/ballot/vote`,
+  `POST /elections/ballot/vote/bulk`, and `GET /elections/{id}/verify-receipt`
+  are unauthenticated by design (they run off the emailed voting token), and
+  were meant to be capped at 10 reads/min and 5 votes/min per IP. Their two
+  rate-limit wrapper functions were declared as plain (non-`async`) functions
+  that called the real limiter without `await`ing it — which only builds an
+  unrun coroutine, never executes the limiter, and never raises. The limit was
+  silently a no-op regardless of how many requests arrived. Fixed by making
+  both wrappers `async` and awaiting the limiter, matching every other
+  rate-limited route in the app; a regression test now fails if either wrapper
+  stops being awaitable. That fix initially left ballot reads and vote
+  submissions tracked against the same counter, so a few ordinary lookups
+  could exhaust a voter's vote-submission limit before they ever cast a
+  ballot; each request kind now has its own counter.
+
 ### The budget summary and approval-chain preview always returned "not found" (2026-09-08)
 
 **Fixed**
