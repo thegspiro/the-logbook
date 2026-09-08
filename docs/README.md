@@ -348,7 +348,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 
 29a. **[MEDICAL_SUPPLIES_MODULE.md](./MEDICAL_SUPPLIES_MODULE.md)** - EMS consumables as dated lots, on their own page rather than in the gear catalog - Domain-scoped permissions, the EMS Supply Officer role, and the domain boundary that keeps the two supply lines apart
 
-29b. **[changelog/](./changelog/)** - Monthly archives of the project changelog; `CHANGELOG.md` carries the current month - A month moves here once it closes — write new entries in `CHANGELOG.md`, never in an archive
+29b. **[changelog/](./changelog/)** - Monthly archives of the project changelog through 2026-09-08, when the ledger was closed - Historical reference only; neither these archives nor `CHANGELOG.md` take new entries
 
 30. **[PUBLIC_PORTAL_MODULE.md](./PUBLIC_PORTAL_MODULE.md)**
     - Public Portal architecture and security design
