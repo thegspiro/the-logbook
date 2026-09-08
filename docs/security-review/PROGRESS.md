@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 05 (Finance & approvals, pass 4)** — PR
+[#2398](https://github.com/thegspiro/the-logbook/pull/2398), branch
+`claude/security-review-finance-approvals`. No backend finance file had
+changed since pass 3's closing commit, so this pass re-verified pass 3's own
+fixes (FIN-19 through FIN-26) against current code and worked the full
+checklist fresh rather than trusting three clean prior passes. Two findings:
+**FIN-27 (MED, fixed)** — `GET /budgets/summary` and `GET /approval-chains/
+preview` were both permanently unreachable, shadowed by an earlier-
+registered `/{id}` route of the same method and shape (Starlette dispatches
+to the first full match in registration order); both endpoints had been
+silently 404ing since whenever they were added. Fixed by reordering route
+registration, with a whole-router-sweep guard test. **FIN-28 (LOW, fixed)**
+— `get_pending_approvals` round-tripped a `Decimal` amount through `float()`
+for no reason; removed. Also corrected three stale "still flagged" claims in
+`docs/module-audit/finance.md`'s FIN-7 entry (and its mirrors) that current
+code had already resolved — unbounded export, in-memory pagination, and no
+overspend guard were all already fixed, just never threaded back into that
+doc. Subscribed to PR activity.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 04 pass 4 merged), preserved for history</summary>
+
 **None.** Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged
 (`c71b5fb2`) by a 30-minute watchdog check — fully green (17/17 checks),
 `mergeable_state: clean`, Codex review completed with nothing further raised,
@@ -23,6 +45,8 @@ idle since CI finished with no owner action needed. One finding this pass:
 **SF-7 (MED, fixed)** — `update_order_status` had its own, unguarded path to
 self-settle a payment; see the superseded note below for the full write-up.
 Next: 05 Finance & approvals.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2395 (pass 4), preserved for history</summary>
