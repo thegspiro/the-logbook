@@ -51,67 +51,109 @@ _CONSUMING_CALLERS = {
 _PYOTP_OWNER = "app/services/mfa_service.py"
 
 
-_ScopeBindings = list[tuple[int, str, str]]
+# A binding recorded inside one of these can be skipped entirely at runtime,
+# so a later binding here must not be trusted to have overwritten an earlier
+# one — the call site could still see either value depending on which branch
+# actually ran.
+_CONDITIONAL_NODES = (
+    ast.If,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.Try,
+    ast.ExceptHandler,
+)
+
+# (lineno, local_name, real_name, conditional)
+_ScopeBindings = list[tuple[int, str, str, bool]]
 
 
 def _local_scope_imports(scope_node: ast.AST) -> _ScopeBindings:
-    """``(lineno, local_name, real_name)`` for each ``from``-import binding
-    made directly in *scope_node*'s own body, sorted by source line.
+    """``(lineno, local_name, real_name, conditional)`` for each ``from``-import
+    binding made directly in *scope_node*'s own body, sorted by source line.
 
     Descends into ``if``/``for``/``while``/``try`` blocks (imports there still
     bind in the enclosing function) but stops at a nested function or class —
-    that scope's own imports belong to it, not to this one. Kept as an
-    ordered list rather than a ``dict`` so a second import re-using the same
-    local name (``... import verify_totp as check`` then, later in the same
-    function, ``... import harmless as check``) doesn't silently overwrite
-    the binding a call made *before* the reassignment resolves against —
-    Codex's third-round finding on PR #2389 against the scope-aware fix that
-    still collapsed same-scope bindings into a flat dict.
+    that scope's own imports belong to it, not to this one. ``conditional`` is
+    True when the import sits inside any of ``_CONDITIONAL_NODES``, at any
+    nesting depth — a branch that might not execute.
+
+    Kept as an ordered list rather than a ``dict`` so a second import re-using
+    the same local name (``... import verify_totp as check`` then, later in
+    the same function, ``... import harmless as check``) doesn't silently
+    overwrite the binding a call made *before* the reassignment resolves
+    against — Codex's third-round finding on PR #2389 against the scope-aware
+    fix that still collapsed same-scope bindings into a flat dict.
     """
     bindings: _ScopeBindings = []
 
-    def walk(node: ast.AST) -> None:
+    def walk(node: ast.AST, conditional: bool) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 continue
+            child_conditional = conditional or isinstance(child, _CONDITIONAL_NODES)
             if isinstance(child, ast.ImportFrom):
                 for alias in child.names:
                     bindings.append(
-                        (child.lineno, alias.asname or alias.name, alias.name)
+                        (
+                            child.lineno,
+                            alias.asname or alias.name,
+                            alias.name,
+                            conditional,
+                        )
                     )
-            walk(child)
+            walk(child, child_conditional)
 
-    walk(scope_node)
+    walk(scope_node, False)
     bindings.sort(key=lambda binding: binding[0])
     return bindings
 
 
-def _resolve_name(name: str, lineno: int, scope_chain: list[_ScopeBindings]) -> str:
-    """Resolve *name* as it stood at *lineno*, through real lexical scoping:
-    innermost function first, then each enclosing function, then the module.
+def _resolve_names(
+    name: str, lineno: int, scope_chain: list[_ScopeBindings]
+) -> frozenset[str]:
+    """All real names *name* could plausibly be bound to at *lineno*, through
+    real lexical scoping: innermost function first, then each enclosing
+    function, then the module.
 
-    Within one scope, only a binding recorded at or before *lineno* counts,
-    and the latest such binding wins — a rebinding later in the same function
-    must not resolve a call made earlier in it. A same-named alias in one
+    Within one scope, only bindings recorded at or before *lineno* count.
+    Walking backward from the most recent one: an **unconditional** binding
+    is a hard cutoff (it always executes, so nothing earlier can still apply)
+    and resolution stops there; a **conditional** one might not have executed,
+    so its real name is added to the possible set and the walk continues to
+    whatever binding would apply if that branch was skipped. This catches
+    Codex's fourth-round finding: a same-scope rebinding that itself sits
+    inside an ``if`` must not be trusted to have silently replaced an earlier,
+    non-consuming-verifier binding — both are possible, and this sweep must
+    flag a call if *either* possibility is the forbidden name, not just
+    whichever binding happens to be textually last. A same-named alias in one
     function must also never resolve a call in a sibling function or at
     module level (Codex's second-round finding, against a flat whole-module
     dict).
     """
     for bindings in reversed(scope_chain):
-        match: str | None = None
-        for binding_line, local, real in bindings:
-            if local == name and binding_line <= lineno:
-                match = real
-        if match is not None:
-            return match
-    return name
+        relevant = sorted(
+            (b for b in bindings if b[1] == name and b[0] <= lineno),
+            key=lambda b: b[0],
+        )
+        if not relevant:
+            continue
+        possible: set[str] = set()
+        for _binding_line, _local, real, conditional in reversed(relevant):
+            possible.add(real)
+            if not conditional:
+                break
+        return frozenset(possible)
+    return frozenset({name})
 
 
-def _called_name(node: ast.Call, scope_chain: list[_ScopeBindings]) -> str | None:
-    """The real function name a Call node targets, however it is spelled.
+def _called_names(node: ast.Call, scope_chain: list[_ScopeBindings]) -> frozenset[str]:
+    """Every real name a Call node could plausibly target, however it is
+    spelled.
 
     Resolves a bare ``ast.Name`` through *scope_chain* first, as it stood at
-    this call's own line. Does not track simple-assignment rebinding
+    this call's own line — see ``_resolve_names`` for why this can be more
+    than one candidate. Does not track simple-assignment rebinding
     (``spend = verify_totp_get_timestep``) — that needs data-flow analysis
     this sweep does not attempt.
 
@@ -130,10 +172,10 @@ def _called_name(node: ast.Call, scope_chain: list[_ScopeBindings]) -> str | Non
     """
     func = node.func
     if isinstance(func, ast.Name):
-        return _resolve_name(func.id, node.lineno, scope_chain)
+        return _resolve_names(func.id, node.lineno, scope_chain)
     if isinstance(func, ast.Attribute):
-        return func.attr
-    return None
+        return frozenset({func.attr})
+    return frozenset()
 
 
 def _python_files():
@@ -193,7 +235,7 @@ def test_no_app_code_calls_the_non_consuming_totp_verifier():
         f"{rel}:{call.lineno} in {owner}()"
         for rel, _tree, calls in _MODULES
         for call, owner, scope_chain in calls
-        if _called_name(call, scope_chain) in _NON_CONSUMING
+        if _called_names(call, scope_chain) & _NON_CONSUMING
     ]
 
     assert not offenders, (
@@ -208,9 +250,9 @@ def test_consuming_primitives_have_exactly_one_caller_each():
     found: dict[str, list[str]] = {name: [] for name in _CONSUMING_CALLERS}
     for rel, _tree, calls in _MODULES:
         for call, owner, scope_chain in calls:
-            name = _called_name(call, scope_chain)
-            if name in found:
-                found[name].append(f"{rel}::{owner}")
+            for name in _called_names(call, scope_chain):
+                if name in found:
+                    found[name].append(f"{rel}::{owner}")
 
     for name, (expected_file, expected_func) in _CONSUMING_CALLERS.items():
         expected = f"{expected_file}::{expected_func}"
