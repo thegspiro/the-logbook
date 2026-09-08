@@ -1150,11 +1150,12 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
     locking reads the same way this class does. Verified against the true
     pre-MP-27 revision (`ae4fe98`, `4107910`'s parent -- `4107910` itself
     is the MP-27 commit and already carries the lock on all three paths, so
-    it cannot serve as the "unlocked" baseline): all three tests below fail
-    against that revision's `membership_pipeline_service.py` (the write
-    proceeds immediately instead of blocking, so the
-    `assert not writer_task.done()` check fires), and pass against current
-    code."""
+    it cannot serve as the "unlocked" baseline): at that revision none of
+    the three paths calls `get_prospect` with `lock_for_update=True`, so
+    `_tracking_get_prospect` never sets `lock_attempted` and all three
+    tests below fail at the 10-second `asyncio.wait_for(lock_attempted.
+    wait(), ...)` -- they never even reach the `assert not writer_task.
+    done()` check -- and pass against current code."""
 
     @pytest.fixture
     async def two_sessions(self, _initialize_database):
@@ -1406,24 +1407,26 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
                     # always unwind a cancelled read cleanly) -- observed
                     # directly against the pre-MP-28 code this test guards
                     # against, so both must be treated as "still locked".
+                    #
+                    # invalidate(), not rollback(): the connection can be
+                    # left unusable by the cancelled-mid-read call above,
+                    # and unlike rollback(), SQLAlchemy guarantees
+                    # invalidate() does not raise even when the underlying
+                    # DBAPI connection is already broken -- so it can't
+                    # mask the pytest.fail() below behind a secondary
+                    # connection error (or, on the outer fixture's own
+                    # rollback() at teardown, a repeat one).
+                    await checker_session.invalidate()
                     pytest.fail(
                         "the rejected item's row is still locked while a "
                         "later item in the same batch is still processing "
                         "-- _bulk_apply is not releasing the lock at the "
                         "item boundary"
                     )
-                finally:
-                    try:
-                        await checker_session.rollback()
-                    except Exception:
-                        # The connection can be left unusable by a
-                        # cancelled-mid-read call above; the fixture's own
-                        # teardown closes the session regardless, so a
-                        # failed rollback here must not mask the
-                        # pytest.fail() that already ran (or hide a
-                        # genuine pass) behind a secondary connection
-                        # error.
-                        pass
+                else:
+                    # The lock was free -- a normal rollback ends this
+                    # read cleanly on an otherwise-healthy connection.
+                    await checker_session.rollback()
 
                 resume_paused_item.set()
                 results = await asyncio.wait_for(bulk_task, timeout=10)
