@@ -203,7 +203,7 @@ const AuthenticationChoice: React.FC = () => {
         icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex flex-1 items-center justify-center p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-4 py-8">
         <div className="w-full max-w-5xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
@@ -268,7 +268,7 @@ const AuthenticationChoice: React.FC = () => {
                 {/* Recommended Badge */}
                 {platform.recommended && (
                   <div className="absolute -top-2 -right-2">
-                    <span className="inline-flex items-center rounded-full bg-green-500 px-3 py-1 text-xs font-semibold text-white shadow-lg">
+                    <span className="inline-flex items-center rounded-full bg-green-700 px-3 py-1 text-xs font-semibold text-white shadow-lg">
                       <CheckCircle aria-hidden="true" className="mr-1 h-3 w-3" />
                       Recommended
                     </span>
@@ -337,7 +337,7 @@ const AuthenticationChoice: React.FC = () => {
               disabled={!authPlatform || isSaving}
               className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
                 authPlatform && !isSaving
-                  ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
+                  ? 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"

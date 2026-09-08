@@ -116,6 +116,7 @@ const StorefrontPage: React.FC = () => {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <EmptyState
+          headingLevel={1}
           icon={Store}
           title="The store is closed"
           description="The department store is not currently accepting orders. Check back when the next order window opens."
@@ -128,6 +129,7 @@ const StorefrontPage: React.FC = () => {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <EmptyState
+          headingLevel={1}
           icon={CalendarClock}
           title="No open order window"
           description="Ordering opens on a schedule. You'll get an email when the next window opens."

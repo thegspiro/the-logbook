@@ -89,6 +89,18 @@ interface NavItem {
   isSectionLabel?: boolean;
 }
 
+/**
+ * A DOM id for a nav item's submenu, safe to name from `aria-controls`.
+ *
+ * `aria-controls` takes an ID *list*, so a raw label went in as several
+ * whitespace-separated tokens: "submenu-Organization Settings" asked for two
+ * elements, `submenu-Organization` and `Settings`, neither of which exists.
+ * axe reports it as an invalid attribute value, and the practical effect is
+ * that a screen reader is told the button controls nothing — the one thing the
+ * attribute is there to say.
+ */
+const submenuId = (label: string) => `submenu-${label.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+
 export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, logoPreview, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -754,11 +766,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         />
       )}
 
-      {/* Side Navigation */}
-      <aside
+      {/* Side Navigation.
+
+          `<nav>`, not `<aside role="navigation">`: an `aside` already carries
+          the `complementary` role, and overriding it with a different landmark
+          role is the kind of contradiction axe flags as `aria-allowed-role`.
+          It fired on every route in the application, this being the one element
+          it came from. The element that means "navigation" is `nav`. */}
+      <nav
         ref={sideNavRef}
         id="side-navigation"
-        role="navigation"
         aria-label="Main navigation"
         className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed left-0 z-40 overscroll-contain border-r transition-all duration-300 md:top-0 md:h-full ${
           collapsed ? 'w-20' : 'w-64'
@@ -893,7 +910,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                       }}
                       aria-current={parentActive && !hasSubItems ? 'page' : undefined}
                       aria-expanded={hasSubItems ? isExpanded : undefined}
-                      aria-controls={hasSubItems ? `submenu-${item.label}` : undefined}
+                      aria-controls={hasSubItems ? submenuId(item.label) : undefined}
                       className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all duration-150 focus:ring-2 focus:outline-hidden ${
                         collapsed ? 'justify-center p-3' : 'px-4 py-3'
                       } ${
@@ -922,7 +939,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                         <>
                           <span className="flex-1 text-left text-sm font-medium">{item.label}</span>
                           {item.label === 'Notifications' && notifUnreadCount > 0 && !parentActive && (
-                            <span className="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                            <span className="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-800 px-1 text-[10px] font-bold text-white">
                               {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                             </span>
                           )}
@@ -938,7 +955,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
 
                     {/* Sub Items */}
                     {hasSubItems && isExpanded && !collapsed && (
-                      <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
+                      <ul id={submenuId(item.label)} className="mt-1 ml-4 space-y-1" role="list">
                         {visibleSubItems.map((subItem) => {
                           const SubIcon = subItem.icon;
                           const subActive = isSubItemActive(subItem.path, item.subItems || []);
@@ -1065,7 +1082,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             </button>
           </div>
         </div>
-      </aside>
+      </nav>
     </>
   );
 };

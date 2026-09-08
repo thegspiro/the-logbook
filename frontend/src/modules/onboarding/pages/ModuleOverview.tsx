@@ -160,7 +160,7 @@ const ModuleOverview: React.FC = () => {
         icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex-1 p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-4 py-8">
         <div className="mx-auto w-full max-w-6xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
@@ -196,7 +196,7 @@ const ModuleOverview: React.FC = () => {
               disabled={isSaving || enabledCount === 0}
               className={`rounded-lg px-6 py-2 font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
-                  ? 'bg-linear-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700'
+                  ? 'bg-linear-to-r from-red-700 to-orange-700 text-white hover:from-red-800 hover:to-orange-800'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
@@ -374,7 +374,7 @@ const ModuleOverview: React.FC = () => {
                         aria-label={`${isEnabled ? 'Enabled' : 'Enable'} ${module.name}`}
                         className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           isEnabled
-                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            ? 'bg-green-700 text-white hover:bg-green-800'
                             : 'bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover'
                         }`}
                       >

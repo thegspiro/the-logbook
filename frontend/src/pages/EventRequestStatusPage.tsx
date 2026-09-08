@@ -136,7 +136,7 @@ const EventRequestStatusPage: React.FC = () => {
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-12">
-      <div className="mx-auto max-w-2xl">
+      <main id="main-content" className="mx-auto max-w-2xl">
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="bg-theme-accent-red-muted mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full">
@@ -197,7 +197,7 @@ const EventRequestStatusPage: React.FC = () => {
                             isCurrent
                               ? 'ring-theme-accent-red-muted bg-red-800 text-white ring-4'
                               : isActive
-                                ? 'bg-green-500 text-white'
+                                ? 'bg-green-700 text-white'
                                 : 'bg-theme-surface-hover text-theme-text-muted'
                           }`}
                         >
@@ -356,7 +356,7 @@ const EventRequestStatusPage: React.FC = () => {
         <p className="text-theme-text-muted mt-8 text-center text-xs">
           You will receive email updates when your request status changes.
         </p>
-      </div>
+      </main>
     </div>
   );
 };

@@ -93,7 +93,7 @@ const TestTimer: React.FC<{
       <button
         onClick={onToggle}
         className={`rounded-full p-3 transition-colors ${
-          running ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-green-500 text-white hover:bg-green-600'
+          running ? 'bg-yellow-700 text-white hover:bg-yellow-800' : 'bg-green-700 text-white hover:bg-green-800'
         }`}
         aria-label={running ? 'Pause timer' : 'Start timer'}
       >
@@ -144,7 +144,7 @@ const PassFailCriterion: React.FC<{
           aria-pressed={result?.passed === true}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
             result?.passed === true
-              ? 'scale-[1.02] bg-green-600 text-white shadow-lg shadow-green-600/30'
+              ? 'scale-[1.02] bg-green-700 text-white shadow-lg shadow-green-600/30'
               : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-green-500'
           }`}
         >
@@ -239,7 +239,7 @@ const ScoreCriterion: React.FC<{
                 scored && currentScore === i
                   ? isCritical
                     ? i >= passingScore
-                      ? 'scale-105 bg-green-600 text-white shadow-lg shadow-green-600/30'
+                      ? 'scale-105 bg-green-700 text-white shadow-lg shadow-green-600/30'
                       : 'scale-105 bg-red-800 text-white shadow-lg shadow-red-600/30'
                     : 'scale-105 bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted border-2'
@@ -384,7 +384,7 @@ const TimedCriterion: React.FC<{
           {!isRunning ? (
             <button
               onClick={handleStart}
-              className="rounded-full bg-green-500 p-3 text-white transition-colors hover:bg-green-600"
+              className="rounded-full bg-green-700 p-3 text-white transition-colors hover:bg-green-800"
               aria-label={`Start timer for ${criterion.label}`}
             >
               <Play className="h-6 w-6" />
@@ -392,7 +392,7 @@ const TimedCriterion: React.FC<{
           ) : (
             <button
               onClick={handleStop}
-              className="rounded-full bg-red-500 p-3 text-white transition-colors hover:bg-red-800"
+              className="rounded-full bg-red-800 p-3 text-white transition-colors hover:bg-red-900"
               aria-label={`Stop timer for ${criterion.label}`}
             >
               <Square className="h-6 w-6" />
@@ -461,7 +461,7 @@ const ChecklistCriterion: React.FC<{
           >
             <div
               className={`flex h-6 w-6 items-center justify-center rounded-md border-2 transition-colors ${
-                completed[i] ? 'border-green-600 bg-green-600 text-white' : 'border-theme-surface-border'
+                completed[i] ? 'border-green-600 bg-green-700 text-white' : 'border-theme-surface-border'
               }`}
             >
               {completed[i] && <Check className="h-4 w-4" />}
@@ -560,7 +560,7 @@ const StatementCriterion: React.FC<{
           <div className="space-y-1">
             <button
               onClick={onStartTimer}
-              className="mobile-touch-target flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-bold text-white shadow-lg shadow-green-600/30 transition-colors hover:bg-green-700"
+              className="mobile-touch-target flex w-full items-center justify-center gap-2 rounded-xl bg-green-700 py-4 text-lg font-bold text-white shadow-lg shadow-green-600/30 transition-colors hover:bg-green-800"
             >
               <Play className="h-6 w-6" />
               START CLOCK &amp; READ
@@ -2201,7 +2201,7 @@ export const ActiveSkillTestPage: React.FC = () => {
               )}
               <button
                 onClick={goToFirstUnscored}
-                className="mt-2 min-h-[44px] rounded-lg bg-amber-600 px-4 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+                className="mt-2 min-h-[44px] rounded-lg bg-amber-700 px-4 text-sm font-medium text-white transition-colors hover:bg-amber-800"
               >
                 Go back and score them
               </button>
@@ -2390,7 +2390,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           </p>
           <button
             onClick={() => void handleReloadAfterConflict()}
-            className="mt-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+            className="mt-2 rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-800"
           >
             Reload current results
           </button>

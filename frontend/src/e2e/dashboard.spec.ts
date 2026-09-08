@@ -33,7 +33,7 @@ test.describe('Dashboard', () => {
     test('should greet the signed-in member by first name', async ({ page }) => {
       // The dashboard personalises the greeting when the profile has a first
       // name, and falls back to "Welcome to {department}" when it does not.
-      const greeting = page.getByRole('heading', { level: 2 }).first();
+      const greeting = page.getByRole('heading', { level: 1 }).first();
       await expect(greeting).toBeVisible({ timeout: 10000 });
       await expect(greeting).toHaveText(`Hi, ${TEST_USER.first_name}`);
     });
@@ -188,7 +188,7 @@ test.describe('Dashboard', () => {
       await page.setViewportSize({ width: 375, height: 812 });
       await gotoDashboard(page);
 
-      const greeting = page.getByRole('heading', { level: 2 }).first();
+      const greeting = page.getByRole('heading', { level: 1 }).first();
       await expect(greeting).toBeVisible({ timeout: 10000 });
 
       await expect(page.getByRole('heading', { name: /next 30 days/i }).first()).toBeVisible();

@@ -447,7 +447,7 @@ export const ReportsPage: React.FC = () => {
               <button
                 key={category.id}
                 onClick={() => setSelectedCategory(category.id)}
-                className={`focus:ring-theme-focus-ring rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                className={`btn-md focus:ring-theme-focus-ring font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                   selectedCategory === category.id
                     ? 'bg-red-800 text-white'
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -472,7 +472,7 @@ export const ReportsPage: React.FC = () => {
               <button
                 key={preset.id}
                 onClick={() => handlePresetChange(preset.id)}
-                className={`focus:ring-theme-focus-ring rounded px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                className={`btn-sm focus:ring-theme-focus-ring text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                   datePreset === preset.id
                     ? 'bg-red-800 text-white'
                     : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -482,19 +482,28 @@ export const ReportsPage: React.FC = () => {
               </button>
             ))}
 
-            <div className="ml-2 flex items-center gap-2">
+            {/* Full width on a phone, inline beside the presets from `sm` up.
+                Two date inputs plus the "to" cannot fit beside a wrapped preset
+                row at 390px: the second one ran to 403px, off the edge of the
+                screen, so the custom range could be started and not finished.
+                `min-w-0` is what lets a date input actually shrink — its
+                intrinsic width otherwise keeps the row wider than its flex
+                parent. */}
+            <div className="flex w-full items-center gap-2 sm:ml-2 sm:w-auto">
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setCustomDates(e.target.value, endDate)}
-                className="form-input-sm"
+                className="form-input-sm min-w-0 flex-1 sm:flex-none"
+                aria-label="Reporting period start date"
               />
               <span className="text-theme-text-muted text-sm">to</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setCustomDates(startDate, e.target.value)}
-                className="form-input-sm"
+                className="form-input-sm min-w-0 flex-1 sm:flex-none"
+                aria-label="Reporting period end date"
               />
             </div>
           </div>

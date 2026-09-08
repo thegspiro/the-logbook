@@ -66,7 +66,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick
       {/* Header */}
       <div className="mb-2 flex items-start justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-500 to-red-700 text-xs font-bold text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-600 to-red-700 text-xs font-bold text-white">
             {initials}
           </div>
           <div className="min-w-0">

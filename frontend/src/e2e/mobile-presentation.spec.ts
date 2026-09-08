@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signIn } from './helpers';
+import { BASE_PERMISSIONS, MIN_FONT_PX, MIN_TAP, PHONE, ROUTES } from './mobile-routes';
 
 /**
  * One pass over every feature at phone size, checking each one is presentable.
@@ -26,153 +27,12 @@ import { signIn } from './helpers';
  * that failure mode is realistic — a captive portal on station Wi-Fi or a
  * carrier interception page answers HTTP 200 with an HTML body.
  *
- * Adding a route here is the cheapest way to stop a whole feature silently
+ * The route list lives in ./mobile-routes.ts, shared with the accessibility
+ * pass and the coverage-integrity check.
+ *
+ * Adding a route there is the cheapest way to stop a whole feature silently
  * regressing to a dead screen on mobile.
  */
-
-interface RouteCheck {
-  path: string;
-  /**
-   * Interactive elements rendering under 44x44. Now 0 for every route — treat
-   * a failure here as "this control needs a mobile size", not "raise the
-   * number". Checkbox and radio inputs are measured by their wrapping <label>,
-   * since a native checkbox is 16px by design and cannot be padded.
-   */
-  maxSmallTargets: number;
-  /**
-   * Text nodes rendering below 12px. Now 0 everywhere — a failure means new
-   * copy needs a mobile size, not a raised number. The 12px floor is applied
-   * centrally in index.css for text-[10px]/text-[11px]; genuinely dense
-   * fixed-size labels (chart axes, the pattern-builder grid) use smaller
-   * arbitrary values and are deliberately exempt there.
-   */
-  maxTinyText: number;
-  /**
-   * Permissions this route needs on top of the base grant, when it is gated
-   * behind something the base set does not carry.
-   *
-   * Per-route rather than one wider grant for everyone, because widening the
-   * base set changes what *other* routes render: a route that had been quietly
-   * measuring the dashboard starts measuring its real body, and any debt that
-   * body carries turns this pass red for reasons unrelated to the route being
-   * added. Scoping the grant keeps each addition to its own page.
-   *
-   * The cost is a re-sign-in when the set changes, so keep routes needing the
-   * same extras adjacent in the list below.
-   */
-  permissions?: string[];
-}
-
-/** Granted for every route; see the per-route `permissions` note above. */
-const BASE_PERMISSIONS = ['inventory.manage', 'facilities.manage'];
-
-//: What every route under Scheduling Administration is gated on.
-//:
-//: `ProtectedRoute` asks for `scheduling.manage` and that alone is what decides
-//: whether these pages render — the API is mocked here, so no server-side grant
-//: is in play. `scheduling.view` rides along because permission matching is
-//: literal (`manage` never implies `view`) and a real scheduling officer holds
-//: both; a fixture that held only one would be modelling a role nobody has.
-const SCHEDULING_ADMIN = ['scheduling.manage', 'scheduling.view'];
-
-const ALL_ROUTES: RouteCheck[] = [
-  { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/training/admin?page=dashboard&tab=compliance', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/events/1/monitoring', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
-  // Every route under /scheduling/admin is gated on `scheduling.manage`, which
-  // is not in BASE_PERMISSIONS — so without these the loop measured
-  // ProtectedRoute's Access Denied screen on all four. That passes every budget
-  // while testing nothing about the page, which is the worst state a ratchet can
-  // be in: it reports coverage it does not have.
-  { path: '/scheduling/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
-  { path: '/scheduling/admin/planning', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
-  { path: '/scheduling/admin/closeout', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
-  { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
-  { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
-  // inventory.check_manage is a distinct grant from inventory.manage, and
-  // checkPermission compares literally — without it this hub renders Access
-  // Denied, which passes both budgets while measuring an error page.
-  {
-    path: '/inventory/admin/checklists',
-    maxSmallTargets: 0,
-    maxTinyText: 0,
-    permissions: ['inventory.check_manage'],
-  },
-  // Also needs settings.manage: its four values are written through the
-  // organization-settings endpoint, so the checklist grant is not enough.
-  {
-    path: '/inventory/admin/checklists/settings',
-    maxSmallTargets: 0,
-    maxTinyText: 0,
-    permissions: ['inventory.check_manage', 'settings.manage'],
-  },
-  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/facilities/settings', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/forms', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/store', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0 },
-  // /analytics and /profile were listed here from the day this file was written
-  // and match no <Route>: both fell through the catch-all to the dashboard,
-  // which is why the three of them reported an identical 24 targets and 1249
-  // characters. The real analytics dashboard is /admin/analytics behind
-  // analytics.view; the real account screen is /account, below.
-  { path: '/admin/analytics', maxSmallTargets: 0, maxTinyText: 0, permissions: ['analytics.view'] },
-  { path: '/messages', maxSmallTargets: 0, maxTinyText: 0 },
-  // Without settings.manage this route redirects and the pass measures the
-  // dashboard under the name "/settings" — a green line for a page that never
-  // rendered. Granting it is what makes the entry mean anything.
-  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
-  // The second of the seven SettingsLayout screens, and the only other one that
-  // needs no grant. Two screens is what keeps the shared shell honest: a fix to
-  // the section strip that only suits one screen's section list fails here.
-  //
-  // The remaining six are not listed, and each has a reason:
-  // /scheduling/admin/settings/*, /members/admin/settings/*,
-  // /elections/settings and /communications/email-templates carry non-shell debt
-  // of their own (17, 1, 2 and 4 controls under 44px — mostly `toggle-track`,
-  // which is 44x24 at every one of its call sites app-wide), and the events and
-  // department-setup panels render inside a hub route rather than at a path of
-  // their own. Adding any of them means fixing that debt first, not raising a
-  // budget. /members/admin/settings/visibility is the cheapest of them: one
-  // control, and the only thing between it and a budget of 0.
-  { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
-];
-
-// Useful when diagnosing one newly exposed permission-gated body locally;
-// omitted in CI and normal runs, where the complete ratchet always executes.
-const routeFilter = process.env.MOBILE_ROUTE_FILTER;
-const ROUTES = routeFilter ? ALL_ROUTES.filter(({ path }) => path.includes(routeFilter)) : ALL_ROUTES;
-
-/** iPhone 14/15 class — the narrow end of what members actually carry. */
-const PHONE = { width: 390, height: 844 };
-
-/** Apple's HIG and WCAG 2.5.5 both land here; the codebase already uses it. */
-const MIN_TAP = 44;
-const MIN_FONT_PX = 12;
 
 interface Measurement {
   crashed: boolean;
@@ -249,6 +109,22 @@ test.describe('mobile presentation', () => {
             // The "skip to main content" link is deliberately 1x1 until
             // focused; counting it would flag every page forever.
             if (b.width <= 2 && b.height <= 2) return false;
+            // WCAG 2.5.5 and 2.5.8 both carve out the Inline case: "the target
+            // is in a sentence, or its size is otherwise constrained by the
+            // line-height of non-target text." A link inside running prose
+            // cannot be padded to 44px without breaking the paragraph it sits
+            // in, and enlarging it is not what the rule asks for. Detected as
+            // an anchor with non-whitespace text beside it in the same
+            // parent — which is what "in a sentence" means structurally.
+            // A sibling *text node* specifically, not a sibling element: a row
+            // of `<a>Edit</a> <a>Delete</a>` would otherwise have each link
+            // excuse the other, which is a row of controls, not a sentence.
+            if (el.tagName === 'A' && el.parentElement) {
+              const inSentence = [...el.parentElement.childNodes].some(
+                (node) => node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim()
+              );
+              if (inSentence) return false;
+            }
             return b.height < minTap || b.width < minTap;
           });
 
@@ -296,7 +172,23 @@ test.describe('mobile presentation', () => {
               if (!el.getAttribute('aria-label')?.trim() && !el.getAttribute('aria-labelledby')?.trim()) {
                 failures.push('has no accessible label');
               }
-              if ((el as HTMLElement).tabIndex !== 0) failures.push('is not keyboard focusable');
+              // WCAG 2.1.1 asks that the off-screen end be reachable without a
+              // mouse, not specifically that the container be focusable. A
+              // strip of buttons already satisfies it — tabbing to the last
+              // button scrolls it into view — and forcing tabIndex=0 on top of
+              // that adds a redundant stop. It is actively wrong on a
+              // `role="tablist"`, which ARIA APG requires to stay out of the
+              // tab order because its tabs use roving tabindex.
+              //
+              // So the container must be focusable only when nothing inside it
+              // is: a wide table, a chart, a timeline. That is the case the
+              // rule was written for and it still fails here.
+              const focusableChild = el.querySelector(
+                'a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])'
+              );
+              if ((el as HTMLElement).tabIndex !== 0 && !focusableChild) {
+                failures.push('is not keyboard reachable: give it tabIndex={0} or focusable children');
+              }
               return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
             });
 

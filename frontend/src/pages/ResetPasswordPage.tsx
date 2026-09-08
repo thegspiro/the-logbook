@@ -102,7 +102,11 @@ export const ResetPasswordPage: React.FC = () => {
 
   if (isValidating) {
     return (
-      <main className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8"
+      >
         <div className="text-center">
           <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4 border-red-500"></div>
           <p className="text-theme-text-primary text-lg">Validating reset link...</p>

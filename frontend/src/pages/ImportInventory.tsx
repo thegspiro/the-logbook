@@ -159,7 +159,7 @@ const ImportInventory: React.FC = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Instructions */}
         <div className="mb-8 rounded-lg border border-blue-500/50 bg-blue-500/10 p-6">
           <h2 className="text-theme-text-primary mb-3 flex items-center space-x-2 font-bold">
@@ -299,7 +299,7 @@ const ImportInventory: React.FC = () => {
                   void handleImport();
                 }}
                 disabled={importing}
-                className="flex items-center space-x-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3 text-white shadow-lg transition-all hover:from-green-700 hover:to-emerald-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center space-x-2 rounded-lg bg-gradient-to-r from-green-700 to-emerald-700 px-6 py-3 text-white shadow-lg transition-all hover:from-green-800 hover:to-emerald-800 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {importing ? (
                   <>
@@ -393,7 +393,7 @@ const ImportInventory: React.FC = () => {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

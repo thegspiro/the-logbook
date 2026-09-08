@@ -227,7 +227,9 @@ export function SettingsLayout<K extends string, S extends string = string>({
             </nav>
           ) : null}
 
-          <main className="card min-w-0 flex-1 p-4 sm:p-6">{children}</main>
+          <div data-page-main className="card min-w-0 flex-1 p-4 sm:p-6">
+            {children}
+          </div>
         </div>
       </div>
     </div>

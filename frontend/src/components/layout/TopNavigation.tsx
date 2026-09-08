@@ -562,7 +562,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   >
                     <Bell className="h-4 w-4" aria-hidden="true" />
                     {notifUnreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-800 px-1 text-[10px] font-bold text-white">
                         {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                       </span>
                     )}
@@ -765,7 +765,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       <Bell className="h-4 w-4" aria-hidden="true" />
                       <span>Notifications</span>
                       {notifUnreadCount > 0 && (
-                        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-800 px-1 text-[10px] font-bold text-white">
                           {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                         </span>
                       )}

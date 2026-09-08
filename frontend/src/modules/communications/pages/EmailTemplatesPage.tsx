@@ -387,10 +387,10 @@ const EmailTemplatesPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           <Breadcrumbs />
           <SkeletonPage rows={8} />
-        </main>
+        </div>
       </div>
     );
   }

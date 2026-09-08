@@ -80,6 +80,7 @@ const AllEntriesTab: React.FC = () => {
             setAllStatusFilter(e.target.value);
             setAllPage(0);
           }}
+          aria-label="Filter entries by status"
           className="form-input px-3 py-1.5 text-sm"
         >
           <option value="">All Statuses</option>
@@ -94,6 +95,7 @@ const AllEntriesTab: React.FC = () => {
             setAllCategoryFilter(e.target.value);
             setAllPage(0);
           }}
+          aria-label="Filter entries by category"
           className="form-input px-3 py-1.5 text-sm"
         >
           <option value="">All Categories</option>
