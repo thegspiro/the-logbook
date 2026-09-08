@@ -134,6 +134,33 @@ const TAILWIND: Record<string, string> = {
   'yellow-700': '#a16207',
   'yellow-800': '#854d0e',
   'yellow-900': '#713f12',
+  'slate-400': '#94a3b8',
+  'slate-500': '#64748b',
+  'slate-600': '#475569',
+  'slate-700': '#334155',
+  'slate-800': '#1e293b',
+  'gray-400': '#9ca3af',
+  'gray-500': '#6b7280',
+  'gray-600': '#4b5563',
+  'gray-700': '#374151',
+  'zinc-500': '#71717a',
+  'zinc-600': '#52525b',
+  'zinc-700': '#3f3f46',
+  'neutral-500': '#737373',
+  'neutral-600': '#525252',
+  'stone-500': '#78716c',
+  'stone-600': '#57534e',
+  'slate-900': '#0f172a',
+  'gray-800': '#1f2937',
+  'gray-900': '#111827',
+  'zinc-800': '#27272a',
+  'zinc-900': '#18181b',
+  'neutral-700': '#404040',
+  'neutral-800': '#262626',
+  'neutral-900': '#171717',
+  'stone-700': '#44403c',
+  'stone-800': '#292524',
+  'stone-900': '#1c1917',
 };
 
 const collectSourceFiles = (dir: string): string[] => {
@@ -266,8 +293,11 @@ describe('primary fill contrast', () => {
    */
   it('pairs no text-white with a sub-AA fill at any call site', () => {
     const white = relativeLuminance(255, 255, 255);
-    const hues = [...new Set(Object.keys(TAILWIND).map((key) => key.split('-')[0]))].join('|');
-    const fillPattern = String.raw`\b((?:[a-z-]+:)*)bg-(${hues})-(\d{3})\b(?!/)`;
+    // Any hue, not only the ones already in the table: a fill whose shade is
+    // unknown must fail loudly ("add its hex") rather than be skipped. Building
+    // the alternation out of TAILWIND made the sweep self-limiting — the one
+    // shape it could never report was the one nobody had measured yet.
+    const fillPattern = String.raw`\b((?:[a-z-]+:)*)bg-([a-z]+)-(\d{2,3})\b(?!/)`;
     const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
 
     /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
@@ -335,8 +365,8 @@ describe('primary fill contrast', () => {
      * bare ``/`[^`]*`/`` pairs backticks across unrelated elements, and the
      * foregrounds of one then get attributed to the fills of another.
      */
-    const classNameValues = (source: string): Array<{ value: string; line: number }> => {
-      const found: Array<{ value: string; line: number }> = [];
+    const classNameValues = (source: string): Array<{ value: string; line: number; end: number }> => {
+      const found: Array<{ value: string; line: number; end: number }> = [];
       const attribute = /className=/g;
       for (const match of source.matchAll(attribute)) {
         let i = (match.index ?? 0) + match[0].length;
@@ -344,7 +374,7 @@ describe('primary fill contrast', () => {
         const opener = source[i];
         if (opener === '"' || opener === "'") {
           const close = source.indexOf(opener, i + 1);
-          if (close > -1) found.push({ value: source.slice(i + 1, close), line });
+          if (close > -1) found.push({ value: source.slice(i + 1, close), line, end: close });
           continue;
         }
         if (opener !== '{') continue;
@@ -367,14 +397,43 @@ describe('primary fill contrast', () => {
             }
           }
         }
-        found.push({ value: source.slice(start + 1, i), line });
+        found.push({ value: source.slice(start + 1, i), line, end: i });
+      }
+      return found;
+    };
+
+    /**
+     * Class strings declared away from the element they dress: the module-level
+     * palette array in `Avatar.tsx`, the `Record<string, string>` status-badge
+     * maps in `constants/enums.ts`, a `const badgeClass = '…'` above the JSX.
+     * They are self-contained — `'bg-slate-500 text-white'` carries its own
+     * foreground — so each literal is its own segment with no inherited
+     * context. Literals already inside a className value are skipped; that pass
+     * has the surrounding static text and so measures them better.
+     */
+    const standaloneLiterals = (
+      source: string,
+      covered: Array<{ start: number; end: number }>
+    ): Array<{ value: string; line: number }> => {
+      const found: Array<{ value: string; line: number }> = [];
+      for (const match of source.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)) {
+        const index = match.index ?? 0;
+        const value = match[1] ?? match[2] ?? match[3] ?? '';
+        if (!/\bbg-[a-z]+-\d{2,3}\b/.test(value)) continue;
+        if (covered.some((range) => index >= range.start && index < range.end)) continue;
+        found.push({ value, line: source.slice(0, index).split('\n').length });
       }
       return found;
     };
 
     for (const file of files) {
       const source = fs.readFileSync(file, 'utf8');
-      for (const { value, line } of classNameValues(source)) {
+      const values = classNameValues(source);
+      const covered = values.map(({ value, end }) => ({ start: end - value.length, end }));
+      for (const { value, line } of standaloneLiterals(source, covered)) {
+        inspect(file, line, value, new Map());
+      }
+      for (const { value, line } of values) {
         // Static text outside any quoted branch is the shared context: a
         // `text-white` there covers every branch's fill.
         const staticText = value.replace(/'[^']*'|"[^"]*"/g, ' ').replace(/\$\{[^}]*\}/gs, ' ');
