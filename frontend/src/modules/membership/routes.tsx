@@ -179,6 +179,30 @@ export const getMembershipRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/members/admin/settings/ranks"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <Suspense fallback={null}>
+              <MembersSettingsPage section="ranks" />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* EVOC stands on `members.manage` at the route like its neighbours, but
+          the section itself needs `apparatus.manage` to save — the page filters
+          it out for an officer who lacks that, rather than offering a ladder
+          every write refuses. */}
+      <Route
+        path="/members/admin/settings/evoc"
+        element={
+          <ProtectedRoute requiredPermission="members.manage">
+            <Suspense fallback={null}>
+              <MembersSettingsPage section="evoc" />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Admin Edit & History */}
       <Route

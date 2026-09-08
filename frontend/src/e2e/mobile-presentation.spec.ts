@@ -80,6 +80,15 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0 },
+  // The rank ladder, and the first of this screen's four sections the pass can
+  // actually measure: it renders no SettingsToggle, so it is not held off by the
+  // 44x24 toggle-track debt that keeps visibility, ids and evoc exempt.
+  //
+  // `members.manage` alone on purpose. It is what the route stands on *and* what
+  // the ranks endpoints now accept, so it is the grant a real roster officer
+  // arrives with — and it is the one fixture that would catch the two drifting
+  // apart again.
+  { path: '/members/admin/settings/ranks', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },

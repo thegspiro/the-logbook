@@ -19,6 +19,8 @@ const renderAt = (entry: string) =>
         <Route path="/members/admin/settings" element={<MembersSettingsRedirect />} />
         <Route path="/members/admin/settings/visibility" element={<p>Contact Visibility landed</p>} />
         <Route path="/members/admin/settings/ids" element={<p>Membership IDs landed</p>} />
+        <Route path="/members/admin/settings/ranks" element={<p>Operational Ranks landed</p>} />
+        <Route path="/members/admin/settings/evoc" element={<p>EVOC Levels landed</p>} />
         <Route path="*" element={<p>fell through</p>} />
       </Routes>
     </MemoryRouter>
@@ -37,6 +39,19 @@ describe('MembersSettingsRedirect', () => {
     // A link to Membership IDs has to arrive at Membership IDs. Dropping the
     // parameter would land the reader on a screen they then have to search.
     expect(screen.getByText('Membership IDs landed')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['ranks', 'Operational Ranks landed'],
+    ['evoc', 'EVOC Levels landed'],
+  ])('carries the %s section across', (tab, landed) => {
+    // Both arrived on 2026-09-08 and both are reachable from the redirect the
+    // moment the manifest lists them — `isTab` reads the manifest rather than a
+    // second hand-written union, which is what stops a new section being
+    // routable but not redirectable.
+    renderAt(`/members/admin/settings?tab=${tab}`);
+
+    expect(screen.getByText(landed)).toBeInTheDocument();
   });
 
   it('sends an unknown section to the first one rather than nowhere', () => {

@@ -157,20 +157,26 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ### Members Admin Pages
 
-| URL                              | Page                 | Permission         |
-| -------------------------------- | -------------------- | ------------------ |
-| `/members/admin/edit/:userId`    | Admin Member Edit    | `members.manage`   |
-| `/members/admin/history/:userId` | Member Audit History | `members.manage`   |
-| `/members/admin/waivers`         | Waiver Management    | `members.manage`   |
-| `/members/admin/settings`        | Members Settings     | `members.manage`   |
-| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage` |
-| `/members/admin/settings/ids`    | Members Settings — Membership IDs | `members.manage`   |
-| `/members/check-in-station`      | Check-In Station     | `members.check_in` |
+| URL                                  | Page                                  | Permission         |
+| ------------------------------------ | ------------------------------------- | ------------------ |
+| `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`   |
+| `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`   |
+| `/members/admin/waivers`             | Waiver Management                     | `members.manage`   |
+| `/members/admin/settings`            | Members Settings                      | `members.manage`   |
+| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`   |
+| `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`   |
+| `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage`   |
+| `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage`   |
+| `/members/check-in-station`          | Check-In Station                      | `members.check_in` |
 
-> _(2026-09-06)_ **Members Settings** holds Contact Visibility and Membership
-> IDs, moved here from the global settings page — they are decisions about the
-> roster, not platform configuration. `/members/admin/settings` redirects to the
-> first section; `/settings?tab=members` redirects here, carrying the sub-page.
+> _(2026-09-06, extended 2026-09-08)_ **Members Settings** holds Contact
+> Visibility, Membership IDs, Operational Ranks and EVOC Levels, moved here from
+> the global settings page — they are decisions about the roster, not platform
+> configuration. `/members/admin/settings` redirects to the first section;
+> `/settings?tab=members` and `/settings?tab=ranks` redirect here, carrying the
+> sub-page. Bare `/settings?tab=evoc` — the address from before EVOC became a
+> sub-page of Ranks — is answered too, because those links are still in
+> bookmarks and the old screen had been remapping them ever since.
 >
 > **The route's permission is not the endpoint's, and this is the one page in
 > the app where that gap is load-bearing.** `members.manage` opens the screen;
@@ -822,7 +828,8 @@ Sections are defined in
 > **Eligibility here is not the same screen as rank eligibility.**
 > **Scheduling Administration → Eligibility Rules** governs which _membership types_ may
 > self-sign-up for a shift; per-rank shift-**position** eligibility is set on
-> **Settings → Ranks**.
+> **Members Administration → Settings → Operational Ranks** _(moved from
+> Settings → Ranks, 2026-09-08)_.
 
 > The **Shift Reports** section links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports. It is a section navigator of its own eight sections, not a page of three cards.
 

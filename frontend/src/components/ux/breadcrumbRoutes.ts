@@ -130,6 +130,8 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/members/admin/settings': { label: 'Settings', permissions: ['members.manage'] },
   '/members/admin/settings/visibility': { label: 'Contact Visibility', permissions: ['members.manage'] },
   '/members/admin/settings/ids': { label: 'Membership IDs', permissions: ['members.manage'] },
+  '/members/admin/settings/ranks': { label: 'Operational Ranks', permissions: ['members.manage'] },
+  '/members/admin/settings/evoc': { label: 'EVOC Levels', permissions: ['members.manage'] },
   '/scheduling/admin/positions': { label: 'Who Can Fill What', permissions: ['scheduling.manage'] },
   '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },
   '/scheduling/checkin': { label: 'Shift Check-In' },

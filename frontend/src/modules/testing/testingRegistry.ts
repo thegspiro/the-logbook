@@ -210,6 +210,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'members.manage',
       },
       { path: '/members/admin/settings/ids', label: 'Members settings — membership IDs', permission: 'members.manage' },
+      {
+        path: '/members/admin/settings/ranks',
+        label: 'Members settings — operational ranks',
+        permission: 'members.manage',
+      },
+      { path: '/members/admin/settings/evoc', label: 'Members settings — EVOC levels', permission: 'members.manage' },
       { path: '/admin/members', label: 'Members admin (legacy URL)', redirectsTo: '/members/admin' },
       { path: '/members/add', label: 'Add member (legacy URL)', redirectsTo: '/members/admin?tab=add' },
       { path: '/members/import', label: 'Import members (legacy URL)', redirectsTo: '/members/admin?tab=import' },

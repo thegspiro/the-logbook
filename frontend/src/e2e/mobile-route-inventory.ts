@@ -797,6 +797,19 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'second section of the same SettingsLayout screen as /members/admin/settings/visibility above, and blocked from the pass by the same toggle-track geometry',
   },
   {
+    path: '/members/admin/settings/ranks',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/members/admin/settings/evoc',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'fourth section of the same SettingsLayout screen, and the only one needing a grant from another module (apparatus.manage) to render at all. The ranks route above measures this screen, and unlike the two toggle-bearing sections it does so at budget 0 — the shell, its nav strip and the section body are the same on both.',
+  },
+  {
     path: '/members/admin/waivers',
     source: 'src/modules/membership/routes.tsx',
     coverage: 'exempt',

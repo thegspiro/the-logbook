@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The rank ladder moved to Members Administration, and the roster officer can now run it (2026-09-08)
+
+**Changed**
+
+- **Operational Ranks and EVOC Levels now live under Members Administration →
+  Settings**, beside Contact Visibility and Membership IDs. They sat on the
+  global settings screen next to Email, Storage and Authentication — platform
+  choices an administrator makes once at setup. A rank ladder is not that. It
+  is a decision about the roster, made by whoever runs the roster, and
+  everything else that person does is under Members Administration.
+
+- **Editing the ladder no longer requires the global settings grant.** Every
+  write to the operational ranks endpoints accepted `settings.manage` alone,
+  which is the grant for the screen the ladder just left — so moving the page
+  without moving the gate would have put a roster officer on a page where every
+  control was refused. Those endpoints now accept `members.manage` as well.
+  This is additive: `require_permission` is OR logic, so every existing
+  `settings.manage` holder keeps exactly the access they had, and the read
+  endpoints, open to any signed-in member, are unchanged.
+
+  What genuinely widens is operational rather than administrative. A rank's
+  permissions come from a fixed table keyed by rank code, not from anything an
+  editor can type, and both creating and renaming a rank are checked against
+  the editor's own permissions before the change is written. What a roster
+  officer gains is control of `eligible_positions` — which ranks may fill which
+  seat on a shift.
+
+- **EVOC Levels keeps its apparatus grant.** The levels are served by the
+  apparatus API and completing a level's training program creates operator
+  records across the fleet, so widening that was a separate decision from
+  moving the page. An officer without it is not offered the section rather than
+  being offered one that refuses every write.
+
+**Fixed**
+
+- **A rank ladder that fails to load now says so, instead of appearing empty.**
+  The load error was swallowed and the section rendered its empty state, so an
+  unreachable server told a department it had no rank structure — while every
+  rank was still in the database and every member still held one. It now
+  reports the failure and offers a retry.
+
+**Compatibility**
+
+- `/settings?tab=ranks`, `/settings?tab=ranks&page=evoc` and the older
+  top-level `/settings?tab=evoc` all redirect to the new addresses, carrying
+  the sub-page. The last of those predates EVOC becoming a sub-page of Ranks
+  and had been remapped internally ever since; it is answered here rather than
+  dropped, because those links are still in bookmarks.
+
 ### Turning on the MFA requirement no longer locks out everyone still on a temporary password (2026-09-08)
 
 **Fixed**
