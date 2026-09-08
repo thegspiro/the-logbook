@@ -142,6 +142,10 @@ every authentication and public endpoint at once.
 
 Anything that can stop an existing deployment from booting — a new critical, a
 default flipped toward fail-closed, a newly enforced flag — needs an entry in
-this file naming the setting and both ways out, plus the usual `CHANGELOG.md`
-entry. A fresh install passing is not evidence: these failures only ever
-appear on installations that already existed.
+this file naming the setting and both ways out. A fresh install passing is not
+evidence: these failures only ever appear on installations that already
+existed.
+
+This file is the operator-facing record and is **not** covered by the changelog
+freeze: it is per-change prose that concurrent branches rarely land on at the
+same offset, and an operator upgrading has nowhere else to read it.
