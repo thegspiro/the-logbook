@@ -294,6 +294,41 @@ describe('skip link target', () => {
      */
     const owners = new Set([...pages, 'components/layout/AppLayout.tsx']);
 
+    /**
+     * Wrappers that render *before* `AppLayout` — and sometimes inside it.
+     *
+     * These are the tempting place to close the remaining gap: the skip link
+     * genuinely points at nothing while the app is loading its first chunk or
+     * checking the session. Neither can own the target, and the reason is the
+     * same both times — each renders in **two** positions, so a static id is
+     * right in one and a duplicate in the other:
+     *
+     * - `PageLoadingFallback` is the fallback of the one `<Suspense>` wrapping
+     *   every route. React does not unmount the children it is standing in for
+     *   on an update — it hides them with `display: none` and leaves them in
+     *   the DOM, and `getElementById` then answers with the *hidden*
+     *   `AppLayout` main rather than the visible fallback. That is reachable,
+     *   not theoretical: finance, grants-fundraising and training route to
+     *   `lazyWithRetry` pages with no inner `<Suspense>`, so navigating to one
+     *   suspends against this boundary with `AppLayout` already mounted.
+     *   Focusing a `display: none` element is worse than focusing nothing.
+     * - `ProtectedRoute`'s auth-loading branches render outside the layout on a
+     *   cold load, but module routes nest `<ProtectedRoute requiredModule=…>`
+     *   *inside* the layout route, so the same branch can render within
+     *   `AppLayout`'s `<main>` — a nested landmark and a duplicate id.
+     *
+     * They are named rather than merely excluded so the offender message can
+     * say this, instead of reading as an oversight. See
+     * `docs/KNOWN_LIMITATIONS.md` for the gap that is left open.
+     */
+    const PRE_LAYOUT_WRAPPERS: Record<string, string> = {
+      'App.tsx':
+        'PageLoadingFallback can render while AppLayout is suspended-but-mounted, ' +
+        'where the hidden AppLayout main would win getElementById',
+      'components/ProtectedRoute.tsx':
+        'its loading branches also render inside AppLayout, via the nested ' + 'ProtectedRoute in every module route',
+    };
+
     // Comments discuss the id (this file's own header does); only markup counts.
     const stripComments = (source: string): string =>
       source
@@ -308,8 +343,11 @@ describe('skip link target', () => {
       .filter((file) => stripComments(read(file)).includes('id="main-content"'));
 
     expect(
-      offenders,
-      'these files are only ever rendered inside AppLayout, which already provides ' +
+      offenders.map((file) => {
+        const wrapper = PRE_LAYOUT_WRAPPERS[file];
+        return wrapper ? `${file} — ${wrapper}` : file;
+      }),
+      'these files render inside AppLayout, which already provides ' +
         '<main id="main-content">; a second one duplicates the id and makes the skip ' +
         'link target ambiguous'
     ).toEqual([]);

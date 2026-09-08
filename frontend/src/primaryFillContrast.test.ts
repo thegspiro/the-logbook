@@ -423,7 +423,16 @@ describe('primary fill contrast', () => {
       // sweeps this source too, and an illustrative half-token in a comment is
       // indistinguishable to it from the real thing — which is how this comment
       // took that test red.
-      for (const [, variant, token] of segment.matchAll(/\b((?:[a-z-]+:)*)bg-(theme-[a-z]+(?:-[a-z]+)*)\b(?![/-])/g)) {
+      //
+      // All four fill prefixes, not just `bg-`. A semantic gradient
+      // (`bg-linear-to-r from-theme-… to-theme-…`) has a shade-less stop that
+      // the numeric loop cannot match either, so restricting this loop to `bg-`
+      // left it measured by nothing at all — the same gap that hid the flat
+      // semantic fills, reopened one prefix over. The app already writes 57 of
+      // these stops.
+      for (const [, variant, fill, token] of segment.matchAll(
+        /\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)\b(?![/-])/g
+      )) {
         const prefix = variant ?? '';
         const perTheme = semanticFill(token ?? '');
         if (perTheme.size === 0) {
@@ -434,7 +443,7 @@ describe('primary fill contrast', () => {
             .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
             .find((value) => value !== undefined);
           if (anyForeground !== undefined) {
-            offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} resolves to no theme value`);
+            offenders.push(`${path.relative(SRC, file)}:${line} — ${fill}-${token} resolves to no theme value`);
           }
           continue;
         }
@@ -466,7 +475,9 @@ describe('primary fill contrast', () => {
           // Reported rather than skipped: such a pairing is not something this
           // check can clear, and silence would read as a pass.
           if (!rgb) {
-            offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} is ${value} in ${theme}, unmeasurable`);
+            offenders.push(
+              `${path.relative(SRC, file)}:${line} — ${fill}-${token} is ${value} in ${theme}, unmeasurable`
+            );
             continue;
           }
           const themeRatio = contrastRatio(
@@ -475,7 +486,7 @@ describe('primary fill contrast', () => {
           );
           if (themeRatio < 4.5) {
             offenders.push(
-              `${path.relative(SRC, file)}:${line} — ${fg} on bg-${token} is ${themeRatio.toFixed(2)}:1 in ${theme}`
+              `${path.relative(SRC, file)}:${line} — ${fg} on ${fill}-${token} is ${themeRatio.toFixed(2)}:1 in ${theme}`
             );
           }
         }
@@ -548,12 +559,15 @@ describe('primary fill contrast', () => {
       for (const match of source.matchAll(/'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g)) {
         const index = match.index ?? 0;
         const value = match[1] ?? match[2] ?? match[3] ?? '';
-        // Both fill shapes, or the semantic check below never sees a class
-        // map. A numeric-only prefilter discarded
-        // `const badge = 'bg-theme-alert-danger-icon text-white'` before
-        // `inspect` ran, leaving the standalone literals this pass exists to
-        // cover unguarded for exactly the tokens that flip between themes.
-        if (!/\bbg-(?:[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*)\b/.test(value)) continue;
+        // Both fill shapes across all four prefixes, or `inspect` never sees
+        // the literal at all. A numeric-only prefilter discarded
+        // `const badge = 'bg-theme-alert-danger-icon text-white'`; a `bg-`-only
+        // one discarded every standalone *gradient*, since its own `bg-` is
+        // `bg-linear-to-r` and matches neither shape — so a hoisted
+        // `'bg-linear-to-r from-red-600 to-orange-600 text-white'` was measured
+        // by nothing, numeric stops and all. Both gaps are the same mistake:
+        // the prefilter has to admit whatever the passes below can measure.
+        if (!/\b(?:bg|from|via|to)-(?:[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*)\b/.test(value)) continue;
         if (covered.some((range) => index >= range.start && index < range.end)) continue;
         found.push({ value, line: source.slice(0, index).split('\n').length });
       }

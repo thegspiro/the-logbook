@@ -3632,6 +3632,41 @@ concurrent catalogue edit, the impact is one hidden row in a search the officer
 can re-run, and the search box narrows results directly. This does not affect
 what is delivered or recorded — only which matches a picker lists.
 
+## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08)
+
+`index.html` opens with `<a href="#main-content">`, and every page that owns its
+own shell provides that target — `skipLinkTarget.test.ts` checks all of them,
+in both directions. Two **transient** states have no target and cannot be given
+one statically:
+
+| State            | What renders                            | Why it cannot own the id                                                                                                                                                                                                                                                                        |
+| ---------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First chunk load | `PageLoadingFallback` (`App.tsx`)       | React does not unmount the children a `<Suspense>` stands in for on an update — it hides them with `display: none` and leaves them in the DOM, so `getElementById('main-content')` answers with the hidden `AppLayout` main. Focusing a `display: none` element is worse than focusing nothing. |
+| Session check    | `ProtectedRoute`'s two loading branches | Module routes nest `<ProtectedRoute requiredModule=…>` **inside** the layout route, so the same branch can render within `AppLayout`'s `<main>` — a nested landmark and a duplicate id.                                                                                                         |
+
+The `PageLoadingFallback` case is reachable rather than theoretical: finance,
+grants-fundraising and training route to `lazyWithRetry` pages with no inner
+`<Suspense>`, so navigating to one suspends against the global boundary with
+`AppLayout` already mounted. Every other module wraps its lazy pages in
+`<Suspense fallback={null}>`, which keeps the suspension local.
+
+**What a fix would take.** Either give those three modules the inner
+`<Suspense>` the other twenty-seven already have — which would make the global
+fallback unreachable while `AppLayout` is mounted, and only then is putting the
+id on it safe — or resolve the skip target at click time against the visible
+main rather than by id. The first is 47 route entries and changes what a page
+swap looks like (a quiet in-layout replace instead of a whole-app spinner); the
+second changes a shared contract that `index.html`, `AppLayout` and three e2e
+specs all read. Both are their own change set.
+
+**Why it is accepted for now.** Both states are transient and unfocusable in
+practice — the link is only revealed on focus, and a user tabbing during a
+sub-second chunk load lands on the fallback's own `role="status"` text either
+way. Neither state has interactive content to skip past, which is what SC 2.4.1
+exists to protect. `skipLinkTarget.test.ts` names both files and explains the
+constraint in its failure message, so the next person to try the obvious fix is
+told why it is not one rather than discovering the duplicate id in review.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
