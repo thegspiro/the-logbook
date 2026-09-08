@@ -16,31 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 08 (Membership pipeline, pass 5)** — PR
-[#2405](https://github.com/thegspiro/the-logbook/pull/2405), branch
-`claude/security-review-membership-pipeline-pass5`. Two fixes this pass:
-**MP-27 (HIGH)** — `update_prospect`, `set_prospect_status`, and
-`bulk_set_prospect_status` each read the prospect's row unlocked before
-checking the guard that prevents a status change from clobbering (or a
-second transfer call from reopening) a completed transfer-to-membership —
-a concurrent, correctly-locked `transfer_to_membership` could commit in the
-gap, letting the status change silently overwrite the just-committed
-`transferred` status and, via a follow-up transfer call, mint a second
-`User` account for the same prospect. Fixed by locking the row on all three
-paths, mirroring the pattern already used by `complete_step`/
-`regress_prospect`/`transfer_to_membership`/`update_election_package`/
-`assign_package_to_election`. **MP-28 (P2/MED, Codex review of this PR)** —
-`_bulk_apply`'s `except ValueError` branch (the rejected-item path) left the
-`FOR UPDATE` lock MP-27's own fix had just acquired held for the rest of the
-batch instead of ending the transaction, blocking (and, across two
-overlapping batches, potentially deadlocking) any other write to that
-prospect until the batch finished. Fixed by committing (not rolling back —
-a raw `rollback()` breaks the test session's async/greenlet bridge under
-`join_transaction_mode="create_savepoint"`) in that branch, safe because
-every current `apply` callback raises before mutating anything. 3
-pre-existing FLAGGED items (MP-10, MP-19's `/widget-summary` half, MP-22)
-re-verified unchanged. Subscribed to PR activity. Next feature once this
-merges: 09 Medical screening (PHI).
+**Feature 08 (Membership pipeline, pass 5 follow-up)** — PR
+[#2406](https://github.com/thegspiro/the-logbook/pull/2406), branch
+`claude/security-review-membership-pipeline-pass5-followup`. PR #2405 (the
+pass 5 PR carrying MP-27) was merged directly by the repo owner before this
+session could push a fix for a second Codex finding on that same PR — so
+that fix lands here instead, on a new branch per CLAUDE.md Pitfall #24
+(never reuse a merged PR's branch name). **MP-28 (P2/MED, Codex review of
+PR #2405)** — `_bulk_apply`'s `except ValueError` branch (the rejected-item
+path) left the `FOR UPDATE` lock MP-27's own fix had just acquired held for
+the rest of the batch instead of ending the transaction, blocking (and,
+across two overlapping batches, potentially deadlocking) any other write to
+that prospect until the batch finished. Fixed by committing (not rolling
+back — a raw `rollback()` breaks the test session's async/greenlet bridge
+under `join_transaction_mode="create_savepoint"`) in that branch, safe
+because every current `apply` callback raises before mutating anything.
+Replied on PR #2405's P2 thread and resolved it; replied on its P1 thread
+(a request for genuine two-session concurrency test infrastructure, which
+this repo has no precedent for anywhere — including
+`test_capacity_locking.py`, whose docstring claims real concurrency but
+whose checks are source-inspection only) explaining it's a repo-wide gap
+out of scope for a one-line fix, left unresolved. Subscribed to PR
+activity. Next feature once this merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11453,9 +11450,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405)
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405) — new PR #2406
 
-Codex reviewed PR #2405 and flagged two issues on the MP-27 fix itself.
+Codex reviewed PR #2405 and flagged two issues on the MP-27 fix itself
+(P2 lock leak, P1 test-rigor ask). Fixed the P2 finding, verified locally,
+and went to push — but PR #2405 had already been merged directly by the
+repo owner in the interim, with only MP-27 (the title still read "1 fix, 0
+flagged"). Per CLAUDE.md Pitfall #24, pushed the fix to a new branch
+(`claude/security-review-membership-pipeline-pass5-followup`, based on
+current `main` which already carries PR #2405's merge) instead of the
+merged branch, and opened it as a new PR, #2406.
 
 **MP-28 (P2/MED, fixed)** — `_bulk_apply`'s `except ValueError` branch (the
 path taken when an item is rejected — e.g. already at the target status)
@@ -11494,9 +11498,11 @@ concurrency — actually drives two live, overlapping DB sessions against a
 lock; the existing pattern throughout is a single session asserting the
 locked query was issued (`with_for_update=True` on the mock/spy) or, at
 most, a source-level trace. Building genuine multi-connection concurrency
-test infrastructure is a repo-wide gap, not something this PR's scope
-covers — replied on the thread explaining the precedent rather than adding
-new test infrastructure.
+test infrastructure is a repo-wide gap, not something a one-line lock-leak
+fix's scope covers — replied on the thread (after #2405 had already
+merged, so the reply and resolve both landed on the closed PR) explaining
+the precedent rather than adding new test infrastructure, and left that
+thread unresolved since it wasn't acted on.
 
 Updated `docs/security-review/MP-08-membership-pipeline.md` with the MP-28
 write-up and refreshed completion-gate numbers. Completion gate re-run:
