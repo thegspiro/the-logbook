@@ -99,6 +99,30 @@ Beyond the shared utilities, **125 hand-rolled class strings in 60 files** paire
 `text-white` with a fill below 4.5:1 — outside the mast CSS entirely, so no
 palette change could ever have found them.
 
+### What axe could not decide
+
+axe reports a node it cannot measure as _incomplete_, not as a violation, and
+the first version of this pass read only `violations`. That is a false floor:
+every such node counted as clean.
+
+It is not a handful of gradient CTAs. This application paints its page
+background as a `linear-gradient`, so axe abstains on essentially every element
+sitting directly on it — about **2,200 nodes across the 52 routes**, in all
+three themes, starting with the dashboard's `h1`. A per-route budget of those
+counts would be noise that moves with the fixture data and would say nothing
+about whether the text is readable.
+
+So the pass asserts the _reason_ axe gives (a background gradient or a
+background image — anything else fails and wants a person), and the gradient
+case is measured by value instead. `themeGradientContrast.test.ts` reads the
+three gradient stops and the three text tiers out of `index.css` for each theme
+and holds every pairing to 4.5:1. A browser cannot resolve a gradient to one
+colour; the stylesheet states both halves exactly, a few lines apart, and the
+worst case a gradient can present is one of its stops.
+
+All nine pairings clear AA in every theme. The tightest is `--text-muted` on
+the dark theme's red-900 stop.
+
 ## What changed
 
 **Crashes fixed (3)** — payloads normalized at the read boundary in

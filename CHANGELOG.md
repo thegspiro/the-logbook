@@ -110,11 +110,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not just the first, and its opener vocabulary covers `receive`, `issue`,
   `assign`, `import` and `generate` — medical supplies' "Receive delivery"
   dialog was invisible to a pass named "every dialog".
-- **`mobile-accessibility.spec.ts` collects axe's `incomplete` results.** axe
-  files a node there when it cannot compute a ratio — text over a CSS gradient
-  is the common case — and reading only `violations` reported zero for nodes
-  nobody had measured. They are now counted, named in the run output and
-  ratcheted per route.
+- **`mobile-accessibility.spec.ts` collects axe's `incomplete` results**, and
+  the reason each one gives is now asserted. axe files a node there when it
+  cannot compute a ratio, and reading only `violations` reported zero for nodes
+  nobody had measured. It turns out to be systemic rather than incidental: the
+  page background is a `linear-gradient`, so axe abstains on roughly **2,200
+  nodes** across the inventory — the dashboard's `h1` included — in every theme.
+  Counting those would be noise that moves with the fixture data, so the pass
+  asserts the stated _reason_ instead (gradient or background image, nothing
+  else), and a new **`themeGradientContrast.test.ts`** measures the case by
+  value: every text tier against every gradient stop, in all three themes, held
+  to the same 4.5:1 floor. That is the text axe was silently skipping on every
+  route, and it clears AA — the worst pairing is `--text-muted` on the dark
+  theme's red-900 stop.
 - **Neither aggregate audit retries on CI.** Both are deterministic against
   mocked routes, and the accessibility pass alone runs about ten minutes inside
   a 30-minute job: two retries would have spent the whole budget re-deriving

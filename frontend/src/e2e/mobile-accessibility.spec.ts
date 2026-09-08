@@ -80,17 +80,28 @@ const ADVISORY_BUDGET: Record<string, number> = {
  * themes. Every entry is a call site whose colour clears AA and not AAA.
  */
 /**
- * Per-route budget of contrast nodes axe reported as *undecided*, summed across
- * all three themes.
+ * Why axe is allowed to abstain on a contrast node.
  *
- * These are not passes. axe files a node here when it cannot compute the ratio
- * — text over a CSS gradient or an image, a partly transparent fill — and
- * counting them as clean is how a gradient CTA slips through a pass that claims
- * an AA floor. They are ratcheted rather than asserted at zero because
- * resolving one takes a human looking at the rendered pixels, and the ratchet
- * is what stops the set growing while that happens.
+ * Reading only `violations` reported zero for every node axe could not decide,
+ * which is a false floor. But the count of those nodes is not the signal: this
+ * app paints its page background as a `linear-gradient`, so axe abstains on
+ * essentially every element sitting directly on it — 2,200-odd nodes across the
+ * inventory, from the dashboard `h1` down. Ratcheting that number would be
+ * noise that moves with the fixture data.
+ *
+ * The *reason* is the signal. Every abstention here must be one of the causes
+ * below, each of which is measured elsewhere by exact value rather than
+ * guessed at from pixels:
+ *
+ *   - a background gradient — `themeGradientContrast.test.ts` measures every
+ *     text tier against every gradient stop, in all three themes
+ *   - a background image — none in the measured routes today, so a new one
+ *     fails here and has to be justified
+ *
+ * A reason outside this list means axe hit something nothing else covers, and
+ * that is worth a person looking at it.
  */
-const UNDECIDED_CONTRAST_BUDGET: Record<string, number> = {};
+const ALLOWED_UNDECIDED = [/background gradient/i, /background image/i];
 
 const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/dashboard': 9,
@@ -120,6 +131,7 @@ interface Summary {
   impact: string;
   help: string;
   count: number;
+  reasons: string[];
   examples: string[];
 }
 
@@ -157,11 +169,12 @@ test.describe('mobile accessibility', () => {
     const runAxe = async (options: unknown): Promise<{ violations: Summary[]; incomplete: Summary[] }> => {
       await page.addScriptTag({ path: AXE_PATH });
       return page.evaluate(async (opts) => {
+        type Check = { message: string };
         type Result = {
           id: string;
           impact: string;
           help: string;
-          nodes: Array<{ target: string[]; html: string }>;
+          nodes: Array<{ target: string[]; html: string; any: Check[]; all: Check[]; none: Check[] }>;
         };
         const axe = (
           window as unknown as {
@@ -176,6 +189,9 @@ test.describe('mobile accessibility', () => {
             impact: v.impact,
             help: v.help,
             count: v.nodes.length,
+            // Why axe abstained, verbatim. The count of undecided nodes is not
+            // the useful signal — the reason is.
+            reasons: [...new Set(v.nodes.flatMap((n) => [...n.any, ...n.all, ...n.none].map((c) => c.message)))],
             examples: v.nodes
               .slice(0, 2)
               .map((n) => `${n.target.join(' ')} :: ${n.html.replace(/\s+/g, ' ').slice(0, 120)}`),
@@ -281,9 +297,15 @@ test.describe('mobile accessibility', () => {
           resultTypes: ['violations', 'incomplete'],
         });
         undecidedCount += undecided.reduce((sum, v) => sum + v.count, 0);
+        for (const finding of undecided) {
+          for (const reason of finding.reasons) {
+            if (ALLOWED_UNDECIDED.some((allowed) => allowed.test(reason))) continue;
+            undecidedBusted.push(`${route.path} [${theme}] ${finding.id}: ${reason}`);
+          }
+        }
         if (undecided.length) {
           undecidedDetail.push(
-            `${route.path} [${theme}]: ${undecided.map((v) => `${v.id} x${v.count}`).join(', ')}\n      ${undecided[0]?.examples[0] ?? ''}`
+            `${route.path} [${theme}]: ${undecided.map((v) => `${v.id} x${v.count}`).join(', ')} — ${undecided.flatMap((v) => v.reasons).join('; ')}`
           );
         }
         const themeAa = contrast.filter((v) => v.id === 'color-contrast');
@@ -357,12 +379,6 @@ test.describe('mobile accessibility', () => {
       if (aaaCount > aaaBudget) {
         aaaBusted.push(`${route.path}: ${aaaCount} nodes below 7:1 across themes, budget ${aaaBudget}`);
       }
-      const undecidedBudget = UNDECIDED_CONTRAST_BUDGET[route.path] ?? 0;
-      if (undecidedCount > undecidedBudget) {
-        undecidedBusted.push(
-          `${route.path}: ${undecidedCount} contrast nodes axe could not decide across themes, budget ${undecidedBudget}`
-        );
-      }
 
       table.push(
         [
@@ -387,7 +403,10 @@ test.describe('mobile accessibility', () => {
     }
 
     if (undecidedDetail.length) {
-      console.log('\nContrast axe could not decide (ratcheted, needs a human eye):\n  ' + undecidedDetail.join('\n  '));
+      console.log(
+        '\nContrast axe could not decide, by stated reason (measured by value in themeGradientContrast.test.ts):\n  ' +
+          undecidedDetail.join('\n  ')
+      );
     }
 
     // Asserted first: a route that never rendered makes every count below it
@@ -398,6 +417,9 @@ test.describe('mobile accessibility', () => {
     expect(reflowed, `routes with content outside the viewport at ${NARROW.width}px (SC 1.4.10)`).toEqual([]);
     expect(advisoryBusted, 'routes that grew best-practice findings').toEqual([]);
     expect(aaaBusted, 'routes that grew AAA-only contrast findings').toEqual([]);
-    expect(undecidedBusted, 'routes that grew contrast nodes axe could not decide').toEqual([]);
+    expect(
+      [...new Set(undecidedBusted)],
+      'contrast nodes axe could not decide for a reason nothing else measures'
+    ).toEqual([]);
   });
 });
