@@ -159,7 +159,7 @@ schemathesis==4.25.2
 # free choice: 0.52.0 and the 0.50.0 that preceded it both make the file
 # unresolvable against the schemathesis above. Read that range off the
 # schemathesis release being pinned before changing this line.
-jsonschema-rs==0.53.0
+jsonschema-rs==0.51.0
 faker==40.38.0
 
 # Code Quality
