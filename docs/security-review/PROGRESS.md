@@ -24,7 +24,7 @@ documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
 out this pass).
 
-Nine fixes this pass — seven added across five further rounds of Codex
+Ten fixes this pass — eight added across six further rounds of Codex
 review on this PR's own commits, finding gaps in the prior fixes:
 
 - **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
@@ -134,6 +134,23 @@ ensure_apparatus_folder`/`ensure_event_folder` (the on-demand creators
   folder for this member) when they no longer match. New guard test
   (`test_falls_through_if_ownership_changed_under_the_lock`), confirmed
   to fail pre-fix via `git stash`.
+- **`ensure_apparatus_folder`/`ensure_event_folder` had the same fast-path
+  predicate gap (MED, Codex review of round 5's own commit)** — the DOC-28
+  fast-path predicate re-check above was fixed only on `ensure_member_
+folder`; round 5 (earlier the same day) had copied `_lock_folder_by_id`'s
+  lock-by-id-only fast path into `ensure_apparatus_folder`/`ensure_event_
+folder` without the analogous re-check, reopening the identical gap one
+  level over: a `documents.manage` holder reparenting an apparatus/event
+  folder between the peek and the lock would still hand it back as-is,
+  producing an empty tree for one caller (`get_apparatus_folders` finds no
+  folder under the expected root) and, on the events side, returning a
+  moved folder's metadata and document count to an `events.view` caller
+  with no ACL re-check. Fixed with the same predicate re-check shape —
+  `parent_id`/`slug` for both, since neither has an owner concept — falling
+  through to the slow path when they no longer match. 2 new guard tests
+  (`test_apparatus_falls_through_if_reparented_under_the_lock`,
+  `test_event_falls_through_if_reparented_under_the_lock`), confirmed to
+  fail pre-fix via `git stash`.
 
 Also on this PR's first commit, Codex found the new
 `TestEnsureMemberFolderIsLocked::test_locks_the_organization_row` guard
@@ -11727,6 +11744,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 7) — 1 fixed, the DOC-28 predicate gap replicated into two siblings (Codex review of PR #2411's round-5 commit)
+
+Codex reviewed round 5's apparatus/event locking fix directly (a separate
+finding from round 6's, on the same commit) and found it had copied
+`_lock_folder_by_id`'s lock-by-id-only fast path from `ensure_member_
+folder` into `ensure_apparatus_folder`/`ensure_event_folder` without also
+copying the DOC-28 predicate re-check that same commit's own sibling fix
+added for the member case. `_lock_folder_by_id` matches only the row's
+primary key; if a `documents.manage` holder reparents an apparatus/event
+folder in the window between the fast path's non-locking peek and its
+by-id lock, the locked row is still returned as-is without confirming it's
+still under the expected root.
+
+**Failure scenario:** on the apparatus side, `get_apparatus_folders`
+resolves the folder by walking from the (now-wrong) expected root and
+finds nothing, producing an empty folder tree instead of recreating one.
+On the events side, worse: `ensure_event_folder` returns the moved
+folder — including its metadata and document count — directly to an
+`events.view` caller, with no subsequent ACL check confirming the caller
+should see whatever the folder was reparented to.
+
+**Fix:** added the same post-lock predicate re-check to both methods,
+using `parent_id` and `slug` (neither apparatus nor event folders have an
+owner concept, so the DOC-28 fix's `owner_user_id` check doesn't apply;
+`(parent_id, slug)` is the correct pair, matching what `_peek_apparatus_
+folder`/`_lock_apparatus_folder` and their event equivalents already key
+on) — falling through to the slow path, which correctly re-resolves under
+the organization lock, when they no longer match.
+
+**Test:** two new guard tests,
+`test_apparatus_falls_through_if_reparented_under_the_lock` and
+`test_event_falls_through_if_reparented_under_the_lock`, mirroring
+`TestEnsureMemberFolderIsLocked::test_falls_through_if_ownership_
+changed_under_the_lock`'s mocked-race shape: the fast path's locked
+re-fetch returns the same folder id with a different `parent_id`, and the
+test asserts the method does not return that row directly. Both confirmed
+to fail against the pre-fix code via `git stash` of `documents_service.py`
+and pass after.
+
+Completion gate re-run: flake8/black/isort clean; scoped documents/
+facilities/property-return test files pass; full backend suite unchanged
+in count from round 6 aside from the two new tests (11873 passed, 21
+skipped, 0 failed).
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 6) — 1 fixed, a lock-order deadlock in a different file (Codex review of PR #2411's round-5 commit)
 

@@ -302,6 +302,31 @@ locked, encoding the assumption this bug rested on. Rewritten as
 `FOR UPDATE` and the other two still do; confirmed to fail against the
 pre-fix code and pass after.
 
+### `ensure_apparatus_folder`/`ensure_event_folder` had the same fast-path predicate gap as DOC-28 (Codex review of round 5's own fix) — ✅ FIXED
+
+**What:** round 5's fix copied `_lock_folder_by_id`'s lock-by-id-only fast
+path from `ensure_member_folder` into `ensure_apparatus_folder`/
+`ensure_event_folder`, but not the DOC-28 predicate re-check that same
+commit's sibling fix added for the member case. `_lock_folder_by_id`
+matches only the row's primary key, so a folder reparented between the
+fast path's peek and its by-id lock is still returned as-is.
+
+**Failure scenario:** on the apparatus side, `get_apparatus_folders`
+walks from the expected root and finds nothing, producing an empty folder
+tree. On the events side, `ensure_event_folder` returns the reparented
+folder's metadata and document count directly to an `events.view` caller
+with no ACL re-check against wherever it was moved.
+
+**Fix:** added the same post-lock predicate re-check to both methods,
+using `parent_id`/`slug` (neither has an owner concept, unlike the member
+case) — falling through to the slow path when they no longer match.
+
+**Verified:** two new guard tests,
+`test_apparatus_falls_through_if_reparented_under_the_lock` and
+`test_event_falls_through_if_reparented_under_the_lock`, mirroring the
+DOC-28 fix's own mocked-race test shape; both confirmed to fail against
+the pre-fix code via `git stash` and pass after.
+
 ### Re-verified still open, not re-flagged
 
 - **DOC-8** (`legal_service.py::list_revisions` unbounded — no
@@ -379,7 +404,7 @@ pre-fix code and pass after.
 | `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                             | pass                                                                                                                                                               |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                     | pass, 438 revisions, single head, unchanged this pass (no migration touched)                                                                                       |
 | `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py` (plus `test_document_service.py`, `test_minutes*.py`, `test_apparatus_type_projection.py` from rounds 3-5) | 389 passed                                                                                                                                                         |
-| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                                                                                  | 11871 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed                         |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                                                                                  | 11873 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed                         |
 | `tsc --noEmit` / `eslint .` (frontend)                                                                                                                                                                                                                                                                                                                | not run — no frontend file changed this pass (verified by `git status`; the one frontend change since pass 3, `f41ed91c6`, was read for review only, not modified) |
 
 Guard tests added this pass: `tests/test_documents_access.py::
@@ -398,6 +423,11 @@ test_fast_path_peek_does_not_lock` (round 6, rewritten from the file's
 pre-existing `test_existence_checks_lock_their_rows`) — see the
 `PropertyReturnService` finding above; confirmed to fail against the
 pre-fix code via `git stash` of `property_return_service.py`.
+`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked::
+test_apparatus_falls_through_if_reparented_under_the_lock` and
+`test_event_falls_through_if_reparented_under_the_lock` (round 7) — see
+the fast-path predicate finding above; both confirmed to fail against the
+pre-fix code via `git stash` of `documents_service.py`.
 
 ## Next
 

@@ -3272,6 +3272,85 @@ class TestEnsureApparatusAndEventFolderAreLocked:
             "locking helper, not a peek"
         )
 
+    async def test_apparatus_falls_through_if_reparented_under_the_lock(self):
+        """Codex review, PR #2411 (round 7): ``_lock_folder_by_id`` matches
+        only the folder's primary key, not ``(parent_id, slug)``. If a
+        ``documents.manage`` holder reparents this folder between the fast
+        path's peek and its lock, the locked row no longer sits under this
+        apparatus root and must not be handed back as this apparatus's
+        folder.
+        """
+        root = SimpleNamespace(id="apparatus-root")
+        peeked_folder = SimpleNamespace(id="folder-1")
+        # The locked re-fetch of that same id finds it reparented elsewhere.
+        reparented_folder = SimpleNamespace(
+            id="folder-1", parent_id="some-other-root", slug="apparatus-appar-1"
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: apparatus root already exists
+                _one(peeked_folder),  # fast-path: peek finds a folder
+                _one(reparented_folder),  # fast-path: locked re-fetch by
+                # id -- same row, parent changed underneath
+                _one(root),  # slow path: apparatus root, locked, re-confirmed
+                _one(None),  # slow path: this apparatus's folder, locked --
+                # none, since the old one is no longer under this root
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        folder = await DocumentsService(db).ensure_apparatus_folder(
+            "org-1", "appar-1", "Engine 1"
+        )
+
+        assert folder is not reparented_folder, (
+            "the fast path returned the folder even though the locked "
+            "re-fetch showed it had already been reparented away from "
+            "this apparatus root"
+        )
+
+    async def test_event_falls_through_if_reparented_under_the_lock(self):
+        """Codex review, PR #2411 (round 7): same as the apparatus case
+        above, for ``ensure_event_folder``.
+        """
+        root = SimpleNamespace(id="events-root")
+        peeked_folder = SimpleNamespace(id="folder-1")
+        reparented_folder = SimpleNamespace(
+            id="folder-1", parent_id="some-other-root", slug="event-evt-1"
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: events root already exists
+                _one(peeked_folder),  # fast-path: peek finds a folder
+                _one(reparented_folder),  # fast-path: locked re-fetch by
+                # id -- same row, parent changed underneath
+                _one(root),  # slow path: events root, locked, re-confirmed
+                _one(None),  # slow path: this event's folder, locked --
+                # none, since the old one is no longer under this root
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        folder = await DocumentsService(db).ensure_event_folder(
+            "org-1", "evt-1", "Drill Night"
+        )
+
+        assert folder is not reparented_folder, (
+            "the fast path returned the folder even though the locked "
+            "re-fetch showed it had already been reparented away from "
+            "this events root"
+        )
+
     @pytest.mark.integration
     async def test_apparatus_folder_is_idempotent(self, db_session):
         """End-to-end against a real database, mirroring

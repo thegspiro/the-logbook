@@ -1524,7 +1524,18 @@ class DocumentsService:
             )
             if peeked_folder is not None:
                 vehicle_folder = await self._lock_folder_by_id(peeked_folder.id)
-                if vehicle_folder is not None:
+                # Codex review, PR #2411: _lock_folder_by_id matches only the
+                # primary key, not (parent_id, slug) -- if a documents.manage
+                # holder reparents this folder between the peek above and
+                # this lock, the locked row is still returned as-is. Re-check
+                # the predicate so a folder that no longer sits under this
+                # apparatus root falls through to the slow path's own locked
+                # re-fetch instead of being handed back.
+                if (
+                    vehicle_folder is not None
+                    and vehicle_folder.parent_id == apparatus_root.id
+                    and vehicle_folder.slug == f"apparatus-{apparatus_id_str}"
+                ):
                     return vehicle_folder
 
         org = await self.db.scalar(
@@ -2173,7 +2184,18 @@ class DocumentsService:
             peeked_folder = await self._peek_event_folder(events_root.id, event_id_str)
             if peeked_folder is not None:
                 event_folder = await self._lock_folder_by_id(peeked_folder.id)
-                if event_folder is not None:
+                # Codex review, PR #2411: _lock_folder_by_id matches only the
+                # primary key, not (parent_id, slug) -- if a documents.manage
+                # holder reparents this folder between the peek above and
+                # this lock, the locked row is still returned as-is. Re-check
+                # the predicate so a folder that no longer sits under this
+                # events root falls through to the slow path's own locked
+                # re-fetch instead of being handed back.
+                if (
+                    event_folder is not None
+                    and event_folder.parent_id == events_root.id
+                    and event_folder.slug == f"event-{event_id_str}"
+                ):
                     return event_folder
 
         org = await self.db.scalar(
