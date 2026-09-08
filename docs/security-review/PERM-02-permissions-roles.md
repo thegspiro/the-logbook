@@ -1,6 +1,6 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1805 (pass 1), #2136 (pass 3), #PENDING (pass 4)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1805 (pass 1), #2136 (pass 3), #2391 (pass 4)
 
 Passes are recorded in this one file rather than a new `PERM<n>-02-*.md` per
 lap, matching what passes 2 and 3 already did here. Newest pass first.

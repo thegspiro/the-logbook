@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 02 (Permissions & roles, pass 4)** — PR
-[#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING), branch
+[#2391](https://github.com/thegspiro/the-logbook/pull/2391), branch
 `claude/security-review-permissions-roles-pass4`. Pass 4's third feature.
 **Four findings: three fixed, one flagged.** The one that matters is **PERM-5
 (MED, flagged)** — the three user↔position assignment routes carry two guards
@@ -11125,7 +11125,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 02 (Permissions & roles, pass 4) — PR #PENDING opened
+### 2026-09-08 — Feature 02 (Permissions & roles, pass 4) — PR #2391 opened
 
 The **Open PR** row read "None" and 02 was the first ⬜ row, so this is a
 feature iteration rather than a tend pass.
