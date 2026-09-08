@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member-drop notification could inject unescaped HTML, and could silently fail to send (2026-09-08)
+
+**Security**
+
+- **The property-return-drop notice's fallback email template didn't escape
+  the officer's stated reason (or the member's name) before putting it in the
+  HTML message.** When an organization hasn't customized its "member dropped"
+  email — the common case, since that only happens by visiting the Email
+  Templates admin screen — the notice sent to the departed member and every
+  CC'd admin was built by a path that skipped the escaping the customized-
+  template path already applies. A reason containing markup would reach
+  those inboxes unescaped. The same code also mishandled a reason containing
+  a literal backslash-digit sequence, which raised an internal error and
+  caused the notification to silently never send at all (the drop itself
+  still succeeded). Both fixed: the fallback path now escapes free-text
+  fields the same way the customized-template path does, and the substitution
+  can no longer be confused by a stray backslash.
+
 ### The public ballot endpoints' rate limit never actually ran (2026-09-08)
 
 **Security**
