@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 06 (Elections & ballots, pass 4)** — PR
-[PR_PLACEHOLDER](PR_URL_PLACEHOLDER), branch
+[#2400](https://github.com/thegspiro/the-logbook/pull/2400), branch
 `claude/security-review-elections-ballots`. One fix, HIGH severity:
 **ELEC-41** — the two rate-limit `Depends()` wrappers guarding all 4 public
 token-based ballot routes (`ballot/lookup`, `ballot/vote`, `ballot/vote/bulk`,
