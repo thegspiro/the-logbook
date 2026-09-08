@@ -677,6 +677,12 @@ const InventoryItemsPage: React.FC = () => {
   // fetch fails. Everything that renders a grouping reads this instead, so the
   // table holds the last consistent state rather than a mixture of two.
   const [loadedGroupBy, setLoadedGroupBy] = useState<GroupKey>('');
+  // The filter set that produced the rows currently on screen, stamped on a
+  // SUCCESSFUL load. Export sends this, so the file is the list a member is
+  // looking at rather than the controls they have most recently touched.
+  // Null until the first load lands, which is the one state where there is
+  // nothing to export.
+  const [loadedParams, setLoadedParams] = useState<ReturnType<typeof filterParams> | null>(null);
   // Collapsed group keys, per section. A group collapsed under Available
   // should not also vanish from Unavailable — they are different populations
   // that happen to share a heading.
@@ -780,6 +786,15 @@ const InventoryItemsPage: React.FC = () => {
         // a response arriving after another dimension was picked cannot claim
         // rows it did not fetch.
         setLoadedGroupBy(requestedGroupBy);
+        // Same reasoning, for the whole filter set rather than just the
+        // grouping: Export reads this, never live control state. Filter
+        // changes are debounced by FILTER_DEBOUNCE_MS, so `filterParams()`
+        // holds the new selection while `items` still holds the previous
+        // response — and if that debounced request FAILS, it stays that way,
+        // because the catch below leaves the old rows on screen. Either way an
+        // export taken from live state describes rows the file does not
+        // contain.
+        setLoadedParams(params);
         if (reset) setSkip(0);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load items'));
@@ -1105,7 +1120,14 @@ const InventoryItemsPage: React.FC = () => {
       //
       // `group_by` is dropped deliberately — it orders rows on screen, and a
       // spreadsheet regroups for itself.
-      const { group_by: _groupBy, ...exportParams } = filterParams();
+      //
+      // `loadedParams`, not `filterParams()`: filter changes are debounced, so
+      // live control state can already hold a selection the rows on screen
+      // were never fetched with. The button is disabled until the first load
+      // stamps this, so the guard below is for TypeScript, not for a state a
+      // member can reach.
+      if (!loadedParams) return;
+      const { group_by: _groupBy, ...exportParams } = loadedParams;
       const blob = await inventoryService.exportItemsCsv(exportParams);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1214,7 +1236,10 @@ const InventoryItemsPage: React.FC = () => {
           </button>
           <button
             onClick={() => void exportCsv()}
-            className="btn-secondary btn-md hidden items-center gap-2 sm:inline-flex"
+            // Until the first load lands there is no list to export, and a
+            // button that silently does nothing is worse than one that says so.
+            disabled={!loadedParams}
+            className="btn-secondary btn-md hidden items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
           >
             <Download className="h-4 w-4" /> Export
           </button>

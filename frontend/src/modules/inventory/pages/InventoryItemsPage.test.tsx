@@ -1160,4 +1160,71 @@ describe('InventoryItemsPage — CSV export', () => {
     expect(String(mockToastError.mock.calls[0]?.[0])).toContain('Invalid status: bogus');
     expect(mockToastSuccess).not.toHaveBeenCalled();
   });
+
+  // Filter changes are debounced by FILTER_DEBOUNCE_MS (350ms), so between a
+  // click on a filter and the response landing, the controls and the rows
+  // disagree. Export has to follow the rows: a file named for today's
+  // inventory that describes a filter set the reader never saw is the same
+  // defect this whole suite exists for, one layer in.
+  describe('while a filter change is still in flight', () => {
+    it('exports the filters the visible rows were fetched with, not the pending ones', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('No items found');
+      await waitFor(() => expect(mockGetItems).toHaveBeenCalled());
+      const loadsBefore = mockGetItems.mock.calls.length;
+
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+      // Deliberately no wait: this is the window the finding is about. The
+      // select already reads "assigned"; the rows on screen do not.
+      await user.click(screen.getByRole('button', { name: /Export/ }));
+
+      await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
+      expect(mockGetItems.mock.calls.length).toBe(loadsBefore);
+      expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }));
+    });
+
+    it('picks up the new filters once their rows have actually arrived', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('No items found');
+
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+      await waitFor(() =>
+        expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' }))
+      );
+
+      await user.click(screen.getByRole('button', { name: /Export/ }));
+      await waitFor(() =>
+        expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' }))
+      );
+    });
+
+    it('holds the last successful filters when the refresh fails', async () => {
+      // The half that a "disable Export while a request is pending" fix would
+      // miss: a rejected load leaves the old rows on screen with nothing
+      // pending, so Export re-enables and would export filters those rows were
+      // never fetched with -- indefinitely.
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('No items found');
+
+      mockGetItems.mockRejectedValue(new Error('boom'));
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /Export/ }));
+      await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
+      expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }));
+    });
+
+    it('offers no Export until a list has actually loaded', async () => {
+      // A never-resolving load, so the page sits in the state before any
+      // response. Exporting here would send filters against no rows at all.
+      mockGetItems.mockImplementation(() => new Promise(() => {}));
+      renderWithRouter(<InventoryItemsPage />);
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Export/ })).toBeDisabled());
+    });
+  });
 });

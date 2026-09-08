@@ -1883,9 +1883,17 @@ async function unpinEverything(page) {
     }
   }
 
-  throw new Error(
-    `unpin cleanup gave up after ${UNPIN_LIMIT} pins — the list is not draining`,
-  );
+  // Conditional, because reaching the bound is not itself a failure. A member
+  // holding exactly UNPIN_LIMIT pins -- the maximum InventoryService.MAX_PINS
+  // allows, so a real account, not a hypothetical one -- clears all of them on
+  // the last lap and exits the loop having succeeded. Throwing unconditionally
+  // here failed both new shots' preparation for that member with nothing
+  // wrong.
+  if (await unpinButtons.count()) {
+    throw new Error(
+      `unpin cleanup gave up after ${UNPIN_LIMIT} pins — the list is not draining`,
+    );
+  }
 }
 
 export const SHOTS = [

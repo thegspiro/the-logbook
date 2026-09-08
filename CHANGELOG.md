@@ -22,6 +22,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Codex rounds 2 and 3 on the items CSV export (2026-09-08)
+
+Six further findings across two review rounds. Every one verified against the
+code before fixing; every one held. Four were defects introduced while fixing
+the round before — each fix closing one swallowed error and opening another,
+which is the pattern worth naming.
+
+**Fixed**
+
+- **The empty-state check stopped seeing empty states rendered as options.**
+  Excluding the Group-by control's "No grouping" was done by skipping _every_
+  `<option>` label, and a `<select>` is exactly where some screens put their
+  real empty state — `FacilityRoomPicker` renders "No rooms available" as its
+  only option. That made an empty screenshot of it publishable. Only labels
+  named in `NEUTRAL_OPTION_LABELS` are skipped now.
+- **A Playwright failure while reading option labels was swallowed**, degrading
+  to "no options" and so reporting a fully populated page as empty while the
+  command exited 0. It now rejects and the shot is recorded as failed.
+- **The unpin cleanup threw on a legitimately full pin list.** The bounded loop
+  fell through to an unconditional error, so a member holding exactly the
+  supported maximum of 25 pins cleared all of them and failed anyway. The throw
+  is now conditional on pins actually remaining.
+- **The unpin loop could not end** (round 2). `togglePin` catches an API error
+  and re-renders the same button, so a loop asking only "is one still there?"
+  clicked a failing control every 600ms forever, hanging the whole capture
+  command. It now waits for the count to fall, with a per-pin timeout and an
+  iteration cap.
+- **A failed cleanup still reported success** (round 2). The result is demoted
+  to `failed`; an existing capture failure is preserved rather than overwritten.
+- **Export could send filters the visible rows were never fetched with.** Filter
+  changes are debounced by 350ms while `exportCsv` read live control state, so
+  changing a filter and pressing Export inside that window produced a file
+  describing a selection the reader could not see — and if the debounced request
+  failed, every later export kept doing it. The page now stamps the filter set
+  that produced the rows, on success only, and Export sends that. Export is
+  disabled until the first list loads.
+
+**Notes**
+
+- Codex's second example for the option-label finding, `SchedulingPage`'s
+  "No templates match …", does not actually reach the check: the curly quotes
+  in that string fall outside `EMPTY_STATE`'s character class, so it was never
+  matched either way. The `FacilityRoomPicker` half was real.
+
 ### Review follow-ups on the items CSV export (2026-09-08)
 
 Five findings from the Codex review of `77ff82fd`, all verified against the code
@@ -164,6 +208,7 @@ before fixing.
   still turns it red after the change.
 
 No production change — the component's behaviour was correct throughout.
+
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 
 **Fixed**

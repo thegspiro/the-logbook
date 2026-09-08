@@ -233,7 +233,21 @@ const EMPTY_STATE_MAX_LINE = 80;
  */
 
 /**
- * The text of every <option> on the page.
+ * Option labels that name a control's neutral default rather than an absence
+ * of data.
+ *
+ * Named one by one, and it has to stay that way. The first version of this
+ * excluded EVERY `<option>` on the page, which is wrong in the dangerous
+ * direction: a select is exactly where several screens put their real empty
+ * state — `FacilityRoomPicker` renders "No rooms available" as its only
+ * option, `SchedulingPage` renders "No templates match …" as a disabled one —
+ * so a blanket exclusion made an empty screenshot of either publishable. Only
+ * a label that means "no filter applied" belongs here.
+ */
+const NEUTRAL_OPTION_LABELS = new Set(["No grouping"]);
+
+/**
+ * The neutral option labels present on the page.
  *
  * A `<select>`'s option labels come back inside `innerText`, and a control's
  * label is not content: the items list's "Group by" control offers
@@ -246,13 +260,18 @@ const EMPTY_STATE_MAX_LINE = 80;
  *
  * `allTextContents` rather than `allInnerTexts`: the options of a closed select
  * are not rendered, and `innerText` on an unrendered element is unreliable.
+ *
+ * Deliberately NOT caught. A rejection here — a navigation mid-scan, an
+ * execution context torn down — used to degrade to an empty set, which reads
+ * as "no neutral labels" and so reports a fully populated page as empty while
+ * the command still exits 0. Letting it reject records the shot as failed,
+ * which is what a Playwright failure is.
  */
 async function optionLabels(page) {
-  const texts = await page
-    .locator("option")
-    .allTextContents()
-    .catch(() => []);
-  return new Set(texts.map((t) => t.trim()).filter(Boolean));
+  const texts = await page.locator("option").allTextContents();
+  return new Set(
+    texts.map((t) => t.trim()).filter((t) => NEUTRAL_OPTION_LABELS.has(t)),
+  );
 }
 
 async function detectEmptyState(page, selector) {
