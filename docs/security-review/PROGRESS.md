@@ -16,6 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 00 (Cross-cutting baseline, pass 4)'s PR #2387 merged
+(`96aa60f1`) — a 30-minute watchdog check found it fully green (17/17 checks,
+`mergeable_state: clean`) and idle, with Codex's review completed and no
+findings, and merged it directly rather than leaving it idle. Rotation row 00
+was already ✅ in the PR itself. Next: 01 Auth & session lifecycle.
+
+<details>
+<summary>Superseded — PR #2387 (pass 4), preserved for history</summary>
+
 **Feature 00 (Cross-cutting baseline, pass 4)** — PR
 [#2387](https://github.com/thegspiro/the-logbook/pull/2387), branch
 `claude/security-review-cross-cutting-pass4`. Opens pass 4. Three findings,
@@ -30,6 +39,8 @@ PR #2381's pass-4 action item (a)/(b)/(c) is discharged in full and marked
 done in `SEC-00-cross-cutting-baseline.md`, so pass 5 should not re-derive
 it. Full write-up: the **Pass 4** section of
 `docs/security-review/SEC-00-cross-cutting-baseline.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (pass 3 complete, rotation reset for pass 4), preserved for history</summary>
@@ -11029,6 +11040,14 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 00 (Cross-cutting baseline, pass 4)'s PR #2387 merged, watchdog recorded it
+
+PR #2387 went fully green (17/17 checks, `mergeable_state: clean`) with
+Codex's review completed and no findings posted. A 30-minute watchdog check
+found it idle in that state and merged it directly (`96aa60f1`) rather than
+leaving it to sit. This entry records that merge and clears the stale Open
+PR row. Next: 01 Auth & session lifecycle.
 
 ### 2026-09-08 — Feature 00 (Cross-cutting baseline, pass 4) — PR #2387 opened
 
