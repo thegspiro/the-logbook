@@ -24,7 +24,7 @@ documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
 out this pass).
 
-Six fixes this pass — four added across three further rounds of Codex
+Eight fixes this pass — six added across four further rounds of Codex
 review on this PR's own commits, finding gaps in the prior fixes:
 
 - **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
@@ -75,6 +75,25 @@ review on this PR's own commits, finding gaps in the prior fixes:
   all-or-nothing create. 3 new guard tests total
   (`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked`),
   each confirmed to fail pre-fix via `git stash`/reverted-code checks.
+- **`ensure_apparatus_folder`/`ensure_event_folder` unlocked (MED, Codex
+  review of round 4's own commit)** — round 4's reconciliation can create
+  the "apparatus"/"events" system folders under the organization lock
+  when they're among what's missing, but `DocumentsService.
+ensure_apparatus_folder`/`ensure_event_folder` (the on-demand creators
+  reached on an apparatus's or event's first document upload) never took
+  that lock — a genuinely pre-existing gap, not new to this pass, but one
+  the reconciliation change sits directly next to. With no uniqueness
+  constraint on `(organization_id, slug)`, a concurrent first
+  apparatus/event upload racing a concurrent minutes publish could each
+  observe the root absent and both create one — the same DOC-28/DOC-29
+  shape, one level over. Fixed by hardening both the same way as
+  `ensure_facility_folder` (FAC-42/43/45): peek-then-lock fast path,
+  organization-locked double-checked slow path, with matching
+  `_peek_*_root`/`_lock_*_root`/`_peek_*_folder`/`_lock_*_folder` helper
+  pairs. 4 new guard tests
+  (`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked`),
+  the two source-inspection ones confirmed to fail pre-fix via a
+  reverted-code check.
 - **DOC-28 fast-path predicate re-check (MED, Codex review of this PR's
   DOC-29 commit)** — `ensure_member_folder`'s fast path locks the peeked
   personal folder by `_lock_folder_by_id`, which matches only the primary
@@ -11666,6 +11685,61 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 5) — 1 fixed, hardened two more get-or-creates (Codex review of PR #2411's round-4 commit)
+
+Codex reviewed round 4's reconciliation fix (`1f95ef3`) and found that it
+now creates the "apparatus" and "events" system folders (whenever they're
+among what's missing) under the organization lock — but the _other_
+get-or-create for each of those same roots, `DocumentsService.
+ensure_apparatus_folder`/`ensure_event_folder` in `documents_service.py`
+(reached whenever an apparatus's or event's first document is uploaded),
+never took that lock.
+
+**This is a genuinely pre-existing gap, not one round 4 introduced.** The
+original code (before any of this pass's work) already inserted every
+`SYSTEM_FOLDERS` entry — including "apparatus" and "events" —
+unconditionally whenever no system folders existed at all, with no
+coordination with these two on-demand creators either. Round 4's
+reconciliation changed _when_ those two roots can get created here (also
+on subsequent calls, not only the very first ever), not _whether_ the
+race against the unlocked on-demand creators exists. Owned and fixed
+anyway, per the same non-negotiable-errors reasoning as round 4's own fix:
+it sits directly in the code this pass is actively touching, and Codex's
+review of this pass's own diff surfaced it.
+
+**Fix:** hardened `ensure_apparatus_folder` and `ensure_event_folder` the
+same way `ensure_facility_folder` already was (FAC-42/43/45, from
+independent facilities-module work): a peek-then-lock fast path
+(`_peek_apparatus_root`/`_peek_events_root`,
+`_peek_apparatus_folder`/`_peek_event_folder`, then `_lock_folder_by_id`
+once a specific row's id is confirmed) that never touches the
+organization row when nothing needs creating; a slow path that locks the
+organization row and re-checks both folders as locking reads
+(`_lock_apparatus_root`/`_lock_events_root`,
+`_lock_apparatus_folder`/`_lock_event_folder`) before creating. Mirrors
+the established pattern precisely, including the FAC-45 gap-lock-avoidance
+shape (peek by `(parent_id, slug)` on the fast path, lock only by a
+known-id point lookup there; the `(parent_id, slug)` locking read is
+reserved for the slow path, where a gap lock is safe to take).
+
+New guard tests in
+`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked`
+(4 cases): source-inspection checks per method (org-row lock present on
+the slow path, fast path never locks, slow path calls the locking helpers
+by name — matching the DOC-28 test-rigor lesson from round 1, not a bare
+`with_for_update()` count), each confirmed to fail against the pre-fix
+code via a reverted-file check; plus a real-database idempotency test per
+method mirroring `test_repeated_calls_return_the_same_folder`, both marked
+`@pytest.mark.integration`.
+
+Completion gate re-run: flake8/black/isort clean; `validate_migrations.py
+--strict` pass (unchanged, no migration touched); scoped tests (documents/
+legal/facilities/facility-permissions/facility-document-race/property-
+return/minutes/apparatus-type-projection feature files) 389 passed; full
+backend suite 11871 passed / 21 skipped (pre-existing/environmental) / 0
+failed (up from 11867, the four new guard tests). No frontend file
+touched.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 4) — 1 fixed, a real pre-existing bug (Codex review of PR #2411's round-3 commit)
 

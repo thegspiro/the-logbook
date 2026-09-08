@@ -3196,6 +3196,127 @@ class TestEnsureMemberFolderIsLocked:
         assert len(count.scalars().all()) == 1
 
 
+class TestEnsureApparatusAndEventFolderAreLocked:
+    """Codex review, PR #2411 (round 5): ``DocumentService.
+    initialize_system_folders``'s reconciliation (round 4) can create the
+    "apparatus"/"events" system folders under the organization lock when
+    they're among what's missing -- but ``DocumentsService.
+    ensure_apparatus_folder``/``ensure_event_folder`` are the *other*
+    get-or-create for those same roots, reached whenever an apparatus's or
+    event's first document is uploaded, and neither took that lock. With no
+    uniqueness constraint behind ``(organization_id, slug)``, a concurrent
+    first apparatus/event upload racing a concurrent minutes publish could
+    each observe the root absent and both create one -- the exact DOC-28/
+    DOC-29 shape, one level over. Hardened both the same way as
+    ``ensure_facility_folder`` (FAC-42/43/45): peek-then-lock fast path,
+    organization-locked double-checked slow path.
+    """
+
+    def test_apparatus_locks_the_organization_row_on_the_slow_path(self):
+        source = inspect.getsource(DocumentsService.ensure_apparatus_folder)
+        fast_path, sep, slow_path = source.partition("org = await self.db.scalar(")
+        assert sep, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_apparatus_folder's fast path must not itself take a "
+            "lock, or every apparatus revisiting its already-created "
+            "folder would serialize on one shared organization row"
+        )
+        org_lock_statement, _, rest_of_slow_path = slow_path.partition(
+            'raise ValueError("Organization not found")'
+        )
+        assert "with_for_update()" in org_lock_statement, (
+            "ensure_apparatus_folder's slow path must lock the "
+            "organization row before re-checking, or a concurrent "
+            "initialize_system_folders reconciliation and a concurrent "
+            "first apparatus upload can both create the 'apparatus' root"
+        )
+        assert "self._lock_apparatus_root(" in rest_of_slow_path, (
+            "the slow path must re-fetch the apparatus root through the "
+            "locking helper, not a peek"
+        )
+        assert "self._lock_apparatus_folder(" in rest_of_slow_path, (
+            "the slow path must re-fetch the per-apparatus folder through "
+            "the locking helper, not a peek"
+        )
+
+    def test_event_locks_the_organization_row_on_the_slow_path(self):
+        source = inspect.getsource(DocumentsService.ensure_event_folder)
+        fast_path, sep, slow_path = source.partition("org = await self.db.scalar(")
+        assert sep, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_event_folder's fast path must not itself take a lock, "
+            "or every event revisiting its already-created folder would "
+            "serialize on one shared organization row"
+        )
+        org_lock_statement, _, rest_of_slow_path = slow_path.partition(
+            'raise ValueError("Organization not found")'
+        )
+        assert "with_for_update()" in org_lock_statement, (
+            "ensure_event_folder's slow path must lock the organization "
+            "row before re-checking, or a concurrent "
+            "initialize_system_folders reconciliation and a concurrent "
+            "first event upload can both create the 'events' root"
+        )
+        assert "self._lock_events_root(" in rest_of_slow_path, (
+            "the slow path must re-fetch the events root through the "
+            "locking helper, not a peek"
+        )
+        assert "self._lock_event_folder(" in rest_of_slow_path, (
+            "the slow path must re-fetch the per-event folder through the "
+            "locking helper, not a peek"
+        )
+
+    @pytest.mark.integration
+    async def test_apparatus_folder_is_idempotent(self, db_session):
+        """End-to-end against a real database, mirroring
+        ``test_repeated_calls_return_the_same_folder``.
+        """
+        org = Organization(name="Apparatus Lock VFD", slug="apparatus-lock-vfd")
+        db_session.add(org)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        first = await service.ensure_apparatus_folder(org.id, "appar-1", "Engine 1")
+        second = await service.ensure_apparatus_folder(org.id, "appar-1", "Engine 1")
+
+        assert first.id == second.id
+        count = await db_session.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == org.id,
+                DocumentFolder.slug == "apparatus-appar-1",
+            )
+        )
+        assert len(count.scalars().all()) == 1
+
+    @pytest.mark.integration
+    async def test_event_folder_is_idempotent(self, db_session):
+        """End-to-end against a real database, mirroring
+        ``test_repeated_calls_return_the_same_folder``.
+        """
+        org = Organization(name="Event Lock VFD", slug="event-lock-vfd")
+        db_session.add(org)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        first = await service.ensure_event_folder(org.id, "evt-1", "Drill Night")
+        second = await service.ensure_event_folder(org.id, "evt-1", "Drill Night")
+
+        assert first.id == second.id
+        count = await db_session.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == org.id,
+                DocumentFolder.slug == "event-evt-1",
+            )
+        )
+        assert len(count.scalars().all()) == 1
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 

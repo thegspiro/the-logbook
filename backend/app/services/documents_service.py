@@ -1409,6 +1409,84 @@ class DocumentsService:
     # Per-Apparatus Folder Management
     # ============================================
 
+    async def _peek_apparatus_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Non-locking read for the org's 'Apparatus Files' system folder.
+
+        Safe as a plain read for the same reason as ``_peek_facilities_root``
+        (a system folder can be neither moved nor deleted, so once visible it
+        stays visible at the same id forever) -- see that method's docstring.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == "apparatus")
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_apparatus_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's 'Apparatus Files' system folder.
+
+        Standalone so ``ensure_apparatus_folder``'s slow path can call it
+        without duplicating the query -- same rationale as
+        ``_lock_facilities_root``.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == "apparatus")
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _peek_apparatus_folder(
+        self, apparatus_root_id: str, apparatus_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Non-locking existence check for one apparatus's own folder.
+
+        Used only by ``ensure_apparatus_folder``'s fast path, paired with
+        ``_lock_folder_by_id`` -- same FAC-45 gap-lock-avoidance rationale as
+        ``_peek_facility_folder``: a stale "not found" here always falls
+        through to the slow path's own locking, double-checked re-read.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == apparatus_root_id)
+            .where(DocumentFolder.slug == f"apparatus-{apparatus_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_apparatus_folder(
+        self, apparatus_root_id: str, apparatus_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for one apparatus's own folder, under the root above.
+
+        Used by ``ensure_apparatus_folder``'s slow path only -- the fast
+        path's own existence check goes through ``_peek_apparatus_folder`` /
+        ``_lock_folder_by_id`` instead, for the same gap-lock reason
+        documented on ``_lock_facility_folder``.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == apparatus_root_id)
+            .where(DocumentFolder.slug == f"apparatus-{apparatus_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_apparatus_folder(
         self, organization_id: UUID, apparatus_id: str, apparatus_unit_number: str
     ) -> DocumentFolder:
@@ -1424,15 +1502,42 @@ class DocumentsService:
                 ├── Maintenance Records/
                 ├── Inspection & Compliance/
                 └── Manuals & References/
+
+        Get-or-create with no uniqueness constraint behind it (Pitfall #27
+        shape), hardened the same way as ``ensure_facility_folder``
+        (FAC-42/43/45): a peek-then-lock fast path that never touches the
+        organization row when nothing needs creating, falling through to an
+        organization-locked, double-checked slow path when it does. Also
+        needed to serialize against ``DocumentService.
+        initialize_system_folders`` (Codex review, PR #2411): that method's
+        reconciliation can create this same "apparatus" root under the
+        organization lock when it's one of the folders missing, and an
+        unlocked on-demand creator here could otherwise race it into a
+        duplicate root with no uniqueness constraint to catch it.
         """
-        # Find the 'apparatus' system folder
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == "apparatus")
-            .where(DocumentFolder.is_system.is_(True))
+        apparatus_id_str = str(apparatus_id)
+
+        apparatus_root = await self._peek_apparatus_root(organization_id)
+        if apparatus_root is not None:
+            peeked_folder = await self._peek_apparatus_folder(
+                apparatus_root.id, apparatus_id_str
+            )
+            if peeked_folder is not None:
+                vehicle_folder = await self._lock_folder_by_id(peeked_folder.id)
+                if vehicle_folder is not None:
+                    return vehicle_folder
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
         )
-        apparatus_root = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+
+        # Re-check under the org lock -- a concurrent transaction may have
+        # created either row between the fast-path check above and here.
+        apparatus_root = await self._lock_apparatus_root(organization_id)
 
         if not apparatus_root:
             # Auto-create if missing (e.g. org created before this feature)
@@ -1454,14 +1559,9 @@ class DocumentsService:
             await self.db.flush()
             await self.db.refresh(apparatus_root)
 
-        # Check if this apparatus already has a folder
-        apparatus_id_str = str(apparatus_id)
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.parent_id == apparatus_root.id)
-            .where(DocumentFolder.slug == f"apparatus-{apparatus_id_str}")
+        vehicle_folder = await self._lock_apparatus_folder(
+            apparatus_root.id, apparatus_id_str
         )
-        vehicle_folder = result.scalar_one_or_none()
 
         if not vehicle_folder:
             vehicle_folder = DocumentFolder(
@@ -1964,6 +2064,84 @@ class DocumentsService:
     # Per-Event Folder Management
     # ============================================
 
+    async def _peek_events_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Non-locking read for the org's 'Event Attachments' system folder.
+
+        Safe as a plain read for the same reason as ``_peek_facilities_root``
+        (a system folder can be neither moved nor deleted, so once visible it
+        stays visible at the same id forever) -- see that method's docstring.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == FOLDER_EVENTS)
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_events_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's 'Event Attachments' system folder.
+
+        Standalone so ``ensure_event_folder``'s slow path can call it
+        without duplicating the query -- same rationale as
+        ``_lock_facilities_root``.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == FOLDER_EVENTS)
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _peek_event_folder(
+        self, events_root_id: str, event_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Non-locking existence check for one event's own folder.
+
+        Used only by ``ensure_event_folder``'s fast path, paired with
+        ``_lock_folder_by_id`` -- same FAC-45 gap-lock-avoidance rationale as
+        ``_peek_facility_folder``: a stale "not found" here always falls
+        through to the slow path's own locking, double-checked re-read.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == events_root_id)
+            .where(DocumentFolder.slug == f"event-{event_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_event_folder(
+        self, events_root_id: str, event_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for one event's own folder, under the root above.
+
+        Used by ``ensure_event_folder``'s slow path only -- the fast path's
+        own existence check goes through ``_peek_event_folder`` /
+        ``_lock_folder_by_id`` instead, for the same gap-lock reason
+        documented on ``_lock_facility_folder``.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == events_root_id)
+            .where(DocumentFolder.slug == f"event-{event_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_event_folder(
         self, organization_id: UUID, event_id: str, event_title: str
     ) -> DocumentFolder:
@@ -1975,15 +2153,40 @@ class DocumentsService:
         Folder hierarchy:
           Event Attachments/                  (system, visibility=organization)
             └── Monthly Meeting - Feb 2026/   (per-event folder)
+
+        Get-or-create with no uniqueness constraint behind it (Pitfall #27
+        shape), hardened the same way as ``ensure_facility_folder``
+        (FAC-42/43/45): a peek-then-lock fast path that never touches the
+        organization row when nothing needs creating, falling through to an
+        organization-locked, double-checked slow path when it does. Also
+        needed to serialize against ``DocumentService.
+        initialize_system_folders`` (Codex review, PR #2411): that method's
+        reconciliation can create this same "events" root under the
+        organization lock when it's one of the folders missing, and an
+        unlocked on-demand creator here could otherwise race it into a
+        duplicate root with no uniqueness constraint to catch it.
         """
-        # Find the 'events' system folder
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == FOLDER_EVENTS)
-            .where(DocumentFolder.is_system.is_(True))
+        event_id_str = str(event_id)
+
+        events_root = await self._peek_events_root(organization_id)
+        if events_root is not None:
+            peeked_folder = await self._peek_event_folder(events_root.id, event_id_str)
+            if peeked_folder is not None:
+                event_folder = await self._lock_folder_by_id(peeked_folder.id)
+                if event_folder is not None:
+                    return event_folder
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
         )
-        events_root = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+
+        # Re-check under the org lock -- a concurrent transaction may have
+        # created either row between the fast-path check above and here.
+        events_root = await self._lock_events_root(organization_id)
 
         if not events_root:
             from app.models.document import SYSTEM_FOLDERS
@@ -2004,14 +2207,7 @@ class DocumentsService:
             await self.db.flush()
             await self.db.refresh(events_root)
 
-        # Check if this event already has a folder
-        event_id_str = str(event_id)
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.parent_id == events_root.id)
-            .where(DocumentFolder.slug == f"event-{event_id_str}")
-        )
-        event_folder = result.scalar_one_or_none()
+        event_folder = await self._lock_event_folder(events_root.id, event_id_str)
 
         if not event_folder:
             event_folder = DocumentFolder(

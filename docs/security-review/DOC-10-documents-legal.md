@@ -194,6 +194,79 @@ method runs outside a transaction that could deadlock against another
 `with_for_update()` holder, and none does (its only caller,
 `publish_minutes`, takes no other lock first).
 
+### `initialize_system_folders` treated "any system folder exists" as "every system folder exists" (Codex review of round 3's own fix) — ✅ FIXED
+
+**What:** making DOC-29's existence check a locking read (round 3) exposed —
+rather than caused — a second, independent defect in the same method:
+`if (existing.scalar() or 0) > 0: return await self.list_folders(...)`
+short-circuits on any nonzero count of existing system folders, not on
+every `SYSTEM_FOLDERS` definition being present. `ensure_member_folder`'s
+own get-or-create only ever inserts the single `members` definition, never
+the full set.
+
+**Failure scenario:** a member visits their Documents folder (creating just
+`members`) before anyone has ever published meeting minutes for that org.
+The next `publish_minutes` call reads a nonzero system-folder count,
+returns early without creating `meeting-minutes`, and the subsequent
+`next((f for f in folders if f.slug == "meeting-minutes"), None)` lookup
+comes back `None` — an unconditional `RuntimeError`. This predates the pass
+entirely and needs no concurrency to trigger; round 3's locking fix only
+made the concurrent case of it newly deterministic.
+
+**Fix:** the existence check now reads existing system-folder slugs (still
+a locking read), computes exactly which `SYSTEM_FOLDERS` definitions are
+missing, and creates only those — reconciling instead of an all-or-nothing
+create. Both the reconcile and short-circuit branches now return
+`list_folders(organization_id)`.
+
+**Verified:** new guard test
+`test_reconciles_missing_system_folders_around_an_existing_one` (real
+database) creates an org with only `members` present, calls
+`initialize_system_folders`, and asserts `meeting-minutes` is now present
+and `members` was not duplicated — confirmed to fail pre-fix with the exact
+described symptom (`slugs == ["members"]`, `meeting-minutes` absent) and
+pass after.
+
+### `ensure_apparatus_folder`/`ensure_event_folder` unlocked (Codex review of round 4's own fix) — ✅ FIXED
+
+**What:** round 4's reconciliation can create the "apparatus"/"events"
+system folders under the organization lock when they're among what's
+missing, but the _other_ get-or-create for each of those same roots —
+`ensure_apparatus_folder`/`ensure_event_folder` in `documents_service.py`,
+reached whenever an apparatus's or event's first document is uploaded —
+never took that lock at all.
+
+**Failure scenario:** a genuinely pre-existing gap (the original code
+already inserted every `SYSTEM_FOLDERS` entry, including "apparatus" and
+"events", unconditionally with no coordination against these two on-demand
+creators). With no uniqueness constraint on `(organization_id, slug)`, a
+concurrent first apparatus/event document upload racing a concurrent
+minutes publish could each observe the relevant root absent and both
+create one — the same DOC-28/DOC-29 shape, one level over.
+
+**Fix:** hardened both the same way as `ensure_facility_folder`
+(FAC-42/43/45, independent facilities-module work): a peek-then-lock fast
+path (`_peek_apparatus_root`/`_peek_events_root`,
+`_peek_apparatus_folder`/`_peek_event_folder`, then `_lock_folder_by_id`
+once a specific row's id is confirmed) that never touches the organization
+row when nothing needs creating, falling through to a slow path that locks
+the organization row and re-checks both folders as locking reads
+(`_lock_apparatus_root`/`_lock_events_root`,
+`_lock_apparatus_folder`/`_lock_event_folder`) before creating. Mirrors the
+established pattern precisely, including the FAC-45 gap-lock-avoidance
+shape — peek by `(parent_id, slug)` on the fast path, lock only by a
+known-id point lookup there; the `(parent_id, slug)` locking read is
+reserved for the slow path, where a gap lock is safe to take.
+
+**Verified:** 4 new guard tests in
+`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked`
+— source-inspection checks per method (org-row lock present on the slow
+path, fast path never locks, slow path calls the locking helpers by name,
+per the DOC-28 test-rigor lesson rather than a bare `with_for_update()`
+count), the two source-inspection ones confirmed to fail against the
+pre-fix code via a reverted-file check; plus a real-database idempotency
+test per method, both marked `@pytest.mark.integration`.
+
 ### Re-verified still open, not re-flagged
 
 - **DOC-8** (`legal_service.py::list_revisions` unbounded — no
@@ -264,15 +337,15 @@ method runs outside a transaction that could deadlock against another
 
 ## Completion gate
 
-| Check                                                                                                                                                                                                                                      | Result                                                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                              | pass, 0 violations                                                                                                                                                 |
-| `black --check app/ tests/ alembic/`                                                                                                                                                                                                       | pass                                                                                                                                                               |
-| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                  | pass                                                                                                                                                               |
-| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                          | pass, 438 revisions, single head, unchanged this pass (no migration touched)                                                                                       |
-| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py` | 262 passed                                                                                                                                                         |
-| `pytest tests/` (full backend suite)                                                                                                                                                                                                       | 11859 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed                         |
-| `tsc --noEmit` / `eslint .` (frontend)                                                                                                                                                                                                     | not run — no frontend file changed this pass (verified by `git status`; the one frontend change since pass 3, `f41ed91c6`, was read for review only, not modified) |
+| Check                                                                                                                                                                                                                                                                                                                                                 | Result                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                         | pass, 0 violations                                                                                                                                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                  | pass                                                                                                                                                               |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                             | pass                                                                                                                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                                                                                     | pass, 438 revisions, single head, unchanged this pass (no migration touched)                                                                                       |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py` (plus `test_document_service.py`, `test_minutes*.py`, `test_apparatus_type_projection.py` from rounds 3-5) | 389 passed                                                                                                                                                         |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                                                                                  | 11871 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed                         |
+| `tsc --noEmit` / `eslint .` (frontend)                                                                                                                                                                                                                                                                                                                | not run — no frontend file changed this pass (verified by `git status`; the one frontend change since pass 3, `f41ed91c6`, was read for review only, not modified) |
 
 Guard tests added this pass: `tests/test_documents_access.py::
 TestEnsureMemberFolderIsLocked` (4 cases) — see DOC-28. Confirmed to fail
@@ -280,6 +353,11 @@ against pre-fix code via `git stash` of `documents_service.py` (3 of 4 —
 the source-inspection pair and the mocked concurrent-race test; the fourth,
 an end-to-end idempotency check against a real database, passes both before
 and after since it does not exercise the race itself).
+`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked` (3
+cases, rounds 2-4) and `tests/test_documents_access.py::
+TestEnsureApparatusAndEventFolderAreLocked` (4 cases, round 5) — see
+DOC-29 and the two additional findings above. Each source-inspection case
+independently confirmed to fail against its pre-fix code.
 
 ## Next
 
