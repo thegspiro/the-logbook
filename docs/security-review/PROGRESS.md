@@ -18,7 +18,7 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 08 (Membership pipeline, pass 5)** — PR
 [#2405](https://github.com/thegspiro/the-logbook/pull/2405), branch
-`claude/security-review-membership-pipeline-pass5`. One fix this pass:
+`claude/security-review-membership-pipeline-pass5`. Two fixes this pass:
 **MP-27 (HIGH)** — `update_prospect`, `set_prospect_status`, and
 `bulk_set_prospect_status` each read the prospect's row unlocked before
 checking the guard that prevents a status change from clobbering (or a
@@ -29,9 +29,18 @@ gap, letting the status change silently overwrite the just-committed
 `User` account for the same prospect. Fixed by locking the row on all three
 paths, mirroring the pattern already used by `complete_step`/
 `regress_prospect`/`transfer_to_membership`/`update_election_package`/
-`assign_package_to_election`. 3 pre-existing FLAGGED items (MP-10, MP-19's
-`/widget-summary` half, MP-22) re-verified unchanged. Subscribed to PR
-activity. Next feature once this merges: 09 Medical screening (PHI).
+`assign_package_to_election`. **MP-28 (P2/MED, Codex review of this PR)** —
+`_bulk_apply`'s `except ValueError` branch (the rejected-item path) left the
+`FOR UPDATE` lock MP-27's own fix had just acquired held for the rest of the
+batch instead of ending the transaction, blocking (and, across two
+overlapping batches, potentially deadlocking) any other write to that
+prospect until the batch finished. Fixed by committing (not rolling back —
+a raw `rollback()` breaks the test session's async/greenlet bridge under
+`join_transaction_mode="create_savepoint"`) in that branch, safe because
+every current `apply` callback raises before mutating anything. 3
+pre-existing FLAGGED items (MP-10, MP-19's `/widget-summary` half, MP-22)
+re-verified unchanged. Subscribed to PR activity. Next feature once this
+merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11443,6 +11452,59 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405)
+
+Codex reviewed PR #2405 and flagged two issues on the MP-27 fix itself.
+
+**MP-28 (P2/MED, fixed)** — `_bulk_apply`'s `except ValueError` branch (the
+path taken when an item is rejected — e.g. already at the target status)
+caught the exception and moved to the next id without ending the
+transaction MP-27's new locked `get_prospect` re-fetch had opened inside
+that closure. The `FOR UPDATE` lock stayed held for the rest of the batch,
+blocking any other write to that prospect's row until a later item's own
+`commit()` or the request's end released it, and two overlapping batches
+processed in opposite orders could deadlock on each other's held locks.
+Fixed by ending the transaction in that branch via `await
+self.db.commit()`. `rollback()` was tried first and looks like the more
+obviously correct choice for a rejected item, but is not safe here: this
+session can be (and in the `db_session` test fixture, is) bound to an
+externally-managed connection using
+`join_transaction_mode="create_savepoint"`, and a raw `rollback()` on that
+combination breaks the session's async/greenlet bridge
+(`MissingGreenlet: greenlet_spawn has not been called`) — reproduced
+directly against two pre-existing tests
+(`test_prospect_bulk_actions.py::TestBulkAdvance::test_one_failure_does_not_abort_the_rest`
+and
+`test_rejected_prospect_dropped.py::TestSingleStatusChange::test_transferred_cannot_be_set_by_a_status_change`),
+both of which exercise this exact branch and both of which failed with that
+error under `rollback()` and pass again under `commit()`. `commit()` is
+data-safe here because every current `apply` callback
+(`advance_prospect`, `_apply_status_change`) raises its `ValueError` from a
+guard clause before making any change, so there is nothing pending to
+discard. New guard test,
+`test_bulk_apply_releases_the_lock_after_a_rejected_item`, independently
+confirmed to fail against the pre-fix code.
+
+The second Codex thread (P1) asked for a test exercising the lock against a
+genuinely concurrent second transaction rather than only source-inspection
+of the fixed code. No test anywhere in this repository — including
+`test_capacity_locking.py`, whose own docstring claims real two-session
+concurrency — actually drives two live, overlapping DB sessions against a
+lock; the existing pattern throughout is a single session asserting the
+locked query was issued (`with_for_update=True` on the mock/spy) or, at
+most, a source-level trace. Building genuine multi-connection concurrency
+test infrastructure is a repo-wide gap, not something this PR's scope
+covers — replied on the thread explaining the precedent rather than adding
+new test infrastructure.
+
+Updated `docs/security-review/MP-08-membership-pipeline.md` with the MP-28
+write-up and refreshed completion-gate numbers. Completion gate re-run:
+flake8/black/isort clean; 4 guard tests (up from 3) in
+`test_membership_pipeline_flow.py`, all independently confirmed to fail
+pre-fix; scoped pytest 611 passed / 1 skipped (up from 610); full backend
+suite 11855 passed / 21 skipped / 0 failed (up from 11854). No frontend file
+touched.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5) — 1 fixed (HIGH), 0 flagged (3 pre-existing flags re-verified, unchanged) — PR opened
 

@@ -2123,6 +2123,36 @@ class MembershipPipelineService:
             try:
                 await apply(prospect)
             except ValueError as exc:
+                # apply() may have already acquired a FOR UPDATE row lock
+                # (bulk_set_prospect_status's own locked re-fetch) before
+                # raising -- without ending the transaction here that lock
+                # would sit held for the rest of this loop, blocking every
+                # other write against the same row until a later item's own
+                # commit or request end released it, and two overlapping
+                # batches processed in opposite orders could deadlock on
+                # each other's held locks (Codex review, PR #2405).
+                #
+                # commit(), not rollback(): every current `apply` callback
+                # (advance_prospect, _apply_status_change) raises its
+                # ValueError from a guard clause before making any change,
+                # so there is nothing pending to discard, and commit() ends
+                # the transaction the same way a successful item already
+                # does two lines below in each closure. rollback() looks
+                # more "correct" for a rejected item in the abstract, but is
+                # not safe to call here: this session can be bound to an
+                # externally-managed connection with
+                # join_transaction_mode="create_savepoint" (every test using
+                # the db_session fixture is exactly this), and a raw
+                # rollback() on that combination leaves the session's
+                # async/greenlet bridge unable to run the next query
+                # (`MissingGreenlet: greenlet_spawn has not been called`) --
+                # confirmed against tests/test_prospect_bulk_actions.py's
+                # existing bulk_advance_prospects coverage, which exercises
+                # this exact except branch already. If a future `apply`
+                # callback can raise ValueError *after* writing something,
+                # it must roll that back itself before raising, since this
+                # branch cannot safely do it for the whole session.
+                await self.db.commit()
                 results.append(
                     {
                         "prospect_id": prospect_id,

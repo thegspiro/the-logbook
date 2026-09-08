@@ -26,6 +26,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   locking the applicant's record before evaluating the status guard on all
   three paths, matching how the transfer flow itself was already protected.
 
+### A rejected item in a bulk applicant status change could hold its row lock for the rest of the batch (2026-09-08)
+
+**Security**
+
+- **The lock added by the fix above had its own leak on the rejected-item
+  path.** When a bulk status-change selection included a prospect already at
+  the target status (or already converted to a member), that item's newly
+  locked read correctly rejected the change, but the code caught the
+  rejection and moved on to the next item without ending that item's
+  transaction — leaving its row lock held until a later item's own commit or
+  the whole batch finished. A batch that included such an item could block
+  every other request touching that same applicant (a transfer, another
+  status change, another bulk sweep that overlapped it) for as long as the
+  batch took to finish, and two overlapping batches processed in opposite
+  orders could deadlock on each other's held locks. Fixed by ending the
+  rejected item's transaction before continuing the batch.
+
 ### A member-drop notification could inject unescaped HTML, and could silently fail to send (2026-09-08)
 
 **Security**

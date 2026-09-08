@@ -187,7 +187,88 @@ were independently confirmed to fail against the pre-fix code (`git stash`
 on `membership_pipeline_service.py` only, tests left in place) before the
 fix was applied, then confirmed to pass after.
 
-### Completion gate (pass 5)
+### MP-28 — P2 — `_bulk_apply`'s rejected-item path left the MP-27 row lock held for the rest of the batch (Codex review, PR #2405) — ✅ FIXED
+
+**What:** the MP-27 fix above gave `bulk_set_prospect_status`'s `_set_status`
+closure its own locked re-fetch (`get_prospect(..., lock_for_update=True)`)
+immediately before `_apply_status_change`'s guard. When that guard rejects
+the item — already `TRANSFERRED`, or already at the requested target status
+— `_apply_status_change` raises `ValueError`, and `_bulk_apply`'s `except
+ValueError` branch caught it and moved straight to the next id in the batch
+**without ending the transaction the locked read had opened.** The `FOR
+UPDATE` lock, and the open transaction under it, stayed held — not
+released until either a later item's own `commit()` (inside a different
+iteration's `apply()` call) or the whole request finished.
+
+**Failure scenario:** a coordinator selects a mix of prospects for a bulk
+status change, and the selection happens to include one that is already at
+the target status (an easy, ordinary mistake — re-submitting a batch, or a
+UI multi-select that didn't clear). That single item's rejected pass now
+holds `FOR UPDATE` on its row for the remainder of the batch's processing
+time. Any other request touching that same prospect — a transfer, a
+different status change, another bulk sweep that also happens to include
+it — blocks until this batch finishes. At larger batch sizes (a “select
+all” sweep of a stale cohort) the hold time grows with the batch, and two
+overlapping batches that include overlapping prospects in opposite orders
+can deadlock on each other's held locks.
+
+**Where:** `membership_pipeline_service.py`, `_bulk_apply`'s `except
+ValueError` branch (the same function MP-27 did not touch, since MP-27's
+own new lock acquisition happens inside the `apply` callback passed _into_
+`_bulk_apply`, not in `_bulk_apply` itself).
+
+**Fix:** end the transaction in the `except ValueError` branch before
+continuing the loop — via `commit()`, not `rollback()`. Every current
+`apply` callback (`advance_prospect`, `_apply_status_change`) raises its
+`ValueError` from a guard clause before making any change, so there is
+nothing pending to discard, and `commit()` releases the lock the same way a
+successful item's own `commit()` two lines below already does. `rollback()`
+looks like the more obviously "correct" choice for a rejected item and was
+tried first — it is **not** safe here: this session can be (and in every
+test using the `db_session` fixture, is) bound to an externally-managed
+connection with `join_transaction_mode="create_savepoint"`, and a raw
+`rollback()` on that combination left the session's async/greenlet bridge
+unable to run the next query (`MissingGreenlet: greenlet_spawn has not been
+called`) — not a hypothetical, but an actual regression caught by two
+**pre-existing** tests that already exercise this exact branch through a
+real database:
+`test_prospect_bulk_actions.py::TestBulkAdvance::test_one_failure_does_not_abort_the_rest`
+and
+`test_rejected_prospect_dropped.py::TestSingleStatusChange::test_transferred_cannot_be_set_by_a_status_change`
+both failed with that error the moment `rollback()` was added, and both
+pass again with `commit()` in its place. A code comment at the call site
+records this so a future edit doesn't rediscover it by breaking CI. If a
+future `apply` callback needs to write something before it can determine
+whether to raise, it must roll that partial write back itself before
+raising — this branch commits unconditionally and cannot tell the
+difference.
+
+**Guard test:** `test_bulk_apply_releases_the_lock_after_a_rejected_item` in
+`test_membership_pipeline_flow.py` — unit-level (mocked `db`) rather than a
+real two-connection lock test, asserting the one thing that changed:
+`db.commit()` is awaited once and `db.rollback()` is never awaited when
+`_bulk_apply`'s callback raises `ValueError`. Confirmed to fail (0 commit
+calls) against the code as it stood right after the MP-27 fix, before this
+one, and to pass after.
+
+Covered by three new source-inspection tests in
+`backend/tests/test_membership_pipeline_flow.py`
+(`TestTransferToMembership`), matching the file's own established pattern
+for `test_transfer_locks_the_prospect_before_checking_status`:
+`test_update_prospect_locks_before_checking_transferred`,
+`test_set_prospect_status_locks_before_applying_change`, and
+`test_bulk_set_prospect_status_locks_before_applying_change` — each asserts
+`lock_for_update=True` appears in the method's source and precedes the
+guard it protects (the `ProspectStatus.TRANSFERRED` comparison for
+`update_prospect`, the call into `_apply_status_change` for the other two,
+since that guard lives in a shared helper rather than inline). All three
+were independently confirmed to fail against the pre-fix code (`git stash`
+on `membership_pipeline_service.py` only, tests left in place) before the
+fix was applied, then confirmed to pass after. A fourth test, MP-28's
+`test_bulk_apply_releases_the_lock_after_a_rejected_item`, covers the
+`_bulk_apply` fix above.
+
+### Completion gate (pass 5, re-run after the MP-28 fix)
 
 | Check                                                               | Result                                                                                                                                                           |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,9 +276,9 @@ fix was applied, then confirmed to pass after.
 | `black --check app/ tests/ alembic/`                                | pass, 0 files would be reformatted                                                                                                                               |
 | `isort --check-only app/ tests/ alembic/`                           | pass, 0 violations                                                                                                                                               |
 | `python3 scripts/validate_migrations.py --strict`                   | pass — single head, no schema change this pass                                                                                                                   |
-| new guard tests (3 in `test_membership_pipeline_flow.py`)           | 3 passed; all 3 independently confirmed to fail against the pre-fix code (`git stash`)                                                                           |
-| scoped pytest (`-k "membership or prospect or pipeline"`, 30 files) | 610 passed / 1 skipped (pre-existing/environmental, `py_vapid`) / 0 failed                                                                                       |
-| full backend suite (`pytest tests/ -q`)                             | 11854 passed / 21 skipped (all pre-existing/environmental — `py_vapid`, no Docker daemon/registry, opt-in API contract suite) / 0 failed                         |
+| new guard tests (4 in `test_membership_pipeline_flow.py`)           | 4 passed; all 4 independently confirmed to fail against their respective pre-fix code                                                                            |
+| scoped pytest (`-k "membership or prospect or pipeline"`, 30 files) | 611 passed / 1 skipped (pre-existing/environmental, `py_vapid`) / 0 failed                                                                                       |
+| full backend suite (`pytest tests/ -q`)                             | 11855 passed / 21 skipped (all pre-existing/environmental — `py_vapid`, no Docker daemon/registry, opt-in API contract suite) / 0 failed                         |
 | `npm run typecheck` (frontend)                                      | pass, 0 errors — no frontend file touched this pass; whole-repo run via the aliased-compiler wrapper                                                             |
 | `npm run lint` (frontend)                                           | pass, 0 errors, 2 pre-existing warnings (unrelated file, `CallTypeChips.tsx`, `react-refresh/only-export-components`) — well under the max-warnings-10 threshold |
 
