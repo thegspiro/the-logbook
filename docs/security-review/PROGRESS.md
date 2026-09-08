@@ -70,10 +70,19 @@ Medical screening, pass 4 — MS-10, a form clear-guard fix) ahead of this
 one finishing — a mild "one PR at a time" violation caused by the pointer
 only updating on merge, not on open, not this session's to fix. Feature 09
 is therefore already done; next feature once _this_ PR merges is 10
-(Fundraising).
+(Documents & legal, confirmed by `main`'s own post-#2409-merge pointer).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, pass 4, PR #2409, merged out of turn while #2408 was still open), preserved for history</summary>
+
+**None.** PR #2409 (Feature 09, Medical screening, pass 4 — MS-10) merged
+clean, all 17 CI checks green, no unresolved review threads. Next: 10
+Documents & legal.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09 pass 4, PR #2409, merged), preserved for history</summary>
 
 **Feature 09 (Medical screening, pass 4)** — PR
 [#2409](https://github.com/thegspiro/the-logbook/pull/2409), branch
@@ -11514,7 +11523,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -11667,6 +11676,16 @@ onboarding, agency position seeding), not investigated further as out of
 scope for this fix. No frontend file touched.
 
 ### 2026-09-08 — Feature 09 (Medical screening, pass 4) — 1 fixed, 0 flagged — new PR #2409, merged out of turn while #2408 was still open
+
+### 2026-09-08 — Feature 09 (Medical screening, pass 4)'s PR #2409 merged
+
+PR #2409 was fully green (17/17 CI checks, including the "CI Success"
+aggregate) with no unresolved review threads (Codex's review completed
+with zero findings). Merged (squash, `expectedHeadSha` matching the PR's
+head). **Open PR** row cleared, rotation row 09 confirmed ✅. Next: 10
+Documents & legal.
+
+### 2026-09-08 — Feature 09 (Medical screening, pass 4) — 1 fixed, 0 flagged — new PR #2409
 
 Full 7-dimension checklist worked fresh against current code (`docs/security-
 review/CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and this feature's
