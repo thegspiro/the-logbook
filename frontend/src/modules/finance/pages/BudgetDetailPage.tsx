@@ -190,6 +190,7 @@ const BudgetDetailPage: React.FC = () => {
           Back to Budgets
         </Link>
         <EmptyState
+          headingLevel={1}
           icon={DollarSign}
           title="Budget not found"
           description="The budget you are looking for does not exist or has been removed."
@@ -228,6 +229,7 @@ const BudgetDetailPage: React.FC = () => {
       <div className="card p-6">
         <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Transaction History</h3>
         <EmptyState
+          headingLevel={4}
           icon={FileText}
           title="No transactions yet"
           description="Transactions linked to this budget will appear here as purchase requests and expense reports are processed."

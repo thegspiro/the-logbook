@@ -28,15 +28,24 @@ export interface EmptyStateProps {
    * It was 3, and that skipped a level on twenty-odd routes: an empty state is
    * usually the only thing under the page's `h1`, so `h1 -> h3` left a hole in
    * the outline, which is the list a screen reader user navigates by. `h2` is
-   * the safe default in both directions — axe only objects to *skipping* a
-   * level on the way down, so an `h2` under a section's own `h3` is fine.
+   * only right for the common case: an empty state that is the page's own body.
    *
-   * Pass `1` when the empty state *is* the page — a closed storefront, a module
-   * with nothing set up yet. Those screens return early, before the page header
-   * renders, so their only heading is this one and the page needs it to be the
-   * `h1`. Pass `3` where the empty state genuinely sits under an `h2`.
+   * It is wrong wherever the empty state is a *section's* body — "Nobody yet"
+   * inside "Who's going", "No transactions yet" inside "Transaction History" —
+   * because a default `h2` there makes the empty state a peer of the section it
+   * belongs to, and a screen-reader user navigating by heading reads it as
+   * another section of the page rather than as that section's content. There is
+   * no default that gets both cases right, so a nested call site states its
+   * level:
+   *
+   *   `1` — the empty state *is* the page: a closed storefront, a record that
+   *         does not exist. Those branches return early, before the page header
+   *         renders, so this is the only heading the page has.
+   *   `2` — (default) the page's body, under the page `h1`.
+   *   `3` — inside a section titled `h2`.
+   *   `4` — inside a section titled `h3`.
    */
-  headingLevel?: 1 | 2 | 3;
+  headingLevel?: 1 | 2 | 3 | 4;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({

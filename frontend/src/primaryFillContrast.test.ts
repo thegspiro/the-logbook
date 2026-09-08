@@ -1,11 +1,17 @@
 /**
  * Primary fill contrast
  *
- * White on red-600 (`#dc2626`) measures **4.83:1**. That is AA for large text
- * only, and a button label, a filter pill, a tab and a date badge are not
- * large text — so a red-600 fill carrying white content misses the AAA bar
- * the rest of the palette was raised to on 2026-08-23. red-800 (`#991b1b`)
- * measures 8.31:1 and is what `btn-primary` and `nav-item-active` use.
+ * White on red-600 measures **4.77:1**. That is AA for large text only, and a
+ * button label, a filter pill, a tab and a date badge are not large text — so a
+ * red-600 fill carrying white content misses the AAA bar the rest of the
+ * palette was raised to on 2026-08-23. red-800 measures 8.36:1 and is what
+ * `btn-primary` and `nav-item-active` use.
+ *
+ * Those two figures are measured from the installed Tailwind palette rather
+ * than quoted from a table, and they moved when the measurement did: the v3
+ * hexes this file used to carry put red-600 at 4.83:1 and red-800 at 8.31:1.
+ * Tailwind v4 authors its palette in OKLCH, so those hexes were never what the
+ * browser painted.
  *
  * The failure is invisible to whoever picks it: the control looks fine on a
  * bright desk monitor and goes unreadable on a phone in daylight, which is
@@ -23,6 +29,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { hexToRgb, relativeLuminance, contrastRatio } from './utils/colorContrast';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
@@ -30,137 +37,78 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 /** An opaque `bg-red-600`. The `/`-suffixed tints are deliberately excluded. */
 const OPAQUE_RED_600 = /\bbg-red-600\b(?!\/)/;
 
+/** sRGB channel from a linear-light one, per the sRGB transfer function. */
+const gammaEncode = (channel: number): number => {
+  const encoded = channel <= 0.0031308 ? 12.92 * channel : 1.055 * Math.pow(channel, 1 / 2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.round(encoded * 255)));
+};
+
 /**
- * Hex for the fills the stylesheet actually uses. Tailwind v4 authors its
- * palette in OKLCH; these are the sRGB values it resolves to, and the same
- * ones the red-600/red-800 assertion below has always used. A fill whose shade
- * is missing here fails the sweep rather than being skipped, so the map cannot
- * silently fall behind the stylesheet.
+ * OKLCH -> sRGB, because that is the space Tailwind v4 authors its palette in.
+ *
+ * The matrices are the ones in the Oklab specification: polar to rectangular,
+ * Oklab to cone responses, cubed, then to linear sRGB and gamma-encoded. Out
+ * of gamut components are clamped, which is what a browser does too.
  */
-const TAILWIND: Record<string, string> = {
-  'amber-400': '#fbbf24',
-  'amber-500': '#f59e0b',
-  'amber-600': '#d97706',
-  'amber-700': '#b45309',
-  'amber-800': '#92400e',
-  'amber-900': '#78350f',
-  'blue-400': '#60a5fa',
-  'blue-500': '#3b82f6',
-  'blue-600': '#2563eb',
-  'blue-700': '#1d4ed8',
-  'blue-800': '#1e40af',
-  'blue-900': '#1e3a8a',
-  'cyan-400': '#22d3ee',
-  'cyan-500': '#06b6d4',
-  'cyan-600': '#0891b2',
-  'cyan-700': '#0e7490',
-  'cyan-800': '#155e75',
-  'cyan-900': '#164e63',
-  'emerald-400': '#34d399',
-  'emerald-500': '#10b981',
-  'emerald-600': '#059669',
-  'emerald-700': '#047857',
-  'emerald-800': '#065f46',
-  'emerald-900': '#064e3b',
-  'green-400': '#4ade80',
-  'green-500': '#22c55e',
-  'green-600': '#16a34a',
-  'green-700': '#15803d',
-  'green-800': '#166534',
-  'green-900': '#14532d',
-  'indigo-400': '#818cf8',
-  'indigo-500': '#6366f1',
-  'indigo-600': '#4f46e5',
-  'indigo-700': '#4338ca',
-  'indigo-800': '#3730a3',
-  'indigo-900': '#312e81',
-  'lime-400': '#a3e635',
-  'lime-500': '#84cc16',
-  'lime-600': '#65a30d',
-  'lime-700': '#4d7c0f',
-  'lime-800': '#3f6212',
-  'lime-900': '#365314',
-  'orange-400': '#fb923c',
-  'orange-500': '#f97316',
-  'orange-600': '#ea580c',
-  'orange-700': '#c2410c',
-  'orange-800': '#9a3412',
-  'orange-900': '#7c2d12',
-  'pink-400': '#f472b6',
-  'pink-500': '#ec4899',
-  'pink-600': '#db2777',
-  'pink-700': '#be185d',
-  'pink-800': '#9d174d',
-  'pink-900': '#831843',
-  'purple-400': '#c084fc',
-  'purple-500': '#a855f7',
-  'purple-600': '#9333ea',
-  'purple-700': '#7e22ce',
-  'purple-800': '#6b21a8',
-  'purple-900': '#581c87',
-  'red-400': '#f87171',
-  'red-500': '#ef4444',
-  'red-600': '#dc2626',
-  'red-700': '#b91c1c',
-  'red-800': '#991b1b',
-  'red-900': '#7f1d1d',
-  'rose-400': '#fb7185',
-  'rose-500': '#f43f5e',
-  'rose-600': '#e11d48',
-  'rose-700': '#be123c',
-  'rose-800': '#9f1239',
-  'rose-900': '#881337',
-  'sky-400': '#38bdf8',
-  'sky-500': '#0ea5e9',
-  'sky-600': '#0284c7',
-  'sky-700': '#0369a1',
-  'sky-800': '#075985',
-  'sky-900': '#0c4a6e',
-  'teal-400': '#2dd4bf',
-  'teal-500': '#14b8a6',
-  'teal-600': '#0d9488',
-  'teal-700': '#0f766e',
-  'teal-800': '#115e59',
-  'teal-900': '#134e4a',
-  'violet-400': '#a78bfa',
-  'violet-500': '#8b5cf6',
-  'violet-600': '#7c3aed',
-  'violet-700': '#6d28d9',
-  'violet-800': '#5b21b6',
-  'violet-900': '#4c1d95',
-  'yellow-400': '#facc15',
-  'yellow-500': '#eab308',
-  'yellow-600': '#ca8a04',
-  'yellow-700': '#a16207',
-  'yellow-800': '#854d0e',
-  'yellow-900': '#713f12',
-  'slate-400': '#94a3b8',
-  'slate-500': '#64748b',
-  'slate-600': '#475569',
-  'slate-700': '#334155',
-  'slate-800': '#1e293b',
-  'gray-400': '#9ca3af',
-  'gray-500': '#6b7280',
-  'gray-600': '#4b5563',
-  'gray-700': '#374151',
-  'zinc-500': '#71717a',
-  'zinc-600': '#52525b',
-  'zinc-700': '#3f3f46',
-  'neutral-500': '#737373',
-  'neutral-600': '#525252',
-  'stone-500': '#78716c',
-  'stone-600': '#57534e',
-  'slate-900': '#0f172a',
-  'gray-800': '#1f2937',
-  'gray-900': '#111827',
-  'zinc-800': '#27272a',
-  'zinc-900': '#18181b',
-  'neutral-700': '#404040',
-  'neutral-800': '#262626',
-  'neutral-900': '#171717',
-  'stone-700': '#44403c',
-  'stone-800': '#292524',
-  'stone-900': '#1c1917',
+const oklchToRgb = (l: number, c: number, hDegrees: number): { r: number; g: number; b: number } => {
+  const h = (hDegrees * Math.PI) / 180;
+  const a = c * Math.cos(h);
+  const bb = c * Math.sin(h);
+
+  const lCone = (l + 0.3963377774 * a + 0.2158037573 * bb) ** 3;
+  const mCone = (l - 0.1055613458 * a - 0.0638541728 * bb) ** 3;
+  const sCone = (l - 0.0894841775 * a - 1.291485548 * bb) ** 3;
+
+  return {
+    r: gammaEncode(4.0767416621 * lCone - 3.3077115913 * mCone + 0.2309699292 * sCone),
+    g: gammaEncode(-1.2684380046 * lCone + 2.6097574011 * mCone - 0.3413193965 * sCone),
+    b: gammaEncode(-0.0041960863 * lCone - 0.7034186147 * mCone + 1.707614701 * sCone),
+  };
+};
+
+/**
+ * The palette this build actually renders, read out of the installed Tailwind
+ * and then out of the project's own `@theme`.
+ *
+ * It used to be a hand-copied table of v3 hexes, and that was wrong twice over.
+ * Tailwind v4 authors its palette in OKLCH — `amber-700` is
+ * `oklch(55.5% 0.163 48.998)`, which is not the `#b45309` the table claimed —
+ * so every ratio here was measured against a colour the browser does not
+ * paint. And a table that duplicates a dependency stays green through the
+ * upgrade that changes a shade underneath it, which is the one moment a
+ * contrast guard exists for.
+ *
+ * `index.css` is read second so a project override (`--color-primary-*`) wins
+ * over the stock value, in the order the cascade applies them.
+ */
+const readPalette = (): Record<string, { r: number; g: number; b: number }> => {
+  const require = createRequire(import.meta.url);
+  const tailwindTheme = path.join(path.dirname(require.resolve('tailwindcss/package.json')), 'theme.css');
+  const palette: Record<string, { r: number; g: number; b: number }> = {};
+
+  for (const file of [tailwindTheme, path.join(SRC, 'styles', 'index.css')]) {
+    const css = fs.readFileSync(file, 'utf8');
+    for (const [, name, value] of css.matchAll(/--color-([a-z]+-\d{2,3})\s*:\s*([^;]+);/g)) {
+      const raw = (value ?? '').trim();
+      const oklch = /^oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)/.exec(raw);
+      if (oklch) {
+        palette[name ?? ''] = oklchToRgb(Number(oklch[1]) / 100, Number(oklch[2]), Number(oklch[3]));
+        continue;
+      }
+      const rgb = hexToRgb(raw);
+      if (rgb) palette[name ?? ''] = rgb;
+    }
+  }
+  return palette;
+};
+
+const PALETTE = readPalette();
+
+/** The measured contrast of white on a palette entry, or null if unknown. */
+const whiteOn = (key: string): number | null => {
+  const rgb = PALETTE[key];
+  if (!rgb) return null;
+  return contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
 };
 
 const collectSourceFiles = (dir: string): string[] => {
@@ -205,15 +153,10 @@ describe('primary fill contrast', () => {
   // The premise, pinned so the rule survives a palette change rather than
   // reading as an arbitrary ban on one Tailwind shade.
   it('is the reason red-600 is not a fill: white on it misses AAA', () => {
-    const white = relativeLuminance(255, 255, 255);
-    const ratioOn = (hex: string) => {
-      const rgb = hexToRgb(hex);
-      if (!rgb) throw new Error(`unparseable hex: ${hex}`);
-      return contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), white);
-    };
-
-    expect(ratioOn('#dc2626')).toBeLessThan(7); // red-600 — 4.83:1
-    expect(ratioOn('#991b1b')).toBeGreaterThanOrEqual(7); // red-800 — 8.31:1
+    // Measured against the installed palette, so a Tailwind upgrade that moves
+    // either shade is reported here rather than quietly invalidating the rule.
+    expect(whiteOn('red-600')).toBeLessThan(7);
+    expect(whiteOn('red-800')).toBeGreaterThanOrEqual(7);
   });
 
   /**
@@ -224,9 +167,9 @@ describe('primary fill contrast', () => {
    * It was not true when written. `btn-primary` and `nav-item-active` were
    * raised to red-800 in the 2026-08-23 sweep and the other three fills were
    * not looked at, because the sweep searched for a red. `btn-success` sat at
-   * green-600 (3.30:1) and `btn-warning` at yellow-600 (2.94:1) — both below
+   * green-600 (3.22:1) and `btn-warning` at yellow-600 (2.94:1) — both below
    * the 4.5:1 AA floor for normal text, not merely short of AAA — and
-   * `btn-info` at blue-600 (5.17:1) was AA only. Between them they carry the
+   * `btn-info` at blue-600 (5.25:1) was AA only. Between them they carry the
    * confirm, publish, approve and archive actions in 101 files.
    *
    * Reading the fills out of index.css rather than listing them here is the
@@ -235,16 +178,12 @@ describe('primary fill contrast', () => {
    */
   it('gives every shared white-on-fill utility a AAA background', () => {
     const css = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
-    const white = relativeLuminance(255, 255, 255);
 
     const failures = [...css.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].flatMap(([, name, body]) => {
       if (!body?.includes('text-white')) return [];
       return [...body.matchAll(/\bbg-([a-z]+)-(\d{2,3})\b(?!\/)/g)].flatMap(([, color, shade]) => {
-        const hex = TAILWIND[`${color}-${shade}`];
-        if (!hex) return [`${name}: bg-${color}-${shade} — add its hex to TAILWIND so it can be measured`];
-        const rgb = hexToRgb(hex);
-        if (!rgb) throw new Error(`unparseable hex for ${color}-${shade}: ${hex}`);
-        const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), white);
+        const ratio = whiteOn(`${color}-${shade}`);
+        if (ratio === null) return [`${name}: bg-${color}-${shade} is not in the installed Tailwind palette`];
         return ratio >= 7
           ? []
           : [`${name}: white on bg-${color}-${shade} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
@@ -292,10 +231,9 @@ describe('primary fill contrast', () => {
    *   falling back to the unprefixed one.
    */
   it('pairs no text-white with a sub-AA fill at any call site', () => {
-    const white = relativeLuminance(255, 255, 255);
     // Any hue, not only the ones already in the table: a fill whose shade is
     // unknown must fail loudly ("add its hex") rather than be skipped. Building
-    // the alternation out of TAILWIND made the sweep self-limiting — the one
+    // the alternation out of the palette made the sweep self-limiting — the one
     // shape it could never report was the one nobody had measured yet.
     const fillPattern = String.raw`\b((?:[a-z-]+:)*)bg-([a-z]+)-(\d{2,3})\b(?!/)`;
     const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
@@ -337,14 +275,11 @@ describe('primary fill contrast', () => {
           .find((value) => value !== undefined);
         if (fg !== 'white') continue;
         const key = `${hue}-${shade}`;
-        const hex = TAILWIND[key];
-        if (!hex) {
-          offenders.push(`${path.relative(SRC, file)}:${line} — bg-${key}: add its hex to TAILWIND`);
+        const ratio = whiteOn(key);
+        if (ratio === null) {
+          offenders.push(`${path.relative(SRC, file)}:${line} — bg-${key} is not in the installed Tailwind palette`);
           continue;
         }
-        const rgb = hexToRgb(hex);
-        if (!rgb) throw new Error(`unparseable hex for ${key}: ${hex}`);
-        const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), white);
         if (ratio < 4.5) {
           offenders.push(
             `${path.relative(SRC, file)}:${line} — ${prefix}white on ${prefix}bg-${key} is ${ratio.toFixed(2)}:1`

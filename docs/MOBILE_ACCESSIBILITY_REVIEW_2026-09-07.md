@@ -77,13 +77,23 @@ The 2026-08-23 sweep searched for a _red_, so it moved `btn-primary` and
 
 | Utility       | Was        | Measured              | Now       | Measured |
 | ------------- | ---------- | --------------------- | --------- | -------- |
-| `btn-success` | green-600  | **3.30:1 — fails AA** | green-800 | 7.13:1   |
+| `btn-success` | green-600  | **3.22:1 — fails AA** | green-800 | 7.13:1   |
 | `btn-warning` | yellow-600 | **2.94:1 — fails AA** | amber-800 | 7.09:1   |
-| `btn-info`    | blue-600   | 5.17:1 — AA only      | blue-800  | 8.72:1   |
+| `btn-info`    | blue-600   | 5.25:1 — AA only      | blue-800  | 8.82:1   |
 
 Between them these carry the confirm, publish, approve and archive actions in
 101 files. `btn-warning` moved to amber rather than yellow because yellow-800 is
-6.85:1 — short of AAA by a hair.
+6.84:1 — short of AAA by a hair.
+
+Those figures were first computed against Tailwind v3 hexes and are quoted here
+as re-measured against the palette this build actually paints. Tailwind v4
+authors its colours in OKLCH, so the hex table the guard originally carried was
+never what the browser rendered — `amber-700` is `oklch(55.5% 0.163 48.998)`,
+not `#b45309`. The guard now reads `node_modules/tailwindcss/theme.css` and
+converts, which is also why a future Tailwind upgrade that moves a shade will
+be reported here rather than silently changing what these numbers mean. The
+drift was small (green-600 3.30 → 3.22, blue-600 5.17 → 5.25) and changed no
+conclusion.
 
 Beyond the shared utilities, **125 hand-rolled class strings in 60 files** paired
 `text-white` with a fill below 4.5:1 — outside the mast CSS entirely, so no
@@ -203,9 +213,19 @@ Four fixes cleared 120 of them:
   jumps to, and there were two of them on 12 of the measured routes.
 - **`EmptyState` defaults to `h2`.** It was `h3`, and an empty state is usually
   the only thing under the page `h1`, so `h1 → h3` left a hole in the outline on
-  twenty routes. `h2` never skips a level in either direction. A `headingLevel`
-  prop covers the two ends: `1` where the empty state _is_ the page (a closed
-  storefront), `3` where it genuinely sits under an `h2`.
+  twenty routes. A `headingLevel` prop covers the rest: `1` where the empty
+  state _is_ the page (a closed storefront, a record that does not exist), `3`
+  inside a section titled `h2`, `4` inside one titled `h3`.
+
+  The default alone was not enough, and the correction is worth recording. `h2`
+  is right for an empty state that is the page's body and wrong for one that is
+  a _section's_ body: "Nobody yet" inside the "Who's going" card then renders as
+  a peer of the card rather than as its content, which is exactly what a
+  screen-reader user navigating by heading hears. No default gets both cases
+  right, so seventeen nested call sites now state their level explicitly —
+  found by walking every `EmptyState` in the tree and reading the heading that
+  encloses it, not by taking the two examples review offered.
+
 - **A `main` for onboarding.** Step 1 had none, so its content sat outside every
   landmark — and the skip link in `index.html` points at `#main-content`, which
   did not exist. That is Bypass Blocks (SC 2.4.1) broken on the flow a chief
@@ -235,13 +255,21 @@ The ratchet only ever sees a route's landing state, and a dialog is where the
 density is: the tightest form layout, a focus trap, and the one surface that can
 render taller than the viewport with no reachable end.
 
-`mobile-dialogs.spec.ts` clicks the first create-shaped control in each page
-body and measures what opens — accessible name, axe A/AA, both ends reachable,
-no overflow at 320px. It found three defects on its first run: the **Add
-Station** and **Add Requirement** dialogs had no accessible name (a screen
-reader announces "dialog" and stops), and **Add Station** and **Add Facility**
-had eleven fields between them whose visible labels were never associated with
-their inputs. Seven dialogs are measured and all seven now pass.
+`mobile-dialogs.spec.ts` clicks every create-shaped control in each page body
+and measures what opens — accessible name, axe A/AA, both ends reachable, no
+overflow at 320px. It found three defects on its first run: the **Add Station**
+and **Add Requirement** dialogs had no accessible name (a screen reader
+announces "dialog" and stops), and **Add Station** and **Add Facility** had
+eleven fields between them whose visible labels were never associated with their
+inputs. Every dialog it reaches now passes.
+
+It originally took only the _first_ opener per route, and only ones phrased as
+an addition. Both were the same mistake the review is about: medical supplies
+offers "Add supply" and "Receive delivery", and a pass named "every dialog"
+measured one of them. The opener vocabulary now covers `receive`, `issue`,
+`assign`, `import` and `generate` alongside the additive verbs, repeats of the
+same dialog on one route are measured once, and a per-route ceiling keeps a long
+toolbar from turning one pass into a hundred dialogs.
 
 Two mistakes in building it are worth recording, because both produced a
 confident wrong answer:

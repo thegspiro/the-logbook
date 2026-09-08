@@ -79,6 +79,19 @@ const ADVISORY_BUDGET: Record<string, number> = {
  * Per-route budget of AAA-only contrast findings (7:1), summed across all three
  * themes. Every entry is a call site whose colour clears AA and not AAA.
  */
+/**
+ * Per-route budget of contrast nodes axe reported as *undecided*, summed across
+ * all three themes.
+ *
+ * These are not passes. axe files a node here when it cannot compute the ratio
+ * — text over a CSS gradient or an image, a partly transparent fill — and
+ * counting them as clean is how a gradient CTA slips through a pass that claims
+ * an AA floor. They are ratcheted rather than asserted at zero because
+ * resolving one takes a human looking at the rendered pixels, and the ratchet
+ * is what stops the set growing while that happens.
+ */
+const UNDECIDED_CONTRAST_BUDGET: Record<string, number> = {};
+
 const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/dashboard': 9,
   '/members/admin': 3,
@@ -115,6 +128,13 @@ type Theme = 'light' | 'dark' | 'high-contrast';
 const THEMES: Theme[] = ['light', 'dark', 'high-contrast'];
 
 test.describe('mobile accessibility', () => {
+  // No retries. This audit is deterministic — it drives mocked routes, so a
+  // failure is a finding, not a flake — and a clean run is around ten minutes.
+  // The `frontend-e2e` job is capped at 30 minutes for the whole suite, so the
+  // config's two CI retries would spend the entire budget re-deriving the same
+  // result and replace the assertion's report with a job timeout.
+  test.describe.configure({ retries: 0 });
+
   test('every feature meets WCAG AA in every theme and reflows to 320px', async ({ page }) => {
     // ~50 routes, each rendered in three themes with an axe run apiece. A clean
     // run is around ten minutes; the headroom is for CI, where this shares a
@@ -124,36 +144,44 @@ test.describe('mobile accessibility', () => {
     let granted = BASE_PERMISSIONS;
     await signIn(page, { permissions: granted });
 
-    const runAxe = async (options: unknown): Promise<Summary[]> => {
+    /**
+     * Both of axe's result arrays, from one run.
+     *
+     * `incomplete` is the one a pass like this quietly loses. When axe cannot
+     * compute a result it does not report a violation — it files the node under
+     * `incomplete` with a reason, and text over a CSS gradient (`bgGradient`)
+     * is the common case here, the onboarding CTA among them. Reading only
+     * `violations` therefore reports zero for the nodes nobody has measured,
+     * which is the same false assurance this whole change is about.
+     */
+    const runAxe = async (options: unknown): Promise<{ violations: Summary[]; incomplete: Summary[] }> => {
       await page.addScriptTag({ path: AXE_PATH });
       return page.evaluate(async (opts) => {
+        type Result = {
+          id: string;
+          impact: string;
+          help: string;
+          nodes: Array<{ target: string[]; html: string }>;
+        };
         const axe = (
           window as unknown as {
             axe: {
-              run: (
-                context: Document,
-                options: unknown
-              ) => Promise<{
-                violations: Array<{
-                  id: string;
-                  impact: string;
-                  help: string;
-                  nodes: Array<{ target: string[]; html: string }>;
-                }>;
-              }>;
+              run: (context: Document, options: unknown) => Promise<{ violations: Result[]; incomplete: Result[] }>;
             };
           }
         ).axe;
+        const summarise = (results: Result[]) =>
+          results.map((v) => ({
+            id: v.id,
+            impact: v.impact,
+            help: v.help,
+            count: v.nodes.length,
+            examples: v.nodes
+              .slice(0, 2)
+              .map((n) => `${n.target.join(' ')} :: ${n.html.replace(/\s+/g, ' ').slice(0, 120)}`),
+          }));
         const result = await axe.run(document, opts);
-        return result.violations.map((v) => ({
-          id: v.id,
-          impact: v.impact,
-          help: v.help,
-          count: v.nodes.length,
-          examples: v.nodes
-            .slice(0, 2)
-            .map((n) => `${n.target.join(' ')} :: ${n.html.replace(/\s+/g, ' ').slice(0, 120)}`),
-        }));
+        return { violations: summarise(result.violations), incomplete: summarise(result.incomplete) };
       }, options);
     };
 
@@ -164,6 +192,9 @@ test.describe('mobile accessibility', () => {
     const aaaBusted: string[] = [];
     const reflowed: string[] = [];
     const advisoryDetail: string[] = [];
+    const undecidedDetail: string[] = [];
+    const undecidedBusted: string[] = [];
+    const notRendered: string[] = [];
     const table: string[] = [];
 
     for (const route of ROUTES) {
@@ -177,6 +208,7 @@ test.describe('mobile accessibility', () => {
       let aaCount = 0;
       let aaaCount = 0;
       let advisoryCount = 0;
+      let undecidedCount = 0;
       const perTheme: string[] = [];
 
       for (const theme of THEMES) {
@@ -186,17 +218,39 @@ test.describe('mobile accessibility', () => {
         if (theme === 'light') await page.goto(route.path);
         else await page.reload();
         await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+        // The `networkidle` timeout above is swallowed on purpose — several
+        // routes hold a long-poll open and never reach idle — so it cannot be
+        // what says the page is ready. Without this, a slow chunk on a loaded
+        // runner meant auditing `PageLoadingFallback`'s spinner and reporting
+        // zero violations for a screen that had not rendered.
+        const ready = await page
+          .waitForFunction(
+            () => {
+              if (document.querySelector('.page-loading-fallback')) return false;
+              const main = document.getElementById('main-content');
+              if (!main) return false;
+              return !!main.querySelector('h1, h2, h3') || (main.innerText ?? '').trim().length > 40;
+            },
+            undefined,
+            { timeout: 15_000 }
+          )
+          .then(() => true)
+          .catch(() => false);
+        if (!ready) {
+          notRendered.push(`${route.path} [${theme}] never left its loading state`);
+          continue;
+        }
         await page.waitForTimeout(350);
 
         // Everything but contrast is theme-independent, so the full rule sets
         // run once, in light. The other two themes measure contrast only.
         const rules = theme === 'light' ? { type: 'tag', values: [...AA_TAGS, ...ADVISORY_TAGS] } : null;
         if (rules) {
-          const all = await runAxe({ runOnly: rules, resultTypes: ['violations'] });
+          const all = (await runAxe({ runOnly: rules, resultTypes: ['violations'] })).violations;
           const advisoryIds = new Set(
-            (await runAxe({ runOnly: { type: 'tag', values: ADVISORY_TAGS }, resultTypes: ['violations'] })).map(
-              (v) => v.id
-            )
+            (
+              await runAxe({ runOnly: { type: 'tag', values: ADVISORY_TAGS }, resultTypes: ['violations'] })
+            ).violations.map((v) => v.id)
           );
           const aa = all.filter((v) => !advisoryIds.has(v.id));
           const advisory = all.filter((v) => advisoryIds.has(v.id));
@@ -220,10 +274,18 @@ test.describe('mobile accessibility', () => {
           }
         }
 
-        const contrast = await runAxe({
+        // One run, both arrays: a second axe pass per route per theme would add
+        // a third to this test's wall clock for a result the first already has.
+        const { violations: contrast, incomplete: undecided } = await runAxe({
           runOnly: { type: 'rule', values: CONTRAST_RULES },
-          resultTypes: ['violations'],
+          resultTypes: ['violations', 'incomplete'],
         });
+        undecidedCount += undecided.reduce((sum, v) => sum + v.count, 0);
+        if (undecided.length) {
+          undecidedDetail.push(
+            `${route.path} [${theme}]: ${undecided.map((v) => `${v.id} x${v.count}`).join(', ')}\n      ${undecided[0]?.examples[0] ?? ''}`
+          );
+        }
         const themeAa = contrast.filter((v) => v.id === 'color-contrast');
         const themeAaa = contrast.find((v) => v.id === 'color-contrast-enhanced')?.count ?? 0;
         aaaCount += themeAaa;
@@ -295,6 +357,12 @@ test.describe('mobile accessibility', () => {
       if (aaaCount > aaaBudget) {
         aaaBusted.push(`${route.path}: ${aaaCount} nodes below 7:1 across themes, budget ${aaaBudget}`);
       }
+      const undecidedBudget = UNDECIDED_CONTRAST_BUDGET[route.path] ?? 0;
+      if (undecidedCount > undecidedBudget) {
+        undecidedBusted.push(
+          `${route.path}: ${undecidedCount} contrast nodes axe could not decide across themes, budget ${undecidedBudget}`
+        );
+      }
 
       table.push(
         [
@@ -302,6 +370,7 @@ test.describe('mobile accessibility', () => {
           `AA ${String(aaCount).padStart(2)}`,
           `adv ${String(advisoryCount).padStart(3)}`,
           `AAA ${String(aaaCount).padStart(3)}`,
+          `undec ${String(undecidedCount).padStart(2)}`,
           `reflow ${String(overflow.length).padStart(2)}`,
           perTheme.join(' '),
         ].join('  ')
@@ -317,9 +386,18 @@ test.describe('mobile accessibility', () => {
       console.log('\nBest-practice findings (ratcheted, not asserted):\n  ' + advisoryDetail.join('\n  '));
     }
 
+    if (undecidedDetail.length) {
+      console.log('\nContrast axe could not decide (ratcheted, needs a human eye):\n  ' + undecidedDetail.join('\n  '));
+    }
+
+    // Asserted first: a route that never rendered makes every count below it
+    // meaningless, and reporting those counts as clean is the failure mode this
+    // whole pass exists to stop.
+    expect(notRendered, 'routes audited before their body rendered').toEqual([]);
     expect(aaFailures, 'routes with WCAG A/AA violations in some theme').toEqual([]);
     expect(reflowed, `routes with content outside the viewport at ${NARROW.width}px (SC 1.4.10)`).toEqual([]);
     expect(advisoryBusted, 'routes that grew best-practice findings').toEqual([]);
     expect(aaaBusted, 'routes that grew AAA-only contrast findings').toEqual([]);
+    expect(undecidedBusted, 'routes that grew contrast nodes axe could not decide').toEqual([]);
   });
 });

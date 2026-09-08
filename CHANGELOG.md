@@ -78,6 +78,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   broken. Both are documented in the spec.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
+### The contrast guard measured a palette this build does not paint (2026-09-08)
+
+**Fixed**
+
+- **`primaryFillContrast.test.ts` measured every ratio against Tailwind v3
+  hexes.** Tailwind v4 authors its palette in OKLCH — `amber-700` is
+  `oklch(55.5% 0.163 48.998)`, not the `#b45309` the file's hand-copied table
+  claimed — so the guard was checking colours the browser never renders, and a
+  Tailwind upgrade that moved a shade would have left it green. It now reads
+  `node_modules/tailwindcss/theme.css` and the project's own `@theme`, converts
+  OKLCH to sRGB, and measures that. The corrected figures move a little:
+  red-600 is 4.77:1 (not 4.83), red-800 8.36:1 (not 8.31), green-600 3.22:1,
+  blue-600 5.25:1. Every conclusion the sweep reached still holds.
+- **The same guard could never report an unknown hue**, because it built its
+  match pattern out of the keys of that table — the one shape it could not see
+  was the one nobody had measured. It also only looked inside `className=`, so
+  a class string declared away from its element (Avatar's module-level palette,
+  the status-badge maps in `constants/enums.ts`) went unscanned. Both widened;
+  nothing in the tree measures below 4.5:1 under either.
+- **`EmptyState`'s default heading level promoted nested empty states.** With
+  the default at `h2`, "Nobody yet" inside the "Who's going" card rendered as a
+  peer of the card rather than as its content, which is what a screen-reader
+  user navigating by heading hears. Seventeen nested call sites now state their
+  level (`3` under an `h2` section, `4` under an `h3`), and the prop accepts
+  `4`.
+
+**Changed**
+
+- **`mobile-dialogs.spec.ts` opens every create-shaped control on a route**,
+  not just the first, and its opener vocabulary covers `receive`, `issue`,
+  `assign`, `import` and `generate` — medical supplies' "Receive delivery"
+  dialog was invisible to a pass named "every dialog".
+- **`mobile-accessibility.spec.ts` collects axe's `incomplete` results.** axe
+  files a node there when it cannot compute a ratio — text over a CSS gradient
+  is the common case — and reading only `violations` reported zero for nodes
+  nobody had measured. They are now counted, named in the run output and
+  ratcheted per route.
+- **Neither aggregate audit retries on CI.** Both are deterministic against
+  mocked routes, and the accessibility pass alone runs about ten minutes inside
+  a 30-minute job: two retries would have spent the whole budget re-deriving
+  the same result and replaced the assertion's report with a job timeout.
+
 ### Mobile coverage reported a fifth of the application it had never measured (2026-09-07)
 
 **Fixed**
@@ -90,8 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   realistic case, not a contrived one: a captive portal on station Wi-Fi answers
   HTTP 200 with an HTML body. Normalized at the read boundary.
 - **`btn-success` and `btn-warning` failed WCAG AA outright.** White on green-600
-  is 3.30:1 and on yellow-600 is 2.94:1, against a 4.5:1 floor; `btn-info` at
-  blue-600 was 5.17:1, AA but not the AAA the rest of the palette holds. They are
+  is 3.22:1 and on yellow-600 is 2.94:1, against a 4.5:1 floor; `btn-info` at
+  blue-600 was 5.25:1, AA but not the AAA the rest of the palette holds. They are
   now green-800 (7.13:1), amber-800 (7.09:1) and blue-800 (8.72:1). The
   2026-08-23 sweep that raised the palette searched for a _red_, so these three
   were never looked at — between them they carry confirm, publish, approve and
@@ -145,6 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 43 AAA-only contrast findings remain at individual call sites, held by the
   per-route budget. The shared utilities are all AAA.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
 ### A member-drop notification could inject unescaped HTML, and could silently fail to send (2026-09-08)
 
 **Security**
