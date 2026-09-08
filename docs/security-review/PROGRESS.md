@@ -16,9 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #2406 (Feature 08, Membership pipeline, pass 5 follow-up — MP-28)
-merged clean, all 17 CI checks green, no unresolved review threads. Next:
-09 Medical screening (PHI).
+**Feature 09 (Medical screening, pass 4)** — PR (this PR), branch
+`claude/security-review-medical-screening-pass4` (new name; the plain
+`claude/security-review-medical-screening` was used and merged by pass 2
+and pass 3, so CLAUDE.md Pitfall #24 rules it out this pass). One fix:
+**MS-10 (MED)** — `ScreeningRecordForm.tsx`/`ScreeningRequirementForm.tsx`
+built their edit-mode payload the same way as create, converting a blanked
+field to `undefined` instead of an explicit `null`; since the backend's
+update path dumps with `exclude_unset`, that omission meant a cleared
+`provider_name`/`result_summary`/`notes` (PHI), date, description,
+`applies_to_roles`, or `frequency_months` silently kept its old value behind
+a success toast. Fixed on the edit path only (create is unchanged); guarded
+by 6 new tests in `ScreeningFormClearGuards.test.tsx`, confirmed to fail (3
+of 6) against the pre-fix code via `git stash`. MS-6/MS-7/MS-9 re-verified
+still open/unchanged, not re-flagged. See
+`docs/security-review/MS-09-medical-screening.md` pass 4 for the full
+write-up. Completion gate: whole-repo `tsc --noEmit`/`eslint .` both clean;
+scoped medical-screening pytest 50 passed/1 pre-existing skip; scoped
+vitest 29 passed; full backend suite run as a sanity check even though no
+backend file was touched — 11855 passed, 21 skipped (pre-existing/
+environmental), 0 failed; backend linters/migration validator were not run
+since no backend file changed.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406, merged), preserved for history</summary>
@@ -11425,7 +11443,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
