@@ -167,9 +167,19 @@ async def check_rate_limit(
         )
         db_count = result.scalar() or 0
 
-        # Update cache with accurate count
-        rate_limit_cache[api_key_id][hour_timestamp] = db_count
-        current_count = db_count
+        # Raise the per-process tally to the cross-process truth, but never
+        # lower it. ``public_portal_access_log`` only ever carries requests
+        # that COMMITTED: an HTTPException rolls the request's session back,
+        # and a 401/429 is raised from ``authenticate_api_key`` before the
+        # handler that writes the row runs at all. So ``db_count`` structurally
+        # under-counts, and the current request's own row is not committed yet
+        # either. Assigning it let a key whose requests keep erroring (a
+        # disabled portal answers 503 to every call) reset its hourly tally to
+        # the persisted count each time it neared the ceiling, and so never
+        # reach it — the per-key hourly quota was bypassable by any caller
+        # whose traffic did not persist a log row.
+        current_count = max(current_count, db_count)
+        rate_limit_cache[api_key_id][hour_timestamp] = current_count
 
     # Check if limit exceeded
     is_allowed = current_count < rate_limit

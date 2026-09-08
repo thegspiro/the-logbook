@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The public portal's data whitelist works, and its hourly key limit holds (2026-09-08)
+
+**Fixed**
+
+- **The public website API no longer returns an error when only some fields
+  are shared.** A department chooses field by field what its public website may
+  read — name, phone, description, member count and so on — and nothing is
+  shared until somebody enables it. That starting state, and every state short
+  of "everything enabled", made the organization-information and
+  organization-statistics endpoints answer with an error instead of the empty
+  or partial document they were supposed to return. A department that had
+  shared only its name and phone number got nothing at all. Both now return
+  exactly the fields that are enabled, with the rest left empty.
+
+**Security**
+
+- **A public-website API key can no longer exceed its hourly request
+  allowance.** The allowance is counted in memory and periodically reconciled
+  against the recorded request log. Because that log only ever kept requests
+  that finished successfully, a caller whose requests were being refused —
+  every request is refused while the portal is switched off — had its running
+  count reset to zero each time it approached the ceiling, and so never reached
+  it. The reconciliation can still correct the count upwards, which is what it
+  is for across multiple server processes, but it can no longer push it down.
+
+- **The public portal's access log now records the requests that failed.** The
+  log is what an administrator reads to spot abuse, and what the portal's own
+  anomaly detection reads to flag it. Entries written for a refused or failed
+  request were discarded along with the rest of that request's database work,
+  so the log showed only traffic that had succeeded — the least interesting
+  half. Refusals and failures are now kept.
+
 ### Read-only permissions stopped counting as write permission, and a rank reorder got a ceiling (2026-09-08)
 
 **Security**

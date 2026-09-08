@@ -217,28 +217,53 @@ class PublicPortalUsageStats(BaseModel):
 
 
 class PublicOrganizationInfo(BaseModel):
-    """Public organization information (sanitized)"""
+    """Public organization information (sanitized)
 
-    name: str
-    organization_type: str
-    logo: Optional[str]
-    description: Optional[str]
-    phone: Optional[str]
-    email: Optional[str]
-    website: Optional[str]
-    mailing_address: Optional[Dict[str, str]]
-    physical_address: Optional[Dict[str, str]]
+    **Every field defaults to ``None``, and that is load-bearing.** The portal
+    handler builds the full dictionary and then runs it through
+    ``filter_data_by_whitelist``, which keeps only the fields an administrator
+    has explicitly enabled — so a field that is not whitelisted is *absent*
+    from the dict this model is constructed from. Under Pydantic v2
+    ``Optional[str]`` with no default is a **required** field that merely
+    accepts ``None``, so the pre-default version raised ``ValidationError`` for
+    every configuration that had not whitelisted all nine fields, including the
+    default-deny one every deployment starts in (the whitelist table is empty
+    until an administrator adds rows; nothing seeds it). The endpoint's own
+    ``except Exception`` then answered 500 — the whitelist's default-deny path
+    could not return the empty document it is supposed to return.
+    ``docs/PUBLIC_API_DOCUMENTATION.md`` already documents this shape: "Only
+    whitelisted fields are returned. Some fields may be null if not
+    configured."
+    """
+
+    name: Optional[str] = None
+    organization_type: Optional[str] = None
+    logo: Optional[str] = None
+    description: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    # The address components are individually nullable (``line2`` and
+    # ``country`` routinely are), so the value type has to admit ``None`` —
+    # ``Dict[str, str]`` rejected the very dictionary the handler builds.
+    mailing_address: Optional[Dict[str, Optional[str]]] = None
+    physical_address: Optional[Dict[str, Optional[str]]] = None
 
 
 class PublicOrganizationStats(BaseModel):
-    """Public organization statistics"""
+    """Public organization statistics
 
-    total_volunteer_hours: Optional[int]
-    total_calls_ytd: Optional[int]
-    total_members: Optional[int]
-    stations: Optional[int]
-    apparatus: Optional[int]
-    founded_year: Optional[int]
+    Defaults to ``None`` for the same reason as
+    :class:`PublicOrganizationInfo` — the whitelist removes un-enabled keys
+    before this model is constructed.
+    """
+
+    total_volunteer_hours: Optional[int] = None
+    total_calls_ytd: Optional[int] = None
+    total_members: Optional[int] = None
+    stations: Optional[int] = None
+    apparatus: Optional[int] = None
+    founded_year: Optional[int] = None
 
 
 class PublicEvent(UTCResponseBase):

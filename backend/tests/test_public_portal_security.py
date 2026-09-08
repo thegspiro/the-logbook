@@ -5,6 +5,7 @@ Covers:
   - Per-key stale timestamp pruning in check_rate_limit
   - Per-IP stale timestamp pruning in check_ip_rate_limit
   - cleanup_rate_limit_cache forced eviction when over max keys
+  - PUB-5: check_rate_limit's DB reconciliation raises the tally, never lowers it
 """
 
 import sys
@@ -73,11 +74,35 @@ from app.core.public_portal_security import (
     _last_used_is_stale,
     authenticate_api_key,
     check_ip_rate_limit,
+    check_rate_limit,
     cleanup_rate_limit_cache,
     generate_api_key,
     ip_rate_limit_cache,
     rate_limit_cache,
 )
+
+
+def _current_hour_ts() -> int:
+    """The hour bucket check_rate_limit keys on, computed the same way."""
+    return int(
+        datetime.now(timezone.utc)
+        .replace(minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+
+
+class _CountingDB:
+    """Stand-in session whose only query answers a fixed ``COUNT(*)``."""
+
+    def __init__(self, count: int):
+        self._count = count
+        self.executions = 0
+
+    async def execute(self, *args, **kwargs):
+        self.executions += 1
+        result = MagicMock()
+        result.scalar.return_value = self._count
+        return result
 
 
 @pytest.fixture(autouse=True)
@@ -280,6 +305,75 @@ class TestLastUsedThrottle:
         naive_recent = now.replace(tzinfo=None).isoformat()
         # Must not raise on naive/aware subtraction; recent → not stale.
         assert _last_used_is_stale(naive_recent, now) is False
+
+
+# ---------------------------------------------------------------------------
+# PUB-5: the hourly reconciliation query may raise the tally, never lower it
+# ---------------------------------------------------------------------------
+
+
+class TestCheckRateLimitDbReconciliation:
+    """``public_portal_access_log`` only ever carries requests that COMMITTED.
+
+    An HTTPException rolls the request's session back and a 401/429 never
+    reaches the handler that writes the row at all, so the reconciliation
+    query's answer is a floor on the true count, not the count. Assigning it
+    let a caller whose traffic did not persist a row walk the in-memory tally
+    up to the 90% threshold and be reset to the (much smaller) persisted count
+    every time, so the per-key hourly quota was never reached.
+    """
+
+    @pytest.mark.unit
+    async def test_db_count_does_not_lower_the_in_memory_tally(self):
+        hour_ts = _current_hour_ts()
+        rate_limit_cache["key-a"][hour_ts] = 95  # 95 of 100 spent this hour
+        db = _CountingDB(0)  # none of them persisted a log row
+
+        is_allowed, current, limit = await check_rate_limit("key-a", 100, db)
+
+        assert db.executions == 1, "the reconciliation query must still run"
+        assert current == 95
+        assert is_allowed is True
+        assert rate_limit_cache["key-a"][hour_ts] == 96
+
+    @pytest.mark.unit
+    async def test_repeated_checks_still_reach_the_ceiling(self):
+        """The bypass, driven end to end: this loop never limited pre-fix."""
+        hour_ts = _current_hour_ts()
+        rate_limit_cache["key-b"][hour_ts] = 90  # at the 90% reconcile threshold
+        db = _CountingDB(0)
+
+        outcomes = [(await check_rate_limit("key-b", 100, db))[0] for _ in range(30)]
+
+        assert outcomes[0] is True
+        assert outcomes[-1] is False
+        assert False in outcomes
+
+    @pytest.mark.unit
+    async def test_db_count_still_raises_a_low_process_local_tally(self):
+        """The cross-process correction the query exists for is preserved."""
+        hour_ts = _current_hour_ts()
+        rate_limit_cache["key-c"][hour_ts] = 90
+        db = _CountingDB(150)  # other workers served 150 requests for this key
+
+        is_allowed, current, limit = await check_rate_limit("key-c", 100, db)
+
+        assert current == 150
+        assert is_allowed is False
+        assert rate_limit_cache["key-c"][hour_ts] == 150
+
+    @pytest.mark.unit
+    async def test_no_query_below_the_threshold(self):
+        """Well under the limit, the hot path stays a pure in-memory check."""
+        hour_ts = _current_hour_ts()
+        rate_limit_cache["key-d"][hour_ts] = 10
+        db = _CountingDB(0)
+
+        is_allowed, current, limit = await check_rate_limit("key-d", 100, db)
+
+        assert db.executions == 0
+        assert is_allowed is True
+        assert rate_limit_cache["key-d"][hour_ts] == 11
 
 
 class TestGenerateApiKeyPrefix:

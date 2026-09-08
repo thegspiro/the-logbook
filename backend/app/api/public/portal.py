@@ -18,6 +18,7 @@ from fastapi import (
     Response,
     status,
 )
+from loguru import logger
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -194,6 +195,24 @@ async def log_public_api_request(
         flagged_suspicious=is_suspicious,
         flag_reason=flag_reason,
     )
+
+    # ``log_access`` only flushes, so the row lives or dies with the request's
+    # transaction — and ``get_db`` rolls that transaction back whenever the
+    # handler raises. Every non-200 answer on this router is an
+    # ``HTTPException``, so without an explicit commit the access log recorded
+    # successes only: the 503 an off portal answers, the 404 a missing config
+    # answers and the 500 an unexpected fault answers all vanished, and
+    # ``detect_anomalies`` was left reading a log that could not show it a
+    # failure pattern. Committing here is safe because these handlers write
+    # nothing else — the only pending row is the log entry itself.
+    try:
+        await db.commit()
+    except Exception as exc:
+        # Best-effort: never let an audit write replace the answer the caller
+        # was about to receive (which, on the paths that matter here, is the
+        # exception this function was called from).
+        logger.warning("Public portal access log could not be persisted: {}", exc)
+        await db.rollback()
 
 
 # ============================================================================
