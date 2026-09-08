@@ -57,7 +57,7 @@
   },
   "homepage": "https://github.com/thegspiro/the-logbook#readme",
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.0",
     "concurrently": "^10.0.4",
     "husky": "^9.0.11",
     "jsdom": "^30.0.1",
