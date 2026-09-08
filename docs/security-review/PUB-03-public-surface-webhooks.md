@@ -149,6 +149,22 @@ the cache. The database can still _raise_ a per-process tally to the
 cross-process truth — the reason the query exists, and the case a
 multi-worker deployment depends on — but it can no longer lower it.
 
+**PUB-5b — the reconciliation query counted the wrong window — ✅ FIXED
+(Codex, pass 4 round 2):** the fix above still scoped its `COUNT(*)` to a
+rolling `now - 1 hour`, while `current_count` and `X-RateLimit-Reset` both key
+off the fixed clock-hour bucket `hour_timestamp` starts. Shortly after a clock
+hour turns over, the rolling window still includes the tail of the _previous_
+bucket's traffic, and because the reconciled value can now only raise the
+in-memory tally and never lower it, an inflated `db_count` from stale traffic
+would stick in the new bucket for the rest of the hour — 429ing legitimate
+requests until the bucket rolled over again. Fixed by scoping the query to
+`datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)` instead of `now -
+timedelta(hours=1)`. `test_reconciliation_query_scopes_to_the_current_hour_bucket`
+(`tests/test_public_portal_security.py`) captures the query's compiled lower
+bound and asserts it equals the hour bucket's start; verified red against the
+rolling-window version (asserted `2026-09-08T04:31:25...` — wall-clock minus
+one hour — where `2026-09-08T05:00:00` — the bucket start — was expected).
+
 #### PUB-6 — LOW — The data whitelist's default-deny path answered 500, not an empty document — ✅ FIXED
 
 **What:** `portal.py` builds the full organization dictionary, runs it through

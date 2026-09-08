@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count reset to zero each time it approached the ceiling, and so never reached
   it. The reconciliation can still correct the count upwards, which is what it
   is for across multiple server processes, but it can no longer push it down.
+  That reconciliation check also compared against the wrong time window,
+  which could freeze a key's count too high for the rest of the hour right
+  after the hour changed; it now compares against the same hour the count
+  itself tracks.
 
 - **The public portal's access log now records the requests that failed.** The
   log is what an administrator reads to spot abuse, and what the portal's own

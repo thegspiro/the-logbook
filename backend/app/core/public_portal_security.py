@@ -155,13 +155,20 @@ async def check_rate_limit(
 
     # If close to limit, verify with database
     if current_count >= rate_limit * 0.9:  # 90% of limit
-        # Count requests in the current hour from database
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Count requests since the start of *this* clock-hour bucket — the
+        # same bucket `current_count`/`X-RateLimit-Reset` use. A rolling
+        # "last 60 minutes" window would, right after the clock hour turns
+        # over, still include the tail of the previous bucket's traffic and
+        # inflate db_count above this bucket's true count. Because the
+        # result below can only raise the in-memory tally and never lower
+        # it, that inflated value would stick for the rest of the new hour
+        # and 429 legitimate requests until the bucket rolls over again.
+        hour_start = datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)
         result = await db.execute(
             select(func.count(PublicPortalAccessLog.id)).where(
                 and_(
                     PublicPortalAccessLog.api_key_id == api_key_id,
-                    PublicPortalAccessLog.timestamp >= one_hour_ago.isoformat(),
+                    PublicPortalAccessLog.timestamp >= hour_start.isoformat(),
                 )
             )
         )

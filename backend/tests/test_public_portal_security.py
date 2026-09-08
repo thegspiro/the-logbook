@@ -97,9 +97,17 @@ class _CountingDB:
     def __init__(self, count: int):
         self._count = count
         self.executions = 0
+        # The lower bound the reconciliation query's WHERE clause was built
+        # with, captured from the compiled statement rather than asserted
+        # against separately — see test_reconciliation_query_scopes_to_the_
+        # current_hour_bucket below.
+        self.captured_lower_bound: str | None = None
 
-    async def execute(self, *args, **kwargs):
+    async def execute(self, stmt, *args, **kwargs):
         self.executions += 1
+        for clause in stmt.whereclause.clauses:
+            if getattr(clause.left, "key", None) == "timestamp":
+                self.captured_lower_bound = clause.right.value
         result = MagicMock()
         result.scalar.return_value = self._count
         return result
@@ -361,6 +369,29 @@ class TestCheckRateLimitDbReconciliation:
         assert current == 150
         assert is_allowed is False
         assert rate_limit_cache["key-c"][hour_ts] == 150
+
+    @pytest.mark.unit
+    async def test_reconciliation_query_scopes_to_the_current_hour_bucket(self):
+        """The query's lower bound must be the clock-hour bucket, not a
+        rolling 60-minute window.
+
+        ``current_count``/``X-RateLimit-Reset`` both key off the fixed
+        clock-hour bucket ``hour_timestamp`` starts. A rolling "last 60
+        minutes" window still includes the tail of the *previous* bucket's
+        traffic right after the hour turns over, and since the reconciled
+        count can only raise the in-memory tally and never lower it, an
+        inflated db_count from stale traffic would stick for the rest of the
+        new hour and 429 legitimate requests until the bucket rolls over
+        again.
+        """
+        hour_ts = _current_hour_ts()
+        rate_limit_cache["key-e"][hour_ts] = 95
+        db = _CountingDB(0)
+
+        await check_rate_limit("key-e", 100, db)
+
+        expected = datetime.fromtimestamp(hour_ts, tz=timezone.utc).isoformat()
+        assert db.captured_lower_bound == expected
 
     @pytest.mark.unit
     async def test_no_query_below_the_threshold(self):
