@@ -235,7 +235,13 @@ describe('primary fill contrast', () => {
     // unknown must fail loudly ("add its hex") rather than be skipped. Building
     // the alternation out of the palette made the sweep self-limiting — the one
     // shape it could never report was the one nobody had measured yet.
-    const fillPattern = String.raw`\b((?:[a-z-]+:)*)bg-([a-z]+)-(\d{2,3})\b(?!/)`;
+    // `bg-` and the three gradient stops together. A gradient fill is still a
+    // fill — `from-red-600 to-orange-600` under `text-white` is a button, and
+    // orange-600 is 3.60:1 — but axe cannot measure one (it abstains with
+    // "background gradient") and the `bg-` sweep never looked at it, so this
+    // whole class of control was unmeasured on both sides. Every stop is
+    // checked, because the worst stop is what the label crosses.
+    const fillPattern = String.raw`\b((?:[a-z-]+:)*)(?:bg|from|via|to)-([a-z]+)-(\d{2,3})\b(?!/)`;
     const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
 
     /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
@@ -264,7 +270,7 @@ describe('primary fill contrast', () => {
 
     const inspect = (file: string, line: number, segment: string, inherited: Map<string, string>) => {
       const own = foregrounds(segment);
-      for (const [, variant, hue, shade] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
+      for (const [whole, variant, hue, shade] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
         const prefix = variant ?? '';
         // The foreground that covers this fill, most specific first. A
         // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
@@ -277,13 +283,11 @@ describe('primary fill contrast', () => {
         const key = `${hue}-${shade}`;
         const ratio = whiteOn(key);
         if (ratio === null) {
-          offenders.push(`${path.relative(SRC, file)}:${line} — bg-${key} is not in the installed Tailwind palette`);
+          offenders.push(`${path.relative(SRC, file)}:${line} — ${whole} is not in the installed Tailwind palette`);
           continue;
         }
         if (ratio < 4.5) {
-          offenders.push(
-            `${path.relative(SRC, file)}:${line} — ${prefix}white on ${prefix}bg-${key} is ${ratio.toFixed(2)}:1`
-          );
+          offenders.push(`${path.relative(SRC, file)}:${line} — ${prefix}white on ${whole} is ${ratio.toFixed(2)}:1`);
         }
       }
     };

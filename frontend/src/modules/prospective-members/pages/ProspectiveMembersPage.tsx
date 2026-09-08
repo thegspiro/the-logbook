@@ -519,10 +519,21 @@ export const ProspectiveMembersPage: React.FC = () => {
           overflow intentional, and it carries an accessibility contract with
           it: a name, and a way to reach the off-screen end without a mouse.
           Five views do not fit across a 390px phone — "Converted" starts
-          off-screen — so without this the last two were unreachable. */}
-      <nav className="tab-scroll mb-4" data-mobile-scroll-region aria-label="Applicant pipeline views" tabIndex={0}>
+          off-screen — so without this the last two were unreachable.
+
+          `role="tablist"`, not `<nav>`: these buttons swap an in-page panel,
+          they do not navigate, and announcing them as a navigation landmark
+          tells a screen-reader user the wrong thing about where they are.
+          `aria-selected` is what says which view is showing — without it,
+          moving between the five gave no programmatic signal at all. The
+          container takes no `tabIndex`: the buttons inside are focusable, so
+          the keyboard already reaches the scrolled-off end and a tab stop on
+          the strip itself is one the user has to press through for nothing. */}
+      <div className="tab-scroll mb-4" data-mobile-scroll-region role="tablist" aria-label="Applicant pipeline views">
         <button
           onClick={() => setActiveTab('active')}
+          role="tab"
+          aria-selected={activeTab === 'active'}
           className={`min-h-11 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'active'
               ? 'text-theme-text-primary border-red-500'
@@ -533,6 +544,8 @@ export const ProspectiveMembersPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('inactive')}
+          role="tab"
+          aria-selected={activeTab === 'inactive'}
           className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'inactive'
               ? 'text-theme-text-primary border-red-500'
@@ -548,6 +561,8 @@ export const ProspectiveMembersPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('rejected')}
+          role="tab"
+          aria-selected={activeTab === 'rejected'}
           className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'rejected'
               ? 'text-theme-text-primary border-red-500'
@@ -563,6 +578,8 @@ export const ProspectiveMembersPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('withdrawn')}
+          role="tab"
+          aria-selected={activeTab === 'withdrawn'}
           className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'withdrawn'
               ? 'text-theme-text-primary border-red-500'
@@ -578,6 +595,8 @@ export const ProspectiveMembersPage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('converted')}
+          role="tab"
+          aria-selected={activeTab === 'converted'}
           className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'converted'
               ? 'text-theme-text-primary border-red-500'
@@ -591,7 +610,7 @@ export const ProspectiveMembersPage: React.FC = () => {
             </span>
           )}
         </button>
-      </nav>
+      </div>
 
       {/* Controls Bar (Active tab) */}
       {activeTab === 'active' && (

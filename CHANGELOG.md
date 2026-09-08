@@ -78,6 +78,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   broken. Both are documented in the spec.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
+### Gradient buttons were never contrast-checked, and four onboarding pages had no skip-link target (2026-09-08)
+
+**Fixed**
+
+- **22 gradient call sites paired white text with a fill below the AA floor.**
+  A gradient fill is written `from-red-600 to-orange-600`, not `bg-*`, so the
+  call-site contrast sweep never looked at it — and axe cannot measure one
+  either, because it abstains on a gradient background. The class was invisible
+  to both guards at once. Every onboarding step's primary button was in it:
+  orange-600 is **3.60:1** against white. Also `from-red-500` avatar circles
+  (3.81:1) in the applicant pipeline, and the import/add-member submit buttons
+  (green-600 **3.22:1**, emerald-600 3.65:1, cyan-600 3.62:1). All raised to the
+  lightest shade of the same hue that clears 4.5:1, hover states raised with
+  them. The sweep now measures `from-`, `via-` and `to-` alongside `bg-`.
+- **Four pages that render outside `AppLayout` had no `#main-content`**, so
+  `index.html`'s skip link pointed at nothing: the Welcome screen at `/`, the
+  startup check at `/onboarding`, the module configuration step, and the
+  security-check placeholder. Bypass Blocks (SC 2.4.1), on the first screen
+  anyone sees. The earlier onboarding landmark fix missed them because the
+  mobile ratchet measures one representative step and assumes the rest share its
+  shell — these four build their own. **`skipLinkTarget.test.ts`** now checks
+  that assumption directly, in the source, for every page reachable outside the
+  layout.
+- **The medical supplies page marked a section loaded before validating it.**
+  A malformed response left the section showing "Showing previously loaded data"
+  and "Nothing expiring" simultaneously, because `setLoaded(true)` had already
+  been queued when the shape guard threw. Validation now happens before any
+  state is touched.
+- **The audit log defaulted a missing `total` to zero.** `Pagination` renders
+  nothing at `totalItems === 0`, so a response with a valid first page and no
+  count showed page 1 and made every later page unreachable. It is now checked
+  with `logs` and enters the error path.
+- **The applicant pipeline's view switcher announced itself as navigation.**
+  It was changed to `<nav>` for its accessible name, but the five buttons swap
+  an in-page panel rather than navigating, and none exposed which view was
+  showing. Now `role="tablist"` with `aria-selected`, matching the eight other
+  tab strips in the app, and without the redundant container tab stop.
+
 ### The contrast guard measured a palette this build does not paint (2026-09-08)
 
 **Fixed**

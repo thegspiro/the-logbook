@@ -99,6 +99,36 @@ Beyond the shared utilities, **125 hand-rolled class strings in 60 files** paire
 `text-white` with a fill below 4.5:1 — outside the mast CSS entirely, so no
 palette change could ever have found them.
 
+### The gap between the two guards
+
+The static sweep measures `bg-<hue>-<shade>`. axe measures rendered pixels but
+abstains on a gradient. A **gradient fill carrying white text falls in the gap
+between them** — neither guard sees it — and that is where the worst contrast in
+the application was sitting: every onboarding step's primary button, `from-red-600
+to-orange-600`, where orange-600 measures **3.60:1** against white. Twenty-two
+call sites in all, including green-600 (3.22:1) on the import screens' submit
+buttons and red-500 (3.81:1) on the applicant avatars.
+
+None of it was a regression. It had never been measured, by anything, and the
+review's own first pass would have reported the same clean result. The sweep now
+reads `from-`, `via-` and `to-` alongside `bg-`, so a gradient is held to the
+same floor as a flat fill and every stop is checked — the worst stop is the one
+the label crosses.
+
+The same shape of gap explains the skip link. The ratchet measures
+`/onboarding/start` as the representative onboarding step, on the assumption
+that the rest render the same shell. Four pages do not: the Welcome screen at
+`/`, the startup check, the module configuration step and the security-check
+placeholder each build their own root, and none had `#main-content`. The skip
+link — the first thing a keyboard user reaches, on the first screen anyone sees
+— pointed at nothing.
+
+Reaching those pages in the browser pass is not the fix: the config step
+redirects to step 1 without a seeded onboarding store, so the pass would measure
+step 1 twice and count it as coverage of two routes. `skipLinkTarget.test.ts`
+checks the assumption where it is exact — in the source, for every page
+reachable outside `AppLayout`.
+
 ### What axe could not decide
 
 axe reports a node it cannot measure as _incomplete_, not as a violation, and

@@ -82,14 +82,18 @@ const AuditLogPage: React.FC = () => {
       // administrator the security log is clear at the moment it cannot be
       // read — the one wrong answer this page must never give. Throwing puts
       // the failure in the error state below, where it stays visible.
-      if (!Array.isArray(list?.logs)) {
+      // `total` is checked with `logs`, not defaulted to 0 beside it: Pagination
+      // renders nothing at `totalItems === 0`, so a response carrying a valid
+      // first page with a missing count would show page 1 and make every later
+      // page unreachable — a quieter version of the same wrong answer.
+      if (!Array.isArray(list?.logs) || typeof list.total !== 'number') {
         throw new Error('The audit log service returned an unexpected response.');
       }
       if (!statsData?.by_category || !statsData.by_severity) {
         throw new Error('The audit log statistics service returned an unexpected response.');
       }
       setEntries(list.logs);
-      setTotal(typeof list.total === 'number' ? list.total : 0);
+      setTotal(list.total);
       setStats(statsData);
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load audit log'));

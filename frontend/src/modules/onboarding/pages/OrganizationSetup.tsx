@@ -1220,7 +1220,7 @@ const OrganizationSetup: React.FC = () => {
               disabled={isSaving}
               className={`w-full rounded-lg px-6 py-4 text-lg font-semibold transition-all duration-300 ${
                 !isSaving
-                  ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-[1.02] hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
+                  ? 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-[1.02] hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"

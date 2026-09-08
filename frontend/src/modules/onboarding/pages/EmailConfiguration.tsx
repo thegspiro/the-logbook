@@ -804,7 +804,7 @@ const EmailConfiguration: React.FC = () => {
                 void handleContinue();
               }}
               disabled={isSaving}
-              className="flex-1 transform rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 transform rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? 'Saving Securely...' : 'Continue'}
             </button>

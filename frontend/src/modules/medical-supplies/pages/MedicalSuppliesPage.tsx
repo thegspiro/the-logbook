@@ -280,6 +280,40 @@ const MedicalSuppliesPage: React.FC = () => {
           try {
             const value = await requests[section]();
             if (superseded()) return;
+
+            // Validated before ANY state is touched. Clearing the error and
+            // marking the section loaded first, then throwing on a bad shape,
+            // leaves the section in both states at once: the catch below shows
+            // "showing previously loaded data" while `loaded` renders the
+            // still-empty list as "Nothing expiring". A section is loaded when
+            // there is something to load it with, not when the request returned.
+            //
+            // These `as` casts assert a wire format that nothing checks. A
+            // response that is valid JSON but not this shape reached
+            // `expiring.map` as a non-array and took the whole page down
+            // through the ErrorBoundary — the failure a phone actually sees
+            // when station Wi-Fi answers 200 with a portal page.
+            //
+            // Rejected rather than emptied: substituting `[]` renders "Nothing
+            // expiring" over stock that may well be expiring, which is the one
+            // wrong answer this screen must not give.
+            let items: InventoryItem[] | null = null;
+            let itemPaging: { total: number; skip: number; limit: number } | null = null;
+            if (section === 'items') {
+              const data = (value ?? {}) as { items: InventoryItem[]; total: number; skip: number; limit: number };
+              if (!Array.isArray(data.items)) {
+                throw new Error('The supply table service returned an unexpected response.');
+              }
+              items = data.items;
+              itemPaging = { total: data.total, skip: data.skip, limit: data.limit };
+            }
+            if (section === 'categories' && !Array.isArray(value)) {
+              throw new Error('The category list service returned an unexpected response.');
+            }
+            if (section === 'expiring' && !Array.isArray(value)) {
+              throw new Error('The expiring stock service returned an unexpected response.');
+            }
+
             setErrors((current) => {
               const next = { ...current };
               delete next[section];
@@ -288,39 +322,14 @@ const MedicalSuppliesPage: React.FC = () => {
             setLoaded((current) => ({ ...current, [section]: true }));
             if (section === 'summary') setSummary(value as MedicalSupplySummary);
             if (section === 'items') {
-              const data = (value ?? {}) as { items: InventoryItem[]; total: number; skip: number; limit: number };
-              // These four `as` casts assert a wire format that nothing checks.
-              // A response that is valid JSON but not this shape reached
-              // `expiring.map` as a non-array and took the whole page down
-              // through the ErrorBoundary — the failure a phone actually sees
-              // when station Wi-Fi answers 200 with a portal page.
-              //
-              // Rejected rather than emptied, here and for the two lists below.
-              // Substituting `[]` marks the section loaded, clears its error and
-              // renders "Nothing expiring" over stock that may well be expiring;
-              // throwing hands it to the section's own error and stale-data
-              // handling, which is already built for exactly this.
-              if (!Array.isArray(data.items)) {
-                throw new Error('The supply table service returned an unexpected response.');
-              }
-              setItems(data.items);
-              setItemPage({ total: data.total, skip: data.skip, limit: data.limit });
+              setItems(items ?? []);
+              if (itemPaging) setItemPage(itemPaging);
               // Stamped from this closure's own values, not from the render's
               // `filterKey`: those are what the request actually asked for.
               setItemsFilterKey(requestedFilterKey);
             }
-            if (section === 'categories') {
-              if (!Array.isArray(value)) {
-                throw new Error('The category list service returned an unexpected response.');
-              }
-              setCategories(value as InventoryCategory[]);
-            }
-            if (section === 'expiring') {
-              if (!Array.isArray(value)) {
-                throw new Error('The expiring stock service returned an unexpected response.');
-              }
-              setExpiring(value as ExpiringLot[]);
-            }
+            if (section === 'categories') setCategories(value as InventoryCategory[]);
+            if (section === 'expiring') setExpiring(value as ExpiringLot[]);
           } catch (reason: unknown) {
             if (superseded()) return;
             if (section === 'items' && controller?.signal.aborted) return;

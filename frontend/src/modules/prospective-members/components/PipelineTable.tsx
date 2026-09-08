@@ -396,7 +396,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                       </td>
                       <td className="p-3" onClick={() => onApplicantClick(applicant)}>
                         <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-500 to-red-700 text-xs font-bold text-white">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-600 to-red-700 text-xs font-bold text-white">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
                           <span className="text-theme-text-primary text-sm font-medium">
