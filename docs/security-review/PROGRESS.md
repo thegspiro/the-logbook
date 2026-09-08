@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
+(`83a55e0`, squash) — fully green, no unresolved review threads, merged
+directly by the repo owner rather than a watchdog check on this iteration.
+One fix this pass: **USR-9 (MED)** — the property-return-drop notification
+email's fallback template had no HTML escaping on officer-typed free text
+(a second, independent bug in the same code also crashed and silently
+dropped the notification on a stray backslash). See the superseded note
+below for the full write-up. Next: 08 Membership pipeline.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
+
 **Feature 07 (Users & organizations, pass 4)** — PR
 [#2402](https://github.com/thegspiro/the-logbook/pull/2402), branch
 `claude/security-review-users-organizations`. One fix this pass:
@@ -47,6 +59,8 @@ errors (2 pre-existing warnings, unrelated file, well under the
 max-warnings-10 threshold — no frontend file changed this pass). See
 `docs/security-review/USR-07-users-organizations.md` pass 4 for the full
 write-up.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06 pass 4, PR #2400, merged), preserved for history</summary>
@@ -11421,6 +11435,14 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
+
+PR #2402 was fully green with no unresolved review threads. Merged directly
+by the repo owner (not this watchdog session's own merge step, unlike the
+last several features). **Open PR** row cleared, rotation row 07 confirmed
+✅ (it was already marked ✅ pending merge when the PR opened). Next: 08
+Membership pipeline.
 
 ### 2026-09-08 — Feature 07 (Users & organizations, pass 4) — 1 fixed (MED), 0 flagged (2 pre-existing flags re-verified, unchanged) — PR opened
 
