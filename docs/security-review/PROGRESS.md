@@ -60,8 +60,45 @@ org`, matching `test_facility_document_reference_race.py`'s own
 batch (one rejected, one deliberately paused) so it checks the lock is
 released _before_ the whole call returns, not only after — a plain
 one-item version can't tell a true per-item release from a regression that
-commits once at the end of the loop. Subscribed to PR activity. Next
-feature once this merges: 09 Medical screening (PHI).
+commits once at the end of the loop. Subscribed to PR activity.
+
+**Note on ordering:** while this PR was still open, a separate rotation
+iteration read `main`'s then-current (stale, since this PR hadn't merged
+yet to update it) "None, next: 09" pointer and opened **and merged**
+[#2409](https://github.com/thegspiro/the-logbook/pull/2409) (Feature 09,
+Medical screening, pass 4 — MS-10, a form clear-guard fix) ahead of this
+one finishing — a mild "one PR at a time" violation caused by the pointer
+only updating on merge, not on open, not this session's to fix. Feature 09
+is therefore already done; next feature once _this_ PR merges is 10
+(Fundraising).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, pass 4, PR #2409, merged out of turn while #2408 was still open), preserved for history</summary>
+
+**Feature 09 (Medical screening, pass 4)** — PR
+[#2409](https://github.com/thegspiro/the-logbook/pull/2409), branch
+`claude/security-review-medical-screening-pass4` (new name; the plain
+`claude/security-review-medical-screening` was used and merged by pass 2
+and pass 3, so CLAUDE.md Pitfall #24 rules it out this pass). One fix:
+**MS-10 (MED)** — `ScreeningRecordForm.tsx`/`ScreeningRequirementForm.tsx`
+built their edit-mode payload the same way as create, converting a blanked
+field to `undefined` instead of an explicit `null`; since the backend's
+update path dumps with `exclude_unset`, that omission meant a cleared
+`provider_name`/`result_summary`/`notes` (PHI), date, description,
+`applies_to_roles`, or `frequency_months` silently kept its old value behind
+a success toast. Fixed on the edit path only (create is unchanged); guarded
+by 6 new tests in `ScreeningFormClearGuards.test.tsx`, confirmed to fail (3
+of 6) against the pre-fix code via `git stash`. MS-6/MS-7/MS-9 re-verified
+still open/unchanged, not re-flagged. See
+`docs/security-review/MS-09-medical-screening.md` pass 4 for the full
+write-up. Completion gate: whole-repo `tsc --noEmit`/`eslint .` both clean;
+scoped medical-screening pytest 50 passed/1 pre-existing skip; scoped
+vitest 29 passed; full backend suite run as a sanity check even though no
+backend file was touched — 11855 passed, 21 skipped (pre-existing/
+environmental), 0 failed; backend linters/migration validator were not run
+since no backend file changed.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406, merged), preserved for history</summary>
@@ -11477,7 +11514,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -11628,6 +11665,56 @@ pytest 615 passed / 1 skipped / 0 failed; full backend suite 11821 passed
 modules — legal-text display, onboarding integration, facilities
 onboarding, agency position seeding), not investigated further as out of
 scope for this fix. No frontend file touched.
+
+### 2026-09-08 — Feature 09 (Medical screening, pass 4) — 1 fixed, 0 flagged — new PR #2409, merged out of turn while #2408 was still open
+
+Full 7-dimension checklist worked fresh against current code (`docs/security-
+review/CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and this feature's
+own `MS-09-medical-screening.md` read first, per Step 2). All 4 backend files
+re-read in full: byte-for-byte structural match to pass 3's documented fixed
+state (MS-3/MS-5/MS-8's fixes all intact; no baseline permission grant; PHI
+encryption, org-scoping, cache exclusion, and the module gate all
+re-confirmed). The frontend module was re-read in full rather than assumed
+unchanged — pass 3's "byte-identical" claim was only against pass 2's merge
+commit, not this session's `HEAD` — and `MedicalScreeningPage.tsx` had
+genuinely changed since (URL-addressable tabs, UI-only, not security-relevant),
+which is where this pass's finding turned up.
+
+**MS-10 (MED, PHI integrity, fixed):** `ScreeningRecordForm.tsx`/
+`ScreeningRequirementForm.tsx` built their edit-mode save payload the same way
+as create (`value.trim() || undefined`). Correct on create, wrong on edit: the
+backend dumps update payloads with `exclude_unset`, so the omitted key meant
+"leave this alone" — clearing a screening record's `provider_name`,
+`result_summary`, or `notes` (PHI, encrypted at rest) showed a success toast
+while the old value silently stayed in the database. Same shape hit the
+record's date fields and the requirement form's `description`,
+`applies_to_roles`, and `frequency_months` (unchecking "recurring" didn't
+clear it). Fixed on the edit path only, using the repo's established
+`blankToNull` convention; `ScreeningRecordUpdate`/`ScreeningRequirementUpdate`
+TS types widened to accept `null` on the affected fields, matching CLAUDE.md's
+`exactOptionalPropertyTypes` guidance (widen, don't cast). No backend change
+needed — the schemas already accepted an explicit null. Guarded by 6 new
+tests in `ScreeningFormClearGuards.test.tsx`, confirmed to fail (3/6) against
+the pre-fix code via `git stash`.
+
+MS-6 (unbounded lists), MS-7 (no reviewer distinct from subject), and MS-9
+(`grace_period_days`/`applies_to_roles` unenforced) re-verified still
+open/unchanged, not re-flagged; already in `KNOWN_LIMITATIONS.md`.
+
+Gate: whole-repo `tsc --noEmit` 0 errors; whole-repo `eslint .` 0 errors (2
+pre-existing unrelated warnings, well under max-warnings-10); scoped
+medical-screening pytest 50 passed/1 pre-existing skip/0 failed; full backend
+suite (run as a sanity check even though no backend file was touched) 11855
+passed/21 skipped (pre-existing/environmental)/0 failed; scoped vitest 29
+passed (4 files, incl. the 6 new guard tests). No backend file touched, so
+backend linters/migration validator were n/a. Branch
+`claude/security-review-medical-screening-pass4` (new name — the plain
+`claude/security-review-medical-screening` was used and merged by pass 2
+(#1952) and pass 3 (#2180), CLAUDE.md Pitfall #24). PR
+[#2409](https://github.com/thegspiro/the-logbook/pull/2409) opened against
+`main`. Rotation row 09 → ⏳ (awaiting PR merge). See
+`docs/security-review/MS-09-medical-screening.md` pass 4 for the full
+write-up.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up)'s PR #2406 merged
 

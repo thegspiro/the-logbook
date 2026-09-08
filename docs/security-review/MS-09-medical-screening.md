@@ -1,6 +1,193 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), (this PR) (pass 3)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), [#1952](https://github.com/thegspiro/the-logbook/pull/1952) (pass 2), [#2180](https://github.com/thegspiro/the-logbook/pull/2180) (pass 3), (this PR) (pass 4)
+
+---
+
+## Pass 4 (2026-09-08)
+
+**Backend:** `endpoints/medical_screening.py` (430 L, 14 routes), `services/medical_screening_service.py` (605 L), `models/medical_screening.py` (215 L), `schemas/medical_screening.py` (255 L) — read in full, byte-for-byte structural match to pass 3's documented fixed state (MS-5/MS-3/MS-8's `apply_updates`/`assert_in_org`/audit-id fixes all present and unchanged)
+**Frontend:** full `modules/medical-screening/` directory, including two files added since pass 3 (`MedicalScreeningPage.banner.test.tsx`, `MedicalScreeningPage.tab.test.tsx`) and a real UI change to `MedicalScreeningPage.tsx` (tabs became URL-addressable via `?tab=`, matching the 2026-09-05 CLAUDE.md convention for settings-style tab screens) — not present in pass 3's byte-identical diff
+**Migrations:** `20260313_0101_create_medical_screening_tables.py`, `20260707_0001_lowercase_screening_and_shift_enums.py`, `20260810_0001_encrypt_medical_screening_phi.py` — re-verified, none new this pass
+
+### Scope
+
+The repo's `git log` for these paths returns a single squash/orphan merge
+commit (`b267ee1`, no resolvable parent) — the same git-history unreliability
+prior passes have hit (see pass 1's note on MP-08). Rather than trust it, all
+four backend files were read in full and compared structurally against pass
+3's documented content: identical. The frontend module was re-read in full
+rather than assumed unchanged, since pass 3's byte-identical claim was against
+pass 2's merge commit, not this session's `HEAD` — and it was not unchanged:
+`MedicalScreeningPage.tsx` gained URL-addressable tabs (a UX change, reviewed
+below and found not security-relevant), plus two new test files. Every other
+frontend file (`routes.tsx`, `services/api.ts`,
+`store/medicalScreeningStore.ts`, `ComplianceDashboard.tsx`) is unchanged.
+
+Worked the full seven-dimension checklist directly rather than re-deriving
+pass 1-3's conclusions: enumerated all 14 routes and re-confirmed each one's
+auth dependency/permission string (unchanged from the pass 3 table); re-traced
+every by-id query and `create_record`'s FK validation for org-scoping;
+re-confirmed no baseline `medical_screening.view`/`.manage` grant in
+`app/core/permissions.py` or any `DEFAULT_POSITIONS`/`OPERATIONAL_RANKS`
+entry; re-confirmed PHI encryption (`EncryptedText`/`EncryptedJSON`) intact on
+all four columns; re-confirmed the frontend cache exclusion
+(`UNCACHEABLE_PREFIXES`) and the backend module gate; re-read
+`admin_hub_service.py`'s medical-screening resolvers (still org-scoped,
+aggregate-only, no PHI in the surfaced text).
+
+### Route inventory
+
+Unchanged from pass 1/3 — re-confirmed directly against the current file, not
+copied forward. See pass 3's table above for the full 14-route list; nothing
+added, removed, or re-permissioned.
+
+### Verified good ✅ (re-confirmed, not re-derived)
+
+- No baseline grant for either permission (`app/core/permissions.py:267-276`
+  is the only reference in the backend).
+- Tenant isolation holds throughout: every by-id getter filters
+  `organization_id`; `create_record`'s three client-supplied FKs
+  (`user_id`, `prospect_id`, `requirement_id`) still go through
+  `assert_in_org(..., allow_none=True)` before the row is built.
+- PHI encryption at rest genuinely intact — `provider_name`, `result_summary`,
+  `notes` (`EncryptedText`), `result_data` (`EncryptedJSON`).
+- `SET NULL` FKs (`requirement_id`, `reviewed_by`) are both `nullable=True`.
+- Update schemas (`ScreeningRecordUpdate`/`ScreeningRequirementUpdate`) still
+  omit every tenancy/subject FK field, so no update path can reassign
+  organization, subject, or requirement.
+- No SQL injection surface, no CSV export, no unescaped HTML/output.
+- Cache exclusion (`/medical-screening/`, `/admin-hub/`) and the module gate
+  (`module_gate("medical_screening", ...)` on the router, independently
+  backed by every route's own `get_current_user`/`require_permission`) both
+  re-confirmed against the current files.
+- `admin_hub_service.py`'s medical-screening resolvers (`_members_screening_
+current`, `_members_attention`'s expired/overdue blocks) filter
+  `organization_id` on every query and surface only aggregate counts/generic
+  titles, never a member name or screening detail.
+- The new URL-addressable tabs on `MedicalScreeningPage.tsx` are UI-only —
+  no new endpoint, no new data exposed in the URL beyond which of the three
+  already-permission-gated tabs is open (`?tab=requirements|records|
+compliance`), matching the pattern already reviewed and accepted for the
+  Organization/Events settings screens.
+
+### Findings
+
+### MS-10 — MED (PHI integrity) — Clearing a screening record's provider name, result summary, or notes field did not persist — ✅ FIXED
+
+**What:** `ScreeningRecordForm.tsx` and `ScreeningRequirementForm.tsx` built
+one payload shape for both the create and the edit submission, using the
+create-path idiom (`value.trim() || undefined`) unconditionally. That idiom
+is correct on create — CLAUDE.md pitfall #1 — and wrong on edit: the backend
+dumps update payloads with `exclude_unset` (`ScreeningRecordUpdate`/
+`ScreeningRequirementUpdate` via `data.model_dump(exclude_unset=True)` in
+`medical_screening_service.py:115,245`), so a key that never leaves the
+browser as JSON (which is what `undefined` produces) means "leave this alone,"
+not "clear it." An officer who blanked `provider_name`, `result_summary`, or
+`notes` on an existing screening record — three PHI-bearing `EncryptedText`
+columns — to correct or remove entered information got a "Record updated"
+success toast while the old value stayed in the database. The same shape hit
+`ScreeningRecordUpdate`'s three date fields, and on the requirement form,
+`description`, `applies_to_roles`, and — because the "One-time requirement"
+checkbox is exactly this pattern with an extra layer — `frequency_months`:
+unchecking "recurring" on an already-recurring requirement sent
+`frequency_months: undefined` rather than clearing it, so the stored value
+silently survived the toggle.
+**Where:** `frontend/src/modules/medical-screening/components/
+ScreeningRecordForm.tsx` (`handleSubmit`, edit branch); `.../
+ScreeningRequirementForm.tsx` (`handleSubmit`, single unbranched payload).
+**Failure scenario:** a `medical_screening.manage` holder edits a screening
+record to remove a `result_summary` entered in error (which may itself be
+misattributed PHI — e.g. copy-pasted onto the wrong member's record) or a
+`notes` field, sees the field go blank in the form and a success toast, closes
+the modal — and the PHI is still there, readable by anyone who next opens
+that record, with nothing in the UI indicating the clear didn't take.
+**Impact:** not a new access-control gap (only existing `.manage` holders
+reach this path, same population as every other write on this feature) — a
+correctness/data-integrity defect on a PHI write path where the failure mode
+is silent persistence of information staff believed they had removed.
+**Fix:** both forms now branch their payload construction on whether they are
+editing (`record`/`requirement` is non-null): the edit branch sends an
+explicit `null` for a blanked optional field (`blankToNull` from
+`utils/formValues.ts`, or a plain `value || null` for date/array fields — the
+same file's `formCoercions` helper wasn't reusable verbatim here because the
+Create and Update TypeScript interfaces are declared separately in this
+module, and `formCoercions`'s return type is the union of both branches);
+the create branch is untouched, still `|| undefined`. `ScreeningRecordUpdate`
+and `ScreeningRequirementUpdate` widened to accept `| null` on the affected
+fields (matching CLAUDE.md's `exactOptionalPropertyTypes` guidance: widen the
+target type rather than cast) — `screening_type`/`status`/`name`/
+`is_active`/`grace_period_days` were not touched, either because they are
+NOT NULL columns `apply_updates` would reject a null for, or because the UI
+control (a `<select>`/checkbox/number-with-fallback) can never actually
+produce a blank in the first place. Guarded by
+`ScreeningFormClearGuards.test.tsx` (6 tests: edit sends null for each
+affected field, an untouched value round-trips unchanged, create still omits
+rather than nulls), confirmed to fail on exactly the 3 edit-path assertions
+pre-fix via `git stash` (`toBeNull()` receiving `undefined`).
+
+### Re-verified open, not re-flagged (unchanged from pass 3)
+
+- **MS-6 — LOW (scale) — Unbounded requirement/record lists.** Re-confirmed:
+  `list_requirements`/`list_records` still run bare `.all()`. Already in
+  `KNOWN_LIMITATIONS.md`.
+- **MS-7 — MED — No reviewer distinct from the subject or the creator.**
+  Re-confirmed: `create_record`/`update_record` still place no constraint
+  between `current_user` and `data.user_id`; `get_compliance_status` still
+  never reads `reviewed_by`. Still needs a product decision (see pass 3's
+  writeup); already in `KNOWN_LIMITATIONS.md`.
+- **`create_record` still doesn't enforce exactly-one-of `user_id`/
+  `prospect_id`.** Unchanged.
+- **`get_compliance_status` still doesn't 404 an unknown subject.**
+  Re-confirmed not an enumeration channel.
+- **`grace_period_days`/`applies_to_roles` are still unenforced (MS-9).** The
+  "Not enforced" notices in `ScreeningRequirementForm.tsx` are unchanged and
+  still present. Noted in passing while fixing MS-10: `frequency_months` is
+  in the same position — written in `create_requirement` and read nowhere in
+  `get_compliance_status` or anywhere else in the backend
+  (`grep -rn frequency_months backend/app/` returns only the write site and
+  the two schema/model declarations) — but this pass does not add it to MS-9
+  or its guard test's AST sweep, since MS-9's own scope and guard test were
+  written and reviewed against exactly two named fields; widening that
+  finding is a separate, deliberate edit for a future pass rather than a
+  drive-by expansion of someone else's finding while fixing an unrelated bug.
+
+## Schema & migration notes
+
+No migration this pass. No model/schema change — MS-10 is a frontend-only fix;
+the backend's `ScreeningRecordUpdate`/`ScreeningRequirementUpdate` schemas
+already accepted `null` on every affected field (that's what made the frontend
+omission the bug — the backend was always ready to clear on an explicit null).
+
+## Guard tests added
+
+- `frontend/src/modules/medical-screening/components/
+ScreeningFormClearGuards.test.tsx` (new, MS-10, 6 tests) — component-level:
+  renders each form in edit mode, blanks the affected fields, asserts the
+  `onSave` payload carries explicit `null`s (not `undefined`, not omitted);
+  a second test per form confirms an untouched value round-trips unchanged;
+  a third confirms the create path still omits rather than nulls. Confirmed
+  to fail (3 of 6) against the pre-fix code via `git stash`.
+
+## Completion gate
+
+| Check                                                                          | Result                                                                                                                           |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                  | n/a — no backend file changed this pass                                                                                          |
+| `black --check app/ tests/ alembic/`                                           | n/a — no backend file changed this pass                                                                                          |
+| `isort --check-only app/ tests/ alembic/`                                      | n/a — no backend file changed this pass                                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                              | not re-run — no migration touched this pass (last clean run: pass 3, 410 revisions, single head)                                 |
+| `pytest tests/ -q -k "medical_screening or medical-screening or grace_period"` | **50 passed, 1 skipped** (pre-existing — optional `py_vapid` dep), 0 failed                                                      |
+| `pytest tests/ -q` (full backend suite, sanity check)                          | **11855 passed, 21 skipped** (pre-existing/environmental: Docker unavailable, optional dep, opt-in API-contract suite), 0 failed |
+| `npx tsc --noEmit` (whole repo)                                                | 0 errors                                                                                                                         |
+| `npx eslint .` (whole repo)                                                    | 0 errors, 2 pre-existing warnings in an unrelated file (`CallTypeChips.tsx`), well under max-warnings-10                         |
+| `npx vitest run src/modules/medical-screening/`                                | **29 passed** (4 test files, including the 6 new guard tests)                                                                    |
+
+No backend file was touched this pass, so the backend linters/migration
+validator were not run (nothing for them to check) — the scoped and full
+backend suites were still run as a sanity check on the read-only re-review
+above and came back clean. Frontend gates were run in full because this pass
+touched three frontend files plus added a fourth.
 
 ---
 
