@@ -148,6 +148,33 @@ cannot be delimited with `[^>]*>` when its `element` prop contains markup, and a
 a single `Route` tag and swallows the page name inside it. The count assertion
 in that test is not decoration; it is the only thing that catches either.
 
+### The third gap: fills with no shade number
+
+The sweep matched `bg-<hue>-<shade>` and then `from-`/`via-`/`to-`. Both require
+a numeric shade, and the app's **semantic** fills have none — `bg-theme-accent-blue`,
+`bg-theme-text-muted`, `bg-theme-nav-bg`. They were unmeasured for the same
+reason gradients were, and they are the fills most likely to be wrong, because
+**their value flips between themes while the `text-white` beside them does not**:
+
+| Fill                         | Light      | Dark       | High-contrast |
+| ---------------------------- | ---------- | ---------- | ------------- |
+| `bg-theme-accent-blue`       | 10.36:1    | **2.54:1** | **2.17:1**    |
+| `bg-theme-text-muted`        | 7.58:1     | **1.00:1** | **1.61:1**    |
+| `bg-theme-nav-bg`            | **1.00:1** | fine       | fine          |
+| `bg-theme-alert-danger-icon` | 4.77:1     | **2.77:1** | **2.78:1**    |
+
+`1.00:1` is white on white. Two equipment-check "Not applicable" buttons were
+invisible in dark mode, and the public portal's "I've Saved the Key" button was
+invisible in light. Neither is a subtle contrast miss; both are controls that
+disappear, and no pass in this review would have caught them — axe abstains on
+the gradient behind them, and both static sweeps needed a shade number.
+
+The sweep resolves the semantic tokens per theme now. It reported nine surfaces
+on its first run and **four of those were the ternary mistake this document
+already records** — a muted fill and a white foreground from two different
+branches, read as one pairing. Reusing the existing per-segment traversal rather
+than writing a second line-based one cut it to the seven real ones.
+
 ### What axe could not decide
 
 axe reports a node it cannot measure as _incomplete_, not as a violation, and

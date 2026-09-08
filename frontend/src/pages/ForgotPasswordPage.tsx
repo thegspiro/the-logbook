@@ -99,7 +99,11 @@ export const ForgotPasswordPage: React.FC = () => {
   }
 
   return (
-    <main className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4 py-12 sm:px-6 lg:px-8"
+    >
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="text-theme-text-primary mb-2 text-3xl font-extrabold">Forgot Your Password?</h1>

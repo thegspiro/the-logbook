@@ -104,6 +104,84 @@ const readPalette = (): Record<string, { r: number; g: number; b: number }> => {
 
 const PALETTE = readPalette();
 
+/**
+ * The semantic theme tokens, resolved per theme.
+ *
+ * `bg-theme-accent-blue` carries no shade number, so the numeric fill pattern
+ * below never matched one and the whole family went unmeasured. That mattered:
+ * the token is blue-900 in light (10.36:1 under white) and a *light* blue in
+ * dark and high-contrast — `#60a5fa` is 2.54:1, `#6bb5ff` is 2.17:1 — so
+ * `bg-theme-accent-blue text-white` reads fine on a desk monitor and fails AA
+ * on the same screen in dark mode. `bg-theme-text-muted text-white` was worse:
+ * `--text-muted` is `#ffffff` in dark, making the control literally invisible.
+ *
+ * Only opaque hex values are resolved. The dark theme's `--surface-bg` is
+ * `rgba(255,255,255,0.06)` over a gradient, which has no single value to
+ * measure; a fill nothing can resolve is reported rather than skipped.
+ */
+const THEME_TOKENS: Array<{ theme: string; selector: string }> = [
+  { theme: 'light', selector: ':root' },
+  { theme: 'dark', selector: '.dark' },
+  { theme: 'high-contrast', selector: '.high-contrast' },
+];
+
+const themeValues = (): Map<string, Map<string, string>> => {
+  const css = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
+  const resolved = new Map<string, Map<string, string>>();
+
+  for (const { theme, selector } of THEME_TOKENS) {
+    const values = new Map<string, string>();
+    for (const match of css.matchAll(new RegExp(`(?:^|\\n)${selector.replace('.', '\\.')}\\s*\\{`, 'g'))) {
+      let depth = 0;
+      const bodyStart = css.indexOf('{', match.index ?? 0);
+      let end = css.length;
+      for (let i = bodyStart; i < css.length; i++) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      let body = css.slice(bodyStart + 1, end);
+      let previous: string;
+      do {
+        previous = body;
+        body = body.replace(/@[\w-]+[^{}]*\{[^{}]*\}/g, ' ');
+      } while (body !== previous);
+      for (const [, name, value] of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+        values.set(name ?? '', (value ?? '').trim());
+      }
+    }
+    resolved.set(theme, values);
+  }
+  return resolved;
+};
+
+const THEME_VALUES = themeValues();
+
+/**
+ * `theme-accent-blue` -> the `--accent-blue` / `--text-muted` value per theme.
+ *
+ * The `@theme` block aliases each Tailwind colour name to a raw custom property
+ * (`--color-theme-accent-blue: var(--accent-blue)`), and the themes below set
+ * the raw one. Read the alias so a renamed token is followed rather than
+ * guessed at.
+ */
+const semanticFill = (name: string): Map<string, string> => {
+  const css = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
+  const alias = new RegExp(`--color-${name}\\s*:\\s*var\\((--[\\w-]+)\\)`).exec(css);
+  const resolved = new Map<string, string>();
+  if (!alias?.[1]) return resolved;
+  for (const { theme } of THEME_TOKENS) {
+    const value = THEME_VALUES.get(theme)?.get(alias[1]);
+    if (value) resolved.set(theme, value);
+  }
+  return resolved;
+};
+
 /** The measured contrast of white on a palette entry, or null if unknown. */
 const whiteOn = (key: string): number | null => {
   const rgb = PALETTE[key];
@@ -288,6 +366,49 @@ describe('primary fill contrast', () => {
         }
         if (ratio < 4.5) {
           offenders.push(`${path.relative(SRC, file)}:${line} — ${prefix}white on ${whole} is ${ratio.toFixed(2)}:1`);
+        }
+      }
+
+      // The semantic fills, measured in every theme.
+      //
+      // These carry no shade number, so the numeric pattern above cannot see
+      // one — and they are the fills most likely to be wrong, because their
+      // value flips between themes while the `text-white` beside them does not.
+      // Both live failures were that shape: `bg-theme-accent-blue` is blue-900
+      // in light (10.36:1) and a light blue in dark (2.54:1) and high-contrast
+      // (2.17:1); `bg-theme-text-muted` is `#ffffff` in dark, which made the
+      // control white on white.
+      //
+      // Same segment discipline as above, and for the same reason: a ternary
+      // puts a muted fill and a white foreground from two different branches on
+      // one line, and reading them as one pairing is how this sweep reported
+      // nine surfaces that render nothing of the kind.
+      for (const [, variant, token] of segment.matchAll(/\b((?:[a-z-]+:)*)bg-(theme-[a-z-]+)\b(?!\/)/g)) {
+        const prefix = variant ?? '';
+        const fg = candidatePrefixes(prefix)
+          .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
+          .find((value) => value !== undefined);
+        if (fg !== 'white') continue;
+        const perTheme = semanticFill(token ?? '');
+        if (perTheme.size === 0) {
+          offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} resolves to no theme value`);
+          continue;
+        }
+        for (const [theme, value] of perTheme) {
+          const rgb = hexToRgb(value);
+          // A translucent token over a gradient has no single value to measure.
+          // Reported rather than skipped: a white-on-translucent pairing is not
+          // something this check can clear, and silence would read as a pass.
+          if (!rgb) {
+            offenders.push(`${path.relative(SRC, file)}:${line} — bg-${token} is ${value} in ${theme}, unmeasurable`);
+            continue;
+          }
+          const themeRatio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+          if (themeRatio < 4.5) {
+            offenders.push(
+              `${path.relative(SRC, file)}:${line} — ${prefix}white on bg-${token} is ${themeRatio.toFixed(2)}:1 in ${theme}`
+            );
+          }
         }
       }
     };

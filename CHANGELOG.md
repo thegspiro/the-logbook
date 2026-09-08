@@ -78,6 +78,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   broken. Both are documented in the spec.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
+### Semantic theme fills were never contrast-checked, and the skip-link sweep read only one branch (2026-09-08)
+
+**Fixed**
+
+- **A semantic fill flips value between themes; the `text-white` beside it does
+  not.** `bg-theme-accent-blue` is blue-900 in light (10.36:1 under white) and a
+  _light_ blue in dark and high-contrast — `#60a5fa` is **2.54:1**, `#6bb5ff` is
+  **2.17:1**. `bg-theme-text-muted` is `#ffffff` in dark, so a white label on it
+  was **1.00:1**: an invisible control. The sweep could not see any of them,
+  because these tokens carry no shade number and the pattern required one.
+  It resolves them per theme now, and found four more beyond the three reported:
+  the danger count badges on the dashboard and admin queue (2.77:1 in dark), the
+  "Delete Draft" button in the election modal (white on slate-100, **1.10:1**),
+  and "I've Saved the Key" in the public-portal API tab (white on `--nav-bg`,
+  which is `#ffffff` in light — **1.00:1**). All seven call sites now use a fixed
+  shade that holds in every theme, or a foreground that inverts with the token.
+- **`skipLinkTarget.test.ts` passed a page that had the target in one branch.**
+  A file-level substring check is not a per-render-state check:
+  `ForgotPasswordPage` carried `id="main-content"` on its success screen and not
+  on the form, and `ResetPasswordPage` had it only while validating a token — so
+  the skip link pointed nowhere in the states people actually sit in, while the
+  sweep reported both covered. It now requires the target on **every** `<main>`
+  in each file, and reports how many of them lack it.
+- **The medical supplies summary was the one section with no shape guard.** A
+  successful `{}` marked it loaded and rendered five zeros and an "Expiring
+  within undefinedd" heading — a plausible all-clear over stock nobody counted.
+
 ### Seven public pages had no skip-link target, and four payload guards were partial (2026-09-08)
 
 **Fixed**

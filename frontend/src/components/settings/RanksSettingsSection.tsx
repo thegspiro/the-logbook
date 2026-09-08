@@ -289,7 +289,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                             }}
                             className={`rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
                               isEligible
-                                ? 'bg-theme-accent-blue text-white shadow-sm'
+                                ? 'bg-blue-800 text-white shadow-sm'
                                 : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-accent-blue border'
                             }`}
                           >

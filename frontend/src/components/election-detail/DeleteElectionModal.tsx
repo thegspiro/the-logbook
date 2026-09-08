@@ -154,8 +154,10 @@ const DeleteElectionModal: React.FC<DeleteElectionModalProps> = ({
               type="button"
               onClick={() => onSubmit(deleteReason)}
               disabled={deleting || (!isDraft && deleteReason.trim().length < 10)}
-              className={`rounded-md px-4 py-2 text-white disabled:opacity-50 ${
-                isDraft ? 'bg-theme-surface-hover hover:bg-theme-surface-secondary' : 'bg-red-800 hover:bg-red-900'
+              className={`rounded-md px-4 py-2 disabled:opacity-50 ${
+                isDraft
+                  ? 'bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-secondary'
+                  : 'bg-red-800 text-white hover:bg-red-900'
               }`}
             >
               {deleting ? 'Deleting...' : isDraft ? 'Delete Draft' : 'Permanently Delete Election'}

@@ -1818,7 +1818,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
           className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'not_applicable'
-              ? 'bg-theme-text-muted text-white'
+              ? 'bg-slate-600 text-white'
               : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted hover:text-theme-text-secondary border'
           }`}
           title="Not on the truck, or does not apply to this apparatus"
@@ -2004,7 +2004,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable', quantityFound: undefined })}
                 className={`flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                   effectiveStatus === 'not_applicable'
-                    ? 'bg-theme-text-muted text-white'
+                    ? 'bg-slate-600 text-white'
                     : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted hover:text-theme-text-secondary border'
                 }`}
                 title="Not on the truck, or does not apply to this apparatus"

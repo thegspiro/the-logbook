@@ -189,15 +189,30 @@ describe('skip link target', () => {
     }
   });
 
-  it('is present on every page that renders outside AppLayout', () => {
-    const missing = pages.filter(
-      (page) => !fs.readFileSync(path.join(SRC, page), 'utf8').includes('id="main-content"')
-    );
+  it('is present in every render branch of every page outside AppLayout', () => {
+    // Every `<main>` in the file, not "the file mentions the id somewhere".
+    //
+    // A substring check passes a page that carries the target in one branch and
+    // drops it in the others, which is exactly what these pages did:
+    // `ForgotPasswordPage` had it on the success screen and not on the form,
+    // and `ResetPasswordPage` had it only while validating the token — so the
+    // skip link pointed nowhere in the states people actually sit in, while
+    // this sweep reported them covered. A page that renders its own shell
+    // renders one `<main>` per branch, and the target belongs on all of them.
+    const findings = pages.flatMap((page) => {
+      const source = fs.readFileSync(path.join(SRC, page), 'utf8');
+      // Brace-aware, because a `<main>` tag's props contain `{...}` expressions
+      // that can hold a `>`.
+      const tags = source.match(/<main\b(?:[^>{]|\{[^}]*\})*?>/gs) ?? [];
+      if (tags.length === 0) return [`${page} — renders no <main> at all`];
+      const untargeted = tags.filter((tag) => !tag.includes('id="main-content"')).length;
+      return untargeted > 0 ? [`${page} — ${untargeted} of ${tags.length} <main> elements lack the target`] : [];
+    });
 
     expect(
-      missing,
-      "these pages render their own root, so each must provide the skip link's target itself: " +
-        'give the content wrapper <main id="main-content"> as the other onboarding steps do'
+      findings,
+      "these pages render their own root, so each must provide the skip link's target itself, " +
+        'in every branch that renders: give each <main> id="main-content" as the onboarding steps do'
     ).toEqual([]);
   });
 });

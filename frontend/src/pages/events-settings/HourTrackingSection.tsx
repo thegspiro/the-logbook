@@ -287,7 +287,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
             <button
               onClick={() => void handleAddMapping()}
               disabled={saving || !newSourceValue || !newCategoryId}
-              className="bg-theme-accent-blue hover:bg-theme-accent-blue/90 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Add
