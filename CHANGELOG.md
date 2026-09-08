@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Read-only permissions stopped counting as write permission, and a rank reorder got a ceiling (2026-09-08)
+
+**Security**
+
+- **A view-only grant can no longer authorize a change to a restricted
+  document folder.** A folder can require a permission before anyone may open
+  it — a facility's insurance and lease folder requires the sensitive-records
+  grant — and the check that decides whether someone may _change_ such a
+  folder is supposed to ignore the read-only entries in that list. It worked
+  out which entries those were from the permission's name, and two of the
+  department's read permissions are spelled in a way it did not recognise, so
+  it would have accepted either as proof of write authority. No folder in the
+  application names either permission today, so nothing was actually exposed;
+  the rule is now right for the next folder somebody sets up, and a test holds
+  every permission's read-or-write classification against its own written
+  description.
+
+- **Reordering the department's rank list is now capped at 500 ranks per
+  request.** The screen sends the whole list back when an administrator drags
+  a rank, and the server looked each one up individually with no limit on how
+  many it would accept — a single crafted request could have tied up a server
+  process for a very long time. No real rank ladder comes close to the cap.
+
+- **Two unused role-assignment helpers now refuse to work across
+  departments.** Neither is reachable from any screen, which is exactly why
+  they were fixed: each took a member and a position with no check that either
+  belonged to the caller's department, so the first screen wired up to them
+  would have crossed that line in a one-line change nobody would have thought
+  to question.
+
 ### Turning on the MFA requirement no longer locks out everyone still on a temporary password (2026-09-08)
 
 **Fixed**

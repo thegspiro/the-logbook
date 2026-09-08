@@ -15,11 +15,18 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import operational_ranks as ranks_ep
 from app.core.permissions import get_rank_default_permissions
-from app.schemas.operational_rank import RankCreate, RankResponse, RankUpdate
+from app.schemas.operational_rank import (
+    MAX_RANKS_PER_REORDER,
+    RankCreate,
+    RankReorderRequest,
+    RankResponse,
+    RankUpdate,
+)
 from app.services.operational_rank_service import (
     DEFAULT_RANKS,
     OperationalRankService,
@@ -325,6 +332,22 @@ class TestReorder:
         assert r1.sort_order == 5
         assert r2.sort_order == 2
         db.commit.assert_awaited()
+
+    def test_reorder_request_is_length_capped(self):
+        """PERM-8: the list length is a query count, so it needs a ceiling.
+
+        ``reorder_ranks`` issues one org-scoped ``get_rank`` per item. Before
+        the cap the only bound was the 60 MB request-body limit against ~60
+        bytes per item.
+        """
+        item = {"id": str(uuid4()), "sort_order": 0}
+        RankReorderRequest(ranks=[item] * MAX_RANKS_PER_REORDER)
+        with pytest.raises(ValidationError):
+            RankReorderRequest(ranks=[item] * (MAX_RANKS_PER_REORDER + 1))
+
+    def test_reorder_request_still_rejects_an_empty_list(self):
+        with pytest.raises(ValidationError):
+            RankReorderRequest(ranks=[])
 
 
 class TestValidateRouteGate:

@@ -27,7 +27,7 @@ from app.services.admin_continuity_service import (
     assert_positions_retain_administrator,
     assert_role_change_retains_administrator,
 )
-from app.utils.org_scoping import assert_all_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 
 
 def slugify(name: str) -> str:
@@ -539,18 +539,45 @@ class RoleManagementService:
         user_id: str,
         role_id: str,
         assigned_by: str,
+        *,
+        organization_id: str,
     ) -> bool:
         """
         Assign a role to a user.
 
+        ``organization_id`` is required and keyword-only for the reason given
+        on :meth:`set_user_roles`: this method has no caller in ``app/``, and
+        an unscoped role-assignment helper crosses tenants the moment an
+        endpoint wires it up — at which point the reviewer of *that* change
+        sees only a one-line service call. Keyword-only so it cannot be
+        supplied by accident of argument order; required so no unscoped path
+        survives (CLAUDE.md pitfall #14b).
+
+        **It enforces tenancy, not authority.** A caller granting a position
+        must additionally hold everything that position grants; that ceiling
+        lives at the endpoint layer (``_enforce_role_grant_ceiling`` in
+        ``users.py``, which the live ``POST /users/{id}/roles/{role_id}``
+        route calls). Any endpoint wired to this method has to call it too.
+
         Args:
-            user_id: User ID
-            role_id: Role ID to assign
+            user_id: User ID, resolved within ``organization_id``
+            role_id: Position ID to assign; verified in-org first
             assigned_by: User ID making the assignment
+            organization_id: The caller's organization. Bounds both ids.
 
         Returns:
             True if assigned, False if already assigned
+
+        Raises:
+            ValueError: the user is not in this org, or the position is not.
         """
+        # Both ids are client-supplied. Bound them before anything is written:
+        # a foreign user_id pins this org's position onto another department's
+        # member, and a foreign role_id grants this member another
+        # department's permission list (XC-1/XC-3).
+        await assert_in_org(db, User, user_id, organization_id, label="member")
+        await assert_in_org(db, Role, role_id, organization_id, label="position")
+
         # Check if already assigned
         result = await db.execute(
             select(user_roles).where(
@@ -603,18 +630,36 @@ class RoleManagementService:
         user_id: str,
         role_id: str,
         removed_by: str,
+        *,
+        organization_id: str,
     ) -> bool:
         """
         Remove a role from a user.
 
+        ``organization_id`` is required and keyword-only for the same reason
+        as on :meth:`assign_role_to_user` — see that docstring.
+
+        **It enforces tenancy, not continuity.** Stripping a position can take
+        an organization's last administrator with it, which is what
+        ``assert_positions_retain_administrator`` refuses; the live
+        ``DELETE /users/{id}/roles/{role_id}`` route calls it, and any endpoint
+        wired to this method has to as well.
+
         Args:
-            user_id: User ID
-            role_id: Role ID to remove
+            user_id: User ID, resolved within ``organization_id``
+            role_id: Position ID to remove; verified in-org first
             removed_by: User ID making the removal
+            organization_id: The caller's organization. Bounds both ids.
 
         Returns:
             True if removed, False if wasn't assigned
+
+        Raises:
+            ValueError: the user is not in this org, or the position is not.
         """
+        await assert_in_org(db, User, user_id, organization_id, label="member")
+        await assert_in_org(db, Role, role_id, organization_id, label="position")
+
         # Get role name for audit before deletion
         role = await db.execute(select(Role.name).where(Role.id == str(role_id)))
         role_name = role.scalar()
