@@ -16,28 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 08 (Membership pipeline, pass 5 follow-up)** — PR
-[#2406](https://github.com/thegspiro/the-logbook/pull/2406), branch
-`claude/security-review-membership-pipeline-pass5-followup`. PR #2405 (the
-pass 5 PR carrying MP-27) was merged directly by the repo owner before this
-session could push a fix for a second Codex finding on that same PR — so
-that fix lands here instead, on a new branch per CLAUDE.md Pitfall #24
-(never reuse a merged PR's branch name). **MP-28 (P2/MED, Codex review of
-PR #2405)** — `_bulk_apply`'s `except ValueError` branch (the rejected-item
-path) left the `FOR UPDATE` lock MP-27's own fix had just acquired held for
-the rest of the batch instead of ending the transaction, blocking (and,
-across two overlapping batches, potentially deadlocking) any other write to
-that prospect until the batch finished. Fixed by committing (not rolling
-back — a raw `rollback()` breaks the test session's async/greenlet bridge
-under `join_transaction_mode="create_savepoint"`) in that branch, safe
-because every current `apply` callback raises before mutating anything.
-Replied on PR #2405's P2 thread and resolved it; replied on its P1 thread
-(a request for genuine two-session concurrency test infrastructure, which
-this repo has no precedent for anywhere — including
-`test_capacity_locking.py`, whose docstring claims real concurrency but
-whose checks are source-inspection only) explaining it's a repo-wide gap
-out of scope for a one-line fix, left unresolved. Subscribed to PR
-activity. Next feature once this merges: 09 Medical screening (PHI).
+**Feature 08 (Membership pipeline, pass 5, MP-29)** — PR TBD, branch
+`claude/security-review-membership-pipeline-mp29`. PR #2406 (MP-28, the
+lock-leak fix on PR #2405's rejected-bulk-item path) has since merged to
+`main`. This PR closes the other thread PR #2406 stood down on: PR #2405's
+P1 Codex thread asked for a test that exercises the MP-27/MP-28 locks
+against a genuinely concurrent second transaction, and #2406's reply said
+no test in this repository does real multi-connection concurrency — that
+was checked more narrowly than it should have been.
+`test_facility_document_reference_race.py` already does exactly this, via
+a `two_sessions` fixture on `database_manager.session_factory` (two real,
+independently-committing sessions; the savepoint-based `db_session`
+fixture every other test in this feature uses never truly commits, so it
+cannot demonstrate cross-transaction visibility). **MP-29 (P1, Codex
+review of PR #2405)** — applied that same pattern to
+`test_membership_pipeline_flow.py`: one session holds a prospect's row
+lock as an in-flight `transfer_to_membership` would, the other runs each
+real status-writing call as a background task and proves it actually
+blocks on the lock and then correctly observes the committed
+`TRANSFERRED` status once it releases; a second new test proves MP-28's
+fix actually releases the lock at the database level rather than only
+satisfying a mocked assertion. Both independently confirmed to fail
+against their pre-fix commits. Will reply on PR #2405's P1 thread and
+resolve it once this PR is up. Subscribed to PR activity. Next feature
+once this merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11449,6 +11451,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29) — 1 fixed (P1, Codex review of PR #2405), closing the gap #2406 stood down on
+
+PR #2406 (MP-28) merged, but its own reply on PR #2405's second Codex
+thread (P1: exercise the lock with competing transactions) stood down,
+stating no test in this repository drives genuine multi-connection
+concurrency. That was checked more narrowly than it should have been:
+`test_facility_document_reference_race.py` (FAC-29 and neighbors) already
+does exactly this — a `two_sessions` fixture on
+`database_manager.session_factory` gives two independent, really-committing
+sessions, used throughout that file (e.g.
+`test_update_document_locks_the_folder_before_the_document`) to hold a
+lock in one session, run the real code under test as a background task in
+the other, and assert it blocks until the lock releases. The savepoint-
+based `db_session` fixture every other test in this feature uses never
+truly commits, so it cannot demonstrate this; `two_sessions` can, and does
+elsewhere in this codebase already.
+
+Applied that exact pattern to `test_membership_pipeline_flow.py` on a new
+branch (`claude/security-review-membership-pipeline-mp29`, based on
+current `main`, which already carries both #2405 and #2406 — same
+Pitfall #24 reasoning #2406 itself used): added
+`TestStatusWritesBlockOnAndObserveAConcurrentTransfer` (one session holds
+the prospect's row lock as an in-flight `transfer_to_membership` would;
+the other runs each real status-writing call as a background task, patched
+only to signal the moment it attempts its own locked read, and asserts the
+task is still blocked at that signal before the lock releases, then that
+it correctly observes the committed `TRANSFERRED` status once it does) and
+`TestBulkApplyReallyReleasesTheLockAfterARejectedItem` (a real-database
+counterpart to MP-28's mocked guard test, proving the lock is actually
+released at the database level, not only that a mock's `commit()` was
+called). Both independently confirmed to fail against their respective
+pre-fix commits (before MP-27's own guard tests existed to catch the
+former; before MP-28's fix for the latter) before passing against the
+current code.
+
+The three pass-5 source-inspection tests and MP-28's mocked guard test are
+kept alongside these — a fast tripwire for the lock call or the commit
+call disappearing entirely, not a substitute for the concurrency proof
+these add on top.
+
+Updated `docs/security-review/MP-08-membership-pipeline.md` with the MP-29
+write-up and refreshed completion-gate numbers. Completion gate: flake8/
+black/isort clean; migrations validated (no schema change); 8 guard tests
+total in `test_membership_pipeline_flow.py` (4 new this round), all
+independently confirmed to fail against their own pre-fix code; scoped
+pytest 615 passed / 1 skipped / 0 failed; full backend suite 11821 passed
+/ 21 skipped / 38 failed — all 38 confirmed pre-existing and unrelated
+(reproduce identically with this round's diff reverted, in unrelated
+modules — legal-text display, onboarding integration, facilities
+onboarding, agency position seeding), not investigated further as out of
+scope for this fix. No frontend file touched.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405) — new PR #2406
 

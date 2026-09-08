@@ -6,15 +6,19 @@ pipeline: pipeline CRUD, prospect management, step progression, and
 the transfer-to-membership workflow.
 """
 
+import asyncio
 import inspect
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import database_manager
+from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
+from app.models.user import Organization
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 pytestmark = [pytest.mark.integration]
@@ -1091,3 +1095,223 @@ class TestTransferToMembership:
         assert email_row is not None
         prospect_email = prospect.email
         assert prospect_email in (email_row[0], email_row[1])
+
+
+# =========================================================================
+# MP-29 (Codex, PR #2405 round 2): the source-inspection guard tests above
+# prove only that `lock_for_update=True` appears textually in the right
+# place -- they pass even if the lock never actually blocked anything.
+# These use two REAL, independently-committing sessions -- the
+# savepoint-based `db_session` fixture never truly commits, so it cannot
+# demonstrate cross-transaction visibility -- to drive the actual race
+# MP-27 closes, and to confirm MP-28's fix genuinely releases the row lock
+# rather than only satisfying a mocked assertion.
+# =========================================================================
+
+
+class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
+    """Each status-writing path's new lock must not just exist in source,
+    it must actually serialize against an in-flight transfer -- blocking
+    until the transfer's row lock releases, then observing the committed
+    TRANSFERRED status rather than the pre-transfer snapshot. A plain
+    SELECT (the pre-fix shape) would return immediately with the stale
+    status and let the write through, silently clobbering the transfer.
+
+    A genuine two-session race test for this exact lock chain has
+    precedent in this repository: `test_facility_document_reference_race.py`
+    drives real, independently-committing sessions against FAC-29's
+    locking reads the same way this class does."""
+
+    @pytest.fixture
+    async def two_sessions(self, _initialize_database):
+        """Two independent AsyncSessions, each its own real connection and
+        transaction -- matches the fixture in
+        test_facility_document_reference_race.py; not hoisted to conftest
+        because this is currently the only other file that needs it."""
+        factory = database_manager.session_factory
+        sessions = [factory(), factory()]
+        try:
+            yield sessions
+        finally:
+            for session in sessions:
+                await session.rollback()
+                await session.close()
+
+    @staticmethod
+    async def _make_active_prospect(session):
+        org = Organization(name="Race Test VFD", slug=f"mp27-race-{_uid()[:12]}")
+        session.add(org)
+        await session.flush()
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Race",
+            last_name="Candidate",
+            email=f"{_uid()}@example.com",
+            status=ProspectStatus.ACTIVE,
+        )
+        session.add(prospect)
+        await session.commit()
+        return org.id, prospect.id
+
+    async def _run_against_in_flight_transfer(self, two_sessions, run_status_write):
+        """Holds the prospect's row lock exactly as a not-yet-committed
+        ``transfer_to_membership`` would (locked read, status flipped to
+        TRANSFERRED, no commit yet), then runs ``run_status_write`` -- a
+        real service call on a second, independent session -- and asserts
+        it blocks on that lock rather than reading a stale snapshot.
+        Returns whatever ``run_status_write`` returns (or re-raises what
+        it raises) once the transfer commits and the write proceeds.
+        """
+        locker, writer = two_sessions
+        org_id, prospect_id = await self._make_active_prospect(locker)
+
+        result = await locker.execute(
+            select(ProspectiveMember)
+            .where(ProspectiveMember.id == prospect_id)
+            .with_for_update()
+        )
+        prospect = result.scalar_one()
+        prospect.status = ProspectStatus.TRANSFERRED
+
+        service = MembershipPipelineService(writer)
+        lock_attempted = asyncio.Event()
+        original_get_prospect = service.get_prospect
+
+        async def _tracking_get_prospect(*args, **kwargs):
+            if kwargs.get("lock_for_update"):
+                lock_attempted.set()
+            return await original_get_prospect(*args, **kwargs)
+
+        writer_task = None
+        try:
+            with patch.object(service, "get_prospect", _tracking_get_prospect):
+                writer_task = asyncio.create_task(
+                    run_status_write(service, prospect_id, org_id)
+                )
+                await asyncio.wait_for(lock_attempted.wait(), timeout=10)
+
+                # Still blocked on the transfer's lock -- not yet having
+                # read (let alone acted on) the row.
+                assert not writer_task.done(), (
+                    "status write proceeded without waiting for the "
+                    "in-flight transfer's row lock to release -- it is "
+                    "reading a stale, unlocked snapshot"
+                )
+
+                await locker.commit()
+                return await asyncio.wait_for(writer_task, timeout=10)
+        finally:
+            if writer_task is not None and not writer_task.done():
+                writer_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await writer_task
+            await locker.rollback()
+            await writer.rollback()
+
+    async def test_set_prospect_status_sees_the_committed_transfer(self, two_sessions):
+        async def _write(service, prospect_id, org_id):
+            return await service.set_prospect_status(
+                prospect_id, org_id, "on_hold", changed_by=None
+            )
+
+        with pytest.raises(ValueError, match="already a member"):
+            await self._run_against_in_flight_transfer(two_sessions, _write)
+
+    async def test_update_prospect_sees_the_committed_transfer(self, two_sessions):
+        async def _write(service, prospect_id, org_id):
+            return await service.update_prospect(
+                prospect_id, org_id, {"status": "on_hold"}, updated_by=None
+            )
+
+        with pytest.raises(ValueError, match="cannot be set or cleared"):
+            await self._run_against_in_flight_transfer(two_sessions, _write)
+
+    async def test_bulk_set_prospect_status_sees_the_committed_transfer(
+        self, two_sessions
+    ):
+        async def _write(service, prospect_id, org_id):
+            return await service.bulk_set_prospect_status(
+                [prospect_id], org_id, "on_hold", changed_by=None
+            )
+
+        results = await self._run_against_in_flight_transfer(two_sessions, _write)
+        assert len(results) == 1
+        assert results[0]["succeeded"] is False
+        assert "already a member" in results[0]["error"]
+
+
+class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
+    """MP-28's own guard test (`test_bulk_apply_releases_the_lock_after_a_
+    rejected_item`, above) mocks `db` and asserts `commit()` was awaited --
+    it proves the fix calls the right method, not that a real InnoDB row
+    lock is actually released. This drives the real service call against a
+    real database and confirms a second, independent session can acquire
+    the same row's lock immediately afterward, using the same two-session
+    technique as the class above."""
+
+    @pytest.fixture
+    async def two_sessions(self, _initialize_database):
+        factory = database_manager.session_factory
+        sessions = [factory(), factory()]
+        try:
+            yield sessions
+        finally:
+            for session in sessions:
+                await session.rollback()
+                await session.close()
+
+    async def test_lock_is_released_after_a_rejected_bulk_item(self, two_sessions):
+        bulk_session, checker_session = two_sessions
+        org = Organization(name="Race Test VFD", slug=f"mp28-bulk-{_uid()[:12]}")
+        bulk_session.add(org)
+        await bulk_session.flush()
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Bulk",
+            last_name="Reject",
+            email=f"{_uid()}@example.com",
+            status=ProspectStatus.ACTIVE,
+        )
+        bulk_session.add(prospect)
+        await bulk_session.flush()
+        # Captured as plain strings before any commit: an object's
+        # attributes are expired after `commit()` (the fix's own end-of-
+        # transaction call, same as after any commit), and an expired
+        # attribute can't be lazily refreshed from plain (non-awaited)
+        # Python code -- only from inside an actually-awaited ORM call.
+        org_id = str(org.id)
+        prospect_id = str(prospect.id)
+        await bulk_session.commit()
+
+        service = MembershipPipelineService(bulk_session)
+        # Target status equals the current status -- _apply_status_change's
+        # "Prospect is already {target}" ValueError, raised *after*
+        # _set_status's locked re-fetch has already taken the row lock.
+        results = await service.bulk_set_prospect_status(
+            [prospect_id], org_id, "active", changed_by=None
+        )
+        assert len(results) == 1
+        assert results[0]["succeeded"] is False
+        assert "already active" in results[0]["error"]
+
+        # If the rejected item's lock were still held, this locking read
+        # from a second, independent session would block until MySQL's
+        # lock-wait timeout; with MP-28's fix it returns immediately
+        # because `_bulk_apply` ends the transaction after the ValueError.
+        try:
+            await asyncio.wait_for(
+                checker_session.execute(
+                    select(ProspectiveMember.id)
+                    .where(ProspectiveMember.id == prospect_id)
+                    .with_for_update()
+                ),
+                timeout=5,
+            )
+        except asyncio.TimeoutError:
+            pytest.fail(
+                "a rejected bulk item left the prospect row locked -- "
+                "_bulk_apply did not end the transaction after the "
+                "ValueError"
+            )
+        finally:
+            await checker_session.rollback()

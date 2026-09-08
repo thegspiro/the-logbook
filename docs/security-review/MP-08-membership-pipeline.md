@@ -4,7 +4,7 @@
 
 ---
 
-## Pass 5 (2026-09-08) — 1 fixed, 0 flagged (3 prior FLAGGED items re-verified unchanged)
+## Pass 5 (2026-09-08) — 3 fixed (MP-27, plus MP-28/MP-29 from Codex review of the PR), 0 flagged (3 prior FLAGGED items re-verified unchanged)
 
 **Scope.** Re-verified this feature is at the current head of a five-pass
 rotation and that nothing landed against it since pass 4 round 4 (2026-09-02)
@@ -268,19 +268,73 @@ fix was applied, then confirmed to pass after. A fourth test, MP-28's
 `test_bulk_apply_releases_the_lock_after_a_rejected_item`, covers the
 `_bulk_apply` fix above.
 
-### Completion gate (pass 5, re-run after the MP-28 fix)
+### MP-29 — P1 — no test drove the MP-27/MP-28 locks through a genuine concurrent transaction (Codex review, PR #2405) — ✅ FIXED
 
-| Check                                                               | Result                                                                                                                                                           |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                       | pass, 0 violations                                                                                                                                               |
-| `black --check app/ tests/ alembic/`                                | pass, 0 files would be reformatted                                                                                                                               |
-| `isort --check-only app/ tests/ alembic/`                           | pass, 0 violations                                                                                                                                               |
-| `python3 scripts/validate_migrations.py --strict`                   | pass — single head, no schema change this pass                                                                                                                   |
-| new guard tests (4 in `test_membership_pipeline_flow.py`)           | 4 passed; all 4 independently confirmed to fail against their respective pre-fix code                                                                            |
-| scoped pytest (`-k "membership or prospect or pipeline"`, 30 files) | 611 passed / 1 skipped (pre-existing/environmental, `py_vapid`) / 0 failed                                                                                       |
-| full backend suite (`pytest tests/ -q`)                             | 11855 passed / 21 skipped (all pre-existing/environmental — `py_vapid`, no Docker daemon/registry, opt-in API contract suite) / 0 failed                         |
-| `npm run typecheck` (frontend)                                      | pass, 0 errors — no frontend file touched this pass; whole-repo run via the aliased-compiler wrapper                                                             |
-| `npm run lint` (frontend)                                           | pass, 0 errors, 2 pre-existing warnings (unrelated file, `CallTypeChips.tsx`, `react-refresh/only-export-components`) — well under the max-warnings-10 threshold |
+**What:** every guard test above, MP-27's three and MP-28's one, either
+source-inspects for `lock_for_update=True` or mocks `db` and asserts
+`commit()`/`rollback()` was awaited. None drives two real, overlapping
+database transactions against the same row, so none can distinguish a
+correct lock from one that is acquired but never actually blocks a second
+transaction, or one that blocks but then reads a stale snapshot anyway.
+PR #2406's stand-down reply on this thread stated no test in this
+repository drives genuine multi-connection concurrency — that was checked
+more narrowly than it should have been: `test_facility_document_reference_race.py`
+(FAC-29 and neighbors) already does exactly this, with a `two_sessions`
+fixture built on `database_manager.session_factory` for two independent,
+really-committing sessions, precisely because the savepoint-based
+`db_session` fixture never truly commits and so cannot demonstrate
+cross-transaction visibility.
+
+**Fix:** added the same `two_sessions` pattern to
+`test_membership_pipeline_flow.py` (not hoisted to `conftest.py` — this is
+currently the only other file that needs it), in two new test classes:
+
+- `TestStatusWritesBlockOnAndObserveAConcurrentTransfer` — one session
+  holds the prospect's row lock exactly as a not-yet-committed
+  `transfer_to_membership` would (locked read, status flipped to
+  `TRANSFERRED`, no commit yet); the other runs the real
+  `set_prospect_status` / `update_prospect` / `bulk_set_prospect_status`
+  call as a background task, patched only to signal the instant it
+  attempts its own locked read. Each test asserts the task is still
+  blocked at that signal, then commits the transfer and asserts the write
+  observes the committed `TRANSFERRED` status — raising for the two
+  single-record paths, returning a `succeeded: false` result for the bulk
+  path, matching each path's real error-reporting shape.
+- `TestBulkApplyReallyReleasesTheLockAfterARejectedItem` — a real-database
+  counterpart to MP-28's mocked guard test: runs `bulk_set_prospect_status`
+  against a prospect already at the target status (the exact rejected-item
+  shape), then has a second, independent session attempt a
+  `SELECT ... FOR UPDATE` on the same row with a 5s `asyncio.wait_for`,
+  proving the lock is actually released at the database level rather than
+  only that `commit()` was called on a mock.
+
+Both were independently confirmed to fail against their respective pre-fix
+code: the concurrency-race tests against the code as it stood right after
+`4107910` (the MP-27 commit, before MP-27's own three source-inspection
+tests existed to catch it — the write path used a plain unlocked read and
+the tests hung until the `asyncio.wait_for` timeout rather than blocking
+correctly), and the real-lock-release test against the code before MP-28's
+fix, reproducing the same timeout MP-28's mocked test caught by a
+different method.
+
+The three pass-5 source-inspection tests and MP-28's mocked guard test are
+kept alongside these, per the existing
+`test_transfer_locks_the_prospect_before_checking_status` precedent noted
+in its own docstring — a fast tripwire for the lock call or the commit
+call disappearing entirely, not a substitute for the concurrency proof.
+
+### Completion gate (pass 5, re-run after the MP-28 and MP-29 fixes)
+
+| Check                                                               | Result                                                                                                                                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                       | pass, 0 violations                                                                                                                                                             |
+| `black --check app/ tests/ alembic/`                                | pass, 0 files would be reformatted                                                                                                                                             |
+| `isort --check-only app/ tests/ alembic/`                           | pass, 0 violations                                                                                                                                                             |
+| `python3 scripts/validate_migrations.py --strict`                   | pass — single head, no schema change this pass                                                                                                                                 |
+| new guard tests (8 in `test_membership_pipeline_flow.py`)           | 8 passed (4 from MP-27/MP-28, 4 new from MP-29); each independently confirmed to fail against its own pre-fix code                                                             |
+| scoped pytest (`-k "membership or prospect or pipeline"`, 30 files) | 615 passed / 1 skipped (pre-existing/environmental, `py_vapid`) / 0 failed                                                                                                     |
+| full backend suite (`pytest tests/ -q`)                             | see PROGRESS.md log entry for this fix — 38 pre-existing/environmental failures in unrelated modules reproduce identically without this diff; 0 failures caused by this change |
+| `npm run typecheck` / `npm run lint` (frontend)                     | not run this round — no frontend file touched                                                                                                                                  |
 
 ## Pass 4, round 4 (2026-09-02) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
 
