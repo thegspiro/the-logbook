@@ -552,7 +552,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <button
               onClick={() => void handleVoid()}
               disabled={voiding || voidReason.trim().length < MIN_VOID_REASON_LENGTH}
-              className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-amber-700 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {voiding ? 'Voiding...' : 'Void result'}
             </button>
@@ -602,7 +602,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             </button>
             <button
               onClick={() => void handleCancel()}
-              className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700"
+              className="rounded-lg bg-amber-700 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-800"
             >
               Cancel test
             </button>

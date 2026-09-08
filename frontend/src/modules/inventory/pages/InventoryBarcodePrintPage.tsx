@@ -1021,7 +1021,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               <button
                 onClick={handlePrint}
                 disabled={!barcodesReady || (isCustom && !customValid)}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
               >
                 <Printer className="h-4 w-4" />
                 <span className="hidden sm:inline">Print</span> Labels

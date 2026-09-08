@@ -218,7 +218,7 @@ const ITTeamBackupAccess: React.FC = () => {
         icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex flex-1 items-center justify-center p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-4 py-8">
         <div className="w-full max-w-4xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
@@ -254,7 +254,7 @@ const ITTeamBackupAccess: React.FC = () => {
                 <button
                   type="button"
                   onClick={addITMember}
-                  className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-700 sm:self-auto"
+                  className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-800 sm:self-auto"
                 >
                   <Plus aria-hidden="true" className="h-4 w-4" />
                   <span>Add Member</span>
@@ -489,7 +489,7 @@ const ITTeamBackupAccess: React.FC = () => {
                 className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
                   isSaving
                     ? 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
-                    : 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
+                    : 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                 }`}
               >
                 {isSaving ? 'Saving Securely...' : 'Continue to Module Selection'}

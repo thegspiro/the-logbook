@@ -208,7 +208,7 @@ const CheckRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowIssueDialog(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
                 Issue Check

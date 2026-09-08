@@ -769,6 +769,7 @@ const RecertificationSection: React.FC = () => {
 
       {pathways.length === 0 ? (
         <EmptyState
+          headingLevel={4}
           icon={Award}
           title="No recertification pathways configured yet."
           description="Create pathways to define how members renew expiring certifications."
@@ -891,6 +892,7 @@ const CompetencySection: React.FC = () => {
 
       {matrices.length === 0 ? (
         <EmptyState
+          headingLevel={4}
           icon={TrendingUp}
           title="No competency matrices configured."
           description="Create matrices to map positions to required skill levels per NFPA 1021/1041."
@@ -954,6 +956,7 @@ const InstructorsSection: React.FC = () => {
 
       {qualifications.length === 0 ? (
         <EmptyState
+          headingLevel={4}
           icon={BookOpen}
           title="No instructor qualifications recorded."
           description="Add qualifications to track who can instruct which courses and evaluate which skills."
@@ -1106,6 +1109,7 @@ const EffectivenessSection: React.FC = () => {
 
       {evaluations.length === 0 ? (
         <EmptyState
+          headingLevel={4}
           icon={BarChart3}
           title="No effectiveness evaluations recorded yet."
           description="Members can submit post-training surveys. Pre/post assessments measure knowledge gain."
@@ -1194,6 +1198,7 @@ const MultiAgencySection: React.FC = () => {
 
       {exercises.length === 0 ? (
         <EmptyState
+          headingLevel={4}
           icon={Globe}
           title="No multi-agency exercises recorded."
           description="Log joint training exercises with other departments, mutual aid drills, and regional exercises."

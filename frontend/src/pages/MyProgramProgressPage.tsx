@@ -278,7 +278,7 @@ const MyProgramProgressPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
 
         <div className="mb-6 flex items-start gap-3">
@@ -406,7 +406,7 @@ const MyProgramProgressPage: React.FC = () => {
             })}
           </div>
         )}
-      </main>
+      </div>
 
       <ConfirmDialog
         isOpen={showLeave}

@@ -476,7 +476,16 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
           >
             Today
           </button>
-          <div className="segmented-group hscroll flex rounded-full" role="group" aria-label="Calendar filter">
+          {/* The filter row already scrolls; the marker is what declares that
+              deliberate. At 320px "My shifts" ends 2px past the edge, which the
+              reflow check reads as content stranded off-screen. Buttons inside,
+              so no tabIndex of its own. */}
+          <div
+            className="segmented-group hscroll flex rounded-full"
+            role="group"
+            aria-label="Calendar filter"
+            data-mobile-scroll-region
+          >
             {FILTERS.map((option) => (
               <button
                 key={option.value}

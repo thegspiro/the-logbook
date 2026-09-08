@@ -196,6 +196,7 @@ export const MemberIdCardsPanel: React.FC<MemberIdCardsPanelProps> = ({ userId, 
 
       {!loading && !loadError && cards.length === 0 && (
         <EmptyState
+          headingLevel={3}
           icon={CreditCard}
           title="No ID cards issued"
           description="Write a code to a blank NFC tag, or record a printed card's serial, so this member can tap in at a check-in station."

@@ -145,6 +145,7 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
 
       {events.length === 0 ? (
         <EmptyState
+          headingLevel={3}
           icon={Wallet}
           title="No payments to review"
           description="Payments reported by a connected provider show up here. Connect PayPal under Settings → Integrations to start matching them to orders automatically."

@@ -79,7 +79,12 @@ export const EventRSVPSection: React.FC<EventRSVPSectionProps> = ({
           )}
         </div>
         {rsvps.length === 0 ? (
-          <EmptyState icon={Users} title="No RSVPs yet" description="No one has responded to this event yet." />
+          <EmptyState
+            icon={Users}
+            title="No RSVPs yet"
+            description="No one has responded to this event yet."
+            headingLevel={3}
+          />
         ) : (
           <>
             <div className="space-y-3">

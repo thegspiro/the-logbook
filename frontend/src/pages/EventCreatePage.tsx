@@ -148,7 +148,7 @@ export const EventCreatePage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <Link
@@ -218,7 +218,7 @@ export const EventCreatePage: React.FC = () => {
             userEvents={userEvents}
           />
         </div>
-      </main>
+      </div>
     </div>
   );
 };

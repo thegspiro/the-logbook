@@ -1666,7 +1666,7 @@ const Dashboard: React.FC = () => {
           ? 'Loading dashboard content...'
           : 'Dashboard content loaded.'}
       </div>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <div data-page-main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
         {/* Header — who and when. The month's hours are stated once, by the
             hours card, which carries the same total plus the split behind it
             and its own failure state; a second copy up here restated the
@@ -1674,7 +1674,7 @@ const Dashboard: React.FC = () => {
         <div className="mb-5 sm:mb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h2 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{greeting}</h2>
+              <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">{greeting}</h1>
               <p className="text-theme-text-muted mt-0.5 text-sm sm:text-base">
                 {formatDateCustom(new Date(), { weekday: 'long', month: 'long', day: 'numeric' }, tz)}
                 <span className="hidden sm:inline">{' · ' + departmentName}</span>
@@ -1991,7 +1991,7 @@ const Dashboard: React.FC = () => {
                   </h3>
                   {feedUnread > 0 && (
                     <span
-                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white tabular-nums"
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-800 px-1.5 text-[11px] font-bold text-white tabular-nums"
                       aria-label={`${feedUnread} unread`}
                     >
                       {feedUnread}
@@ -2465,7 +2465,7 @@ const Dashboard: React.FC = () => {
             <AssetWidgetRegistry widgets={assetWidgets} />
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

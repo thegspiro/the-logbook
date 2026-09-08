@@ -237,7 +237,7 @@ const ShiftCheckInPage: React.FC = () => {
                 void handleCheckIn();
               }}
               disabled={processing || shift.is_finalized || shift.checkin_open === false}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-700 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-800 disabled:opacity-50"
             >
               {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
               Check In
