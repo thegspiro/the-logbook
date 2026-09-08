@@ -1,13 +1,14 @@
-# CHANGELOG.md is an append-only ledger, and that is exactly the shape a
-# textual merge handles worst. Every PR adds its entry at the top of
-# `## [Unreleased]`, so two concurrent PRs write different content at the same
-# offset and git reports a conflict on the pair -- not because they disagree,
-# but because neither can be placed relative to the other without a rule.
+# CHANGELOG.md was closed to new entries on 2026-09-08 (see the note at the top
+# of the file, and CLAUDE.md "Changelog entries are no longer part of a pull
+# request"). Nothing appends to it any more, so the conflict this driver exists
+# to absorb no longer arises on branches opened after that date.
 #
-# `union` is that rule: keep both sides. It is correct here specifically
-# because entries are independent and additive -- no PR edits another's entry,
-# so there is no case where taking both loses an intended change. On
-# 2026-09-06 it was the sole remaining conflict across every open PR.
+# It stays for the branches opened BEFORE it. Those still carry an entry at the
+# top of `## [Unreleased]`, and until they merge or close they conflict with
+# each other exactly as they always did. `union` -- keep both sides -- is the
+# right rule for them specifically because entries are independent and additive:
+# no PR edits another's entry, so taking both loses nothing. Remove this file
+# once no open branch touches CHANGELOG.md.
 #
 # WHAT THIS DOES NOT DO -- established by trying it, after an earlier version
 # of this comment implied otherwise. GitHub's server-side merge does NOT apply
@@ -15,7 +16,8 @@
 # reports a conflict and still refuses. Every merge run by a git client does
 # honour it: `git merge main` on a branch, `git pull`, and merging a PR branch
 # locally. So the workflow this supports is resolve-locally-then-push, not
-# merge-in-the-UI.
+# merge-in-the-UI. That limitation is the reason the entry requirement was
+# retired rather than left to this driver to manage.
 #
 # SECOND SHARP EDGE: git reads merge attributes from the tree being merged
 # INTO, not from either side's content. A branch created before this file

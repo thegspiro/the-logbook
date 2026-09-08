@@ -78,6 +78,53 @@ Write a comment when the code alone cannot communicate:
 - **Intentional departures from convention** — if code deliberately does
   something that looks wrong but is correct for a specific reason, say so
 
+## Changelog Entries Are No Longer Part of a Pull Request
+
+**Do not add an entry to `CHANGELOG.md`.** The file was closed on 2026-09-08 and
+is a historical record through that date; nothing appends to it, and nothing
+appends to the monthly archives under `docs/changelog/` either.
+
+The reason is mechanical rather than a judgement that the history stopped
+mattering. Several sessions work this repository at once, every one of them
+added its entry at the top of `## [Unreleased]`, and two branches writing
+different content at the same file offset conflict on the pair every time — not
+because they disagree, but because neither can be placed relative to the other
+without a rule. `.gitattributes` supplies that rule for a local merge, but
+GitHub's server-side merge ignores merge drivers, so the merge button still
+refused and every pair had to be resolved by hand. The changelog was the largest
+single tax on merging parallel work, and it bought nothing the merged pull
+requests do not already record.
+
+So the narrative goes where it was already going, in files that are per-feature
+and therefore rarely land at the same offset:
+
+| What                                       | Where                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| Why a change was made, what it fixed       | the pull request's Summary and Changes                                  |
+| A security-review finding and its fix      | `docs/security-review/<FEATURE>.md` and its `PROGRESS.md`               |
+| An app-review pass                         | `docs/app-review/PROGRESS.md`                                           |
+| Something the owner must decide, or accept | `docs/KNOWN_LIMITATIONS.md`                                             |
+| Anything that can stop an upgrade booting  | `docs/UPGRADING.md` — **still required**, and not covered by the freeze |
+
+`docs/UPGRADING.md` is the one exemption and is deliberate: an operator
+upgrading an existing installation has nowhere else to read that a flag now
+refuses to start, and that file is per-change prose that concurrent branches do
+not collide on the way an append-only ledger does.
+
+**Branches opened before the freeze still carry entries.** Merging one is
+unchanged — resolve the `## [Unreleased]` conflict by keeping both sides, as
+below. Do not strip an existing entry out of someone else's open branch, and do
+not delete anything already in `CHANGELOG.md`.
+
+**Two things still edit the file, and neither is a per-PR entry.** A **release
+cut** — `docs/RELEASE_CANDIDATE_PLAN.md` item 3.2, retitling `## [Unreleased]`
+as a dated version section — rearranges frozen history rather than adding to it,
+and stays part of the release process. A **monthly archive move** does the same,
+relocating closed `###` sections into `docs/changelog/`. Both are deliberate,
+infrequent, and done alone rather than riding along with a feature branch, so
+neither reintroduces the offset collision this freeze exists to end. What is
+banned is a pull request appending its own change's entry.
+
 ## Pre-Commit Verification Checklist
 
 Before committing any changes, mentally verify these items (the most frequent sources of bugs):
@@ -91,6 +138,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **No unused imports (frontend or backend)** — TypeScript strict mode rejects them; Python flake8 F401 catches them. Remove all unused imports before committing
 - [ ] **No Python lint violations** — no F401 (unused imports), F811 (redefined unused), F821 (undefined names), E303 (excess blank lines), or W291/W293 (trailing whitespace). Run `flake8` on changed files before committing
 - [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
+- [ ] **No `CHANGELOG.md` entry in the diff** — the file is closed to new entries (see above). `docs/UPGRADING.md` carries upgrade-blocking changes instead; a release cut or archive move may still edit `CHANGELOG.md`, on its own branch
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 
 ## Project Overview
@@ -238,12 +286,14 @@ backend and frontend runs together take the better part of ten minutes, and
 spending that on a change no test can observe is time taken from the person
 waiting on the work.
 
-**Documentation-only changes need no local suite at all.** `CHANGELOG.md`,
-`README.md`, `docs/**` and `wiki/**` are prose: nothing imports them, no test
+**Documentation-only changes need no local suite at all.** `README.md`,
+`docs/**`, `wiki/**` and `CHANGELOG.md` are prose: nothing imports them, no test
 asserts on them, and no migration reads them. Resolve, commit and push — CI
-still runs everything, so the safety net is intact either way. This applies
-squarely to the merge conflict these files produce constantly, where both
-branches appended under `## [Unreleased]`: keep both sets and move on.
+still runs everything, so the safety net is intact either way. The changelog
+conflict this used to describe — both branches appending under
+`## [Unreleased]` — now only arises on branches opened before the 2026-09-08
+freeze; while any remain open, resolve it the same way: keep both sets and move
+on.
 
 The exceptions are the two docs a job does parse, and they are cheap to check
 on their own rather than by running everything:
