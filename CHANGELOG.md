@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Turning on the MFA requirement no longer locks out everyone still on a temporary password (2026-09-08)
+
+**Fixed**
+
+- **A member who must change their password can now do so even when the
+  department requires two-factor authentication.** Two separate rules restrict
+  what an account in an unfinished state may reach: one confines a member with
+  a temporary password to the change-password screen, the other confines an
+  un-enrolled member to the two-factor setup screens when the department
+  requires 2FA. A member in both states at once — which is every account an
+  administrator has created, every bulk-imported member, and every prospect
+  converted to a member — could reach neither. Switching on the department-wide
+  2FA requirement permanently locked all of them out of everything except
+  their own profile, with no way back for them or for an administrator short
+  of switching the requirement off again. Changing the password is now allowed
+  under both rules, so the sequence completes: change the password, then
+  enrol.
+
+**Security**
+
+- **Every two-factor code check is now held to single use by a test, not by
+  review.** Three earlier fixes established that verifying an authenticator
+  code must also spend it, so the same code cannot be replayed at the sign-in
+  screen seconds later. Nothing enforced that, and the older non-consuming
+  check was still available under the more obvious name. A sweep now fails the
+  build if any part of the application verifies a code without spending it, if
+  a second place gains the ability to spend one, or if the TOTP library is
+  used outside the one module that wraps it.
+
 ### Error messages stopped naming the mail server, and the cache denylist got a guard (2026-09-08)
 
 **Security**

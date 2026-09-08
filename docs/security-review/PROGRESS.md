@@ -16,11 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 01 (Auth & session lifecycle, pass 4)** — PR
+[#2389](https://github.com/thegspiro/the-logbook/pull/2389), branch
+`claude/security-review-auth-session-pass4`. Pass 4's second feature. **Five
+findings: three fixed, two flagged.** The one that matters is **AUTH-14
+(MED)** — the two account-state gates in `get_current_user`
+(`must_change_password`, and org-wide `mfa_required` while un-enrolled) run in
+sequence and their allowlists did not intersect on any remediation route, so
+switching on the department MFA requirement permanently locked out every
+account still holding a temporary password, with no way back for the member
+_or_ an administrator. Reproduced against the real dependency, fixed with one
+allowlist entry, and now guarded by a test that drives the dependency rather
+than asserting list membership. **AUTH-16 (LOW)** puts a machine check behind
+the verify-implies-consume invariant that AUTH-7/9/13 spent three review
+rounds establishing and that nothing enforced. Two flagged for an owner
+decision: **AUTH-15 (MED)** — the HIPAA maximum password age is enforced only
+in the browser, unlike its server-enforced sibling — and **AUTH-17 (LOW)** —
+expired `sessions` rows are never reaped. Both mirrored into
+`docs/KNOWN_LIMITATIONS.md`. Full write-up: the **Pass 4** section of
+`docs/security-review/AUTH-01-auth-session.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 00 pass 4 merged), preserved for history</summary>
+
 **None.** Feature 00 (Cross-cutting baseline, pass 4)'s PR #2387 merged
 (`96aa60f1`) — a 30-minute watchdog check found it fully green (17/17 checks,
 `mergeable_state: clean`) and idle, with Codex's review completed and no
 findings, and merged it directly rather than leaving it idle. Rotation row 00
 was already ✅ in the PR itself. Next: 01 Auth & session lifecycle.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2387 (pass 4), preserved for history</summary>
@@ -10999,7 +11024,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
@@ -11040,6 +11065,90 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 01 (Auth & session lifecycle, pass 4) — PR #2389 opened
+
+The **Open PR** row read "None" and 01 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass.
+
+**5 findings: 3 fixed, 2 flagged.** Both flagged items are mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+- **AUTH-14 (MED, fixed)** — `get_current_user` runs two account-state
+  refusals in sequence, each with its own allowlist of path suffixes: one for
+  `must_change_password`, one for an un-enrolled member in an org that
+  requires MFA. A member in **both** states can only reach the intersection,
+  and the intersection held no remediation route: gate 1 refused every
+  `/auth/mfa/*` enrollment path, gate 2 refused `/auth/change-password`. So
+  switching on the department-wide MFA requirement permanently locked out
+  every account still holding a temporary password — which is every member an
+  administrator created, every bulk-imported member, and every converted
+  prospect — with no way back for the member or for an administrator
+  (`admin_reset_password` re-sets the flag; `admin_reset_mfa` clears an
+  enrollment that never existed). Fixed by putting `/auth/change-password` on
+  both lists, which is also the right ordering: binding an authenticator to
+  an account still on the administrator's temporary password is worse than
+  the reverse. Reproduced against the real dependency across all four state
+  combinations before the fix, not reasoned from the tuples.
+- **AUTH-16 (LOW, fixed)** — AUTH-7, AUTH-9 and AUTH-13 spent three review
+  rounds establishing that every second-factor check must verify **and**
+  consume under a row lock, and nothing enforced it: the non-consuming
+  `mfa_service.verify_totp` was still exported with zero `app/` callers under
+  the most obvious name in the module — AUTH-6's landmine shape, on the exact
+  primitive AUTH-7 had to remove from three routes. A new AST sweep now
+  asserts `verify_totp` has no call sites, that each consuming primitive has
+  exactly **one** named caller, and that `pyotp` is imported only by
+  `mfa_service.py` (which catches a hand-rolled check that would bypass both
+  helpers without naming either). Deleting `verify_totp` was considered and
+  rejected — the guard covers strictly more than removal would.
+- **AUTH-18 (NIT, fixed, docs only)** — three claims in this feature's own
+  record had drifted: the route split is 14 public / 12 private (passes 1–3
+  said 11 / 15, while pass 1's own table already listed 14 unauthenticated
+  rows); AUTH-12's "`mfa_setup` is the only place that writes `mfa_secret`
+  outside `mfa_disable`" missed `users.py`'s `admin_reset_mfa` (the fix is
+  still sufficient, but for a different reason than the one recorded); and
+  pass 1's "no dead endpoints" no longer holds for `/check`, whose sole
+  frontend wrapper now has zero callers.
+- **AUTH-15 (MED, flagged)** — `HIPAA_MAXIMUM_PASSWORD_AGE_DAYS` (default 90)
+  has three readers and none refuses a request; the only thing acting on it is
+  `ProtectedRoute.tsx`. Its sibling `must_change_password` **is** gated in
+  `get_current_user`, with a comment saying the API must not rely on the
+  frontend — and no matching gate exists for `password_expired`. A 400-day-old
+  password gets a full session from `curl`. Flagged rather than fixed because
+  the gate locks out every over-age member the day it deploys; the rollout is
+  an owner decision.
+- **AUTH-17 (LOW, flagged)** — `sessions` rows are deleted on four events and
+  never reaped otherwise; a session that simply expires is never touched
+  again, keeping its `ip_address` and `user_agent` indefinitely in an app that
+  sets a deliberate 7-year window on its audit log. `scheduled_tasks.py` has
+  retention jobs for the two neighbouring tables and none for this one.
+  Flagged: a reaper needs a retention window (a product decision, since these
+  rows are the data behind any future "where am I signed in" screen) and a new
+  scheduled task, which is feature 31's surface.
+
+Re-verified still current: AUTH-1's OAuth org-active fix and its guard test,
+AUTH-3's stale-response guard, AUTH-4's reasoning, AUTH-7/9/12/13's MFA
+consumption and locking, and AUTH-6's removal. Also recorded four things
+checked and deliberately **not** raised (the 5-minute `mfa_pending` window's
+org-active and replay properties, `roster()`'s pagination, and why
+`enforce_suspicious_ip` covers only the two login routes) so pass 5 does not
+re-derive them.
+
+**`git log` carries no usable history for this feature** — the repository is
+squashed at `2aa66b8e`, which is the root commit for every path in scope — so
+unlike passes 2 and 3 this one could not diff against the prior reviewed
+state. It re-read the code instead and says so, rather than reporting a
+diff-scoped verdict it could not compute.
+
+Gate: flake8 / black (26.5.1, CI's pin — the 26.3.1 on `PATH` was shadowed,
+so the gate ran as `python3 -m black`) / isort (9.0.1, CI's pin) /
+`validate_migrations --strict` (437 revisions, single head `b1e7c3a92f45`)
+all clean; 600 scoped backend tests pass (2 skipped, both pre-existing
+environment gaps), plus 44 standing guard tests and
+`scripts/check_docs_links.py`. No frontend source changed, so `tsc` / `eslint`
+are recorded as n/a rather than as a gate that ran.
+
+Next: 02 Permissions & roles.
 
 ### 2026-09-08 — Feature 00 (Cross-cutting baseline, pass 4)'s PR #2387 merged, watchdog recorded it
 
