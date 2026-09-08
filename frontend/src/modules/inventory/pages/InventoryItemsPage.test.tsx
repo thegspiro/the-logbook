@@ -17,6 +17,7 @@ const mockGetItemColors = vi.fn();
 const mockPinItem = vi.fn();
 const mockUnpinItem = vi.fn();
 const mockReorderItemPins = vi.fn();
+const mockExportItemsCsv = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -31,7 +32,7 @@ vi.mock('../../../services/api', () => ({
     pinItem: (...a: unknown[]) => mockPinItem(...a) as unknown,
     unpinItem: (...a: unknown[]) => mockUnpinItem(...a) as unknown,
     reorderItemPins: (...a: unknown[]) => mockReorderItemPins(...a) as unknown,
-    exportItemsCsv: vi.fn(),
+    exportItemsCsv: (...a: unknown[]) => mockExportItemsCsv(...a) as unknown,
   },
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
@@ -1036,5 +1037,107 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
     expect(header('Category').length).toBeGreaterThan(0);
     expect(header('Location').length).toBeGreaterThan(0);
     expect(header('Size').length).toBeGreaterThan(0);
+  });
+});
+
+describe('InventoryItemsPage — CSV export', () => {
+  // This block sets its own mock implementations rather than inheriting
+  // whatever ran before it (CLAUDE.md pitfall #28: `vi.clearAllMocks()` clears
+  // calls, not implementations).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetSummary.mockResolvedValue({
+      total_items: 0,
+      non_medical_items: 0,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([{ id: 'loc-1', name: 'Station 1' }]);
+    mockGetItemColors.mockResolvedValue(['Navy']);
+    mockCheckPermission.mockReturnValue(true);
+    mockExportItemsCsv.mockReset();
+    mockExportItemsCsv.mockResolvedValue(new Blob(['Name\n'], { type: 'text/csv' }));
+
+    // jsdom implements neither, and the handler calls both around the download.
+    const url = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    url.createObjectURL = vi.fn(() => 'blob:export');
+    url.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    const url = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    delete url.createObjectURL;
+    delete url.revokeObjectURL;
+  });
+
+  it('exports the list on screen, not a hand-picked three of its filters', async () => {
+    // The regression this suite exists for: the handler named category, status
+    // and search out of eleven filters, so narrowing to one colour and
+    // condition and hitting Export produced the whole department's uniforms —
+    // under a filename saying otherwise, which is what makes it dangerous.
+    //
+    // Asserted against the parameters the LIST was fetched with rather than a
+    // literal object, so a filter added to the page fails this test until it
+    // reaches the export too.
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    await user.type(screen.getByLabelText('Search items...'), 'helmet');
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+    await user.selectOptions(screen.getByLabelText('Filter by condition'), 'fair');
+    await user.selectOptions(screen.getByLabelText('Filter by type'), 'uniform');
+    await user.selectOptions(await screen.findByLabelText('Filter by color'), 'Navy');
+    await user.selectOptions(screen.getByLabelText('Filter by location'), 'loc-1');
+
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'helmet', color: 'Navy', location_id: 'loc-1' })
+      )
+    );
+
+    await user.click(screen.getByRole('button', { name: /Export/ }));
+    await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
+
+    const listCall = mockGetItems.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    // Paging is the list's own concern; `group_by` orders rows on screen and a
+    // spreadsheet regroups for itself. Everything else must match.
+    const { skip: _skip, limit: _limit, group_by: _groupBy, ...expected } = listCall;
+    expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expected);
+  });
+
+  it('carries the sort the list is using', async () => {
+    // The sort controls only render with rows beneath them.
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: /Sort descending/i }));
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ sort_order: 'desc' })));
+
+    await user.click(screen.getByRole('button', { name: /Export/ }));
+    await waitFor(() =>
+      expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ sort_order: 'desc' }))
+    );
+  });
+
+  it('reports a failed export instead of claiming one', async () => {
+    mockExportItemsCsv.mockRejectedValue({ response: { data: { detail: 'Invalid status: bogus' } } });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    await user.click(screen.getByRole('button', { name: /Export/ }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(String(mockToastError.mock.calls[0]?.[0])).toContain('Invalid status: bogus');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 });

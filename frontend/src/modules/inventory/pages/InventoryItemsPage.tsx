@@ -1096,11 +1096,17 @@ const InventoryItemsPage: React.FC = () => {
   /* ---- export ---- */
   const exportCsv = async () => {
     try {
-      const blob = await inventoryService.exportItemsCsv({
-        category_id: fCat || undefined,
-        status: fStatus || undefined,
-        search: search.trim() || undefined,
-      });
+      // The same object the list itself is fetched with, not a hand-picked
+      // subset of it: this handler used to name three of the eleven filters,
+      // so a member who narrowed to one colour and size exported the entire
+      // department's uniforms under a filename claiming otherwise. Reusing
+      // `filterParams` means the next filter added to the page reaches the
+      // export with no second list to remember.
+      //
+      // `group_by` is dropped deliberately — it orders rows on screen, and a
+      // spreadsheet regroups for itself.
+      const { group_by: _groupBy, ...exportParams } = filterParams();
+      const blob = await inventoryService.exportItemsCsv(exportParams);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

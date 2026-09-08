@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: the items CSV is the list it was exported from (2026-09-08)
+
+**Fixed**
+
+- **Export sent three of the page's eleven filters.** `exportCsv` hand-listed
+  `category_id`, `status` and `search`, so narrowing the list to a colour, size,
+  condition or location and pressing Export produced the entire uniform closet —
+  under a filename saying otherwise, which is the part that gets acted on. The
+  handler now sends the same object the list itself is fetched with, so the next
+  filter added to the page reaches the export with no second list to remember.
+  `group_by` is dropped deliberately: it orders rows on screen, and a
+  spreadsheet regroups for itself.
+- **The export carried medical stock the page never shows.** `GET /items`
+  hard-codes `exclude_item_types=MEDICAL_ITEM_TYPES` because EMS supplies are
+  listed on their own page; the export did not. Not a permission bypass — the
+  medical endpoints are already open to anyone holding `inventory.manage` — but
+  a file that disagrees with its own screen is read as the truth.
+- **The file stopped at 10,000 rows with nothing saying so.** It is now paged
+  and streamed for real: the previous `StreamingResponse` wrapped a fully
+  materialized string in a one-element iterator.
+
+**Changed**
+
+- `GET /inventory/items/export` accepts the full filter and sort surface of
+  `GET /inventory/items` (`condition`, `item_type`, `location_id`,
+  `unassigned_location`, `storage_area_id`, `vendor_id`, `size`, `color`,
+  `style`, `active_only`, `sort_by`, `sort_order`). Existing callers sending the
+  old three are unaffected.
+- An unrecognized `status` is now a 400 rather than a silently ignored filter,
+  matching `GET /items`. Ignoring it exported the whole catalogue.
+
+**Notes**
+
+- The streaming generator opens its own database session on purpose. Since
+  FastAPI 0.106 a `yield` dependency's exit code runs _before_ the response body
+  is sent, so the request's `Depends(get_db)` session is already closed by the
+  time a streaming body is consumed.
+- The endpoint had no test on either side, which is how all three defects
+  survived together. `backend/tests/test_inventory_export.py` is new.
+
 ### Training guide: the items list pictured as it now is (2026-09-08)
 
 **Changed**

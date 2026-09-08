@@ -5,6 +5,7 @@ Endpoints for inventory management including categories, items, assignments,
 checkouts, maintenance, and reporting.
 """
 
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -33,7 +34,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import async_session_factory, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
@@ -927,116 +928,195 @@ async def create_item_if_absent(
     return InventoryItemCreateIfAbsentResult(item=new_item, created=created)
 
 
+# Rows fetched per database page while the export streams. Small enough that
+# the response starts flowing before the whole catalogue is materialized, large
+# enough that a department-sized export is a handful of queries.
+_EXPORT_PAGE_SIZE = 500
+
+_EXPORT_COLUMNS = [
+    "Name",
+    "Category",
+    "Serial Number",
+    "Asset Tag",
+    "Barcode",
+    "Status",
+    "Condition",
+    "Storage Location",
+    "Station",
+    "Manufacturer",
+    "Model Number",
+    "Quantity",
+    # Lot-stocked consumables carry their real count here; the Quantity
+    # column above is not maintained for them, and an export that shows
+    # only it disagrees with every screen.
+    "Ready Lot Stock",
+    "Tracking Type",
+    "Purchase Date",
+    "Purchase Price",
+    "Vendor",
+    "Warranty Expiration",
+    "Notes",
+]
+
+
+def _export_item_row(item: InventoryItem) -> List[Any]:
+    """One CSV row for an item, in ``_EXPORT_COLUMNS`` order."""
+    # The tracked vendor is the answer when the item has one; the legacy
+    # free-text column is only a fallback for rows never linked.
+    linked_vendor = item.__dict__.get("vendor_record")
+    return [
+        item.name,
+        item.category.name if item.category else "",
+        item.serial_number or "",
+        item.asset_tag or "",
+        item.barcode or "",
+        (item.status.value if hasattr(item.status, "value") else str(item.status)),
+        (
+            item.condition.value
+            if hasattr(item.condition, "value")
+            else str(item.condition)
+        ),
+        item.storage_location or "",
+        item.station or "",
+        item.manufacturer or "",
+        item.model_number or "",
+        item.quantity,
+        (
+            getattr(item, "lot_stock", None)
+            if getattr(item, "is_lot_stocked", False)
+            else ""
+        ),
+        (
+            item.tracking_type.value
+            if hasattr(item.tracking_type, "value")
+            else str(item.tracking_type)
+        ),
+        str(item.purchase_date) if item.purchase_date else "",
+        str(item.purchase_price) if item.purchase_price else "",
+        (linked_vendor.name if linked_vendor is not None else item.vendor) or "",
+        str(item.warranty_expiration) if item.warranty_expiration else "",
+        item.notes or "",
+    ]
+
+
 @router.get("/items/export")
 async def export_items_csv(
     category_id: UUID | None = None,
     status: str | None = None,
+    condition: str | None = None,
+    item_type: str | None = None,
+    location_id: UUID | None = None,
+    unassigned_location: bool = False,
+    storage_area_id: UUID | None = None,
+    vendor_id: UUID | None = None,
     search: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    size: str | None = None,
+    color: str | None = None,
+    style: str | None = None,
+    active_only: bool = True,
+    sort_by: str | None = None,
+    sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
-    """Export inventory items as CSV."""
+    """Export inventory items as CSV.
+
+    Takes the same filter and sort surface as ``GET /items`` and applies the
+    same medical-stock exclusion, because a file that disagrees with the list
+    it was exported from is read as the truth and acted on. Pinning and
+    grouping are not accepted: both are on-screen ordering a spreadsheet
+    reapplies for itself.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
     import io
 
     from starlette.responses import StreamingResponse
 
     from app.utils.csv_export import SafeCsvWriter
 
-    service = InventoryService(db)
-    status_enum = None
-    if status:
+    def _enum_filter(enum_cls: Any, raw: str | None, field: str) -> Any:
+        if not raw:
+            return None
         try:
-            status_enum = ItemStatus(status)
+            return enum_cls(raw)
         except ValueError:
-            pass
+            # Rejected rather than ignored: silently dropping an unrecognized
+            # filter exports the whole catalogue under a filename that says
+            # otherwise.
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid {field}: {raw}",
+            )
 
-    items, _ = await service.get_items(
-        organization_id=current_user.organization_id,
-        category_id=category_id,
-        status=status_enum,
-        search=search,
-        active_only=True,
-        limit=10000,
-    )
+    status_enum = _enum_filter(ItemStatus, status, "status")
+    condition_enum = _enum_filter(ItemCondition, condition, "condition")
+    item_type_enum = _enum_filter(ItemType, item_type, "item_type")
 
-    output = io.StringIO()
-    # SafeCsvWriter neutralizes spreadsheet formula injection in free-text cells.
-    writer = SafeCsvWriter(output)
-    writer.writerow(
-        [
-            "Name",
-            "Category",
-            "Serial Number",
-            "Asset Tag",
-            "Barcode",
-            "Status",
-            "Condition",
-            "Storage Location",
-            "Station",
-            "Manufacturer",
-            "Model Number",
-            "Quantity",
-            # Lot-stocked consumables carry their real count here; the Quantity
-            # column above is not maintained for them, and an export that shows
-            # only it disagrees with every screen.
-            "Ready Lot Stock",
-            "Tracking Type",
-            "Purchase Date",
-            "Purchase Price",
-            "Vendor",
-            "Warranty Expiration",
-            "Notes",
-        ]
-    )
-    for item in items:
-        cat_name = item.category.name if item.category else ""
-        # The tracked vendor is the answer when the item has one; the legacy
-        # free-text column is only a fallback for rows never linked.
-        linked_vendor = item.__dict__.get("vendor_record")
-        writer.writerow(
-            [
-                item.name,
-                cat_name,
-                item.serial_number or "",
-                item.asset_tag or "",
-                item.barcode or "",
-                (
-                    item.status.value
-                    if hasattr(item.status, "value")
-                    else str(item.status)
-                ),
-                (
-                    item.condition.value
-                    if hasattr(item.condition, "value")
-                    else str(item.condition)
-                ),
-                item.storage_location or "",
-                item.station or "",
-                item.manufacturer or "",
-                item.model_number or "",
-                item.quantity,
-                (
-                    getattr(item, "lot_stock", None)
-                    if getattr(item, "is_lot_stocked", False)
-                    else ""
-                ),
-                (
-                    item.tracking_type.value
-                    if hasattr(item.tracking_type, "value")
-                    else str(item.tracking_type)
-                ),
-                str(item.purchase_date) if item.purchase_date else "",
-                str(item.purchase_price) if item.purchase_price else "",
-                (linked_vendor.name if linked_vendor is not None else item.vendor)
-                or "",
-                str(item.warranty_expiration) if item.warranty_expiration else "",
-                item.notes or "",
-            ]
-        )
+    # Resolved before the generator starts: nothing may be read off the
+    # request-scoped session once the body is streaming (see below).
+    organization_id = current_user.organization_id
 
-    output.seek(0)
+    async def _rows() -> AsyncGenerator[str, None]:
+        # This generator opens its own session. Since FastAPI 0.106 the exit
+        # code of a `yield` dependency runs BEFORE the response body is sent,
+        # so the `Depends(get_db)` session is already closed by the time a
+        # StreamingResponse is consumed -- reusing it fails at runtime, and
+        # only for this endpoint.
+        buffer = io.StringIO()
+        # SafeCsvWriter neutralizes spreadsheet formula injection in free-text
+        # cells.
+        writer = SafeCsvWriter(buffer)
+
+        def drain() -> str:
+            text = buffer.getvalue()
+            buffer.seek(0)
+            buffer.truncate(0)
+            return text
+
+        writer.writerow(_EXPORT_COLUMNS)
+        yield drain()
+
+        async with async_session_factory() as db:
+            service = InventoryService(db)
+            skip = 0
+            while True:
+                items, _ = await service.get_items(
+                    organization_id=organization_id,
+                    category_id=category_id,
+                    status=status_enum,
+                    condition=condition_enum,
+                    item_type=item_type_enum,
+                    # Gear and uniforms only -- medical stock is listed, and
+                    # exported, from its own page.
+                    exclude_item_types=MEDICAL_ITEM_TYPES,
+                    location_id=location_id,
+                    unassigned_location=unassigned_location,
+                    storage_area_id=storage_area_id,
+                    vendor_id=vendor_id,
+                    search=search,
+                    size=size,
+                    color=color,
+                    style=style,
+                    active_only=active_only,
+                    sort_by=sort_by,
+                    sort_order=sort_order,
+                    skip=skip,
+                    limit=_EXPORT_PAGE_SIZE,
+                )
+                if not items:
+                    return
+                for item in items:
+                    writer.writerow(_export_item_row(item))
+                yield drain()
+                # A short page is the last page. Every sort carries an id
+                # tiebreaker, so offset paging cannot repeat or skip a row.
+                if len(items) < _EXPORT_PAGE_SIZE:
+                    return
+                skip += _EXPORT_PAGE_SIZE
+
     return StreamingResponse(
-        iter([output.getvalue()]),
+        _rows(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=inventory_export.csv"},
     )
