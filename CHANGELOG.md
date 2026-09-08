@@ -52,6 +52,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   still turns it red after the change.
 
 No production change — the component's behaviour was correct throughout.
+
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 
 **Fixed**
@@ -122,91 +123,6 @@ No production change — the component's behaviour was correct throughout.
   rather than the one that opened, which reported a working focus trap as
   broken. Both are documented in the spec.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
-
-### An adaptive fill needs an adaptive foreground, not a fixed shade (2026-09-08)
-
-**Fixed**
-
-- **Replacing the adaptive theme tokens with fixed shades traded one contrast
-  failure for another.** `bg-blue-800` clears AA against white text, but it is
-  only **2.02:1 against the dark theme's background** — and on the rank selector
-  the fill _is_ the eligibility indicator, so the selected state became hard to
-  find in the mode it was supposed to fix. The tokens are back, each paired with
-  a foreground that flips with them (`text-white dark:text-slate-950`). That
-  clears both bars everywhere: **7.93:1** text and **7.02:1** non-text in dark,
-  against 2.02:1 for the fixed shade. High-contrast carries the `.dark` class
-  too, so one variant covers both. Nothing looks different from `main` now.
-- **21 render branches across 10 public pages had no `<main>` at all**, so the
-  skip link pointed nowhere in every loading, error and submitted state — the
-  states people wait in. The previous check required the target on every
-  `<main>` it found, which passes a branch that renders none. It now walks each
-  component-level return; a branch routed through a shared shell that carries
-  the target (`FinanceApprovalPage`) still passes.
-- **The contrast sweep resolved a foreground once and reused it across themes**,
-  so `text-slate-950 dark:text-white` on a light fill was missed and the
-  `dark:`-variant fix would have been reported as a false failure. Resolved per
-  theme now. Its standalone-literal prefilter also required a numeric shade,
-  which discarded `const badge = 'bg-theme-… text-white'` before the semantic
-  check ran.
-
-**Fixed (from review of this branch's own fix)**
-
-- **The branch sweep took a helper component for a page.** `OrganizationSetup`
-  declares an `AddressForm` beside the page, indented identically, and it
-  renders _inside_ the page's own `<main>` — so giving its root the landmark
-  produced nested `<main>` elements with duplicate ids, twice over when both
-  address sections expand. That is precisely the defect this sweep exists to
-  catch, committed by the sweep's own fix. The check is scoped to the page
-  component's body now, and the component name travels with the file to make
-  that possible.
-- **`role="status"` on a `<main>` overrides its landmark role**, so two loading
-  states had the skip link's target in the DOM and no main landmark behind it —
-  the source-level sweep passed on the id while assistive technology got
-  nothing. The live region moved to a child in `ApplicationStatusPage` and
-  `EventRequestStatusPage`.
-
-**Testing**
-
-- Two regression tests for the malformed medical-supplies summary: `{}` must
-  surface the overview error rather than render five zeros, and a malformed
-  _refresh_ must leave the loaded counters on screen behind that error rather
-  than blanking them.
-- `checkSweepContrast.test.ts` carries `slate-600`. That entry is now unused —
-  reverting to the adaptive tokens took `bg-slate-600` back out of the sweep
-  files — but it is left in place: the guard throws on an _unknown_ shade, not
-  an unmeasured one, so the entry costs nothing and the next change that reaches
-  for that shade finds it measured. Recorded with it, because it is the reason
-  that guard went red at all: `vitest related` follows import edges, so a
-  **source-sweeping test is invisible to it** — it reads the file off disk
-  rather than importing it. Page-markup changes need the full suite, not the
-  related one.
-
-### Semantic theme fills were never contrast-checked, and the skip-link sweep read only one branch (2026-09-08)
-
-**Fixed**
-
-- **A semantic fill flips value between themes; the `text-white` beside it does
-  not.** `bg-theme-accent-blue` is blue-900 in light (10.36:1 under white) and a
-  _light_ blue in dark and high-contrast — `#60a5fa` is **2.54:1**, `#6bb5ff` is
-  **2.17:1**. `bg-theme-text-muted` is `#ffffff` in dark, so a white label on it
-  was **1.00:1**: an invisible control. The sweep could not see any of them,
-  because these tokens carry no shade number and the pattern required one.
-  It resolves them per theme now, and found four more beyond the three reported:
-  the danger count badges on the dashboard and admin queue (2.77:1 in dark), the
-  "Delete Draft" button in the election modal (white on slate-100, **1.10:1**),
-  and "I've Saved the Key" in the public-portal API tab (white on `--nav-bg`,
-  which is `#ffffff` in light — **1.00:1**). All seven call sites now use a fixed
-  shade that holds in every theme, or a foreground that inverts with the token.
-- **`skipLinkTarget.test.ts` passed a page that had the target in one branch.**
-  A file-level substring check is not a per-render-state check:
-  `ForgotPasswordPage` carried `id="main-content"` on its success screen and not
-  on the form, and `ResetPasswordPage` had it only while validating a token — so
-  the skip link pointed nowhere in the states people actually sit in, while the
-  sweep reported both covered. It now requires the target on **every** `<main>`
-  in each file, and reports how many of them lack it.
-- **The medical supplies summary was the one section with no shape guard.** A
-  successful `{}` marked it loaded and rendered five zeros and an "Expiring
-  within undefinedd" heading — a plausible all-clear over stock nobody counted.
 
 ### Seven public pages had no skip-link target, and four payload guards were partial (2026-09-08)
 

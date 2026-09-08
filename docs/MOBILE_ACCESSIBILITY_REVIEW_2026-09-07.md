@@ -409,3 +409,53 @@ still measuring the refusal screen, whose heading is an `h2`. A route stuck on
 it therefore has no `h1` at all — which is how a rule about headings found a
 coverage gap. The count in the first half of this document should read nine,
 not eight.
+
+## Three regressions this branch's own fixes introduced
+
+Each was found in review of the fix rather than by any check the fix added, and
+all three are the same shape: a repair applied by a sweep that was slightly
+wider than the defect.
+
+**A fixed shade is not a fix when the fill is adaptive.** The seven semantic
+call sites above were first repaired by replacing the theme token with a
+literal — `bg-blue-800` clears AA under white text in every theme, which is
+true and beside the point. That fill is **2.02:1 against the dark theme's
+background**, and on the rank selector the fill _is_ the eligibility indicator,
+so the control it was meant to rescue became hard to find in the mode it was
+failing in. Trading a text-contrast failure (1.4.3) for a non-text one (1.4.11)
+is not progress. The tokens are back, each paired with a foreground that flips
+with them — `text-white dark:text-slate-950` — which measures **7.93:1** text
+and **7.02:1** non-text in dark. High-contrast carries the `.dark` class too, so
+one variant covers both, and nothing looks different from `main`.
+
+**A helper component beside a page is not a render branch.** The sweep that gave
+21 public render branches their missing `<main id="main-content">` matched on
+indentation, and `OrganizationSetup` declares an `AddressForm` at the same
+indentation as the page itself. Its root renders _inside_ the page's own
+`<main>`, so the fix nested a second landmark with a duplicate id — twice over
+when both address sections expand — which is precisely the defect the sweep
+exists to catch. Separately, `role="status"` on a `<main>` **replaces** its
+landmark role, so two loading states satisfied the source-level check for the id
+while assistive technology got no main landmark at all; the live region moved to
+a child.
+
+**A protected page inherits the landmark and must not be given one.** The same
+sweep reached `ShiftReportPrintPage`, which is mounted by `getSchedulingRoutes()`
+inside the `AppLayout` route — `AppLayout` already renders the page's single
+`<main id="main-content">`, so its loading and error branches acquired a nested
+landmark and a duplicate id. This is the second time the sweep over-collected in
+this direction and neither instance was visible to `skipLinkTarget.test.ts`,
+which only ever asked whether a **public** page was _missing_ the target. It now
+checks the inverse as well: any `.tsx` outside the derived public set and
+`AppLayout` carrying `id="main-content"` in markup fails. The page's success
+branch had the same duplicate id from before this work; it went with them.
+
+### The pre-commit hook cannot see a source-sweeping test
+
+`checkSweepContrast.test.ts` went red on a push after a change to page markup it
+measures, having passed the pre-commit hook. The hook runs `vitest related`,
+which selects tests by import edge — and a test that reads source files off disk
+imports none of them, so it is invisible to that selection by construction. Any
+change to page markup or shared CSS needs the full suite, not the related one.
+The same applies to `primaryFillContrast`, `skipLinkTarget`,
+`dialogScrollIntegrity`, `routeIntegrity` and `themeGradientContrast`.
