@@ -853,7 +853,7 @@ class Session(Base):
     )
 
     token = Column(String(512), nullable=False, unique=True, index=True)
-    refresh_token = Column(String(512))
+    refresh_token = Column(String(512), index=True)
     # The immediately-previous refresh token, honored for a short grace window
     # after rotation so two concurrent legitimate refreshes (multi-tab, app
     # boot, network retry) don't look like token theft and trigger a mass logout.

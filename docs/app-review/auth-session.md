@@ -3,6 +3,24 @@
 **Prefix:** `AUTH` · **Iteration:** A2 · **Reviewed:** 2026-08-05 (pass 1),
 2026-08-08 (pass 2)
 
+## Pass 4 (2026-09-08) — security-review AUTH pass 4 — see AUTH-01
+
+Two further corrections to the record below, both documentation-only:
+
+- **The route split is 14 public / 12 private, not 10/15 (below) or 11/15
+  (the pass-3 note that follows).** The public set is exactly the 14 `auth.py`
+  entries in `ALLOWLISTED_PUBLIC` in
+  `backend/tests/test_endpoint_auth_coverage.py`, which is machine-checked in
+  both directions; the full inventory is in the pass-4 section of
+  [`docs/security-review/AUTH-01-auth-session.md`](../security-review/AUTH-01-auth-session.md).
+- **"No dead endpoints" is no longer true of `/check`.** `authService.checkAuth`
+  is the sole wrapper and now has zero call sites in `frontend/src` outside
+  its own declaration and its test. The route itself is harmless.
+
+Pass 4's two new findings — a `must_change_password` + `mfa_required` lockout
+(**AUTH-14**, fixed) and the browser-only enforcement of the HIPAA maximum
+password age (**AUTH-15**, flagged) — are written up in that same file.
+
 ## Pass 3 (2026-08-25) — security-review AUTH re-verification — see AUTH-01
 
 Re-verified against current code as part of the application-wide security
@@ -291,9 +309,18 @@ methods surfaced while tracing the endpoint layer.
    and later uses Google gets matched by email; there is no explicit link or
    unlink UI, and no way to see which providers are attached. _Incomplete
    feature._
-5. **`REGISTRATION_REQUIRES_APPROVAL` has no admin queue in the UI.** The flag
-   is honored server-side but pending self-registrations are reachable only
-   through the members list. _Incomplete feature._
+5. **`REGISTRATION_REQUIRES_APPROVAL` is not honored anywhere — corrected
+   2026-09-07, security review CI3-33.** This bullet's original claim ("honored
+   server-side but pending self-registrations are reachable only through the
+   members list") is wrong, not merely incomplete: `settings
+.REGISTRATION_REQUIRES_APPROVAL` has no reader anywhere in the backend, no
+   `UserStatus` value represents a pending/unapproved account, and
+   `register_user()` (`auth_service.py`) unconditionally sets `status=
+UserStatus.ACTIVE` and returns tokens that log the caller in immediately.
+   Every self-registered account is fully active and authenticated the moment
+   registration completes, regardless of this setting's value (default `True`).
+   See `docs/security-review/CI3-33-core-infra.md` (CI3-33-3) and
+   `docs/KNOWN_LIMITATIONS.md`.
 
 ## Completion gate
 

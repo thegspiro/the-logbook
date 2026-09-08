@@ -3156,9 +3156,15 @@ async def email_test_results(
             html_body=html_body,
         )
     except Exception as e:
+        # SEC4-1: never hand the transport's own exception text back. An SMTP
+        # failure raises with the provider's response and the configured host
+        # in it (``[Errno -2] Name or service not known: 'smtp.internal...'``,
+        # ``(535, b'5.7.8 Username and Password not accepted')``), which is
+        # mail-infrastructure detail the caller has no business seeing.
+        # safe_error_detail logs the real error and returns the fallback.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send email: {str(e)}",
+            detail=safe_error_detail(e, fallback="Failed to send email"),
         ) from e
 
     if failure > 0:

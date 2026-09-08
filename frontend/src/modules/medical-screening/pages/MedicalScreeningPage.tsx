@@ -163,7 +163,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRequirement(null);
               setShowRequirementForm(true);
             }}
-            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 sm:self-auto"
+            className="btn-primary flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Requirement
@@ -175,7 +175,7 @@ export const MedicalScreeningPage: React.FC = () => {
               setEditingRecord(null);
               setShowRecordForm(true);
             }}
-            className="flex shrink-0 items-center gap-2 self-start rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 sm:self-auto"
+            className="btn-primary flex shrink-0 items-center gap-2 self-start text-sm font-medium sm:self-auto"
           >
             <Plus className="h-4 w-4" />
             Add Record
@@ -197,7 +197,11 @@ export const MedicalScreeningPage: React.FC = () => {
 
       {/* Tabs */}
       <div className="border-theme-surface-border mb-6 border-b">
-        <div className="hscroll flex gap-1">
+        {/* Marked an intentional scroll region: five tabs do not fit across a
+            390px phone and "Compliance" ran off the edge, which the presentation
+            pass reads as an overflow bug rather than as a strip you can swipe.
+            The tabs are focusable, so the strip needs no tabIndex of its own. */}
+        <div className="hscroll flex gap-1" data-mobile-scroll-region aria-label="Medical screening sections">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

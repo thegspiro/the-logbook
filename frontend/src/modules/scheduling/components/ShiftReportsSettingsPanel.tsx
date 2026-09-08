@@ -1068,9 +1068,9 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       </nav>
 
       {/* Content panel */}
-      <main className="min-w-0 flex-1">
+      <div data-page-main className="min-w-0 flex-1">
         <div className="card p-4 sm:p-6">{renderSection()}</div>
-      </main>
+      </div>
     </div>
   );
 };

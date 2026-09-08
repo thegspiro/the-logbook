@@ -8,7 +8,7 @@ export default function LearningCenterPage() {
   const { visiblePaths, completed, completedCount, totalCount, percent, reset } = useLearningProgress();
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <div data-page-main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2">
@@ -108,6 +108,6 @@ export default function LearningCenterPage() {
         Progress is stored in this browser for your account only. Completing a learning task does not change operational
         records or certify training.
       </p>
-    </main>
+    </div>
   );
 }

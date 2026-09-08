@@ -410,7 +410,7 @@ const DocumentsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Page Header */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-3">
@@ -435,7 +435,7 @@ const DocumentsPage: React.FC = () => {
               </button>
               <button
                 onClick={handleOpenUploadModal}
-                className="flex items-center space-x-2 rounded-lg bg-amber-600 px-4 py-2 text-white transition-colors hover:bg-amber-700"
+                className="flex items-center space-x-2 rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
               >
                 <Upload className="h-4 w-4" />
                 <span>Upload Document</span>
@@ -546,7 +546,7 @@ const DocumentsPage: React.FC = () => {
               <div className="bg-theme-surface-secondary flex rounded-lg p-1" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'grid' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'grid' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="Grid view"
                   aria-pressed={viewMode === 'grid'}
                 >
@@ -554,7 +554,7 @@ const DocumentsPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'list' ? 'bg-amber-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                  className={`max-md:mobile-touch-target rounded-sm p-2.5 ${viewMode === 'list' ? 'bg-amber-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
                   aria-label="List view"
                   aria-pressed={viewMode === 'list'}
                 >
@@ -824,7 +824,7 @@ const DocumentsPage: React.FC = () => {
                 {canManage && (
                   <button
                     onClick={handleOpenUploadModal}
-                    className="inline-flex items-center space-x-2 rounded-lg bg-amber-600 px-6 py-3 text-white transition-colors hover:bg-amber-700"
+                    className="inline-flex items-center space-x-2 rounded-lg bg-amber-700 px-6 py-3 text-white transition-colors hover:bg-amber-800"
                   >
                     <Upload className="h-5 w-5" />
                     <span>Upload First Document</span>
@@ -842,7 +842,7 @@ const DocumentsPage: React.FC = () => {
                     type="button"
                     onClick={handleLoadMore}
                     disabled={moreDocumentsLoading}
-                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-5 py-2.5 text-white transition-colors hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {moreDocumentsLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                     <span>{moreDocumentsLoading ? 'Loading more documents...' : 'Load more'}</span>
@@ -872,7 +872,7 @@ const DocumentsPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={handleOpenUploadModal}
-                  className="inline-flex items-center space-x-2 rounded-lg bg-amber-600 px-6 py-3 text-white transition-colors hover:bg-amber-700"
+                  className="inline-flex items-center space-x-2 rounded-lg bg-amber-700 px-6 py-3 text-white transition-colors hover:bg-amber-800"
                 >
                   <Upload className="h-5 w-5" />
                   <span>Upload First Document</span>
@@ -911,7 +911,7 @@ const DocumentsPage: React.FC = () => {
                       />
                       <label
                         htmlFor="file-upload"
-                        className="inline-flex cursor-pointer items-center rounded-lg bg-amber-600 px-4 py-2 text-white transition-colors hover:bg-amber-700"
+                        className="inline-flex cursor-pointer items-center rounded-lg bg-amber-700 px-4 py-2 text-white transition-colors hover:bg-amber-800"
                       >
                         Choose File
                       </label>
@@ -989,8 +989,8 @@ const DocumentsPage: React.FC = () => {
                     disabled={!uploadForm.file || actionLoading}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
                       !uploadForm.file || actionLoading
-                        ? 'cursor-not-allowed bg-amber-600 opacity-50'
-                        : 'bg-amber-600 hover:bg-amber-700'
+                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
+                        : 'bg-amber-700 hover:bg-amber-800'
                     }`}
                   >
                     {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1080,8 +1080,8 @@ const DocumentsPage: React.FC = () => {
                     disabled={!folderForm.name.trim() || actionLoading}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
                       !folderForm.name.trim() || actionLoading
-                        ? 'cursor-not-allowed bg-amber-600 opacity-50'
-                        : 'bg-amber-600 hover:bg-amber-700'
+                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
+                        : 'bg-amber-700 hover:bg-amber-800'
                     }`}
                   >
                     {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1134,7 +1134,7 @@ const DocumentsPage: React.FC = () => {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

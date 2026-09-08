@@ -39,7 +39,9 @@ test.describe('Navigation', () => {
       await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
 
       // The dashboard greets the member by first name once /auth/me resolves.
-      const greeting = page.getByRole('heading', { level: 2 }).first();
+      // Level 1: the greeting is the page's own heading, and was an h2 until a
+      // page with no h1 was found to start its outline three levels down.
+      const greeting = page.getByRole('heading', { level: 1 }).first();
       await expect(greeting).toBeVisible({ timeout: 10000 });
       await expect(greeting).toContainText(TEST_USER.first_name);
     });

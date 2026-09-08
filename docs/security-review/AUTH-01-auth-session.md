@@ -1,6 +1,484 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3), #2389 (pass 4)
+
+Passes are recorded in this one file rather than a new `AUTH<n>-01-*.md` per
+lap, matching what passes 2 and 3 already did here. Newest pass first.
+
+---
+
+## Pass 4 (2026-09-08)
+
+**Backend:** `app/api/v1/endpoints/auth.py` (1673 L, **26 routes** — 14 public
+/ 12 private, enumerated below), `app/services/auth_service.py` (978 L),
+`app/services/mfa_service.py` (121 L), `app/services/oauth_service.py`
+(340 L), `app/services/consent_service.py` (211 L), plus the parts of
+`app/api/dependencies.py` (`get_current_user` and the two account-state
+gates), `app/core/security.py` (JWT issue/decode, §"JWT Token Management")
+and `app/core/suspicious_ip.py` (236 L) this surface depends on
+**Frontend:** `stores/authStore.ts`, `services/apiClient.ts`,
+`services/authService.ts` — read, not modified
+**Migrations:** one written this pass (AUTH-19: index `sessions.refresh_token`);
+438 revisions, single head `1603bd9c59e7`
+
+### Scope
+
+Read in full, not skimmed: all four principal backend files, `suspicious_ip.py`,
+`dependencies.py`'s `get_current_user` / `get_current_active_user` /
+`get_optional_current_user`, `core/security.py`'s token block, and
+`schemas/auth.py`. `consent_service.py` was diffed against pass 2's reviewed
+state (211 L, byte-identical) rather than re-read line by line — pass 2's
+seven-dimension review of it stands.
+
+**`git log` carries no usable history for these files.** The repository's
+history is squashed at `2aa66b8e` (2026-09-05), which is the root commit for
+every path in this feature, so "what changed since pass 3" could not be
+derived from the diff the way pass 2 and pass 3 derived it. This pass
+therefore re-read the code rather than reading a diff, and states so instead
+of reporting a diff-scoped verdict it could not compute. The observable
+delta since pass 3 is `auth.py` 1543 L → 1673 L, route count unchanged at 26.
+
+**Not read:** `users.py`'s admin password-reset / admin-MFA-reset handlers,
+beyond the two specific checks recorded under AUTH-18 — those are feature 07.
+
+### Route inventory
+
+26 routes. The public/private split is **14 / 12**, not the 11 / 15 passes 1–3
+recorded (see AUTH-18). The 14 public ones are exactly the 14 `auth.py`
+entries in `ALLOWLISTED_PUBLIC` in `tests/test_endpoint_auth_coverage.py`, so
+this table is machine-checked in both directions rather than transcribed.
+
+| Method | Path                        | Auth dependency               | Permission                                          | Org-scoped | Notes                                                        |
+| ------ | --------------------------- | ----------------------------- | --------------------------------------------------- | ---------- | ------------------------------------------------------------ |
+| GET    | `/branding`                 | none                          | n/a                                                 | n/a        | public; name + logo of the oldest active org only            |
+| GET    | `/captcha-config`           | none                          | n/a                                                 | n/a        | public; site key only, never the secret                      |
+| GET    | `/oauth-config`             | none                          | n/a                                                 | n/a        | public; provider-enabled booleans only                       |
+| GET    | `/oauth/google`             | none                          | n/a                                                 | n/a        | public; 404 when unconfigured; sets state cookie             |
+| GET    | `/oauth/google/callback`    | none                          | n/a                                                 | n/a        | public; `compare_digest` on state vs httpOnly cookie         |
+| GET    | `/oauth/microsoft`          | none                          | n/a                                                 | n/a        | public; 404 when unconfigured                                |
+| GET    | `/oauth/microsoft/callback` | none                          | n/a                                                 | n/a        | public; `compare_digest` on state; `tid` pinned              |
+| POST   | `/register`                 | none                          | n/a                                                 | n/a        | `rate_limit_register()`; 403 unless `REGISTRATION_ENABLED`   |
+| POST   | `/login`                    | none                          | n/a                                                 | n/a        | `rate_limit_login()` + `enforce_suspicious_ip`               |
+| POST   | `/mfa/login`                | none (pre-auth `mfa_pending`) | n/a                                                 | n/a        | `rate_limit_login()` + `enforce_suspicious_ip`; token-scoped |
+| POST   | `/refresh`                  | none (refresh cookie/body)    | n/a                                                 | n/a        | `rate_limit_token_refresh()`; org-active check in service    |
+| POST   | `/forgot-password`          | none                          | n/a                                                 | n/a        | `rate_limit_password_reset()` + `require_captcha`            |
+| POST   | `/reset-password`           | none                          | n/a                                                 | n/a        | `rate_limit_password_reset()`; SHA-256 token lookup          |
+| POST   | `/validate-reset-token`     | none                          | n/a                                                 | n/a        | `rate_limit_password_reset()`; returns `{"valid": true}`     |
+| POST   | `/mfa/setup`                | `get_current_active_user`     | self                                                | self       | clears `mfa_last_timestep` with the new secret               |
+| POST   | `/mfa/verify-setup`         | `get_current_active_user`     | self                                                | self       | `rate_limit_login()`; consumes the code                      |
+| POST   | `/mfa/disable`              | `get_current_active_user`     | self                                                | self       | `rate_limit_login()`; consumes the code                      |
+| GET    | `/mfa/status`               | `get_current_active_user`     | self                                                | self       | —                                                            |
+| POST   | `/mfa/recovery-codes`       | `get_current_active_user`     | self                                                | self       | `rate_limit_login()`; consumes the code                      |
+| GET    | `/mfa/policy`               | `require_permission`          | `settings.manage` OR `organization.update_settings` | org        | reads own org's settings only                                |
+| PUT    | `/mfa/policy`               | `require_permission`          | `settings.manage` OR `organization.update_settings` | org        | `copy.deepcopy` before the nested write (Pitfall #12)        |
+| POST   | `/logout`                   | `get_current_user`            | self                                                | self       | deletes the session row (access + refresh in one row)        |
+| GET    | `/me`                       | `get_current_active_user`     | self                                                | self       | —                                                            |
+| GET    | `/session-settings`         | `get_current_user`            | self                                                | self       | timeout + password-age policy, no secrets                    |
+| POST   | `/change-password`          | `get_current_active_user`     | self                                                | self       | `rate_limit_password_change()`; revokes all sessions         |
+| GET    | `/check`                    | `get_current_user`            | self                                                | self       | cheap probe; no frontend caller today (AUTH-18)              |
+
+Both `/mfa/policy` routes resolve the organization from
+`current_user.organization_id`, never from a client-supplied id, so neither is
+an XC-3 candidate. Neither OR-gate is broadly seeded: `settings.manage` and
+`organization.update_settings` are administrator grants, not baseline member
+ones (checklist dimension 2 / Pitfall #23).
+
+### Verified good ✅
+
+Claims with the mechanism named, so pass 5 can re-check cheaply rather than
+re-derive:
+
+- **Every one of the 26 routes' gates is as tabled, and the 14 unauthenticated
+  ones are on a reviewed allowlist that fails in both directions.** Mechanism:
+  `tests/test_endpoint_auth_coverage.py` — it re-derives the unauthenticated
+  set from the AST and fails on an unlisted handler _and_ on a stale listing.
+  Re-run this pass: passes.
+- **Every TOTP and recovery-code check in `app/` now goes through a helper
+  that consumes the credential under a row lock.** Mechanism:
+  `tests/test_mfa_verification_consumes.py`, new this pass — see AUTH-16.
+  Before it, AUTH-7/AUTH-9/AUTH-13 were held only by review discipline.
+- **A `must_change_password` member in an MFA-required org has a reachable
+  way out.** Mechanism: `tests/test_auth_gate_remediation_paths.py`, new this
+  pass, which drives the real `get_current_user` rather than asserting list
+  membership — see AUTH-14.
+- **No injection surface anywhere in this feature.** Mechanism: grep across
+  all five files for `.like(` / `.ilike(` / `text(` / f-string `execute` /
+  `csv.writer` returns zero hits, so Pitfalls #15 and #25 are n/a here, and
+  `tests/test_like_escaping.py` still passes app-wide.
+- **Tokens never leave the server in a JSON body.** Mechanism: `_set_auth_cookies`
+  is the single choke point (login, MFA login, register, OAuth, refresh all
+  call it), and every one of those handlers builds a body of
+  `{token_type, expires_in}` (+ the `user` dict) with no token field.
+- **`/auth/` is excluded from the frontend response cache.** Mechanism:
+  `UNCACHEABLE_PREFIXES[0]` in `frontend/src/utils/apiCache.ts` is `'/auth/'`,
+  matched by `startsWith`, so every sub-path is covered without a per-route
+  entry; pinned by `tests/test_api_cache_pii_exclusions.py` since SEC4-3.
+- **Refresh rotation still fails closed with no grace window.** Mechanism:
+  `auth_service.refresh_access_token` — a refresh token with no matching
+  session row calls `_revoke_all_user_sessions` and then **commits**, so the
+  revocation survives the 401 the caller turns it into;
+  `previous_refresh_token` / `previous_refresh_expires_at` are cleared on
+  every rotation and read by nothing.
+- **AUTH-1's OAuth org-active fix is still in place.** Mechanism:
+  `oauth_service._link_existing_user` still filters
+  `Organization.active.is_(True)` and returns `(None, "no_account")` on an
+  empty lookup; `test_resolve_user_no_active_organization` still passes.
+- **The three MFA management routes still consume the code they verify
+  (AUTH-7), and the two consuming helpers still hold `.with_for_update()`
+  plus `populate_existing=True` (AUTH-9, AUTH-13).** Mechanism: read at
+  `auth.py:787-876`, and now additionally pinned by the new guard above.
+- **`mfa_login` cannot be reached by a soft-deleted account.** Mechanism:
+  `User.is_active` is a hybrid property whose expression is
+  `status == ACTIVE AND deleted_at IS NULL` (`models/user.py:526-534`), so
+  `mfa_login`'s `not user.is_active` check covers deletion even though the
+  query itself omits a `deleted_at` filter. Worth recording because the query
+  reads as if it were missing one.
+- **An admin MFA reset cannot strand a stale replay baseline.** Mechanism:
+  `users.py`'s `admin_reset_mfa` nulls `mfa_secret` without touching
+  `mfa_last_timestep`, but the only route that can install a replacement
+  secret — `mfa_setup` — clears the timestep itself (AUTH-12's fix), so the
+  stale value is gone before any code is checked against the new secret. See
+  AUTH-18 for the correction to AUTH-12's own write-up that this check found.
+
+**Considered and deliberately not raised as findings**, recorded so pass 5
+does not re-derive them:
+
+- **`mfa_login` does not re-check that the organization is still active.** The
+  `mfa_pending` token lives 5 minutes and is only issued after
+  `authenticate_user` (or `_link_existing_user`) already enforced
+  `Organization.active`. Five minutes is strictly shorter than the
+  access-token window an already-signed-in member of the same org keeps, so
+  closing it would not change when a deactivated org actually loses access.
+- **The `mfa_pending` token is replayable within its own 5 minutes.** It
+  authorizes only _attempting_ the second factor, and the second factor
+  itself is single-use and lockout-counted, so a second `mfa_pending` costs
+  an attacker nothing they could not get by calling `/login` again.
+- **`ConsentService.roster()` is still unpaginated** — unchanged since pass 2,
+  and AUTH-4's reasoning (255+ identically-shaped call sites app-wide; a
+  `LIMIT` on this one is arbitrary, not a security improvement) still holds.
+- **`enforce_suspicious_ip` guards only `/login` and `/mfa/login`.** The other
+  credential-bearing public routes carry their own rate limiters and present
+  no guessable secret: reset tokens are 48 random bytes, and `/refresh`
+  requires a signed JWT that also matches a stored session row.
+
+### Findings
+
+#### AUTH-14 — MED — `must_change_password` + an MFA-required org is a permanent lockout with no remediation route — ✅ FIXED
+
+**What:** `get_current_user` runs two account-state refusals in sequence
+against the same request, each with its own allowlist of path suffixes:
+
+| Gate                             | Allowlist                                                                                                                              |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `must_change_password`           | `/auth/change-password`, `/auth/logout`, `/auth/me`, `/auth/refresh`, `/auth/session-settings`                                         |
+| org `mfa_required` + un-enrolled | `/auth/mfa/setup`, `/auth/mfa/verify-setup`, `/auth/mfa/status`, `/auth/me`, `/auth/logout`, `/auth/refresh`, `/auth/session-settings` |
+
+A member in **both** states can only reach the intersection — and the
+intersection was `{me, logout, refresh, session-settings}`, which contains no
+remediation route at all. Gate 1 refuses every `/auth/mfa/*` enrollment path;
+gate 2 refuses the one path gate 1 allows.
+
+**Where:** `backend/app/api/dependencies.py:81-101` (the two tuples, pre-fix)
+and `:193-219` (the two gates that consume them).
+
+**Failure scenario:** an administrator turns on the org-wide MFA requirement
+(`PUT /auth/mfa/policy`). Every member currently flagged
+`must_change_password` is now permanently locked out of the application: they
+can sign in, refresh, and read `/auth/me`, and nothing else, forever. That is
+not a narrow set — `users.py:355` (admin creates a member),
+`onboarding.py:1092` (bulk member import) and
+`membership_pipeline_service.py:2661` (prospect converted to member) all set
+`must_change_password=True`, so it is every account an administrator has
+created and every account that has ever been issued a temporary password. The
+member's own recovery paths are both closed, and so is the administrator's:
+`admin_reset_password` sets the flag again, and `admin_reset_mfa` only clears
+enrollment the member never had. The only escape is turning the org MFA policy
+back off.
+
+Reproduced by driving the real dependency across the four relevant state
+combinations, not reasoned from the lists:
+
+```
+must_change_password=True, mfa_enabled=False, org mfa_required=True
+  /api/v1/auth/change-password  -> 403 MFA enrollment required before continuing.
+  /api/v1/auth/mfa/setup        -> 403 Password change required before continuing.
+  /api/v1/auth/mfa/verify-setup -> 403 Password change required before continuing.
+  /api/v1/auth/me               -> ALLOWED
+```
+
+**Impact:** availability, self-inflicted, no attacker required — but total for
+the affected members, and the trigger (switching on an advertised security
+policy) is exactly the action a department is encouraged to take. Not a
+confidentiality or integrity defect: nothing is exposed and nothing is
+writable that was not before.
+
+**Fix:** added `/auth/change-password` to `_MFA_ENROLL_ALLOWED_SUFFIXES`, so
+the intersection now contains the one route that clears state 1; the member
+changes their password, the flag drops, and the `/auth/mfa/*` routes gate 2
+already allows become reachable. Password-first is also the correct ordering
+rather than merely the smaller change: binding an authenticator to an account
+still holding the temporary password an administrator chose is worse than the
+reverse. A comment on the tuple records why the entry appears on both lists,
+so the next person to prune it sees the coupling.
+
+**Guard test:** `tests/test_auth_gate_remediation_paths.py` — three tests
+driving the real `get_current_user` (a mocked `get_user_from_token` plus a
+stand-in for the single org-settings query the MFA gate issues), because
+asserting membership in the two tuples would pass trivially and prove nothing
+about their interaction. `test_password_change_is_reachable_when_both_gates_apply`
+confirmed to fail against the pre-fix code with the exact 403 above;
+`test_enrollment_is_reachable_once_the_password_is_changed` proves the
+sequence terminates; and `test_ordinary_routes_stay_closed_while_either_gate_applies`
+is the counterweight that keeps a future "just allow a bit more" from becoming
+a bypass.
+
+#### AUTH-15 — MED — The HIPAA maximum-password-age control is enforced only in the browser — 🚩 FLAGGED
+
+**What:** `HIPAA_MAXIMUM_PASSWORD_AGE_DAYS` (`core/config.py:176`, default
+**90**) has exactly three readers, and none of them refuses a request:
+
+| Reader                                   | What it does                                                 |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| `auth_service.authenticate_user:249-261` | `logger.warning(...)` and returns the user anyway            |
+| `auth._build_current_user_dict:179-187`  | sets `password_expired` on the `/auth/me` and login response |
+| `auth.get_session_settings:1403`         | reports the number to the client                             |
+
+The only thing that acts on it is
+`frontend/src/components/ProtectedRoute.tsx:166`
+(`user?.must_change_password || user?.password_expired`), which routes the
+browser to the change-password screen.
+
+Its sibling control is enforced properly and says so: the
+`must_change_password` gate in `get_current_user` carries the comment "the
+frontend honors the same flag, **but the API must not rely on that**". The
+same sentence is true of `password_expired` and there is no matching gate.
+
+**Where:** `backend/app/api/dependencies.py:189-201` (where the sibling gate
+is, and where this one is not); `backend/app/services/auth_service.py:248-261`.
+
+**Failure scenario:** a member whose password is 400 days old signs in with
+`curl` (or any script, any mobile client, anything that is not this SPA) and
+gets a full session with every permission they hold. The browser is the only
+thing that has ever enforced the 90-day maximum. An attacker holding a
+credential harvested from an old breach is in the same position: password age
+is precisely the control meant to have retired that credential, and it
+retires nothing. It is also an asymmetry a reader of the code would not
+expect, because the adjacent flag _is_ enforced.
+
+**Impact:** a documented HIPAA §164.308(a)(5)(ii)(D) control is advisory only.
+No cross-tenant exposure and no privilege gain — the member reaches exactly
+their own permissions — but the compliance claim the setting represents is
+not backed by the server.
+
+**Why FLAGGED and not fixed:** the fix is a behaviour change that locks people
+out on the day it deploys. Adding `password_expired` to the gate would, on
+first boot after the upgrade, refuse every member whose `password_changed_at`
+is more than 90 days old — on an installation that has never enforced this,
+that is potentially the whole department at once, including whoever would have
+to fix it. It needs an owner decision on the rollout (a grace period, a
+staged threshold, a per-org opt-in, or simply accepting the cutover), which
+is exactly the class this rotation flags rather than implements. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+#### AUTH-16 — LOW — Nothing enforced "a verified second factor is always consumed"; the non-consuming verifier survived as a landmine — ✅ FIXED
+
+**What:** AUTH-7, AUTH-9 and AUTH-13 established one invariant across three
+rounds of review: every TOTP and recovery-code check must verify **and**
+consume, under a row lock, through one of two helpers in `auth.py`. Nothing
+checked it. `mfa_service.verify_totp` — the boolean, state-free verifier that
+AUTH-7 had to remove from three routes — is still exported with **zero
+callers anywhere in `app/`**, under the most obvious name in the module.
+
+This is the shape AUTH-6 already named in this file: "an unused method whose
+behavior contradicts a documented, load-bearing invariant is a landmine, not
+neutral dead code." It is also the shape that produced AUTH-7 in the first
+place — pass 3's original write-up _reasoned_ the three management routes were
+safe without consumption, and the reasoning was wrong. A fourth round of the
+same reasoning is what a machine check exists to prevent.
+
+**Where:** `backend/app/services/mfa_service.py:32-39`; the two helpers it
+should never displace are `auth.py:787` (`_verify_and_consume_totp`) and
+`auth.py:839` (`_verify_and_consume_recovery_code`).
+
+**Failure scenario:** not live today — the finding is the absence of a guard,
+not a present defect. The scenario it prevents is AUTH-7's, verbatim: a route
+added or edited later calls `mfa_service.verify_totp(secret, code)`, the code
+is never marked spent, and a code observed in use there replays at
+`POST /auth/mfa/login` inside its remaining ~30–90s window to open an
+independent attacker-controlled session.
+
+**Fix:** two parts, neither behavioural.
+
+1. `verify_totp`'s docstring now says it is not for application code, names
+   the helper to use instead, names AUTH-7, and points at the guard.
+2. `tests/test_mfa_verification_consumes.py` — an AST sweep of the whole
+   `app/` tree asserting three things: (a) `verify_totp` has **zero** call
+   sites; (b) `verify_totp_get_timestep` and `find_matching_recovery_code`
+   each have **exactly one** caller, named — the two consuming helpers, so a
+   second place that can spend a code is a deliberate edit to this file
+   rather than a silent one; (c) `pyotp` is imported only by
+   `mfa_service.py`, which catches a hand-rolled `pyotp.TOTP(...).verify(...)`
+   that would bypass both helpers without naming either.
+
+Deleting `verify_totp` outright was considered and rejected: it would remove
+the primitive `test_mfa_service.py` exercises, and it would not catch (c) —
+the guard covers strictly more than removal would.
+
+**Guard test:** the file above. Confirmed red, not assumed: reverting
+`mfa_disable` to the pre-AUTH-7 `mfa_service.verify_totp(current_user.mfa_secret,
+data.code)` produced `Offending call sites: app/api/v1/endpoints/auth.py:1113
+in mfa_disable()`; adding a second `find_matching_recovery_code` call site
+produced the exactly-one-caller failure naming both. Both reverted after.
+
+#### AUTH-17 — LOW — Session rows are never reaped, so expired sessions keep a member's IP and user-agent indefinitely — 🚩 FLAGGED
+
+**What:** `sessions` rows are deleted on exactly four events — logout, an idle
+timeout actually being _hit_ by a request, a password change/reset, and
+refresh-replay revocation. A session that simply expires quietly (the member
+closes the tab; the access token lapses; the 7-day refresh token lapses) is
+never touched again. There is no cleanup task: `delete(UserSession)` appears
+only in `auth_service._revoke_all_user_sessions`, and
+`services/scheduled_tasks.py` has no session job — it _does_ have retention
+jobs for the two neighbouring tables (`archive_expired_logs` for audit rows,
+`expire_ip_exceptions` for IP rules), which is what makes the absence look
+like an oversight rather than a decision.
+
+**Where:** `backend/app/models/user.py:840-874` (the table),
+`backend/app/services/auth_service.py:419-444` (the only deleter),
+`backend/app/services/scheduled_tasks.py` (no counterpart job).
+
+**Failure scenario:** two, both slow. (1) Data retention: every row carries
+`ip_address` and `user_agent` — where a member signed in from and on what
+device — and there is no expiry on that, in an application that sets a 7-year
+retention window on its audit log precisely because retention is a decision
+it takes deliberately elsewhere. (2) Growth: the table accumulates one row per
+sign-in per device forever, each holding two full JWTs in `String(512)`
+columns. Neither is exploitable, and this pass's first draft claimed neither
+degrades a lookup because "both token columns are indexed" — that claim was
+wrong (see **AUTH-19**, fixed below) at the time it was written, and is only
+true now because of that fix.
+
+**Why FLAGGED and not fixed:** a reaper needs a retention window, and picking
+one is a product decision — sessions are the data behind any future
+"where am I signed in" screen, and deleting a row is also deleting that
+history. It also needs a new scheduled task, which is a behaviour change, and
+`scheduled_tasks.py` is feature 31's surface. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+#### AUTH-18 — NIT — Three claims in this feature's own record had drifted from the code — ✅ FIXED (docs only)
+
+**What:** re-verifying prior passes turned up three statements that no longer
+match, or never matched, the code. None is a security defect; all three would
+mislead pass 5.
+
+1. **The route split.** Passes 1–3 record "26 routes, 11 public / 15 private".
+   The real split is **14 public / 12 private** — the public set is exactly
+   the 14 `auth.py` entries in `ALLOWLISTED_PUBLIC`, and pass 1's own table
+   already listed 14 rows with no auth dependency while its prose said 11.
+   Corrected in this pass's inventory above.
+2. **AUTH-12's "only place" claim.** AUTH-12 states it checked "whether a
+   secret can be replaced anywhere else: `mfa_setup` is the only place that
+   writes `mfa_secret` outside `mfa_disable`". That grep missed
+   `users.py:2113` (`admin_reset_mfa`), which also nulls it. **The fix is
+   still sufficient** — see the "Verified good" entry above — but the reason
+   is `mfa_setup` clearing the timestep, not the absence of a third writer,
+   and pass 5 should not re-derive a wrong premise.
+3. **Pass 1's "no dead endpoints" claim.** It named `/check` among five routes
+   with frontend callers. `authService.checkAuth` (the sole wrapper) now has
+   zero call sites in `frontend/src` outside its own declaration and its test.
+   The route is harmless (`get_current_user`, returns id + username), but it
+   is not currently reachable from the app.
+
+**Where:** this file, passes 1–3; `docs/app-review/auth-session.md`'s pass-3
+section, which repeats the route-count correction and is corrected again
+there.
+
+**Fix:** the pass-4 sections above state the current facts, and
+`docs/app-review/auth-session.md` gains a pass-4 note pointing here.
+
+#### AUTH-19 — LOW — `sessions.refresh_token`, the column the hot refresh path filters on, had no index — ✅ FIXED
+
+**What:** Codex review on PR #2389 caught this pass's own AUTH-17 write-up
+asserting "both token columns are indexed" as a reason growth couldn't
+degrade a lookup. It's false for one of the two: `token` (the access-token
+column) is `unique=True, index=True`; `previous_refresh_token` (the
+rotation-grace fallback, used only inside a short window right after a
+refresh) is indexed by
+`20260727_0001_add_session_refresh_grace.py`. `refresh_token` itself —
+the column `AuthService.refresh_access_token` filters on for **every**
+refresh request, the busiest query this table sees — was a plain
+`Column(String(512))` with no index at all, since the initial schema
+migration.
+
+**Failure scenario:** combined with AUTH-17's own finding (no reaper, so
+`sessions` grows without bound), every token refresh — issued on essentially
+every authenticated page load once the short-lived access token expires —
+degrades from an index seek to a full-table scan as the table grows. Not
+exploitable by itself, but it meant AUTH-17's stated reasoning for staying
+LOW ("neither is exploitable and neither degrades a lookup") rested on a
+false premise for the column that matters most.
+
+**Where:** `backend/app/models/user.py:856` (the column),
+`backend/app/services/auth_service.py:344-347` (the filtering query).
+
+**Fix:** `refresh_token = Column(String(512), index=True)`, plus
+`alembic/versions/20260908_0223_1603bd9c59e7_index_sessions_refresh_token_for_the_.py`
+adding `ix_sessions_refresh_token`. Purely additive — no data change, no
+behavior change. Verified by running `alembic upgrade head` against the real
+database, confirming the index appears in `SHOW INDEX`, then `alembic
+downgrade -1` / `upgrade head` again to confirm both directions are real.
+This does not replace AUTH-17's reaper — an indexed scan of an unbounded
+table is still an unbounded scan, just a cheaper one — so AUTH-17 stays
+flagged for the retention-window product decision.
+
+### Schema & migration notes
+
+One migration was written this pass — `1603bd9c59e7`, indexing
+`sessions.refresh_token` (AUTH-19) — the first to touch this feature's tables
+since pass 2's `20260825_1900_c4a91b7e2f08_grant_users_view_consents.py`. The
+three tables this feature owns were re-checked against their models:
+
+- `sessions` — `user_id` FK `ondelete="CASCADE"`, `nullable=False`; `token`
+  unique + indexed; `refresh_token` now indexed (AUTH-19);
+  `previous_refresh_token` indexed; `expires_at` indexed. Not a `SET NULL`
+  case, so Pitfall #2 is n/a. No retention policy — AUTH-17.
+- `password_history` — `user_id` FK `ondelete="CASCADE"`, `nullable=False`.
+  Bounded on read by `HIPAA_PASSWORD_HISTORY_COUNT`, unbounded on write; rows
+  hold only Argon2 hashes, so this is not the same exposure as AUTH-17.
+- `user_consents` — unchanged since pass 1; both FKs `CASCADE` +
+  `nullable=False`, unique index on `(user_id, consent_type)` matching the
+  migration.
+
+Alembic chain: 438 revisions, single head `1603bd9c59e7`, no duplicate ids.
+
+### Guard tests added
+
+| Test file                                   | Invariant it freezes                                                                                                                                |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/test_auth_gate_remediation_paths.py` | The two account-state gates in `get_current_user` always leave a member a route that clears the state, and never open an ordinary application route |
+| `tests/test_mfa_verification_consumes.py`   | Every TOTP / recovery-code check in `app/` goes through a consuming, row-locked helper; `pyotp` stays confined to `mfa_service.py`                  |
+
+Both were confirmed red against the defect they describe and green after —
+the specific reversions are recorded in each finding above.
+
+### Completion gate (pass 4)
+
+| Check                                                                                                  | Result                                                                              |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                          | ✅ 0 violations                                                                     |
+| `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                | ✅ 1529 files unchanged (1 new test file reformatted before commit)                 |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                            | ✅ clean                                                                            |
+| `validate_migrations.py --strict`                                                                      | ✅ single head `1603bd9c59e7`, 438 revisions                                        |
+| `alembic upgrade head` / `downgrade -1` / `upgrade head` on the real database                          | ✅ `ix_sessions_refresh_token` created, dropped, recreated                          |
+| `pytest tests/test_alembic_migrations.py tests/test_migration_create_all_tables.py`                    | ✅ 80 passed                                                                        |
+| backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission"`)  | ✅ 600 passed, 2 skipped (both pre-existing: optional `pywebpush`, Docker registry) |
+| standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`) | ✅ 44 passed                                                                        |
+| `scripts/check_docs_links.py`                                                                          | ✅ 351 files, 0 broken links                                                        |
+| `tsc --noEmit` / `eslint .`                                                                            | n/a — no frontend source changed this pass                                          |
+
+`black` was 26.3.1 on PATH via `/root/.local/bin`; CI pins 26.5.1, which was
+already installed under `/usr/local`, so the gate above was run as
+`python3 -m black` to use CI's version rather than the shadowing one.
 
 ---
 

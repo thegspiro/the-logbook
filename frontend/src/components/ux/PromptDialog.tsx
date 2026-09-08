@@ -122,7 +122,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
             disabled={loading}
             className={
               confirmVariant === 'warning'
-                ? 'inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50'
+                ? 'inline-flex items-center justify-center gap-2 rounded-lg bg-amber-700 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50'
                 : 'btn-primary inline-flex items-center justify-center gap-2 font-medium'
             }
           >

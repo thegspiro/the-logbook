@@ -257,7 +257,7 @@ const MinutesPage: React.FC = () => {
           {canManage && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-600 px-4 py-2 text-white transition-colors hover:bg-cyan-700 sm:self-auto"
+              className="flex shrink-0 items-center space-x-2 self-start rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800 sm:self-auto"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               <span>Record Minutes</span>
@@ -579,7 +579,7 @@ const MinutesPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center space-x-2 rounded-lg bg-cyan-600 px-6 py-3 text-white transition-colors hover:bg-cyan-700"
+                  className="inline-flex items-center space-x-2 rounded-lg bg-cyan-700 px-6 py-3 text-white transition-colors hover:bg-cyan-800"
                 >
                   <Plus className="h-5 w-5" />
                   <span>Record First Minutes</span>
@@ -751,7 +751,7 @@ const MinutesPage: React.FC = () => {
                       void handleCreateMeeting();
                     }}
                     disabled={creating || !minutesForm.title.trim()}
-                    className="flex items-center space-x-2 rounded-lg bg-cyan-600 px-4 py-2 text-white transition-colors hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center space-x-2 rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating && <Loader2 className="h-4 w-4 animate-spin" />}
                     <span>{creating ? 'Creating...' : 'Start Recording'}</span>

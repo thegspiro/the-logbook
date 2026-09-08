@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -342,7 +343,14 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
             # every service reads config with .get(key, default) so a partial
             # stored config stays usable.
             return validated.model_dump(exclude_unset=True)
-        except Exception as e:
+        except ValidationError as e:
+            # SEC4-2: only Pydantic's own verdict is echoed. A bare
+            # ``except Exception`` here reported any internal failure — an
+            # AttributeError inside a field validator, a TypeError from a
+            # malformed stored config — to the client as a 422 with the raw
+            # Python message in it, which is both an internals disclosure and
+            # the wrong status for a server-side fault. Anything that is not a
+            # validation verdict now propagates and becomes a generic 500.
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Invalid config for {integration_type}: {e}",

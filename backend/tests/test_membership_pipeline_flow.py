@@ -6,13 +6,19 @@ pipeline: pipeline CRUD, prospect management, step progression, and
 the transfer-to-membership workflow.
 """
 
+import asyncio
 import inspect
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import database_manager
+from app.models.membership_pipeline import ProspectiveMember, ProspectStatus
+from app.models.user import Organization
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 pytestmark = [pytest.mark.integration]
@@ -894,6 +900,128 @@ class TestTransferToMembership:
             "open even though a lock call exists somewhere in the function"
         )
 
+    def test_update_prospect_locks_before_checking_transferred(self):
+        """MP-08 pass 5: update_prospect's generic status guard (MP-9, pass
+        1) read the prospect with a plain (unlocked) get_prospect call, then
+        checked ``prospect.status == ProspectStatus.TRANSFERRED`` before
+        writing a caller-supplied ``status``. Under REPEATABLE READ a plain
+        SELECT answers from a snapshot that predates a concurrent
+        transfer_to_membership's commit, and the eventual UPDATE this method
+        issues has no WHERE on the old status -- so an unlocked read lets
+        this endpoint's write silently clobber a transfer that landed in the
+        gap between the read and this transaction's own commit, reopening
+        the double-transfer race transfer_to_membership's own lock (pass 2)
+        exists to prevent, via this update endpoint instead of the transfer
+        one. Source-inspected, matching
+        test_transfer_locks_the_prospect_before_checking_status above."""
+        source = inspect.getsource(MembershipPipelineService.update_prospect)
+        assert "lock_for_update=True" in source, (
+            "update_prospect no longer locks the prospect row before "
+            "checking its status -- reintroduces the double-transfer race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        status_check_at = source.index("ProspectStatus.TRANSFERRED")
+        assert lock_at < status_check_at, (
+            "update_prospect checks the prospect's status before acquiring "
+            "the row lock -- the check-before-write race is still open even "
+            "though a lock call exists somewhere in the function"
+        )
+
+    def test_set_prospect_status_locks_before_applying_change(self):
+        """MP-08 pass 5: same race as
+        test_update_prospect_locks_before_checking_transferred, on the
+        dedicated single-prospect status endpoint. The TRANSFERRED guard
+        itself lives in _apply_status_change, so this asserts the row lock
+        is acquired in set_prospect_status before that guard runs, rather
+        than comparing string offsets within a single function body."""
+        source = inspect.getsource(MembershipPipelineService.set_prospect_status)
+        assert "lock_for_update=True" in source, (
+            "set_prospect_status no longer locks the prospect row before "
+            "applying the status change -- reintroduces the double-transfer "
+            "race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        apply_at = source.index("_apply_status_change(")
+        assert lock_at < apply_at, (
+            "set_prospect_status calls _apply_status_change before "
+            "acquiring the row lock -- the check-before-write race is "
+            "still open even though a lock call exists somewhere in the "
+            "function"
+        )
+
+    def test_bulk_set_prospect_status_locks_before_applying_change(self):
+        """MP-08 pass 5: same race, on the bulk status endpoint.
+        bulk_set_prospect_status's inner _set_status closure received an
+        already-fetched, unlocked prospect from _bulk_apply's own read (that
+        read exists only to report "not found" per id and to capture
+        full_name for the result row) and applied the status change
+        directly against it -- the same unlocked-read-then-write shape as
+        the single-prospect endpoint, just reached through the bulk path
+        instead."""
+        source = inspect.getsource(MembershipPipelineService.bulk_set_prospect_status)
+        assert "lock_for_update=True" in source, (
+            "bulk_set_prospect_status no longer locks the prospect row "
+            "before applying the status change -- reintroduces the "
+            "double-transfer race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        apply_at = source.index("_apply_status_change(")
+        assert lock_at < apply_at, (
+            "bulk_set_prospect_status calls _apply_status_change before "
+            "acquiring the row lock -- the check-before-write race is "
+            "still open even though a lock call exists somewhere in the "
+            "function"
+        )
+
+    async def test_bulk_apply_releases_the_lock_after_a_rejected_item(self):
+        """Codex review, PR #2405: bulk_set_prospect_status's per-item
+        callback (_set_status) locks the prospect row with a FOR UPDATE read
+        before its ValueError-raising guard. _bulk_apply's own ``except
+        ValueError`` branch caught that and moved on to the next id without
+        ever ending the transaction -- so the FOR UPDATE lock stayed held
+        for the rest of the batch. A selection that includes even one
+        already-transferred or already-at-target prospect would hold that
+        row locked until a later item's own commit (or the whole request
+        ending) released it, blocking every other write against it -- and
+        two overlapping batches processed in opposite orders could deadlock
+        on each other's held locks.
+
+        Asserts commit(), not rollback(): every current ``apply`` callback
+        raises its ValueError from a guard clause before writing anything,
+        so there is nothing to discard, and commit() is what is actually
+        safe to call here -- rollback() breaks the db_session fixture's
+        create_savepoint-mode session with a MissingGreenlet error (see the
+        comment at the call site, and
+        tests/test_prospect_bulk_actions.py::TestBulkAdvance::
+        test_one_failure_does_not_abort_the_rest, which already exercises
+        this exact branch through the real database and would have caught
+        a rollback() regression here). Unit-level rather than a real
+        two-connection lock test: this asserts the one thing that actually
+        changed, that the transaction ends before the loop continues past a
+        rejected item, using a mocked ``db`` so no real lock needs to be
+        held to observe it."""
+        service = MembershipPipelineService(db=AsyncMock())
+        org_id = str(uuid.uuid4())
+        prospect_id = str(uuid.uuid4())
+        prospect = SimpleNamespace(id=prospect_id, full_name="Rejected Prospect")
+
+        async def _apply(_prospect):
+            raise ValueError("Prospect is already dropped")
+
+        with patch.object(service, "get_prospect", AsyncMock(return_value=prospect)):
+            results = await service._bulk_apply([prospect_id], org_id, _apply)
+
+        assert results == [
+            {
+                "prospect_id": prospect_id,
+                "name": "Rejected Prospect",
+                "succeeded": False,
+                "error": "Prospect is already dropped",
+            }
+        ]
+        service.db.commit.assert_awaited_once()
+        service.db.rollback.assert_not_awaited()
+
     async def test_transfer_creates_user(
         self, db_session: AsyncSession, setup_org_and_admin
     ):
@@ -967,3 +1095,447 @@ class TestTransferToMembership:
         assert email_row is not None
         prospect_email = prospect.email
         assert prospect_email in (email_row[0], email_row[1])
+
+
+# =========================================================================
+# MP-29 (Codex, PR #2405 round 2): the source-inspection guard tests above
+# prove only that `lock_for_update=True` appears textually in the right
+# place -- they pass even if the lock never actually blocked anything.
+# These use two REAL, independently-committing sessions -- the
+# savepoint-based `db_session` fixture never truly commits, so it cannot
+# demonstrate cross-transaction visibility -- to drive the actual race
+# MP-27 closes, and to confirm MP-28's fix genuinely releases the row lock
+# rather than only satisfying a mocked assertion.
+# =========================================================================
+
+
+async def _teardown_membership_race_org(org_id, prospect_ids=()):
+    """Deletes the rows a concurrency test committed for real. These tests
+    use `database_manager.session_factory` sessions specifically because
+    they need genuine cross-transaction visibility -- the savepoint-based
+    `db_session` fixture never truly commits, so its rollback cannot stand
+    in for cleanup here the way it does everywhere else in this file.
+    Matches `test_facility_document_reference_race.py`'s `_teardown_org`:
+    a real commit needs a real, explicit delete, or the row (and, for an
+    Organization, `OnboardingService.create_organization`'s "one org already
+    exists" guard) outlives the test."""
+    factory = database_manager.session_factory
+    cleanup = factory()
+    try:
+        for prospect_id in prospect_ids:
+            await cleanup.execute(
+                ProspectiveMember.__table__.delete().where(
+                    ProspectiveMember.id == prospect_id
+                )
+            )
+        await cleanup.execute(
+            Organization.__table__.delete().where(Organization.id == org_id)
+        )
+        await cleanup.commit()
+    finally:
+        await cleanup.close()
+
+
+class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
+    """Each status-writing path's new lock must not just exist in source,
+    it must actually serialize against an in-flight transfer -- blocking
+    until the transfer's row lock releases, then observing the committed
+    TRANSFERRED status rather than the pre-transfer snapshot. A plain
+    SELECT (the pre-fix shape) would return immediately with the stale
+    status and let the write through, silently clobbering the transfer.
+
+    A genuine two-session race test for this exact lock chain has
+    precedent in this repository: `test_facility_document_reference_race.py`
+    drives real, independently-committing sessions against FAC-29's
+    locking reads the same way this class does. Verified against the true
+    pre-MP-27 revision (`ae4fe98`, `4107910`'s parent -- `4107910` itself
+    is the MP-27 commit and already carries the lock on all three paths, so
+    it cannot serve as the "unlocked" baseline): at that revision none of
+    the three paths calls `get_prospect` with `lock_for_update=True`, so
+    `_tracking_get_prospect` never sets `lock_attempted` -- but
+    `writer_task` does not complete either. The unlocked `SELECT` itself
+    returns instantly (MVCC reads never wait on another transaction's row
+    lock), but the eventual `UPDATE` the write issues at its own flush/
+    commit is a real row-level write, which MySQL always serializes via
+    genuine locks regardless of isolation level -- so it queues behind
+    `locker`'s still-held `FOR UPDATE` lock on that exact row and never
+    finishes. Neither task in the `asyncio.wait({lock_wait_task,
+    writer_task}, ...)` race below completes, so all three tests below hit
+    the explicit `raise asyncio.TimeoutError(...)` for that case, and pass
+    against current code."""
+
+    @pytest.fixture
+    async def two_sessions(self, _initialize_database):
+        """Two independent AsyncSessions, each its own real connection and
+        transaction -- matches the fixture in
+        test_facility_document_reference_race.py; not hoisted to conftest
+        because this is currently the only other file that needs it."""
+        factory = database_manager.session_factory
+        sessions = [factory(), factory()]
+        try:
+            yield sessions
+        finally:
+            for session in sessions:
+                await session.rollback()
+                await session.close()
+
+    @staticmethod
+    async def _make_active_prospect(session):
+        org = Organization(name="Race Test VFD", slug=f"mp27-race-{_uid()[:12]}")
+        session.add(org)
+        await session.flush()
+        prospect = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Race",
+            last_name="Candidate",
+            email=f"{_uid()}@example.com",
+            status=ProspectStatus.ACTIVE,
+        )
+        session.add(prospect)
+        await session.commit()
+        return org.id, prospect.id
+
+    async def _run_against_in_flight_transfer(self, two_sessions, run_status_write):
+        """Holds the prospect's row lock exactly as a not-yet-committed
+        ``transfer_to_membership`` would (locked read, status flipped to
+        TRANSFERRED, no commit yet), then runs ``run_status_write`` -- a
+        real service call on a second, independent session -- and asserts
+        it blocks on that lock rather than reading a stale snapshot.
+        Returns whatever ``run_status_write`` returns (or re-raises what
+        it raises) once the transfer commits and the write proceeds.
+        """
+        locker, writer = two_sessions
+        org_id, prospect_id = await self._make_active_prospect(locker)
+
+        result = await locker.execute(
+            select(ProspectiveMember)
+            .where(ProspectiveMember.id == prospect_id)
+            .with_for_update()
+        )
+        prospect = result.scalar_one()
+        prospect.status = ProspectStatus.TRANSFERRED
+
+        service = MembershipPipelineService(writer)
+        lock_attempted = asyncio.Event()
+        original_get_prospect = service.get_prospect
+
+        async def _tracking_get_prospect(*args, **kwargs):
+            if kwargs.get("lock_for_update"):
+                lock_attempted.set()
+            return await original_get_prospect(*args, **kwargs)
+
+        writer_task = None
+        try:
+            with patch.object(service, "get_prospect", _tracking_get_prospect):
+                writer_task = asyncio.create_task(
+                    run_status_write(service, prospect_id, org_id)
+                )
+                lock_wait_task = asyncio.create_task(lock_attempted.wait())
+                try:
+                    done, _pending = await asyncio.wait(
+                        {lock_wait_task, writer_task},
+                        timeout=10,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if writer_task in done:
+                        # Codex (PR #2408): if the write raises (or even
+                        # returns) before ever attempting the locked read
+                        # -- e.g. a setup/validation regression -- waiting
+                        # out the full 10s for an event that can now never
+                        # fire buries the real failure behind a confusing
+                        # timeout, and the original exception is left
+                        # unretrieved. `.result()` re-raises it immediately;
+                        # a clean return with no lock attempt is itself a
+                        # bug worth its own message rather than falling
+                        # through to the "still blocked" assertion below.
+                        writer_task.result()
+                        raise AssertionError(
+                            "status write returned without ever "
+                            "attempting a locked read -- "
+                            "lock_for_update was never used"
+                        )
+                    if lock_wait_task not in done:
+                        raise asyncio.TimeoutError(
+                            "neither the locked read nor the status "
+                            "write completed within 10s"
+                        )
+                finally:
+                    if not lock_wait_task.done():
+                        lock_wait_task.cancel()
+
+                # Codex (PR #2408): `lock_attempted` fires the instant the
+                # locked query is *issued*, not once it has actually had
+                # time to resolve -- so without a beat here, an unlocked
+                # regression that returns almost immediately could still
+                # look "not done" purely from scheduling latency, passing
+                # this assertion for the wrong reason. Same 0.2s observation
+                # window as test_facility_document_reference_race.py's
+                # FAC-37 fix, for the same reason: give a genuinely-fast
+                # unlocked read time to actually complete before checking.
+                await asyncio.sleep(0.2)
+
+                # Still blocked on the transfer's lock -- not yet having
+                # read (let alone acted on) the row.
+                assert not writer_task.done(), (
+                    "status write proceeded without waiting for the "
+                    "in-flight transfer's row lock to release -- it is "
+                    "reading a stale, unlocked snapshot"
+                )
+
+                await locker.commit()
+                return await asyncio.wait_for(writer_task, timeout=10)
+        finally:
+            if writer_task is not None and not writer_task.done():
+                writer_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await writer_task
+            # Codex (PR #2413): checking `.cancelled()` here, not just
+            # whether *this* block performed the cancel, is what catches
+            # the case where the `asyncio.wait_for(writer_task, ...)`
+            # inside the `try` above timed out -- `wait_for` cancels and
+            # awaits the task itself before raising `TimeoutError`, so by
+            # the time this `finally` runs the task is already done and
+            # the cancel-here branch above never executes, even though
+            # the task genuinely was cancelled mid-flight.
+            writer_cancelled = writer_task is not None and writer_task.cancelled()
+            await locker.rollback()
+            if writer_cancelled:
+                # invalidate(), not rollback(): cancelling a task
+                # mid-DB-read (aiomysql doesn't always unwind that
+                # cleanly) can leave the writer's connection unusable,
+                # and unlike rollback(), SQLAlchemy guarantees
+                # invalidate() does not raise even then -- so it can't
+                # prevent the explicit teardown below from running.
+                await writer.invalidate()
+            else:
+                await writer.rollback()
+            await _teardown_membership_race_org(org_id, [prospect_id])
+
+    async def test_set_prospect_status_sees_the_committed_transfer(self, two_sessions):
+        async def _write(service, prospect_id, org_id):
+            return await service.set_prospect_status(
+                prospect_id, org_id, "on_hold", changed_by=None
+            )
+
+        with pytest.raises(ValueError, match="already a member"):
+            await self._run_against_in_flight_transfer(two_sessions, _write)
+
+    async def test_update_prospect_sees_the_committed_transfer(self, two_sessions):
+        async def _write(service, prospect_id, org_id):
+            return await service.update_prospect(
+                prospect_id, org_id, {"status": "on_hold"}, updated_by=None
+            )
+
+        with pytest.raises(ValueError, match="cannot be set or cleared"):
+            await self._run_against_in_flight_transfer(two_sessions, _write)
+
+    async def test_bulk_set_prospect_status_sees_the_committed_transfer(
+        self, two_sessions
+    ):
+        async def _write(service, prospect_id, org_id):
+            return await service.bulk_set_prospect_status(
+                [prospect_id], org_id, "on_hold", changed_by=None
+            )
+
+        results = await self._run_against_in_flight_transfer(two_sessions, _write)
+        assert len(results) == 1
+        assert results[0]["succeeded"] is False
+        assert "already a member" in results[0]["error"]
+
+
+class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
+    """MP-28's own guard test (`test_bulk_apply_releases_the_lock_after_a_
+    rejected_item`, above) mocks `db` and asserts `commit()` was awaited --
+    it proves the fix calls the right method, not that a real InnoDB row
+    lock is actually released. This drives the real service call against a
+    real database and confirms a second, independent session can acquire
+    the same row's lock, using the same two-session technique as the class
+    above.
+
+    Codex (PR #2408): checking the lock only after the whole bulk call
+    returns cannot distinguish a per-item release from a regression that
+    commits once after the entire loop -- both look identical from outside
+    a one-item batch, since either way the lock is gone by the time the
+    call returns. This uses a **two**-item batch (one rejected, one
+    deliberately paused mid-processing) so the checker session attempts the
+    rejected item's lock *while the batch is still running* -- a scenario
+    only a true per-item release passes."""
+
+    @pytest.fixture
+    async def two_sessions(self, _initialize_database):
+        factory = database_manager.session_factory
+        sessions = [factory(), factory()]
+        try:
+            yield sessions
+        finally:
+            for session in sessions:
+                await session.rollback()
+                await session.close()
+
+    async def test_lock_is_released_before_the_batch_finishes(self, two_sessions):
+        bulk_session, checker_session = two_sessions
+        org = Organization(name="Race Test VFD", slug=f"mp28-bulk-{_uid()[:12]}")
+        bulk_session.add(org)
+        await bulk_session.flush()
+        # rejected: already at the target status, so _apply_status_change
+        # raises before this item's own commit -- the shape MP-28 fixes.
+        rejected = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Bulk",
+            last_name="Reject",
+            email=f"{_uid()}@example.com",
+            status=ProspectStatus.ON_HOLD,
+        )
+        # paused: a normal, accepted item -- held mid-flight (see below) so
+        # the batch is still inside `_bulk_apply`'s loop when the checker
+        # session probes the *rejected* item's row.
+        paused = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Bulk",
+            last_name="Paused",
+            email=f"{_uid()}@example.com",
+            status=ProspectStatus.ACTIVE,
+        )
+        bulk_session.add_all([rejected, paused])
+        await bulk_session.flush()
+        # Captured as plain strings before any commit: commit() expires
+        # every attribute on every object the session has loaded, and an
+        # expired attribute can't be lazily refreshed from plain
+        # (non-awaited) Python code -- only from inside an actually-awaited
+        # ORM call.
+        org_id = str(org.id)
+        rejected_id = str(rejected.id)
+        paused_id = str(paused.id)
+        await bulk_session.commit()
+
+        service = MembershipPipelineService(bulk_session)
+        rejected_item_done = asyncio.Event()
+        resume_paused_item = asyncio.Event()
+        original_apply_status_change = service._apply_status_change
+
+        async def _pausing_apply_status_change(
+            prospect, target, changed_by, reason, bulk
+        ):
+            if str(prospect.id) == paused_id:
+                # The rejected item has already raised, and _bulk_apply's
+                # except-ValueError branch has already ended that item's
+                # transaction -- its lock should be releasable right now,
+                # even though this second item's own locked read (taken by
+                # _set_status just before this call) is still open.
+                rejected_item_done.set()
+                await resume_paused_item.wait()
+            return await original_apply_status_change(
+                prospect, target, changed_by, reason, bulk
+            )
+
+        bulk_task = None
+        try:
+            with patch.object(
+                service, "_apply_status_change", _pausing_apply_status_change
+            ):
+                bulk_task = asyncio.create_task(
+                    service.bulk_set_prospect_status(
+                        [rejected_id, paused_id], org_id, "on_hold", changed_by=None
+                    )
+                )
+                pause_wait_task = asyncio.create_task(rejected_item_done.wait())
+                try:
+                    done, _pending = await asyncio.wait(
+                        {pause_wait_task, bulk_task},
+                        timeout=10,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if bulk_task in done:
+                        # Codex (PR #2408): if the batch raises (or
+                        # returns) before the paused item ever reaches
+                        # _pausing_apply_status_change -- e.g. a
+                        # _bulk_apply setup regression -- waiting out the
+                        # full 10s for an event that can now never fire
+                        # buries the real failure behind a confusing
+                        # timeout. `.result()` re-raises it immediately.
+                        bulk_task.result()
+                        pytest.fail(
+                            "the batch finished before the paused item "
+                            "was ever released -- the pause point was "
+                            "never reached"
+                        )
+                    if pause_wait_task not in done:
+                        raise asyncio.TimeoutError(
+                            "neither the pause point nor the batch "
+                            "completed within 10s"
+                        )
+                finally:
+                    if not pause_wait_task.done():
+                        pause_wait_task.cancel()
+
+                # The core assertion: the rejected item's lock must be free
+                # *now*, mid-batch, not merely by the time the whole call
+                # eventually returns.
+                try:
+                    await asyncio.wait_for(
+                        checker_session.execute(
+                            select(ProspectiveMember.id)
+                            .where(ProspectiveMember.id == rejected_id)
+                            .with_for_update()
+                        ),
+                        timeout=5,
+                    )
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    # A cancelled-mid-read DBAPI call can surface as
+                    # CancelledError rather than the TimeoutError
+                    # wait_for() normally converts it to (aiomysql doesn't
+                    # always unwind a cancelled read cleanly) -- observed
+                    # directly against the pre-MP-28 code this test guards
+                    # against, so both must be treated as "still locked".
+                    #
+                    # invalidate(), not rollback(): the connection can be
+                    # left unusable by the cancelled-mid-read call above,
+                    # and unlike rollback(), SQLAlchemy guarantees
+                    # invalidate() does not raise even when the underlying
+                    # DBAPI connection is already broken -- so it can't
+                    # mask the pytest.fail() below behind a secondary
+                    # connection error (or, on the outer fixture's own
+                    # rollback() at teardown, a repeat one).
+                    await checker_session.invalidate()
+                    pytest.fail(
+                        "the rejected item's row is still locked while a "
+                        "later item in the same batch is still processing "
+                        "-- _bulk_apply is not releasing the lock at the "
+                        "item boundary"
+                    )
+                else:
+                    # The lock was free -- a normal rollback ends this
+                    # read cleanly on an otherwise-healthy connection.
+                    await checker_session.rollback()
+
+                resume_paused_item.set()
+                results = await asyncio.wait_for(bulk_task, timeout=10)
+        finally:
+            if bulk_task is not None and not bulk_task.done():
+                bulk_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await bulk_task
+            # Codex (PR #2413): `.cancelled()` after the task has settled,
+            # not just whether *this* block performed the cancel -- the
+            # final `asyncio.wait_for(bulk_task, timeout=10)` above cancels
+            # and awaits the task itself on a timeout, so by the time this
+            # `finally` runs the task is already done and the cancel-here
+            # branch never executes, even though it genuinely was
+            # cancelled mid-DB-read.
+            bulk_cancelled = bulk_task is not None and bulk_task.cancelled()
+            if bulk_cancelled:
+                # invalidate(), not rollback(): same reasoning as the
+                # class above -- cancelling a task mid-DB-read can leave
+                # its connection unusable, and invalidate() is guaranteed
+                # not to raise even then, so it can't skip the explicit
+                # teardown below.
+                await bulk_session.invalidate()
+            else:
+                await bulk_session.rollback()
+            await checker_session.rollback()
+            await _teardown_membership_race_org(org_id, [rejected_id, paused_id])
+
+        by_id = {r["prospect_id"]: r for r in results}
+        assert by_id[rejected_id]["succeeded"] is False
+        assert "already on_hold" in by_id[rejected_id]["error"]
+        assert by_id[paused_id]["succeeded"] is True

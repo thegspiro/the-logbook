@@ -10,7 +10,7 @@ import html
 import re
 import secrets
 import time
-from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request, status
@@ -28,6 +28,24 @@ from app.core.error_codes import CodedHTTPException, ErrorCode
 # ============================================
 
 
+@dataclass
+class _KeyState:
+    """All state RateLimiter tracks for one key.
+
+    A key's request history, its own window, and its lockout status live in
+    one record, not split across independently-capped, independently-evicted
+    structures — eviction can never remove one piece of a key's state while
+    leaving another piece behind, in any combination. A key either has a
+    _KeyState, in which case all three travel together, or it has no record
+    at all. See docs/security-review/CI3-33-core-infra.md for the review
+    history that led to this shape.
+    """
+
+    request_times: list[float] = field(default_factory=list)
+    window_seconds: int = 60
+    lockout_until: float | None = None
+
+
 class RateLimiter:
     """
     In-memory rate limiter for API endpoints
@@ -38,70 +56,233 @@ class RateLimiter:
     memory growth under sustained traffic.
     """
 
-    # Maximum number of tracked keys before forced eviction
+    # Maximum number of distinct keys tracked before forced eviction.
     _MAX_KEYS = 10_000
 
-    # Minimum interval between eviction scans (seconds)
+    # Independent cap on the number of ACTIVE lockouts, enforced at
+    # *insertion* time (see is_rate_limited), never by evicting an existing
+    # one: an active lockout is a security decision already made, and
+    # evicting one early — by size, by soonest-expiry, or any other
+    # selection — lets a locked-out attacker back in ahead of schedule.
+    # Once saturated, a new lockout simply isn't persisted; the request is
+    # still rejected on the count-based check regardless.
+    _MAX_LOCKOUTS = 10_000
+
+    # Minimum interval between full periodic sweeps (seconds).
     _EVICTION_INTERVAL = 60
 
-    def __init__(self):
-        self.requests: dict[str, list[float]] = defaultdict(list)
-        self.lockouts: dict[str, float] = {}
-        # Each key's own window_seconds, as last passed to is_rate_limited()
-        # for it — callers share this one limiter instance across scopes
-        # with very different windows (most are 60s, but e.g. data_export is
-        # 3600s), so eviction must judge each key's staleness against its
-        # own window, not whichever call happened to trigger the sweep.
-        self._key_windows: dict[str, int] = {}
-        self._last_eviction: float = 0.0
+    # Minimum interval between recomputing the exact active-lockout count
+    # (seconds) — independent of, and much shorter than, _EVICTION_INTERVAL.
+    # Bounds the cost of an accurate "is the table really full" answer to at
+    # most one O(len(self._keys)) scan per second, regardless of how many
+    # times a caller asks in that window — one over-limit key retrying
+    # repeatedly, or many different first-time violators arriving together,
+    # cost the same fixed per-second rate either way. self._active_lockout_
+    # count can only ever be a stale OVER-estimate between refreshes (see its
+    # own comment in __init__), so gating a refresh on "only when the cached
+    # count already reads at/over capacity" cannot let an over-cap insertion
+    # slip through.
+    _LOCKOUT_VERIFY_INTERVAL = 1.0
 
-    def _evict_stale(self, now: float, window_seconds: int) -> None:
-        """Remove entries that have no recent requests and expired lockouts.
+    # Maximum number of distinct rate-limit scopes tracked in
+    # self._saturation_reject_until. Scope prefixes are a fixed, finite set
+    # of string literals at today's call sites (see _scope_of), but the
+    # public interface (check_rate_limit(scope), public_rate_limit(key))
+    # does not itself enforce that, so this cap and _sweep's eviction of it
+    # are defense in depth against a future dynamic-scope caller, not a
+    # bound this file's current callers can reach.
+    _MAX_SATURATION_SCOPES = 1_000
+
+    def __init__(self):
+        self._keys: dict[str, _KeyState] = {}
+        self._last_eviction: float = 0.0
+        # Cached count of records whose lockout_until is set and unexpired.
+        # Incremented immediately on every successful insertion (so a burst
+        # of distinct violators within one _LOCKOUT_VERIFY_INTERVAL window
+        # still sees each other's inserts and the cap stays effectively
+        # exact); corrected to an exact value only by _sweep and
+        # _refresh_active_lockout_count. Between those corrections it can
+        # only be an OVER-estimate (an expired-but-not-yet-rediscovered
+        # lockout still counts against capacity) — the safe direction: it
+        # can cause an unnecessary saturation-fallback determination for up
+        # to _LOCKOUT_VERIFY_INTERVAL, never let the true cap be exceeded.
+        self._active_lockout_count: int = 0
+        self._last_lockout_verify: float = 0.0
+        # Fail-closed signal for a violator whose lockout couldn't be
+        # persisted because the table was saturated: without this, such a
+        # violator's only remaining protection is its own request history's
+        # (much shorter) sliding window, not the lockout duration it was
+        # told about. Keyed per rate-limit *scope* (the literal prefix each
+        # call site puts before the first ":" in its key — "login",
+        # "register", "pub_form_submit", etc. — see _scope_of), not
+        # globally: a flood saturating one scope's lockout capacity must
+        # not fail closed for every other scope sharing this one
+        # process-wide limiter instance. Not part of _KeyState — a
+        # fundamentally different key space (rate-limit scope, not
+        # attacker-influenceable client identifier) — but still bounded by
+        # _MAX_SATURATION_SCOPES and swept by _sweep, same as _keys.
+        self._saturation_reject_until: dict[str, float] = {}
+
+    @staticmethod
+    def _scope_of(key: str) -> str:
+        """The rate-limit scope encoded in a tracker key.
+
+        Every caller builds keys as f"{scope}:{identifier}" (see
+        check_rate_limit and public_rate_limit's call sites) — split on the
+        first ":" only, since the identifier half (an IPv6 address) may
+        itself contain colons.
+        """
+        return key.split(":", 1)[0]
+
+    def _sweep(self, now: float, window_seconds: int) -> None:
+        """Periodic maintenance: bound memory and keep the active-lockout
+        count from drifting stale forever.
 
         ``window_seconds`` is used only as the fallback for a key this
         limiter has somehow never recorded a window for; every key evicts
-        against its own recorded window via ``_key_windows``.
+        against its own recorded window.
 
-        Also enforces ``_MAX_KEYS`` by force-evicting the oldest entries
-        when the key count exceeds the limit (prevents unbounded memory
-        growth under DDoS with many unique source IPs).
+        Only runs at most once per _EVICTION_INTERVAL, unless the tracked
+        evictable (non-actively-locked-out) key count, or the tracked
+        saturation-scope count, exceeds its own safety limit — which must
+        force an immediate sweep rather than wait, or an unbounded flood of
+        distinct keys/scopes grows memory unchecked in between. Evictable
+        count is approximated as len(self._keys) - self._active_lockout_
+        count rather than computed exactly (which would cost the same
+        O(len(self._keys)) scan this throttle exists to bound): since
+        _active_lockout_count can only ever be a stale OVER-estimate (see
+        its own comment in __init__), this can only ever be a stale UNDER-
+        estimate of the true evictable count — so it can delay noticing an
+        evictable-count overshoot by up to _EVICTION_INTERVAL, the same
+        staleness tolerance already accepted for the periodic throttle
+        itself, but can never mistake a table saturated purely with active
+        lockouts for one needing eviction, which is what happens using
+        len(self._keys) alone once active lockouts fill _MAX_KEYS on their
+        own: this call's own body then re-runs its full O(len(self._keys))
+        scans on every single subsequent call, forever, since the
+        combined total never drops back at or under _MAX_KEYS while
+        lockouts stay saturated.
         """
-        # Only run eviction at most once per _EVICTION_INTERVAL to avoid overhead,
-        # unless the key count exceeds the safety limit.
-        over_limit = len(self.requests) > self._MAX_KEYS
+        over_limit = (
+            len(self._keys) - self._active_lockout_count > self._MAX_KEYS
+            or len(self._saturation_reject_until) > self._MAX_SATURATION_SCOPES
+        )
         if not over_limit and now - self._last_eviction < self._EVICTION_INTERVAL:
             return
         self._last_eviction = now
 
-        # Evict expired lockouts
-        expired_lockouts = [k for k, v in self.lockouts.items() if now >= v]
-        for k in expired_lockouts:
-            del self.lockouts[k]
-
-        # Evict request entries with no recent activity, each against its
-        # own window.
-        stale_keys = [
+        # Remove records that are both request-stale (per their own
+        # recorded window) and not actively locked out. An active lockout
+        # is a security *decision* already made, not a soft activity cache
+        # — it is only ever removed once it has genuinely expired,
+        # regardless of how stale the rest of the record looks.
+        stale = [
             k
-            for k, timestamps in self.requests.items()
-            if not timestamps
-            or (now - timestamps[-1]) > self._key_windows.get(k, window_seconds)
-        ]
-        for k in stale_keys:
-            del self.requests[k]
-            self._key_windows.pop(k, None)
-
-        # Enforce _MAX_KEYS: if still over the limit after removing stale
-        # entries, force-evict the keys with the oldest last-request time.
-        if len(self.requests) > self._MAX_KEYS:
-            by_recency = sorted(
-                self.requests.items(),
-                key=lambda kv: kv[1][-1] if kv[1] else 0.0,
+            for k, st in self._keys.items()
+            if (st.lockout_until is None or st.lockout_until <= now)
+            and (
+                not st.request_times or (now - st.request_times[-1]) > st.window_seconds
             )
-            to_remove = len(self.requests) - self._MAX_KEYS
-            for key, _ in by_recency[:to_remove]:
-                del self.requests[key]
-                self.lockouts.pop(key, None)
-                self._key_windows.pop(key, None)
+        ]
+        for k in stale:
+            del self._keys[k]
+
+        # Enforce _MAX_KEYS against evictable (non-actively-locked-out)
+        # records only, and size the eviction off their own count — not
+        # off len(self._keys). Active lockouts already have their own
+        # independent cap (_MAX_LOCKOUTS); sizing this eviction off the
+        # combined total instead of the evictable count means that once
+        # active lockouts alone fill _MAX_KEYS (the two caps share the
+        # same default), _MAX_KEYS has no headroom left for ordinary
+        # request histories at all — every unlocked entry gets evicted on
+        # the very next call, before it can ever accumulate enough history
+        # to trip its own max_requests. Two keys alternating one request
+        # each then never see their own prior request, so neither ever
+        # reaches its limit no matter how many requests either sends —
+        # the count-based check is silently defeated for as long as
+        # lockouts stay saturated, precisely when the fallback needs to
+        # hold. Sizing eviction off the evictable count means unlocked
+        # entries keep their own full _MAX_KEYS worth of capacity
+        # regardless of how full the (independently-capped) lockout
+        # portion is — the two caps compose additively, as intended,
+        # rather than the lockout cap silently consuming the key cap.
+        if len(self._keys) > self._MAX_KEYS:
+            evictable = [
+                (k, st)
+                for k, st in self._keys.items()
+                if st.lockout_until is None or st.lockout_until <= now
+            ]
+            to_remove = len(evictable) - self._MAX_KEYS
+            if to_remove > 0:
+                evictable.sort(
+                    key=lambda kv: (
+                        kv[1].request_times[-1] if kv[1].request_times else 0.0
+                    )
+                )
+                for k, _ in evictable[:to_remove]:
+                    del self._keys[k]
+
+        # Remove expired saturation-reject entries, then — if a caller
+        # somehow supplied enough distinct scopes to still be over cap —
+        # evict the soonest-to-expire remaining ones first: those are also
+        # the ones closest to no longer mattering, so this loses the least
+        # fail-closed protection per entry removed.
+        expired_scopes = [
+            scope
+            for scope, reject_until in self._saturation_reject_until.items()
+            if reject_until <= now
+        ]
+        for scope in expired_scopes:
+            del self._saturation_reject_until[scope]
+        if len(self._saturation_reject_until) > self._MAX_SATURATION_SCOPES:
+            to_remove = len(self._saturation_reject_until) - self._MAX_SATURATION_SCOPES
+            soonest = sorted(
+                self._saturation_reject_until.items(), key=lambda kv: kv[1]
+            )[:to_remove]
+            for scope, _ in soonest:
+                del self._saturation_reject_until[scope]
+
+        # Full, exact recompute of the active-lockout count. This is the
+        # other half (besides _refresh_active_lockout_count) of keeping
+        # the throttled per-call verify from drifting stale indefinitely
+        # when no single key's own call ever rediscovers its own expiry.
+        self._active_lockout_count = sum(
+            1
+            for st in self._keys.values()
+            if st.lockout_until is not None and st.lockout_until > now
+        )
+        self._last_lockout_verify = now
+
+    def _refresh_active_lockout_count(self, now: float) -> bool:
+        """Recompute self._active_lockout_count exactly, throttled
+        independently of the general periodic sweep — at most once per
+        _LOCKOUT_VERIFY_INTERVAL (1 second), far shorter than
+        _EVICTION_INTERVAL (60 seconds). Returns whether a real recompute
+        happened (False when throttled — the cache is left exactly as it
+        was, which the caller must treat as unverified).
+
+        Called only when the cached count already reads at or over
+        capacity, immediately before an insertion decision. Relying solely
+        on the 60-second periodic sweep would leave a genuinely-emptied
+        table reading as saturated for up to 60 seconds (a stale count
+        causing a false rejection); refreshing on every single call that
+        merely observes the table at capacity would turn a sustained
+        attacker's own repeated retries — or any burst of first-time
+        violators arriving together — into unbounded full-table-scan work.
+        Throttling the *verification* itself to a short, fixed interval
+        bounds the scan cost to a fixed per-second rate regardless of call
+        volume, while keeping the worst-case staleness far below the
+        general sweep's window.
+        """
+        if now - self._last_lockout_verify < self._LOCKOUT_VERIFY_INTERVAL:
+            return False
+        self._last_lockout_verify = now
+        self._active_lockout_count = sum(
+            1
+            for st in self._keys.values()
+            if st.lockout_until is not None and st.lockout_until > now
+        )
+        return True
 
     def is_rate_limited(
         self,
@@ -124,57 +305,156 @@ class RateLimiter:
         """
         current_time = time.time()
 
-        # Record this key's own window before eviction runs, so a sweep
-        # triggered by a different scope's window doesn't judge this key's
-        # staleness against the wrong duration.
-        self._key_windows[key] = window_seconds
+        # Capture this key's own state *before* the periodic sweep runs.
+        # _sweep's forced-by-recency eviction can remove this exact key's
+        # own record if it ranks globally-oldest among an over-cap
+        # tracker, even though it is well within its own window (e.g. a
+        # 3600s data_export key sitting next to a flood of 60s login
+        # keys). Capturing first, and writing a fresh record back
+        # explicitly below, means this call's own history/lockout is
+        # never silently reset by its own eviction pass.
+        existing = self._keys.get(key)
+        existing_requests = list(existing.request_times) if existing else []
+        existing_lockout_until = existing.lockout_until if existing else None
 
-        # Periodic eviction to bound memory usage
-        self._evict_stale(current_time, window_seconds)
+        self._sweep(current_time, window_seconds)
 
-        # Check if currently locked out
-        if key in self.lockouts:
-            if current_time < self.lockouts[key]:
-                remaining = int(self.lockouts[key] - current_time)
+        scope = self._scope_of(key)
+
+        # Check if currently locked out, using the pre-sweep value
+        # captured above, not a fresh lookup that the sweep could have
+        # just removed.
+        if existing_lockout_until is not None:
+            if current_time < existing_lockout_until:
+                remaining = int(existing_lockout_until - current_time)
                 return True, f"Account locked. Try again in {remaining} seconds"
             else:
-                # Lockout expired
-                del self.lockouts[key]
+                # Lockout expired.
+                existing_lockout_until = None
                 # Only reset history for a lockout that actually cooled
-                # something down (Codex, PR #2106). A caller with
-                # lockout_seconds=0 — public_rate_limit's in-memory fallback,
-                # used by several unauthenticated public endpoints when Redis
-                # is down — sets self.lockouts[key] = current_time + 0, which
-                # reads as "expired" on the very next call. Popping
+                # something down. A caller with lockout_seconds=0 —
+                # public_rate_limit's in-memory fallback, used by several
+                # unauthenticated public endpoints when Redis is down —
+                # reads as "expired" on the very next call. Resetting
                 # unconditionally would then wipe the in-window request
                 # history on every single over-limit request, turning the
                 # sliding window into a free reset every max_requests+1'th
                 # hit and defeating the limit entirely. A real lockout
                 # (lockout_seconds >> window_seconds) still gets the same
-                # clean slate as before: every recorded timestamp is already
-                # older than window_seconds by the time it expires, so the
-                # window filter below would drop them regardless.
+                # clean slate as before: every recorded timestamp is
+                # already older than window_seconds by the time it
+                # expires, so the window filter below would drop them
+                # regardless.
                 if lockout_seconds > 0:
-                    self.requests.pop(key, None)
+                    existing_requests = []
 
-        # Clean old requests outside window
-        self.requests[key] = [
+        # Clean old requests outside window, using the pre-sweep history
+        # captured above.
+        filtered_requests = [
             req_time
-            for req_time in self.requests[key]
+            for req_time in existing_requests
             if current_time - req_time < window_seconds
         ]
 
-        # Check rate limit
-        if len(self.requests[key]) >= max_requests:
-            # Too many requests - apply lockout
-            self.lockouts[key] = current_time + lockout_seconds
+        if len(filtered_requests) >= max_requests:
+            # Too many requests. By this point `key` is guaranteed not to
+            # already hold an unexpired lockout — the branch above already
+            # returned early if it did — so this is always a *new* entry.
+            # Once the table is genuinely saturated, fail closed: don't
+            # persist the new one rather than bumping an existing,
+            # still-active one out early to make room. This request is
+            # rejected either way — the count-based check above already
+            # decided that — and every subsequent request from this same
+            # key keeps failing it for as long as its request history
+            # survives (weaker, but real, fallback protection).
+            if self._active_lockout_count >= self._MAX_LOCKOUTS:
+                self._refresh_active_lockout_count(current_time)
+            # Fresh as of *this* call if the cache's last exact recompute
+            # landed on current_time — whether that came from
+            # _refresh_active_lockout_count just above, or from _sweep's
+            # own recompute earlier in this same call (e.g. a forced sweep
+            # on a key count/scope-count overflow). Checking the
+            # timestamp directly, rather than trusting only the refresh
+            # call's own return value, is what makes both recompute paths
+            # count as "verified right now".
+            just_verified = self._last_lockout_verify == current_time
+
+            if self._active_lockout_count < self._MAX_LOCKOUTS:
+                lockout_until: float | None = current_time + lockout_seconds
+                # A lockout_seconds=0 caller's own lockout_until equals
+                # current_time, which the read-side check (current_time <
+                # lockout_until) already treats as immediately expired —
+                # never a real active lockout. Counting it here anyway
+                # would let a single such key inflate the cached count
+                # without limit on repeated retries (each retry reads its
+                # own just-set entry as already-expired, resets, and
+                # re-enters this branch), eventually reaching capacity
+                # with zero genuine active lockouts and routing an
+                # unrelated scope's real violator into the saturation
+                # fallback instead of its own per-key lockout.
+                if lockout_seconds > 0:
+                    self._active_lockout_count += 1
+            else:
+                # Saturated: this violator's own lockout can't be
+                # persisted. Extend this scope's saturation-reject signal
+                # so a *later* call from this same key — after its own
+                # request history's window_seconds has naturally cleared
+                # it — still fails closed instead of silently sailing
+                # through with the sliding window's much shorter
+                # protection. See the check below.
+                lockout_until = None
+                # Only commit a long-lived (lockout_seconds, often
+                # minutes) scope-wide signal from a count we just proved
+                # accurate. Extending it from an unverified, throttled-away
+                # read would let a sub-second stale-count race (the real
+                # table emptied a moment ago, but the cache hasn't been
+                # rechecked yet) block every fresh, no-history client in
+                # the scope for the full lockout duration — grossly
+                # disproportionate to how briefly the cache was actually
+                # wrong. This request is still rejected regardless (the
+                # count-based check above already decided that); only the
+                # broader signal is deferred to a call that can verify.
+                if just_verified:
+                    self._saturation_reject_until[scope] = max(
+                        self._saturation_reject_until.get(scope, 0.0),
+                        current_time + lockout_seconds,
+                    )
+            self._keys[key] = _KeyState(
+                request_times=filtered_requests,
+                window_seconds=window_seconds,
+                lockout_until=lockout_until,
+            )
             return (
                 True,
                 f"Too many requests. Account locked for {lockout_seconds // 60} minutes",
             )
 
+        # Fail closed during an active saturation event *for this key's
+        # own scope*: this call is about to be allowed because
+        # filtered_requests shows nothing within window — indistinguishable
+        # from a saturated-table violator whose earlier lockout couldn't
+        # be persisted, and whose last request has since aged out of
+        # window_seconds. A key with *any* live in-window history is
+        # unaffected (handled above), so this can only make a request
+        # stricter, never looser, and costs nothing once the scope's
+        # reject-until has passed.
+        reject_until = self._saturation_reject_until.get(scope, 0.0)
+        if not filtered_requests and current_time < reject_until:
+            # Deliberately does not write a record for `key` here (unlike
+            # every other return path) — stateless by design, so it
+            # doesn't grow self._keys for an otherwise-untracked key
+            # precisely when the tracker is already under saturation
+            # pressure.
+            remaining = int(reject_until - current_time)
+            return True, f"Account locked. Try again in {remaining} seconds"
+
         # Record this request
-        self.requests[key].append(current_time)
+        filtered_requests.append(current_time)
+        self._keys[key] = _KeyState(
+            request_times=filtered_requests,
+            window_seconds=window_seconds,
+            lockout_until=None,
+        )
 
         return False, None
 

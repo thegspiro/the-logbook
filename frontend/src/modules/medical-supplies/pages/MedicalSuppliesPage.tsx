@@ -280,6 +280,50 @@ const MedicalSuppliesPage: React.FC = () => {
           try {
             const value = await requests[section]();
             if (superseded()) return;
+
+            // Validated before ANY state is touched. Clearing the error and
+            // marking the section loaded first, then throwing on a bad shape,
+            // leaves the section in both states at once: the catch below shows
+            // "showing previously loaded data" while `loaded` renders the
+            // still-empty list as "Nothing expiring". A section is loaded when
+            // there is something to load it with, not when the request returned.
+            //
+            // These `as` casts assert a wire format that nothing checks. A
+            // response that is valid JSON but not this shape reached
+            // `expiring.map` as a non-array and took the whole page down
+            // through the ErrorBoundary — the failure a phone actually sees
+            // when station Wi-Fi answers 200 with a portal page.
+            //
+            // Rejected rather than emptied: substituting `[]` renders "Nothing
+            // expiring" over stock that may well be expiring, which is the one
+            // wrong answer this screen must not give.
+            let items: InventoryItem[] | null = null;
+            let itemPaging: { total: number; skip: number; limit: number } | null = null;
+            if (section === 'items') {
+              const data = (value ?? {}) as { items: InventoryItem[]; total: number; skip: number; limit: number };
+              // The paging metadata is validated with the array, not stored
+              // blind beside it. `itemPage.total > 0` is what renders the
+              // pagination control, so an undefined `total` hides it: page one
+              // shows, and every later supply is unreachable with nothing on
+              // screen saying so.
+              if (
+                !Array.isArray(data.items) ||
+                typeof data.total !== 'number' ||
+                typeof data.skip !== 'number' ||
+                typeof data.limit !== 'number'
+              ) {
+                throw new Error('The supply table service returned an unexpected response.');
+              }
+              items = data.items;
+              itemPaging = { total: data.total, skip: data.skip, limit: data.limit };
+            }
+            if (section === 'categories' && !Array.isArray(value)) {
+              throw new Error('The category list service returned an unexpected response.');
+            }
+            if (section === 'expiring' && !Array.isArray(value)) {
+              throw new Error('The expiring stock service returned an unexpected response.');
+            }
+
             setErrors((current) => {
               const next = { ...current };
               delete next[section];
@@ -288,9 +332,8 @@ const MedicalSuppliesPage: React.FC = () => {
             setLoaded((current) => ({ ...current, [section]: true }));
             if (section === 'summary') setSummary(value as MedicalSupplySummary);
             if (section === 'items') {
-              const data = value as { items: InventoryItem[]; total: number; skip: number; limit: number };
-              setItems(data.items);
-              setItemPage({ total: data.total, skip: data.skip, limit: data.limit });
+              setItems(items ?? []);
+              if (itemPaging) setItemPage(itemPaging);
               // Stamped from this closure's own values, not from the render's
               // `filterKey`: those are what the request actually asked for.
               setItemsFilterKey(requestedFilterKey);
@@ -404,7 +447,7 @@ const MedicalSuppliesPage: React.FC = () => {
       <div className="mb-6">
         <Link
           to="/dashboard"
-          className="text-theme-text-muted hover:text-theme-text-primary mb-3 inline-flex items-center gap-1 text-sm"
+          className="touch-target-phone text-theme-text-muted hover:text-theme-text-primary mb-3 inline-flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Dashboard
@@ -431,7 +474,14 @@ const MedicalSuppliesPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="hscroll flex items-center gap-2">
+          {/* Four actions do not fit across a phone — "Add supply" ran to
+              408px. `hscroll` already scrolls them; the marker is what tells the
+              mobile pass that is deliberate. Buttons inside, so no tabIndex. */}
+          <div
+            className="hscroll flex items-center gap-2"
+            data-mobile-scroll-region
+            aria-label="Medical supply actions"
+          >
             <button
               type="button"
               onClick={() => void refresh()}

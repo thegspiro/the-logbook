@@ -323,6 +323,30 @@ async def create_budget(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+@router.get("/budgets/summary", response_model=BudgetSummaryResponse)
+async def get_budget_summary(
+    fiscal_year_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    # Registered before `/budgets/{budget_id}` on purpose: Starlette matches
+    # routes in registration order, so a fixed-path route sharing a dynamic
+    # route's prefix and segment count must come first or it is permanently
+    # shadowed -- a GET here previously always matched
+    # get_budget(budget_id="summary") instead and 404'd.
+    service = FinanceService(db)
+    try:
+        return await service.get_budget_summary(
+            str(current_user.organization_id), fiscal_year_id
+        )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
 @router.get("/budgets/{budget_id}", response_model=BudgetResponse)
 async def get_budget(
     budget_id: str,
@@ -349,25 +373,6 @@ async def update_budget(
             budget_id,
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
-        )
-    except BudgetLimitExceededError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
-
-
-@router.get("/budgets/summary", response_model=BudgetSummaryResponse)
-async def get_budget_summary(
-    fiscal_year_id: str = Query(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
-):
-    service = FinanceService(db)
-    try:
-        return await service.get_budget_summary(
-            str(current_user.organization_id), fiscal_year_id
         )
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -432,6 +437,41 @@ async def create_approval_chain(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/approval-chains/preview", response_model=ApprovalChainResponse)
+async def preview_approval_chain(
+    entity_type: str = Query(...),
+    amount: Decimal = Query(..., decimal_places=2),
+    category_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    # Registered before `/approval-chains/{chain_id}` on purpose: Starlette
+    # matches routes in registration order, so a fixed-path route sharing a
+    # dynamic route's prefix and segment count must come first or it is
+    # permanently shadowed -- a GET here previously always matched
+    # get_approval_chain(chain_id="preview") instead and 404'd.
+    service = FinanceService(db)
+    try:
+        chain = await service.preview_approval_chain(
+            str(current_user.organization_id),
+            entity_type,
+            amount,
+            category_id,
+        )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+    if not chain:
+        raise HTTPException(
+            status_code=404,
+            detail="No matching approval chain found",
+        )
+    return chain
 
 
 @router.get("/approval-chains/{chain_id}", response_model=ApprovalChainResponse)
@@ -553,36 +593,6 @@ async def delete_chain_step(
         await service.delete_chain_step(
             step_id, chain_id, str(current_user.organization_id)
         )
-    except BudgetLimitExceededError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=safe_error_detail(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=safe_error_detail(e))
-
-
-@router.get("/approval-chains/preview", response_model=ApprovalChainResponse)
-async def preview_approval_chain(
-    entity_type: str = Query(...),
-    amount: Decimal = Query(..., decimal_places=2),
-    category_id: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
-):
-    service = FinanceService(db)
-    try:
-        chain = await service.preview_approval_chain(
-            str(current_user.organization_id),
-            entity_type,
-            amount,
-            category_id,
-        )
-        if not chain:
-            raise HTTPException(
-                status_code=404,
-                detail="No matching approval chain found",
-            )
-        return chain
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:

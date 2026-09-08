@@ -14,6 +14,9 @@ const mockCheckPermission = vi.fn();
 const mockRetireItem = vi.fn();
 const mockUpdateItem = vi.fn();
 const mockGetItemColors = vi.fn();
+const mockPinItem = vi.fn();
+const mockUnpinItem = vi.fn();
+const mockReorderItemPins = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -25,6 +28,9 @@ vi.mock('../../../services/api', () => ({
     getItemColors: (...a: unknown[]) => mockGetItemColors(...a) as unknown,
     retireItem: (...a: unknown[]) => mockRetireItem(...a) as unknown,
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
+    pinItem: (...a: unknown[]) => mockPinItem(...a) as unknown,
+    unpinItem: (...a: unknown[]) => mockUnpinItem(...a) as unknown,
+    reorderItemPins: (...a: unknown[]) => mockReorderItemPins(...a) as unknown,
     exportItemsCsv: vi.fn(),
   },
   locationsService: {
@@ -559,5 +565,476 @@ describe('InventoryItemsPage — the location panel', () => {
     await waitFor(() => expect(lastItemsCall().location_id).toBe('loc-1'));
     // The size the user picked first is still on the request.
     expect(lastItemsCall().size).toBe('l');
+  });
+});
+
+describe('InventoryItemsPage — pinned shortlist', () => {
+  // Its own defaults rather than the neighbouring block's: vi.clearAllMocks()
+  // resets recorded calls but NOT implementations, so a block that configures
+  // nothing runs on whatever ran before it (CLAUDE.md pitfall #28).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockPinItem.mockReset();
+    mockUnpinItem.mockReset();
+    mockReorderItemPins.mockReset();
+
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ id: 'it-boots', name: 'Duty Boots', pin_position: 1 }),
+        makeItem({ id: 'it-polo', name: 'Class B Polo', pin_position: 0 }),
+        makeItem({ id: 'it-ladder', name: 'Attic Ladder' }),
+        makeItem({ id: 'it-saw', name: 'Rotary Saw', status: 'maintenance' }),
+      ],
+      total: 4,
+    });
+    mockGetSummary.mockResolvedValue({
+      total_items: 4,
+      non_medical_items: 4,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockPinItem.mockResolvedValue({ id: 'pin-1', item_id: 'it-ladder', position: 2 });
+    mockUnpinItem.mockResolvedValue(undefined);
+    mockReorderItemPins.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  /** The data rows of one section's table, header row dropped. */
+  const sectionRows = async (name: string) => {
+    const table = await screen.findByRole('table', { name });
+    return within(table).getAllByRole('row').slice(1);
+  };
+
+  it('renders a Pinned section ordered by pin_position, not by name', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+
+    const rows = await sectionRows('Pinned');
+    // Polo is pin_position 0 and Boots is 1. Alphabetically Boots comes first,
+    // so the pin order is the only thing that can produce this.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Class B Polo');
+    expect(rows[1]).toHaveTextContent('Duty Boots');
+  });
+
+  it('does not repeat a pinned item in the sections below', async () => {
+    // The same id in two tables would render two checkboxes for one row and
+    // desynchronise the bulk-selection Set.
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByRole('heading', { name: /^Pinned$/ });
+
+    const available = await sectionRows('Available');
+    expect(available).toHaveLength(1);
+    expect(available[0]).toHaveTextContent('Attic Ladder');
+    expect(screen.getAllByText('Class B Polo')).toHaveLength(1);
+  });
+
+  it('pins an unpinned item and reloads the list', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /^Pin Attic Ladder$/ }));
+    await waitFor(() => expect(mockPinItem).toHaveBeenCalledWith('it-ladder'));
+  });
+
+  it('unpins a pinned item', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /^Unpin Class B Polo$/ }));
+    await waitFor(() => expect(mockUnpinItem).toHaveBeenCalledWith('it-polo'));
+  });
+
+  it('sends every pinned id when a row is moved, not just the one that moved', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Move Duty Boots up/i }));
+    // A partial list is indistinguishable from a stale tab dropping a pin, so
+    // the backend rejects one — the page must send the whole order.
+    await waitFor(() => expect(mockReorderItemPins).toHaveBeenCalledWith(['it-boots', 'it-polo']));
+  });
+
+  it('disables Move up on the first pinned row and Move down on the last', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+
+    expect(await screen.findByRole('button', { name: /Move Class B Polo up/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Move Duty Boots down/i })).toBeDisabled();
+  });
+
+  it('warns and refetches the real order when the reorder is rejected', async () => {
+    mockReorderItemPins.mockRejectedValue(new Error('stale'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByRole('table', { name: 'Pinned' });
+    const callsBefore = mockGetItems.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: /Move Duty Boots up/i }));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+
+    // Refetched rather than rolled back to the browser's own stale copy: the
+    // rejection this path exists for is "your list no longer matches ours", so
+    // restoring what the browser already had leaves every retry failing.
+    await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(callsBefore));
+    const rows = await sectionRows('Pinned');
+    expect(rows[0]).toHaveTextContent('Class B Polo');
+  });
+
+  it('marks the sorted column with aria-sort', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    const nameHeaders = await screen.findAllByRole('columnheader', { name: /Name/ });
+    // Default sort is name ascending.
+    expect(nameHeaders[0]).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  it('says the count is a running tally when more items match than are loaded', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'it-ladder', name: 'Attic Ladder' })],
+      total: 87,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+
+    // A bare "(1)" would read as "there is one available item" when 87 match.
+    expect(await screen.findByText('(1 so far)')).toBeInTheDocument();
+  });
+
+  it('shows no Pinned section when the member has pinned nothing', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'it-ladder', name: 'Attic Ladder' })],
+      total: 1,
+    });
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Attic Ladder');
+
+    expect(screen.queryByRole('heading', { name: /^Pinned$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('InventoryItemsPage — grouping', () => {
+  // Own defaults rather than a neighbour's: vi.clearAllMocks() resets recorded
+  // calls but not implementations (CLAUDE.md pitfall #28).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({ id: 'a-coat', name: 'Dress Coat', category_id: 'cat-a', group_key: 'cat-a' }),
+        makeItem({ id: 'b-polo', name: 'Class B Polo', category_id: 'cat-b', group_key: 'cat-b' }),
+      ],
+      total: 2,
+      groups: [
+        { key: 'cat-a', label: 'Class A Uniform', available_count: 12, unavailable_count: 1 },
+        { key: 'cat-b', label: 'Class B Uniform', available_count: 30, unavailable_count: 0 },
+      ],
+    });
+    mockGetSummary.mockResolvedValue({
+      total_items: 2,
+      non_medical_items: 2,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([
+      { id: 'cat-a', name: 'Class A Uniform', item_type: 'uniform', active: true },
+      { id: 'cat-b', name: 'Class B Uniform', item_type: 'uniform', active: true },
+    ]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const lastItemsCall = (): Record<string, unknown> =>
+    (mockGetItems.mock.calls[mockGetItems.mock.calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+
+  const chooseGrouping = async (value: string) => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByLabelText('Group by:');
+    await user.selectOptions(screen.getByLabelText('Group by:'), value);
+    return user;
+  };
+
+  it('sends group_by on the request when a dimension is chosen', async () => {
+    await chooseGrouping('category');
+    await waitFor(() => expect(lastItemsCall().group_by).toBe('category'));
+  });
+
+  it('does not send group_by when grouping is off', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByLabelText('Group by:');
+    expect(lastItemsCall().group_by).toBeUndefined();
+  });
+
+  it("labels each group with the backend's whole-set count, not the loaded rows", async () => {
+    await chooseGrouping('category');
+
+    // One Class A row is loaded but 12 match. A tally of what arrived is the
+    // exact mislabel counting server-side exists to prevent.
+    const header = await screen.findByRole('button', { name: /Class A Uniform/ });
+    expect(header).toHaveTextContent('(12)');
+  });
+
+  it('collapses a group and keeps its count visible', async () => {
+    const user = await chooseGrouping('category');
+    const header = await screen.findByRole('button', { name: /Class A Uniform/ });
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(header);
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    expect(header).toHaveTextContent('(12)');
+    // The row is gone; the header that accounts for it is not.
+    expect(screen.queryByText('Dress Coat')).not.toBeInTheDocument();
+  });
+
+  it('clears collapse state when the dimension changes', async () => {
+    const user = await chooseGrouping('category');
+    await user.click(await screen.findByRole('button', { name: /Class A Uniform/ }));
+    expect(screen.queryByText('Dress Coat')).not.toBeInTheDocument();
+
+    // Collapse state is keyed by group VALUE, and 'cat-a' means nothing under
+    // Colour — carrying it over would collapse an unrelated bucket.
+    await user.selectOptions(screen.getByLabelText('Group by:'), 'color');
+    expect(await screen.findByText('Dress Coat')).toBeInTheDocument();
+  });
+
+  it('heads the no-value bucket "Unspecified" rather than dropping it', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'x', name: 'Unsorted Helmet', group_key: null })],
+      total: 1,
+      groups: [{ key: null, label: null, available_count: 1, unavailable_count: 0 }],
+    });
+    await chooseGrouping('category');
+
+    // An item with no category is a group, not an absence of one — it must
+    // not vanish from a list it matches the filters for.
+    expect(await screen.findByRole('button', { name: /Unspecified/ })).toBeInTheDocument();
+    expect(screen.getByText('Unsorted Helmet')).toBeInTheDocument();
+  });
+
+  it("files a row under the server's key even when local data would disagree", async () => {
+    // The regression this guards: the page used to re-derive the group key
+    // from the row's own fields plus a locations lookup capped at 100 rows.
+    // Colour keys lower-cased, location follows a COALESCE, item_type lives on
+    // the category — every one a chance to disagree with the header's count,
+    // and the failure is a silent missing total (CLAUDE.md pitfall #29).
+    mockGetItems.mockResolvedValue({
+      items: [
+        // Nothing on this row spells 'far-loc'; only the server knows it.
+        makeItem({ id: 'far', name: 'Distant Nozzle', group_key: 'far-loc' }),
+      ],
+      total: 1,
+      groups: [{ key: 'far-loc', label: 'Shelf Z-9', available_count: 7, unavailable_count: 0 }],
+    });
+    await chooseGrouping('location');
+
+    const header = await screen.findByRole('button', { name: /Shelf Z-9/ });
+    expect(header).toHaveTextContent('(7)');
+    expect(screen.getByText('Distant Nozzle')).toBeInTheDocument();
+    // Not stranded under Unspecified with no count.
+    expect(screen.queryByRole('button', { name: /Unspecified/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves a department-authored name exactly as typed', async () => {
+    // Underscore-opening is for enum values like `in_maintenance`. Category,
+    // colour, location and vendor names are typed by the department, so an
+    // unconditional replace rewrites their own data.
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 's1', name: 'Nozzle', group_key: 'cat-s1' })],
+      total: 1,
+      groups: [{ key: 'cat-s1', label: 'Station_1', available_count: 1, unavailable_count: 0 }],
+    });
+    await chooseGrouping('category');
+
+    expect(await screen.findByRole('button', { name: /Station_1/ })).toBeInTheDocument();
+  });
+
+  it('opens out underscores in an enum-backed value', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [makeItem({ id: 'm1', name: 'Saw', group_key: 'in_maintenance' })],
+      total: 1,
+      groups: [{ key: 'in_maintenance', label: 'in_maintenance', available_count: 0, unavailable_count: 1 }],
+    });
+    await chooseGrouping('condition');
+
+    expect(await screen.findByRole('button', { name: /in maintenance/i })).toBeInTheDocument();
+  });
+
+  it('gives each group its own row group', async () => {
+    const user = await chooseGrouping('category');
+    expect(user).toBeDefined();
+
+    // Wait for the grouped fetch: grouping does not apply until rows fetched
+    // for that dimension arrive.
+    await screen.findByRole('button', { name: /Class A Uniform/ });
+    const table = screen.getByRole('table', { name: 'Available' });
+    // thead plus one tbody per group. A single tbody would bind every
+    // scope="rowgroup" header to the rows of the whole table rather than its
+    // own, handing a screen reader the wrong group-to-row map.
+    expect(within(table).getAllByRole('rowgroup')).toHaveLength(3);
+  });
+
+  it('renders no group headers when grouping is off', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Dress Coat');
+    expect(screen.queryByRole('button', { name: /Class A Uniform \(/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
+  // One rule under test: whatever you group by is stated once by the group
+  // header and never repeated on the rows beneath — whether it lives in a real
+  // column or in a variant capsule.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({
+      items: [
+        makeItem({
+          id: 'a-coat',
+          name: 'Dress Coat',
+          category_id: 'cat-a',
+          group_key: 'cat-a',
+          size: 'l',
+          standard_size: 'l',
+          color: 'Navy',
+          storage_location: 'Shelf B-3',
+        }),
+        makeItem({
+          id: 'b-polo',
+          name: 'Class B Polo',
+          category_id: 'cat-b',
+          group_key: 'cat-b',
+          size: 'l',
+          standard_size: 'l',
+          color: 'Navy',
+          storage_location: 'Shelf B-3',
+        }),
+      ],
+      total: 2,
+      groups: [
+        { key: 'cat-a', label: 'Class A Uniform', available_count: 1, unavailable_count: 0 },
+        { key: 'cat-b', label: 'Class B Uniform', available_count: 1, unavailable_count: 0 },
+      ],
+    });
+    mockGetSummary.mockResolvedValue({
+      total_items: 2,
+      non_medical_items: 2,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([
+      { id: 'cat-a', name: 'Class A Uniform', item_type: 'uniform', active: true },
+      { id: 'cat-b', name: 'Class B Uniform', item_type: 'uniform', active: true },
+    ]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetItemColors.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const lastItemsCall = (): Record<string, unknown> =>
+    (mockGetItems.mock.calls[mockGetItems.mock.calls.length - 1]?.[0] ?? {}) as Record<string, unknown>;
+
+  const groupBy = async (value: string) => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByLabelText('Group by:');
+    await user.selectOptions(screen.getByLabelText('Group by:'), value);
+    // Grouping deliberately does not apply until rows fetched FOR that
+    // dimension arrive — otherwise the previous dimension's keys are rendered
+    // under the new dimension's headings. So wait for the request to carry it
+    // and for a group heading to appear, rather than asserting mid-flight.
+    await waitFor(() => expect(lastItemsCall().group_by).toBe(value));
+    await screen.findByRole('button', { name: /Class A Uniform/ });
+    return user;
+  };
+
+  const header = (name: string) => screen.queryAllByRole('columnheader', { name });
+
+  it('leaves every column in place when nothing is grouped', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Dress Coat');
+
+    // The promise this change makes: the default view is untouched.
+    expect(header('Category').length).toBeGreaterThan(0);
+    expect(header('Location').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('columnheader', { name: /Condition/ }).length).toBeGreaterThan(0);
+    expect(header('Size')).toHaveLength(0);
+  });
+
+  it('drops the Category column when grouped by category', async () => {
+    await groupBy('category');
+
+    expect(header('Category')).toHaveLength(0);
+    // Named once, by the header that accounts for the rows.
+    expect(screen.getByRole('button', { name: /Class A Uniform/ })).toBeInTheDocument();
+  });
+
+  it('drops the Condition column when grouped by condition', async () => {
+    await groupBy('condition');
+    expect(screen.queryAllByRole('columnheader', { name: /Condition/ })).toHaveLength(0);
+  });
+
+  it('drops the Location column when grouped by location', async () => {
+    await groupBy('location');
+    expect(header('Location')).toHaveLength(0);
+  });
+
+  // Scoped to the table: the filter bar carries an "All Sizes" select whose
+  // options include a literal "L", so an unscoped text query matches the
+  // control rather than the rows.
+  const sizesInRows = () => within(screen.getByRole('table', { name: 'Available' })).queryAllByText('L');
+
+  it('adds a Size column when grouping, and shows size once not twice', async () => {
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('Dress Coat');
+    // Ungrouped: size appears once per row, as a capsule.
+    expect(sizesInRows()).toHaveLength(2);
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Group by:'), 'category');
+    await waitFor(() => expect(header('Size').length).toBeGreaterThan(0));
+
+    // Still once per row — now the column, not the capsule. Four would mean
+    // the capsule stayed and the column duplicated it.
+    expect(sizesInRows()).toHaveLength(2);
+  });
+
+  it('drops the colour capsule when grouped by colour', async () => {
+    await groupBy('color');
+
+    // Colour only ever renders as a capsule, so its absence is unambiguous.
+    await waitFor(() => expect(screen.queryByText('Navy')).not.toBeInTheDocument());
+    // And the columns it does not own are untouched.
+    expect(header('Category').length).toBeGreaterThan(0);
+    expect(header('Size').length).toBeGreaterThan(0);
+  });
+
+  it('adds no Size column when size IS the grouping', async () => {
+    await groupBy('size');
+
+    // The header already says it; a column would be the exact redundancy this
+    // rule removes.
+    expect(header('Size')).toHaveLength(0);
+    expect(sizesInRows()).toHaveLength(0);
+  });
+
+  it('hides no column for a dimension that has none, but still adds Size', async () => {
+    await groupBy('vendor');
+
+    // Proves the two rules are independent: nothing to hide, Size still gained.
+    expect(header('Category').length).toBeGreaterThan(0);
+    expect(header('Location').length).toBeGreaterThan(0);
+    expect(header('Size').length).toBeGreaterThan(0);
   });
 });

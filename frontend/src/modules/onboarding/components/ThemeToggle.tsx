@@ -23,7 +23,7 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
   return (
     <button
       onClick={cycleTheme}
-      className={`text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${className}`}
+      className={`btn-icon text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring transition-colors focus:ring-2 focus:outline-hidden ${className}`}
       title={`Theme: ${themeLabel}`}
       aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
     >

@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.document import SYSTEM_FOLDERS, DocumentFolder, FolderVisibility
 from app.services.property_return_service import PropertyReturnService
 
 
@@ -221,31 +222,123 @@ class TestGenerateReport:
 
 
 class TestSaveAsDocument:
-    async def test_saves_into_reports_folder(self):
+    """Where the saved report lands, which is an access-control decision.
+
+    The report prints the departed member's home address and the stated reason
+    for the separation. It used to be filed in the ``Reports`` system folder,
+    whose ORGANIZATION visibility makes it readable by every ``documents.view``
+    holder, and fell back to ``folder_id = None`` — which
+    ``DocumentsService.can_access_document`` also treats as organization-level
+    — when that folder was missing. Both are asserted against here.
+    """
+
+    async def test_saves_into_existing_separations_folder(self):
         folder = SimpleNamespace(id="folder-1")
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(folder))
         db.add = MagicMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
+        db.flush = AsyncMock()
         doc = await PropertyReturnService(db).save_as_document(
             "org-1", "Jane Smith", "<html></html>", "officer-1"
         )
         assert doc.folder_id == "folder-1"
         assert doc.organization_id == "org-1"
+        # Only the document is added; the folder already existed.
         db.add.assert_called_once()
         db.commit.assert_awaited()
 
-    async def test_folder_id_none_when_no_reports_folder(self):
+    async def test_creates_leadership_folder_when_absent(self):
+        """A department onboarded before this folder existed still gets one.
+
+        ``initialize_system_folders`` returns early for any organization that
+        already has system folders, so relying on it would leave every
+        existing department without the folder — and the report in whatever
+        the fallback was.
+        """
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(None))
         db.add = MagicMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
         doc = await PropertyReturnService(db).save_as_document(
             "org-1", "Jane Smith", "<html></html>", "officer-1"
         )
-        assert doc.folder_id is None
+
+        added = [c.args[0] for c in db.add.call_args_list]
+        folders = [o for o in added if isinstance(o, DocumentFolder)]
+        assert len(folders) == 1
+        folder = folders[0]
+        assert folder.slug == "member-separations"
+        assert folder.visibility is FolderVisibility.LEADERSHIP
+        assert folder.organization_id == "org-1"
+        assert folder.is_system is True
+
+        # Never organization-level: a null folder_id reads as org-wide.
+        assert doc.folder_id is not None
+        assert doc.folder_id == str(folder.id)
+
+    async def test_registry_entry_is_leadership_only(self):
+        """The seeded definition itself, so a fresh org is not the exception."""
+        entry = next(s for s in SYSTEM_FOLDERS if s["slug"] == "member-separations")
+        assert entry["visibility"] is FolderVisibility.LEADERSHIP
+
+    async def test_reuses_folder_a_concurrent_drop_created(self):
+        """The re-check under the organization lock, not just the fast path.
+
+        ``(organization_id, slug)`` has no uniqueness constraint, so two
+        members dropped at once would otherwise both insert and every later
+        read of the folder would raise ``MultipleResultsFound`` — permanently,
+        for that department. The first read misses, the loser waits on the
+        organization row, and the second read must see the winner's folder.
+        """
+        winner = SimpleNamespace(id="folder-created-by-the-other-request")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(None),  # fast-path check: nothing yet
+                _one(None),  # the organization row, locked
+                _one(winner),  # re-check: the concurrent drop got there first
+            ]
+        )
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        doc = await PropertyReturnService(db).save_as_document(
+            "org-1", "Jane Smith", "<html></html>", "officer-1"
+        )
+
+        assert doc.folder_id == "folder-created-by-the-other-request"
+        added = [c.args[0] for c in db.add.call_args_list]
+        assert not [o for o in added if isinstance(o, DocumentFolder)]
+
+    async def test_existence_checks_lock_their_rows(self):
+        """Both folder reads are locking reads (pitfall #27's second half).
+
+        The caller has already read the member, the organization and the
+        assignment rows, so the transaction's REPEATABLE READ snapshot
+        predates the lock. A plain SELECT would report "no folder yet" even
+        after waiting for the transaction that created one.
+        """
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(None))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        await PropertyReturnService(db).save_as_document(
+            "org-1", "Jane Smith", "<html></html>", "officer-1"
+        )
+
+        statements = [str(c.args[0]) for c in db.execute.call_args_list]
+        assert len(statements) == 3
+        assert all("FOR UPDATE" in s for s in statements)
 
 
 if __name__ == "__main__":  # pragma: no cover

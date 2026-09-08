@@ -10,6 +10,7 @@ disagreed with the HTTP enforcement layer. Also covers the slugify helper.
 DB mocked; no MySQL.
 """
 
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -116,6 +117,13 @@ def _mutation_db():
     db.rollback = AsyncMock()
     db.refresh = AsyncMock()
     return db
+
+
+def _in_org_result(found: bool = True):
+    """What ``org_scoping.is_in_org`` reads: a scalar id, or None."""
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value="row-id" if found else None)
+    return result
 
 
 def _mutation_db_with_user(role_ids=("new-role",), rank=None):
@@ -233,14 +241,21 @@ class TestRoleMutationAuditing:
         absent.first.return_value = None
         role_name = MagicMock()
         role_name.scalar.return_value = "Officer"
-        db.execute.side_effect = [absent, MagicMock(), role_name]
+        # Two in-org lookups (member, position) precede the assignment reads.
+        db.execute.side_effect = [
+            _in_org_result(),
+            _in_org_result(),
+            absent,
+            MagicMock(),
+            role_name,
+        ]
 
         with patch(
             "app.services.role_service.log_audit_event",
             new=AsyncMock(return_value=object()),
         ) as audit:
             changed = await RoleManagementService().assign_role_to_user(
-                db, "user-1", "role-1", "admin-1"
+                db, "user-1", "role-1", "admin-1", organization_id="org-1"
             )
 
         assert changed is True
@@ -254,7 +269,13 @@ class TestRoleMutationAuditing:
         absent.first.return_value = None
         role_name = MagicMock()
         role_name.scalar.return_value = "Officer"
-        db.execute.side_effect = [absent, MagicMock(), role_name]
+        db.execute.side_effect = [
+            _in_org_result(),
+            _in_org_result(),
+            absent,
+            MagicMock(),
+            role_name,
+        ]
 
         with patch(
             "app.services.role_service.log_audit_event",
@@ -262,7 +283,7 @@ class TestRoleMutationAuditing:
         ):
             with pytest.raises(RuntimeError, match="assignment audit"):
                 await RoleManagementService().assign_role_to_user(
-                    db, "user-1", "role-1", "admin-1"
+                    db, "user-1", "role-1", "admin-1", organization_id="org-1"
                 )
 
         db.commit.assert_not_awaited()
@@ -274,7 +295,12 @@ class TestRoleMutationAuditing:
         role_name.scalar.return_value = "Officer"
         deleted = MagicMock()
         deleted.rowcount = 1
-        db.execute.side_effect = [role_name, deleted]
+        db.execute.side_effect = [
+            _in_org_result(),
+            _in_org_result(),
+            role_name,
+            deleted,
+        ]
 
         with patch(
             "app.services.role_service.log_audit_event",
@@ -282,11 +308,74 @@ class TestRoleMutationAuditing:
         ):
             with pytest.raises(RuntimeError, match="removal audit"):
                 await RoleManagementService().remove_role_from_user(
-                    db, "user-1", "role-1", "admin-1"
+                    db, "user-1", "role-1", "admin-1", organization_id="org-1"
                 )
 
         db.commit.assert_not_awaited()
         db.rollback.assert_awaited_once()
+
+
+class TestSingleAssignmentOrgScoping:
+    """PERM-7: both single-assignment helpers bound their ids to the org.
+
+    Neither has a caller in ``app/``. That is exactly why they are guarded:
+    the tenancy check has to already be there when an endpoint is wired up,
+    because the reviewer of that change sees only a one-line service call.
+    """
+
+    async def test_assign_refuses_a_member_from_another_org(self):
+        db = _mutation_db()
+        db.execute.side_effect = [_in_org_result(found=False)]
+
+        with pytest.raises(ValueError, match="Invalid member"):
+            await RoleManagementService().assign_role_to_user(
+                db, "user-1", "role-1", "admin-1", organization_id="org-1"
+            )
+
+        db.commit.assert_not_awaited()
+
+    async def test_assign_refuses_a_position_from_another_org(self):
+        db = _mutation_db()
+        db.execute.side_effect = [_in_org_result(), _in_org_result(found=False)]
+
+        with pytest.raises(ValueError, match="Invalid position"):
+            await RoleManagementService().assign_role_to_user(
+                db, "user-1", "role-1", "admin-1", organization_id="org-1"
+            )
+
+        db.commit.assert_not_awaited()
+
+    async def test_remove_refuses_a_member_from_another_org(self):
+        db = _mutation_db()
+        db.execute.side_effect = [_in_org_result(found=False)]
+
+        with pytest.raises(ValueError, match="Invalid member"):
+            await RoleManagementService().remove_role_from_user(
+                db, "user-1", "role-1", "admin-1", organization_id="org-1"
+            )
+
+        db.commit.assert_not_awaited()
+
+    async def test_remove_refuses_a_position_from_another_org(self):
+        db = _mutation_db()
+        db.execute.side_effect = [_in_org_result(), _in_org_result(found=False)]
+
+        with pytest.raises(ValueError, match="Invalid position"):
+            await RoleManagementService().remove_role_from_user(
+                db, "user-1", "role-1", "admin-1", organization_id="org-1"
+            )
+
+        db.commit.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "method", ["assign_role_to_user", "remove_role_from_user", "set_user_roles"]
+    )
+    def test_organization_id_is_required_and_keyword_only(self, method):
+        """A positional org id, or none at all, must not compile a call."""
+        signature = inspect.signature(getattr(RoleManagementService, method))
+        param = signature.parameters["organization_id"]
+        assert param.kind is inspect.Parameter.KEYWORD_ONLY
+        assert param.default is inspect.Parameter.empty
 
     async def test_bulk_replacement_writes_only_its_canonical_audit(self):
         db = _mutation_db_with_user()

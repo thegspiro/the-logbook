@@ -682,7 +682,43 @@ class InventoryItemResponse(InventoryItemBase):
     lot_stock: Optional[int] = None
     is_lot_stocked: bool = False
 
+    # The requesting member's own pin position, 0-based, or null when they
+    # have not pinned this item. Personal to the caller: two members reading
+    # the same item see different values here, by design.
+    pin_position: Optional[int] = None
+
+    # The group this row was filed under, when the request asked for a
+    # grouping. Reported by the server rather than re-derived in the browser:
+    # colour keys lower-cased, location follows a COALESCE, item_type lives on
+    # the category, and an enum keys to its value — a client reproducing any of
+    # those can drift, and a header whose key misses its rows shows no count.
+    group_key: Optional[str] = None
+
     model_config = _response_config
+
+
+class InventoryItemPinResponse(UTCResponseBase):
+    """One entry in a member's pinned shortlist."""
+
+    id: UUID
+    item_id: UUID
+    position: int
+    created_at: datetime
+
+    model_config = _response_config
+
+
+class ItemPinReorder(BaseModel):
+    """A full replacement order for the caller's pinned shortlist.
+
+    Must list every pinned item, not just the ones that moved -- a partial
+    list is indistinguishable from a stale tab dropping a pin, so the service
+    rejects it rather than guessing.
+    """
+
+    ordered_item_ids: List[str] = Field(
+        ..., description="Every pinned item id, front of the list first"
+    )
 
 
 # ============================================
@@ -1194,6 +1230,23 @@ class ItemRetireRequest(BaseModel):
     notes: Optional[FreeText] = None
 
 
+class ItemGroupCount(BaseModel):
+    """One bucket of a grouped items list, counted over the whole filtered set.
+
+    Split by availability because the list nests groups inside its Available
+    and Unavailable sections, so one dimension value can head two sections
+    with different tallies.
+    """
+
+    key: Optional[str] = None
+    # None when the item has no value on this dimension -- no colour recorded,
+    # no category. The UI shows that bucket as "Unspecified"; it is a real
+    # group, not an absence of one.
+    label: Optional[str] = None
+    available_count: int = 0
+    unavailable_count: int = 0
+
+
 class ItemsListResponse(BaseModel):
     """Schema for paginated items list"""
 
@@ -1201,6 +1254,10 @@ class ItemsListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+    # Present only when the request asked for a grouping. Counts cover every
+    # matching item, not the returned page, so a collapsed group header states
+    # a total rather than however much happened to load.
+    groups: List[ItemGroupCount] = []
 
 
 # ============================================

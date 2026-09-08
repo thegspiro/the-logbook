@@ -81,9 +81,12 @@ export interface ScreeningRequirementCreate {
 export interface ScreeningRequirementUpdate {
   name?: string | undefined;
   screening_type?: ScreeningType | undefined;
-  description?: string | undefined;
-  frequency_months?: number | undefined;
-  applies_to_roles?: string[] | undefined;
+  // Nullable columns: an edit form sends an explicit null to clear these
+  // (CLAUDE.md pitfall #1 — omitting the key on an update leaves the old
+  // value in place), so the type has to accept null as well as undefined.
+  description?: string | null | undefined;
+  frequency_months?: number | null | undefined;
+  applies_to_roles?: string[] | null | undefined;
   is_active?: boolean | undefined;
   grace_period_days?: number | undefined;
 }
@@ -133,13 +136,16 @@ export interface ScreeningRecordCreate {
 export interface ScreeningRecordUpdate {
   screening_type?: ScreeningType | undefined;
   status?: ScreeningStatus | undefined;
-  scheduled_date?: string | undefined;
-  completed_date?: string | undefined;
-  expiration_date?: string | undefined;
-  provider_name?: string | undefined;
-  result_summary?: string | undefined;
+  // Nullable columns: an edit form sends an explicit null to clear these
+  // (CLAUDE.md pitfall #1 — omitting the key on an update leaves the old
+  // value, including PHI, in place), so the type has to accept null too.
+  scheduled_date?: string | null | undefined;
+  completed_date?: string | null | undefined;
+  expiration_date?: string | null | undefined;
+  provider_name?: string | null | undefined;
+  result_summary?: string | null | undefined;
   result_data?: Record<string, unknown> | undefined;
-  notes?: string | undefined;
+  notes?: string | null | undefined;
 }
 
 // --- Compliance ---

@@ -184,9 +184,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <CommandPalette />
         <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
         <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
-          <div className="flex-1" id="main-content" role="main" tabIndex={-1}>
+          <main className="flex-1" id="main-content" tabIndex={-1}>
             <PageTransition>{content}</PageTransition>
-          </div>
+          </main>
           {/* Reserve room so the fixed bottom bar never covers the footer. */}
           <div className="pb-[var(--bottom-nav-height,0px)] md:ml-0">{footer}</div>
         </div>
@@ -219,9 +219,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
       <CommandPalette />
       <TopNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
-      <div className="flex-1" id="main-content" role="main" tabIndex={-1}>
+      <main className="flex-1" id="main-content" tabIndex={-1}>
         <PageTransition>{content}</PageTransition>
-      </div>
+      </main>
       {/* Reserve room so the fixed bottom bar never covers the footer. */}
       <div className="pb-[var(--bottom-nav-height,0px)]">{footer}</div>
       <BottomNavigation hidden={keyboardInset > 0 || overlayOpen} />

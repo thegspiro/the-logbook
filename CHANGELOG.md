@@ -37,6 +37,772 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still turns it red after the change.
 
 No production change — the component's behaviour was correct throughout.
+### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
+
+**Fixed**
+
+- **The application shipped two `main` landmarks on 12 routes.** `AppLayout`
+  declared `role="main"` and 41 pages rendered inside it declared a second
+  `<main>` of their own, nested in the first. The layout now owns one real
+  `<main>`; the page wrappers are `<div data-page-main>`.
+- **The skip link pointed at nothing on every pre-auth page.** `index.html`
+  links to `#main-content`, which only `AppLayout` provided — so on onboarding,
+  forgot-password, reset-password and the OAuth callback it resolved to no
+  element. That is Bypass Blocks (SC 2.4.1) broken on the flow a chief walks
+  through before the application has any other navigation. Onboarding step 1
+  additionally had no `main` at all, leaving every element on it outside a
+  landmark. Sixteen pages now provide the target.
+- **High-contrast mode failed WCAG AA in four places** — the one theme somebody
+  turns on _because_ they need contrast, and the only one with no test coverage
+  anywhere in the repository. `text-red-600` measures 4.35:1 on its black
+  ground and `text-blue-600` 4.06:1, both below the 4.5:1 floor. Both were raw
+  Tailwind colours standing where the theme-aware `--accent-red` /
+  `--accent-blue` tokens belong; those already resolve to 6.2:1 or better in
+  every theme. Dark mode was clean.
+- **`<aside role="navigation">` in the side navigation** contradicted the
+  element's own `complementary` role, and so was flagged on every route in the
+  application. It is a `<nav>`.
+- **`EmptyState` rendered an `h3` directly under the page `h1`**, skipping a
+  level on twenty routes and leaving a hole in the outline a screen reader user
+  navigates by. It defaults to `h2` now, with a `headingLevel` prop for the two
+  ends — `1` where the empty state is the whole page, `3` where it sits under
+  an `h2`.
+- **Two dialogs had no accessible name** (Add Station, Add Requirement — a
+  screen reader announces "dialog" and stops) and **eleven form fields across
+  two more** had visible labels that were never associated with their inputs.
+- **`Collapsible` gave every instance an unnamed `role="region"`**, so a page
+  with several offered a landmark list of identical, indistinguishable entries.
+  Each is now named from its own trigger.
+- **A ninth route was still measuring Access Denied.** `/apparatus` needs
+  `apparatus.view`, which the fixture did not hold. What surfaced it was the
+  `page-has-heading-one` rule: the refusal screen's heading is an `h2`, so a
+  route stuck on it has no `h1` at all.
+
+**Changed**
+
+- **The accessibility pass runs in all three themes and against WCAG 2.2.** It
+  had used the 2.0/2.1 A and AA tags in the light theme only, which excluded
+  `target-size` (SC 2.5.8) and all 30 of axe's best-practice rules — heading
+  order, landmarks, region, dialog names, skip-link. Those found 132 issues on
+  their first run, now 12, ratcheted per route. A/AA is asserted at zero in
+  light, dark and high-contrast.
+- **New `mobile-dialogs.spec.ts`.** The ratchet only ever measured a route's
+  landing state; this opens each page's first create-shaped control and
+  measures the dialog — accessible name, axe A/AA, both ends reachable (Pitfall
+  #21), no overflow at 320px. Seven dialogs, all passing.
+
+**Notes**
+
+- Converting those 41 `<main>` elements silently broke a stylesheet rule keyed
+  to the tag (`[data-page-layout='application'] > :first-child > main`), which
+  gave the pages their outer padding back and squeezed the scheduling
+  calendar's day cells to 41px — under the touch minimum. No type or lint check
+  could see it; the presentation ratchet caught it on the next run. The rule is
+  now keyed to `[data-page-main]`.
+- Building the dialog pass produced two confidently wrong answers worth
+  recording: searching the whole document for the opener made the bottom
+  navigation's global "Add" win on nearly every route, so it measured one
+  quick-add sheet 42 times and reported 42 dialogs; and
+  `querySelector('[role="dialog"]')` returns the first dialog in source order
+  rather than the one that opened, which reported a working focus trap as
+  broken. Both are documented in the spec.
+- Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
+### Seven public pages had no skip-link target, and four payload guards were partial (2026-09-08)
+
+**Fixed**
+
+- **The skip-link guard checked a hardcoded list of five pages and missed
+  seven.** `App.tsx` renders five module public-route factories
+  (`getProspectiveMembersPublicRoutes`, forms, events, elections, facilities)
+  plus `FinanceApprovalPage` outside `AppLayout`, and none was in the list —
+  so `ApplicationStatusPage`, `PublicFormPage`, `EventRequestStatusPage`,
+  `BallotVotingPage`, `LocationKioskPage`, `GuestCheckInPage` and
+  `FinanceApprovalPage` all rendered with `index.html`'s skip link pointing at
+  nothing, while the test passed. That is the same assumption-instead-of-
+  measurement failure the guard was written to catch, committed in the guard
+  itself. All seven now render `<main id="main-content">`, and the list is
+  derived: the `AppLayout` route is excised from `<Routes>` by tag depth and
+  every remaining page — including those the factories render — is checked.
+- **The check-in monitoring guard validated 3 of its 16 required fields.** A
+  response carrying the two arrays and three counters but missing `event_name`,
+  `is_check_in_active` or the window timestamps was accepted, and the dashboard
+  rendered blank totals and an incorrect inactive badge as live data. All
+  required fields are checked now, and the error names the missing ones.
+- **The medical supplies guard validated `items` but not its paging metadata.**
+  `itemPage.total > 0` is what renders the pagination control, so an undefined
+  `total` showed page one and made every later supply unreachable.
+- **The audit-log statistics guard checked its maps for truthiness only**, so a
+  string or an array passed, and it did not check `total` at all — leaving a
+  blank "Total events" beside a populated table, which reads as a healthy log.
+
+**Changed**
+
+- **The applicant pipeline tabs implement the whole tab pattern**, not the half
+  of it that announces a contract. `role="tab"` tells a screen-reader user the
+  arrow keys move between views and that Tab leaves the strip; without roving
+  `tabIndex` and an Arrow/Home/End handler neither was true. Now matches
+  `AdminHubFrame`, which is where the app already does this properly, and the
+  five views share one `role="tabpanel"` so `aria-controls` names something
+  that exists.
+
+### Gradient buttons were never contrast-checked, and four onboarding pages had no skip-link target (2026-09-08)
+
+**Fixed**
+
+- **22 gradient call sites paired white text with a fill below the AA floor.**
+  A gradient fill is written `from-red-600 to-orange-600`, not `bg-*`, so the
+  call-site contrast sweep never looked at it — and axe cannot measure one
+  either, because it abstains on a gradient background. The class was invisible
+  to both guards at once. Every onboarding step's primary button was in it:
+  orange-600 is **3.60:1** against white. Also `from-red-500` avatar circles
+  (3.81:1) in the applicant pipeline, and the import/add-member submit buttons
+  (green-600 **3.22:1**, emerald-600 3.65:1, cyan-600 3.62:1). All raised to the
+  lightest shade of the same hue that clears 4.5:1, hover states raised with
+  them. The sweep now measures `from-`, `via-` and `to-` alongside `bg-`.
+- **Four pages that render outside `AppLayout` had no `#main-content`**, so
+  `index.html`'s skip link pointed at nothing: the Welcome screen at `/`, the
+  startup check at `/onboarding`, the module configuration step, and the
+  security-check placeholder. Bypass Blocks (SC 2.4.1), on the first screen
+  anyone sees. The earlier onboarding landmark fix missed them because the
+  mobile ratchet measures one representative step and assumes the rest share its
+  shell — these four build their own. **`skipLinkTarget.test.ts`** now checks
+  that assumption directly, in the source, for every page reachable outside the
+  layout.
+- **The medical supplies page marked a section loaded before validating it.**
+  A malformed response left the section showing "Showing previously loaded data"
+  and "Nothing expiring" simultaneously, because `setLoaded(true)` had already
+  been queued when the shape guard threw. Validation now happens before any
+  state is touched.
+- **The audit log defaulted a missing `total` to zero.** `Pagination` renders
+  nothing at `totalItems === 0`, so a response with a valid first page and no
+  count showed page 1 and made every later page unreachable. It is now checked
+  with `logs` and enters the error path.
+- **The applicant pipeline's view switcher announced itself as navigation.**
+  It was changed to `<nav>` for its accessible name, but the five buttons swap
+  an in-page panel rather than navigating, and none exposed which view was
+  showing. Now `role="tablist"` with `aria-selected`, matching the eight other
+  tab strips in the app, and without the redundant container tab stop.
+
+### The contrast guard measured a palette this build does not paint (2026-09-08)
+
+**Fixed**
+
+- **`primaryFillContrast.test.ts` measured every ratio against Tailwind v3
+  hexes.** Tailwind v4 authors its palette in OKLCH — `amber-700` is
+  `oklch(55.5% 0.163 48.998)`, not the `#b45309` the file's hand-copied table
+  claimed — so the guard was checking colours the browser never renders, and a
+  Tailwind upgrade that moved a shade would have left it green. It now reads
+  `node_modules/tailwindcss/theme.css` and the project's own `@theme`, converts
+  OKLCH to sRGB, and measures that. The corrected figures move a little:
+  red-600 is 4.77:1 (not 4.83), red-800 8.36:1 (not 8.31), green-600 3.22:1,
+  blue-600 5.25:1. Every conclusion the sweep reached still holds.
+- **The same guard could never report an unknown hue**, because it built its
+  match pattern out of the keys of that table — the one shape it could not see
+  was the one nobody had measured. It also only looked inside `className=`, so
+  a class string declared away from its element (Avatar's module-level palette,
+  the status-badge maps in `constants/enums.ts`) went unscanned. Both widened;
+  nothing in the tree measures below 4.5:1 under either.
+- **`EmptyState`'s default heading level promoted nested empty states.** With
+  the default at `h2`, "Nobody yet" inside the "Who's going" card rendered as a
+  peer of the card rather than as its content, which is what a screen-reader
+  user navigating by heading hears. Seventeen nested call sites now state their
+  level (`3` under an `h2` section, `4` under an `h3`), and the prop accepts
+  `4`.
+
+**Changed**
+
+- **`mobile-dialogs.spec.ts` opens every create-shaped control on a route**,
+  not just the first, and its opener vocabulary covers `receive`, `issue`,
+  `assign`, `import` and `generate` — medical supplies' "Receive delivery"
+  dialog was invisible to a pass named "every dialog".
+- **`mobile-accessibility.spec.ts` collects axe's `incomplete` results**, and
+  the reason each one gives is now asserted. axe files a node there when it
+  cannot compute a ratio, and reading only `violations` reported zero for nodes
+  nobody had measured. It turns out to be systemic rather than incidental: the
+  page background is a `linear-gradient`, so axe abstains on roughly **2,200
+  nodes** across the inventory — the dashboard's `h1` included — in every theme.
+  Counting those would be noise that moves with the fixture data, so the pass
+  asserts the stated _reason_ instead (gradient or background image, nothing
+  else), and a new **`themeGradientContrast.test.ts`** measures the case by
+  value: every text tier against every gradient stop, in all three themes, held
+  to the same 4.5:1 floor. That is the text axe was silently skipping on every
+  route, and it clears AA — the worst pairing is `--text-muted` on the dark
+  theme's red-900 stop.
+- **Neither aggregate audit retries on CI.** Both are deterministic against
+  mocked routes, and the accessibility pass alone runs about ten minutes inside
+  a 30-minute job: two retries would have spent the whole budget re-deriving
+  the same result and replaced the assertion's report with a job timeout.
+
+### Mobile coverage reported a fifth of the application it had never measured (2026-09-07)
+
+**Fixed**
+
+- **Three pages died through the ErrorBoundary on a payload that was valid JSON
+  but not the declared type** — `AuditLogPage`, `EventCheckInMonitoringPage` and
+  `MedicalSuppliesPage`. `api.get<T>` asserts a wire format rather than
+  verifying it, so `Object.keys(stats.by_category)`, `stats.recent_check_ins.length`
+  and `expiring.map` each took a whole screen down. On a phone this is the
+  realistic case, not a contrived one: a captive portal on station Wi-Fi answers
+  HTTP 200 with an HTML body. Normalized at the read boundary.
+- **`btn-success` and `btn-warning` failed WCAG AA outright.** White on green-600
+  is 3.22:1 and on yellow-600 is 2.94:1, against a 4.5:1 floor; `btn-info` at
+  blue-600 was 5.25:1, AA but not the AAA the rest of the palette holds. They are
+  now green-800 (7.13:1), amber-800 (7.09:1) and blue-800 (8.72:1). The
+  2026-08-23 sweep that raised the palette searched for a _red_, so these three
+  were never looked at — between them they carry confirm, publish, approve and
+  archive in 101 files.
+- **125 hand-rolled class strings paired `text-white` with a fill below 4.5:1**,
+  across 60 files and outside the mast CSS entirely. All raised to at least AA,
+  hue preserved, minimal shade step.
+- **Eight WCAG AA violations**, now zero application-wide: two `aria-controls`
+  values naming ids that could not exist (the nav submenu id was built from a
+  label containing spaces, so it parsed as several ids), five unlabelled form
+  controls, and one link with no accessible name.
+- **Four elements overflowed a 320px viewport** — the width SC 1.4.10 actually
+  names, where the presentation pass measured 390.
+- **44 controls under the 44px touch minimum and 10 elements running off a 390px
+  screen**, almost all in modules that had never been measured.
+
+**Changed**
+
+- **The mobile ratchet covers 52 routes, up from 43.** Nine modules — finance,
+  grants & fundraising, onboarding, medical supplies, medical screening, IP
+  security, integrations, reports and the public portal, 56 routes between them
+  — had no entry at all. Every one sat in the inventory as `exempt` under the
+  same generated sentence, "covered by its representative module route", naming
+  a representative route that did not exist. 170 of the 196 exemptions use that
+  identical text.
+- **Eight ratcheted routes were measuring `ProtectedRoute`'s Access Denied
+  screen**, which passes every budget while testing nothing. They now carry the
+  grants their pages require. Their fingerprint had been visible in the run
+  output for some time: eight routes reporting an identical `tap 0/9, text 474`.
+- **New `mobile-accessibility.spec.ts`** runs axe (WCAG 2.1 A + AA, asserted at
+  zero) and a 320px reflow check (asserted at zero) over the same routes, plus a
+  ratcheted budget for AAA-only contrast findings. axe is injected from the
+  installed `axe-core` rather than adding `@axe-core/playwright`.
+- **`primaryFillContrast.test.ts` now measures every shared fill**, reading them
+  out of `index.css` instead of banning one shade by name, so a new `@utility`
+  pairing `text-white` with a fill is checked the day it is added.
+- **New `touch-target-phone` utility** — the 44px minimum on phones only.
+  `mobile-touch-target` applies it at every width, which is right for a control
+  that is cramped everywhere and wrong for a wrapped row of status pills.
+- The route list moved to `e2e/mobile-routes.ts`, shared by the presentation
+  ratchet, the accessibility pass and the coverage-integrity check.
+
+**Notes**
+
+- Two refinements stop the presentation pass demanding something WCAG does not:
+  a marked scroll region needs `tabIndex={0}` only when nothing inside it is
+  focusable (forcing it on a `role="tablist"` contradicts ARIA APG), and a link
+  inside running prose is exempt from the touch minimum per SC 2.5.5's Inline
+  case — detected by a sibling _text node_, so a row of adjacent links cannot
+  excuse itself.
+- 43 AAA-only contrast findings remain at individual call sites, held by the
+  per-route budget. The shared utilities are all AAA.
+- Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
+### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
+
+### Clearing a medical screening record or requirement field silently kept the old value (2026-09-08)
+
+**Security**
+
+- **Blanking a provider name, result summary, note, date, description, role
+  list, or recurrence on an existing screening record or requirement did not
+  clear it.** Both edit forms built their save payload the same way as their
+  create form, converting an emptied field to `undefined` — which never
+  reaches the server as JSON — instead of an explicit `null`. The backend's
+  update path only clears a column when the key is present with a `null`
+  value; an omitted key means "leave this alone." So unchecking a screening's
+  recurrence, or clearing an incorrect provider name, result summary, or
+  note — three PHI fields — showed a success toast while the old value stayed
+  in the database. Fixed by sending an explicit `null` for a blanked field on
+  the edit path only, matching the repo's `blankToNull` convention; the
+  create path is unchanged (a blank field is still omitted). Guarded by
+  `ScreeningFormClearGuards.test.tsx`, confirmed to fail against the pre-fix
+  code.
+
+**Security**
+
+- **Editing or bulk-changing a prospective member's status raced converting
+  them to a full member.** `PUT /prospects/{id}`, `POST /prospects/{id}/status`,
+  and the bulk status endpoint each read the applicant's record without
+  locking it before checking whether they had already been converted to a
+  member. If one of those requests landed in the narrow window between a
+  concurrent "transfer to membership" request's own read and its commit, the
+  status check could pass against stale data and silently overwrite the
+  just-completed conversion back to an ordinary applicant status — while the
+  new member account it had already created stayed live. Because the
+  transfer flow's only safeguard against transferring the same applicant
+  twice was that same status field, a second transfer attempt afterward
+  could then create a **second** account for the same applicant. Fixed by
+  locking the applicant's record before evaluating the status guard on all
+  three paths, matching how the transfer flow itself was already protected.
+
+### A rejected item in a bulk applicant status change could hold its row lock for the rest of the batch (2026-09-08)
+
+**Security**
+
+- **The lock added by the fix above had its own leak on the rejected-item
+  path.** When a bulk status-change selection included a prospect already at
+  the target status (or already converted to a member), that item's newly
+  locked read correctly rejected the change, but the code caught the
+  rejection and moved on to the next item without ending that item's
+  transaction — leaving its row lock held until a later item's own commit or
+  the whole batch finished. A batch that included such an item could block
+  every other request touching that same applicant (a transfer, another
+  status change, another bulk sweep that overlapped it) for as long as the
+  batch took to finish, and two overlapping batches processed in opposite
+  orders could deadlock on each other's held locks. Fixed by ending the
+  rejected item's transaction before continuing the batch.
+
+### A member-drop notification could inject unescaped HTML, and could silently fail to send (2026-09-08)
+
+**Security**
+
+- **The property-return-drop notice's fallback email template didn't escape
+  the officer's stated reason (or the member's name) before putting it in the
+  HTML message.** When an organization hasn't customized its "member dropped"
+  email — the common case, since that only happens by visiting the Email
+  Templates admin screen — the notice sent to the departed member and every
+  CC'd admin was built by a path that skipped the escaping the customized-
+  template path already applies. A reason containing markup would reach
+  those inboxes unescaped. The same code also mishandled a reason containing
+  a literal backslash-digit sequence, which raised an internal error and
+  caused the notification to silently never send at all (the drop itself
+  still succeeded). Both fixed: the fallback path now escapes free-text
+  fields the same way the customized-template path does, and the substitution
+  can no longer be confused by a stray backslash.
+
+### The public ballot endpoints' rate limit never actually ran (2026-09-08)
+
+**Security**
+
+- **Elections' public, token-based ballot routes had no working rate limit.**
+  `POST /elections/ballot/lookup`, `POST /elections/ballot/vote`,
+  `POST /elections/ballot/vote/bulk`, and `GET /elections/{id}/verify-receipt`
+  are unauthenticated by design (they run off the emailed voting token), and
+  were meant to be capped at 10 reads/min and 5 votes/min per IP. Their two
+  rate-limit wrapper functions were declared as plain (non-`async`) functions
+  that called the real limiter without `await`ing it — which only builds an
+  unrun coroutine, never executes the limiter, and never raises. The limit was
+  silently a no-op regardless of how many requests arrived. Fixed by making
+  both wrappers `async` and awaiting the limiter, matching every other
+  rate-limited route in the app; a regression test now fails if either wrapper
+  stops being awaitable. That fix initially left ballot reads and vote
+  submissions tracked against the same counter, so a few ordinary lookups
+  could exhaust a voter's vote-submission limit before they ever cast a
+  ballot; each request kind now has its own counter.
+
+### The budget summary and approval-chain preview always returned "not found" (2026-09-08)
+
+**Fixed**
+
+- **The finance module's budget summary and approval-chain preview endpoints
+  never worked.** Both were registered after a same-shaped `/{id}` route in
+  the API, so every request to them was intercepted by the by-id lookup
+  instead — with the fixed word ("summary", "preview") treated as an id that
+  never matched a real record, always answering "not found." Reordering the
+  routes makes both reachable; a test now fails if either is ever shadowed
+  again. Previewing an approval chain for parameters that genuinely match
+  none now correctly answers "not found" rather than a generic server error.
+
+### A department store manager can no longer settle their own order's balance (2026-09-08)
+
+**Security**
+
+- **Advancing a store order's status to "Paid" no longer lets a manager clear
+  their own balance.** Marking an order paid, waiving it, and refunding it
+  already required a second person when the manager placing the order and the
+  manager approving the payment were the same member — but changing the
+  order's status directly to "Paid" settled the same balance to zero through
+  a separate code path that carried no such check. A `storefront.manage`
+  holder who had also placed a personal order could zero it out, alone, with
+  no money changing hands. That path now requires a different person too,
+  matching every other way a store order gets marked paid.
+
+### The public portal's data whitelist works, and its hourly key limit holds (2026-09-08)
+
+**Fixed**
+
+- **The public website API no longer returns an error when only some fields
+  are shared.** A department chooses field by field what its public website may
+  read — name, phone, description, member count and so on — and nothing is
+  shared until somebody enables it. That starting state, and every state short
+  of "everything enabled", made the organization-information and
+  organization-statistics endpoints answer with an error instead of the empty
+  or partial document they were supposed to return. A department that had
+  shared only its name and phone number got nothing at all. Both now return
+  exactly the fields that are enabled, with the rest left empty.
+
+- **Fields a department has not shared no longer come back as explicit
+  nulls, or partial shares as every unshared field alongside them.** Making
+  the endpoints tolerate an unshared field (above) left them serialising it
+  as `"field": null` instead of omitting it outright, and a partial share
+  returned every field that was _not_ enabled right alongside the ones that
+  were — both endpoints now return only the fields actually enabled.
+
+**Security**
+
+- **A public-website API request that the server ultimately rejects can no
+  longer be recorded in the access log as having succeeded.** The log entry
+  was written before the response was fully checked, so a request whose
+  reply failed a late check still landed in the log as a success — hiding
+  exactly the failures an administrator or the portal's own abuse detection
+  would want to see.
+
+- **A public-website API key can no longer exceed its hourly request
+  allowance.** The allowance is counted in memory and periodically reconciled
+  against the recorded request log. Because that log only ever kept requests
+  that finished successfully, a caller whose requests were being refused —
+  every request is refused while the portal is switched off — had its running
+  count reset to zero each time it approached the ceiling, and so never reached
+  it. The reconciliation can still correct the count upwards, which is what it
+  is for across multiple server processes, but it can no longer push it down.
+  That reconciliation check also compared against the wrong time window,
+  which could freeze a key's count too high for the rest of the hour right
+  after the hour changed; it now compares against the same hour the count
+  itself tracks.
+
+- **The public portal's access log now records the requests that failed.** The
+  log is what an administrator reads to spot abuse, and what the portal's own
+  anomaly detection reads to flag it. Entries written for a refused or failed
+  request were discarded along with the rest of that request's database work,
+  so the log showed only traffic that had succeeded — the least interesting
+  half. Refusals and failures are now kept.
+
+### Read-only permissions stopped counting as write permission, and a rank reorder got a ceiling (2026-09-08)
+
+**Security**
+
+- **A view-only grant can no longer authorize a change to a restricted
+  document folder.** A folder can require a permission before anyone may open
+  it — a facility's insurance and lease folder requires the sensitive-records
+  grant — and the check that decides whether someone may _change_ such a
+  folder is supposed to ignore the read-only entries in that list. It worked
+  out which entries those were from the permission's name, and two of the
+  department's read permissions are spelled in a way it did not recognise, so
+  it would have accepted either as proof of write authority. No folder in the
+  application names either permission today, so nothing was actually exposed;
+  the rule is now right for the next folder somebody sets up, and a test holds
+  every permission's read-or-write classification against its own written
+  description.
+
+- **Reordering the department's rank list is now capped at 500 ranks per
+  request.** The screen sends the whole list back when an administrator drags
+  a rank, and the server looked each one up individually with no limit on how
+  many it would accept — a single crafted request could have tied up a server
+  process for a very long time. No real rank ladder comes close to the cap.
+
+- **Two unused role-assignment helpers now refuse to work across
+  departments.** Neither is reachable from any screen, which is exactly why
+  they were fixed: each took a member and a position with no check that either
+  belonged to the caller's department, so the first screen wired up to them
+  would have crossed that line in a one-line change nobody would have thought
+  to question.
+
+### Turning on the MFA requirement no longer locks out everyone still on a temporary password (2026-09-08)
+
+**Fixed**
+
+- **A member who must change their password can now do so even when the
+  department requires two-factor authentication.** Two separate rules restrict
+  what an account in an unfinished state may reach: one confines a member with
+  a temporary password to the change-password screen, the other confines an
+  un-enrolled member to the two-factor setup screens when the department
+  requires 2FA. A member in both states at once — which is every account an
+  administrator has created, every bulk-imported member, and every prospect
+  converted to a member — could reach neither. Switching on the department-wide
+  2FA requirement permanently locked all of them out of everything except
+  their own profile, with no way back for them or for an administrator short
+  of switching the requirement off again. Changing the password is now allowed
+  under both rules, so the sequence completes: change the password, then
+  enrol.
+
+**Security**
+
+- **Every two-factor code check is now held to single use by a test, not by
+  review.** Three earlier fixes established that verifying an authenticator
+  code must also spend it, so the same code cannot be replayed at the sign-in
+  screen seconds later. Nothing enforced that, and the older non-consuming
+  check was still available under the more obvious name. A sweep now fails the
+  build if any part of the application verifies a code without spending it, if
+  a second place gains the ability to spend one, or if the TOTP library is
+  used outside the one module that wraps it.
+
+### Error messages stopped naming the mail server, and the cache denylist got a guard (2026-09-08)
+
+**Security**
+
+- **A failed results email no longer reports the mail server's own error to
+  the officer who sent it.** Emailing a skills-test scorecard to a candidate
+  wrapped the send in a catch-all that put the transport's exception text
+  straight into the response — the configured SMTP hostname when DNS could
+  not resolve it, the provider's verbatim rejection when credentials were
+  wrong. It now reports "Failed to send email" and the real error goes to the
+  server log, where it was already going.
+
+- **A broken integration config now reads as a server error instead of your
+  mistake.** Saving an integration's settings caught _any_ failure while
+  validating them and returned it as a 422 with the raw Python message
+  attached, so an internal fault looked like a complaint about what you
+  typed. Only Pydantic's own validation verdict is shown now; anything else
+  is a 500, which is both accurate and something the operators get alerted
+  about.
+
+- **Nine endpoints excluded from the response cache now have a test holding
+  them there.** The 2026-09-07 sweep excluded 18 PII-carrying routes;
+  the ratchet added alongside it can only see routes whose response schema
+  names a known personal field, which left nine — among them
+  `/inventory/clearances` (who is leaving and what they still owe) and
+  `/inventory/items/{id}/history` — held in place by nothing but the comment
+  next to them. A deletion from that 90-line list would have passed every
+  test in the repository. It now fails, naming the route and why it was
+  excluded.
+
+### Two data-leakage fixes: separation reports, and the response cache (2026-09-07)
+
+**Security**
+
+- **A property-return report no longer publishes a departed member's home
+  address to the whole department.** When a member was dropped, the generated
+  report — which names them, quotes the reason for the separation (involuntary
+  ones included) and prints their home address so the letter can be posted —
+  was filed in the `Reports` system folder. That folder is
+  organization-visible, so every holder of plain `documents.view` could read
+  it. Reports now go to a new leadership-only **Member Separations** folder,
+  and the folder is resolved before the document is written rather than
+  falling back to `folder_id = NULL`, which `can_access_document` also treats
+  as organization-level. This is the hazard `publish_minutes` already refuses
+  for executive minutes (MM2-1); it is now refused here by the same mechanism.
+
+  A migration creates the folder for existing departments and moves reports
+  already filed in `Reports` into it. **Visible change:** members who could
+  previously open these reports no longer can. The downgrade restores the
+  prior arrangement exactly, disclosure included, so it is for a schema
+  rollback rather than a decision to undo.
+
+- **Ten member-PII endpoints were being held in the frontend response cache.**
+  `apiCache.ts` is cache-by-default with a denylist, so an endpoint added to
+  the backend is cached unless someone remembers to edit a TypeScript file in
+  the other half of the repository — and ten had not been. Among them:
+  `/inventory/items/{id}/exposures` (a member's contamination and decon
+  history), `/inventory/clearances` (who is leaving and what they still owe),
+  `/inventory/items/{id}/history` and `/roles/{id}/users`. All are now
+  excluded.
+
+  `backend/tests/test_api_cache_pii_exclusions.py` resolves every GET route's
+  response schema and fails on a new one that carries member PII and is not
+  excluded — a ratchet, in the manner of `test_org_scoping_ratchet.py`, with
+  an empty baseline. CLAUDE.md stated this rule and nothing checked it, which
+  is the same gap that let pitfall #16 regress after holding across 58 call
+  sites on review discipline alone.
+
+### An inventory item's colour could be briefly cached even when it wasn't just a colour (2026-09-07)
+
+**Fixed**
+
+- `GET /inventory/items/colors` — the list a settings screen's colour filter
+  builds its dropdown from — was left cacheable on the assumption the field
+  is a plain colour name. It isn't constrained to one: `color` is free text up
+  to 50 characters with no fixed vocabulary (a department stocks whatever its
+  supplier sells), so whatever an inventory manager or a CSV import puts in
+  that column is exactly what this globally-shared response echoes back for
+  up to 90 seconds. Added to the client's cache-exclusion list alongside the
+  other free-text fields already excluded there.
+- The same endpoint required only being signed in, not `inventory.view` like
+  every other read on the inventory router — a custom position without that
+  permission could still read every colour in the org's catalog through this
+  one route. Now gated on `inventory.view` to match its siblings.
+
+### Grouping the items list by size no longer 500s the endpoint (2026-09-07)
+
+**Fixed**
+
+- **Grouping by Size crashed the items endpoint for any department stocking
+  boots or waist measurements.** `size` is deliberately free text — "10.5 EE",
+  "lg" — but SQLAlchemy infers a `COALESCE`'s result type from its _first_
+  argument, so `COALESCE(standard_size, size)` was typed `Enum(StandardSize)`
+  and every row went through the enum result processor on the way back. A
+  free-text value then raised `LookupError` and the whole list returned 500.
+  The grouping expression is now cast to text.
+- **Condition, Style and Size groups were keyed and labelled with a Python
+  repr.** `str()` on a `(str, Enum)` member renders `ItemCondition.GOOD`, not
+  `good` — which both headed the group with the repr and never matched the
+  value a row carried, so every one of those groups showed no count at all.
+  Keys and labels now use the enum's value.
+- **A row could be filed under a group the header did not count.** The page
+  re-derived each row's group key from its own fields plus a locations lookup
+  capped at 100 rows, so an item in a department's 101st location landed under
+  "Unspecified" while the backend counted it under its real name. The server now
+  stamps `group_key` on every row and the page consumes it — which also settles
+  colour's lower-cased key, location's `COALESCE` precedence and the `item_type`
+  join, each of which was a separate chance to disagree (pitfall #29).
+- The group header row declared `scope="colgroup"`, marking it a header for a
+  group of _columns_; it labels the rows beneath it, so it is now
+  `scope="rowgroup"` — and each group is rendered as its own `<tbody>`. The
+  scope change alone was not enough: `rowgroup` binds a header to its row
+  group, so with every heading in one `<tbody>` each claimed the rows to the
+  end of the table rather than its own.
+- **A department's own group names were being rewritten for display.**
+  Underscores were opened out unconditionally to humanise enum values like
+  `in_maintenance`, which also rewrote a station really called `Station_1` or a
+  category `SCBA_Equipment`. Only enum-backed dimensions are humanised now;
+  size uses the existing `sizeLabel`, and category, colour, location and vendor
+  names render exactly as typed.
+- **Changing the grouping dimension briefly rendered the previous dimension's
+  keys.** `group_by` changes with the dropdown, but the loaded rows keep the
+  key the server stamped for the dimension they were fetched for until the
+  debounced request lands — and indefinitely if it fails. The table now renders
+  against the dimension its rows were actually fetched for, so it shows the
+  last consistent state rather than a mixture of two.
+
+**Known limitation**
+
+- When a single group holds more rows than the 50-row page, collapsing it hides
+  every loaded row while "Load More" keeps fetching more members of that same
+  hidden group. Pagination is row-wise, not group-wise. Not addressed here.
+
+### A grouped items list stops repeating the grouped value on every row (2026-09-07)
+
+**Changed**
+
+- **The dimension you group by no longer appears in the rows beneath.** Grouping
+  by Category left a CATEGORY column restating the same value under a header
+  that already said it — dead width on every row. The same now applies to
+  Condition and Location, and to the Colour and Style capsules, which grouping
+  previously did not touch at all. One rule: the group header states it once,
+  the rows do not repeat it.
+- **Size gets its own column whenever a grouping is active**, in the space the
+  hidden column vacates, and leaves the Variant capsules so it is not shown
+  twice. It is the attribute a quartermaster scans for, and a chip wedged
+  between colour and style is not scannable.
+
+Two behaviours fall out of the rule rather than being special cases:
+
+- Grouping **by Size** adds no Size column — the header already says it.
+- `Item type` and `Vendor` hide nothing, because neither has a column or a
+  capsule today; they still gain the Size column.
+
+The ungrouped view is unchanged, and a test asserts that.
+
+**Notes**
+
+- The Size column is deliberately **not sortable**. The backend's
+  `_SORTABLE_COLUMNS` has no `size` key and an unknown `sort_by` silently falls
+  back to `name`, so a sort button there would look live and do nothing.
+- Hiding the Condition column also hides its sort button, which is correct —
+  sorting by the dimension you are grouped by is meaningless, the group order
+  dominates it, and the mobile Sort dropdown still offers Condition.
+- `displaySize` moved to `utils/variantHelpers.ts`, shared by the new column and
+  the capsule. It had been inline in `VariantCapsules` and a second copy is
+  precisely how `styleAttributesLabel` came to render "Mens" and "V Neck"
+  (pitfall #29). `VariantCapsules` gains an optional `omit` prop that defaults
+  to showing everything, so its five other call sites are untouched.
+
+### The items list can be grouped by category, colour or any other attribute (2026-09-07)
+
+**Added**
+
+- **A "Group by" control on the inventory items list.** Choose Category, Item
+  type, Colour, Size, Condition, Style, Location or Vendor and the rows organise
+  into collapsible sections with counts — Class A in one group, Class B in
+  another. Groups nest inside the existing Available and Unavailable sections,
+  and the pinned shortlist stays above both.
+- **The counts are true totals, not a tally of what loaded.** The list pages at
+  50 rows, so a header counting the rows it received would read "Class A Uniform
+  (3)" while 40 matched — worse than no header, because a bare number reads as a
+  total. They come from a `GROUP BY` over the whole filtered set, split by
+  availability, and a collapsed group keeps its count.
+- Rows are ordered so a group's members are contiguous, so a group can never be
+  split across a page boundary and show half its contents under a header
+  claiming all of them.
+
+**Notes on two dimensions that could easily have been wrong**
+
+- **Colour groups case-insensitively.** The colour _filter_ has always matched
+  that way, because the requestable catalog collapses on `color.casefold()`;
+  grouping on the raw column would have put "Navy" and "navy" in two buckets
+  that can never be viewed together — reintroducing precisely the split the
+  filter exists to avoid. The header shows a real spelling from the data;
+  which one, when the data carries both, is unspecified.
+- **Location groups on the same precedence the Location column displays**
+  (`storage_location`, then the location's name, then station). Grouping on
+  `location_id` alone would file an item tagged "Shelf B-3" under _Unspecified_
+  while the cell beside it plainly reads "Shelf B-3".
+- An item with no value on the chosen dimension gets its own **"Unspecified"**
+  group, sorted last. It is a real bucket — an item with no colour recorded is
+  not the same as no such items — and must not vanish from a list it matches
+  the filters for.
+- An unrecognised `group_by` degrades to an ungrouped list rather than 400ing,
+  so a stale or hand-edited link shows the items instead of an error page.
+
+**Internal**
+
+- `InventoryService.get_items` keeps its two-value return and every existing
+  caller. The filter construction is extracted to `_build_items_query`, shared
+  with the new `get_item_group_counts`, so the counts cannot drift from the
+  list they label — a second hand-maintained copy of a seventeen-parameter
+  WHERE clause is how a header comes to disagree with the rows beneath it.
+
+### A quartermaster can front their own working set on the items list (2026-09-07)
+
+**Added**
+
+- **The inventory items list gains a per-member pinned shortlist.** The list is
+  alphabetical, and for a quartermaster a handful of items — the Class B polos,
+  the duty boots — carry nearly all the traffic while sitting scattered between
+  things touched once a year. Pinned items now appear in their own section above
+  Available and Unavailable, in an order the member arranges themselves, ahead
+  of whatever sort is active.
+- Pins are **per member**, not per organization: two quartermasters running
+  different supply lines front different gear, and one curating their list must
+  not reorder the other's page. A member with no pins sees exactly the page they
+  saw before — the default sort is still Name, ascending.
+- Reordering works by dragging a row or by the up/down arrows beside it. The
+  arrows are not a fallback: HTML5 drag events never fire on touch, so on a
+  phone they are the only way to reorder, and they are the path that works with
+  a keyboard and a screen reader on any device.
+- Capped at 25 pins per member. The list pages at 50 rows and pinned items sort
+  first, so an unbounded shortlist would fill the whole first page and make
+  "Load More" the only route to unpinned stock.
+
+**Fixed**
+
+- **The items list's section counts read as section totals when they were a
+  running tally.** The Available/Unavailable split happens client-side over the
+  rows loaded so far, so "(12)" appeared while 87 items matched the filters —
+  silently understating the department's stock for any list past one page. A
+  truncated section now reads "(12 so far)".
+- **The items list's sortable column headers carried no `aria-sort`.** The page
+  predates `components/ux/SortableHeader` and hand-rolls its sort buttons, so a
+  screen reader announced a plain button and never said which column the table
+  was ordered by.
+
+**Migration**
+
+- New `inventory_item_pins` table (`f2a91c7d4e86`). No backfill and no data
+  loss on downgrade — an empty pin table is the correct starting state, since
+  the absence of a pin means "not pinned", never "unknown".
+
+### Administration-hub attention ages now use the department's own calendar (2026-09-07)
+
+**Fixed**
+
+- **A shift swap, training submission, or overdue screening reported on the
+  administration hub's "Needs attention" queue could read a day older than it
+  actually was, for any department whose local calendar date differs from
+  UTC's.** `_age_days` took the date straight off a UTC timestamp and compared
+  it against the department's own local "today" without converting first —
+  wrong every evening for a department behind UTC, and for a few hours after
+  midnight for one ahead of it. Fixed by converting to the organization's
+  timezone before taking the date, matching the conversion already used
+  elsewhere on the same page.
+- **A department with an unusually large number of shifts starting in the
+  short-staffed lookback window could load every one of them into memory with
+  no cap.** `_short_staffed_shifts` now bounds the query the same way the
+  scheduling module's own open-shifts query already does.
 
 ### A garment's style is one description, not one item per adjective (2026-09-06)
 

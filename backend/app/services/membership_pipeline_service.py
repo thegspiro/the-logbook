@@ -1224,7 +1224,18 @@ class MembershipPipelineService:
         updated_by: Optional[str] = None,
     ) -> Optional[ProspectiveMember]:
         """Update a prospect's information"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Locked for the same reason set_prospect_status is: this method's
+        # own TRANSFERRED guard below reads prospect.status, and a plain
+        # SELECT can read that value from a snapshot older than a concurrent
+        # transfer_to_membership's commit (CLAUDE.md Pitfall #27). Without
+        # the lock, this update's status write can silently overwrite a
+        # transfer that committed in the gap between this read and this
+        # transaction's own commit -- reopening the double-transfer bug
+        # transfer_to_membership's own lock (pass 2) exists to prevent, via
+        # this generic update instead of the transfer endpoint.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 
@@ -2112,6 +2123,36 @@ class MembershipPipelineService:
             try:
                 await apply(prospect)
             except ValueError as exc:
+                # apply() may have already acquired a FOR UPDATE row lock
+                # (bulk_set_prospect_status's own locked re-fetch) before
+                # raising -- without ending the transaction here that lock
+                # would sit held for the rest of this loop, blocking every
+                # other write against the same row until a later item's own
+                # commit or request end released it, and two overlapping
+                # batches processed in opposite orders could deadlock on
+                # each other's held locks (Codex review, PR #2405).
+                #
+                # commit(), not rollback(): every current `apply` callback
+                # (advance_prospect, _apply_status_change) raises its
+                # ValueError from a guard clause before making any change,
+                # so there is nothing pending to discard, and commit() ends
+                # the transaction the same way a successful item already
+                # does two lines below in each closure. rollback() looks
+                # more "correct" for a rejected item in the abstract, but is
+                # not safe to call here: this session can be bound to an
+                # externally-managed connection with
+                # join_transaction_mode="create_savepoint" (every test using
+                # the db_session fixture is exactly this), and a raw
+                # rollback() on that combination leaves the session's
+                # async/greenlet bridge unable to run the next query
+                # (`MissingGreenlet: greenlet_spawn has not been called`) --
+                # confirmed against tests/test_prospect_bulk_actions.py's
+                # existing bulk_advance_prospects coverage, which exercises
+                # this exact except branch already. If a future `apply`
+                # callback can raise ValueError *after* writing something,
+                # it must roll that back itself before raising, since this
+                # branch cannot safely do it for the whole session.
+                await self.db.commit()
                 results.append(
                     {
                         "prospect_id": prospect_id,
@@ -2191,8 +2232,21 @@ class MembershipPipelineService:
         target = self._parse_status(status)
 
         async def _set_status(prospect: ProspectiveMember) -> None:
+            # _bulk_apply's own fetch (below) is unlocked -- it exists only
+            # to report "not found" per id and to read prospect.full_name
+            # for the result row. Re-fetch locked here, immediately before
+            # the status guard/write, for the same race set_prospect_status
+            # guards against: an unlocked read of prospect.status can be
+            # stale by the time this transaction commits, letting a bulk
+            # status change silently clobber a transfer that lands in the
+            # gap (CLAUDE.md Pitfall #27).
+            locked = await self.get_prospect(
+                str(prospect.id), organization_id, lock_for_update=True
+            )
+            if not locked:
+                raise ValueError("Prospect not found")
             await self._apply_status_change(
-                prospect, target, changed_by, reason, bulk=True
+                locked, target, changed_by, reason, bulk=True
             )
             await self.db.commit()
 
@@ -2276,7 +2330,18 @@ class MembershipPipelineService:
         so the endpoint can answer 404 rather than leaking its existence.
         """
         target = self._parse_status(status)
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Locked for the same reason complete_step/regress_prospect/
+        # transfer_to_membership are: _apply_status_change's TRANSFERRED
+        # guard below reads prospect.status, and without the lock a plain
+        # SELECT can read that value from a snapshot older than a
+        # concurrent transfer_to_membership's commit. The UPDATE this
+        # method issues at commit has no WHERE on the old status, so an
+        # unlocked read lets this write silently clobber a transfer that
+        # landed in the gap -- reopening the double-transfer bug
+        # transfer_to_membership's own lock (pass 2) exists to prevent.
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 

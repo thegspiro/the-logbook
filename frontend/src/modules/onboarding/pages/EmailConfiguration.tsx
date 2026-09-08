@@ -684,7 +684,7 @@ const EmailConfiguration: React.FC = () => {
       />
 
       {/* Main Content */}
-      <main className="flex flex-1 items-center justify-center p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-4 py-8">
         <div className="w-full max-w-3xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
@@ -754,7 +754,7 @@ const EmailConfiguration: React.FC = () => {
                 disabled={testingConnection || !config.fromEmail}
                 className={`flex w-full items-center justify-center rounded-lg px-6 py-3 font-semibold transition-all duration-300 ${
                   connectionTested
-                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    ? 'bg-green-700 text-white hover:bg-green-800'
                     : 'disabled:bg-theme-surface disabled:text-theme-text-muted bg-blue-600 text-white hover:bg-blue-700'
                 }`}
               >
@@ -804,7 +804,7 @@ const EmailConfiguration: React.FC = () => {
                 void handleContinue();
               }}
               disabled={isSaving}
-              className="flex-1 transform rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 transform rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? 'Saving Securely...' : 'Continue'}
             </button>
