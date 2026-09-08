@@ -305,7 +305,6 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPi
           void (editingStage ? handleUpdateStage(data) : handleAddStage(data));
         }}
         editingStage={editingStage}
-        existingStageCount={stages.length}
       />
     </div>
   );
