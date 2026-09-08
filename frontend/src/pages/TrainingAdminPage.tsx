@@ -643,7 +643,18 @@ export const TrainingAdminPage: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Inner tab bar */}
           <div className="border-theme-surface-border border-b">
-            <div className="hscroll flex space-x-1" role="tablist" aria-label={`${currentPage.label} tabs`}>
+            {/* Declared an intentional scroll region so the mobile pass stops
+                reading the off-screen tabs as an overflow bug. No tabIndex
+                here, unlike the plain `<nav>` strips: a tablist using roving
+                tabindex must stay out of the tab order (ARIA APG), and its
+                tabs are already arrow-navigable, which is what actually
+                scrolls the far end into view. */}
+            <div
+              className="hscroll flex space-x-1"
+              role="tablist"
+              aria-label={`${currentPage.label} tabs`}
+              data-mobile-scroll-region
+            >
               {currentPage.tabs.map((tab) => (
                 <button
                   key={tab.id}

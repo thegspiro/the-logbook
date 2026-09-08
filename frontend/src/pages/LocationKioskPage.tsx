@@ -190,7 +190,7 @@ const LocationKioskPage: React.FC = () => {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 items-center justify-center p-8">
+      <main id="main-content" className="flex flex-1 items-center justify-center p-8">
         {hasEvents && currentEvent ? (
           <div className="w-full max-w-2xl text-center">
             {/* Event info */}
@@ -281,7 +281,7 @@ const LocationKioskPage: React.FC = () => {
             </p>
           </div>
         )}
-      </div>
+      </main>
 
       {/* Footer */}
       <div className="bg-black/20 px-8 py-3 text-center">

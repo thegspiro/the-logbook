@@ -1021,9 +1021,19 @@ export const SettingsPage: React.FC = () => {
 
             {/* Name + Timezone */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* `htmlFor`/`id`, not just proximity: neither control was wrapped
+                  by its label, so a screen reader announced the department name
+                  field and the timezone list as unnamed. Sighted proximity is
+                  not an association. */}
               <div>
-                <label className="text-theme-text-primary mb-1 block text-sm font-medium">Department Name</label>
+                <label
+                  htmlFor="settings-department-name"
+                  className="text-theme-text-primary mb-1 block text-sm font-medium"
+                >
+                  Department Name
+                </label>
                 <input
+                  id="settings-department-name"
                   type="text"
                   value={profile?.name || ''}
                   onChange={(e) => updateProfileField('name', e.target.value)}
@@ -1031,8 +1041,11 @@ export const SettingsPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-primary mb-1 block text-sm font-medium">Timezone</label>
+                <label htmlFor="settings-timezone" className="text-theme-text-primary mb-1 block text-sm font-medium">
+                  Timezone
+                </label>
                 <select
+                  id="settings-timezone"
                   value={profile?.timezone || 'America/New_York'}
                   onChange={(e) => updateProfileField('timezone', e.target.value, { immediate: true })}
                   className="form-input"

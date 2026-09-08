@@ -531,7 +531,7 @@ const OnboardingCheck: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={handleRetry}
-              className="flex-1 rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-6 py-3 font-semibold text-white transition-all duration-300 hover:from-red-700 hover:to-orange-700"
+              className="flex-1 rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-6 py-3 font-semibold text-white transition-all duration-300 hover:from-red-800 hover:to-orange-800"
             >
               Try Again
             </button>
@@ -551,7 +551,7 @@ const OnboardingCheck: React.FC = () => {
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
-      <div className="w-full max-w-md">
+      <main id="main-content" className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-block h-16 w-16 animate-spin rounded-full border-t-4 border-b-4 border-red-500"></div>
           <p className="text-theme-text-primary mb-2 text-xl">Initializing The Logbook</p>
@@ -825,7 +825,7 @@ const OnboardingCheck: React.FC = () => {
             <code className="text-theme-text-muted">docker compose logs</code>
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

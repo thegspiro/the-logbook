@@ -71,7 +71,7 @@ const Welcome: React.FC = () => {
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to relative flex min-h-screen items-center justify-center bg-linear-to-br p-4">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="w-full max-w-3xl space-y-8 text-center">
+      <main id="main-content" className="w-full max-w-3xl space-y-8 text-center">
         {/* Title */}
         <h1
           className={`text-theme-text-primary text-6xl font-bold transition-all duration-1000 md:text-7xl ${
@@ -114,7 +114,7 @@ const Welcome: React.FC = () => {
           <div className="mt-12">
             <button
               onClick={() => void navigate('/onboarding')}
-              className="transform rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl"
+              className="transform rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl"
             >
               Get Started
             </button>
@@ -126,7 +126,7 @@ const Welcome: React.FC = () => {
             <p className="mt-2">Open Source | MIT Licensed | Community Driven</p>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

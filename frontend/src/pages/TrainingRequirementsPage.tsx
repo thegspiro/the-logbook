@@ -224,7 +224,7 @@ const TrainingRequirementsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -385,7 +385,7 @@ const TrainingRequirementsPage: React.FC = () => {
             }}
           />
         )}
-      </main>
+      </div>
     </div>
   );
 };

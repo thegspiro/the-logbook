@@ -213,6 +213,57 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
 
   ['**/api/v1/organization/modules', () => ({})],
 
+  // Three pages now reject a payload that is valid JSON but not their declared
+  // type, rather than substituting empty lists: an audit log that reads "no
+  // events" over a broken endpoint, or a check-in board showing blank totals as
+  // though they were live, is worse than an error. The catch-all `{}` above is
+  // exactly such a payload, so without these fixtures those routes render their
+  // error state — and the mobile passes would be measuring an error page, the
+  // very thing this suite exists to catch.
+  [
+    '**/api/v1/audit-logs**',
+    () => ({
+      logs: [
+        {
+          id: 1,
+          event_type: 'user.login',
+          event_category: 'authentication',
+          severity: 'info',
+          username: 'e2euser',
+          description: 'Signed in from a new device',
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 2,
+          event_type: 'settings.update',
+          event_category: 'settings',
+          severity: 'warning',
+          username: 'e2euser',
+          description: 'Changed the session timeout',
+          created_at: new Date().toISOString(),
+        },
+      ],
+      total: 2,
+      skip: 0,
+      limit: 25,
+    }),
+  ],
+  // Registered after the list glob above, which also matches this URL: a later
+  // `page.route` takes precedence, so the more specific pattern has to come
+  // last or it never runs.
+  [
+    '**/api/v1/audit-logs/stats**',
+    () => ({
+      total: 2,
+      by_severity: { info: 1, warning: 1, critical: 0 },
+      by_category: { authentication: 1, settings: 1 },
+    }),
+  ],
+
+  ['**/api/v1/medical-supplies/lots/expiring**', () => []],
+  ['**/api/v1/medical-supplies/categories**', () => []],
+  ['**/api/v1/medical-supplies/items**', () => ({ items: [], total: 0, skip: 0, limit: 200 })],
+
   // Every Administration hub reads this. Unmocked, the catch-all answered `{}`
   // — truthy, so `AdminHubFrame` rendered the attention queue, but with no
   // `attention` array, and the page died on `items.length`. No hub route had
@@ -325,6 +376,33 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
   ['**/api/v1/members**', () => ({ members: [], users: [], total: 0 })],
   ['**/api/v1/settings**', () => ({})],
   ['**/api/v1/events**', () => []],
+
+  // After the broad `events**` glob above for the same reason: it matches this
+  // URL too, and the last matching route registered is the one that answers.
+  [
+    '**/api/v1/events/*/check-in-monitoring**',
+    () => ({
+      event_id: '1',
+      event_name: 'Monthly Drill',
+      event_type: 'training',
+      created_by_name: 'Alex Tester',
+      start_datetime: new Date().toISOString(),
+      end_datetime: new Date(Date.now() + 7_200_000).toISOString(),
+      is_check_in_active: true,
+      check_in_window_start: new Date(Date.now() - 900_000).toISOString(),
+      check_in_window_end: new Date(Date.now() + 7_200_000).toISOString(),
+      total_eligible_members: 24,
+      total_rsvps: 18,
+      total_checked_in: 12,
+      check_in_rate: 50,
+      recent_check_ins: [],
+      early_check_ins: [],
+      early_check_in_count: 0,
+      early_check_in_threshold_minutes: 30,
+      avg_check_in_time_minutes: null,
+      last_check_in_at: null,
+    }),
+  ],
 ];
 
 /**

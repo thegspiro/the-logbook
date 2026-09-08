@@ -93,7 +93,13 @@ const ModuleConfigTemplate: React.FC = () => {
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 relative min-h-screen bg-linear-to-br p-4 pb-8">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="mx-auto w-full max-w-4xl">
+      {/* `main id="main-content"`, because index.html's skip link points there
+          and this step is outside AppLayout, which owns that landmark
+          everywhere else. Without it the first thing a keyboard user reaches on
+          this page is a link to nowhere — Bypass Blocks (SC 2.4.1) — and this
+          step was missed when the rest of onboarding was fixed because the
+          ratchet measures /onboarding/start and this page has its own shell. */}
+      <main id="main-content" className="mx-auto w-full max-w-4xl">
         {/* Header */}
         <div className="mb-6">
           <button
@@ -252,7 +258,7 @@ const ModuleConfigTemplate: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-6 py-3 font-semibold text-white transition-all hover:from-red-700 hover:to-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-6 py-3 font-semibold text-white transition-all hover:from-red-800 hover:to-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Permissions'}
           </button>
@@ -263,7 +269,7 @@ const ModuleConfigTemplate: React.FC = () => {
             Use Defaults
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

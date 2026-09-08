@@ -310,7 +310,7 @@ export const ElectionsPage: React.FC = () => {
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <div>
-              <h2 className="text-theme-text-primary text-2xl font-bold">Elections</h2>
+              <h1 className="text-theme-text-primary text-2xl font-bold">Elections</h1>
               <p className="text-theme-text-muted mt-1 text-sm">Manage elections and view results</p>
             </div>
             <HelpLink
@@ -387,7 +387,7 @@ export const ElectionsPage: React.FC = () => {
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-xs ${
                     statusFilter === status
-                      ? 'bg-blue-500 text-white'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted'
                   }`}
                 >

@@ -366,7 +366,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkReceived()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
               >
                 <Truck className="h-3.5 w-3.5" />
                 Mark Received
@@ -376,7 +376,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkPaid()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
               >
                 <CreditCard className="h-3.5 w-3.5" />
                 Mark Paid

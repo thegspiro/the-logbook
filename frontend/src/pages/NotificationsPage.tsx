@@ -517,17 +517,17 @@ const NotificationsPage: React.FC = () => {
   if (loading && loadingInbox && loadingLogs) {
     return (
       <div className="min-h-screen">
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
           <Breadcrumbs />
           <SkeletonPage rows={6} />
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <Breadcrumbs />
 
         {/* Page Header */}
@@ -550,7 +550,7 @@ const NotificationsPage: React.FC = () => {
           {canManage && activeTab !== 'inbox' && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700"
+              className="flex items-center space-x-2 rounded-lg bg-orange-700 px-4 py-2 text-white transition-colors hover:bg-orange-800"
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
               <span>Add Rule</span>
@@ -613,14 +613,14 @@ const NotificationsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'inbox'}
             className={`flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-              activeTab === 'inbox' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'inbox' ? 'bg-orange-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             <span>My Notifications</span>
             {myUnreadCount > 0 && (
               <span
                 className={`rounded-full px-1.5 py-0.5 text-xs ${
-                  activeTab === 'inbox' ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                  activeTab === 'inbox' ? 'bg-white/20 text-white' : 'bg-red-800 text-white'
                 }`}
               >
                 {myUnreadCount}
@@ -634,7 +634,7 @@ const NotificationsPage: React.FC = () => {
               aria-selected={activeTab === 'rules'}
               className={`rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                 activeTab === 'rules'
-                  ? 'bg-orange-600 text-white'
+                  ? 'bg-orange-700 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -648,7 +648,7 @@ const NotificationsPage: React.FC = () => {
               aria-selected={activeTab === 'templates'}
               className={`rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                 activeTab === 'templates'
-                  ? 'bg-orange-600 text-white'
+                  ? 'bg-orange-700 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
@@ -661,7 +661,7 @@ const NotificationsPage: React.FC = () => {
               role="tab"
               aria-selected={activeTab === 'log'}
               className={`rounded-md px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
-                activeTab === 'log' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                activeTab === 'log' ? 'bg-orange-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               Send Log
@@ -808,7 +808,7 @@ const NotificationsPage: React.FC = () => {
                   {canManage && !searchQuery && (
                     <button
                       onClick={() => setShowCreateModal(true)}
-                      className="inline-flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700"
+                      className="inline-flex items-center space-x-2 rounded-lg bg-orange-700 px-4 py-2 text-white transition-colors hover:bg-orange-800"
                     >
                       <Plus className="h-4 w-4" />
                       <span>Create Rule</span>
@@ -898,7 +898,7 @@ const NotificationsPage: React.FC = () => {
             </p>
             <button
               onClick={() => void navigate('/communications/email-templates')}
-              className="inline-flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700"
+              className="inline-flex items-center space-x-2 rounded-lg bg-orange-700 px-4 py-2 text-white transition-colors hover:bg-orange-800"
             >
               <Mail className="h-4 w-4" />
               <span>Manage Email Templates</span>
@@ -930,7 +930,7 @@ const NotificationsPage: React.FC = () => {
                     onClick={() => setLogChannelFilter(value)}
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       logChannelFilter === value
-                        ? 'bg-orange-600 text-white'
+                        ? 'bg-orange-700 text-white'
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
@@ -1168,7 +1168,7 @@ const NotificationsPage: React.FC = () => {
                       void handleCreateRule();
                     }}
                     disabled={creating}
-                    className="flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center space-x-2 rounded-lg bg-orange-700 px-4 py-2 text-white transition-colors hover:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating && <Loader2 className="h-4 w-4 animate-spin" />}
                     <span>Create Rule</span>
@@ -1178,7 +1178,7 @@ const NotificationsPage: React.FC = () => {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

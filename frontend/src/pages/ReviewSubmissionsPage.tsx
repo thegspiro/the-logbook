@@ -311,7 +311,7 @@ const ReviewPanel: React.FC<{
           onClick={() => setAction('approve')}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === 'approve'
-              ? 'bg-green-600 text-white'
+              ? 'bg-green-700 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
@@ -322,7 +322,7 @@ const ReviewPanel: React.FC<{
           onClick={() => setAction(SubmissionStatus.REVISION_REQUESTED)}
           className={`flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             action === SubmissionStatus.REVISION_REQUESTED
-              ? 'bg-orange-600 text-white'
+              ? 'bg-orange-700 text-white'
               : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
           }`}
         >
@@ -1078,7 +1078,7 @@ const ReviewSubmissionsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button
@@ -1210,7 +1210,7 @@ const ReviewSubmissionsPage: React.FC = () => {
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

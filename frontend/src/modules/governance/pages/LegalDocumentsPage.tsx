@@ -341,6 +341,7 @@ const LegalDocumentsPage: React.FC = () => {
             </h2>
             {active.drafts.length === 0 ? (
               <EmptyState
+                headingLevel={3}
                 title="No proposals yet"
                 description="Propose a revision to suggest wording that fits your department's rules. Nothing is published until someone with publishing rights publishes it."
               />

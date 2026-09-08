@@ -769,6 +769,7 @@ const AdminHoursPage: React.FC = () => {
             setStatusFilter(e.target.value);
             setPage(0);
           }}
+          aria-label="Filter entries by status"
           className="form-input px-3 py-1.5 text-sm max-md:min-h-[44px]"
         >
           <option value="">All Statuses</option>
@@ -783,6 +784,7 @@ const AdminHoursPage: React.FC = () => {
             setCategoryFilter(e.target.value);
             setPage(0);
           }}
+          aria-label="Filter entries by category"
           className="form-input px-3 py-1.5 text-sm max-md:min-h-[44px]"
         >
           <option value="">All Categories</option>

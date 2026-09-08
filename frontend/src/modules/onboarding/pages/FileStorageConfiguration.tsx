@@ -212,7 +212,7 @@ const FileStorageConfiguration: React.FC = () => {
         icon={<HardDrive aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex flex-1 items-start justify-center p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-start justify-center p-4 py-8">
         <div className="w-full max-w-2xl">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10">

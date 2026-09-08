@@ -24,7 +24,10 @@ import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
   info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
-  warning: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  // amber-800, not amber-700: the tint blends to #fef0da over white, where
+  // amber-700 measures 4.47:1 — under the 4.5:1 floor by a hair, on a 12px
+  // badge. The blue and red rows clear it at -700 (5.64:1, 5.32:1) and stay.
+  warning: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
   critical: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
 };
 
@@ -68,6 +71,34 @@ const AuditLogPage: React.FC = () => {
     setError(null);
     try {
       const [list, statsData] = await Promise.all([auditLogService.list(filters), auditLogService.getStats()]);
+      // `api.get<T>` asserts the wire format rather than verifying it, so a
+      // response that is merely well-formed JSON — a captive portal on station
+      // Wi-Fi, a proxy error page, an endpoint mid-rename — arrives typed as
+      // AuditLogStats with every field undefined, and reading it unchecked took
+      // the page down through the ErrorBoundary.
+      //
+      // Rejected rather than emptied. Substituting `[]` and `{}` would render
+      // "No audit events found" over a broken endpoint, which tells an
+      // administrator the security log is clear at the moment it cannot be
+      // read — the one wrong answer this page must never give. Throwing puts
+      // the failure in the error state below, where it stays visible.
+      // `total` is checked with `logs`, not defaulted to 0 beside it: Pagination
+      // renders nothing at `totalItems === 0`, so a response carrying a valid
+      // first page with a missing count would show page 1 and make every later
+      // page unreachable — a quieter version of the same wrong answer.
+      if (!Array.isArray(list?.logs) || typeof list.total !== 'number') {
+        throw new Error('The audit log service returned an unexpected response.');
+      }
+      // The maps are checked for being objects, not merely truthy: a string or
+      // an array is truthy and reaches `Object.entries` as something that
+      // renders nothing. `total` is checked for the same reason `list.total` is
+      // — it is the "Total events" figure, and a missing one renders as blank
+      // beside a populated table, which reads as "the log is fine" rather than
+      // as a failure.
+      const isMap = (value: unknown) => typeof value === 'object' && value !== null && !Array.isArray(value);
+      if (!isMap(statsData?.by_category) || !isMap(statsData?.by_severity) || typeof statsData?.total !== 'number') {
+        throw new Error('The audit log statistics service returned an unexpected response.');
+      }
       setEntries(list.logs);
       setTotal(list.total);
       setStats(statsData);
@@ -112,7 +143,7 @@ const AuditLogPage: React.FC = () => {
         </div>
         <button
           onClick={() => void load()}
-          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors"
+          className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
           aria-label="Refresh audit log"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
@@ -201,11 +232,7 @@ const AuditLogPage: React.FC = () => {
           <button type="submit" className="btn-primary flex-1 text-sm">
             Apply
           </button>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-theme-text-secondary hover:text-theme-text-primary border-theme-surface-border rounded-md border px-3 py-2 text-sm"
-          >
+          <button type="button" onClick={resetFilters} className="btn-secondary btn-md text-sm">
             Reset
           </button>
         </div>

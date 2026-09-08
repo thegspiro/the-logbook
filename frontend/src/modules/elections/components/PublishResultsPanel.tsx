@@ -120,7 +120,7 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({ electi
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
               resultsPublished
                 ? 'bg-theme-surface text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover border'
-                : 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-green-700 text-white hover:bg-green-800'
             }`}
           >
             {updatingVisibility ? (

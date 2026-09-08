@@ -32,7 +32,7 @@ export default function LearningPathPage() {
   const done = path.steps.filter((step) => isStepComplete(path.id, step.id)).length;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+    <div data-page-main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
       <Link
         to="/learning"
         className="text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring mb-4 inline-flex items-center gap-1.5 rounded-sm text-sm font-medium focus:ring-2 focus:outline-hidden"
@@ -145,6 +145,6 @@ export default function LearningPathPage() {
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </a>
       </div>
-    </main>
+    </div>
   );
 }

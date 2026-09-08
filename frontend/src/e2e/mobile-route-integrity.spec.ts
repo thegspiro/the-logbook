@@ -33,7 +33,9 @@ test('every registered route has mobile coverage or a documented exemption', () 
   // all — and both gaps were live: /analytics and /profile sat in the
   // presentation pass matching no <Route>, so they fell through the catch-all
   // and reported the dashboard's numbers under two other names.
-  const presentation = readFileSync(resolve(src, 'e2e/mobile-presentation.spec.ts'), 'utf8');
+  // The route list moved to its own module so the presentation ratchet, the
+  // accessibility pass and this check all read the same one.
+  const presentation = readFileSync(resolve(src, 'e2e/mobile-routes.ts'), 'utf8');
   // The query string is the route's own state, not part of its path.
   const measured = [...presentation.matchAll(/\{\s*path:\s*'([^']+)'/g)].map(
     (match) => (match[1] ?? '').split('?')[0] ?? ''

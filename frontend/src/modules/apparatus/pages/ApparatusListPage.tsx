@@ -135,7 +135,7 @@ export const ApparatusListPage: React.FC = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Error Display */}
         {error && (
           <div className="mb-6 flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-4">
@@ -573,7 +573,7 @@ export const ApparatusListPage: React.FC = () => {
             )}
           </>
         )}
-      </main>
+      </div>
     </div>
   );
 };

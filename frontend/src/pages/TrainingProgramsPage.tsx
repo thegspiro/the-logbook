@@ -218,7 +218,7 @@ const TrainingProgramsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* The hub is a sibling of this page, not an ancestor, so the trail
             cannot reach it from the URL. `underHub` splices it in with the
             registry's own label and gate: a member without training.manage
@@ -654,7 +654,7 @@ const TrainingProgramsPage: React.FC = () => {
             )}
           </>
         )}
-      </main>
+      </div>
 
       {/* Both dialogs only ever perform training.manage actions, so losing the
           permission with one open closes it rather than leaving Import or Save

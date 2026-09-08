@@ -1284,7 +1284,7 @@ export const ElectionDetailPage: React.FC = () => {
                         void handleOpenPreview();
                       }}
                       disabled={loadingPreview}
-                      className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+                      className="rounded-md bg-cyan-700 px-4 py-2 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
                     >
                       {loadingPreview ? 'Loading Preview...' : 'Preview Ballot'}
                     </button>
@@ -1305,7 +1305,7 @@ export const ElectionDetailPage: React.FC = () => {
                           onClick={() => {
                             void handleOpenNominations();
                           }}
-                          className="rounded-md bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700"
+                          className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
                         >
                           Open Nominations
                         </button>
@@ -1326,7 +1326,7 @@ export const ElectionDetailPage: React.FC = () => {
                       onClick={() => {
                         void handleCloseNominations();
                       }}
-                      className="rounded-md bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700"
+                      className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
                     >
                       Close Nominations
                     </button>
@@ -1336,7 +1336,7 @@ export const ElectionDetailPage: React.FC = () => {
                     <>
                       <button
                         onClick={() => setShowTurnout((s) => !s)}
-                        className="rounded-md bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700"
+                        className="rounded-md bg-sky-700 px-4 py-2 text-sm text-white hover:bg-sky-800"
                       >
                         {showTurnout ? 'Hide Live Turnout' : 'Live Turnout'}
                       </button>
@@ -1345,7 +1345,7 @@ export const ElectionDetailPage: React.FC = () => {
                           onClick={() => {
                             void handleShowPaperBallots();
                           }}
-                          className="rounded-md bg-teal-600 px-4 py-2 text-sm text-white hover:bg-teal-700"
+                          className="rounded-md bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800"
                         >
                           Record Paper Ballots
                         </button>
@@ -1372,7 +1372,7 @@ export const ElectionDetailPage: React.FC = () => {
                   {(election.status === ElectionStatus.OPEN || election.status === ElectionStatus.CLOSED) && (
                     <button
                       onClick={() => setShowRollbackModal(true)}
-                      className="rounded-md bg-orange-600 px-4 py-2 text-sm text-white hover:bg-orange-700"
+                      className="rounded-md bg-orange-700 px-4 py-2 text-sm text-white hover:bg-orange-800"
                     >
                       Rollback
                     </button>
@@ -1436,7 +1436,7 @@ export const ElectionDetailPage: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => setShowPackageModal(true)}
-                      className="rounded-md bg-teal-600 px-4 py-2 text-sm text-white hover:bg-teal-700"
+                      className="rounded-md bg-teal-700 px-4 py-2 text-sm text-white hover:bg-teal-800"
                     >
                       Pre-Meeting Package
                     </button>
@@ -1462,7 +1462,7 @@ export const ElectionDetailPage: React.FC = () => {
                             void handleOpenRemindModal();
                           }}
                           disabled={isLoadingNonVoters}
-                          className="rounded-md bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                          className="rounded-md bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-50"
                         >
                           {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
                         </button>

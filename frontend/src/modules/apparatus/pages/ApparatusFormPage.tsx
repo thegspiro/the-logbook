@@ -359,7 +359,7 @@ export const ApparatusFormPage: React.FC = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
+      <div data-page-main className="mx-auto max-w-5xl px-6 py-8">
         <form
           onSubmit={(e) => {
             void handleSubmit(e);
@@ -1006,7 +1006,7 @@ export const ApparatusFormPage: React.FC = () => {
             </button>
           </div>
         </form>
-      </main>
+      </div>
     </div>
   );
 };

@@ -94,7 +94,7 @@ export const OrderStatusStepper: React.FC<{ order: StoreOrder }> = ({ order }) =
 
   const circleClass = (state: StepState) =>
     state === 'complete'
-      ? 'bg-emerald-600 text-white'
+      ? 'bg-emerald-700 text-white'
       : state === 'current'
         ? 'bg-theme-surface border-2 border-amber-600 text-amber-900 dark:text-amber-200'
         : 'bg-theme-surface-hover text-theme-text-muted';

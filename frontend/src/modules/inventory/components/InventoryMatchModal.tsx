@@ -189,7 +189,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
                             >
                               <span
                                 className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                                  selected ? 'border-blue-500 bg-blue-500 text-white' : 'border-theme-surface-border'
+                                  selected ? 'border-blue-500 bg-blue-600 text-white' : 'border-theme-surface-border'
                                 }`}
                               >
                                 {selected && <Check className="h-3 w-3" />}
