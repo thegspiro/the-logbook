@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 01 (Auth & session lifecycle, pass 4)'s PR #2389 merged
+(`a68d674d`) — 6 findings, 4 fixed, 2 flagged (the real fix is **AUTH-14**
+MED: the two account-state gates in `get_current_user` had no intersecting
+remediation route, permanently locking out any account still holding a
+temporary password once org-wide MFA was required; **AUTH-19** LOW, an
+unindexed hot-path column Codex caught mid-review, is the other functional
+fix). This PR is also on record for the guard test it landed
+(`test_mfa_verification_consumes.py`, AUTH-16): five consecutive Codex review
+rounds each found one more real gap in that AST sweep's alias resolution —
+plain aliasing, cross-scope leakage, same-scope reordering, control-flow
+(conditional rebindings), and finally `match` arms plus single-hop assignment
+aliasing — each verified against an injected repro before being accepted,
+none dismissed. A sixth suggestion (resolve attribute-call receivers to their
+real module) was verified and deliberately declined, documented in the
+function's own docstring rather than implemented, since it would trade a
+real guarantee for cosmetic precision against a collision that doesn't exist
+in this codebase. Merged once CI went fully green (16/16) and Codex's own
+review began failing on usage limits rather than surfacing anything new —
+same precedent as Feature 33's PR #2370. Full write-up: the **Pass 4** section
+of `docs/security-review/AUTH-01-auth-session.md`. Next: 02 Permissions &
+roles.
+
+<details>
+<summary>Superseded — PR #2389 (pass 4), preserved for history</summary>
+
 **Feature 01 (Auth & session lifecycle, pass 4)** — PR
 [#2389](https://github.com/thegspiro/the-logbook/pull/2389), branch
 `claude/security-review-auth-session-pass4`. Pass 4's second feature. **Five
@@ -35,6 +60,8 @@ in the browser, unlike its server-enforced sibling — and **AUTH-17 (LOW)** —
 expired `sessions` rows are never reaped. Both mirrored into
 `docs/KNOWN_LIMITATIONS.md`. Full write-up: the **Pass 4** section of
 `docs/security-review/AUTH-01-auth-session.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 00 pass 4 merged), preserved for history</summary>
@@ -11065,6 +11092,31 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 01 (Auth & session lifecycle, pass 4)'s PR #2389 merged, watchdog recorded it
+
+PR #2389 went through five consecutive rounds of Codex review, all against
+its own new guard test (`test_mfa_verification_consumes.py`, AUTH-16) — each
+round found one more real gap in that AST sweep's alias resolution (plain
+aliasing → cross-scope leakage → same-scope reordering → control-flow →
+`match` arms and single-hop assignment aliasing), and each was verified
+against an injected repro of the exact scenario before being fixed and
+pushed. A sixth suggestion (resolve attribute-call receivers to their real
+module) was verified and deliberately declined with reasoning documented in
+the function's own docstring, not implemented — narrowing there would trade
+a real guarantee for cosmetic precision against a collision that doesn't
+exist in this codebase. Codex's review then started failing on usage limits
+rather than surfacing anything new. With CI fully green (16/16 checks),
+`mergeable_state: clean`, and all 8 review threads resolved, this was judged
+equivalent to Feature 33's PR #2370 precedent (Codex stuck on quota after
+real findings were already addressed) and merged directly (`a68d674d`)
+rather than left idle. Also fixed mid-PR: **AUTH-19** (LOW) — Codex caught
+this pass's own AUTH-17 write-up wrongly claiming `sessions.refresh_token`
+was indexed; it wasn't, despite being the column the hot refresh-token
+lookup filters on every request. Indexed it via a real migration
+(`1603bd9c59e7`), verified against the live database in both directions.
+This entry records the merge and clears the stale Open PR row. Next: 02
+Permissions & roles.
 
 ### 2026-09-08 — Feature 01 (Auth & session lifecycle, pass 4) — PR #2389 opened
 
