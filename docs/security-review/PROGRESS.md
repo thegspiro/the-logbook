@@ -11922,6 +11922,54 @@ Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
 `CHANGELOG.md` entry added. Rotation row 10 → ⏳ (awaiting PR merge). **Open
 PR** row updated with the branch and finding summary above.
 
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 rounds 3-4) — 4 more test-robustness fixes (Codex review of PR #2408)
+
+Two further Codex rounds on PR #2408, both about the new tests' own
+robustness rather than coverage gaps or production code:
+
+**Round 3:** the class docstring had drifted from actual behavior (said
+the "still blocked" assertion fires; the test actually times out earlier,
+waiting on `lock_attempted`) — corrected. The bulk-lock test's
+`checker_session.rollback()` after a cancelled-mid-read lock check was
+wrapped in a bare `except Exception: pass`, which could silently discard a
+real connection error and let the outer teardown's own `rollback()` either
+mask the intended `pytest.fail()` behind a secondary exception, or succeed
+and hide that anything went wrong — replaced with `invalidate()` (which
+SQLAlchemy guarantees does not raise even on an already-broken connection)
+specifically on that failure path.
+
+**Round 4:** in both `_run_against_in_flight_transfer` and the bulk-lock
+test, a background task that raised (or returned) before ever reaching the
+point being tracked left the test waiting out a full 10s for an event that
+could no longer fire, burying the real exception behind a confusing
+timeout with the task's own error left unretrieved. Both now race the
+tracked event against the task itself
+(`asyncio.wait(..., return_when=FIRST_COMPLETED)`) and immediately
+propagate the task's result/exception if it finishes first. Cancelling
+either task mid-DB-read can also leave its session's connection unusable,
+so both `finally` blocks now call `invalidate()` instead of `rollback()`
+specifically when the task was cancelled, keeping the explicit row-cleanup
+teardown running unconditionally. This also meant correcting the class
+docstring a second time: with the race in place, the actual pre-MP-27
+mechanism turned out more subtle than originally documented — the unlocked
+`SELECT` returns instantly (MVCC reads never wait on another transaction's
+row lock), but the `UPDATE` the write eventually issues at its own
+flush/commit is a real row-level write that InnoDB always serializes via
+genuine locks, so it queues behind the locker's `FOR UPDATE` and never
+completes either. _Neither_ side of the race finishes, so the explicit
+`TimeoutError` fires — verified directly by re-running against `ae4fe98`
+after the change, not just re-derived from reading the diff.
+
+Completion gate re-run after both rounds: flake8/black/isort clean; all 8
+guard tests pass and each independently reconfirmed to fail against its
+correct pre-fix state (including the corrected `ae4fe98` mechanism above,
+and the bulk test's pre-MP-28 failure still reporting a single clean
+`pytest.fail()`, not masked by anything); scoped pytest 806 passed / 1
+skipped / 0 failed; full backend suite 11859 passed / 21 skipped / 0
+failed. Updated `docs/security-review/MP-08-membership-pipeline.md` with
+both rounds' write-up. All 8 Codex review threads on this PR now replied
+to and resolved.
+
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 round 2) — 3 fixed (Codex review of PR #2408, one a real CI failure)
 
 Codex reviewed PR #2408's own first commit (`d7f253f`) and found three
