@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 05 (Finance & approvals, pass 4)'s PR #2398 merged
+(`320a143d`, squash) by a 30-minute watchdog check — fully green (17/17
+checks including `CI Success`), `mergeable_state: clean`, Codex review
+completed on the final commit with nothing further raised, all three review
+threads resolved. Four fixes, one flagged this pass: FIN-27 (route-shadowing
+404s), FIN-28 (needless Decimal round-trip), FIN-29 (a 404 swallowed into a
+500, found by Codex once FIN-27 made the route reachable), and FIN-30
+(flagged — an unbounded per-member dues-payment ledger, found by Codex after
+this pass's own doc correction overclaimed it was paginated). See the
+superseded note below for the full write-up. Next: 06 Elections & ballots.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05 pass 4, PR #2398), preserved for history</summary>
+
 **Feature 05 (Finance & approvals, pass 4)** — PR
 [#2398](https://github.com/thegspiro/the-logbook/pull/2398), branch
 `claude/security-review-finance-approvals`. No backend finance file had
@@ -44,6 +58,8 @@ overclaimed "every list method" paginates: `list_dues_payments`
 per-member-scoped unbounded ledger) rather than fixed, since pagination
 would change the endpoint's response shape. All doc corrections now name
 this exception. Subscribed to PR activity.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04 pass 4 merged), preserved for history</summary>
@@ -11317,6 +11333,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 05 (Finance & approvals, pass 4)'s PR #2398 merged, watchdog recorded it
+
+PR #2398 was fully green (17/17 checks including `CI Success`),
+`mergeable_state: clean`, and Codex's review of the final commit
+(`1dac106`, the FIN-29/FIN-30 tracker-reconciliation fix) completed with
+nothing further raised. All three review threads — the two Codex findings
+(FIN-29, FIN-30) and the tracker-contradiction finding on this doc's own
+Open PR/Log sections — were addressed and resolved. Merged directly
+(`320a143d`, squash) by a 30-minute watchdog check rather than left idle,
+matching the bar prior watchdog merges in this log have used (Features 04,
+23, 25, 33, 34). **Open PR** row cleared, rotation row 05 confirmed ✅ (it
+was already marked ✅ pending merge when the PR opened). Next: 06 Elections
+& ballots.
 
 ### 2026-09-08 — Feature 05 (Finance & approvals, pass 4) — 4 fixes, 1 flagged — PR opened, then a Codex round fixed FIN-29 and corrected FIN-30
 
