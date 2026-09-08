@@ -16,6 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #2406 (Feature 08, Membership pipeline, pass 5 follow-up — MP-28)
+merged clean, all 17 CI checks green, no unresolved review threads. Next:
+09 Medical screening (PHI).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406, merged), preserved for history</summary>
+
 **Feature 08 (Membership pipeline, pass 5 follow-up)** — PR
 [#2406](https://github.com/thegspiro/the-logbook/pull/2406), branch
 `claude/security-review-membership-pipeline-pass5-followup`. PR #2405 (the
@@ -38,6 +45,8 @@ this repo has no precedent for anywhere — including
 whose checks are source-inspection only) explaining it's a repo-wide gap
 out of scope for a one-line fix, left unresolved. Subscribed to PR
 activity. Next feature once this merges: 09 Medical screening (PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11449,6 +11458,14 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up)'s PR #2406 merged
+
+PR #2406 was fully green (17/17 CI checks, including the "CI Success"
+aggregate) with no unresolved review threads (Codex's own review of the
+PR completed with zero findings). Merged (squash, `expectedHeadSha`
+matching the PR's head). **Open PR** row cleared, rotation row 08
+confirmed ✅. Next: 09 Medical screening (PHI).
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405) — new PR #2406
 
