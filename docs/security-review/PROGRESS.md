@@ -21,19 +21,29 @@ feature. The rotation cannot outrun its own review queue.
 `claude/security-review-finance-approvals`. No backend finance file had
 changed since pass 3's closing commit, so this pass re-verified pass 3's own
 fixes (FIN-19 through FIN-26) against current code and worked the full
-checklist fresh rather than trusting three clean prior passes. Two findings:
-**FIN-27 (MED, fixed)** — `GET /budgets/summary` and `GET /approval-chains/
-preview` were both permanently unreachable, shadowed by an earlier-
-registered `/{id}` route of the same method and shape (Starlette dispatches
-to the first full match in registration order); both endpoints had been
-silently 404ing since whenever they were added. Fixed by reordering route
-registration, with a whole-router-sweep guard test. **FIN-28 (LOW, fixed)**
-— `get_pending_approvals` round-tripped a `Decimal` amount through `float()`
-for no reason; removed. Also corrected three stale "still flagged" claims in
+checklist fresh rather than trusting three clean prior passes. Four fixes,
+one flagged: **FIN-27 (MED, fixed)** — `GET /budgets/summary` and
+`GET /approval-chains/preview` were both permanently unreachable, shadowed
+by an earlier-registered `/{id}` route of the same method and shape
+(Starlette dispatches to the first full match in registration order); both
+endpoints had been silently 404ing since whenever they were added. Fixed by
+reordering route registration, with a whole-router-sweep guard test.
+**FIN-28 (LOW, fixed)** — `get_pending_approvals` round-tripped a `Decimal`
+amount through `float()` for no reason; removed. **FIN-29 (MED, fixed,
+found by Codex review on this PR)** — once FIN-27 made
+`GET /approval-chains/preview` reachable, its own 404-for-no-match was
+raised inside a `try` whose trailing `except Exception` caught it and
+replaced it with a 500; moved the check outside the `try`/`except`. Also
+corrected three stale "still flagged" claims in
 `docs/module-audit/finance.md`'s FIN-7 entry (and its mirrors) that current
-code had already resolved — unbounded export, in-memory pagination, and no
-overspend guard were all already fixed, just never threaded back into that
-doc. Subscribed to PR activity.
+code had already resolved — unbounded export and no overspend guard were
+fully fixed; in-memory pagination was only _mostly_ fixed. **FIN-30 (LOW,
+flagged, also found by Codex)** — that correction's own first draft
+overclaimed "every list method" paginates: `list_dues_payments`
+(`GET /dues/{dues_id}/payments`) does not, and is left flagged (a
+per-member-scoped unbounded ledger) rather than fixed, since pagination
+would change the endpoint's response shape. All doc corrections now name
+this exception. Subscribed to PR activity.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 04 pass 4 merged), preserved for history</summary>
@@ -11308,7 +11318,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 05 (Finance & approvals, pass 4) — 3 fixes, 0 flagged — PR opened
+### 2026-09-08 — Feature 05 (Finance & approvals, pass 4) — 4 fixes, 1 flagged — PR opened, then a Codex round fixed FIN-29 and corrected FIN-30
 
 No backend finance file had changed since pass 3's closing commit (`git log
 --since="2026-09-01"` on the module's paths surfaces only a breadcrumb/
@@ -11338,11 +11348,28 @@ and `docs/KNOWN_LIMITATIONS.md`) still described three items as open that
 were already fixed on `main`, landed incidentally by earlier finance-
 approvals security-review passes and never threaded back into the older
 audit doc: unbounded transaction export (now capped at 10,000 rows,
-streamed in batches), in-memory list pagination (every list method already
-pushes `.offset()`/`.limit()` into the query), and no overspend guard
-(`_mutate_budget` already enforces the ceiling, fail-closed). Corrected all
-three docs; only the `get_pending_approvals` assignee-level filter remains
-genuinely open, as it always has.
+streamed in batches), in-memory list pagination, and no overspend guard
+(`_mutate_budget` already enforces the ceiling, fail-closed). The pagination
+half of this correction was itself wrong, caught by the Codex round below.
+
+**Codex round on PR #2398** caught two real issues in the diff above.
+**FIN-29 (MED, fixed)** — the route reorder above made
+`GET /approval-chains/preview` reachable for the first time, which exposed a
+pre-existing bug in the same handler: its own `if not chain: raise
+HTTPException(404, ...)` sat inside the same `try` block as the service
+call, and that block's trailing `except Exception` (no `except
+HTTPException` ahead of it) caught the 404 and replaced it with a 500 for
+every genuinely no-match preview. Moved the check outside the
+`try`/`except`, matching every other by-id 404 in this file; 3 new guard
+tests in `tests/test_finance_approval_chain_preview.py`, confirmed red
+against the pre-fix ordering (500 instead of 404) and green after.
+**FIN-30 (LOW, flagged)** — the in-memory-pagination correction above
+overclaimed "every list method" paginates: `list_dues_payments`
+(`GET /dues/{dues_id}/payments`) does not — it eager-loads one member's
+entire payment ledger with no `.offset()`/`.limit()`. Left flagged rather
+than fixed (pagination would change the endpoint's response shape, a
+frontend-contract decision), and all three doc corrections above now name
+this exception instead of asserting none exists. Both threads resolved.
 
 **Local-environment note:** this session's sandbox initially resolved a
 stale, unrelated `node_modules` (a worktree with none of its own falls back
@@ -11353,14 +11380,16 @@ pre-existing warnings after, matching a green `main` CI run on the same
 commit). Recorded in the findings file so it doesn't get mistaken for a
 regression by a later pass reading this log.
 
-Completion gate: flake8/black/isort clean on `app/ tests/ alembic/` (isort
-9.0.1, CI's pin); `validate_migrations.py --strict` (438 revisions, single
-head); scoped `pytest -k "finance or dues or approval or budget or export"`
-308 passed/1 skipped (pre-existing)/0 failed; full backend suite 11840
-passed/21 skipped (pre-existing)/0 failed; `tsc --noEmit` 0 errors; `eslint .`
-0 errors/2 pre-existing warnings (well under `--max-warnings 10`); `vitest
-run src/modules/finance/` 108 passed. Rotation row 05 → ✅ (pending PR
-merge). Next: 06 elections & ballots.
+Completion gate (re-run after the Codex round): flake8/black/isort clean on
+`app/ tests/ alembic/` (isort 9.0.1, CI's pin); `validate_migrations.py
+--strict` (438 revisions, single head); scoped `pytest -k "finance or dues
+or approval or budget or export"` 311 passed (303 pre-existing + 8 new)/1
+skipped (pre-existing)/0 failed; full backend suite 11843 passed/21 skipped
+(pre-existing)/0 failed; `tsc --noEmit` 0 errors; `eslint .` 0 errors/2
+pre-existing warnings (well under `--max-warnings 10`); `vitest run
+src/modules/finance/` 108 passed (frontend gate re-checked though the Codex
+round touched no frontend file). Rotation row 05 → ✅ (pending PR merge).
+Next: 06 elections & ballots.
 
 ### 2026-09-08 — Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged, watchdog recorded it
 
