@@ -242,39 +242,152 @@ describe('primary fill contrast', () => {
    * uses. `mobile-accessibility.spec.ts` measures the rendered result and
    * ratchets what is left below 7:1.
    *
-   * Matched per quoted **segment**, not per line. A ternary puts both branches
-   * on one line, so a line-level match reads `bg-amber-400 text-amber-950`
-   * (8.97:1, a deliberately bright "on" indicator) as white-on-amber and
-   * "fixes" it to 2.98:1. That is not hypothetical — the sweep that cleared
-   * this backlog did exactly that to FlashlightToggle before it was caught.
+   * Pairing a fill with the foreground that actually covers it takes three
+   * rules, each learned by getting it wrong:
+   *
+   *   Per quoted **segment**, not per line. A ternary puts both branches on one
+   *   line, so a line-level match reads `bg-amber-400 text-amber-950` (8.97:1,
+   *   a deliberately bright "on" indicator) as white-on-amber and "fixes" it to
+   *   2.98:1. The sweep that cleared this backlog did exactly that to
+   *   FlashlightToggle before it was caught.
+   *
+   *   Template literals count, and their static text is shared context. A
+   *   `className={`… text-white … ${cond ? 'bg-green-600' : …}`}` keeps the
+   *   foreground in the static part and the fill in a branch, so neither piece
+   *   on its own looks like a violation — and the most common className form in
+   *   this codebase went entirely unscanned. ReturnRequestsPanel sat at 3.30:1
+   *   through the sweep and through the first version of this test.
+   *
+   *   Variants scope the pairing. `dark:bg-emerald-500` is covered by
+   *   `dark:text-emerald-950`, not by the `text-white` sitting beside it for the
+   *   light theme; measuring it against white reports 1.9:1 for a pairing that
+   *   never renders. A fill takes the foreground sharing its variant prefix,
+   *   falling back to the unprefixed one.
    */
   it('pairs no text-white with a sub-AA fill at any call site', () => {
     const white = relativeLuminance(255, 255, 255);
     const hues = [...new Set(Object.keys(TAILWIND).map((key) => key.split('-')[0]))].join('|');
-    const FILL = new RegExp(String.raw`\b(?:[a-z-]+:)*bg-(${hues})-(\d{3})\b(?!/)`, 'g');
+    const fillPattern = String.raw`\b((?:[a-z-]+:)*)bg-(${hues})-(\d{3})\b(?!/)`;
+    const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
 
-    const offenders = files.flatMap((file) => {
+    /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
+    const foregrounds = (text: string): Map<string, string> => {
+      const found = new Map<string, string>();
+      for (const [, variant, hue, shade] of text.matchAll(textPattern)) {
+        found.set(variant ?? '', shade ? `${hue}-${shade}` : (hue ?? ''));
+      }
+      return found;
+    };
+
+    /**
+     * A fill's variant prefix, then every less specific prefix it falls back
+     * to, longest first: `dark:hover:` -> `dark:hover:`, `dark:`, `hover:`, ``.
+     */
+    const candidatePrefixes = (prefix: string): string[] => {
+      const variants = prefix.split(':').filter(Boolean);
+      const subsets: string[][] = [[]];
+      for (const variant of variants) {
+        for (const subset of [...subsets]) subsets.push([...subset, variant]);
+      }
+      return subsets.sort((a, b) => b.length - a.length).map((subset) => (subset.length ? `${subset.join(':')}:` : ''));
+    };
+
+    const offenders: string[] = [];
+
+    const inspect = (file: string, line: number, segment: string, inherited: Map<string, string>) => {
+      const own = foregrounds(segment);
+      for (const [, variant, hue, shade] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
+        const prefix = variant ?? '';
+        // The foreground that covers this fill, most specific first. A
+        // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
+        // by `dark:text-*` — not by the `text-white` sitting beside it for the
+        // light theme, which is a pairing that never renders.
+        const fg = candidatePrefixes(prefix)
+          .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
+          .find((value) => value !== undefined);
+        if (fg !== 'white') continue;
+        const key = `${hue}-${shade}`;
+        const hex = TAILWIND[key];
+        if (!hex) {
+          offenders.push(`${path.relative(SRC, file)}:${line} — bg-${key}: add its hex to TAILWIND`);
+          continue;
+        }
+        const rgb = hexToRgb(hex);
+        if (!rgb) throw new Error(`unparseable hex for ${key}: ${hex}`);
+        const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), white);
+        if (ratio < 4.5) {
+          offenders.push(
+            `${path.relative(SRC, file)}:${line} — ${prefix}white on ${prefix}bg-${key} is ${ratio.toFixed(2)}:1`
+          );
+        }
+      }
+    };
+
+    /**
+     * Every `className` value in a file, each bounded to the one element it
+     * dresses.
+     *
+     * Bounding matters twice over. Per line is too small — a className template
+     * routinely spans three lines (static text, an interpolated ternary, the
+     * closing brace), so a per-line matcher never sees a complete backtick pair
+     * and the branch inside it goes unexamined; that is where
+     * ReturnRequestsPanel hid a 3.30:1 pairing. Whole-file is too large — a
+     * bare ``/`[^`]*`/`` pairs backticks across unrelated elements, and the
+     * foregrounds of one then get attributed to the fills of another.
+     */
+    const classNameValues = (source: string): Array<{ value: string; line: number }> => {
+      const found: Array<{ value: string; line: number }> = [];
+      const attribute = /className=/g;
+      for (const match of source.matchAll(attribute)) {
+        let i = (match.index ?? 0) + match[0].length;
+        const line = source.slice(0, i).split('\n').length;
+        const opener = source[i];
+        if (opener === '"' || opener === "'") {
+          const close = source.indexOf(opener, i + 1);
+          if (close > -1) found.push({ value: source.slice(i + 1, close), line });
+          continue;
+        }
+        if (opener !== '{') continue;
+        // Walk to the matching brace, stepping over nested braces and over
+        // string/template bodies so their braces and quotes do not confuse it.
+        let depth = 0;
+        const start = i;
+        for (; i < source.length; i++) {
+          const ch = source[i];
+          if (ch === '{') depth++;
+          else if (ch === '}') {
+            depth--;
+            if (depth === 0) break;
+          } else if (ch === '"' || ch === "'" || ch === '`') {
+            const quote = ch;
+            i++;
+            while (i < source.length && source[i] !== quote) {
+              if (source[i] === '\\') i++;
+              i++;
+            }
+          }
+        }
+        found.push({ value: source.slice(start + 1, i), line });
+      }
+      return found;
+    };
+
+    for (const file of files) {
       const source = fs.readFileSync(file, 'utf8');
-      return source.split('\n').flatMap((line, index) =>
-        [...line.matchAll(/'([^']*)'|"([^"]*)"/g)].flatMap((quoted) => {
-          const segment = quoted[1] ?? quoted[2] ?? '';
-          if (!segment.includes('text-white')) return [];
-          return [...segment.matchAll(FILL)].flatMap(([token, hue, shade]) => {
-            const hex = TAILWIND[`${hue}-${shade}`];
-            if (!hex) return [`${path.relative(SRC, file)}:${index + 1} — ${token}: add its hex to TAILWIND`];
-            const rgb = hexToRgb(hex);
-            if (!rgb) throw new Error(`unparseable hex for ${hue}-${shade}: ${hex}`);
-            const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), white);
-            return ratio >= 4.5
-              ? []
-              : [`${path.relative(SRC, file)}:${index + 1} — white on ${token} is ${ratio.toFixed(2)}:1`];
-          });
-        })
-      );
-    });
+      for (const { value, line } of classNameValues(source)) {
+        // Static text outside any quoted branch is the shared context: a
+        // `text-white` there covers every branch's fill.
+        const staticText = value.replace(/'[^']*'|"[^"]*"/g, ' ').replace(/\$\{[^}]*\}/gs, ' ');
+        const context = foregrounds(staticText);
+        inspect(file, line, staticText, new Map());
+        for (const [, single, double] of value.matchAll(/'([^']*)'|"([^"]*)"/g)) {
+          inspect(file, line, single ?? double ?? '', context);
+        }
+      }
+    }
 
     expect(
-      offenders,
+      [...new Set(offenders)],
       'raise the fill to the lightest shade of the same hue that clears 4.5:1 (usually -700), ' +
         'or reach for btn-primary/btn-success/btn-info/btn-warning instead of a hand-typed box'
     ).toEqual([]);

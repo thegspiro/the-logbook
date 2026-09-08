@@ -211,7 +211,7 @@ const TrainingRequirementsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-primary" role="status" aria-live="polite">
               Loading requirements...
@@ -224,7 +224,7 @@ const TrainingRequirementsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>

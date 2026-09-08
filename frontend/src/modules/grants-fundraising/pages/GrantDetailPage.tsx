@@ -475,7 +475,7 @@ export const GrantDetailPage: React.FC = () => {
       {/* Header                                                             */}
       {/* ================================================================== */}
       <div className="border-theme-surface-border bg-theme-surface border-b">
-        <div data-page-main className="mx-auto max-w-7xl px-6 py-6">
+        <div className="mx-auto max-w-7xl px-6 py-6">
           <Breadcrumbs />
           {/* Back link */}
           <button
@@ -596,7 +596,7 @@ export const GrantDetailPage: React.FC = () => {
       {/* ================================================================== */}
       {/* Tab Content                                                        */}
       {/* ================================================================== */}
-      <div className="mx-auto max-w-7xl px-6 py-6">
+      <div data-page-main className="mx-auto max-w-7xl px-6 py-6">
         {/* ---------------------------------------------------------------- */}
         {/* Overview Tab                                                     */}
         {/* ---------------------------------------------------------------- */}

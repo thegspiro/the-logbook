@@ -105,7 +105,7 @@ export const EventEditPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs items={trail} />
         <LoadingSpinner message="Loading event..." />
       </div>
@@ -183,7 +183,7 @@ export const EventEditPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs items={trail} />
 
         {/* Header */}

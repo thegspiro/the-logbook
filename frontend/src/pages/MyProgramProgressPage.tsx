@@ -259,7 +259,7 @@ const MyProgramProgressPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div data-page-main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
         <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
           <div
@@ -278,7 +278,7 @@ const MyProgramProgressPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div data-page-main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <Breadcrumbs />
 
         <div className="mb-6 flex items-start gap-3">

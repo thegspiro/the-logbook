@@ -243,13 +243,24 @@ test.describe('mobile accessibility', () => {
         const viewportWidth = doc.clientWidth;
         const isVisible = (el: Element) => {
           const b = el.getBoundingClientRect();
-          return b.width > 0 && b.height > 0 && b.right > 0 && b.left < viewportWidth;
+          return b.width > 0 && b.height > 0;
         };
+        // Overflow is directional, and the two edges mean different things.
+        //
+        // Past the RIGHT edge is the reflow defect, and it counts even when the
+        // element sits entirely beyond the viewport — requiring it to intersect
+        // first discards the very worst case, content stranded wholly
+        // off-screen.
+        //
+        // Past the LEFT edge only counts when the element still reaches into
+        // the viewport. A closed navigation drawer is parked at left=-256,
+        // right=0 by design; flagging that reports the shell of the app as a
+        // reflow bug on every route.
+        const overflows = (b: DOMRect) => b.right > viewportWidth + 1 || (b.left < -1 && b.right > 0);
         return [...document.body.querySelectorAll('*')]
           .filter((el) => {
             if (!isVisible(el) || el.closest('[data-mobile-scroll-region]')) return false;
-            const b = el.getBoundingClientRect();
-            return b.left < -1 || b.right > viewportWidth + 1;
+            return overflows(el.getBoundingClientRect());
           })
           .slice(0, 6)
           .map((el) => {

@@ -989,8 +989,8 @@ const DocumentsPage: React.FC = () => {
                     disabled={!uploadForm.file || actionLoading}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
                       !uploadForm.file || actionLoading
-                        ? 'cursor-not-allowed bg-amber-600 opacity-50'
-                        : 'bg-amber-600 hover:bg-amber-700'
+                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
+                        : 'bg-amber-700 hover:bg-amber-800'
                     }`}
                   >
                     {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1080,8 +1080,8 @@ const DocumentsPage: React.FC = () => {
                     disabled={!folderForm.name.trim() || actionLoading}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
                       !folderForm.name.trim() || actionLoading
-                        ? 'cursor-not-allowed bg-amber-600 opacity-50'
-                        : 'bg-amber-600 hover:bg-amber-700'
+                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
+                        : 'bg-amber-700 hover:bg-amber-800'
                     }`}
                   >
                     {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}
