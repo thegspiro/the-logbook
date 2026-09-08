@@ -26,6 +26,7 @@ import { inventoryService } from '../../../services/api';
 import type { MemberSizePreferencesCreate } from '../types';
 import { STANDARD_SIZES, SHOE_SIZES, GARMENT_FIT_OPTIONS } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { blankToNull } from '../../../utils/formValues';
 import { Modal } from '../../../components/Modal';
 import { Collapsible } from '../../../components/ux';
 import toast from 'react-hot-toast';
@@ -114,17 +115,23 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
 
   const handleSave = async () => {
     setSaving(true);
-    // Coerce empty strings to undefined so unset fields are omitted, not stored as "".
+    // This is always an update (PUT .../size-preferences upserts an existing
+    // row), never a create -- so a blank field must send an explicit `null`,
+    // not be coerced to `undefined`. `undefined` drops the key from the JSON
+    // body, and the backend's `exclude_unset=True` dump then leaves an
+    // already-stored value untouched: a member who clears "Fit" back to "No
+    // preference" would see a success toast while the old fit silently
+    // survived (CLAUDE.md pitfall #1's update-path shape).
     const payload: MemberSizePreferencesCreate = {
-      shirt_size: form.shirt_size || undefined,
-      garment_fit: form.garment_fit || undefined,
-      pant_waist: form.pant_waist.trim() || undefined,
-      pant_inseam: form.pant_inseam.trim() || undefined,
-      jacket_size: form.jacket_size || undefined,
-      boot_size: form.boot_size || undefined,
-      boot_width: form.boot_width.trim() || undefined,
-      glove_size: form.glove_size || undefined,
-      hat_size: form.hat_size.trim() || undefined,
+      shirt_size: blankToNull(form.shirt_size),
+      garment_fit: blankToNull(form.garment_fit),
+      pant_waist: blankToNull(form.pant_waist),
+      pant_inseam: blankToNull(form.pant_inseam),
+      jacket_size: blankToNull(form.jacket_size),
+      boot_size: blankToNull(form.boot_size),
+      boot_width: blankToNull(form.boot_width),
+      glove_size: blankToNull(form.glove_size),
+      hat_size: blankToNull(form.hat_size),
     };
     try {
       if (userId) {

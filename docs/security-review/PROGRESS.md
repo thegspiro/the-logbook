@@ -21,9 +21,19 @@ feature. The rotation cannot outrun its own review queue.
 `claude/security-review-inventory-pass1` (fresh name for this rotation pass;
 `claude/security-review-inventory-lockorder` and the pass-1/pass-2 branch
 names were each used and merged by earlier passes, so CLAUDE.md Pitfall #24
-rules them out). 0 fixes, 0 new findings, 4 prior flags (INV-8, INV-9,
-INV-16, INV-17) re-verified still open. Docs-only diff (no backend or
-frontend code changed). Awaiting CI. See the Log entry above and
+rules them out). **Corrected after Codex review**: the first draft's claim
+of "0 fixes, 0 new findings" was wrong on two axes — a declared-but-unread
+frontend scope (eleven files) and an entirely unreviewed MCP tool surface
+(`app/mcp/tools/inventory.py`, `writes.py::create_reorder_request`) sat
+behind the "complete" claim, and three real Pitfall #27/#1-shaped defects
+were inside the ground the pass _did_ claim to cover. This round: the
+frontend files and MCP tools are now reviewed in full (found clean); 3
+fixed (INV-23 pin-cap race, INV-24 first-time variant-group race, INV-25
+`SizePreferencesModal` dropped-null); 1 flagged, not fixed (INV-22,
+unbounded catalog scans, DOC-9 shape); the 4 prior flags (INV-8, INV-9,
+INV-16, INV-17) re-verified still open. Full completion gate green
+(backend + frontend, both run for the first time this pass now that there
+is a real code diff). Awaiting CI. See the Log entry above and
 `INV-11-inventory.md` for detail.
 
 <details>
@@ -11771,7 +11781,25 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 11 (Inventory, pass 4) — 0 fixed, 0 new findings; 4 prior flags re-verified still open
+### 2026-09-08 — Feature 11 (Inventory, pass 4) — corrected after Codex review: 3 fixed, 1 flagged, 4 prior flags re-verified still open
+
+**This entry originally read "0 fixed, 0 new findings" and marked the pass
+complete. That was wrong; corrected in place below rather than left standing,
+since PR #2422 had not yet merged when Codex's review caught it** (unlike a
+merged pass, which gets a new dated entry instead of an edit to one already
+closed). Two process gaps produced the false "clean" claim: the frontend
+scope note named eleven inventory files (the pins/grouping UI, admin hub,
+equipment requests, write-offs, maintenance, `types/index.ts`,
+`variantHelpers.ts`, four apparatus/fleet/supply screens) as genuinely
+inventory work that were "not read this pass," then declared the pass done
+anyway; and the inventory-owned MCP tools (`app/mcp/tools/inventory.py`,
+`writes.py::create_reorder_request`) were never enumerated into scope at
+all, despite this rotation's own Events/Training precedent that a
+feature-owned MCP surface belongs to the owning feature's pass. Both are now
+reviewed in full (see `INV-11-inventory.md`'s two "Scope addition" sections)
+and found clean. Three further, genuinely fixable defects (INV-23/24/25) were
+sitting inside the ground the first draft _did_ claim to cover, caught by
+the same Codex review pass, not found independently.
 
 Re-verified all four still-open flagged findings from pass 2/3 (INV-8, INV-9,
 INV-16, INV-17) against current code — all four confirmed unchanged and still
@@ -11797,20 +11825,40 @@ that runs `_deactivation_block_reason` (itself newly Pitfall #27-correct —
 both blocker counts are now locking reads, with a comment explaining why the
 item lock alone is not enough under REPEATABLE READ).
 
-All 144 routes in `inventory.py` (up from 137 at pass 3, +6 net) were
-enumerated programmatically for their auth dependency and permission string,
-not spot-checked; zero lack a `current_user` dependency. Five migrations
-landed since pass 3, all correctly guarded and reversible, read in full.
+All 144 routes in `inventory.py` (up from 137 at pass 3, **+7 net** —
+corrected from this entry's original "+6": `GET
+/requests/{request_id}/fulfillment-options` was missing from the route
+table, caught by Codex) were enumerated programmatically for their auth
+dependency and permission string, not spot-checked; zero lack a
+`current_user` dependency. Five migrations landed since pass 3, all
+correctly guarded and reversible, read in full.
 
-No fixable defect found — every piece of new surface reviewed against all
-seven checklist dimensions came back correctly scoped, permissioned, and
-locked. Full completion gate green: flake8/black/isort clean on `app/`,
+**Three fixable defects, both Pitfall #27 read-then-write races with no
+lock on anything that exists yet:** `pin_item`'s per-member pin-cap check
+(INV-23, fixed by locking the member's `User` row — mirroring
+`push_service.py`'s push-subscription cap — before a locking `COUNT`) and
+`create_size_variants`/`_find_variant_group_for_reuse`'s first-time
+variant-group creation (INV-24, fixed by locking the `Organization` row
+before the reuse lookup, mirroring `ensure_facility_folder`/
+`ensure_member_folder`'s parent-locked-first shape) both had this rotation's
+signature "no row to lock yet" gap. A third, `SizePreferencesModal.tsx`
+dropping a cleared `garment_fit` as `undefined` instead of an explicit
+`null` (INV-25, CLAUDE.md Pitfall #1's update-path shape), was found during
+the frontend re-review this correction required. A fourth item — unbounded
+catalog scans in `get_fulfillment_options`/`get_requestable_categories` — is
+recorded as INV-22 but flagged, not fixed: the DOC-9 shape, where the
+unbounded read is load-bearing for correctness, not incidental.
+
+Full completion gate green, backend and frontend both (a real code diff this
+round, unlike the first draft): flake8/black/isort clean on `app/`,
 `tests/`, `alembic/`; `validate_migrations.py --strict` single head (439
-revisions); `pytest tests/ -k "inventory or label"` — 984 passed, 1
-pre-existing skip. No frontend files edited (reviewed but not modified — see
-`INV-11-inventory.md` pass 4 for the frontend scope note), so `tsc`/`eslint`
-not run this pass. See `INV-11-inventory.md` for the complete write-up. Next:
-12 Facilities.
+revisions); `pytest tests/ -k "inventory or label"` — 987 passed (984 + 3
+new), 1 pre-existing skip; full backend suite `pytest tests/` — 11897
+passed, 21 pre-existing skips, 0 failed; frontend `tsc --noEmit`/`eslint .`
+both clean, `vitest run src/modules/inventory` — 1203 passed. See
+`INV-11-inventory.md` for the complete write-up, including the two "Scope
+addition" sections (frontend files, MCP tools) this correction required.
+Next: 12 Facilities.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4)'s PR #2411 merged
 

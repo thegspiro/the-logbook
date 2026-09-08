@@ -2343,6 +2343,13 @@ class InventoryService:
         organization -- an unvalidated client-supplied foreign key would
         otherwise persist a cross-tenant reference (CLAUDE.md pitfall #14c) --
         or when the shortlist is already full.
+
+        The pin cap is a read-then-write (CLAUDE.md pitfall #27): two
+        concurrent pins of different items by the same member must not both
+        read the same count, both pass the cap, and both insert. There is no
+        pin row to lock until after that decision is made, so the lock has to
+        be on something that already exists -- the member's own ``User`` row,
+        mirroring ``push_service.py``'s push-subscription cap.
         """
         item = await self.get_item_by_id(item_id, organization_id)
         if item is None:
@@ -2359,8 +2366,29 @@ class InventoryService:
         if pin is not None:
             return pin
 
-        pins = await self.list_pins(organization_id, user_id)
-        if len(pins) >= self.MAX_PINS:
+        await self.db.execute(
+            select(User.id)
+            .where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        # A locking read, not a plain one: under REPEATABLE READ, holding the
+        # User lock does not by itself refresh a snapshot taken before it was
+        # acquired -- only a locking read is defined to return the latest
+        # committed rows (CLAUDE.md pitfall #27).
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(InventoryItemPin)
+            .where(
+                InventoryItemPin.organization_id == str(organization_id),
+                InventoryItemPin.user_id == str(user_id),
+            )
+            .with_for_update()
+        )
+        pin_count = count_result.scalar_one()
+        if pin_count >= self.MAX_PINS:
             raise ValueError(
                 f"You can pin at most {self.MAX_PINS} items. " "Unpin something first."
             )
@@ -2369,7 +2397,7 @@ class InventoryService:
             organization_id=str(organization_id),
             user_id=str(user_id),
             item_id=str(item_id),
-            position=len(pins),
+            position=pin_count,
         )
         self.db.add(pin)
         await self.db.commit()
@@ -6352,11 +6380,12 @@ class InventoryService:
         Locked for update: deciding whether to create is a read-then-write, and
         two admins generating at once would otherwise both read "no group" and
         both create one (CLAUDE.md pitfall #27). The lock closes that for every
-        run after the first. It cannot close the case where the group does not
-        exist yet — there is no row to lock — so two simultaneous first runs can
-        still produce two groups; a unique index on
-        (organization_id, name, category_id) would close it, and needs a dedupe
-        migration against installations that already have duplicates.
+        run after the first. On its own it cannot close the case where the
+        group does not exist yet — there is no row to lock — so the caller
+        (``create_size_variants``) locks the organization row, which always
+        exists, before calling this: two simultaneous first runs for the same
+        product now serialize on that lock instead of both observing "no
+        group" here.
         """
         query = (
             select(ItemVariantGroup)
@@ -6515,6 +6544,20 @@ class InventoryService:
         variant_group_id: Optional[str] = None
         existing_group: Optional[ItemVariantGroup] = None
         if create_variant_group:
+            # Serializes the "does this product already have a group"
+            # decision on the organization row, which always exists --
+            # closing the gap _find_variant_group_for_reuse's own FOR UPDATE
+            # cannot close on its own: a group that does not exist yet has no
+            # row to lock, so two simultaneous first runs for the same
+            # product could otherwise both see "no group" and both create one
+            # (CLAUDE.md pitfall #27). Mirrors ensure_member_folder's/
+            # ensure_facility_folder's organization-row lock taken before
+            # their own get-or-create existence check.
+            await self.db.execute(
+                select(Organization.id)
+                .where(Organization.id == str(organization_id))
+                .with_for_update()
+            )
             existing_group = await self._find_variant_group_for_reuse(
                 organization_id, base_name, category_id
             )

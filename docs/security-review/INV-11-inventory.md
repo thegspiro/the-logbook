@@ -32,6 +32,62 @@ corrected in the other file (`module-audit/inventory.md`'s "116 vs 132", pass
 corrected here so the next pass's baseline is accurate. Not worth editing
 pass 3's already-merged section.
 
+### Correction (Codex review of PR #2422)
+
+The version of this pass first pushed concluded "no new findings, 0 fixes
+needed" and marked Feature 11 complete. That was wrong, on two axes at once,
+and Codex caught both on review:
+
+1. **Scope was declared narrower than the diff, and the doc said so in its
+   own text while still marking the pass complete.** The frontend scope note
+   below named eleven files that changed — the pins/grouping UI, the admin
+   hub, equipment requests, write-offs, maintenance, `types/index.ts`,
+   `variantHelpers.ts`, and four apparatus/fleet/supply screens — as
+   genuinely inventory work that "were not read this pass," then declared
+   the pass done anyway. A pass cannot honestly claim zero findings over
+   ground it never walked, and it also never enumerated the inventory-owned
+   MCP tools at all (`app/mcp/tools/inventory.py`,
+   `app/mcp/tools/writes.py::create_reorder_request`) — an independently
+   authenticated surface this rotation's own precedent (Events, Training)
+   treats as belonging to the owning feature's pass, not a future MCP-wide
+   sweep. Both gaps are closed below: the frontend files are now read in
+   full (see "Scope addition — the frontend files pass 4 first skipped"),
+   and the MCP tools get their own first review ("Scope addition — the
+   inventory MCP tools").
+2. **Three real, fixable defects were sitting inside the ground the first
+   draft _did_ claim to cover.** `GET
+/requests/{request_id}/fulfillment-options` is a seventh new route in
+   `inventory.py`'s own diff, absent from a route table the pass claimed
+   enumerated "every route... not spot-checked" — the "+6" delta was wrong,
+   corrected to +7 below. `pin_item` and
+   `create_size_variants`/`_find_variant_group_for_reuse` are both
+   read-then-write capacity/existence decisions with no lock (or an
+   incomplete one) on anything that exists before the row being decided
+   about — the exact CLAUDE.md pitfall #27 shape this rotation has hardened
+   repeatedly elsewhere in this same file (INV-18 through INV-21) and missed
+   on these two newer methods. Fixed as INV-23 and INV-24 below, each with a
+   guard test confirmed to fail against the pre-fix code.
+
+A fourth, genuinely frontend defect (`SizePreferencesModal.tsx` dropping a
+cleared `garment_fit` instead of sending an explicit `null`) is fixed as
+INV-25, found during the frontend re-review this correction required. A
+fifth item -- unbounded catalog scans in `get_fulfillment_options`/
+`get_requestable_categories` -- is recorded as INV-22 but _not_ fixed here:
+it is the same shape as this rotation's own DOC-9 (`get_folders`'
+`accessible_folder_ids`), where the unbounded read is load-bearing for
+correctness rather than incidental, so bounding it needs a design decision,
+not a drive-by `LIMIT`. See INV-22 below for why.
+
+Read together, the root cause looks like a scope-definition mistake rather
+than carelessness on any single file: the backend review (route
+enumeration, migrations, the four re-verified prior flags) was genuinely
+thorough, and the pass's own text honestly listed what it had not read — it
+just then drew the wrong conclusion from an honest partial scope note,
+declaring the _feature_ clean instead of declaring the _reviewed portion_
+clean and leaving the row open. The fix in this PR is procedural as much as
+it is the five findings below: nothing is marked done while the pass's own
+scope note lists unread files or an unenumerated tool surface.
+
 ### Scope
 
 Re-verified all four still-open flagged findings from pass 2/3 (INV-8, INV-9,
@@ -40,7 +96,9 @@ unchanged, see below.
 
 Then reviewed everything that changed since pass 3's merge (`a964f782a`, PR
 #2190). That range is substantial: `inventory.py` gained 311 lines / lost 213
-(net +6 routes), `inventory_service.py` gained ~2,440 lines net across two
+(net +7 routes — corrected from the first draft's "+6"; see [the correction
+above](#correction-codex-review-of-pr-2422)), `inventory_service.py` gained
+~2,440 lines net across two
 distinct sources — genuine new inventory feature work (a pinned shortlist, an
 org-wide colour filter, a member-facing "requestable catalog" grouping
 variants into products, list-grouping by category/colour/attribute, a
@@ -105,28 +163,178 @@ not bypassed). **`InventoryItemsPage.tsx` (918-line diff, the group-by/pins UI),
 `FleetBoardPage.tsx`, `SupplyExpiringPage.tsx`, `VariantGroupsPage.tsx`,
 `InventoryMaintenancePage.tsx`, `InventoryMembersPage.tsx`, `types/index.ts`,
 and `variantHelpers.ts` were not read this pass** — noted explicitly rather
-than silently claiming full frontend coverage. None of the backend surfaces
-those pages call (`get_items`/`get_item_group_counts`, `retire_item`,
-`update_reorder_request`, write-off review, item detail, variant groups,
-maintenance) were found to disagree with what their frontend callers should
-be sending, based on the backend-side review above, but the frontend files
-themselves were not opened.
+than silently claiming full frontend coverage. This is where the first
+draft went wrong: the paragraph above is left as written (it is an honest
+account of what was and was not opened), but the pass then marked Feature 11
+complete anyway, on the reasoning that the backend surfaces those pages call
+were already reviewed and "found to disagree with" nothing — which checks
+that the _API_ is correct, not that the _client_ calls it correctly, escapes
+no untrusted output, or gates its own UI consistently with what the API
+enforces. That inference is not a substitute for reading the files, and the
+pass should have left Feature 11's row pending instead of drawing it. See
+the correction above and the scope addition immediately below, which
+actually opens them.
+
+### Scope addition — the frontend files pass 4 first skipped
+
+All fifteen files named above as unread were read in full this round
+(`InventoryItemsPage.tsx`, `InventoryAdminHub.tsx`, `EquipmentRequestsPage.tsx`,
+`ReorderRequestsPage.tsx`, `WriteOffsPage.tsx`, `ItemDetailPage.tsx`,
+`VariantCapsules.tsx`, `ApparatusInventoryPage.tsx`, `ApparatusDetailPage.tsx`,
+`FleetBoardPage.tsx`, `SupplyExpiringPage.tsx`, `VariantGroupsPage.tsx`,
+`InventoryMaintenancePage.tsx`, `InventoryMembersPage.tsx`, `types/index.ts`,
+`variantHelpers.ts` — sixteen counting `types/index.ts` and the helper
+separately), against the three dimensions the review comment named:
+
+- **Untrusted-output handling.** No `dangerouslySetInnerHTML`, no raw
+  `innerHTML` assignment, and no `eval`/`new Function` anywhere in the
+  sixteen files (checked by grep across the whole set, not sampled). Every
+  member-supplied string these pages render (item names, descriptions,
+  vendor notes, write-off/return reasons, maintenance notes) goes through
+  plain JSX text interpolation, which React escapes; there is no path from a
+  stored free-text field to raw HTML. `types/index.ts` and
+  `variantHelpers.ts` (`getDisplayName`/`displaySize`) are pure
+  formatting/type-declaration code with no rendering of their own.
+- **No blocked browser dialogs.** None of the sixteen files call
+  `window.confirm`/`alert`/`prompt` (Pitfall #16) — the destructive actions
+  in these pages (write-off approval, reorder rejection, unassigning an
+  item, deleting a variant group) all route through `useConfirm()`/
+  `ConfirmDialog`, matching the rest of the module.
+- **No client-side auth/data-exposure gap.** None of the sixteen files call
+  `axios`/`fetch` directly (every call goes through the shared
+  `inventoryService`, which carries the same CSRF/credentials setup as
+  every other module service) or read `localStorage`/`sessionStorage` for
+  anything auth-related. None of them re-derive a permission or filter a
+  fetched list client-side by role/permission (Pitfall #29's shape checked
+  and not found) — each page renders whatever its service call returns, and
+  authorization is left entirely to the backend endpoint and the route's own
+  `ProtectedRoute` gate, both of which pass 4's backend review already
+  confirmed correctly scoped. Cross-checked every one of these pages'
+  `ProtectedRoute` gate in `routes.tsx` against the permission the backend
+  endpoints it calls actually require (`inventory.manage` for every
+  `/inventory/admin/*` screen, matching the routes those pages call) — all
+  consistent, with one gap noted below that is a UX inconsistency, not a
+  security defect.
+
+**One inconsistency found, not a security finding:** `/inventory/items/:id`
+(`ItemDetailPage.tsx`'s route) carries `requiredModule="inventory"` but no
+`requiredPermission` at all, while `GET /items/{item_id}` on the backend
+requires `inventory.view`. A member with the inventory module enabled but no
+`inventory.view` grant can navigate to the URL and reach the page component,
+but every data fetch it makes (`getItem`, `getCategories`,
+`getStorageAreas`, and on-demand history/maintenance/NFPA/exposure record
+calls) still 403s against the backend gate — so no item data is actually
+exposed, only a blank/error page where every other admin screen in this
+module would have redirected at the route. Not fixed here (a UI-only
+consistency gap, not a data-exposure defect — the backend gate is what
+actually protects the data), but worth a one-line route-gate fix in a future
+pass since every sibling detail-style route in this module does carry a
+gate.
+
+No fixable defect found in this scope addition beyond the one above.
+`SizePreferencesModal.tsx` — read again as part of the original (narrower)
+frontend scope, not this addition — is where INV-25 was actually found; see
+above.
+
+### Scope addition — the inventory MCP tools
+
+Not part of any prior pass's declared scope, and not part of the first
+draft of this pass either — flagged by Codex, citing this rotation's own
+Events/Training precedent that a feature-owned MCP tool surface belongs to
+that feature's pass, not a future MCP-wide sweep. Read in full:
+`backend/app/mcp/tools/inventory.py` (153 L, 4 read tools —
+`get_inventory_summary`, `list_low_stock_items`, `list_inventory_items`,
+`list_overdue_checkouts`) and the inventory-specific write tool in
+`backend/app/mcp/tools/writes.py` (`create_reorder_request`, ~75 L of that
+file's 253).
+
+All five tools were checked against the four dimensions the review comment
+named:
+
+- **Authentication/authorization gating.** Every tool call passes through
+  `logbook_tool`'s shared wrapper (`app/mcp/registry.py`), which refuses
+  before the handler runs unless the caller's module set includes
+  `"inventory"` (the same per-org enablement flag the module's own API
+  router is gated on) and, for `create_reorder_request`, unless the service
+  key's `access_mode` is `read_write` (`gate="write"`) — the four read tools
+  carry no `gate`, which is correct: they are plain reads, the same shape
+  every other module's read tools use. This is a materially different auth
+  model from `require_permission("inventory.view"/"inventory.manage")` —
+  there is no per-user permission string behind an MCP service key, only
+  the module-enablement and read/write switches an administrator sets when
+  issuing the key — and that difference is the model, not a gap in it.
+- **Org-scoping (Pitfall #14).** Every read tool calls its `InventoryService`
+  method with `org_uuid(principal)` — the principal's own organization,
+  never a client-supplied id — so every one of the four is scoped by
+  construction to the calling department's own data, through service
+  methods (`get_inventory_summary`, `get_low_stock_items`, `get_items`,
+  `get_overdue_checkouts`) whose `organization_id` filter is already part of
+  the SQL this pass's own backend review read. `create_reorder_request`
+  validates both client-supplied FKs (`item_id`/`category_id`) are in-org
+  before persisting, twice over: once directly (`item_in_domain`/
+  `category_in_domain`, both org-filtered) to refuse a request naming a
+  medical-domain item/category, and again inside
+  `InventoryService.create_reorder_request` itself via
+  `_assert_reorder_fks_in_org` (XC-1, the same helper the REST endpoint
+  uses — reused, not reimplemented). The write's actor (`_actor()`) is
+  resolved by primary-key lookup and then explicitly checked against
+  `principal.organization_id` before being trusted, refusing rather than
+  attributing a write to a cross-org or deactivated administrator.
+- **Data redaction.** Every tool result passes through the shared
+  `redact()` boundary (`app/mcp/redaction.py`) before it leaves the process
+  — contact details, identity fields, membership/certification numbers and
+  credential-shaped keys are stripped at every depth regardless of which
+  field names a tool happens to project, and free text (`checkout_reason`,
+  item descriptions) is scrubbed of embedded emails/phone numbers. This is
+  shared, already-tested infrastructure (`tests/test_mcp_redaction.py`), not
+  something these two files implement themselves — checked that neither
+  file's own field projection includes anything the boundary would need to
+  catch as a _second_ net (it does not: names, quantities, statuses, dates,
+  asset tags — no email/phone/DOB/SSN-shaped field is projected directly).
+- **Bounds.** All four read tools clamp `limit`/`offset` through
+  `clamp_limit`/`clamp_offset` (`app/mcp/tools/_common.py`,
+  `MAX_PAGE_SIZE=200`) before passing them to an already-`LIMIT`/`OFFSET`-
+  bounded SQL query (`get_low_stock_items`'s categories, `get_items`,
+  `get_overdue_checkouts` all take `skip`/`limit` at the query level, not a
+  Python-side slice of an unbounded fetch) — none of the four is the
+  INV-22 shape. `list_low_stock_items` fetches `limit + 1` rows to compute
+  `has_more` without a second `COUNT` query, capped at `MAX_PAGE_SIZE + 1`
+  either way. `create_reorder_request`'s `quantity`/`notes`/`item_name`
+  bounds are enforced by re-validating through the same
+  `ReorderRequestCreate` Pydantic schema the REST endpoint uses, so an MCP
+  caller cannot write what the API would have rejected.
+
+**No fixable defect found.** This is a first-time, full review of a real
+surface (not a formality): every dimension above was checked against the
+actual code, not inferred from the REST endpoints' own correctness — the
+tenancy and redaction guarantees the four dimensions depend on turned out to
+already be enforced by shared MCP infrastructure this feature's tools
+correctly opt into, rather than anything specific to `inventory.py`/
+`writes.py` needing a fix. Mirrors this rotation's own TR-17 experience with
+`app/mcp/tools/training.py`: a feature-owned tool file that had never been
+swept into a pass, reviewed for the first time, and found tenancy-correct —
+though unlike TR-17 (which flagged an unbounded certification-history read),
+nothing here needed flagging either.
 
 ### Route inventory
 
 Full enumeration of all 144 routes in `inventory.py`; identical to pass 3's
 table for the 137 unchanged ones (all still `inventory.view`/`inventory.manage`,
 or `get_current_user` plus an in-body self-or-quartermaster/self-or-manage
-check — see the four routes below), reproduced here only for what changed:
+check — see the four routes below), reproduced here only for what changed.
+Seven new routes, not six (the first draft's own "+6" was wrong; see
+[the correction above](#correction-codex-review-of-pr-2422) — Codex caught
+`fulfillment-options` missing from this table on review):
 
-| Method | Path                   | Auth dependency      | Permission       | Org-scoped         | Notes                                                                                                                                            |
-| ------ | ---------------------- | -------------------- | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/items/colors`        | `require_permission` | `inventory.view` | ✅                 | new; was `get_current_user` in the branch's first commit, tightened to `.view` before merge (see [Verified good](#verified-good--new-this-pass)) |
-| GET    | `/items/pins`          | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
-| PUT    | `/items/pins/order`    | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
-| POST   | `/items/{item_id}/pin` | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
-| DELETE | `/items/{item_id}/pin` | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
-| GET    | `/requestable-catalog` | `require_permission` | `inventory.view` | ✅                 | new                                                                                                                                              |
+| Method | Path                                         | Auth dependency      | Permission         | Org-scoped         | Notes                                                                                                                                                                                                                                                                                        |
+| ------ | -------------------------------------------- | -------------------- | ------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/items/colors`                              | `require_permission` | `inventory.view`   | ✅                 | new; was `get_current_user` in the branch's first commit, tightened to `.view` before merge (see [Verified good](#verified-good--new-this-pass))                                                                                                                                             |
+| GET    | `/items/pins`                                | `require_permission` | `inventory.view`   | ✅ (+ user-scoped) | new                                                                                                                                                                                                                                                                                          |
+| PUT    | `/items/pins/order`                          | `require_permission` | `inventory.view`   | ✅ (+ user-scoped) | new                                                                                                                                                                                                                                                                                          |
+| POST   | `/items/{item_id}/pin`                       | `require_permission` | `inventory.view`   | ✅ (+ user-scoped) | new                                                                                                                                                                                                                                                                                          |
+| DELETE | `/items/{item_id}/pin`                       | `require_permission` | `inventory.view`   | ✅ (+ user-scoped) | new                                                                                                                                                                                                                                                                                          |
+| GET    | `/requestable-catalog`                       | `require_permission` | `inventory.view`   | ✅                 | new                                                                                                                                                                                                                                                                                          |
+| GET    | `/requests/{request_id}/fulfillment-options` | `require_permission` | `inventory.manage` | ✅                 | new; missed by the first draft's table (Codex). Resolves the `EquipmentRequest` filtered on `id` **and** `organization_id` (`inventory.py:4004-4020` / `inventory_service.py:get_fulfillment_options`) — cross-tenant-safe; see INV-22 for the abuse-resistance dimension of this same route |
 
 The five bare-`get_current_user` per-member routes that existed before this
 pass (`GET /users/{user_id}/assignments`, `GET /users/{user_id}/issuances`,
@@ -171,11 +379,164 @@ spot-checked — see [Scope](#scope-1) above; "Scope" is disambiguated with a
 
 ### Findings
 
-No new findings this pass. The new feature surface (pinned shortlist,
-requestable catalog, list grouping, garment-style-attributes, self-scoped
-size preferences) and the MSUP-driven retire-path hardening were all reviewed
-against the seven checklist dimensions and found correct — see
-[Verified good](#verified-good--new-this-pass).
+Four findings this pass, all caught by Codex reviewing the first ("no new
+findings") draft of this PR, not found independently — see the
+[correction](#correction-codex-review-of-pr-2422) above. Three fixed
+(INV-23, INV-24, INV-25); one flagged, not fixed (INV-22). The rest of the
+new feature surface (requestable catalog, list grouping,
+garment-style-attributes, self-scoped size preferences) and the MSUP-driven
+retire-path hardening were reviewed against the seven checklist dimensions
+and found correct — see [Verified good](#verified-good--new-this-pass).
+
+#### INV-22 — MED (abuse resistance) — the fulfillment-options and requestable-categories catalog reads are unbounded — 🚩 flagged, not fixed
+
+**What:** `get_fulfillment_options` (`inventory_service.py:8887-9076`)
+materializes its narrowed candidate set with a bare `.all()`
+(`:8960-8962`), and when `include_incompatible=true` (the substitution
+browse) additionally loads the **entire** organization catalog the same way
+(`:9028-9038`) before applying the caller's `limit` in Python, only after
+sorting the whole thing (`:9061-9062`). `get_requestable_categories`
+(`:9078-9120`) loads one row per active item across every category just to
+deduplicate category chips in Python. `docs/security-review/CHECKLIST.md`'s
+abuse-resistance dimension rejects an org-wide `.all()` call outright.
+
+**Where:** `backend/app/services/inventory_service.py` —
+`get_fulfillment_options`, `get_requestable_categories`.
+
+**Why this is the DOC-9 shape, not the cheaply-fixable one:** both queries'
+own docstrings explain _why_ the full narrowed/whole-catalog set has to be
+in Python before an answer can be given — `get_fulfillment_options` decides
+`can_fulfill_now`/`suggested_item_id`/`requested_size_available` from a
+normalized size/colour/style identity comparison that "is not expressible
+in SQL," and `get_requestable_categories` decides per-category eligibility
+from a rank/position check that has to run per item. The `limit` each
+already exposes to its caller behaves like DOC-9's _fixed_ half (the
+returned page size); what is unbounded is the _internal_ materialization
+needed to answer correctly, which is DOC-9's own `accessible_folder_ids`
+shape — the half DOC-9 left flagged because bounding it changes what the
+answer means, not merely how it is computed. A SQL-level cap on either
+query here has the identical failure mode: truncate the pre-decision set at,
+say, 2000 rows and a department whose free-text request (no `item_id`/
+`category_id`, so `get_fulfillment_options`' `narrowed` query is the whole
+catalog) or whose catalog exceeds that in one category gets a silently
+wrong "cannot fulfill"/"category has nothing" answer for rows past the cut
+— worse than the current unbounded-but-correct read, and exactly the kind
+of "fix" this rotation's own DOC-9 precedent already rejected once.
+
+**Impact:** memory/time cost scales with catalog size on a `.manage`-gated
+review screen (`get_fulfillment_options`) and a member-facing browse chip
+list (`get_requestable_categories`); not a tenant-isolation or data-exposure
+defect — both queries are already org-scoped, and neither returns more rows
+to the client than `limit` allows (only the _internal_ working set is
+unbounded).
+
+**Not fixed here**, mirroring DOC-9's own disposition: recorded in
+`docs/KNOWN_LIMITATIONS.md` under Inventory rather than force-fixed.
+
+#### INV-23 — MED — `pin_item`'s pin-cap check is an unlocked read-then-write — ✅ FIXED
+
+**What:** `pin_item` (`inventory_service.py:2333-2377` before this fix) read
+the member's current pin count via `list_pins` (a plain, unlocked `SELECT`),
+compared it against `MAX_PINS` (25), and — if under the cap — inserted a new
+pin at `position=len(pins)`. No lock on anything, and the count read was not
+a locking read (CLAUDE.md pitfall #27, both halves missing).
+
+**Where:** `backend/app/services/inventory_service.py::pin_item`.
+
+**Failure scenario:** a member at 24 pins fires two pin requests for two
+different items at nearly the same time (a double-tap, or two tabs). Both
+read `len(pins) == 24` before either commits, both pass the `< MAX_PINS`
+check, and both insert — one at `position=24`, the other also at
+`position=24` (each computed `len(pins)` from its own stale read). The
+member ends up with 26 pins, two of them sharing a position, which
+`reorder_pins`/the compaction logic in `unpin_item` was not written to
+expect.
+
+**Fix:** locks the member's own `User` row (`select(User.id).where(User.id
+== ...).with_for_update()`) before deciding the cap — the same
+"lock a parent that already exists" shape `push_service.py`'s
+`_MAX_PUSH_SUBSCRIPTIONS_PER_USER` cap already uses for an identical
+per-member-capacity decision — then replaces the `list_pins`/`len()` count
+with a `select(func.count())...with_for_update()` locking read, so the
+count decided against is the committed one, not a pre-lock snapshot.
+
+**Verified:** `tests/test_inventory_pin_and_variant_locking.py::
+test_pin_item_locks_the_member_row_before_counting_pins` and
+`::test_pin_item_counts_existing_pins_with_a_locking_read` — source
+inspection, confirmed to **fail** against the pre-fix code (`git stash`)
+and **pass** after.
+
+#### INV-24 — MED — first-time variant-group creation has no lock on anything — ✅ FIXED
+
+**What:** `_find_variant_group_for_reuse`'s own `.with_for_update()` locks a
+matching `ItemVariantGroup` row when one exists, but — as its own docstring
+already said before this fix — "cannot close the case where the group does
+not exist yet — there is no row to lock." Two quartermasters quick-creating
+the same previously-unseen base name/category could both find no group,
+both fall through `create_size_variants`'s `elif create_variant_group:`
+branch, and both insert a new `ItemVariantGroup` for the same product.
+
+**Where:** `backend/app/services/inventory_service.py` —
+`create_size_variants` (the reuse-or-create branch, `:6514-6537` before this
+fix), `_find_variant_group_for_reuse`.
+
+**Failure scenario:** two simultaneous first runs of "generate sizes" for a
+product the catalog has never stocked before (no existing
+`ItemVariantGroup` row to lock) each create their own group row for the
+same name+category. Depending on which of the two InnoDB gap locks land
+first, the generated stock either splits across two duplicate products (the
+`_variant_key`/`_product_key` collapsing this feature exists to prevent) or
+one request loses a deadlock.
+
+**Fix:** locks the `Organization` row — which, unlike the not-yet-created
+group, always exists — before calling `_find_variant_group_for_reuse`,
+mirroring `ensure_facility_folder`/`ensure_member_folder`'s
+organization-row-locked, parent-locked-first shape for their own
+get-or-create. Two concurrent first-time creates for the same product now
+serialize on the organization lock instead of racing the group lookup.
+
+**Verified:**
+`tests/test_inventory_pin_and_variant_locking.py::test_create_size_variants_locks_the_organization_before_reusing_a_variant_group`
+— source inspection (asserts the `Organization` lock is acquired, by name,
+before the call to `_find_variant_group_for_reuse`), confirmed to **fail**
+against the pre-fix code (`git stash`) and **pass** after.
+
+#### INV-25 — MED — `SizePreferencesModal` drops a cleared `garment_fit` instead of sending an explicit `null` — ✅ FIXED
+
+**What:** `handleSave` coerced every blank field, including `garment_fit`,
+with `form.field || undefined`. `undefined` is omitted by `JSON.stringify`,
+and the backend's `upsert_member_size_preferences` is called with
+`data.model_dump(exclude_unset=True)` — a field never present in the
+request body is "unset," not "cleared," so a member with a stored fit who
+selects "No preference" gets a success toast while the old `garment_fit`
+value silently survives. This is CLAUDE.md pitfall #1's update-path shape
+exactly: `SizePreferencesModal` is always an upsert of an existing row
+(never a distinct create form), so every field it owns needs the
+`blankToNull` treatment, not `|| undefined`.
+
+**Where:** `frontend/src/modules/inventory/components/SizePreferencesModal.tsx::handleSave`.
+
+**Impact:** a stale `garment_fit` (or any of the other eight fields — the
+same `|| undefined` bug was present on all nine, not only the one Codex's
+comment named) keeps steering `get_requestable_catalog`'s fit-based variant
+preselection toward gear the member no longer wants, with no way to clear it
+from the UI short of picking a different fit and then somehow re-clearing —
+which hits the identical bug again.
+
+**Fix:** switched every field in the payload to `blankToNull` (already used
+elsewhere in this codebase for exactly this update-path shape), which sends
+an explicit `null` for a blank field instead of omitting the key. Widened
+`MemberSizePreferencesCreate`'s frontend type (`eventServices.ts`) to
+`string | null | undefined` per field, since `exactOptionalPropertyTypes`
+otherwise refuses assigning `null` to a `string | undefined` property.
+
+**Verified:** `SizePreferencesModal.test.tsx` — the existing save test was
+updated (it had asserted the _old_, buggy behaviour — blank fields arriving
+as `undefined` — so it had to change to assert the fix, not merely add
+alongside it) plus a new regression test,
+`'clearing a stored fit back to "No preference" sends an explicit null, not
+a dropped key'`. Both confirmed to **fail** against the pre-fix component
+(`git stash`) and **pass** after.
 
 ### Verified good ✅ (new this pass)
 
@@ -319,28 +680,52 @@ migrations in the repository, not just this module's five.
 
 ### Guard tests added
 
-None. No fixable defect was found this pass — see [Findings](#findings-1).
+- `tests/test_inventory_pin_and_variant_locking.py` (new file, 3 tests) —
+  source-inspection, matching `test_inventory_return_locking.py`'s
+  established style: `test_pin_item_locks_the_member_row_before_counting_pins`
+  and `test_pin_item_counts_existing_pins_with_a_locking_read` (INV-23),
+  `test_create_size_variants_locks_the_organization_before_reusing_a_variant_group`
+  (INV-24). All three confirmed to **fail** against the pre-fix
+  `inventory_service.py` (`git stash`) and **pass** after.
+- `SizePreferencesModal.test.tsx` — one existing test updated (it had
+  asserted the pre-fix, buggy `undefined`-drops-the-key behaviour) plus one
+  new regression test for the exact scenario Codex named (clearing a stored
+  `garment_fit` back to "No preference"). Both confirmed to **fail** against
+  the pre-fix component (`git stash`) and **pass** after (INV-25).
 
 ### Completion gate
 
-| Check                                             | Result                                         |
-| ------------------------------------------------- | ---------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                |
-| `black --check app/ tests/ alembic/`              | ✅ clean (1537 files unchanged)                |
-| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                       |
-| `python3 scripts/validate_migrations.py --strict` | ✅ single head (`a3f61c8d27b4`), 439 revisions |
-| `pytest tests/ -k "inventory or label"`           | ✅ 984 passed, 1 pre-existing skip             |
-| `tsc --noEmit` / `eslint .` (frontend)            | not run — no frontend files edited this pass   |
+| Check                                             | Result                                                    |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                           |
+| `black --check app/ tests/ alembic/`              | ✅ clean (1538 files unchanged)                           |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                  |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head (`a3f61c8d27b4`), 439 revisions            |
+| `pytest tests/ -k "inventory or label"`           | ✅ 987 passed, 1 pre-existing skip (984 baseline + 3 new) |
+| `pytest tests/` (full backend suite)              | ✅ 11897 passed, 21 pre-existing skips, 0 failed          |
+| `npm run typecheck` (`tsc --noEmit`, frontend)    | ✅ clean                                                  |
+| `npm run lint` (`eslint .`, frontend)             | ✅ 0 errors, 2 pre-existing warnings (unrelated file)     |
+| `npx vitest run src/modules/inventory` (frontend) | ✅ 1203 passed (73 files)                                 |
 
-No backend or frontend files were changed this pass — every finding
-re-verified was already correctly implemented in the current code, so there
-was nothing to fix. The full backend suite was not re-run beyond the scoped
-`inventory or label` selection, since no code in this pass's diff (there is
-none) or in the module under review was modified; the scoped run above is a
-health check on the module as it stands, not a regression check on a change,
-per CLAUDE.md's "match the verification to the change" guidance for a pass
-that produces no code diff. Stated explicitly per this rotation's "never
-report a gate you did not run" rule.
+Unlike the first draft, this round has a real code diff (backend:
+`inventory_service.py`'s `pin_item`/`create_size_variants`; frontend:
+`SizePreferencesModal.tsx`/`eventServices.ts`), so the full backend suite
+was run in addition to the scoped selection, and the frontend gate
+(`tsc`/`eslint`, plus the inventory module's own Vitest suite) was run for
+the first time this pass rather than skipped.
+
+One backend test needed attention along the way — not a defect in the fix,
+but the ratchet doing its job: `pin_item`'s new `select(User.id).where(
+User.id == str(user_id)).with_for_update()` tripped
+`test_org_scoping_ratchet.py::test_no_new_unscoped_by_id_query`, which
+freezes bare by-id queries with no `organization_id` filter (CLAUDE.md
+Pitfall #14). `user_id` here is always `current_user.id` — the endpoint
+never takes a client-supplied member id for this route — so it was never a
+cross-tenant read, but adding `User.organization_id ==
+str(organization_id)` to the lock query costs nothing, is trivially correct
+given `organization_id` is already in scope, and satisfies the ratchet
+without a `tests/org_scoping_baseline.txt` exception — the better of the two
+outcomes the ratchet's own failure message offers.
 
 ---
 

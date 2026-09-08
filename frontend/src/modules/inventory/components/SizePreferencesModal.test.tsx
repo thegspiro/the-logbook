@@ -75,12 +75,12 @@ describe('SizePreferencesModal', () => {
     expect(await pantWaist()).toHaveValue('');
   });
 
-  it('saves: trims values and omits empty fields as undefined', async () => {
+  it('saves: trims values and sends explicit null for empty fields (update payload, not create)', async () => {
     mockGetMy.mockResolvedValue({
       shirt_size: 'l',
       pant_waist: ' 34 ', // should be trimmed
-      boot_width: '   ', // whitespace-only -> undefined
-      jacket_size: null, // null -> undefined
+      boot_width: '   ', // whitespace-only -> null
+      jacket_size: null, // null -> null
     });
     const user = userEvent.setup();
     render(<SizePreferencesModal isOpen onClose={onClose} />);
@@ -92,11 +92,39 @@ describe('SizePreferencesModal', () => {
     const payload = mockUpsertMy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.shirt_size).toBe('l');
     expect(payload.pant_waist).toBe('34'); // trimmed
-    expect(payload.boot_width).toBeUndefined(); // whitespace coerced away
-    expect(payload.jacket_size).toBeUndefined(); // null coerced away
-    expect(payload.hat_size).toBeUndefined(); // never set
+    // Every blank field is an explicit `null`, never an omitted/`undefined`
+    // key -- this is an upsert of an existing row, and the backend's
+    // `exclude_unset=True` dump would otherwise leave the old value in place
+    // behind a success toast (CLAUDE.md pitfall #1's update-path shape).
+    expect(payload.boot_width).toBeNull(); // whitespace coerced to null
+    expect(payload.jacket_size).toBeNull(); // null stays null
+    expect(payload.hat_size).toBeNull(); // never set -> still sent as null
     expect(mockToastSuccess).toHaveBeenCalledWith('Sizes saved');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearing a stored fit back to "No preference" sends an explicit null, not a dropped key', async () => {
+    // Regression test for the bug Codex found on PR #2422: a member with a
+    // stored garment_fit selecting "No preference" must actually clear the
+    // stored value, not silently leave it in place because the key never
+    // left the browser.
+    mockGetMy.mockResolvedValue({ shirt_size: 'l', garment_fit: 'mens' });
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await pantWaist();
+
+    // The Fit field is prefilled, so the "Additional sizes" disclosure opens
+    // automatically -- no need to expand it by hand.
+    const fitSelect = await screen.findByLabelText('Fit');
+    expect(fitSelect).toHaveValue('mens');
+    await user.selectOptions(fitSelect, 'No preference');
+
+    await user.click(screen.getByRole('button', { name: 'Save Sizes' }));
+
+    await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
+    const payload = mockUpsertMy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.garment_fit).toBeNull();
+    expect('garment_fit' in payload).toBe(true);
   });
 
   it('saves typed input in the payload', async () => {

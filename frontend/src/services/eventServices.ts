@@ -1338,18 +1338,23 @@ export interface MemberSizePreferences {
 }
 
 export interface MemberSizePreferencesCreate {
-  shirt_size?: string | undefined;
+  // `| null` on every field: this is an update payload (PUT .../size-preferences
+  // upserts), and the backend's `exclude_unset=True` dump means an omitted key
+  // is left untouched while an explicit `null` clears it (CLAUDE.md pitfall #1's
+  // update-path shape) -- `undefined` would drop the key from the JSON body
+  // entirely and silently leave a stale value in place.
+  shirt_size?: string | null | undefined;
   /** @deprecated Still accepted so an older client does not start failing. */
-  shirt_style?: string | undefined;
-  garment_fit?: string | undefined;
-  pant_waist?: string | undefined;
-  pant_inseam?: string | undefined;
-  jacket_size?: string | undefined;
-  boot_size?: string | undefined;
-  boot_width?: string | undefined;
-  glove_size?: string | undefined;
-  hat_size?: string | undefined;
-  custom_sizes?: Record<string, string> | undefined;
+  shirt_style?: string | null | undefined;
+  garment_fit?: string | null | undefined;
+  pant_waist?: string | null | undefined;
+  pant_inseam?: string | null | undefined;
+  jacket_size?: string | null | undefined;
+  boot_size?: string | null | undefined;
+  boot_width?: string | null | undefined;
+  glove_size?: string | null | undefined;
+  hat_size?: string | null | undefined;
+  custom_sizes?: Record<string, string> | null | undefined;
 }
 
 export interface ItemIssuance {
