@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
+(`83a55e01`, squash) by a 30-minute watchdog check — fully green (14/14 CI
+jobs plus the `CI Success` gate, Secret Scan, and Supply Chain all
+succeeded), `mergeable_state: clean`, Codex review completed on the pass's
+substantive commit with nothing raised (no review comments, no threads to
+resolve — the one commit after Codex's review only filled in this PR's own
+link in the tracker docs). One fix this pass: **USR-9 (MED)** — the
+property-return-drop notification email's unescaped-HTML fallback template,
+plus a backslash-handling crash in the same `re.sub` call. See the
+superseded note below for the full write-up. Next: 08 Membership pipeline.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
+
 **Feature 07 (Users & organizations, pass 4)** — PR
 [#2402](https://github.com/thegspiro/the-logbook/pull/2402), branch
 `claude/security-review-users-organizations`. One fix this pass:
@@ -47,6 +61,8 @@ errors (2 pre-existing warnings, unrelated file, well under the
 max-warnings-10 threshold — no frontend file changed this pass). See
 `docs/security-review/USR-07-users-organizations.md` pass 4 for the full
 write-up.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06 pass 4, PR #2400, merged), preserved for history</summary>
@@ -11421,6 +11437,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 07 (Users & organizations, pass 4)'s PR #2402 merged, watchdog recorded it
+
+PR #2402 was fully green (14/14 CI jobs plus the `CI Success` gate, plus
+Secret Scan and Supply Chain), `mergeable_state: clean`, and Codex's review
+(triggered on PR open, completed on commit `3c65b48` — the pass's
+substantive commit) finished with nothing raised: no review comments, no
+threads to resolve. The one commit after that review (`a82e0a8f`) only
+filled in this PR's own link in the tracker docs, so nothing security-review
+relevant went unreviewed. Merged directly (`83a55e01`, squash) by a
+30-minute watchdog check rather than left idle, matching the bar prior
+watchdog merges in this log have used (Features 04, 05, 06, 23, 25, 33, 34).
+**Open PR** row cleared, rotation row 07 confirmed ✅ (it was already marked
+✅ pending merge when the PR opened). Next: 08 Membership pipeline.
 
 ### 2026-09-08 — Feature 07 (Users & organizations, pass 4) — 1 fixed (MED), 0 flagged (2 pre-existing flags re-verified, unchanged) — PR opened
 
