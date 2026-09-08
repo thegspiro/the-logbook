@@ -3117,6 +3117,7 @@ class TestEnsureMemberFolderIsLocked:
             "but a duplicate DocumentFolder was added anyway"
         )
 
+    @pytest.mark.integration
     async def test_repeated_calls_return_the_same_folder(self, db_session):
         """End-to-end against a real database: not just that a lock is
         taken, but that the get-or-create is actually idempotent.

@@ -11700,6 +11700,16 @@ property-return feature files) 273 passed; full backend suite 11864
 passed / 21 skipped (pre-existing/environmental) / 0 failed (up from
 11863, the one new guard test). No frontend file touched.
 
+Also caught and fixed after pushing: CI's "Backend Unit Tests" job
+(`pytest -m "not integration and not slow and not docker"`, no database
+provisioned) failed on the merge commit —
+`TestEnsureMemberFolderIsLocked::test_repeated_calls_return_the_same_folder`
+(the real-database idempotency test from this pass's original commit) was
+missing `@pytest.mark.integration`, unlike every other `db_session`-using
+test in the file. Added the marker; verified locally that the unit-test
+filter now excludes it and the full class still passes against a real
+database.
+
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4) — 2 fixed, 0 flagged (new) — new PR
 
 Full 7-dimension checklist worked fresh against current code. Read
