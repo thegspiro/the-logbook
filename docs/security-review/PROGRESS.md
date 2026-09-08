@@ -16,6 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged
+(`c71b5fb2`) — **one finding: SF-7 (MED, fixed).** `update_order_status` — a
+route distinct from `record_payment`/`mark_order_paid`/`waive_order_payment`,
+all three guarded by an earlier pass's `assert_different_person`
+separation-of-duties check (SF-6) — had its own branch performing the
+identical ledger settlement (`payment_status = PAID`, `amount_paid =
+order.total`, `paid_at = now()`) whenever a caller advanced an order's
+fulfillment status to `PAID`, with none of the other four's guard. A
+`storefront.manage` holder who also placed their own order could call `POST
+/orders/{their_own_order_id}/status` with `{"status": "paid"}` (or the
+bulk-status sibling, across an entire selection) and zero their own balance
+with no money moved and no second person involved — the exact scenario SF-6's
+own write-up named, reached through a fourth path that fix never touched.
+Fixed with the same guard, positioned before any mutation. This module is the
+most heavily-audited in the codebase (a dedicated module audit, two
+app-review passes, and three prior security-review passes) — scoped by `git
+diff` against pass 3's own closing merge, the same method pass 3 used. Also
+reviewed and confirmed clean: a new `exclude_cancelled` order-list filter, the
+admin console's move into Inventory Administration (new metric/attention
+resolvers confirmed org-scoped), and a large cross-feature grant-restoration
+migration confirmed a false positive (same shape MP-08/ELEC-06/GF-22 already
+reported for their own domains). CI green, Codex's review of the opening
+commit completed with no findings. Full write-up: the **Pass 4** section of
+`docs/security-review/SF-04-storefront-payments.md`. Next: 05 Finance &
+approvals.
+
+<details>
+<summary>Superseded — PR #2395 (pass 4), preserved for history</summary>
+
 **Feature 04 (Storefront & payments, pass 4)** — PR
 [#2395](https://github.com/thegspiro/the-logbook/pull/2395), branch
 `claude/security-review-storefront-payments`. This module is the most
@@ -47,6 +76,8 @@ cross-feature grant-restoration migration that pattern-matches on
 false positive of the same shape MP-08/ELEC-06/GF-22 already reported for
 their own domains against the same migration). Full write-up: the **Pass 4**
 section of `docs/security-review/SF-04-storefront-payments.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03 pass 4 merged), preserved for history</summary>
@@ -11270,6 +11301,14 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) ✅ merged — PR #2395
+
+CI went green (all jobs, including the two fast-scan and full backend/frontend
+suites) and Codex's review of the opening commit (`20e0a57`) completed with no
+findings. No review threads to resolve. Merged (`c71b5fb2`). Rotation row 04
+stays ✅ (already marked at PR-open per convention). Next: 05 Finance &
+approvals.
 
 ### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) — PR #2395 opened
 
