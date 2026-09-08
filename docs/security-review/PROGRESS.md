@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 11 (Inventory, pass 4)** — branch
+`claude/security-review-inventory-pass1` (fresh name for this rotation pass;
+`claude/security-review-inventory-lockorder` and the pass-1/pass-2 branch
+names were each used and merged by earlier passes, so CLAUDE.md Pitfall #24
+rules them out). PR opening now — 0 fixes, 0 new findings, 4 prior flags
+(INV-8, INV-9, INV-16, INV-17) re-verified still open. Docs-only diff (no
+backend or frontend code changed). See the Log entry above and
+`INV-11-inventory.md` for detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10 pass 4, PR #2411), preserved for history</summary>
+
 **None.** PR #2411 (Feature 10, Documents & legal, pass 4 — ten fixes across
 six further rounds of Codex review on the PR's own commits) merged clean,
 17/17 CI checks green, every actionable review thread resolved. Feature 10
@@ -26,9 +38,6 @@ resolved: a P1 Codex finding asking to remove this PR's pre-freeze
 freeze keeps its entries and a merge resolves by keeping both sides — this
 PR opened before the freeze landed on `main`, so its entries predate it.
 Next: 11 Inventory.
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 10 pass 4, PR #2411), preserved for history</summary>
 
 **Feature 10 (Documents & legal, pass 4)** — PR
 [#2411](https://github.com/thegspiro/the-logbook/pull/2411), branch
@@ -11729,7 +11738,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
@@ -11760,6 +11769,47 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 11 (Inventory, pass 4) — 0 fixed, 0 new findings; 4 prior flags re-verified still open
+
+Re-verified all four still-open flagged findings from pass 2/3 (INV-8, INV-9,
+INV-16, INV-17) against current code — all four confirmed unchanged and still
+open, still mirrored in `KNOWN_LIMITATIONS.md`.
+
+Reviewed everything that changed in `inventory.py`/`inventory_service.py`
+since pass 3's merge (`a964f782a`, PR #2190): a genuine new-feature diff (a
+per-member pinned shortlist, an org-wide colour filter, a member-facing
+"requestable catalog" that groups variants into products and rank/position-
+filters them before they are shown, list grouping by category/colour/
+attribute, a four-axis garment-style-attributes model replacing the old
+single-value `style` enum, and a `garment_fit` preference the requestable
+catalog now actually reads — its predecessor `shirt_style` was stored and
+never consulted by anything) plus a chain of medical-supplies (feature 23,
+MSUP) fixes that touched `inventory_service.py` because
+`MedicalSuppliesService` wraps `InventoryService` — most substantially a
+retire-path hardening that generalizes pass 3's own INV-21 identity-map fix
+and closes a previously-unflagged gap: the generic item PATCH could
+previously flip an item's `active` flag or set status/condition to RETIRED
+without ever running `retire_item`'s locked blocker checks, and now rejects
+that outright, forcing every path into retirement through the one method
+that runs `_deactivation_block_reason` (itself newly Pitfall #27-correct —
+both blocker counts are now locking reads, with a comment explaining why the
+item lock alone is not enough under REPEATABLE READ).
+
+All 144 routes in `inventory.py` (up from 137 at pass 3, +6 net) were
+enumerated programmatically for their auth dependency and permission string,
+not spot-checked; zero lack a `current_user` dependency. Five migrations
+landed since pass 3, all correctly guarded and reversible, read in full.
+
+No fixable defect found — every piece of new surface reviewed against all
+seven checklist dimensions came back correctly scoped, permissioned, and
+locked. Full completion gate green: flake8/black/isort clean on `app/`,
+`tests/`, `alembic/`; `validate_migrations.py --strict` single head (439
+revisions); `pytest tests/ -k "inventory or label"` — 984 passed, 1
+pre-existing skip. No frontend files edited (reviewed but not modified — see
+`INV-11-inventory.md` pass 4 for the frontend scope note), so `tsc`/`eslint`
+not run this pass. See `INV-11-inventory.md` for the complete write-up. Next:
+12 Facilities.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4)'s PR #2411 merged
 

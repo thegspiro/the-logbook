@@ -1,6 +1,346 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), pass 4 (this PR)
+
+---
+
+## Pass 4 (2026-09-08)
+
+**Backend:** `api/v1/endpoints/inventory.py` (144 routes, 1 WebSocket, up from
+137 at pass 3), `services/inventory_service.py` (~11,020 L, up from ~8,850),
+`api/v1/endpoints/labels.py` (12 routes, unchanged), `services/label_service.py`,
+`services/label_printer_service.py` (both unchanged — zero diff since pass 3's
+merge)
+**Frontend:** `modules/inventory/*` (pages, components, routes, types) — see
+scope note below on what was actually read
+**Migrations:** five landed since pass 3's merge (`a964f782a`) that touch this
+module's tables: `a1c7e93b2d54` (`equipment_requests.requested_size`),
+`b8e3f1a97c24` (`inventory_items.style_attributes`), `c4f7a2e91b38`
+(`member_size_preferences.garment_fit`), `d3f8b6a24c91` (merge point, no
+schema change), `f2a91c7d4e86` (`inventory_item_pins`) — all read in full, see
+[Schema & migration notes](#schema--migration-notes)
+
+### Correction to pass 3's own baseline count
+
+Pass 3's doc states "up from 26" for `labels.py`'s route count at pass 2's
+merge. Re-counted this pass with the same AST-style enumeration used
+throughout this rotation: `labels.py` carries **12** routes, not 26, and has
+had zero diff since pass 3 merged — so the 26 was already wrong when pass 3
+wrote it, the identical stale-snapshot pattern pass 1 and pass 3 each already
+corrected in the other file (`module-audit/inventory.md`'s "116 vs 132", pass
+3's own "132 vs 136"). Not a sign of undocumented shrinkage between passes;
+corrected here so the next pass's baseline is accurate. Not worth editing
+pass 3's already-merged section.
+
+### Scope
+
+Re-verified all four still-open flagged findings from pass 2/3 (INV-8, INV-9,
+INV-16, INV-17) against current code — all four confirmed still open and
+unchanged, see below.
+
+Then reviewed everything that changed since pass 3's merge (`a964f782a`, PR
+#2190). That range is substantial: `inventory.py` gained 311 lines / lost 213
+(net +6 routes), `inventory_service.py` gained ~2,440 lines net across two
+distinct sources — genuine new inventory feature work (a pinned shortlist, an
+org-wide colour filter, a member-facing "requestable catalog" grouping
+variants into products, list-grouping by category/colour/attribute, a
+four-axis garment-style-attributes model replacing the old single-value
+`style` enum, a `garment_fit` member preference actually read by the
+requestable catalog where its predecessor `shirt_style` was stored and never
+consulted, and two self-scoped `/my/size-preferences` routes) and a chain of
+medical-supplies (MSUP) fixes on this rotation's own feature 23 that touched
+`inventory_service.py` because `MedicalSuppliesService` is a thin wrapper over
+`InventoryService` — most substantially a domain-pinned retire path and the
+identity-map-staleness fix (`populate_existing=True`) this rotation's own
+pass 3 (INV-21) introduced, both now generalized: `retire_item` uses
+`_get_item_locked` throughout, gates entry into retirement to itself alone
+(the generic `update_item` PATCH now rejects `active`/`RETIRED`
+status-or-condition outright rather than approximating retire_item's
+locked/blocker-checked/audited contract inline — closing a way to skip
+`_deactivation_block_reason`'s checks that a permissive PATCH would otherwise
+leave open), and extends `_deactivation_block_reason`'s two blocker counts
+with `.with_for_update()` — a fresh, correct application of Pitfall #27 to a
+read this rotation had not previously flagged. All new/changed service
+methods (`get_item_group_counts`, `_build_items_query`, `list_pins`/
+`pin_item`/`unpin_item`/`reorder_pins`, `get_item_colors`, `get_requestable_catalog`
+/`get_fulfillment_options`/`get_requestable_categories`, `_member_may_request`/
+`_passes_restrictions`, `_settle_style_fields`, `retire_item`/
+`_deactivation_block_reason`) were read in full. Every new/changed endpoint in
+`inventory.py`'s diff was read in full.
+
+Every route in `inventory.py` (144, all it has) was enumerated
+programmatically — method, path, and the `current_user`/`Depends(...)`
+dependency in each handler's signature — not spot-checked; see
+[Route inventory](#route-inventory). The same enumeration confirmed **zero**
+routes lack a `current_user` dependency (the WebSocket route authenticates
+internally instead, unchanged since earlier passes and not re-audited here
+since its diff against `a964f782a` is empty).
+
+**Frontend:** the diff against pass 3 touches `modules/inventory/` at a scale
+(65 files, ~7,970 insertions) that is, like pass 3's own frontend diff, mostly
+equipment-check (feature 14) work living under this directory —
+`EquipmentCheckTemplateBuilder.tsx`, `ChecklistSettingsPage.tsx`,
+`ChecklistsAdminPage.tsx`, `MyChecklistsPage.tsx`, `EquipmentCheckForm.tsx`,
+`EquipmentCheckReportsPage.tsx`, `equipmentCheckHierarchy.ts`,
+`checkSweepContrast.test.ts` — reviewing those here would be scope creep past
+this feature's rotation-table row and duplicate feature 14's own pass, per
+pass 3's identical reasoning. **This pass's frontend scope is narrowed** to
+files that are genuinely inventory feature work: `routes.tsx` (the two
+`ProtectedRoute` gate changes — widened admin-hub access and a narrowed
+supply-worklist gate, both read in full with their own explanatory comments,
+see [Verified good](#verified-good--new-this-pass)), `inventoryHubCards.ts`
+(a new typed navigation-card registry with its own subset-of-route-gate
+invariant, enforced by `inventoryHubCards.test.ts`), `SizePreferencesModal.tsx`
+(the `shirt_style`→`garment_fit` field swap, confirmed to still route
+self/admin calls to the correct self- vs. admin-scoped service methods),
+`RequestEquipmentModal.tsx` (new — the member-facing gear-request UI, checked
+for which service calls it makes; it calls `getRequestableCatalog`/
+`createEquipmentRequest` only, no direct item mutation), and `MyEquipmentPage.tsx`
+(confirmed it still calls `getUserInventory(user.id)` — the caller's own id,
+so the backend's `_require_self_or_quartermaster` gate is trivially satisfied,
+not bypassed). **`InventoryItemsPage.tsx` (918-line diff, the group-by/pins UI),
+`InventoryAdminHub.tsx` (585-line diff), `EquipmentRequestsPage.tsx`,
+`ReorderRequestsPage.tsx`, `WriteOffsPage.tsx`, `ItemDetailPage.tsx`,
+`VariantCapsules.tsx`, `ApparatusInventoryPage.tsx`/`ApparatusDetailPage.tsx`,
+`FleetBoardPage.tsx`, `SupplyExpiringPage.tsx`, `VariantGroupsPage.tsx`,
+`InventoryMaintenancePage.tsx`, `InventoryMembersPage.tsx`, `types/index.ts`,
+and `variantHelpers.ts` were not read this pass** — noted explicitly rather
+than silently claiming full frontend coverage. None of the backend surfaces
+those pages call (`get_items`/`get_item_group_counts`, `retire_item`,
+`update_reorder_request`, write-off review, item detail, variant groups,
+maintenance) were found to disagree with what their frontend callers should
+be sending, based on the backend-side review above, but the frontend files
+themselves were not opened.
+
+### Route inventory
+
+Full enumeration of all 144 routes in `inventory.py`; identical to pass 3's
+table for the 137 unchanged ones (all still `inventory.view`/`inventory.manage`,
+or `get_current_user` plus an in-body self-or-quartermaster/self-or-manage
+check — see the four routes below), reproduced here only for what changed:
+
+| Method | Path                   | Auth dependency      | Permission       | Org-scoped         | Notes                                                                                                                                            |
+| ------ | ---------------------- | -------------------- | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/items/colors`        | `require_permission` | `inventory.view` | ✅                 | new; was `get_current_user` in the branch's first commit, tightened to `.view` before merge (see [Verified good](#verified-good--new-this-pass)) |
+| GET    | `/items/pins`          | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
+| PUT    | `/items/pins/order`    | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
+| POST   | `/items/{item_id}/pin` | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
+| DELETE | `/items/{item_id}/pin` | `require_permission` | `inventory.view` | ✅ (+ user-scoped) | new                                                                                                                                              |
+| GET    | `/requestable-catalog` | `require_permission` | `inventory.view` | ✅                 | new                                                                                                                                              |
+
+The five bare-`get_current_user` per-member routes that existed before this
+pass (`GET /users/{user_id}/assignments`, `GET /users/{user_id}/issuances`,
+`GET /users/{user_id}/inventory`, `GET /users/{user_id}/clearance`,
+`GET /users/{user_id}/issuance-history`) are unchanged and all still call
+`_require_self_or_quartermaster(user_id, current_user)` before touching the
+service layer — re-confirmed this pass by reading `_require_self_or_quartermaster`
+itself (`inventory.py:236`) and its five call sites. `PATCH
+/checkout/{checkout_id}/extend` (also bare `get_current_user`) resolves the
+checkout org-scoped first, then checks `is_own or can_manage` inline —
+likewise unchanged and re-confirmed.
+
+No new route relaxed a permission, added a bare route with no auth
+dependency, or introduced an unauthenticated path. Zero of the 144 routes
+lack a `current_user` dependency (enumerated programmatically, not
+spot-checked — see [Scope](#scope-1) above; "Scope" is disambiguated with a
+`-1` suffix since both this pass and pass 3 use the header).
+
+### Re-verified still open, not re-flagged
+
+- **INV-8 / INV-9** (`GET /allowances/check/{user_id}/{category_id}` and
+  `GET /members/{user_id}/size-preferences` gated on the baseline
+  `inventory.view` rather than a self-or-quartermaster/`.manage` shape) —
+  both routes' `Depends()` are unchanged since pass 2's flag, re-read this
+  pass at `inventory.py:5827` and `:6794`. Worth noting explicitly since this
+  pass added the _sibling_ self-scoped pair (`/my/size-preferences`,
+  `get_current_user` only, correctly scoped to the caller's own row) without
+  touching the officer-facing `/members/{user_id}/...` routes this finding is
+  about — the new work narrowed the blast radius of the _self_ case rather
+  than resolving the pre-existing _cross-member_ gap, which is a different
+  question. Still mirrored in `KNOWN_LIMITATIONS.md`; still an owner decision.
+- **INV-16** (`update_reorder_request` neither locks the row nor increments
+  `version`, unlike `/transition`/`/correct-status`/`/receipts`) —
+  `update_reorder_request` re-read in full at
+  `inventory_service.py:8051`; still a plain `get_reorder_request` fetch,
+  still no `.with_for_update()`, still no version bump. Unchanged.
+- **INV-17** (equipment-maintenance "Complete work" always creates a new
+  record rather than closing the open one) — `InventoryMaintenancePage.tsx`
+  re-checked at the `createMaintenanceRecord` call site; still a single
+  unconditional call with no attempt to locate or close an existing open
+  record. Unchanged.
+
+### Findings
+
+No new findings this pass. The new feature surface (pinned shortlist,
+requestable catalog, list grouping, garment-style-attributes, self-scoped
+size preferences) and the MSUP-driven retire-path hardening were all reviewed
+against the seven checklist dimensions and found correct — see
+[Verified good](#verified-good--new-this-pass).
+
+### Verified good ✅ (new this pass)
+
+- **Every new/changed route is correctly gated and org-scoped.** `GET
+/items/colors` requires `inventory.view` and answers from
+  `_known_colors(organization_id)`, an org-filtered `DISTINCT` query — the PR
+  history shows this route started life on plain `get_current_user` and was
+  tightened before merge (its own docstring explains why: it previously let
+  any authenticated member read a value `GET /items` itself would deny them).
+  The four pin routes and `/requestable-catalog` are `inventory.view`-gated
+  and additionally scope every read/write to `(organization_id, user_id)` —
+  `list_pins`/`pin_item`/`unpin_item`/`reorder_pins` all filter on both
+  columns, so one member's shortlist is invisible to and unwritable by
+  another even though the permission grant is the department-wide baseline.
+  `pin_item` validates the referenced `item_id` is in-org before persisting
+  the pin (`get_item_by_id(item_id, organization_id)` returning `None` raises
+  `ValueError("Item not found")`, XC-1) and is idempotent (re-pinning an
+  already-pinned item returns the existing row rather than erroring or
+  duplicating).
+- **The requestable catalog does not leak restricted gear's existence to
+  members it is restricted from.** `get_requestable_catalog` filters the
+  eligible list through `_member_may_request` — the same
+  `_passes_restrictions` rank/position check `POST /requests` itself
+  enforces at submission — _before_ grouping into products, so a
+  rank-or-position-restricted item a member cannot request is not shown to
+  them as an unfulfillable option (the code's own comment names this
+  explicitly: "without it the modal lists gear the member is then refused at
+  submit, and the restricted item's existence leaks to everyone").
+  `get_requestable_categories` applies the identical check to category
+  chips, for the same reason — an empty-after-filtering category would
+  otherwise be a visible chip disclosing restricted stock exists. Both
+  eligibility checks and the underlying rank/position lookups
+  (`_member_rank_order`, `_member_position_slugs`) are org-scoped.
+- **`_build_items_query`'s `search` filter and `get_requestable_catalog`'s/
+  `_fulfillment_base_query`'s own search filters all use `like_pattern()` +
+  `escape=LIKE_ESCAPE_CHAR`** (Pitfall #25) — checked every `.ilike(` call
+  site added or touched in the diff; none use a bare pattern.
+- **The retire-path hardening (MSUP fix-chain spillover) is Pitfall
+  #27-correct and closes a life-safety-adjacent gap the generic PATCH left
+  open.** `retire_item` now routes through `_get_item_locked` uniformly
+  (fixing the same identity-map staleness class INV-21 fixed on the
+  return/check-in paths, generalized here); its new
+  `_deactivation_block_reason` helper makes both blocker counts
+  (`CheckOutRecord`/`ItemIssuance` active-row counts) locking reads via
+  `.with_for_update()`, with a comment correctly explaining _why_ the item
+  lock alone is not enough under REPEATABLE READ (the count query's own
+  snapshot predates the lock unless the count itself locks). Separately,
+  `update_item` (the generic PATCH) now rejects any attempt to set `active`,
+  or a `status`/`condition` pair equal to `RETIRED`, forcing every path into
+  retirement through `retire_item`'s locked/blocker-checked/audited
+  contract — closing a route that previously could flip an item's `active`
+  flag or retired status/condition without running `_deactivation_block_reason`
+  at all, silently orphaning an unsafe item's status if it happened to
+  already be assigned or checked out (the update would have raced the block
+  entirely, since it never checked). This is a defensive tightening, not a
+  regression fix for a _reported_ bug in this pass's diff — mentioned here
+  because it is exactly the class of gap Pitfall #27 and INV-12 both exist to
+  close, caught this time before shipping rather than after.
+- **No new injection surface, no new CSV export, no `window.confirm`/
+  `alert`/`prompt`** anywhere in the diff (Pitfalls 15/16) — `inventory.py`'s
+  two CSV exports still route through `SafeCsvWriter`, unchanged (confirmed:
+  zero diff on those code paths since pass 3).
+- **All five migrations since pass 3 are correctly structured** — see
+  [Schema & migration notes](#schema--migration-notes-1).
+- **`labels.py`'s printer-configuration routes remain correctly gated.** The
+  six `/label-printers*` write/probe/status routes all require
+  `settings.manage`/`organization.update_settings` (an initial programmatic
+  enumeration pass missed these because the `Depends(require_permission(...))`
+  call wraps across two lines in this file; re-read directly to confirm).
+  `labels.py` has zero diff since pass 3's merge, so this is a
+  re-confirmation of pass 1's LBL-1 fix holding, not new work.
+- **The frontend route-gate changes in `routes.tsx` are each internally
+  justified and consistent with what they gate.** The admin-hub route
+  widened from `inventory.manage` alone to
+  `['inventory.manage', 'inventory.check_manage', 'storefront.manage']` (any
+  of) — the hub itself resolves each card's own, narrower gate
+  (`inventoryHubCards.ts`, whose own test asserts every card's gate is a
+  _subset_ of its target route's real gate, parsed out of route source
+  rather than hand-copied), so this widens who can reach the hub page without
+  widening what any given card actually opens. The supply-worklist route
+  gate was narrowed (dropped `scheduling.manage`) to match what the backing
+  equipment-check endpoint actually accepts — out of this feature's own
+  backend scope to verify (that endpoint lives in feature 14's
+  `equipment_check.py`), so taken on the strength of the comment's stated
+  reasoning rather than independently re-checked against that endpoint's own
+  `Depends()`.
+
+### Schema & migration notes
+
+Five migrations landed since pass 3, all correctly structured and read in
+full:
+
+- **`f2a91c7d4e86`** (`inventory_item_pins`) — new table, guarded on
+  `_has_table` even though this revision creates it (CLAUDE.md pitfall #26:
+  application startup's `create_all()` can reach this revision first on a
+  fresh install). All three FKs (`organization_id`→`organizations`,
+  `user_id`→`users`, `item_id`→`inventory_items`) are `ondelete="CASCADE"` —
+  no `SET NULL` column, so Pitfall #2 does not apply. `UniqueConstraint
+("user_id", "item_id")` is what keeps `get_items`' outer join to pins at
+  most 1:1, called out correctly in the migration's own docstring.
+  Reversible: `downgrade()` drops the table outright, and the docstring
+  correctly notes an empty table is the only valid starting state (no
+  backfill needed or attempted).
+- **`b8e3f1a97c24`** (`inventory_items.style_attributes`) — `inventory_items`
+  is a migration-created table (`20260120_0013b`), so no table guard is
+  needed; the column-existence guard is load-bearing all the same (startup's
+  column-repair path can add it from the model first). Backfill is
+  idempotent (`IS NULL` guard) and engine-portable (`JSON_ARRAY(CAST(style AS
+CHAR))`, with the `CAST` explained as necessary because `style` is an ENUM
+  and would otherwise coerce to its 1-based index in a numeric context, not
+  its string value). Reversible: `downgrade()` drops the column only,
+  leaving the original `style` values untouched.
+- **`c4f7a2e91b38`** (`member_size_preferences.garment_fit`) — same table/
+  column-guard shape. Backfill is idempotent (`garment_fit IS NULL` guard,
+  so a value someone has already set is never overwritten by a re-run) and
+  correctly scoped: it moves `shirt_style` into `garment_fit` **only** where
+  the old value is one of the three actual fit literals
+  (`mens`/`womens`/`unisex`), leaving a stored `long_sleeve` or other
+  non-fit `shirt_style` value where it was — the docstring explains there is
+  nowhere truthful to move it, and inventing a mapping would repeat the
+  conflation this migration exists to fix. The fit literals are inlined
+  rather than imported from `app/utils/garment_styles`, matching CLAUDE.md
+  pitfall #20's rule that a migration must keep transforming rows the way it
+  did the day it ran, independent of a taxonomy module that is free to
+  change later. `shirt_style` itself is deliberately not dropped (still
+  holds non-fit values, and removing it would be a response-schema breaking
+  change) — correctly left as a follow-up, not attempted here.
+- **`d3f8b6a24c91`** — a merge revision (two heads created by the style and a
+  concurrent treasurer-permission migration branching independently);
+  no schema change of its own, confirmed by reading its body (`upgrade()`/
+  `downgrade()` are both `pass`).
+- **`a1c7e93b2d54`** (`equipment_requests.requested_size`) — `nullable=True`
+  `String(50)` column, correctly guarded on column existence for the same
+  create_all-race reason as the others; `equipment_requests` is a
+  migration-created table so no table guard is needed. No FK, so Pitfall #2
+  does not apply.
+
+`python3 scripts/validate_migrations.py --strict` (see
+[Completion gate](#completion-gate-1)) confirms a single head across all 439
+migrations in the repository, not just this module's five.
+
+### Guard tests added
+
+None. No fixable defect was found this pass — see [Findings](#findings-1).
+
+### Completion gate
+
+| Check                                             | Result                                         |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                |
+| `black --check app/ tests/ alembic/`              | ✅ clean (1537 files unchanged)                |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                       |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head (`a3f61c8d27b4`), 439 revisions |
+| `pytest tests/ -k "inventory or label"`           | ✅ 984 passed, 1 pre-existing skip             |
+| `tsc --noEmit` / `eslint .` (frontend)            | not run — no frontend files edited this pass   |
+
+No backend or frontend files were changed this pass — every finding
+re-verified was already correctly implemented in the current code, so there
+was nothing to fix. The full backend suite was not re-run beyond the scoped
+`inventory or label` selection, since no code in this pass's diff (there is
+none) or in the module under review was modified; the scoped run above is a
+health check on the module as it stands, not a regression check on a change,
+per CLAUDE.md's "match the verification to the change" guidance for a pass
+that produces no code diff. Stated explicitly per this rotation's "never
+report a gate you did not run" rule.
 
 ---
 
