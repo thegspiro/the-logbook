@@ -233,6 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 43 AAA-only contrast findings remain at individual call sites, held by the
   per-route budget. The shared utilities are all AAA.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
 ### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
 
 **Security**
