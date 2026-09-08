@@ -81,7 +81,7 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByText(/The rank ladder, its order/)).toBeInTheDocument();
+    expect(await screen.findByText(/Customize rank\/position choices/)).toBeInTheDocument();
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
     expect(screen.queryByText('Membership ID Number')).not.toBeInTheDocument();
     expect(screen.queryByText(/does not hold that grant/)).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="evoc" />);
 
-    expect(await screen.findByText(/The rank ladder, its order/)).toBeInTheDocument();
+    expect(await screen.findByText(/Customize rank\/position choices/)).toBeInTheDocument();
     expect(screen.queryByText('Driver certification ladder and certifying programs.')).not.toBeInTheDocument();
   });
 

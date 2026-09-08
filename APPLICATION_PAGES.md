@@ -157,17 +157,17 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ### Members Admin Pages
 
-| URL                                  | Page                                  | Permission         |
-| ------------------------------------ | ------------------------------------- | ------------------ |
-| `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`   |
-| `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`   |
-| `/members/admin/waivers`             | Waiver Management                     | `members.manage`   |
-| `/members/admin/settings`            | Members Settings                      | `members.manage`   |
-| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`   |
-| `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`   |
-| `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage`   |
-| `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage`   |
-| `/members/check-in-station`          | Check-In Station                      | `members.check_in` |
+| URL                                  | Page                                  | Permission                                                                                                                                       |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`                                                                                                                                 |
+| `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`                                                                                                                                 |
+| `/members/admin/waivers`             | Waiver Management                     | `members.manage`                                                                                                                                 |
+| `/members/admin/settings`            | Members Settings                      | `members.manage`, `settings.manage`, `settings.manage_contact_visibility`, `settings.edit`, `organization.update_settings` or `apparatus.manage` |
+| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`, `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings`                                      |
+| `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
+| `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage` or `settings.manage`                                                                                                            |
+| `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage` or `apparatus.manage`                                                                                                           |
+| `/members/check-in-station`          | Check-In Station                      | `members.check_in`                                                                                                                               |
 
 > _(2026-09-06, extended 2026-09-08)_ **Members Settings** holds Contact
 > Visibility, Membership IDs, Operational Ranks and EVOC Levels, moved here from
@@ -178,8 +178,16 @@ Requires `members.manage` permission. Tab-based admin interface.
 > sub-page of Ranks — is answered too, because those links are still in
 > bookmarks and the old screen had been remapping them ever since.
 >
-> **The route's permission is not the endpoint's, and this is the one page in
-> the app where that gap is load-bearing.** `members.manage` opens the screen;
+> **Each route admits its own section's grants as well as the hub's**
+> _(2026-09-08)_. Gating them on `members.manage` alone would have locked out
+> the officers the move took the page away from: someone holding
+> `settings.manage` and not `members.manage` ran all of these from `/settings`,
+> and the legacy redirect now lands them here. `members.manage` stays in every
+> gate so a roster officer reaches the screen and is told which sections their
+> grants open, rather than meeting Access Denied.
+>
+> **The route's permission is still not the endpoint's, and this is the one page
+> in the app where that gap is load-bearing.** `members.manage` opens the screen;
 > neither section's save accepts it. Contact Visibility writes through
 > `PATCH /organization/settings/contact-info` (`settings.manage`,
 > `settings.manage_contact_visibility` or `organization.update_settings`) and

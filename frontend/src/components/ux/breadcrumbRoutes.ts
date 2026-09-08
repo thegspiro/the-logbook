@@ -57,6 +57,15 @@ export interface BreadcrumbRoute {
   permissions?: string[];
 }
 
+import { MEDICAL_VIEW_PERMISSIONS } from '../../modules/medical-supplies/routes';
+import {
+  MEMBERS_SETTINGS_ANY_PERMISSION,
+  MEMBERS_SETTINGS_EVOC_GATE,
+  MEMBERS_SETTINGS_IDS_GATE,
+  MEMBERS_SETTINGS_RANKS_GATE,
+  MEMBERS_SETTINGS_VISIBILITY_GATE,
+} from '../../modules/membership/routes';
+
 /**
  * Keyed by full path, because the label a segment deserves depends on where it
  * sits: `admin` is "Scheduling Administration" under `/scheduling` and
@@ -88,7 +97,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/ip-security': { permissions: ['security.manage', 'settings.manage'] },
   '/learning': {},
   '/locations': {},
-  '/medical-supplies': {},
+  '/medical-supplies': { permissions: MEDICAL_VIEW_PERMISSIONS },
   '/members': {},
   '/messages': {},
   '/minutes': {},
@@ -127,11 +136,11 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // A leaf, registered only for its label: the segment is "positions" and the
   // page calls itself "Who Can Fill What", so the fallback would give the trail
   // and the heading two different names for one screen.
-  '/members/admin/settings': { label: 'Settings', permissions: ['members.manage'] },
-  '/members/admin/settings/visibility': { label: 'Contact Visibility', permissions: ['members.manage'] },
-  '/members/admin/settings/ids': { label: 'Membership IDs', permissions: ['members.manage'] },
-  '/members/admin/settings/ranks': { label: 'Operational Ranks', permissions: ['members.manage'] },
-  '/members/admin/settings/evoc': { label: 'EVOC Levels', permissions: ['members.manage'] },
+  '/members/admin/settings': { label: 'Settings', permissions: MEMBERS_SETTINGS_ANY_PERMISSION },
+  '/members/admin/settings/visibility': { label: 'Contact Visibility', permissions: MEMBERS_SETTINGS_VISIBILITY_GATE },
+  '/members/admin/settings/ids': { label: 'Membership IDs', permissions: MEMBERS_SETTINGS_IDS_GATE },
+  '/members/admin/settings/ranks': { label: 'Operational Ranks', permissions: MEMBERS_SETTINGS_RANKS_GATE },
+  '/members/admin/settings/evoc': { label: 'EVOC Levels', permissions: MEMBERS_SETTINGS_EVOC_GATE },
   '/scheduling/admin/positions': { label: 'Who Can Fill What', permissions: ['scheduling.manage'] },
   '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },
   '/scheduling/checkin': { label: 'Shift Check-In' },

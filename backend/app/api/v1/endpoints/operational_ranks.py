@@ -148,6 +148,7 @@ async def get_rank(
 
 @router.patch("/{rank_id}", response_model=RankResponse)
 async def update_rank(
+    request: Request,
     rank_id: UUID,
     data: RankUpdate,
     db: AsyncSession = Depends(get_db),
@@ -171,6 +172,17 @@ async def update_rank(
     # same failure mode: a rank's grants reach the database by a side door).
     # Enforced only on an actual change, matching _enforce_rank_grant_ceiling's
     # other call sites.
+    #
+    # BOTH codes, not just the destination. Checking only where the rename goes
+    # catches escalation and misses its mirror image: renaming `fire_chief` to
+    # an unrecognized code passes trivially, because an unknown code grants
+    # nothing and nothing is a subset of everything -- and then the cascade
+    # rewrites `rank` on every member who held it, so each of them silently
+    # loses the chief's permissions and shift eligibility. That is stripping
+    # rather than granting, and it needs the same authority: a caller may only
+    # disturb a rank whose grants they already hold. It went unnoticed while
+    # only settings.manage could reach this handler, since such a caller
+    # typically covered every rank anyway; members.manage does not.
     update_data = data.model_dump(exclude_unset=True)
     if "rank_code" in update_data:
         existing = ensure_found(
@@ -178,7 +190,10 @@ async def update_rank(
         )
         if update_data["rank_code"] != existing.rank_code:
             await _enforce_rank_grant_ceiling(
-                current_user, update_data["rank_code"], db, None
+                current_user, existing.rank_code, db, get_client_ip(request)
+            )
+            await _enforce_rank_grant_ceiling(
+                current_user, update_data["rank_code"], db, get_client_ip(request)
             )
 
     async with handle_service_errors("Failed to update rank"):

@@ -10,6 +10,11 @@
  * its own screen. `RanksSettingsSection` stays exactly as it was — it renders,
  * and this owns what it renders.
  *
+ * No `SettingsPanelHead` here, unlike its sibling sections: `RanksSettingsSection`
+ * renders its own heading and description, and the global settings page mounted
+ * it directly for that reason. A wrapper head would show the title twice and put
+ * a redundant level in the heading outline.
+ *
  * **A failed load is not an empty ladder.** The version this replaces caught the
  * load error into `/* empty state shown *\/`, so an unreachable API rendered
  * "No ranks configured yet" — a department being told it has no rank structure
@@ -23,7 +28,6 @@ import { ranksService } from '../../../../services/api';
 import type { OperationalRankResponse, RankValidationIssue } from '../../../../services/api';
 import { invalidateRanksCache } from '../../../../hooks/useRanks';
 import RanksSettingsSection from '../../../../components/settings/RanksSettingsSection';
-import { SettingsPanelHead } from '../../../../components/settings/SettingsPanelHead';
 
 interface RankForm {
   rank_code: string;
@@ -169,11 +173,6 @@ const RanksSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <SettingsPanelHead
-        title="Operational Ranks"
-        description="The rank ladder, its order, and the shift positions each rank may fill."
-      />
-
       {failed && !ranksLoading ? (
         <div className="alert-danger" role="alert">
           <p className="text-theme-text-primary text-sm font-medium">The rank ladder could not be loaded.</p>

@@ -19,6 +19,7 @@ import inspect
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -82,6 +83,83 @@ class TestLadderGates:
         for handler in (operational_ranks.list_ranks, operational_ranks.get_rank):
             with pytest.raises(AssertionError):
                 _gate_permissions(handler)
+
+
+class TestRenameCeiling:
+    """A rename is checked at both ends, because it can strip as well as grant."""
+
+    async def _rename(self, caller, frm, to, service_update):
+        existing = SimpleNamespace(rank_code=frm)
+        with patch.object(
+            operational_ranks.OperationalRankService,
+            "get_rank",
+            new=AsyncMock(return_value=existing),
+        ):
+            with patch.object(
+                operational_ranks.OperationalRankService,
+                "update_rank",
+                new=service_update,
+            ):
+                with patch(
+                    "app.api.v1.endpoints.users.report_privilege_escalation_attempt",
+                    new=AsyncMock(),
+                ):
+                    return await operational_ranks.update_rank(
+                        request=MagicMock(client=None, headers={}),
+                        rank_id=uuid4(),
+                        data=SimpleNamespace(
+                            model_dump=lambda **_: {"rank_code": to},
+                            rank_code=to,
+                        ),
+                        db=MagicMock(),
+                        current_user=caller,
+                    )
+
+    async def test_cannot_rename_a_rank_that_grants_more_than_the_caller(self):
+        # The mirror image of escalation, and the one a destination-only check
+        # misses: an unrecognized destination grants nothing, so it clears the
+        # ceiling trivially -- and update_rank then rewrites `rank` on every
+        # member holding fire_chief, stripping each of them.
+        updated = AsyncMock()
+        with pytest.raises(HTTPException) as exc:
+            await self._rename(
+                _caller(["members.manage"]), "fire_chief", "retired_rung", updated
+            )
+
+        assert exc.value.status_code == 403
+        updated.assert_not_awaited()
+
+    async def test_cannot_rename_into_a_rank_that_grants_more_than_the_caller(self):
+        updated = AsyncMock()
+        with pytest.raises(HTTPException) as exc:
+            await self._rename(
+                _caller(["members.manage"]), "probationary", "fire_chief", updated
+            )
+
+        assert exc.value.status_code == 403
+        updated.assert_not_awaited()
+
+    async def test_a_rename_within_the_caller_s_own_grants_is_allowed(self):
+        rank = SimpleNamespace(
+            id="00000000-0000-0000-0000-000000000001",
+            organization_id="00000000-0000-0000-0000-000000000002",
+            rank_code="probationary_v2",
+            display_name="Probationary",
+            description=None,
+            sort_order=0,
+            is_active=True,
+            eligible_positions=[],
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        result = await self._rename(
+            _caller(["*"]),
+            "probationary",
+            "probationary_v2",
+            AsyncMock(return_value=rank),
+        )
+
+        assert result.rank_code == "probationary_v2"
 
 
 class TestCreateCeiling:

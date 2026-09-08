@@ -37,6 +37,60 @@ const MembersSettingsPage = lazyWithRetry(() => import('../../pages/members/admi
 const MembersSettingsRedirect = lazyWithRetry(
   () => import('../../pages/members/admin/settings/MembersSettingsRedirect')
 );
+
+/**
+ * What each Members settings route admits — the section's own endpoint grants,
+ * plus the hub's.
+ *
+ * Gating these on `members.manage` alone locked out the people the move took
+ * the page away from. An officer holding `settings.manage` and not
+ * `members.manage` ran Contact Visibility, Membership IDs and the rank ladder
+ * from `/settings`; after the move the legacy redirect lands them here and a
+ * `members.manage` gate refuses them before `MembersSettingsPage` can apply the
+ * per-section filtering that would have admitted them. The endpoints still
+ * accept them, so that was access lost to the route rather than to any
+ * decision. `members.manage` stays in each list so a roster officer still
+ * reaches the screen and is told which sections their grants open, rather than
+ * meeting a bare Access Denied.
+ *
+ * Literal arrays declared here rather than derived from
+ * `membersSettingsSections.ts`, matching `MEDICAL_VIEW_PERMISSIONS` and
+ * `LEGAL_DOCUMENTS_PERMISSIONS`. Three separate checkers read route gates
+ * straight out of this file — `scripts/check_route_permissions.py`,
+ * `breadcrumbRoutes.test.ts` and `testingRegistry.test.ts` — and none of them
+ * evaluates TypeScript or follows an import. A gate they cannot resolve is a
+ * gate nothing verifies, so `membersSettingsRoutes.test.ts` asserts each of
+ * these equals its section's declared permissions instead: the manifest stays
+ * the single source of truth, enforced by a test rather than by an import the
+ * tooling cannot see through.
+ */
+export const MEMBERS_SETTINGS_VISIBILITY_GATE = [
+  'settings.manage',
+  'settings.manage_contact_visibility',
+  'organization.update_settings',
+  'members.manage',
+];
+export const MEMBERS_SETTINGS_IDS_GATE = ['settings.edit', 'organization.update_settings', 'members.manage'];
+export const MEMBERS_SETTINGS_RANKS_GATE = ['settings.manage', 'members.manage'];
+export const MEMBERS_SETTINGS_EVOC_GATE = ['apparatus.manage', 'members.manage'];
+
+/**
+ * Anything that admits an officer to at least one section, for the bare path.
+ *
+ * Spelled out rather than spread from the four above for the same reason they
+ * are literals: `check_route_permissions.py` reads the first `[...]` after the
+ * name, so a computed union scored this route as authenticated-only — the
+ * silently-permissive answer that checker exists to refuse. The union is
+ * asserted against the four in `membersSettingsRoutes.test.ts`.
+ */
+export const MEMBERS_SETTINGS_ANY_PERMISSION = [
+  'settings.manage',
+  'settings.manage_contact_visibility',
+  'organization.update_settings',
+  'members.manage',
+  'settings.edit',
+  'apparatus.manage',
+];
 const MemberAdminEditPage = lazyWithRetry(() => import('../../pages/MemberAdminEditPage'));
 const MemberAuditHistoryPage = lazyWithRetry(() => import('../../pages/MemberAuditHistoryPage'));
 const MemberIdCardPage = lazyWithRetry(() => import('../../pages/MemberIdCardPage'));
@@ -152,7 +206,7 @@ export const getMembershipRoutes = () => {
       <Route
         path="/members/admin/settings"
         element={
-          <ProtectedRoute requiredPermission="members.manage">
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_ANY_PERMISSION}>
             <Suspense fallback={null}>
               <MembersSettingsRedirect />
             </Suspense>
@@ -162,7 +216,7 @@ export const getMembershipRoutes = () => {
       <Route
         path="/members/admin/settings/visibility"
         element={
-          <ProtectedRoute requiredPermission="members.manage">
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_VISIBILITY_GATE}>
             <Suspense fallback={null}>
               <MembersSettingsPage section="visibility" />
             </Suspense>
@@ -172,7 +226,7 @@ export const getMembershipRoutes = () => {
       <Route
         path="/members/admin/settings/ids"
         element={
-          <ProtectedRoute requiredPermission="members.manage">
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_IDS_GATE}>
             <Suspense fallback={null}>
               <MembersSettingsPage section="ids" />
             </Suspense>
@@ -182,21 +236,21 @@ export const getMembershipRoutes = () => {
       <Route
         path="/members/admin/settings/ranks"
         element={
-          <ProtectedRoute requiredPermission="members.manage">
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_RANKS_GATE}>
             <Suspense fallback={null}>
               <MembersSettingsPage section="ranks" />
             </Suspense>
           </ProtectedRoute>
         }
       />
-      {/* EVOC stands on `members.manage` at the route like its neighbours, but
-          the section itself needs `apparatus.manage` to save — the page filters
-          it out for an officer who lacks that, rather than offering a ladder
-          every write refuses. */}
+      {/* EVOC's route admits `apparatus.manage` (what its endpoints want) and
+          `members.manage` (so a roster officer reaches the screen and is told
+          which sections their grants open). The page still filters the section
+          itself, rather than offering a ladder every write refuses. */}
       <Route
         path="/members/admin/settings/evoc"
         element={
-          <ProtectedRoute requiredPermission="members.manage">
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_EVOC_GATE}>
             <Suspense fallback={null}>
               <MembersSettingsPage section="evoc" />
             </Suspense>
