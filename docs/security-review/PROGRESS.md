@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged
+(`c71b5fb2`) by a 30-minute watchdog check — fully green (17/17 checks),
+`mergeable_state: clean`, Codex review completed with nothing further raised,
+idle since CI finished with no owner action needed. One finding this pass:
+**SF-7 (MED, fixed)** — `update_order_status` had its own, unguarded path to
+self-settle a payment; see the superseded note below for the full write-up.
+Next: 05 Finance & approvals.
+
+<details>
+<summary>Superseded — PR #2395 (pass 4), preserved for history</summary>
+
 **Feature 04 (Storefront & payments, pass 4)** — PR
 [#2395](https://github.com/thegspiro/the-logbook/pull/2395), branch
 `claude/security-review-storefront-payments`. This module is the most
@@ -47,6 +58,8 @@ cross-feature grant-restoration migration that pattern-matches on
 false positive of the same shape MP-08/ELEC-06/GF-22 already reported for
 their own domains against the same migration). Full write-up: the **Pass 4**
 section of `docs/security-review/SF-04-storefront-payments.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 03 pass 4 merged), preserved for history</summary>
@@ -11270,6 +11283,17 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged, watchdog recorded it
+
+No security-review PR had gone through a normal tend iteration since #2395
+opened. On this pass the PR was fully green (17/17 checks, `mergeable_state:
+clean`), Codex's review had completed with nothing further raised, and it had
+sat idle for roughly 3 hours since CI finished — the same "green, idle, Codex
+clean" bar prior watchdog merges in this log have used (Features 23, 25, 33,
+34). Merged directly (`c71b5fb2`, squash) rather than left open. **Open PR**
+row cleared, rotation row 04 confirmed ✅ (it was already marked ✅ pending
+merge when the PR opened). Next: 05 Finance & approvals.
 
 ### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) — PR #2395 opened
 
