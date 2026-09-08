@@ -237,6 +237,18 @@ When a change introduces a durable repository convention or resolves a subtle re
 
 Avoid adding transient debugging narratives to production source comments.
 
+## Changelog
+
+`CHANGELOG.md` was closed to new entries on 2026-09-08. **Do not add one**, and do not add to the monthly archives under `docs/changelog/`. Older instructions to "update the CHANGELOG" as part of a pull request no longer apply.
+
+Several agents work this repository concurrently, and every entry was appended at the same offset under `## [Unreleased]`, so each pair of open branches conflicted on it. A change's narrative belongs in the pull request description and in the per-feature documents that already carry it: `docs/security-review/`, `docs/app-review/PROGRESS.md`, and `docs/KNOWN_LIMITATIONS.md` for anything the owner must decide.
+
+The one exemption is `docs/UPGRADING.md`: a change that can stop an existing deployment from booting — a new critical, a default flipped toward fail-closed, a newly enforced flag — still needs its entry there, naming the setting and both ways out.
+
+Branches opened before the freeze still carry entries. Merging one is unchanged: resolve the conflict by keeping both sides. Never delete existing changelog content.
+
+See `CLAUDE.md` → "Changelog Entries Are No Longer Part of a Pull Request".
+
 ## Completion Gate
 
 A task is complete only when all of the following are true, or an explicit blocker has been reported:

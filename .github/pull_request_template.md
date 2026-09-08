@@ -32,7 +32,3 @@ diff was committed either way, run `npx prettier --write` over the files first.
 - **New config switch** — something reads it in this same change; a stored-but-inert setting is labelled in the UI as not yet in effect. (#19)
 - **Seed data** — the migration is registered in `SEED_DATA_FILES` (`backend/main.py`), `organization_id` is nullable for system-level rows, and service code handles the default being absent (auto-create, or raise a clear error) rather than assuming the row exists. (#8)
 - **CSV / spreadsheet export** — written with `SafeCsvWriter` or `SafeDictCsvWriter`, never bare `csv.writer` / `csv.DictWriter`. (#15)
-
-## Changelog
-
-<!-- Entry added under `## [Unreleased]` in CHANGELOG.md, or a note on why none is needed. -->

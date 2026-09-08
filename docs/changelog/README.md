@@ -1,20 +1,21 @@
 # Changelog archive
 
-Monthly archives of [the project changelog](../../CHANGELOG.md). The main file
-carries the **current** month; a month is moved here once it closes.
+Monthly archives of [the project changelog](../../CHANGELOG.md), which was
+**closed to new entries on 2026-09-08**. Both these archives and the root file
+are historical reference now — nothing is added to either.
 
 Entries are reproduced unchanged apart from link paths, which were written
 relative to the repository root and are rewritten to `../../` here.
 
-| Month                             | Sections | Notes                                         |
-| --------------------------------- | -------: | --------------------------------------------- |
-| [August 2026](../../CHANGELOG.md) |      584 | **Current** — still in `CHANGELOG.md`         |
-| [July 2026](2026-07.md)           |       28 | ISO alignment, module security audit          |
-| [June 2026](2026-06.md)           |       12 | OAuth, MFA, platoon rotations                 |
-| [May 2026](2026-05.md)            |        4 | Client IP resolution, GeoIP                   |
-| [April 2026](2026-04.md)          |        9 | Shift summaries, trainee follow-up            |
-| [March 2026](2026-03.md)          |      148 | Frontend consolidation, pipeline auto-advance |
-| [February 2026](2026-02.md)       |      122 | Initial release and the build-out after it    |
+| Month                              | Sections | Notes                                         |
+| ---------------------------------- | -------: | --------------------------------------------- |
+| [Aug–Sep 2026](../../CHANGELOG.md) |      584 | Final months — still in `CHANGELOG.md`        |
+| [July 2026](2026-07.md)            |       28 | ISO alignment, module security audit          |
+| [June 2026](2026-06.md)            |       12 | OAuth, MFA, platoon rotations                 |
+| [May 2026](2026-05.md)             |        4 | Client IP resolution, GeoIP                   |
+| [April 2026](2026-04.md)           |        9 | Shift summaries, trainee follow-up            |
+| [March 2026](2026-03.md)           |      148 | Frontend consolidation, pipeline auto-advance |
+| [February 2026](2026-02.md)        |      122 | Initial release and the build-out after it    |
 
 ## Why this is split
 
@@ -27,9 +28,13 @@ changelog at all, five of them contradicted by the documentation then in force.
 Splitting by month keeps the file somebody actually opens down to the period
 they are asking about, without discarding anything.
 
-## Adding to it
+## Nothing is added here any more
 
-Write new entries in [`CHANGELOG.md`](../../CHANGELOG.md) as before. **Do not
-add entries here** — an archive covering a closed month should not gain new
-ones. When a month closes, move its `###` sections into a new file here,
-rewrite root-relative links to `../../`, and add a row to the table above.
+The ledger stopped taking entries on 2026-09-08. **Do not add entries to these
+archives, and do not add them to [`CHANGELOG.md`](../../CHANGELOG.md) either** —
+see [Changelog entries are no longer part of a pull
+request](../../CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request)
+for why, and for where a change's narrative goes instead.
+
+Everything below the freeze date is read from the merged pull requests, which
+carry the same detail with none of the merge cost.

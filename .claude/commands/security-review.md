@@ -14,7 +14,7 @@ is still open, so the rotation cannot outrun its own review queue.
 
 Read `docs/security-review/PROGRESS.md` → **Open PR** row.
 
-- **A PR is open and not yet merged** → this iteration is a *tend* iteration:
+- **A PR is open and not yet merged** → this iteration is a _tend_ iteration:
   1. Fetch its state, CI result on the **current head SHA**, and unresolved
      review threads.
   2. Merge conflict → merge the base branch in and resolve it. Never rebase or
@@ -104,7 +104,8 @@ so explicitly — never report a gate you did not run.
 
 - Mark the feature ✅ (pending PR merge) in `PROGRESS.md` and append a log entry.
 - Mirror owner-decision items into `docs/KNOWN_LIMITATIONS.md`.
-- Mirror user-visible changes into `CHANGELOG.md`.
+- Do **not** write to `CHANGELOG.md` — it is closed to new entries. The
+  user-visible narrative belongs in the findings file and `PROGRESS.md`.
 - If a finding contradicts `CLAUDE.md` or a module doc, correct it there too.
 
 ## Step 8 — Branch, commit, PR
