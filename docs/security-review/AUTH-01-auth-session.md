@@ -18,8 +18,8 @@ gates), `app/core/security.py` (JWT issue/decode, §"JWT Token Management")
 and `app/core/suspicious_ip.py` (236 L) this surface depends on
 **Frontend:** `stores/authStore.ts`, `services/apiClient.ts`,
 `services/authService.ts` — read, not modified
-**Migrations:** none written this pass; 437 revisions, single head
-`b1e7c3a92f45`
+**Migrations:** one written this pass (AUTH-19: index `sessions.refresh_token`);
+438 revisions, single head `1603bd9c59e7`
 
 ### Scope
 
@@ -353,8 +353,10 @@ device — and there is no expiry on that, in an application that sets a 7-year
 retention window on its audit log precisely because retention is a decision
 it takes deliberately elsewhere. (2) Growth: the table accumulates one row per
 sign-in per device forever, each holding two full JWTs in `String(512)`
-columns. Neither is exploitable and neither degrades a lookup (both token
-columns are indexed), which is why this is LOW.
+columns. Neither is exploitable, and this pass's first draft claimed neither
+degrades a lookup because "both token columns are indexed" — that claim was
+wrong (see **AUTH-19**, fixed below) at the time it was written, and is only
+true now because of that fix.
 
 **Why FLAGGED and not fixed:** a reaper needs a retention window, and picking
 one is a product decision — sessions are the data behind any future
@@ -394,15 +396,52 @@ there.
 **Fix:** the pass-4 sections above state the current facts, and
 `docs/app-review/auth-session.md` gains a pass-4 note pointing here.
 
+#### AUTH-19 — LOW — `sessions.refresh_token`, the column the hot refresh path filters on, had no index — ✅ FIXED
+
+**What:** Codex review on PR #2389 caught this pass's own AUTH-17 write-up
+asserting "both token columns are indexed" as a reason growth couldn't
+degrade a lookup. It's false for one of the two: `token` (the access-token
+column) is `unique=True, index=True`; `previous_refresh_token` (the
+rotation-grace fallback, used only inside a short window right after a
+refresh) is indexed by
+`20260727_0001_add_session_refresh_grace.py`. `refresh_token` itself —
+the column `AuthService.refresh_access_token` filters on for **every**
+refresh request, the busiest query this table sees — was a plain
+`Column(String(512))` with no index at all, since the initial schema
+migration.
+
+**Failure scenario:** combined with AUTH-17's own finding (no reaper, so
+`sessions` grows without bound), every token refresh — issued on essentially
+every authenticated page load once the short-lived access token expires —
+degrades from an index seek to a full-table scan as the table grows. Not
+exploitable by itself, but it meant AUTH-17's stated reasoning for staying
+LOW ("neither is exploitable and neither degrades a lookup") rested on a
+false premise for the column that matters most.
+
+**Where:** `backend/app/models/user.py:856` (the column),
+`backend/app/services/auth_service.py:344-347` (the filtering query).
+
+**Fix:** `refresh_token = Column(String(512), index=True)`, plus
+`alembic/versions/20260908_0223_1603bd9c59e7_index_sessions_refresh_token_for_the_.py`
+adding `ix_sessions_refresh_token`. Purely additive — no data change, no
+behavior change. Verified by running `alembic upgrade head` against the real
+database, confirming the index appears in `SHOW INDEX`, then `alembic
+downgrade -1` / `upgrade head` again to confirm both directions are real.
+This does not replace AUTH-17's reaper — an indexed scan of an unbounded
+table is still an unbounded scan, just a cheaper one — so AUTH-17 stays
+flagged for the retention-window product decision.
+
 ### Schema & migration notes
 
-No migration was written this pass, and none has touched this feature's tables
+One migration was written this pass — `1603bd9c59e7`, indexing
+`sessions.refresh_token` (AUTH-19) — the first to touch this feature's tables
 since pass 2's `20260825_1900_c4a91b7e2f08_grant_users_view_consents.py`. The
 three tables this feature owns were re-checked against their models:
 
 - `sessions` — `user_id` FK `ondelete="CASCADE"`, `nullable=False`; `token`
-  unique + indexed; `expires_at` indexed. Not a `SET NULL` case, so Pitfall #2
-  is n/a. No retention policy — AUTH-17.
+  unique + indexed; `refresh_token` now indexed (AUTH-19);
+  `previous_refresh_token` indexed; `expires_at` indexed. Not a `SET NULL`
+  case, so Pitfall #2 is n/a. No retention policy — AUTH-17.
 - `password_history` — `user_id` FK `ondelete="CASCADE"`, `nullable=False`.
   Bounded on read by `HIPAA_PASSWORD_HISTORY_COUNT`, unbounded on write; rows
   hold only Argon2 hashes, so this is not the same exposure as AUTH-17.
@@ -410,7 +449,7 @@ three tables this feature owns were re-checked against their models:
   `nullable=False`, unique index on `(user_id, consent_type)` matching the
   migration.
 
-Alembic chain: 437 revisions, single head `b1e7c3a92f45`, no duplicate ids.
+Alembic chain: 438 revisions, single head `1603bd9c59e7`, no duplicate ids.
 
 ### Guard tests added
 
@@ -429,10 +468,12 @@ the specific reversions are recorded in each finding above.
 | `flake8 app/ tests/ alembic/`                                                                          | ✅ 0 violations                                                                     |
 | `black --check app/ tests/ alembic/` (26.5.1, CI's pin)                                                | ✅ 1529 files unchanged (1 new test file reformatted before commit)                 |
 | `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                            | ✅ clean                                                                            |
-| `validate_migrations.py --strict`                                                                      | ✅ single head `b1e7c3a92f45`, 437 revisions                                        |
+| `validate_migrations.py --strict`                                                                      | ✅ single head `1603bd9c59e7`, 438 revisions                                        |
+| `alembic upgrade head` / `downgrade -1` / `upgrade head` on the real database                          | ✅ `ix_sessions_refresh_token` created, dropped, recreated                          |
+| `pytest tests/test_alembic_migrations.py tests/test_migration_create_all_tables.py`                    | ✅ 80 passed                                                                        |
 | backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip or dependencies or permission"`)  | ✅ 600 passed, 2 skipped (both pre-existing: optional `pywebpush`, Docker registry) |
 | standing guards (`endpoint_auth_coverage`, `org_scoping_ratchet`, `capacity_locking`, `like_escaping`) | ✅ 44 passed                                                                        |
-| `scripts/check_docs_links.py`                                                                          | ✅ clean                                                                            |
+| `scripts/check_docs_links.py`                                                                          | ✅ 351 files, 0 broken links                                                        |
 | `tsc --noEmit` / `eslint .`                                                                            | n/a — no frontend source changed this pass                                          |
 
 `black` was 26.3.1 on PATH via `/root/.local/bin`; CI pins 26.5.1, which was

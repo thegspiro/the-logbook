@@ -51,14 +51,24 @@ _CONSUMING_CALLERS = {
 _PYOTP_OWNER = "app/services/mfa_service.py"
 
 
-def _local_scope_imports(scope_node: ast.AST) -> dict[str, str]:
-    """``from``-import bindings made directly in *scope_node*'s own body.
+_ScopeBindings = list[tuple[int, str, str]]
+
+
+def _local_scope_imports(scope_node: ast.AST) -> _ScopeBindings:
+    """``(lineno, local_name, real_name)`` for each ``from``-import binding
+    made directly in *scope_node*'s own body, sorted by source line.
 
     Descends into ``if``/``for``/``while``/``try`` blocks (imports there still
     bind in the enclosing function) but stops at a nested function or class —
-    that scope's own imports belong to it, not to this one.
+    that scope's own imports belong to it, not to this one. Kept as an
+    ordered list rather than a ``dict`` so a second import re-using the same
+    local name (``... import verify_totp as check`` then, later in the same
+    function, ``... import harmless as check``) doesn't silently overwrite
+    the binding a call made *before* the reassignment resolves against —
+    Codex's third-round finding on PR #2389 against the scope-aware fix that
+    still collapsed same-scope bindings into a flat dict.
     """
-    bindings: dict[str, str] = {}
+    bindings: _ScopeBindings = []
 
     def walk(node: ast.AST) -> None:
         for child in ast.iter_child_nodes(node):
@@ -66,36 +76,61 @@ def _local_scope_imports(scope_node: ast.AST) -> dict[str, str]:
                 continue
             if isinstance(child, ast.ImportFrom):
                 for alias in child.names:
-                    bindings[alias.asname or alias.name] = alias.name
+                    bindings.append(
+                        (child.lineno, alias.asname or alias.name, alias.name)
+                    )
             walk(child)
 
     walk(scope_node)
+    bindings.sort(key=lambda binding: binding[0])
     return bindings
 
 
-def _resolve_name(name: str, scope_chain: list[dict[str, str]]) -> str:
-    """Resolve *name* through real lexical scoping: innermost function first,
-    then each enclosing function, then the module. A same-named alias in one
-    function must never resolve a call in a sibling function or at module
-    level — that was Codex's second-round finding on PR #2389 against a flat,
-    whole-module alias dict.
+def _resolve_name(name: str, lineno: int, scope_chain: list[_ScopeBindings]) -> str:
+    """Resolve *name* as it stood at *lineno*, through real lexical scoping:
+    innermost function first, then each enclosing function, then the module.
+
+    Within one scope, only a binding recorded at or before *lineno* counts,
+    and the latest such binding wins — a rebinding later in the same function
+    must not resolve a call made earlier in it. A same-named alias in one
+    function must also never resolve a call in a sibling function or at
+    module level (Codex's second-round finding, against a flat whole-module
+    dict).
     """
-    for scope in reversed(scope_chain):
-        if name in scope:
-            return scope[name]
+    for bindings in reversed(scope_chain):
+        match: str | None = None
+        for binding_line, local, real in bindings:
+            if local == name and binding_line <= lineno:
+                match = real
+        if match is not None:
+            return match
     return name
 
 
-def _called_name(node: ast.Call, scope_chain: list[dict[str, str]]) -> str | None:
+def _called_name(node: ast.Call, scope_chain: list[_ScopeBindings]) -> str | None:
     """The real function name a Call node targets, however it is spelled.
 
-    Resolves a bare ``ast.Name`` through *scope_chain* first. Does not track
-    simple-assignment rebinding (``spend = verify_totp_get_timestep``) — that
-    needs data-flow analysis this sweep does not attempt.
+    Resolves a bare ``ast.Name`` through *scope_chain* first, as it stood at
+    this call's own line. Does not track simple-assignment rebinding
+    (``spend = verify_totp_get_timestep``) — that needs data-flow analysis
+    this sweep does not attempt.
+
+    For an ``ast.Attribute`` call, matches on the attribute name alone
+    without resolving the receiver's provenance — ``x.verify_totp(...)``
+    counts regardless of what ``x`` is. This is intentionally over-inclusive:
+    the three names this file tracks are unique to `app/services/mfa_service.py`
+    today (verified — nothing else in `app/` defines an attribute with any of
+    these names), so narrowing to "only when the receiver resolves to
+    `app.services.mfa_service`" would trade a real guarantee (nothing calls
+    `verify_totp` through a receiver this sweep can't resolve, e.g.
+    `self.mfa.verify_totp(...)` or a `getattr`) for cosmetic precision against
+    a collision that does not exist. If a future unrelated attribute happens
+    to collide with one of these names, that is this sweep's false positive
+    to diagnose, not a defect to code around by weakening the check.
     """
     func = node.func
     if isinstance(func, ast.Name):
-        return _resolve_name(func.id, scope_chain)
+        return _resolve_name(func.id, node.lineno, scope_chain)
     if isinstance(func, ast.Attribute):
         return func.attr
     return None
@@ -114,7 +149,7 @@ def _rel(path: pathlib.Path) -> str:
 
 def _calls_with_context(
     tree: ast.AST,
-) -> list[tuple[ast.Call, str, list[dict[str, str]]]]:
+) -> list[tuple[ast.Call, str, list[_ScopeBindings]]]:
     """Every Call in *tree*, paired with its owner function and the chain of
     import-alias scopes visible at that point (module first, innermost last).
 
@@ -125,9 +160,9 @@ def _calls_with_context(
     overall because it stops at each nested function boundary, so no node's
     import bindings are collected by more than one call.
     """
-    found: list[tuple[ast.Call, str, list[dict[str, str]]]] = []
+    found: list[tuple[ast.Call, str, list[_ScopeBindings]]] = []
 
-    def descend(node: ast.AST, owner: str, scope_chain: list[dict[str, str]]) -> None:
+    def descend(node: ast.AST, owner: str, scope_chain: list[_ScopeBindings]) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 child_chain = scope_chain + [_local_scope_imports(child)]
@@ -144,7 +179,7 @@ def _calls_with_context(
 # Parsing and indexing the whole `app/` tree costs a few seconds and all three
 # tests need it, so do it once at import.
 _MODULES: list[
-    tuple[str, ast.AST, list[tuple[ast.Call, str, list[dict[str, str]]]]]
+    tuple[str, ast.AST, list[tuple[ast.Call, str, list[_ScopeBindings]]]]
 ] = [
     (_rel(path), tree, _calls_with_context(tree))
     for path, tree in (
