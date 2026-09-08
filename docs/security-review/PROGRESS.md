@@ -16,6 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 02 (Permissions & roles, pass 4)** — PR
+[#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING), branch
+`claude/security-review-permissions-roles-pass4`. Pass 4's third feature.
+**Four findings: three fixed, one flagged.** The one that matters is **PERM-5
+(MED, flagged)** — the three user↔position assignment routes carry two guards
+and neither compares the caller to the target: the grant ceiling walks the
+_incoming_ roles (so `role_ids: []` is a no-op) and the continuity guard only
+counts whether _somebody_ still holds `members.manage`. The seeded Secretary
+and Membership Coordinator hold both assignment grants plus `members.manage`
+and none of `settings.manage` / `security.manage` / `positions.*`, so either
+can strip the wildcard `it_manager` position from the department's only `*`
+holder — and it cannot be undone through the API, because re-granting `*`
+requires already holding it and `create_role` rejects wildcards outright.
+Reproduced against the real helpers before being written up; flagged rather
+than fixed because the obvious guard also blocks the offboarding case a
+Membership Coordinator exists for, and the three options are not equivalent.
+Fixed: **PERM-6 (LOW)** — `is_read_only_permission` filed `inventory.check_view`
+and `scheduling.report` as writes, which `permission_matches_any_write` would
+have accepted as write authority on a document folder (latent: no folder names
+either permission today); **PERM-7 (LOW)** — the two single-assignment helpers
+`a9063055` left behind when it scoped `set_user_roles`, still unscoped and
+still callerless; **PERM-8 (LOW)** — an uncapped rank-reorder list against a
+one-query-per-item loop. Also the first pass on this feature to read all ten
+principal files in full rather than the diff, which is how PERM-5 — older than
+pass 3 — was reached. Full write-up: the **Pass 4** section of
+`docs/security-review/PERM-02-permissions-roles.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 01 pass 4 merged), preserved for history</summary>
+
 **None.** Feature 01 (Auth & session lifecycle, pass 4)'s PR #2389 merged
 (`a68d674d`) — 6 findings, 4 fixed, 2 flagged (the real fix is **AUTH-14**
 MED: the two account-state gates in `get_current_user` had no intersecting
@@ -37,6 +67,8 @@ review began failing on usage limits rather than surfacing anything new —
 same precedent as Feature 33's PR #2370. Full write-up: the **Pass 4** section
 of `docs/security-review/AUTH-01-auth-session.md`. Next: 02 Permissions &
 roles.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2389 (pass 4), preserved for history</summary>
@@ -11052,7 +11084,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
@@ -11092,6 +11124,115 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 02 (Permissions & roles, pass 4) — PR #PENDING opened
+
+The **Open PR** row read "None" and 02 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass.
+
+**4 findings: 3 fixed, 1 flagged.** The flagged one is mirrored into
+`KNOWN_LIMITATIONS.md`.
+
+**This is the first pass on this feature to read all ten principal files in
+full rather than the diff, and that is what produced the only finding that
+matters.** Passes 2 and 3 both scoped themselves to what had changed —
+correctly, and pass 3 even corrected its own diff range mid-review — but the
+escalation questions this feature is asked are answered by how
+`users.py`'s assignment handlers, `roles.py`'s ceilings and
+`admin_continuity_service`'s counting interact, not by any one file's diff.
+PERM-5 predates pass 3 and was reachable only that way. (The diff range was
+still computed and is recorded: pass 3's merge is `074f6a79`; three of ten
+files changed, seven byte-identical. The repository started this session as a
+shallow clone whose history began after pass 3, so it took a
+`git fetch --deepen` before the range existed at all.)
+
+- **PERM-5 (MED, flagged)** — `PUT /users/{id}/roles`,
+  `POST /users/{id}/roles/{role_id}` and `DELETE /users/{id}/roles/{role_id}`
+  carry two guards and neither compares the caller to the target.
+  `_enforce_role_grant_ceiling` walks the **incoming** roles, so it is a no-op
+  on a removal — `{"role_ids": []}` passes trivially — and
+  `assert_positions_retain_administrator` only asks whether _somebody_ in the
+  organization would still hold `members.manage`. The seeded **Secretary** and
+  **Membership Coordinator** positions hold both assignment grants plus
+  `members.manage` and hold none of `settings.manage`, `security.manage` or
+  `positions.*`, so either can strip the wildcard `it_manager` position from
+  the department's only `*` holder and the continuity guard still passes,
+  because the remover is the second administrator it counts. **It cannot be
+  undone through the API**: re-granting runs the ceiling, which requires
+  already holding `*`, and `create_role`/`update_role` validate against
+  `get_all_permissions()`, which contains no wildcard —
+  `admin_continuity_service`'s own docstring says recovery from that state
+  "needs a database administrator". Reproduced by driving both real helpers
+  with the seeded permission sets, not reasoned from the signatures. The
+  neighbouring paths **do** ask this question — `_enforce_role_edit_ceiling`
+  (ORU-7) on a position's permission list, `_enforce_account_reset_ceiling` on
+  a credential reset — so this is an inconsistency rather than a design.
+  Flagged because the obvious guard also blocks the legitimate case a
+  Membership Coordinator exists for, offboarding a departing chief, and the
+  three options (full demotion ceiling / narrow last-`*`-holder guard /
+  accept-and-make-recoverable) are not equivalent.
+- **PERM-6 (LOW, fixed)** — `is_read_only_permission` decided a permission's
+  tier with `action == "view" or action.startswith("view_")`, and two
+  catalogued reads do not match that shape: `inventory.check_view` (a two-word
+  action on a nested resource) and `scheduling.report` ("View shift reports and
+  analytics"). `permission_matches_any_write` authorizes a mutation by keeping
+  only what it believes are the write-tier entries of a folder's required
+  permissions, so a read filed as a write is handed over as proof of write
+  authority. Latent rather than live, and verified as such: the only writer of
+  `DocumentFolder.required_permissions` in `app/` stores
+  `FACILITY_SENSITIVE_PERMISSIONS`, all three classified correctly, and no
+  request schema exposes the column. `view` is now matched as a word in the
+  action, plus a named exception set for the one grant no naming rule can
+  express. The guard test checks the classifier against an **independent**
+  signal — each `Permission`'s hand-written description — rather than
+  restating the implementation, and was verified red against the pre-fix
+  version (4 of 11 tests, including the end-to-end matcher assertion).
+- **PERM-7 (LOW, fixed)** — when `a9063055` gave `set_user_roles` a required
+  keyword-only `organization_id` ("an unreachable bulk role-replacement that
+  would have crossed tenants the moment an endpoint wired it up"), its two
+  siblings on the same service were left as they were: `assign_role_to_user`
+  and `remove_role_from_user`, no org parameter, no in-org check on either
+  client-supplied id, zero callers in `app/`. Same landmine shape as AUTH-6
+  and AUTH-16. Both now take the same required keyword-only parameter and run
+  `assert_in_org` over the member and the position before any write, and their
+  docstrings name what they still do **not** enforce (the grant ceiling on
+  assignment, the continuity guard on removal) and which live endpoints do.
+- **PERM-8 (LOW, fixed)** — `RankReorderRequest.ranks` had `min_length=1` and
+  no `max_length` against a `reorder_ranks` loop that issues one org-scoped
+  query per item, so the list length was a query count bounded only by the
+  60 MB request-body limit at ~60 bytes an item. Capped at 500 (the seed writes
+  8). The loop is deliberately left alone — collapsing it into one query would
+  have to reproduce MySQL's case-insensitive id comparison in Python to be
+  behaviour-preserving, and a cap is the change that cannot be subtly wrong.
+
+**Re-verified still current:** PERM-1's `settings.manage` gate on
+`GET /operational-ranks/validate`, PERM-2's savepoint-based `seed_defaults`,
+PERM-3's and PERM-4's `_enforce_rank_grant_ceiling` wiring (all four call
+sites, and `User.rank` confirmed by grep to have exactly one widening write
+path so those four are the complete set), and the officers/org-chart
+XC-1/XC-3 conclusions from passes 1–2 on the seven files that have not
+changed since. All three seeded-grant changes since pass 3 shipped the
+Pitfall #23 migration, each with the scoping its direction requires — a
+revocation unconditional and `is_system`-scoped, an addition gated on positive
+evidence the row is an unrepaired seed. Six things were checked and
+deliberately **not** raised (the two authentication-only rank reads,
+`get_user_permissions` omitting rank defaults in the nav-only admin probe, the
+per-position count query in `list_roles`, unvalidated `eligible_positions`,
+the `it_manager` wildcard, and `get_request_enabled_modules` swallowing an
+invalid-credential exception) — recorded in the write-up so the next pass does
+not spend the time again. `GET /org-chart` returns member names, emails and
+phones and is not in `UNCACHEABLE_PREFIXES`; verified a no-op today because
+the governance module builds its client with `createApiClient()`, which has no
+cache interceptor — the same shape PR #2381 recorded for three routes rather
+than excluding them, and recorded the same way here.
+
+**Completion gate:** flake8 / black / isort all clean on `app/ tests/
+alembic/` at CI's pinned versions (7.3.0 / 26.5.1 / 9.0.1);
+`validate_migrations.py --strict` 438 revisions, single head `1603bd9c59e7`;
+`test_org_scoping_ratchet.py` 12 passed; the four permission-registry and
+auth-coverage guards 18 passed; scoped tests 1 348 passed; **full backend
+suite 11 815 passed, 21 skipped, 0 failed**; `check_docs_links.py` 351 files,
+0 broken links. No frontend file modified, so `tsc`/`eslint` are n/a.
 
 ### 2026-09-08 — Feature 01 (Auth & session lifecycle, pass 4)'s PR #2389 merged, watchdog recorded it
 
