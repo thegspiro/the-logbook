@@ -64,7 +64,9 @@ class TestClassifierAgreesWithDescription:
             + "\n".join(violations)
         )
 
-    @pytest.mark.parametrize("name,description", sorted(_DESCRIPTION_MISMATCH.items()))
+    @pytest.mark.parametrize(
+        ("name", "description"), sorted(_DESCRIPTION_MISMATCH.items())
+    )
     def test_documented_mismatches_still_describe_a_real_permission(
         self, name: str, description: str
     ):
