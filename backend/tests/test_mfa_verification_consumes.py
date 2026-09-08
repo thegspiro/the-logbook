@@ -51,11 +51,33 @@ _CONSUMING_CALLERS = {
 _PYOTP_OWNER = "app/services/mfa_service.py"
 
 
-def _called_name(node: ast.Call) -> str | None:
-    """The bare function name a Call node targets, however it is spelled."""
+def _import_aliases(tree: ast.AST) -> dict[str, str]:
+    """Map each name a ``from``-import binds locally to its real name.
+
+    ``from app.services.mfa_service import verify_totp as check`` binds
+    ``check`` to a Call node whose ``ast.Name.id`` is ``check`` — resolving
+    through this map before the ``_NON_CONSUMING`` / ``_CONSUMING_CALLERS``
+    check is what makes the aliased-import case in this file's own docstring
+    actually true, rather than merely claimed (Codex review, PR #2389).
+    """
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                aliases[alias.asname or alias.name] = alias.name
+    return aliases
+
+
+def _called_name(node: ast.Call, aliases: dict[str, str]) -> str | None:
+    """The real function name a Call node targets, however it is spelled.
+
+    Resolves a bare ``ast.Name`` through *aliases* first. Does not track
+    simple-assignment rebinding (``spend = verify_totp_get_timestep``) — that
+    needs data-flow analysis this sweep does not attempt.
+    """
     func = node.func
     if isinstance(func, ast.Name):
-        return func.id
+        return aliases.get(func.id, func.id)
     if isinstance(func, ast.Attribute):
         return func.attr
     return None
@@ -97,8 +119,8 @@ def _calls_with_owner(tree: ast.AST) -> list[tuple[ast.Call, str]]:
 
 # Parsing and indexing the whole `app/` tree costs a few seconds and all three
 # tests need it, so do it once at import.
-_MODULES: list[tuple[str, ast.AST, list[tuple[ast.Call, str]]]] = [
-    (_rel(path), tree, _calls_with_owner(tree))
+_MODULES: list[tuple[str, ast.AST, list[tuple[ast.Call, str]], dict[str, str]]] = [
+    (_rel(path), tree, _calls_with_owner(tree), _import_aliases(tree))
     for path, tree in (
         (p, ast.parse(p.read_text(encoding="utf-8"))) for p in _python_files()
     )
@@ -108,9 +130,9 @@ _MODULES: list[tuple[str, ast.AST, list[tuple[ast.Call, str]]]] = [
 def test_no_app_code_calls_the_non_consuming_totp_verifier():
     offenders = [
         f"{rel}:{call.lineno} in {owner}()"
-        for rel, _tree, calls in _MODULES
+        for rel, _tree, calls, aliases in _MODULES
         for call, owner in calls
-        if _called_name(call) in _NON_CONSUMING
+        if _called_name(call, aliases) in _NON_CONSUMING
     ]
 
     assert not offenders, (
@@ -123,9 +145,9 @@ def test_no_app_code_calls_the_non_consuming_totp_verifier():
 
 def test_consuming_primitives_have_exactly_one_caller_each():
     found: dict[str, list[str]] = {name: [] for name in _CONSUMING_CALLERS}
-    for rel, _tree, calls in _MODULES:
+    for rel, _tree, calls, aliases in _MODULES:
         for call, owner in calls:
-            name = _called_name(call)
+            name = _called_name(call, aliases)
             if name in found:
                 found[name].append(f"{rel}::{owner}")
 
@@ -140,7 +162,7 @@ def test_consuming_primitives_have_exactly_one_caller_each():
 
 def test_pyotp_is_confined_to_the_mfa_service():
     importers = []
-    for rel, tree, _calls in _MODULES:
+    for rel, tree, _calls, _aliases in _MODULES:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 names = [alias.name.split(".")[0] for alias in node.names]
