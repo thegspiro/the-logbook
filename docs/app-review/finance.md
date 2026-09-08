@@ -16,10 +16,21 @@ The known DiD gap (`get_approval_records`/`get_current_pending_step` unscoped)
 stays re-confirmed **not live** — every call site passes an already-org-resolved
 `entity_id`.
 
-Open items unchanged, both refactor-shaped: **FIN-7** (float→Decimal money math +
+Open items at the time, both refactor-shaped: **FIN-7** (float→Decimal money math +
 unbounded transaction export/pagination + overspend guard) and **FIN-N** (the
 `ApprovalStepRecord` helpers stay unfiltered — verified not-live; threading `org_id`
 through the critical money-approval path isn't worth the churn).
+
+**Correction (security-review FIN-05 pass 4, 2026-09-08):** FIN-7's export/
+pagination/overspend items above are no longer open — re-verified against
+current code, all three already carry the fix this doc called for (bounded,
+streamed export; DB-level `.offset()`/`.limit()` on every list method;
+`_mutate_budget` enforces the spend ceiling). See
+`docs/module-audit/finance.md`'s FIN-7 entry for the full re-verification.
+Only the assignee-level filter on `get_pending_approvals` (an approver sees
+every org approver's actionable steps, not just steps assigned to them
+specifically) remains a genuine, undecided behavior question — there is no
+per-step assignee field to filter on today.
 
 **Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
 `tsc --noEmit` n/a.

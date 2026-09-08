@@ -11246,7 +11246,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
@@ -11283,6 +11283,60 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 05 (Finance & approvals, pass 4) — 3 fixes, 0 flagged — PR opened
+
+No backend finance file had changed since pass 3's closing commit (`git log
+--since="2026-09-01"` on the module's paths surfaces only a breadcrumb/
+navigation-trail commit touching ten frontend page files, cosmetic). Re-
+verified pass 3's own fixes (FIN-19–26) present and unchanged, then worked
+the full checklist fresh rather than trusting three clean prior passes.
+
+**FIN-27 (MED, fixed) — `GET /budgets/summary` and `GET /approval-chains/
+preview` were both permanently unreachable**, shadowed by an earlier-
+registered `/{id}` route of the same method and segment shape (Starlette
+dispatches to the first full match in registration order, and does not
+prefer a fixed path over a same-shaped dynamic one). Both endpoints have
+been silently 404ing since whenever they were added. Fixed by reordering
+route registration (no handler/auth/schema change); guard test
+`tests/test_finance_route_resolution.py` (5 tests, one a whole-router sweep)
+confirmed red against the pre-fix order, green after.
+
+**FIN-28 (LOW, fixed) — `get_pending_approvals` round-tripped a `Decimal`
+amount through `float()`** before Pydantic re-validated it as `Decimal`; not
+a live bug at this table's value range, but a needless precision hazard
+inconsistent with the module's otherwise-consistent `Decimal` money math.
+Removed.
+
+**Documentation correction, no code change** — `docs/module-audit/
+finance.md`'s FIN-7 entry (and its mirrors in `docs/app-review/finance.md`
+and `docs/KNOWN_LIMITATIONS.md`) still described three items as open that
+were already fixed on `main`, landed incidentally by earlier finance-
+approvals security-review passes and never threaded back into the older
+audit doc: unbounded transaction export (now capped at 10,000 rows,
+streamed in batches), in-memory list pagination (every list method already
+pushes `.offset()`/`.limit()` into the query), and no overspend guard
+(`_mutate_budget` already enforces the ceiling, fail-closed). Corrected all
+three docs; only the `get_pending_approvals` assignee-level filter remains
+genuinely open, as it always has.
+
+**Local-environment note:** this session's sandbox initially resolved a
+stale, unrelated `node_modules` (a worktree with none of its own falls back
+to the main checkout's install one directory up), producing 1116 false
+`@typescript-eslint/no-unsafe-*` warnings on a first `eslint .` run across
+41 files this pass never touched. `npm ci` at the worktree root fixed it (2
+pre-existing warnings after, matching a green `main` CI run on the same
+commit). Recorded in the findings file so it doesn't get mistaken for a
+regression by a later pass reading this log.
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/` (isort
+9.0.1, CI's pin); `validate_migrations.py --strict` (438 revisions, single
+head); scoped `pytest -k "finance or dues or approval or budget or export"`
+308 passed/1 skipped (pre-existing)/0 failed; full backend suite 11840
+passed/21 skipped (pre-existing)/0 failed; `tsc --noEmit` 0 errors; `eslint .`
+0 errors/2 pre-existing warnings (well under `--max-warnings 10`); `vitest
+run src/modules/finance/` 108 passed. Rotation row 05 → ✅ (pending PR
+merge). Next: 06 elections & ballots.
 
 ### 2026-09-08 — Feature 04 (Storefront & payments, pass 4)'s PR #2395 merged, watchdog recorded it
 

@@ -144,22 +144,55 @@ CI's unit job rather than needing MySQL. **Status:** fixed.
   retry-on-conflict allocator (offset stepping defeats REPEATABLE READ
   snapshot staleness) that never poisons the caller's outer transaction.
   Covered by `TestRequestNumberAllocation` in `tests/test_finance.py`.
-- **Flagged (cross-cutting refactor):** float money math in
-  `get_budget_summary`/`get_dues_summary` and throughout the spend-tracking path
-  (`_add_to_spent`, budget comparisons, response payloads). Converting money to
-  `Decimal` end-to-end (with JSON serialization handling) is a module-wide change;
-  a partial conversion would leave the service inconsistent. Deferred as a
-  dedicated task.
-- **Flagged (DoS surface, behavior change):** unbounded transaction export and
-  in-memory pagination (fetch-all-then-slice) on the list endpoints — pushing
-  `skip`/`limit` into the queries and capping the export range is the fix, but it
-  touches many endpoints and changes response envelopes. Deferred.
-- **Flagged (behavior change):** no overspend/negative-balance guard on spend
-  posting; `get_pending_approvals` returns the org-wide queue rather than the
-  caller's assigned steps. Both change established behavior and need an owner
-  decision.
-  **Status:** the safe correctness fix (line-item total) applied; the rest remain
-  flagged as behavior-change or schema/sequence-change (per original triage).
+- **✅ Resolved (re-verified, security-review FIN-05 pass 4, 2026-09-08).**
+  The three items below were still described as open by this entry, and were
+  not: current code already carries the fix each one calls for, with no
+  commit in this rotation's own log claiming credit — they landed as
+  incidental improvements in the finance-approvals security-review passes
+  (pass 1's request-number migration, pass 2's export-streaming rewrite) that
+  were never threaded back into this older audit doc. Re-verified against the
+  code directly, not taken on any doc's word:
+  - **"Unbounded transaction export and in-memory pagination (fetch-all-then-
+    slice) on the list endpoints"** — every list method (`list_purchase_
+requests`, `list_expense_reports`, `list_check_requests`, `list_budgets`,
+    `list_dues_schedules`, `list_export_mappings`, `list_export_logs`, …)
+    pushes `.offset()`/`.limit()` into the SQL query itself; none fetches the
+    full table into Python first. `generate_export` (`finance_service.py:2496`)
+    counts rows up front and refuses anything over `max_records=10_000`
+    (`ValueError` → 400), then streams the CSV in `batch_size=500` pages via
+    `SafeCsvWriter`, writing an `ExportLog` row (`status`/`error_message`/
+    `completed_at`, from migration `20260826_1700_add_export_stream_status`)
+    that records `partial`/`failed` if the stream is interrupted.
+  - **"No overspend/negative-balance guard on spend posting"** —
+    `_mutate_budget` (`finance_service.py:2778`) takes the budget row
+    `.with_for_update()` and raises `BudgetLimitExceededError` (→ 409) whenever
+    `new_spent + new_encumbered > amount_budgeted`, on every path that
+    encumbers or spends (`_encumber_budget`/`_release_encumbrance`/
+    `_add_to_spent`, and `update_budget`'s own reduce-side check per FIN-11).
+    Deliberately fail-closed with no override, per the comment at
+    `finance_service.py:2751`.
+  - **`_generate_request_number` `count()+1` race** — this file's own bullet
+    two lines above already marked this fixed (2026-07-31); only the summary
+    bullet below it had not caught up.
+    Genuinely unchanged: **float→Decimal is not a module-wide gap** — every
+    money _column_ is `Numeric(12, 2)` (`models/finance.py`) and every money
+    _computation_ (`_mutate_budget`, `_apply_payment_totals`, `get_dues_summary`'s
+    totals) is `Decimal` arithmetic throughout; the only `float()` calls left in
+    `finance_service.py` are two percentage/rate display roundings
+    (`percent_used`, `collection_rate`), which are not currency amounts and do
+    not need cent precision. One straggler was found and fixed this pass:
+    `get_pending_approvals` cast `entity_amount` through `float()` before
+    `PendingApprovalResponse` (which types it `Decimal`) revalidated it — a
+    needless, precision-risking round-trip with no live bug at this table's
+    size (`Numeric(12,2)` fits exactly in a float64 mantissa), removed by
+    passing the `Decimal` straight through.
+    `get_pending_approvals` returning the org-wide queue is unchanged from the
+    correction already recorded in `KNOWN_LIMITATIONS.md`: the query itself has
+    been org-confined since FIN-9 (2026-08-25); only the assignee-level filter
+    (return each approver only _their own_ actionable steps rather than every
+    org approver's) is the remaining behavior-change item, and it still needs an
+    owner decision on what "assigned to me" means when a step has no
+    per-user assignment field today.
 
 ## Notes
 
