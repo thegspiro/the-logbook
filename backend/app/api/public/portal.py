@@ -220,7 +220,11 @@ async def log_public_api_request(
 # ============================================================================
 
 
-@router.get("/organization/info", response_model=PublicOrganizationInfo)
+@router.get(
+    "/organization/info",
+    response_model=PublicOrganizationInfo,
+    response_model_exclude_unset=True,
+)
 async def get_organization_info(
     request: Request,
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
@@ -308,10 +312,15 @@ async def get_organization_info(
             str(api_key.organization_id), "organization", org_data, db
         )
 
+        # Build (and thereby validate) the response before logging success —
+        # a construction failure must fall through to the `except Exception`
+        # branch below and log 500, not a 200 that was already committed.
+        response_obj = PublicOrganizationInfo(**filtered_data)
+
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)
 
-        return PublicOrganizationInfo(**filtered_data)
+        return response_obj
 
     except HTTPException as e:
         # Log failed access
@@ -326,7 +335,11 @@ async def get_organization_info(
         )
 
 
-@router.get("/organization/stats", response_model=PublicOrganizationStats)
+@router.get(
+    "/organization/stats",
+    response_model=PublicOrganizationStats,
+    response_model_exclude_unset=True,
+)
 async def get_organization_stats(
     request: Request,
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
@@ -405,10 +418,15 @@ async def get_organization_stats(
             str(api_key.organization_id), "stats", stats_data, db
         )
 
+        # Build (and thereby validate) the response before logging success —
+        # a construction failure must fall through to the `except Exception`
+        # branch below and log 500, not a 200 that was already committed.
+        response_obj = PublicOrganizationStats(**filtered_data)
+
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)
 
-        return PublicOrganizationStats(**filtered_data)
+        return response_obj
 
     except HTTPException as e:
         # Log failed access
@@ -496,7 +514,15 @@ async def get_public_events(
                 org_id_str, "events", event_data, db
             )
             if filtered_event:
-                events.append(filtered_event)
+                # Construct (and thereby validate) each event against the
+                # same model FastAPI's response_model will hold the return
+                # value to. Building it here, inside the try block, means a
+                # PUB-7-style field mismatch is caught before the success log
+                # below commits — deferring validation to FastAPI's own
+                # response serialization (which runs after this handler
+                # returns) would let a request the client sees as a 500 get
+                # logged as a 200 that can no longer be rolled back.
+                events.append(PublicEvent(**filtered_event))
 
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)

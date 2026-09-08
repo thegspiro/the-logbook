@@ -234,6 +234,16 @@ class PublicOrganizationInfo(BaseModel):
     ``docs/PUBLIC_API_DOCUMENTATION.md`` already documents this shape: "Only
     whitelisted fields are returned. Some fields may be null if not
     configured."
+
+    The route handler must pass ``response_model_exclude_unset=True``: without
+    it, the defaults that make an unwhitelisted field constructible also make
+    it round-trip back out as an explicit ``null`` instead of being absent, and
+    a partial whitelist would serialize every field it did *not* enable —
+    exactly the leak the whitelist exists to prevent. ``exclude_unset`` keys
+    off ``model_fields_set``, which holds only the keys the whitelist-filtered
+    dict actually passed to the constructor, so an enabled field that happens
+    to be empty still serializes as ``null`` (a configured-but-blank value)
+    while a disabled one is omitted entirely.
     """
 
     name: Optional[str] = None
@@ -255,7 +265,8 @@ class PublicOrganizationStats(BaseModel):
 
     Defaults to ``None`` for the same reason as
     :class:`PublicOrganizationInfo` — the whitelist removes un-enabled keys
-    before this model is constructed.
+    before this model is constructed. Also requires
+    ``response_model_exclude_unset=True`` on its route for the same reason.
     """
 
     total_volunteer_hours: Optional[int] = None

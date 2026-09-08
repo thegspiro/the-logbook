@@ -21,7 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared only its name and phone number got nothing at all. Both now return
   exactly the fields that are enabled, with the rest left empty.
 
+- **Fields a department has not shared no longer come back as explicit
+  nulls, or partial shares as every unshared field alongside them.** Making
+  the endpoints tolerate an unshared field (above) left them serialising it
+  as `"field": null` instead of omitting it outright, and a partial share
+  returned every field that was _not_ enabled right alongside the ones that
+  were — both endpoints now return only the fields actually enabled.
+
 **Security**
+
+- **A public-website API request that the server ultimately rejects can no
+  longer be recorded in the access log as having succeeded.** The log entry
+  was written before the response was fully checked, so a request whose
+  reply failed a late check still landed in the log as a success — hiding
+  exactly the failures an administrator or the portal's own abuse detection
+  would want to see.
 
 - **A public-website API key can no longer exceed its hourly request
   allowance.** The allowance is counted in memory and periodically reconciled

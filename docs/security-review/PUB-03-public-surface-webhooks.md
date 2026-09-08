@@ -267,6 +267,80 @@ Until then `detect_anomalies`' failed-auth branch stays dead; the per-IP
 limiter and `suspicious_ip` are the controls actually covering that case.
 Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
+#### PUB-9 — LOW — `response_model_exclude_unset` was missing, so the PUB-6 defaults round-tripped as explicit `null`s — ✅ FIXED
+
+**What:** PUB-6 gave every field on `PublicOrganizationInfo` /
+`PublicOrganizationStats` a `None` default so the models could be constructed
+from a whitelist-filtered dict without raising. That fixed construction but
+not serialisation: FastAPI's default response behaviour serialises every
+declared field, default or not, so a field an administrator never whitelisted
+came back as an explicit `"field": null` instead of being absent, and a
+partial whitelist returned every field the whitelist had _not_ enabled right
+alongside the ones it had — the inverse of "only whitelisted fields are
+returned".
+
+**Where:** `app/api/public/portal.py` — the `GET /organization/info` and
+`GET /organization/stats` route decorators (neither set
+`response_model_exclude_unset`).
+
+**Fix:** both decorators now pass `response_model_exclude_unset=True`.
+`PublicOrganizationInfo(**filtered_data)` only marks the whitelist-filtered
+keys as "set" (`model_fields_set`), so `exclude_unset` reconstructs exactly
+the whitelist's contract: an unwhitelisted field is omitted, and a whitelisted
+field that happens to be empty still serialises as `null` (configured but
+blank) rather than being dropped. Verified with the existing
+`test_public_portal_whitelist_shape.py` suite (unaffected — it asserts on
+`model_dump()` without `exclude_unset`, i.e. the model's own default-null
+shape, not the route's wire shape) plus manual construction:
+`PublicOrganizationInfo(name="x").model_dump(exclude_unset=True)` returns
+`{"name": "x"}`, not the other eight keys as `null`.
+
+Found by Codex on PR #2393, pass 4.
+
+#### PUB-10 — LOW — The access-log commit ran before the response model was actually validated — ✅ FIXED
+
+**What:** PUB-8 made `log_public_api_request` commit its row immediately so it
+survives a raised `HTTPException`. All three success paths called it and then
+_separately_ built the return value on the next line — `return
+PublicOrganizationInfo(**filtered_data)` for the two organization routes,
+`return events` (a list of plain dicts) for `/events/public`. FastAPI runs
+`response_model` validation against the return value _after_ the handler
+returns, outside the `try` these three routes commit inside. A failure at that
+stage answers the client 500, but the 200 row was already committed and
+`get_db` cannot roll it back on the way out — durable proof of a request the
+security log now misreports as successful.
+
+**Where:** `app/api/public/portal.py` — all three success paths
+(`get_organization_info`, `get_organization_stats`, `get_public_events`).
+
+**Failure scenario:** concretely reachable on `/events/public` today, via
+PUB-7: whitelist one events field, have one matching upcoming event, and the
+handler's dict is missing three fields `PublicEvent` requires. Before this
+fix: `log_public_api_request(..., 200, ...)` commits, `return events` hands
+FastAPI a list of dicts, response serialisation raises
+`ResponseValidationError`, the client gets 500 — and the access log says 200.
+The two organization routes were not concretely reachable the same way
+(`PublicOrganizationInfo`/`Stats` have no required fields left after PUB-6),
+but the ordering was identical and would have reopened the same class of bug
+the moment either model gained a required field.
+
+**Fix:** construct the response value — and thereby run the same validation
+`response_model` would — _before_ calling `log_public_api_request`, still
+inside the `try`. A `ValidationError` at construction now falls through to the
+existing `except Exception` branch and logs 500, matching what the client
+actually receives, instead of skipping validation until after 200 is already
+durable. `/events/public` now builds a `PublicEvent(**filtered_event)` per
+event inside the loop rather than appending the raw dict; this does not change
+PUB-7's flagged status or its client-visible 500 — it only makes the access
+log agree with the answer the client got. Verified with the full
+`test_public_portal_whitelist_shape.py` and
+`test_public_portal_access_log_persistence.py` suites (unaffected; neither
+exercises FastAPI response serialisation) and by re-reading the reordered
+control flow against `test_dependency_teardown_rolls_back_on_httpexception`'s
+pinned `get_db` semantics.
+
+Found by Codex on PR #2393, pass 4.
+
 ### Checked and deliberately not raised
 
 Recorded so pass 5 does not spend the time again.
