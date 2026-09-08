@@ -51,33 +51,51 @@ _CONSUMING_CALLERS = {
 _PYOTP_OWNER = "app/services/mfa_service.py"
 
 
-def _import_aliases(tree: ast.AST) -> dict[str, str]:
-    """Map each name a ``from``-import binds locally to its real name.
+def _local_scope_imports(scope_node: ast.AST) -> dict[str, str]:
+    """``from``-import bindings made directly in *scope_node*'s own body.
 
-    ``from app.services.mfa_service import verify_totp as check`` binds
-    ``check`` to a Call node whose ``ast.Name.id`` is ``check`` — resolving
-    through this map before the ``_NON_CONSUMING`` / ``_CONSUMING_CALLERS``
-    check is what makes the aliased-import case in this file's own docstring
-    actually true, rather than merely claimed (Codex review, PR #2389).
+    Descends into ``if``/``for``/``while``/``try`` blocks (imports there still
+    bind in the enclosing function) but stops at a nested function or class —
+    that scope's own imports belong to it, not to this one.
     """
-    aliases: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                aliases[alias.asname or alias.name] = alias.name
-    return aliases
+    bindings: dict[str, str] = {}
+
+    def walk(node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            if isinstance(child, ast.ImportFrom):
+                for alias in child.names:
+                    bindings[alias.asname or alias.name] = alias.name
+            walk(child)
+
+    walk(scope_node)
+    return bindings
 
 
-def _called_name(node: ast.Call, aliases: dict[str, str]) -> str | None:
+def _resolve_name(name: str, scope_chain: list[dict[str, str]]) -> str:
+    """Resolve *name* through real lexical scoping: innermost function first,
+    then each enclosing function, then the module. A same-named alias in one
+    function must never resolve a call in a sibling function or at module
+    level — that was Codex's second-round finding on PR #2389 against a flat,
+    whole-module alias dict.
+    """
+    for scope in reversed(scope_chain):
+        if name in scope:
+            return scope[name]
+    return name
+
+
+def _called_name(node: ast.Call, scope_chain: list[dict[str, str]]) -> str | None:
     """The real function name a Call node targets, however it is spelled.
 
-    Resolves a bare ``ast.Name`` through *aliases* first. Does not track
+    Resolves a bare ``ast.Name`` through *scope_chain* first. Does not track
     simple-assignment rebinding (``spend = verify_totp_get_timestep``) — that
     needs data-flow analysis this sweep does not attempt.
     """
     func = node.func
     if isinstance(func, ast.Name):
-        return aliases.get(func.id, func.id)
+        return _resolve_name(func.id, scope_chain)
     if isinstance(func, ast.Attribute):
         return func.attr
     return None
@@ -94,33 +112,41 @@ def _rel(path: pathlib.Path) -> str:
     return path.relative_to(APP_ROOT.parent).as_posix()
 
 
-def _calls_with_owner(tree: ast.AST) -> list[tuple[ast.Call, str]]:
-    """Every Call in *tree*, paired with the function that lexically holds it.
+def _calls_with_context(
+    tree: ast.AST,
+) -> list[tuple[ast.Call, str, list[dict[str, str]]]]:
+    """Every Call in *tree*, paired with its owner function and the chain of
+    import-alias scopes visible at that point (module first, innermost last).
 
-    A single descent, carrying the nearest enclosing function name down. The
-    obvious ``ast.walk``-inside-``ast.walk`` version is quadratic in module
-    size and pushed this file past the 30s per-test timeout on `app/`'s
-    largest modules.
+    A single descent, carrying the nearest enclosing function name and its
+    scope chain down. The obvious ``ast.walk``-inside-``ast.walk`` version is
+    quadratic in module size and pushed this file past the 30s per-test
+    timeout on `app/`'s largest modules; ``_local_scope_imports`` stays linear
+    overall because it stops at each nested function boundary, so no node's
+    import bindings are collected by more than one call.
     """
-    found: list[tuple[ast.Call, str]] = []
+    found: list[tuple[ast.Call, str, list[dict[str, str]]]] = []
 
-    def descend(node: ast.AST, owner: str) -> None:
+    def descend(node: ast.AST, owner: str, scope_chain: list[dict[str, str]]) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                descend(child, child.name)
+                child_chain = scope_chain + [_local_scope_imports(child)]
+                descend(child, child.name, child_chain)
                 continue
             if isinstance(child, ast.Call):
-                found.append((child, owner))
-            descend(child, owner)
+                found.append((child, owner, scope_chain))
+            descend(child, owner, scope_chain)
 
-    descend(tree, "<module>")
+    descend(tree, "<module>", [_local_scope_imports(tree)])
     return found
 
 
 # Parsing and indexing the whole `app/` tree costs a few seconds and all three
 # tests need it, so do it once at import.
-_MODULES: list[tuple[str, ast.AST, list[tuple[ast.Call, str]], dict[str, str]]] = [
-    (_rel(path), tree, _calls_with_owner(tree), _import_aliases(tree))
+_MODULES: list[
+    tuple[str, ast.AST, list[tuple[ast.Call, str, list[dict[str, str]]]]]
+] = [
+    (_rel(path), tree, _calls_with_context(tree))
     for path, tree in (
         (p, ast.parse(p.read_text(encoding="utf-8"))) for p in _python_files()
     )
@@ -130,9 +156,9 @@ _MODULES: list[tuple[str, ast.AST, list[tuple[ast.Call, str]], dict[str, str]]] 
 def test_no_app_code_calls_the_non_consuming_totp_verifier():
     offenders = [
         f"{rel}:{call.lineno} in {owner}()"
-        for rel, _tree, calls, aliases in _MODULES
-        for call, owner in calls
-        if _called_name(call, aliases) in _NON_CONSUMING
+        for rel, _tree, calls in _MODULES
+        for call, owner, scope_chain in calls
+        if _called_name(call, scope_chain) in _NON_CONSUMING
     ]
 
     assert not offenders, (
@@ -145,9 +171,9 @@ def test_no_app_code_calls_the_non_consuming_totp_verifier():
 
 def test_consuming_primitives_have_exactly_one_caller_each():
     found: dict[str, list[str]] = {name: [] for name in _CONSUMING_CALLERS}
-    for rel, _tree, calls, aliases in _MODULES:
-        for call, owner in calls:
-            name = _called_name(call, aliases)
+    for rel, _tree, calls in _MODULES:
+        for call, owner, scope_chain in calls:
+            name = _called_name(call, scope_chain)
             if name in found:
                 found[name].append(f"{rel}::{owner}")
 
@@ -162,7 +188,7 @@ def test_consuming_primitives_have_exactly_one_caller_each():
 
 def test_pyotp_is_confined_to_the_mfa_service():
     importers = []
-    for rel, tree, _calls, _aliases in _MODULES:
+    for rel, tree, _calls in _MODULES:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 names = [alias.name.split(".")[0] for alias in node.names]
