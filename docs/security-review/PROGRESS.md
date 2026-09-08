@@ -16,12 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 10 (Documents & legal, pass 4)** — branch
+**Feature 10 (Documents & legal, pass 4)** — PR
+[#2411](https://github.com/thegspiro/the-logbook/pull/2411), branch
 `claude/security-review-documents-legal-pass4` (new name; `claude/security-
 review-doc`, `claude/security-review-doc-followup`, `claude/security-review-
 documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
-out this pass). PR: pending creation, will be recorded here once opened.
+out this pass).
 
 Two fixes this pass:
 
