@@ -16,6 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 02 (Permissions & roles, pass 4)'s PR #2391 merged
+(`a96b7370`) — 4 findings, 3 fixed, 1 flagged. The one that matters is
+**PERM-5** (MED, flagged) — the three user↔position assignment routes carry
+two guards and neither compares the caller to the target, letting a
+low-privileged Secretary or Membership Coordinator strip the department's only
+wildcard `*` holder with an irreversible empty-list role removal; flagged
+because the obvious fix also blocks a legitimate offboarding case. CI caught
+one real issue mid-PR: a `PT006` flake8-pytest-style violation (comma-string
+`@pytest.mark.parametrize` argnames instead of a tuple) in the new guard test,
+fixed and verified against the CI-pinned plugin (the plain `flake8` on `PATH`
+resolves to an isolated `uv tool` install that doesn't see it — same
+shadowing class already documented for `black`). Merged once CI was fully
+green and Codex's review completed clean on the fix commit. Full write-up:
+the **Pass 4** section of `docs/security-review/PERM-02-permissions-roles.md`.
+Next: 03 Public surface & webhooks.
+
+<details>
+<summary>Superseded — PR #2391 (pass 4), preserved for history</summary>
+
 **Feature 02 (Permissions & roles, pass 4)** — PR
 [#2391](https://github.com/thegspiro/the-logbook/pull/2391), branch
 `claude/security-review-permissions-roles-pass4`. Pass 4's third feature.
@@ -42,6 +61,8 @@ one-query-per-item loop. Also the first pass on this feature to read all ten
 principal files in full rather than the diff, which is how PERM-5 — older than
 pass 3 — was reached. Full write-up: the **Pass 4** section of
 `docs/security-review/PERM-02-permissions-roles.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 01 pass 4 merged), preserved for history</summary>
@@ -11124,6 +11145,19 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 02 (Permissions & roles, pass 4)'s PR #2391 merged, watchdog recorded it
+
+CI's Backend Lint job caught a real `PT006` flake8-pytest-style violation in
+the PR's own new guard test (`@pytest.mark.parametrize("name,description",
+...)` needed a tuple, not a comma-string, matching this suite's existing
+convention elsewhere) — fixed and verified against the CI-pinned plugin
+version directly, not just re-read (the plain `flake8` on `PATH` resolves to
+an isolated `uv tool` install that doesn't see it, same shadowing class this
+rotation already documented for `black`). Codex's review completed clean on
+both the original and the fix commit, with 0 findings. Merged (`a96b7370`)
+once CI was fully green. This entry records the merge and clears the stale
+Open PR row. Next: 03 Public surface & webhooks.
 
 ### 2026-09-08 — Feature 02 (Permissions & roles, pass 4) — PR #2391 opened
 
