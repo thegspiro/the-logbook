@@ -132,14 +132,28 @@ corrected, no finding reopened.
 This PR was opened directly against a merge conflict in this section: a
 concurrent rotation iteration's PR #2408 (below) had merged to `main` in
 the interim without a docs-only follow-up yet recording it, so both PRs'
-Open PR notes landed on the same section at once. Resolved here by folding
-PR #2408 into the Superseded history below as merged, and keeping this PR
-(#2411, genuinely still open) as the current entry.
+Open PR notes landed on the same section at once. By the time this
+conflict was re-resolved against current `main` (this PR having since
+picked up three further Codex-review rounds of its own), PR #2413 —
+MP-29's own round 4, on top of #2408 — had also merged, fully closing
+Feature 08. Resolved here by folding both #2408 and #2413 into the
+Superseded history below as merged, and keeping this PR (#2411, genuinely
+still open) as the current entry.
 
 Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408, merged), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408/#2413, merged), preserved for history</summary>
+
+**None.** PR #2413 (Feature 08, Membership pipeline, pass 5, MP-29 round 4
+— cancellation-detection and stale-docstring fixes on top of #2408) merged
+clean, 17/17 CI checks green, its one Codex thread resolved. Feature 08 is
+now fully closed across all rounds (MP-27 via #2405, MP-28 via #2406,
+MP-29 and its four Codex-review rounds via #2408 and #2413). Next: 10
+Documents & legal.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408/#2413), preserved for history</summary>
 
 **Feature 08 (Membership pipeline, pass 5, MP-29)** — PR
 [#2408](https://github.com/thegspiro/the-logbook/pull/2408), branch
@@ -185,7 +199,7 @@ org`, matching `test_facility_document_reference_race.py`'s own
 batch (one rejected, one deliberately paused) so it checks the lock is
 released _before_ the whole call returns, not only after — a plain
 one-item version can't tell a true per-item release from a regression that
-commits once at the end of the loop.
+commits once at the end of the loop. Subscribed to PR activity.
 
 **Note on ordering:** while this PR was still open, a separate rotation
 iteration read `main`'s then-current (stale, since this PR hadn't merged
@@ -194,10 +208,10 @@ yet to update it) "None, next: 09" pointer and opened **and merged**
 Medical screening, pass 4 — MS-10, a form clear-guard fix) ahead of this
 one finishing — a mild "one PR at a time" violation caused by the pointer
 only updating on merge, not on open, not this session's to fix. Feature 09
-was therefore already done by the time this PR merged; PR #2408 itself has
-since merged to `main` too (confirmed via `git log`), and this docs-only
-follow-up for it had not yet landed when PR #2411 (Feature 10) was opened,
-which is what produced this section's merge conflict — resolved above.
+is therefore already done; next feature once _this_ PR merges is 10
+(Documents & legal, confirmed by `main`'s own post-#2409-merge pointer).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, pass 4, PR #2409, merged out of turn while #2408 was still open), preserved for history</summary>
@@ -11995,6 +12009,27 @@ Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
 `docs/KNOWN_LIMITATIONS.md` and `docs/module-audit/documents.md` updated.
 `CHANGELOG.md` entry added. Rotation row 10 → ⏳ (awaiting PR merge). **Open
 PR** row updated with the branch and finding summary above.
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5)'s PR #2413 merged — feature fully closed
+
+PR #2408 merged mid-fix (as #2406 had before it), so its last two Codex
+findings landed in a follow-up, #2413: (1) preserving `bulk_task`'s
+original failure instead of burying it behind a 10s timeout when the task
+raised before reaching its pause point (same fix already applied to the
+sibling `writer_task` case), and (2) correcting the class docstring's
+claimed pre-fix failure mechanism a second time to match the code's
+current wait logic. A fifth Codex round on #2413 itself then found the
+cancellation-detection flag in both `finally` blocks missed the case where
+`asyncio.wait_for(task, timeout=10)`'s own internal timeout cancels the
+task before this code ever sees it not-done — fixed by checking
+`task.cancelled()` after the task has settled, covering both self-
+initiated and `wait_for`-initiated cancellation. Codex's next review pass
+on the fix found nothing further. PR #2413 merged fully green (17/17 CI
+checks, `mergeable_state: clean`), its one review thread resolved.
+
+Feature 08's pass 5 is now completely closed across every round: MP-27
+(#2405), MP-28 (#2406), MP-29 and its four Codex-review rounds (#2408,
+#2413). **Open PR** row cleared. Next: 10 Documents & legal.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 rounds 3-4) — 4 more test-robustness fixes (Codex review of PR #2408)
 
