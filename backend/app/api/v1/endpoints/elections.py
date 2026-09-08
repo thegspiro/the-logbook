@@ -113,21 +113,28 @@ from app.utils.org_scoping import assert_in_org
 router = APIRouter()
 
 
-# Rate-limit factories for public ballot endpoints (no auth required)
-def _ballot_read_rate_limit(
+# Rate-limit factories for public ballot endpoints (no auth required).
+# SECURITY (ELEC-41): these must be `async def` and `await` check_rate_limit —
+# check_rate_limit is itself `async def`, so a plain `def` wrapper that
+# returns its call without awaiting it only constructs a coroutine and never
+# runs the limiter's body (no exception is ever raised, regardless of request
+# volume). FastAPI decides sync-vs-await by inspecting the dependency
+# callable itself, not its return value, so this silently disabled rate
+# limiting on every one of this module's public token routes.
+async def _ballot_read_rate_limit(
     request: Request,
 ) -> None:
     """10 requests/minute per IP for ballot reads."""
-    return check_rate_limit(
+    return await check_rate_limit(
         request, max_requests=10, window_seconds=60, lockout_seconds=300
     )
 
 
-def _ballot_vote_rate_limit(
+async def _ballot_vote_rate_limit(
     request: Request,
 ) -> None:
     """5 requests/minute per IP for vote submissions."""
-    return check_rate_limit(
+    return await check_rate_limit(
         request, max_requests=5, window_seconds=60, lockout_seconds=600
     )
 

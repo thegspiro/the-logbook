@@ -1,15 +1,17 @@
 # Module Audit — Elections
 
 **Files:** `app/api/v1/endpoints/elections.py` (2,721 L, 46 endpoints incl. 5
-public token endpoints at iteration-5 audit time; **3,809 L, 65 endpoints incl.
-4 public token endpoints as of security-review 06, 2026-08-25** — see that
-iteration's write-up for what accounts for the growth), `app/services/election_service.py`
-(4,616 L at iteration-5 audit time; **7,962 L as of 2026-08-25**),
-`app/services/quorum_service.py` (139 L), model `app/models/election.py`,
-frontend `modules/elections`.
+public token endpoints at iteration-5 audit time; 3,809 L, 65 endpoints incl.
+4 public token endpoints as of security-review 06 pass 1, 2026-08-25;
+**3,880 L as of pass 4, 2026-09-08, route count unchanged** — the growth is
+pass 3's own fixes' comments/logic, not new endpoints), `app/services/election_service.py`
+(4,616 L at iteration-5 audit time; 7,962 L as of pass 3; **8,632 L as of
+pass 4**), `app/services/quorum_service.py` (139 L; **159 L as of pass 4**),
+model `app/models/election.py`, frontend `modules/elections`.
 **Audited:** iteration 5 (security-critical — voting integrity, ballot secrecy,
 token security, tenant isolation, tally/quorum correctness); re-verified against
-current code by security-review 06 (`docs/security-review/ELEC-06-elections-ballots.md`).
+current code by security-review 06 (`docs/security-review/ELEC-06-elections-ballots.md`,
+4 passes through 2026-09-08).
 
 ## Verified good ✅
 
@@ -25,7 +27,15 @@ current code by security-review 06 (`docs/security-review/ELEC-06-elections-ball
 - **Concurrency:** `close_election`/`open_election` use `with_for_update()` to
   avoid duplicate runoffs / double-open.
 - **Public endpoints rate-limited:** 10/min reads, 5/min votes, IP lockouts
-  (300s/600s), via the proxy-aware `check_rate_limit`.
+  (300s/600s), via the proxy-aware `check_rate_limit`. **Correction
+  (2026-09-08, security review 06 pass 4, ELEC-41):** this claim was false
+  from whenever this code was written until pass 4 fixed it — the two
+  wrapper dependencies called `check_rate_limit` (an `async def`) without
+  `await`, which only constructs a coroutine and never runs the limiter, so
+  none of these 4 public routes were rate-limited at all despite reading as
+  if they were. Now genuinely enforced; see
+  `docs/security-review/ELEC-06-elections-ballots.md` pass 4 for the
+  write-up and the guard test that would have caught it.
 - **Tally math correct:** quorum uses `ceil - epsilon`; majority uses `n//2 + 1`.
 - **No SQL injection:** the `.format()` hits are email templates (internal
   constants, all user fields `html.escape`'d), not SQL. Write-in names escaped.

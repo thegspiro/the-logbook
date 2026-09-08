@@ -1,8 +1,184 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7), PR_PLACEHOLDER (pass 4)
 
 ---
+
+## Pass 4 (2026-09-08)
+
+**Scoping:** confirmed `main` tip (`ccb8451`) against `origin/main` before
+starting; no security-review PR was open (`PROGRESS.md`'s Open PR row read
+"None"; a GitHub PR search for `security(elections` returned only closed/
+merged PRs). Route/permission counts re-enumerated from scratch rather than
+trusted from pass 3's write-up: `grep -c "Depends(require_permission" /
+"Depends(get_current_user)" / "^@router\."` on
+`backend/app/api/v1/endpoints/elections.py` returns **56 / 5 / 65** —
+unchanged from pass 3 (56 `elections.manage`/`elections.view` gated, 5
+authenticated-only, 4 public token routes). Confirmed 65 total including the
+4 public routes via a direct count of `^@router\.` decorators.
+
+**Code did change since pass 3, but only by pass 3's own last rounds landing:**
+`election_service.py` grew from the 7,962 lines pass 3 recorded to 8,632
+(+670), `elections.py` from 3,809 to 3,880 (+71), `quorum_service.py` from 139
+to 159 (+20). This repo's history has been squash-rewritten again since pass
+3 (a single merge commit, `b267ee1`, now carries the entire pre-existing tree
+as its first appearance of these files in `git log`), so the growth could not
+be attributed to a diffable commit range — instead it was verified by content:
+every fix pass 3's rounds 7–10 made (`_dedup_scoped_item_aliases`,
+`eligible_positions`/`eligible_item_ids` snapshot handling,
+`attest_manual_ballot_batch`'s `attested_by == batch.recorded_by` guard, the
+`populate_existing=True` re-selects) is present verbatim in the current file,
+confirming the diff is pass 3's own already-reviewed work and not new,
+unreviewed code. No election-table migration landed since (55 migrations
+existed as of pass 3's own check and none touched an election table by
+content; re-confirmed no new ones touch `elections`/`candidates`/`votes`/
+`voting_tokens`/`manual_ballot_batches` by grepping migration bodies, not
+filenames).
+
+**Re-verified against current code, not re-derived:**
+
+- **ELEC-2, ELEC-7 (org-scoping on `update_candidate`/`delete_candidate`/
+  `create_candidate`) — still fixed.** Both mutation endpoints still resolve
+  the election via `get_election(election_id, current_user.organization_id)`
+  before touching the candidate; `create_candidate` still runs
+  `assert_in_org(db, User, candidate.user_id, ..., allow_none=True)` before
+  persisting the client-supplied `user_id` (XC-1).
+- **`respond_to_nomination` (self-scoping, checklist §2) — confirmed.**
+  `accept_nomination`/`decline_nomination` are gated only by
+  `elections.view` (the baseline `member` grant) by design — "only the
+  nominee can respond" is enforced in the service
+  (`election_service.py:3540`, `if str(candidate.user_id) != str(user_id):
+return False, "Only the nominee can respond to this nomination"`), not by
+  permission scope. `create_nomination` independently org-scopes both the
+  election and the nominee lookup.
+- **ELEC-6/R-D2 (ballot secrecy — IP/UA purge at close) — still intact.**
+  `close_election` (`election_service.py:4811-4825`) still destroys
+  `voter_anonymity_salt` and bulk-clears `ip_address`/`user_agent` on that
+  election's `Vote` rows for anonymous elections in the same transaction.
+- **Token path fail-closed ordering — re-traced, unchanged and correct.**
+  `get_ballot_by_token` (line 7479) checks token existence → expiry → used →
+  frozen-roll membership → election status/window, in that order, before any
+  candidate/eligibility work, and returns `(None, None, <reason>)` — never a
+  partial success — on every branch.
+  `_lock_token_ballot_for_submission` (line 7557) re-checks all of the same
+  mutable state under `.with_for_update()` +
+  `.execution_options(populate_existing=True)` immediately before either
+  vote-casting method does any writing, closing the TOCTOU window between
+  the optimistic read in `get_ballot_by_token` and the actual write.
+- **PDF exports (`printable-ballot`, `certified-results`,
+  `pre-meeting-package`) — checked for the first time by name in this file.**
+  All three are `elections.manage`-gated, resolve the election through
+  `get_election(id, organization_id)` (org-scoped), and build their
+  `Content-Disposition` filename via
+  `re.sub(r"[^A-Za-z0-9_-]+", "_", election.title)[:60]` — no raw
+  attacker-influenced title reaches the header. Pitfall #15 (`SafeCsvWriter`)
+  remains n/a: these are PDF (`StreamingResponse`,
+  `media_type="application/pdf"`), not CSV; still zero `csv.writer` calls in
+  the module.
+- **ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40 — re-verified, all still
+  accurately flagged/open, no drift.** Read each finding's exact code again
+  rather than trusting the prior write-up:
+  - ELEC-12 (`SavedBallotTemplate` list/create unbounded) —
+    `elections.py:391-401` still has no `limit`/`offset`.
+  - ELEC-14 (`verify_vote_receipt`'s `receipt: str` GET query param) —
+    `elections.py:3846-3849`, signature unchanged.
+  - ELEC-16 (`list_manual_ballot_batches` unbounded) —
+    `election_service.py:3958-3974`, still no pagination.
+  - ELEC-28 (public ballot UI cannot render a plain-position contest) —
+    `frontend/src/pages/BallotVotingPage.tsx` only ever maps
+    `election.ballot_items`; `election.positions` is not referenced anywhere
+    in the file.
+  - ELEC-40 (pre-ELEC-34 vote collision-avoidance gap) — the known
+    limitation as documented; no code path changed.
+
+### ELEC-41 — HIGH — Public ballot rate limiting was completely inert (silently unawaited coroutine) — ✅ FIXED
+
+**What:** `_ballot_read_rate_limit` and `_ballot_vote_rate_limit` — the
+`Depends()` used by all 4 public token-based ballot routes — were declared as
+plain `def` functions that `return check_rate_limit(...)` **without
+`await`**. `check_rate_limit` (`app/core/security_middleware.py:919`) is
+itself `async def`. Calling an `async def` function without `await` only
+constructs a coroutine object; none of its body — including the Redis/
+in-memory limit check and the `HTTPException(429)` it raises when a limit is
+exceeded — ever executes. FastAPI decides whether to `await` a dependency by
+inspecting whether the **dependency callable itself** is a coroutine function
+(`inspect.iscoroutinefunction`), not by inspecting what calling it returns —
+so a sync `def` wrapper around an async call is invisible to that check.
+FastAPI ran the sync wrapper (in a threadpool), received a coroutine object
+back as the "result", discarded it, and let the request through. The only
+observable trace was a "coroutine 'check_rate_limit' was never awaited"
+`RuntimeWarning`, which nothing surfaces to an operator.
+
+**Where:** `backend/app/api/v1/endpoints/elections.py:117-132` (pre-fix line
+numbers).
+
+**Failure scenario:** an attacker sends unlimited `POST
+/api/v1/elections/ballot/lookup`, `POST /api/v1/elections/ballot/vote`,
+`POST /api/v1/elections/ballot/vote/bulk`, or `GET
+/api/v1/elections/{id}/verify-receipt` requests from one IP with no
+throttling or lockout whatsoever — the two documented, verified-good
+compensating controls for this module's only unauthenticated surface (module-
+audit: "Public endpoints rate-limited: 10/min reads, 5/min votes, IP
+lockouts (300s/600s)") did not exist in practice. This does not break token
+secrecy (512-bit tokens are not brute-forceable regardless of rate), but it
+removes the app's only defense against automated hammering of these routes —
+scripted DB/CPU load from unthrottled ballot lookups, or scripted attempts
+against `verify_vote_receipt`'s receipt-hash lookup, at unlimited
+request-per-second volume from a single IP.
+
+**Impact:** every deployment running this code had no working rate limit on
+its 4 public voting endpoints, for as long as this code has existed —
+verified present (and equally broken) as far back as this pass could trace it
+by content; the wrappers were byte-identical in the diff-from-`a518957e5`
+check pass 3 ran and reported no change in.
+
+**Fix:** both wrappers are now `async def` and `await check_rate_limit(...)`,
+matching every other rate-limit wrapper pattern in the codebase (e.g.
+`app/api/public/finance_approvals.py`'s `_rate_limit`). Verified the fix by
+hand: `inspect.iscoroutinefunction` now returns `True` for both, and a
+FastAPI-shaped dependency-resolution simulation (mirroring
+`fastapi.dependencies.utils.solve_dependencies`'s own
+`is_coroutine_callable` check) confirms `check_rate_limit`'s body now
+actually runs instead of being silently dropped.
+
+**Guard test:** `backend/tests/test_election_ballot_rate_limit.py` — asserts
+`inspect.iscoroutinefunction()` on both wrappers (the actual property FastAPI
+inspects; this is the assertion that fails on the pre-fix code — verified by
+stashing the fix and re-running), plus that `check_rate_limit` is reached
+with the documented `max_requests`/`window_seconds`/`lockout_seconds` values
+and that a raised `HTTPException(429)` propagates. The file's docstring
+records — because it is not obvious and was hand-verified before writing the
+test — that a test which merely does `await wrapper(...)` directly would
+have passed on the broken code too, since manually awaiting the wrapper's
+return value drives the coroutine regardless of whether the wrapper itself
+was ever awaited by anything (which is exactly the distinction FastAPI's own
+resolution makes and the bug depended on).
+
+**Pass 4 summary: 1 fixed (ELEC-41, HIGH), 0 flagged this pass — 5 prior
+findings (ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still
+accurately open/flagged, no drift, no re-report needed.**
+
+**Completion gate (pass 4):**
+
+| Check                                                       | Result                                                                                                                       |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                               | ✅ 0 violations                                                                                                              |
+| `black --check app/ tests/ alembic/`                        | ✅ clean (1536 files)                                                                                                        |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin) | ✅ clean                                                                                                                     |
+| `python3 scripts/validate_migrations.py --strict`           | ✅ 438 revisions, single head (`1603bd9c59e7`) — no migration this pass                                                      |
+| `pytest tests/ -q -k "election or ballot or quorum"`        | ✅ 554 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed                                                    |
+| `pytest tests/test_election_ballot_rate_limit.py -v`        | ✅ 6 passed (new guard tests); confirmed 2 fail against the pre-fix code by stashing the fix and re-running                  |
+| `pytest tests/ -q` (full backend suite)                     | ✅ 11849 passed, 21 skipped (pre-existing/environmental — py_vapid, Docker unavailable, opt-in API-contract suite), 0 failed |
+| `npm run typecheck` (frontend, aliased-compiler wrapper)    | ✅ 0 errors — no frontend file changed this pass, run anyway per gate                                                        |
+| `npm run lint` (frontend)                                   | ✅ 0 errors, 2 pre-existing warnings in an unrelated file (`CallTypeChips.tsx`), well under `--max-warnings 10`              |
+
+New guard test: `backend/tests/test_election_ballot_rate_limit.py` (6 tests —
+see ELEC-41 above for what each asserts and why the naive form would not have
+caught the bug).
+
+---
+
+## Pass 3 (2026-09-02)
 
 ## Pass 3 (2026-09-02)
 
@@ -1709,7 +1885,7 @@ New guard tests: `tests/test_election_codex_round10.py` (new file, 3 tests).
 
 **What:** Codex's ELEC-38 report (round 9) and this codebase's own reply on
 it both reasoned that dropping a colliding fallback alias from the
-duplicate-vote *pre-check* is safe because "a genuine repeat vote is always
+duplicate-vote _pre-check_ is safe because "a genuine repeat vote is always
 dedup-hashed against the item's own canonical id... so the UNIQUE
 constraint still catches an actual duplicate on that exact item even after
 a colliding alias is excluded from the pre-check." That reasoning has an
@@ -1727,7 +1903,7 @@ ELEC-34 only changed what feeds the **hash**. So: a vote cast through
 `cast_vote_with_token` for a legacy item, at any time — including right
 now, not only "historically" in a pre-migration sense, though the sharpest
 case is a genuinely pre-ELEC-34 production row whose `vote_dedup_hash` was
-computed with the *old* (title-based) formula — is stored with
+computed with the _old_ (title-based) formula — is stored with
 `Vote.position == <title>`. If that title collides with a sibling item's
 canonical key, `_dedup_scoped_item_aliases()` drops it from the pre-check's
 alias set, and:
@@ -1738,7 +1914,7 @@ alias set, and:
 - For a genuinely pre-ELEC-34 row specifically, the **UNIQUE constraint**
   does not save it either: its `vote_dedup_hash` was computed against the
   title, not the item's id, so a new vote's id-based hash cannot collide
-  with it. (A row written by `cast_vote_with_token` *after* ELEC-34 does
+  with it. (A row written by `cast_vote_with_token` _after_ ELEC-34 does
   still hash against the item's own id like everything else, so the UNIQUE
   constraint remains the backstop for that case — only genuinely
   pre-ELEC-34 rows are exposed to an actual bypassed double vote; more
@@ -1751,7 +1927,7 @@ costs and neither is obviously correct without a product decision:
 1. Revert `_dedup_scoped_item_aliases()`'s narrowing (go back to the full,
    unscoped alias set for the pre-check) — closes this gap for historical
    title-keyed rows, but reopens ELEC-38's false-positive (a legitimate
-   vote on a *different* item rejected as a duplicate merely because its
+   vote on a _different_ item rejected as a duplicate merely because its
    alias string collides). Given the schema cannot disambiguate the two
    items apart from the string itself (see ELEC-38 / `KNOWN_LIMITATIONS.md`),
    there is no way to keep both fixed with a pre-check alone.

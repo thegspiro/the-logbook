@@ -16,6 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 06 (Elections & ballots, pass 4)** — PR
+[PR_PLACEHOLDER](PR_URL_PLACEHOLDER), branch
+`claude/security-review-elections-ballots`. One fix, HIGH severity:
+**ELEC-41** — the two rate-limit `Depends()` wrappers guarding all 4 public
+token-based ballot routes (`ballot/lookup`, `ballot/vote`, `ballot/vote/bulk`,
+`verify-receipt`) were plain `def` functions calling the (`async def`)
+`check_rate_limit` without `await`, which only constructs a coroutine and
+never runs the limiter — silently disabling rate limiting on this module's
+entire public voting surface, invisibly to FastAPI (which decides whether to
+await a dependency by inspecting the callable itself, not its return value).
+Fixed by making both wrappers `async def` and awaiting the call; new guard
+test asserts `inspect.iscoroutinefunction()` on both (confirmed to fail on
+the pre-fix code by stashing the fix and re-running). Five prior findings
+(ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still accurately
+open/flagged, no drift. Full checklist worked fresh across all 7 dimensions.
+Gate: flake8/black/isort clean; migration validator passed (no migration
+this pass); scoped pytest 554 passed; full backend suite 11,849 passed, 21
+pre-existing skips, 0 failed; frontend typecheck/lint both clean (no
+frontend file changed). See `docs/security-review/ELEC-06-elections-ballots.md`
+pass 4 for the full write-up. Next feature (once this PR merges): 07 Users &
+organizations.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 05 pass 4, PR #2398 merged), preserved for history</summary>
+
 **None.** Feature 05 (Finance & approvals, pass 4)'s PR #2398 merged
 (`320a143d`, squash) by a 30-minute watchdog check — fully green (17/17
 checks including `CI Success`), `mergeable_state: clean`, Codex review
@@ -25,7 +50,9 @@ threads resolved. Four fixes, one flagged this pass: FIN-27 (route-shadowing
 500, found by Codex once FIN-27 made the route reachable), and FIN-30
 (flagged — an unbounded per-member dues-payment ledger, found by Codex after
 this pass's own doc correction overclaimed it was paginated). See the
-superseded note below for the full write-up. Next: 06 Elections & ballots.
+superseded note below for the full write-up.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 05 pass 4, PR #2398), preserved for history</summary>
@@ -11297,7 +11324,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
@@ -11333,6 +11360,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 06 (Elections & ballots, pass 4) — 1 fixed (HIGH), 0 flagged — PR opened
+
+Confirmed `origin/main` tip matched the briefing (`ccb8451`) and no
+security-review PR was open (search for `security(elections` returned only
+closed/merged PRs; Open PR row read "None"). Diffed the module against pass
+3's own recorded state by content — this repo's history has been
+squash-rewritten again since pass 3, so a commit-range diff was not
+available — and confirmed the growth since pass 3
+(`election_service.py` 7,962→8,632 L, `elections.py` 3,809→3,880 L,
+`quorum_service.py` 139→159 L) is pass 3's own rounds 7–10 fixes verbatim
+(`_dedup_scoped_item_aliases`, the `eligible_positions`/`eligible_item_ids`
+snapshot handling, `attest_manual_ballot_batch`'s separation-of-duties
+guard), not new unreviewed code. Route/permission enumeration re-confirmed
+exactly unchanged: 65 routes, 56 `require_permission`, 5 authenticated-only,
+4 public.
+
+**ELEC-41 (HIGH, fixed) — the public ballot rate limit was completely
+inert.** `_ballot_read_rate_limit`/`_ballot_vote_rate_limit` — the
+`Depends()` guarding all 4 public token-based ballot routes — were plain
+`def` functions that returned `check_rate_limit(...)` (an `async def`)
+**without `await`**, which only constructs a coroutine and never runs the
+limiter's body. FastAPI decides whether to await a dependency by inspecting
+the callable itself, not its return value, so this was invisible to FastAPI
+and silently disabled rate limiting on this module's entire public,
+unauthenticated voting surface — for as long as the code has existed, as
+far as this pass could trace it by content. Fixed by making both wrappers
+`async def` and awaiting the call, matching the correct pattern already used
+elsewhere in the codebase (`app/api/public/finance_approvals.py`'s
+`_rate_limit`). New guard test
+(`backend/tests/test_election_ballot_rate_limit.py`, 6 tests) asserts
+`inspect.iscoroutinefunction()` on both wrappers — the actual property
+FastAPI's dependency resolution inspects, and confirmed by hand (stashing
+the fix and re-running) to fail on the pre-fix code; a naive
+`await wrapper(...)` test would not have caught this, since manually
+awaiting the wrapper's return value drives the coroutine regardless of
+whether the wrapper itself is ever awaited by anything.
+
+Also re-verified, unchanged from pass 3, no re-report needed: ELEC-12
+(unbounded `SavedBallotTemplate` list/create, flagged), ELEC-14
+(`verify_vote_receipt`'s credential as a GET query param, flagged), ELEC-16
+(unbounded `list_manual_ballot_batches`, flagged), ELEC-28 (public ballot UI
+cannot render a plain-position contest, flagged), ELEC-40 (pre-ELEC-34 vote
+collision-avoidance gap, flagged/known limitation). Full checklist worked
+fresh across all 7 dimensions (auth coverage, self-scoping on
+accept/decline-nomination, tenant isolation on candidate CRUD and PDF
+exports, injection/CSV n/a, ballot-secrecy IP/UA purge at close, abuse
+resistance — where ELEC-41 was found, schema/migration integrity).
+
+**Gate: flake8/black/isort clean on `app/ tests/ alembic/`; migration
+validator passed (438 revisions, single head); scoped pytest (`election or
+ballot or quorum`) 554 passed, 1 pre-existing skip; full backend suite
+11,849 passed, 21 pre-existing/environmental skips, 0 failed; frontend
+`npm run typecheck` 0 errors and `npm run lint` 0 errors (2 pre-existing
+warnings in an unrelated file) — no frontend file changed this pass, both
+run anyway per the gate.** See `docs/security-review/ELEC-06-elections-ballots.md`
+pass 4 for the full write-up. `docs/module-audit/elections.md` corrected
+(the "Public endpoints rate-limited" verified-good claim was false until
+this fix) and `CHANGELOG.md` updated under `[Unreleased]`. Rotation row 06
+→ ✅ (pending PR merge). Next: 07 Users & organizations.
 
 ### 2026-09-08 — Feature 05 (Finance & approvals, pass 4)'s PR #2398 merged, watchdog recorded it
 
