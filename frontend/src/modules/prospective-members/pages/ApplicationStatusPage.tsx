@@ -77,11 +77,16 @@ export const ApplicationStatusPage: React.FC = () => {
       <main
         id="main-content"
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
-        role="status"
-        aria-live="polite"
       >
-        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
-        <span className="sr-only">Loading application status...</span>
+        {/* The live region is a child, not the landmark. `role="status"`
+            overrides an element's implicit role, so putting it on the <main>
+            leaves the page with no main landmark for a screen reader to skip
+            to — the target the skip link names would exist in the DOM and mean
+            nothing. */}
+        <div role="status" aria-live="polite">
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
+          <span className="sr-only">Loading application status...</span>
+        </div>
       </main>
     );
   }

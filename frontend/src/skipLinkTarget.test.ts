@@ -77,7 +77,7 @@ const renderedComponents = (jsx: string): string[] => {
  * block, brace-matched, from the `<Routes>` body. Anything left is public. The
  * count assertion below is what stops a parse that silently matches nothing.
  */
-const publicPages = (): string[] => {
+const publicPages = (): Array<{ file: string; component: string }> => {
   const app = read('App.tsx');
   const routesBody = app.slice(app.indexOf('<Routes>'), app.lastIndexOf('</Routes>'));
 
@@ -139,13 +139,19 @@ const publicPages = (): string[] => {
 
   const names = [...new Set([...renderedComponents(publicJsx), ...factoryJsx])];
 
+  // The component name travels with the file. A page file often declares
+  // helper components beside the page itself, and their returns are indented
+  // identically — `OrganizationSetup` has an `AddressForm` that renders *inside*
+  // the page's own `<main>`. Treating its root as a render branch put a second
+  // `<main id="main-content">` inside the first, which is the exact defect this
+  // sweep exists to prevent, committed by the sweep's own fix.
   return names.map((name) => {
     const byFilename = globSync(path.join(SRC, `**/${name}.tsx`));
     // Ambiguity fails loudly rather than checking whichever file sorted first.
     if (byFilename.length > 1) {
       throw new Error(`expected at most one file named ${name}.tsx, found ${byFilename.length}`);
     }
-    if (byFilename.length === 1) return path.relative(SRC, byFilename[0] ?? '');
+    if (byFilename.length === 1) return { file: path.relative(SRC, byFilename[0] ?? ''), component: name };
 
     // A component can live in a file named for something else — onboarding's
     // placeholder steps share `components/PlaceholderPages.tsx`.
@@ -155,12 +161,15 @@ const publicPages = (): string[] => {
     if (declaring.length !== 1) {
       throw new Error(`cannot locate ${name}: ${declaring.length} files declare it`);
     }
-    return path.relative(SRC, declaring[0] ?? '');
+    return { file: path.relative(SRC, declaring[0] ?? ''), component: name };
   });
 };
 
 describe('skip link target', () => {
-  const pages = [...new Set(publicPages())];
+  const entries = publicPages().filter(
+    (entry, index, all) => all.findIndex((other) => other.file === entry.file) === index
+  );
+  const pages = entries.map((entry) => entry.file);
 
   it('covers the onboarding wizard and the pre-auth pages', () => {
     // A guard against the sweep quietly emptying: if the router is refactored
@@ -202,9 +211,20 @@ describe('skip link target', () => {
      * render state with no landmark is the same defect as one with an
      * unlabelled landmark; the user cannot skip to content either way.
      */
-    const findings = pages.flatMap((page) => {
+    const findings = entries.flatMap(({ file: page, component }) => {
       const source = read(page);
-      const lines = source.split('\n');
+      // Only the page component's own body. A helper declared beside it in the
+      // same file returns markup at the same indentation, and that markup is
+      // rendered *inside* the page — so its root is not a render branch and
+      // must not be given the landmark.
+      const declaration = new RegExp(`(?:export\\s+)?(?:const\\s+${component}\\b|function\\s+${component}\\b)`).exec(
+        source
+      );
+      const bodyStart = declaration?.index ?? 0;
+      const next = /\n(?:export\s+)?(?:const|function)\s+[A-Z]\w*/.exec(source.slice(bodyStart + 1));
+      const bodyEnd = next ? bodyStart + 1 + next.index : source.length;
+      const offset = source.slice(0, bodyStart).split('\n').length - 1;
+      const lines = source.slice(bodyStart, bodyEnd).split('\n');
       const missing: number[] = [];
 
       lines.forEach((line, index) => {
@@ -240,7 +260,7 @@ describe('skip link target', () => {
             return;
           }
         }
-        missing.push(index + 1);
+        missing.push(offset + index + 1);
       });
 
       return missing.length > 0

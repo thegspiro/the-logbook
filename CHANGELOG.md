@@ -104,10 +104,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which discarded `const badge = 'bg-theme-… text-white'` before the semantic
   check ran.
 
+**Fixed (from review of this branch's own fix)**
+
+- **The branch sweep took a helper component for a page.** `OrganizationSetup`
+  declares an `AddressForm` beside the page, indented identically, and it
+  renders _inside_ the page's own `<main>` — so giving its root the landmark
+  produced nested `<main>` elements with duplicate ids, twice over when both
+  address sections expand. That is precisely the defect this sweep exists to
+  catch, committed by the sweep's own fix. The check is scoped to the page
+  component's body now, and the component name travels with the file to make
+  that possible.
+- **`role="status"` on a `<main>` overrides its landmark role**, so two loading
+  states had the skip link's target in the DOM and no main landmark behind it —
+  the source-level sweep passed on the id while assistive technology got
+  nothing. The live region moved to a child in `ApplicationStatusPage` and
+  `EventRequestStatusPage`.
+
 **Testing**
 
-- A regression test for the malformed medical-supplies summary: `{}` must
-  surface the overview error rather than render five zeros.
+- Two regression tests for the malformed medical-supplies summary: `{}` must
+  surface the overview error rather than render five zeros, and a malformed
+  _refresh_ must leave the loaded counters on screen behind that error rather
+  than blanking them.
 - `checkSweepContrast.test.ts` carries `slate-600`. That entry is now unused —
   reverting to the adaptive tokens took `bg-slate-600` back out of the sweep
   files — but it is left in place: the guard throws on an _unknown_ shade, not

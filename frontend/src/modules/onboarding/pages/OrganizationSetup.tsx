@@ -275,7 +275,7 @@ const AddressForm: React.FC<{
   };
 
   return (
-    <main id="main-content" className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div className="md:col-span-2">
         <InputField
           label="Street Address"
@@ -337,7 +337,7 @@ const AddressForm: React.FC<{
         maxLength={100}
         error={getFieldError('country')}
       />
-    </main>
+    </div>
   );
 };
 

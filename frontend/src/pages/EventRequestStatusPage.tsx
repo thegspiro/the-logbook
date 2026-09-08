@@ -111,10 +111,13 @@ const EventRequestStatusPage: React.FC = () => {
       <main
         id="main-content"
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
-        role="status"
-        aria-live="polite"
       >
-        <Loader2 className="text-theme-accent-red h-8 w-8 animate-spin" />
+        {/* Live region on a child: `role="status"` on the <main> would override
+            its implicit landmark role and leave the skip link's target inert. */}
+        <div role="status" aria-live="polite">
+          <Loader2 className="text-theme-accent-red h-8 w-8 animate-spin" />
+          <span className="sr-only">Loading request status...</span>
+        </div>
       </main>
     );
   }
