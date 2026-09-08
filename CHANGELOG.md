@@ -273,6 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
 ### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
+
 ### Clearing a medical screening record or requirement field silently kept the old value (2026-09-08)
 
 **Security**
