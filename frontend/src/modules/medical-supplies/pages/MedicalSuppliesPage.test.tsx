@@ -117,6 +117,50 @@ describe('MedicalSuppliesPage', () => {
     mockRetireItem.mockResolvedValue(undefined);
   });
 
+  /**
+   * The overview is five counters and every one of them renders. A response
+   * that is valid JSON but not this shape — a captive portal answering 200, an
+   * endpoint mid-rename — used to mark the section loaded and draw five zeros
+   * under an "Expiring within undefinedd" heading: a plausible all-clear over
+   * stock nobody had counted, which is the one wrong answer this screen must
+   * not give.
+   *
+   * Asserted through what the officer sees, not through the guard's internals,
+   * so the test survives a rewrite of how the shape is checked.
+   *
+   * The stale-data half is covered by the test below, through the toolbar's
+   * refresh button. An earlier version of this comment claimed there was no
+   * control to click — that was wrong: `useRegisterPullToRefresh` registers the
+   * gesture, but the same `refresh()` is also wired to a visible button.
+   */
+  it('reports an unreadable overview rather than drawing it as zeros', async () => {
+    mockGetSummary.mockResolvedValue({});
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByText(/Could not load the overview/i)).toBeInTheDocument();
+    // The counters must not render at all: a "0" here is the failure mode.
+    expect(screen.queryByText(/Expiring within/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * The other half: a refresh that comes back malformed must surface the error
+   * *without* wiping the numbers already on screen. Clearing them would replace
+   * a known-good count with a blank, which is the same false all-clear as
+   * rendering zeros — just arrived at from the other direction.
+   */
+  it('keeps the loaded counters visible when a refresh returns a malformed overview', async () => {
+    renderWithRouter(<MedicalSuppliesPage />);
+    expect(await screen.findByText(/Expiring within 30/i)).toBeInTheDocument();
+
+    mockGetSummary.mockResolvedValue({ total_items: 12 });
+    await userEvent.click(screen.getByRole('button', { name: /Refresh medical supplies/i }));
+
+    expect(await screen.findByText(/Could not load the overview/i)).toBeInTheDocument();
+    // The stale numbers stay up behind the error rather than being blanked.
+    expect(screen.getByText(/Expiring within 30/i)).toBeInTheDocument();
+  });
+
   it('names the page for the domain it holds', async () => {
     renderWithRouter(<MedicalSuppliesPage />);
 

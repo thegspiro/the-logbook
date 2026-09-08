@@ -317,6 +317,24 @@ const MedicalSuppliesPage: React.FC = () => {
               items = data.items;
               itemPaging = { total: data.total, skip: data.skip, limit: data.limit };
             }
+            // The summary is five counters, every one of them rendered. An
+            // unchecked `{}` reaches the overview as zeros and an "Expiring
+            // within undefinedd" heading — a plausible-looking all-clear over
+            // stock nobody has actually counted, which is the same wrong answer
+            // the three list guards exist to prevent.
+            if (section === 'summary') {
+              const summaryValue = value as MedicalSupplySummary | null;
+              const counters: Array<keyof MedicalSupplySummary> = [
+                'total_items',
+                'expiring_soon',
+                'expired',
+                'low_stock',
+                'expiring_within_days',
+              ];
+              if (!summaryValue || counters.some((field) => typeof summaryValue[field] !== 'number')) {
+                throw new Error('The supply summary service returned an unexpected response.');
+              }
+            }
             if (section === 'categories' && !Array.isArray(value)) {
               throw new Error('The category list service returned an unexpected response.');
             }

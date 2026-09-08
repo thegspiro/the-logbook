@@ -116,27 +116,27 @@ const GuestCheckInPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="bg-theme-surface-secondary flex min-h-screen items-center justify-center">
+      <main id="main-content" className="bg-theme-surface-secondary flex min-h-screen items-center justify-center">
         <div className="text-theme-text-secondary">Loading event...</div>
-      </div>
+      </main>
     );
   }
 
   if (loadError || !info) {
     return (
-      <div className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
+      <main id="main-content" className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
         <div className="bg-theme-surface rounded-lg p-8 text-center shadow-md">
           <MapPin className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
           <h1 className="text-theme-text-primary mb-2 text-2xl font-bold">Sign-In Unavailable</h1>
           <p className="text-theme-text-secondary">{loadError}</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (result) {
     return (
-      <div className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
+      <main id="main-content" className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
         <div className="bg-theme-surface rounded-lg p-8 text-center shadow-md">
           <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
             <CheckCircle2 className="h-12 w-12 text-green-600 dark:text-green-400" />
@@ -175,7 +175,7 @@ const GuestCheckInPage: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
+      </main>
     );
   }
 

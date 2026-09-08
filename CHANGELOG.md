@@ -119,6 +119,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   still turns it red after the change.
 
 No production change — the component's behaviour was correct throughout.
+
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 
 **Fixed**
