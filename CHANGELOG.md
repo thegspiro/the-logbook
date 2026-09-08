@@ -28,7 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   document upload sends whatever stage the applicant is parked on, and an
   interview recorded without a stage defaults to the same, so either one
   completed a meeting stage. Each trigger now advances only the kind of stage
-  it is evidence for.
+  it is evidence for. Stages still stored in the older "action" shape are
+  resolved to the kind they behave as, so a document stage built before the
+  typed stages existed keeps advancing on upload — and a meeting stage built
+  then is held to the same attendance rule as a modern one, rather than
+  slipping past the gate for want of a type.
 - **Marking a stage Required did nothing.** The flag was stored and badged in
   the stage list but read by no logic, so a required stage could be skipped
   like any other. **Breaking:** a required stage can no longer be skipped —

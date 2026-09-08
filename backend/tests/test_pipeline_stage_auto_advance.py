@@ -998,3 +998,105 @@ class TestMeetingStageNeedsRealAttendance:
 
         assert advanced is False
         assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+
+class TestLegacyActionStagesKeepTheirBehaviour:
+    """Before typed stages existed, a document, meeting or email stage was
+    ``step_type='action'`` with the kind in ``action_type``. Those rows are
+    still live: the editor renders them as their modern equivalent and only
+    rewrites ``step_type`` when somebody saves the stage.
+
+    Dispatching on ``step_type`` alone treats them as untyped, which cuts both
+    ways — a legacy document stage stops advancing on upload, and a legacy
+    meeting stage skips the attendance gate that is the point of the change.
+    """
+
+    async def test_a_legacy_document_stage_still_advances_on_upload(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="action",
+            config={
+                "required_document_types": ["Photo ID"],
+                "auto_advance": True,
+            },
+        )
+        gate.action_type = "collect_document"
+        await db_session.commit()
+
+        await _upload_document(svc, prospect, org, "Photo ID", gate.id)
+
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_a_legacy_meeting_stage_is_gated_on_attendance_too(
+        self, db_session: AsyncSession, org
+    ):
+        """The regression this whole change exists to prevent, on the shape
+        that dispatching by step_type alone would have left wide open."""
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="action",
+            config={
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+        gate.action_type = "schedule_meeting"
+        await db_session.commit()
+        now = datetime.now(timezone.utc)
+        next_week = _make_event(
+            org,
+            start_datetime=now + timedelta(days=7),
+            end_datetime=now + timedelta(days=7, hours=2),
+        )
+        attendee = EventExternalAttendee(
+            id=_uid(),
+            organization_id=org,
+            event_id=str(next_week.id),
+            name="Dana Reed",
+            email=f"staff-{_uid()[:8]}@example.com",
+            prospect_id=prospect.id,
+            checked_in=True,
+            checked_in_at=now,
+        )
+        db_session.add_all([next_week, attendee])
+        await db_session.commit()
+
+        advanced = await GuestCheckInService(
+            db_session
+        ).try_advance_attendance_pipeline(str(prospect.id), next_week)
+
+        assert advanced is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)
+
+    async def test_a_legacy_meeting_stage_advances_on_real_attendance(
+        self, db_session: AsyncSession, org
+    ):
+        svc, prospect, gate = await _pipeline_parked_on(
+            db_session,
+            org,
+            step_type="action",
+            config={
+                "linked_event_type": "business_meeting",
+                "auto_advance": True,
+            },
+        )
+        gate.action_type = "schedule_meeting"
+        await db_session.commit()
+        event = _make_event(org)
+        db_session.add(event)
+        await db_session.flush()
+
+        _, error, _ = await GuestCheckInService(db_session).check_in_guest(
+            event=event,
+            organization_id=org,
+            first_name="Dana",
+            last_name="Reed",
+            email=prospect.email,
+        )
+
+        assert error is None
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)

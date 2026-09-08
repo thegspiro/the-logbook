@@ -93,12 +93,16 @@ Each pipeline stage has a type that determines its behavior:
 
 > **What counts as attendance on a Meeting stage.** A meeting stage set to
 > auto-advance moves the applicant on when they are **checked in at the
-> meeting**, and not before the meeting has started. Recording attendance ahead
-> of time — a coordinator adding the expected guests to next Monday's meeting —
-> records the attendance but does not advance anybody; nor does linking the
-> event to the applicant, which the stage does for itself when they reach it.
-> The applicant must be checked in at an event matching the stage's
-> **Auto-Link Event Type** (and category, if one is set).
+> meeting**, from the moment that meeting's **check-in window** opens. That is
+> the same window the event's organizer configured for members, so an applicant
+> who arrives a little early and signs in — 9:40 for a 10:00 meeting, under the
+> usual settings — advances just as one who signs in at 10:05 does.
+>
+> Recording attendance ahead of that window — a coordinator adding next
+> Monday's expected guests today — records the attendance but advances nobody;
+> nor does linking the event to the applicant, which the stage does for itself
+> when they reach it. The applicant must be checked in at an event matching the
+> stage's **Auto-Link Event Type** (and category, if one is set).
 >
 > If someone attended and it was not recorded, use **Advance** — a coordinator's
 > manual advance is not gated on the attendance record.

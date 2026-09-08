@@ -67,10 +67,10 @@ const getStageRequirementHint = (applicant: Applicant): string | null => {
     case StageType.MEETING: {
       // Only when auto-advance is on: that is the setting whose gate the
       // coordinator can be surprised by, because it will not fire until the
-      // meeting has actually started and the applicant is checked in.
+      // applicant is checked in and that meeting's check-in window has opened.
       const autoAdvance = 'auto_advance' in config ? config.auto_advance : false;
       return autoAdvance
-        ? 'Advances on its own once the applicant is checked in at the meeting — not before the meeting starts. Advance by hand if they attended and it was not recorded.'
+        ? "Advances on its own once the applicant is checked in at the meeting, from the moment that meeting's check-in window opens. Advance by hand if they attended and it was not recorded."
         : null;
     }
     default:

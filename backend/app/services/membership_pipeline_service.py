@@ -126,6 +126,39 @@ DUPLICATE_MEMBER_REFUSAL = (
 )
 
 
+def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
+    """The stage type a step behaves as, resolving the legacy ``action`` shape.
+
+    Before the typed stages existed, a document, meeting or email stage was
+    stored as ``step_type='action'`` with the kind in ``action_type``. Those
+    rows are still live — the stage editor renders them as their modern
+    equivalent (``mapStepTypeToFrontend``) and only rewrites ``step_type`` when
+    somebody saves the stage — so any code that dispatches on ``step_type``
+    alone silently treats them as untyped.
+
+    That matters twice here. A trigger matched against an exact type stops
+    advancing a legacy document stage that used to advance on upload; and a
+    legacy meeting stage skips the attendance gate entirely, which is the very
+    bug this module was changed to close. Both dispatch through this instead.
+
+    Only the unambiguous ``action_type`` mapping is resolved. The frontend also
+    guesses at ELECTION_VOTE / STATUS_PAGE_TOGGLE / FORM_SUBMISSION from the
+    shape of ``config``; those are presentation heuristics, and none of them
+    carries a completion gate, so they are deliberately not replicated into a
+    decision about whether an applicant may move.
+    """
+    if step.step_type != PipelineStepType.ACTION:
+        return step.step_type
+
+    action = step.action_type
+    raw = action.value if isinstance(action, ActionType) else action
+    return {
+        ActionType.SEND_EMAIL.value: PipelineStepType.AUTOMATED_EMAIL,
+        ActionType.SCHEDULE_MEETING.value: PipelineStepType.MEETING,
+        ActionType.COLLECT_DOCUMENT.value: PipelineStepType.DOCUMENT_UPLOAD,
+    }.get(raw, PipelineStepType.ACTION)
+
+
 def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
     """Whether a meeting stage's config accepts ``event`` as its meeting.
 
@@ -1438,7 +1471,10 @@ class MembershipPipelineService:
         have made "Advance" unusable on the stage type it exists for.
         """
         config = step.config or {}
-        step_type = step.step_type
+        # Resolved, not raw: a legacy ``action`` + ``schedule_meeting`` stage is
+        # a meeting stage, and dispatching on step_type alone would hand it the
+        # no-gate path the MEETING branch below exists to remove.
+        step_type = effective_step_type(step)
 
         if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
             required_count = config.get("required_count", 1)
@@ -3143,16 +3179,11 @@ class MembershipPipelineService:
         """Return True if the step should trigger an automated email.
 
         Matches both the modern ``automated_email`` step type and the
-        legacy pattern of ``action`` + ``action_type='send_email'``.
+        legacy pattern of ``action`` + ``action_type='send_email'`` — which is
+        what :func:`effective_step_type` resolves, so the legacy mapping is
+        written once rather than once per caller that needs it.
         """
-        if step.step_type == PipelineStepType.AUTOMATED_EMAIL:
-            return True
-        if step.step_type == PipelineStepType.ACTION:
-            action = step.action_type
-            raw = action.value if isinstance(action, ActionType) else action
-            if raw == ActionType.SEND_EMAIL.value:
-                return True
-        return False
+        return effective_step_type(step) == PipelineStepType.AUTOMATED_EMAIL
 
     async def _fetch_meeting_details(
         self,
@@ -3848,7 +3879,7 @@ class MembershipPipelineService:
         )
         if (
             not step
-            or step.step_type not in for_step_types
+            or effective_step_type(step) not in for_step_types
             or not (step.config or {}).get("auto_advance")
             or str(prospect.current_step_id) != str(step_id)
         ):
@@ -3926,7 +3957,7 @@ class MembershipPipelineService:
             ),
             None,
         )
-        if step is None or step.step_type != step_type:
+        if step is None or effective_step_type(step) != step_type:
             return False
         if config_matches and not config_matches(step.config or {}):
             return False
