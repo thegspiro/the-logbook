@@ -21,16 +21,21 @@ unbounded transaction export/pagination + overspend guard) and **FIN-N** (the
 `ApprovalStepRecord` helpers stay unfiltered — verified not-live; threading `org_id`
 through the critical money-approval path isn't worth the churn).
 
-**Correction (security-review FIN-05 pass 4, 2026-09-08):** FIN-7's export/
-pagination/overspend items above are no longer open — re-verified against
-current code, all three already carry the fix this doc called for (bounded,
-streamed export; DB-level `.offset()`/`.limit()` on every list method;
-`_mutate_budget` enforces the spend ceiling). See
+**Correction (security-review FIN-05 pass 4, 2026-09-08; itself corrected
+same-day after Codex review on PR #2398 — see FIN-30):** FIN-7's export/
+overspend items above are no longer open — re-verified against current
+code, both already carry the fix this doc called for (bounded, streamed
+export; `_mutate_budget` enforces the spend ceiling). The pagination item is
+only _mostly_ closed: every list method the original finding named pushes
+DB-level `.offset()`/`.limit()`, but `list_dues_payments` (`GET
+/dues/{dues_id}/payments`) is also list-shaped and does not paginate — a
+genuinely unbounded per-member payment ledger, left flagged rather than
+fixed since paginating it changes the endpoint's response shape. See
 `docs/module-audit/finance.md`'s FIN-7 entry for the full re-verification.
-Only the assignee-level filter on `get_pending_approvals` (an approver sees
-every org approver's actionable steps, not just steps assigned to them
-specifically) remains a genuine, undecided behavior question — there is no
-per-step assignee field to filter on today.
+Besides that, only the assignee-level filter on `get_pending_approvals` (an
+approver sees every org approver's actionable steps, not just steps
+assigned to them specifically) remains a genuine, undecided behavior
+question — there is no per-step assignee field to filter on today.
 
 **Completion gate (pass 4):** no code changed; `flake8` 0 · `black --check` clean ·
 `tsc --noEmit` n/a.

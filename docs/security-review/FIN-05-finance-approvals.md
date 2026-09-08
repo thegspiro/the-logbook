@@ -111,6 +111,37 @@ representation — `grep -rn entity_amount backend/tests/` returns nothing —
 and `Decimal == float` compares by value in Python, so any hand run against
 either form agrees).
 
+### FIN-29 — MED — `GET /approval-chains/preview`'s own 404 was swallowed by its trailing `except Exception`, downgraded to a 500 — ✅ FIXED
+
+**What:** Codex review on PR #2398 caught this the moment FIN-27's route
+reorder made the endpoint reachable at all: `preview_approval_chain`'s
+`if not chain: raise HTTPException(status_code=404, ...)` sat _inside_ the
+same `try` block as the service call, and that block's own
+`except Exception as e: raise HTTPException(status_code=500, ...)` has no
+`except HTTPException` clause ahead of it — `HTTPException` is an `Exception`
+subclass, so the 404 it raised was itself caught by the generic handler and
+replaced with a 500. A caller previewing a chain for a genuinely
+no-match `(entity_type, amount, category_id)` combination — the normal,
+expected outcome for a preview, not an error — got `500 Internal Server
+Error` instead of the intended `404`. Confirmed this shape is unique to this
+one endpoint in the file: every other 404-raising handler in `finance.py`
+either raises outside any `try` (`get_fiscal_year`, `get_budget`,
+`get_approval_chain`, `get_purchase_request`, `get_expense_report`,
+`get_check_request`) or raises it via a caught `except ValueError`
+(`list_dues_payments`), never as a bare `raise HTTPException(404)` sharing a
+`try` with a bare `except Exception`.
+
+**Where:** `backend/app/api/v1/endpoints/finance.py`, `preview_approval_chain`
+(the same function FIN-27 reordered).
+
+**Fix:** moved the `if not chain: raise HTTPException(404, ...)` check to
+after the `try`/`except` block, matching the pattern every other read
+endpoint in this file already uses — the service call and its
+`BudgetLimitExceededError`/`ValueError`/`Exception` handling stay wrapped
+(the service can raise `ValueError` for an invalid `entity_type`), but the
+"no chain matched" branch is no longer inside anything that can catch it. No
+handler logic changed beyond the reordering.
+
 ### Documentation correction — FIN-7's residual "still flagged" items were already fixed on `main`, undocumented — no code change, docs only
 
 Re-verifying FIN-7 (the module-audit's original correctness/DoS-polish
@@ -122,15 +153,18 @@ this doc doesn't cover and found it clean, without noticing the older doc
 still called the same gap open.
 
 - **"Unbounded transaction export and in-memory pagination (fetch-all-then-
-  slice) on the list endpoints"** — every list method already pushes
-  `.offset()`/`.limit()` into the SQL query (`list_purchase_requests`,
-  `list_expense_reports`, `list_check_requests`, `list_budgets`, `list_dues_
-schedules`, `list_export_mappings`, `list_export_logs`); none fetches the
-  full table into Python first. `generate_export` (`finance_service.py:2496`)
-  counts rows up front, refuses anything over `max_records=10_000` (→ 400),
-  and streams the CSV in `batch_size=500` pages, recording `partial`/`failed`
-  on `ExportLog` if the stream is interrupted — evidently landed alongside
-  pass 2's `add_export_stream_status` migration (2026-08-27), which added the
+  slice) on the list endpoints"** — **partially resolved; the "every list
+  method" claim below was itself wrong, per Codex review on PR #2398 (now
+  filed separately as FIN-30).** Every list method the original finding
+  actually named already pushes `.offset()`/`.limit()` into the SQL query
+  (`list_purchase_requests`, `list_expense_reports`, `list_check_requests`,
+  `list_budgets`, `list_dues_schedules`, `list_export_mappings`,
+  `list_export_logs`); none fetches the full table into Python first.
+  `generate_export` (`finance_service.py:2496`) counts rows up front, refuses
+  anything over `max_records=10_000` (→ 400), and streams the CSV in
+  `batch_size=500` pages, recording `partial`/`failed` on `ExportLog` if the
+  stream is interrupted — evidently landed alongside pass 2's
+  `add_export_stream_status` migration (2026-08-27), which added the
   `status`/`error_message`/`completed_at` columns this exact code path
   writes, but pass 2's own write-up described that migration without
   reporting that the export it belongs to had also become bounded.
@@ -155,18 +189,51 @@ has been org-confined since FIN-9; there is no per-step assignee field to
 filter on today, and adding one is a schema/behavior decision, not a fix this
 pass can make.
 
-**Corrected:** `docs/module-audit/finance.md`'s FIN-7 entry (full
-re-verification inline), `docs/app-review/finance.md`'s pass-4 section
-(pointer to the correction), `docs/KNOWN_LIMITATIONS.md`'s finance
-correctness/DoS-polish row. No security-review file needed correction — this
-file's own FIN-9 entry already had the accurate, current claim about
-`get_pending_approvals`.
+### FIN-30 — LOW — `list_dues_payments` (`GET /dues/{dues_id}/payments`) is genuinely unbounded — the "every list method paginates" claim above was false — 🚩 FLAGGED (doc correction reverted, not fixed)
 
-**Disposition: FIN-27 and FIN-28 FIXED (both with guard coverage); the
-documentation staleness corrected in three files; no findings carried
-forward as OPEN from this pass.** `get_pending_approvals` assignee-level
-filtering remains FLAGGED, as it always has been, now for the first time
-accurately described as the _only_ remaining FIN-7 item.
+**What:** Codex review on PR #2398 caught that this very pass's own
+documentation correction (above) overclaimed: `list_dues_payments`
+(`finance_service.py:2325`) is a list-shaped method the original FIN-7
+finding's "list endpoints" language covers, and it does **not** paginate —
+`select(MemberDues).where(*filters).options(selectinload(MemberDues.
+payments))` eager-loads the entire `payments` relationship with no
+`.offset()`/`.limit()`, and the endpoint (`finance.py:1402`) returns
+`list(dues.payments)` straight through with no slicing of its own. Scoped to
+one member's dues record rather than the whole org (the enumeration above
+was of org-wide list endpoints, which is a materially smaller blast radius),
+but a dues ledger that accrues an unusually large number of payments —
+plausible over a multi-year membership, and each individual
+`record_dues_payment` call is itself unbounded in count — still returns its
+full history in one response with no cap.
+
+**Where:** `backend/app/services/finance_service.py:2325`
+(`list_dues_payments`); `backend/app/api/v1/endpoints/finance.py:1402`
+(`list_dues_payments` route).
+
+**Why flagged, not fixed:** paginating this endpoint changes its response
+shape — today it returns `list[DuesPaymentResponse]` unconditionally; adding
+`limit`/`offset` (or a cursor) means either a new paginated envelope (a
+frontend contract change, mirrored in `DuesManagementPage`'s payment-history
+view if it has one) or silently capping and dropping older payments with no
+indication anything was cut off, which is worse than the current unbounded
+behavior for a bookkeeping ledger. That is a product decision, not a
+drive-by fix, and finance code is exactly where this pass should flag rather
+than guess. Left unchanged.
+
+**Corrected (the corrected version, this time verified against every
+enumerated list method individually rather than the blanket claim reverted
+here):** `docs/module-audit/finance.md`'s FIN-7 entry, `docs/app-review/
+finance.md`'s pass-4 section, `docs/KNOWN_LIMITATIONS.md`'s finance
+correctness/DoS-polish row — each now names `list_dues_payments` as the one
+list method still unbounded rather than asserting "every list method"
+without exception. No other security-review file needed correction.
+
+**Disposition: FIN-27 and FIN-29 FIXED (both with guard coverage); FIN-28
+FIXED; FIN-30 FLAGGED (a Codex-caught overclaim in this pass's own doc
+correction, now accurately scoped rather than resolved).** `get_pending_
+approvals` assignee-level filtering remains FLAGGED, as it always has been,
+now for the first time accurately described as the _only_ remaining FIN-7
+item besides FIN-30.
 
 **Verified good ✅ (re-confirmed, not re-derived):** all 66 routes still carry
 `require_permission` (route count unchanged); every by-id read/update/delete

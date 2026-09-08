@@ -460,18 +460,18 @@ async def preview_approval_chain(
             amount,
             category_id,
         )
-        if not chain:
-            raise HTTPException(
-                status_code=404,
-                detail="No matching approval chain found",
-            )
-        return chain
     except BudgetLimitExceededError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
+    if not chain:
+        raise HTTPException(
+            status_code=404,
+            detail="No matching approval chain found",
+        )
+    return chain
 
 
 @router.get("/approval-chains/{chain_id}", response_model=ApprovalChainResponse)

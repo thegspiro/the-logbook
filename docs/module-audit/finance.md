@@ -144,25 +144,36 @@ CI's unit job rather than needing MySQL. **Status:** fixed.
   retry-on-conflict allocator (offset stepping defeats REPEATABLE READ
   snapshot staleness) that never poisons the caller's outer transaction.
   Covered by `TestRequestNumberAllocation` in `tests/test_finance.py`.
-- **✅ Resolved (re-verified, security-review FIN-05 pass 4, 2026-09-08).**
-  The three items below were still described as open by this entry, and were
-  not: current code already carries the fix each one calls for, with no
-  commit in this rotation's own log claiming credit — they landed as
+- **✅ Mostly resolved (re-verified, security-review FIN-05 pass 4, 2026-09-08;
+  corrected same-day after Codex review on PR #2398 caught one overclaim —
+  see FIN-30).** The three items below were still described as open by this
+  entry, and two of the three were not: current code already carries the fix
+  each calls for, with no commit in this rotation's own log claiming credit —
+  they landed as
   incidental improvements in the finance-approvals security-review passes
   (pass 1's request-number migration, pass 2's export-streaming rewrite) that
   were never threaded back into this older audit doc. Re-verified against the
   code directly, not taken on any doc's word:
   - **"Unbounded transaction export and in-memory pagination (fetch-all-then-
-    slice) on the list endpoints"** — every list method (`list_purchase_
-requests`, `list_expense_reports`, `list_check_requests`, `list_budgets`,
-    `list_dues_schedules`, `list_export_mappings`, `list_export_logs`, …)
-    pushes `.offset()`/`.limit()` into the SQL query itself; none fetches the
-    full table into Python first. `generate_export` (`finance_service.py:2496`)
-    counts rows up front and refuses anything over `max_records=10_000`
-    (`ValueError` → 400), then streams the CSV in `batch_size=500` pages via
-    `SafeCsvWriter`, writing an `ExportLog` row (`status`/`error_message`/
-    `completed_at`, from migration `20260826_1700_add_export_stream_status`)
-    that records `partial`/`failed` if the stream is interrupted.
+    slice) on the list endpoints"** — **partially resolved (corrected
+    2026-09-08, Codex review on PR #2398 — see FIN-30):** every list method
+    the original finding named (`list_purchase_requests`, `list_expense_
+reports`, `list_check_requests`, `list_budgets`, `list_dues_schedules`,
+    `list_export_mappings`, `list_export_logs`, …) pushes `.offset()`/
+    `.limit()` into the SQL query itself; none fetches the full table into
+    Python first. `generate_export` (`finance_service.py:2496`) counts rows
+    up front and refuses anything over `max_records=10_000` (`ValueError` →
+    400), then streams the CSV in `batch_size=500` pages via `SafeCsvWriter`,
+    writing an `ExportLog` row (`status`/`error_message`/`completed_at`,
+    from migration `20260826_1700_add_export_stream_status`) that records
+    `partial`/`failed` if the stream is interrupted. **Still open:**
+    `list_dues_payments` (`finance_service.py:2325`, backing
+    `GET /dues/{dues_id}/payments`) is also a list method and does **not**
+    paginate — it eager-loads a member's entire payment ledger with no
+    `.offset()`/`.limit()`. Scoped to one member's dues record rather than
+    the whole org, but genuinely unbounded; not fixed because pagination
+    would change the endpoint's response shape (`list[DuesPaymentResponse]`
+    today), a frontend-contract decision rather than a drive-by fix.
   - **"No overspend/negative-balance guard on spend posting"** —
     `_mutate_budget` (`finance_service.py:2778`) takes the budget row
     `.with_for_update()` and raises `BudgetLimitExceededError` (→ 409) whenever
