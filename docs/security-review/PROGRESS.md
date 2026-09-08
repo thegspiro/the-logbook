@@ -24,8 +24,8 @@ documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
 out this pass).
 
-Five fixes this pass — three added across two further rounds of Codex
-review on this PR's own commits, finding gaps in the first two fixes:
+Six fixes this pass — four added across three further rounds of Codex
+review on this PR's own commits, finding gaps in the prior fixes:
 
 - **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
   directly by `documents.py`'s own `GET /documents/my-folder`, was a
@@ -55,16 +55,26 @@ review on this PR's own commits, finding gaps in the first two fixes:
   member's first `/documents/my-folder` visit could each observe zero
   system folders and both create a `members` root, since there's no
   uniqueness constraint on `(organization_id, slug)` — reopening DOC-28's
-  exact symptom through a second, unlocked creator. Fixed by giving
-  `initialize_system_folders` the same organization-row lock, plus a
-  second round: that lock alone wasn't sufficient (Pitfall #27's second
-  half, Codex review of this fix itself) — `publish_minutes` already reads
-  a folder via `get_folder_by_slug` before calling this method, so under
-  REPEATABLE READ the transaction's snapshot predates the lock, and a
-  plain existence count could still answer from that stale snapshot.
-  Made the existence check itself a locking read too. 2 new guard tests
+  exact symptom through a second, unlocked creator. Fixed across three
+  rounds: (1) gave `initialize_system_folders` the same organization-row
+  lock; (2) that lock alone wasn't sufficient (Pitfall #27's second half,
+  Codex review of fix 1) — `publish_minutes` already reads a folder via
+  `get_folder_by_slug` before calling this method, so under REPEATABLE
+  READ the transaction's snapshot predates the lock, and a plain
+  existence count could still answer from that stale snapshot; made the
+  existence check itself a locking read; (3) that locking read still
+  short-circuited on **any** existing system folder rather than **all**
+  of them (Codex review of fix 2) — since `ensure_member_folder` only
+  ever creates the single `members` definition, a member visiting before
+  anyone published minutes left just that one folder in place, and the
+  next `publish_minutes` call found a nonzero count, returned without
+  creating `meeting-minutes`, and raised `RuntimeError` — a real,
+  pre-existing bug (present even without concurrency) that the locking
+  fix made newly reachable in the race case; rewrote the check to
+  reconcile against the specific missing slugs instead of an
+  all-or-nothing create. 3 new guard tests total
   (`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked`),
-  each confirmed to fail pre-fix via `git stash`.
+  each confirmed to fail pre-fix via `git stash`/reverted-code checks.
 - **DOC-28 fast-path predicate re-check (MED, Codex review of this PR's
   DOC-29 commit)** — `ensure_member_folder`'s fast path locks the peeked
   personal folder by `_lock_folder_by_id`, which matches only the primary
@@ -11656,6 +11666,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 4) — 1 fixed, a real pre-existing bug (Codex review of PR #2411's round-3 commit)
+
+Codex reviewed round 3's fix (`a6484b3`) and found that making the
+existence check a locking read exposed — rather than fixed — a second,
+independent defect in the same method: `if (existing.scalar() or 0) > 0:
+return await self.list_folders(...)` treats "some system folder exists"
+as "every system folder exists". `ensure_member_folder`'s own
+get-or-create only ever inserts the single `members` definition, never
+the full `SYSTEM_FOLDERS` set, so a member visiting their Documents
+folder before anyone had ever published minutes for that org left
+exactly one system folder in place. The next `publish_minutes` call then
+read a nonzero count, returned early without creating `meeting-minutes`,
+and `next((f for f in folders if f.slug == "meeting-minutes"), None)`
+came back `None` — an unconditional `RuntimeError`, a user-visible
+publish failure.
+
+**This bug predates this pass entirely and does not require concurrency
+to trigger** — the plain, ordinary sequence of "a member opens Documents
+before the first meeting minutes get published" was already broken before
+any of this pass's locking work; round 3's own locking fix just made the
+concurrent case of it newly deterministic rather than merely possible.
+Owned and fixed here rather than left as a known gap, per CLAUDE.md's
+non-negotiable "no acceptable pre-existing errors" rule — it surfaced
+directly out of code this pass was already touching.
+
+**Fix:** rewrote the existence check to read existing system-folder
+_slugs_ (still a locking read) rather than a bare count, compute exactly
+which `SYSTEM_FOLDERS` definitions are missing, and create only those —
+reconciling instead of an all-or-nothing create. Returns
+`list_folders(organization_id)` in both the reconcile and short-circuit
+branches now (previously the full-creation path returned the freshly
+created objects directly), which also removes the need for the
+per-object `db.refresh()` loop the old code used.
+
+New guard test,
+`test_reconciles_missing_system_folders_around_an_existing_one`
+(real database): creates an org with only a `members` system folder
+already present (simulating `ensure_member_folder` having won first),
+calls `initialize_system_folders`, and asserts `meeting-minutes` is now
+present and `members` was not duplicated. Confirmed to fail against the
+pre-fix code with the exact symptom described — `slugs == ["members"]`,
+`meeting-minutes` absent — and pass after. The two existing guard tests'
+source-inspection anchors were updated to match the rewritten method
+(`existing_result`/`missing_defs` in place of `existing`/`existing.scalar()`).
+
+Removed the now-unused `func` import from `document_service.py`
+(flake8 F401).
+
+Replied on the Codex thread and resolved it.
+
+Completion gate re-run: flake8/black/isort clean; `validate_migrations.py
+--strict` pass (unchanged, no migration touched); scoped tests (documents/
+legal/facilities/property-return/minutes feature files) 351 passed; full
+backend suite 11867 passed / 21 skipped (pre-existing/environmental) / 0
+failed (up from 11866, the one new guard test). No frontend file touched.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 3) — 2 fixed (Codex review of PR #2411's DOC-29 commit)
 

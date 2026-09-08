@@ -64,6 +64,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that, by the time the response went out, was no longer theirs. Fixed by
   re-checking ownership after the lock and creating a fresh folder for that
   member when it no longer matches.
+- **Publishing an organization's first meeting minutes could fail outright
+  if a member had ever visited their own Documents folder first.** The
+  system-folder setup treated "at least one default folder already exists"
+  as "every default folder already exists" and skipped creating the rest —
+  including the one meeting minutes are filed into. A department where any
+  member opened Documents before the first meeting minutes were published
+  hit this every time, not just under a race. Fixed to create only the
+  specific folders actually missing, rather than assuming none are needed
+  once any one exists.
 
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 

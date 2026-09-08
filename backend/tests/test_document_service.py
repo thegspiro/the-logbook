@@ -3,7 +3,9 @@ Tests for the document service (app/services/document_service.py).
 
 Covers the published-minutes HTML rendering (_generate_minutes_html) with a
 focus on HTML escaping of member-supplied text (XSS) and present/absent
-attendee partitioning, plus the timezone helper. DB mocked; no MySQL.
+attendee partitioning, plus the timezone helper (DB mocked; no MySQL), and
+``initialize_system_folders``'s locking/reconciliation shape (source
+inspection plus real-database integration tests).
 """
 
 import inspect
@@ -14,7 +16,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.models.document import DocumentFolder, FolderVisibility
 from app.models.minute import MinutesMeetingType, MinutesStatus
+from app.models.user import Organization, User
 from app.services.document_service import DocumentService
 
 
@@ -151,7 +155,9 @@ class TestInitializeSystemFoldersIsLocked:
 
     def test_locks_the_organization_row_before_the_existence_check(self):
         source = inspect.getsource(DocumentService.initialize_system_folders)
-        before_check, sep, _ = source.partition("existing = await self.db.execute(")
+        before_check, sep, _ = source.partition(
+            "existing_result = await self.db.execute("
+        )
         assert sep, (
             "expected to find the system-folder existence check to anchor "
             "the search for a lock taken before it"
@@ -169,23 +175,79 @@ class TestInitializeSystemFoldersIsLocked:
         already reads a folder via ``get_folder_by_slug`` before calling
         this method, which under this app's default REPEATABLE READ
         establishes the transaction's snapshot before the organization
-        lock above is acquired -- a plain count would still answer from
+        lock above is acquired -- a plain read would still answer from
         that earlier snapshot and could report zero system folders even
         though a concurrent transaction already created and committed one
         while this one waited for the lock.
         """
         source = inspect.getsource(DocumentService.initialize_system_folders)
-        _, sep, rest = source.partition("existing = await self.db.execute(")
+        _, sep, rest = source.partition("existing_result = await self.db.execute(")
         assert sep, (
             "expected to find the system-folder existence check to anchor "
             "the search for a locking read"
         )
-        existence_check, _, _ = rest.partition("if (existing.scalar()")
+        existence_check, _, _ = rest.partition("if missing_defs:")
         assert "with_for_update()" in existence_check, (
             "the existence check itself must be a locking read "
             "(with_for_update()), not just guarded by the organization "
             "row's lock -- a plain SELECT can still answer from a stale "
             "REPEATABLE READ snapshot taken before that lock was acquired"
+        )
+
+    @pytest.mark.integration
+    async def test_reconciles_missing_system_folders_around_an_existing_one(
+        self, db_session
+    ):
+        """Codex review, PR #2411, round 3: the previous fix's existence
+        check short-circuited on ANY existing system folder, not ALL of
+        them. ``ensure_member_folder`` (DocumentsService) only ever
+        inserts the single "members" definition on its own get-or-create
+        -- a member visiting their Documents folder before anyone had
+        published minutes left exactly that one system folder in place.
+        The next ``publish_minutes`` call then found a nonzero count,
+        returned without creating "meeting-minutes", and failed with a
+        ``RuntimeError``. Reconciling against the missing slugs instead
+        of an all-or-nothing create must fill in what's missing rather
+        than treating "something exists" as "everything exists".
+        """
+        org = Organization(name="Reconcile VFD", slug="reconcile-vfd")
+        db_session.add(org)
+        await db_session.flush()
+        user = User(
+            organization_id=org.id,
+            username="chief1",
+            email="chief1@example.com",
+            first_name="Pat",
+            last_name="Lee",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        # The one folder ensure_member_folder's own get-or-create would
+        # have created, simulating it winning the race first.
+        db_session.add(
+            DocumentFolder(
+                organization_id=org.id,
+                slug="members",
+                name="Member Files",
+                is_system=True,
+                visibility=FolderVisibility.ORGANIZATION,
+            )
+        )
+        await db_session.flush()
+
+        service = DocumentService(db_session)
+        folders = await service.initialize_system_folders(org.id, user.id)
+
+        slugs = [f.slug for f in folders]
+        assert "meeting-minutes" in slugs, (
+            "initialize_system_folders must create the missing system "
+            "folders even when one ('members') already exists -- not "
+            "short-circuit on any nonzero count"
+        )
+        assert slugs.count("members") == 1, (
+            "the pre-existing 'members' folder must not be duplicated by "
+            "reconciliation"
         )
 
 
