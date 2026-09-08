@@ -93,10 +93,24 @@ class RankReorderItem(BaseModel):
     sort_order: int
 
 
+#: Upper bound on one reorder request.
+#:
+#: ``OperationalRankService.reorder_ranks`` resolves each item with its own
+#: org-scoped ``get_rank`` query, so the list length is a query count. Without
+#: a cap the only bound was ``MAX_REQUEST_BODY_SIZE`` (60 MB) against ~60 bytes
+#: per item — roughly a million sequential round-trips holding one worker and
+#: one database connection for the duration. A department's rank ladder is a
+#: dozen rows; this is set far above any real one purely so the number is not
+#: the thing that has to be revisited.
+MAX_RANKS_PER_REORDER = 500
+
+
 class RankReorderRequest(BaseModel):
     """Batch-reorder ranks."""
 
-    ranks: List[RankReorderItem] = Field(..., min_length=1)
+    ranks: List[RankReorderItem] = Field(
+        ..., min_length=1, max_length=MAX_RANKS_PER_REORDER
+    )
 
 
 class RankValidationIssue(BaseModel):

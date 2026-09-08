@@ -320,7 +320,7 @@ const AddMember: React.FC = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
         <form
           onSubmit={(e) => {
             void handleSubmit(e);
@@ -933,7 +933,7 @@ const AddMember: React.FC = () => {
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center space-x-2 rounded-lg bg-linear-to-r from-blue-600 to-cyan-600 px-6 py-3 text-white shadow-lg transition-all hover:from-blue-700 hover:to-cyan-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center space-x-2 rounded-lg bg-linear-to-r from-blue-700 to-cyan-700 px-6 py-3 text-white shadow-lg transition-all hover:from-blue-800 hover:to-cyan-800 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? (
                 <>
@@ -949,7 +949,7 @@ const AddMember: React.FC = () => {
             </button>
           </div>
         </form>
-      </main>
+      </div>
     </div>
   );
 };

@@ -90,7 +90,7 @@ const RemindNonVotersModal: React.FC<RemindNonVotersModalProps> = ({
               type="button"
               onClick={() => onSubmit(remindMessage)}
               disabled={sending}
-              className="rounded-md bg-amber-600 px-4 py-2 text-white hover:bg-amber-700 disabled:opacity-50"
+              className="rounded-md bg-amber-700 px-4 py-2 text-white hover:bg-amber-800 disabled:opacity-50"
             >
               {sending ? 'Sending...' : `Send Reminders (${nonVoterCount})`}
             </button>

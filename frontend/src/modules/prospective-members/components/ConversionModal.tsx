@@ -484,7 +484,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({ isOpen, onClos
                     void handleConvert();
                   }}
                   disabled={isConverting}
-                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-emerald-700 px-6 py-2 text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
                 >
                   {isConverting ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

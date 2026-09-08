@@ -63,7 +63,17 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
       </div>
 
       {/* Breadcrumb-Style Step Indicators (Mobile: Scrollable, Desktop: All visible) */}
-      <div className="scrollbar-thumb-theme-surface-hover scrollbar-track-theme-surface -mx-2 scrollbar-thin overflow-x-auto px-2 pb-2">
+      {/* Already built to scroll on a phone; the marker is what says so to the
+          mobile presentation pass, which otherwise reads the 1454px step row as
+          content spilling off the screen. The steps are plain divs rather than
+          controls, so this one does need `tabIndex` — there is nothing inside
+          it a keyboard could otherwise reach to scroll it. */}
+      <div
+        className="scrollbar-thumb-theme-surface-hover scrollbar-track-theme-surface -mx-2 scrollbar-thin overflow-x-auto px-2 pb-2"
+        data-mobile-scroll-region
+        aria-label="Setup steps"
+        tabIndex={0}
+      >
         <div className="flex min-w-max items-center space-x-1">
           {ONBOARDING_STEPS.map((listStep, index) => {
             const stepNumber = index + 1;
@@ -88,7 +98,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
                       isCurrent
                         ? 'bg-theme-surface text-red-600'
                         : isCompleted
-                          ? 'bg-green-600 text-white'
+                          ? 'bg-green-700 text-white'
                           : 'bg-theme-surface-hover text-theme-text-muted'
                     }`}
                   >
@@ -96,9 +106,13 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({ step, className =
                   </div>
 
                   {/* Step Name (hide on very small screens for first/last steps) */}
-                  <span
-                    className={`text-xs font-medium whitespace-nowrap ${isCurrent ? 'text-theme-text-primary' : ''}`}
-                  >
+                  {/* Weight, not colour, marks the current step. The container
+                      it sits in is `bg-red-800 text-white` when current, so
+                      overriding to `text-theme-text-primary` here put dark
+                      slate on dark red — about 1.5:1, and the one step label a
+                      person most needs to read. Inheriting white keeps it at
+                      the container's 8.31:1. */}
+                  <span className={`text-xs whitespace-nowrap ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
                     <span className="hidden sm:inline">{listStep.name}</span>
                     <span className="sm:hidden">{listStep.shortName}</span>
                   </span>

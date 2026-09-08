@@ -26,6 +26,7 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(defaultOpen ? undefined : 0);
   const contentId = useId();
+  const triggerId = useId();
 
   useEffect(() => {
     if (!contentRef.current) return undefined;
@@ -53,6 +54,7 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition-colors ${headerClassName}`}
+        id={triggerId}
         aria-expanded={isOpen}
         aria-controls={contentId}
       >
@@ -62,10 +64,16 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
           aria-hidden="true"
         />
       </button>
+      {/* A `region` is a landmark, and two unnamed landmarks of the same role
+          are indistinguishable in a screen reader's landmark list — which is
+          the list the role exists to put it in. Named from its own trigger, so
+          a page with several collapsibles gives each the title already on
+          screen. */}
       <div
         ref={contentRef}
         id={contentId}
         role="region"
+        aria-labelledby={triggerId}
         style={{ height: height !== undefined ? `${height}px` : 'auto' }}
         className="overflow-hidden transition-[height] duration-200 ease-in-out"
       >

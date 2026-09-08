@@ -186,7 +186,7 @@ const ReturnRequestsPanel: React.FC = () => {
                           setReceivedQuantity(1);
                           setFollowUp('auto');
                         }}
-                        className="rounded-lg bg-green-600 p-1.5 text-white transition-colors hover:bg-green-700"
+                        className="rounded-lg bg-green-700 p-1.5 text-white transition-colors hover:bg-green-800"
                         title="Receive item"
                       >
                         <CheckCircle className="h-4 w-4" />
@@ -366,7 +366,7 @@ const ReturnRequestsPanel: React.FC = () => {
                           : receivedQuantity < 1)))
                   }
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
-                    reviewAction === 'received' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-800 hover:bg-red-900'
+                    reviewAction === 'received' ? 'bg-green-700 hover:bg-green-800' : 'bg-red-800 hover:bg-red-900'
                   }`}
                 >
                   {submitting ? 'Processing...' : reviewAction === 'received' ? 'Receive item' : 'Deny'}

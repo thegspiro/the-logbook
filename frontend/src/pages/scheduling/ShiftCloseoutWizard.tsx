@@ -293,7 +293,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
               aria-label={`Step ${n} of 3`}
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                 n < step
-                  ? 'bg-green-600 text-white'
+                  ? 'bg-green-700 text-white'
                   : n === step
                     ? 'bg-red-800 text-white'
                     : 'border-theme-surface-border text-theme-text-muted border'
@@ -515,7 +515,7 @@ export const ShiftCloseoutWizard: React.FC<ShiftCloseoutWizardProps> = ({
             else void finalize();
           }}
           className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
-            step === 3 ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'
+            step === 3 ? 'bg-green-700 hover:bg-green-800' : 'bg-violet-600 hover:bg-violet-700'
           }`}
         >
           {saving ? (

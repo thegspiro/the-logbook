@@ -532,7 +532,7 @@ const PositionSetup: React.FC = () => {
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
-      <main className="flex-1 p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-4 py-8">
         <div className="mx-auto w-full max-w-6xl">
           <BackButton to="/onboarding/it-team" className="mb-6" />
 
@@ -610,7 +610,7 @@ const PositionSetup: React.FC = () => {
                 disabled={isSaving || selectedCount < 2}
                 className={`rounded-lg px-6 py-2 font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
-                    ? 'bg-linear-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700'
+                    ? 'bg-linear-to-r from-red-700 to-orange-700 text-white hover:from-red-800 hover:to-orange-800'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
@@ -909,7 +909,7 @@ const PositionSetup: React.FC = () => {
               </button>
               <button
                 onClick={createCustomPosition}
-                className="flex-1 rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-4 py-2 font-semibold text-white transition-colors hover:from-red-700 hover:to-orange-700"
+                className="flex-1 rounded-lg bg-linear-to-r from-red-700 to-orange-700 px-4 py-2 font-semibold text-white transition-colors hover:from-red-800 hover:to-orange-800"
               >
                 Create Position
               </button>

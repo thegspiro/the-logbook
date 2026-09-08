@@ -244,7 +244,7 @@ export const StartSkillTestPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
         {/* Header */}
         <div className="mb-6">
           <Link
@@ -561,7 +561,7 @@ export const StartSkillTestPage: React.FC = () => {
                 ? 'Begin Practice'
                 : 'Begin Evaluation'}
         </button>
-      </main>
+      </div>
     </div>
   );
 };

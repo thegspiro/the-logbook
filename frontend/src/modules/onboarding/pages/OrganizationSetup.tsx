@@ -736,7 +736,13 @@ const OrganizationSetup: React.FC = () => {
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 relative min-h-screen bg-linear-to-br px-4 pb-8">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="mx-auto max-w-3xl">
+      {/* A real `main`, carrying the id the skip link in index.html points
+          at. Onboarding renders outside AppLayout, so nothing else on the page
+          provides one: the skip link resolved to nothing, and every element on
+          the screen sat outside a landmark. That is Bypass Blocks (2.4.1) on
+          the one flow a chief walks through before the application has any
+          other navigation at all. */}
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-3xl">
         {/* Back Button */}
         <div className="mb-4">
           <BackButton to="/" label="Back to Welcome" />
@@ -1214,7 +1220,7 @@ const OrganizationSetup: React.FC = () => {
               disabled={isSaving}
               className={`w-full rounded-lg px-6 py-4 text-lg font-semibold transition-all duration-300 ${
                 !isSaving
-                  ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-[1.02] hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
+                  ? 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-[1.02] hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
@@ -1243,7 +1249,7 @@ const OrganizationSetup: React.FC = () => {
             Need help?{' '}
             <a
               href="https://github.com/thegspiro/the-logbook/wiki/Onboarding"
-              className="text-theme-accent-red hover:text-theme-accent-red underline"
+              className="touch-target-phone text-theme-accent-red hover:text-theme-accent-red underline"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -1251,7 +1257,7 @@ const OrganizationSetup: React.FC = () => {
             </a>
           </p>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

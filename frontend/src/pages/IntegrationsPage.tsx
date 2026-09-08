@@ -1409,7 +1409,7 @@ const IntegrationsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Page Header */}
         <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -1475,7 +1475,7 @@ const IntegrationsPage: React.FC = () => {
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
                   aria-pressed={categoryFilter === cat}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  className={`touch-target-phone flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                     categoryFilter === cat
                       ? 'bg-indigo-600 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary'
@@ -2073,7 +2073,7 @@ const IntegrationsPage: React.FC = () => {
               </div>
             );
           })()}
-      </main>
+      </div>
     </div>
   );
 };

@@ -353,8 +353,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/finance',
     source: 'src/modules/finance/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — finance module hub',
   },
   {
     path: '/finance/budgets',
@@ -473,8 +473,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/grants',
     source: 'src/modules/grants-fundraising/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — grants & fundraising hub',
   },
   {
     path: '/grants/opportunities',
@@ -533,8 +533,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/integrations',
     source: 'src/modules/integrations/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — integrations catalogue',
   },
   {
     path: '/inventory',
@@ -689,8 +689,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/ip-security',
     source: 'src/modules/ip-security/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — IP security admin',
   },
   {
     path: '/ip-security/my-requests',
@@ -701,14 +701,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/medical-screening',
     source: 'src/modules/medical-screening/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — medical screening hub',
   },
   {
     path: '/medical-supplies',
     source: 'src/modules/medical-supplies/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — medical supplies hub',
   },
   {
     path: '/medical-supplies/categories',
@@ -866,8 +866,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/onboarding/start',
     source: 'src/modules/onboarding/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — onboarding wizard step 1',
   },
   {
     path: '/onboarding/department',
@@ -951,7 +951,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     path: '/onboarding/modules/:moduleId/config',
     source: 'src/modules/onboarding/routes.tsx',
     coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    detail:
+      'parameterized setup route; reachable only with a seeded onboarding store, so it redirects to step 1 under test. Its landmark, the one thing the shared shell does not give it, is asserted by skipLinkTarget.test.ts',
   },
   {
     path: '/onboarding/module-selection',
@@ -1016,14 +1017,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/admin/public-portal',
     source: 'src/modules/public-portal/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — public portal admin',
   },
   {
     path: '/reports',
     source: 'src/modules/reports/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet — reports hub',
   },
   {
     path: '/scheduling',

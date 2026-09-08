@@ -84,7 +84,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
         <button
           onClick={onBulkAddAllEligible}
           disabled={bulkAddLoading}
-          className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {bulkAddLoading ? (
             <>

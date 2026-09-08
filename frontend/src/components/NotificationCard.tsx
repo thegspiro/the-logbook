@@ -352,7 +352,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
                 onClick={() => void handleNavigate(action.url)}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   idx === 0
-                    ? 'bg-orange-600 text-white hover:bg-orange-700'
+                    ? 'bg-orange-700 text-white hover:bg-orange-800'
                     : 'border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover border'
                 }`}
               >

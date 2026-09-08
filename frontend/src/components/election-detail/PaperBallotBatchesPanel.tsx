@@ -85,7 +85,7 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                       type="button"
                       onClick={() => onAttest(batch.batch_id)}
                       disabled={attestingBatchId === batch.batch_id}
-                      className="rounded-md bg-teal-600 px-3 py-1.5 text-sm text-white hover:bg-teal-700 disabled:opacity-50"
+                      className="rounded-md bg-teal-700 px-3 py-1.5 text-sm text-white hover:bg-teal-800 disabled:opacity-50"
                     >
                       {attestingBatchId === batch.batch_id ? 'Attesting…' : 'Attest Count'}
                     </button>

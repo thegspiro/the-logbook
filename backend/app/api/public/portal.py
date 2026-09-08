@@ -18,6 +18,7 @@ from fastapi import (
     Response,
     status,
 )
+from loguru import logger
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -195,13 +196,35 @@ async def log_public_api_request(
         flag_reason=flag_reason,
     )
 
+    # ``log_access`` only flushes, so the row lives or dies with the request's
+    # transaction — and ``get_db`` rolls that transaction back whenever the
+    # handler raises. Every non-200 answer on this router is an
+    # ``HTTPException``, so without an explicit commit the access log recorded
+    # successes only: the 503 an off portal answers, the 404 a missing config
+    # answers and the 500 an unexpected fault answers all vanished, and
+    # ``detect_anomalies`` was left reading a log that could not show it a
+    # failure pattern. Committing here is safe because these handlers write
+    # nothing else — the only pending row is the log entry itself.
+    try:
+        await db.commit()
+    except Exception as exc:
+        # Best-effort: never let an audit write replace the answer the caller
+        # was about to receive (which, on the paths that matter here, is the
+        # exception this function was called from).
+        logger.warning("Public portal access log could not be persisted: {}", exc)
+        await db.rollback()
+
 
 # ============================================================================
 # Public API Endpoints
 # ============================================================================
 
 
-@router.get("/organization/info", response_model=PublicOrganizationInfo)
+@router.get(
+    "/organization/info",
+    response_model=PublicOrganizationInfo,
+    response_model_exclude_unset=True,
+)
 async def get_organization_info(
     request: Request,
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
@@ -289,10 +312,15 @@ async def get_organization_info(
             str(api_key.organization_id), "organization", org_data, db
         )
 
+        # Build (and thereby validate) the response before logging success —
+        # a construction failure must fall through to the `except Exception`
+        # branch below and log 500, not a 200 that was already committed.
+        response_obj = PublicOrganizationInfo(**filtered_data)
+
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)
 
-        return PublicOrganizationInfo(**filtered_data)
+        return response_obj
 
     except HTTPException as e:
         # Log failed access
@@ -307,7 +335,11 @@ async def get_organization_info(
         )
 
 
-@router.get("/organization/stats", response_model=PublicOrganizationStats)
+@router.get(
+    "/organization/stats",
+    response_model=PublicOrganizationStats,
+    response_model_exclude_unset=True,
+)
 async def get_organization_stats(
     request: Request,
     api_key: PublicPortalAPIKey = Depends(authenticate_api_key),
@@ -386,10 +418,15 @@ async def get_organization_stats(
             str(api_key.organization_id), "stats", stats_data, db
         )
 
+        # Build (and thereby validate) the response before logging success —
+        # a construction failure must fall through to the `except Exception`
+        # branch below and log 500, not a 200 that was already committed.
+        response_obj = PublicOrganizationStats(**filtered_data)
+
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)
 
-        return PublicOrganizationStats(**filtered_data)
+        return response_obj
 
     except HTTPException as e:
         # Log failed access
@@ -477,7 +514,15 @@ async def get_public_events(
                 org_id_str, "events", event_data, db
             )
             if filtered_event:
-                events.append(filtered_event)
+                # Construct (and thereby validate) each event against the
+                # same model FastAPI's response_model will hold the return
+                # value to. Building it here, inside the try block, means a
+                # PUB-7-style field mismatch is caught before the success log
+                # below commits — deferring validation to FastAPI's own
+                # response serialization (which runs after this handler
+                # returns) would let a request the client sees as a 500 get
+                # logged as a 200 that can no longer be rolled back.
+                events.append(PublicEvent(**filtered_event))
 
         # Log successful access
         await log_public_api_request(request, api_key, 200, start_time, db)

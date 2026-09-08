@@ -61,7 +61,7 @@ const TrainingOfficerDashboard: React.FC = () => {
     });
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div data-page-main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <header className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-theme-text-primary flex items-center gap-3 text-3xl font-bold">
@@ -118,7 +118,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           </div>
         )
       )}
-    </main>
+    </div>
   );
 };
 export default TrainingOfficerDashboard;

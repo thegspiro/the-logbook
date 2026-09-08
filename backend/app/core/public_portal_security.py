@@ -155,21 +155,38 @@ async def check_rate_limit(
 
     # If close to limit, verify with database
     if current_count >= rate_limit * 0.9:  # 90% of limit
-        # Count requests in the current hour from database
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Count requests since the start of *this* clock-hour bucket — the
+        # same bucket `current_count`/`X-RateLimit-Reset` use. A rolling
+        # "last 60 minutes" window would, right after the clock hour turns
+        # over, still include the tail of the previous bucket's traffic and
+        # inflate db_count above this bucket's true count. Because the
+        # result below can only raise the in-memory tally and never lower
+        # it, that inflated value would stick for the rest of the new hour
+        # and 429 legitimate requests until the bucket rolls over again.
+        hour_start = datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)
         result = await db.execute(
             select(func.count(PublicPortalAccessLog.id)).where(
                 and_(
                     PublicPortalAccessLog.api_key_id == api_key_id,
-                    PublicPortalAccessLog.timestamp >= one_hour_ago.isoformat(),
+                    PublicPortalAccessLog.timestamp >= hour_start.isoformat(),
                 )
             )
         )
         db_count = result.scalar() or 0
 
-        # Update cache with accurate count
-        rate_limit_cache[api_key_id][hour_timestamp] = db_count
-        current_count = db_count
+        # Raise the per-process tally to the cross-process truth, but never
+        # lower it. ``public_portal_access_log`` only ever carries requests
+        # that COMMITTED: an HTTPException rolls the request's session back,
+        # and a 401/429 is raised from ``authenticate_api_key`` before the
+        # handler that writes the row runs at all. So ``db_count`` structurally
+        # under-counts, and the current request's own row is not committed yet
+        # either. Assigning it let a key whose requests keep erroring (a
+        # disabled portal answers 503 to every call) reset its hourly tally to
+        # the persisted count each time it neared the ceiling, and so never
+        # reach it — the per-key hourly quota was bypassable by any caller
+        # whose traffic did not persist a log row.
+        current_count = max(current_count, db_count)
+        rate_limit_cache[api_key_id][hour_timestamp] = current_count
 
     # Check if limit exceeded
     is_allowed = current_count < rate_limit

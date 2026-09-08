@@ -46,7 +46,7 @@ export const EventAttendeesCard: React.FC<EventAttendeesCardProps> = ({ attendee
           Loading attendees…
         </p>
       ) : attendees.length === 0 ? (
-        <EmptyState icon={Users} title="Nobody yet" description="Be the first to say you're coming." />
+        <EmptyState icon={Users} title="Nobody yet" description="Be the first to say you're coming." headingLevel={3} />
       ) : (
         <>
           <ul className="space-y-2">

@@ -338,6 +338,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
         {fiscalYears.length === 0 ? (
           <EmptyState
+            headingLevel={3}
             icon={Calendar}
             title="No fiscal years"
             description="Create your first fiscal year to start budgeting."
@@ -416,6 +417,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
         {budgetCategories.length === 0 ? (
           <EmptyState
+            headingLevel={3}
             icon={Tag}
             title="No budget categories"
             description="Create categories to organize your budget line items."

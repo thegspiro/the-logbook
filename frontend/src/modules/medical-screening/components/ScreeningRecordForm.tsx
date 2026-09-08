@@ -9,6 +9,7 @@ import { useDialog } from '../../../hooks/useDialog';
 import { X } from 'lucide-react';
 import { ScreeningType, ScreeningStatus, SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS } from '../types';
 import type { ScreeningRecord, ScreeningRequirement, ScreeningRecordCreate, ScreeningRecordUpdate } from '../types';
+import { blankToNull } from '../../../utils/formValues';
 
 interface ScreeningRecordFormProps {
   record: ScreeningRecord | null;
@@ -39,15 +40,21 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
     setIsSaving(true);
 
     if (record) {
+      // Edit path sends an explicit null for a blanked field. The backend
+      // dumps update payloads with exclude_unset, so `undefined` here (which
+      // never leaves the browser as JSON) means "leave this alone" — a
+      // cleared provider name, result summary or note would otherwise
+      // silently survive behind the "Record updated" toast (CLAUDE.md
+      // pitfall #1, and these three are PHI).
       const data: ScreeningRecordUpdate = {
         screening_type: screeningType as ScreeningRecordUpdate['screening_type'],
         status: recordStatus as ScreeningRecordUpdate['status'],
-        scheduled_date: scheduledDate || undefined,
-        completed_date: completedDate || undefined,
-        expiration_date: expirationDate || undefined,
-        provider_name: providerName.trim() || undefined,
-        result_summary: resultSummary.trim() || undefined,
-        notes: notes.trim() || undefined,
+        scheduled_date: scheduledDate || null,
+        completed_date: completedDate || null,
+        expiration_date: expirationDate || null,
+        provider_name: blankToNull(providerName),
+        result_summary: blankToNull(resultSummary),
+        notes: blankToNull(notes),
       };
       await onSave(data);
     } else {
@@ -72,13 +79,14 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record
       className="modal-overlay z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="screening-record-dialog-title"
       onKeyDown={(e) => {
         if (e.key === 'Escape') onClose();
       }}
     >
       <div ref={dialogRef} className="modal-panel modal-body w-full max-w-lg">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-          <h2 className="text-theme-text-primary text-lg font-bold">
+          <h2 id="screening-record-dialog-title" className="text-theme-text-primary text-lg font-bold">
             {record ? 'Edit Screening Record' : 'Add Screening Record'}
           </h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">

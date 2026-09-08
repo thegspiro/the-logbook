@@ -654,7 +654,7 @@ export const MinutesDetailPage: React.FC = () => {
                     void handlePublish();
                   }}
                   disabled={publishing}
-                  className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-white hover:bg-cyan-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-cyan-700 px-4 py-2 text-white hover:bg-cyan-800 disabled:opacity-50"
                 >
                   <BookOpen className="h-4 w-4" aria-hidden="true" />
                   {publishing
@@ -745,7 +745,7 @@ export const MinutesDetailPage: React.FC = () => {
             {canManage && isEditable && (
               <button
                 onClick={() => setShowAddSection(!showAddSection)}
-                className="inline-flex items-center gap-1 rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700"
+                className="inline-flex items-center gap-1 rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Section
@@ -774,7 +774,7 @@ export const MinutesDetailPage: React.FC = () => {
                   void handleAddSection();
                 }}
                 disabled={!newSectionTitle.trim() || saving}
-                className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+                className="rounded-md bg-cyan-700 px-4 py-2 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
               >
                 Add
               </button>
@@ -884,7 +884,7 @@ export const MinutesDetailPage: React.FC = () => {
                               void handleSaveSection(section.key);
                             }}
                             disabled={saving}
-                            className="rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+                            className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
                           >
                             {saving ? 'Saving...' : 'Save'}
                           </button>
@@ -927,7 +927,7 @@ export const MinutesDetailPage: React.FC = () => {
             {canManage && isEditable && (
               <button
                 onClick={() => setShowMotionForm(!showMotionForm)}
-                className="rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700"
+                className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
               >
                 {showMotionForm ? 'Cancel' : 'Add Motion'}
               </button>
@@ -1059,7 +1059,7 @@ export const MinutesDetailPage: React.FC = () => {
                   void handleAddMotion();
                 }}
                 disabled={motionBusy || !motionForm.motion_text.trim()}
-                className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+                className="rounded-md bg-cyan-700 px-4 py-2 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
               >
                 Add Motion
               </button>
@@ -1120,7 +1120,7 @@ export const MinutesDetailPage: React.FC = () => {
             {canManage && isEditable && (
               <button
                 onClick={() => setShowActionForm(!showActionForm)}
-                className="rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700"
+                className="rounded-md bg-cyan-700 px-3 py-1.5 text-sm text-white hover:bg-cyan-800"
               >
                 {showActionForm ? 'Cancel' : 'Add Action Item'}
               </button>
@@ -1192,7 +1192,7 @@ export const MinutesDetailPage: React.FC = () => {
                   void handleAddActionItem();
                 }}
                 disabled={actionItemBusy || !actionForm.description.trim()}
-                className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+                className="rounded-md bg-cyan-700 px-4 py-2 text-sm text-white hover:bg-cyan-800 disabled:opacity-50"
               >
                 Add Action Item
               </button>

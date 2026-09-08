@@ -887,7 +887,7 @@ export const PatternsTab: React.FC = () => {
                       setGeneratingFor(pattern.id);
                       setGenerateForm({ start_date: '', end_date: '' });
                     }}
-                    className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 max-sm:mt-4 sm:mr-5"
+                    className="mr-4 flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 max-sm:mt-4 sm:mr-5"
                   >
                     <Play className="h-3.5 w-3.5" aria-hidden="true" />
                     {/* Never sr-only: hiding the text on a phone leaves the same
@@ -1016,7 +1016,7 @@ export const PatternsTab: React.FC = () => {
                               void handleGenerate(pattern.id);
                             }}
                             disabled={generating}
-                            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+                            className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm text-white hover:bg-emerald-800 disabled:opacity-50"
                           >
                             {generating ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1034,7 +1034,7 @@ export const PatternsTab: React.FC = () => {
                             setGeneratingFor(pattern.id);
                             setGenerateForm({ start_date: '', end_date: '' });
                           }}
-                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-700"
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white transition-colors hover:bg-emerald-800"
                         >
                           <Play className="h-3.5 w-3.5" /> Generate Shifts
                         </button>

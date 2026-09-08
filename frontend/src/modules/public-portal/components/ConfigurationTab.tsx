@@ -102,7 +102,8 @@ const ConfigurationTab: React.FC = () => {
               onChange={(e) => setNewOrigin(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddOrigin()}
               placeholder="https://example.com"
-              className="border-theme-surface-border focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2"
+              aria-label="Allowed origin URL"
+              className="form-input flex-1"
             />
             <button onClick={handleAddOrigin} className="btn-info flex shrink-0 items-center justify-center gap-2">
               <Plus className="h-4 w-4" />
@@ -120,16 +121,20 @@ const ConfigurationTab: React.FC = () => {
         </p>
 
         <div>
-          <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
+          <label
+            htmlFor="portal-default-rate-limit"
+            className="text-theme-text-secondary mb-2 block text-sm font-medium"
+          >
             Default Rate Limit (requests per hour)
           </label>
           <input
+            id="portal-default-rate-limit"
             type="number"
             value={defaultRateLimit}
             onChange={(e) => setDefaultRateLimit(parseInt(e.target.value, 10))}
             min={1}
             max={100000}
-            className="border-theme-surface-border focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2"
+            className="form-input"
           />
           <p className="text-theme-text-muted mt-1 text-xs">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
@@ -145,14 +150,17 @@ const ConfigurationTab: React.FC = () => {
         </p>
 
         <div>
-          <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Cache TTL (seconds)</label>
+          <label htmlFor="portal-cache-ttl" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+            Cache TTL (seconds)
+          </label>
           <input
+            id="portal-cache-ttl"
             type="number"
             value={cacheTTL}
             onChange={(e) => setCacheTTL(parseInt(e.target.value, 10))}
             min={0}
             max={3600}
-            className="border-theme-surface-border focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2"
+            className="form-input"
           />
           <p className="text-theme-text-muted mt-1 text-xs">
             Recommended: 300 seconds (5 minutes). Set to 0 to disable caching.

@@ -107,7 +107,12 @@ const ActionItemsPage: React.FC = () => {
       <div className="mb-6 flex flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Filter className="text-theme-text-muted h-4 w-4" />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="form-input-sm">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filter action items by status"
+            className="form-input-sm"
+          >
             <option value="">All Statuses</option>
             <option value="open">Open</option>
             <option value="pending">Pending</option>

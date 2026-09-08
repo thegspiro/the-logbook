@@ -78,6 +78,53 @@ Write a comment when the code alone cannot communicate:
 - **Intentional departures from convention** — if code deliberately does
   something that looks wrong but is correct for a specific reason, say so
 
+## Changelog Entries Are No Longer Part of a Pull Request
+
+**Do not add an entry to `CHANGELOG.md`.** The file was closed on 2026-09-08 and
+is a historical record through that date; nothing appends to it, and nothing
+appends to the monthly archives under `docs/changelog/` either.
+
+The reason is mechanical rather than a judgement that the history stopped
+mattering. Several sessions work this repository at once, every one of them
+added its entry at the top of `## [Unreleased]`, and two branches writing
+different content at the same file offset conflict on the pair every time — not
+because they disagree, but because neither can be placed relative to the other
+without a rule. `.gitattributes` supplies that rule for a local merge, but
+GitHub's server-side merge ignores merge drivers, so the merge button still
+refused and every pair had to be resolved by hand. The changelog was the largest
+single tax on merging parallel work, and it bought nothing the merged pull
+requests do not already record.
+
+So the narrative goes where it was already going, in files that are per-feature
+and therefore rarely land at the same offset:
+
+| What                                       | Where                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| Why a change was made, what it fixed       | the pull request's Summary and Changes                                  |
+| A security-review finding and its fix      | `docs/security-review/<FEATURE>.md` and its `PROGRESS.md`               |
+| An app-review pass                         | `docs/app-review/PROGRESS.md`                                           |
+| Something the owner must decide, or accept | `docs/KNOWN_LIMITATIONS.md`                                             |
+| Anything that can stop an upgrade booting  | `docs/UPGRADING.md` — **still required**, and not covered by the freeze |
+
+`docs/UPGRADING.md` is the one exemption and is deliberate: an operator
+upgrading an existing installation has nowhere else to read that a flag now
+refuses to start, and that file is per-change prose that concurrent branches do
+not collide on the way an append-only ledger does.
+
+**Branches opened before the freeze still carry entries.** Merging one is
+unchanged — resolve the `## [Unreleased]` conflict by keeping both sides, as
+below. Do not strip an existing entry out of someone else's open branch, and do
+not delete anything already in `CHANGELOG.md`.
+
+**Two things still edit the file, and neither is a per-PR entry.** A **release
+cut** — `docs/RELEASE_CANDIDATE_PLAN.md` item 3.2, retitling `## [Unreleased]`
+as a dated version section — rearranges frozen history rather than adding to it,
+and stays part of the release process. A **monthly archive move** does the same,
+relocating closed `###` sections into `docs/changelog/`. Both are deliberate,
+infrequent, and done alone rather than riding along with a feature branch, so
+neither reintroduces the offset collision this freeze exists to end. What is
+banned is a pull request appending its own change's entry.
+
 ## Pre-Commit Verification Checklist
 
 Before committing any changes, mentally verify these items (the most frequent sources of bugs):
@@ -91,6 +138,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **No unused imports (frontend or backend)** — TypeScript strict mode rejects them; Python flake8 F401 catches them. Remove all unused imports before committing
 - [ ] **No Python lint violations** — no F401 (unused imports), F811 (redefined unused), F821 (undefined names), E303 (excess blank lines), or W291/W293 (trailing whitespace). Run `flake8` on changed files before committing
 - [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
+- [ ] **No `CHANGELOG.md` entry in the diff** — the file is closed to new entries (see above). `docs/UPGRADING.md` carries upgrade-blocking changes instead; a release cut or archive move may still edit `CHANGELOG.md`, on its own branch
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 
 ## Project Overview
@@ -238,12 +286,14 @@ backend and frontend runs together take the better part of ten minutes, and
 spending that on a change no test can observe is time taken from the person
 waiting on the work.
 
-**Documentation-only changes need no local suite at all.** `CHANGELOG.md`,
-`README.md`, `docs/**` and `wiki/**` are prose: nothing imports them, no test
+**Documentation-only changes need no local suite at all.** `README.md`,
+`docs/**`, `wiki/**` and `CHANGELOG.md` are prose: nothing imports them, no test
 asserts on them, and no migration reads them. Resolve, commit and push — CI
-still runs everything, so the safety net is intact either way. This applies
-squarely to the merge conflict these files produce constantly, where both
-branches appended under `## [Unreleased]`: keep both sets and move on.
+still runs everything, so the safety net is intact either way. The changelog
+conflict this used to describe — both branches appending under
+`## [Unreleased]` — now only arises on branches opened before the 2026-09-08
+freeze; while any remain open, resolve it the same way: keep both sets and move
+on.
 
 The exceptions are the two docs a job does parse, and they are cheap to check
 on their own rather than by running everything:
@@ -406,7 +456,8 @@ backend/app/
 - **Toast notifications:** `react-hot-toast` — use `toast.success()`, `toast.error()` for user feedback. `<Toaster>` is mounted in `App.tsx`
 - **Styling:** Tailwind CSS with `theme-*` CSS variable classes defined in `styles/index.css` (e.g., `bg-theme-surface`, `text-theme-text-primary`, `border-theme-surface-border`). Dark mode via `class` strategy. High-contrast mode also supported (`ThemeContext` handles `'light' | 'dark' | 'system' | 'high-contrast'`). Size variants as objects (`{ sm: 'max-w-md', md: 'max-w-lg' }`)
 - **Contrast is AAA, and the palette is one decision** _(2026-08-23)_: the primary fill is **red-800** (`#991b1b`), not red-600 — white on red-600 measures 4.83:1, which is AA for large text only, and a button label is not large text. The light text tiers are slate-700 / slate-600, and in dark mode `--text-primary`, `--text-secondary` and `--text-muted` are **all `#ffffff`**: no tint of grey clears 7:1 against a 6% surface on this gradient, so dark-mode hierarchy comes from size and weight, never colour. Do not reintroduce a grey text tier in `.dark`, and do not add a red-600 primary fill — a mixed palette is worse than either choice, which is why the uplift was applied to every call site at once rather than screen by screen.
-- **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `btn-primary`/`btn-icon` (44px touch target), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px. When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
+- **"Every call site at once" was not true, and the check is what makes it true now** _(2026-09-07)_: the 2026-08-23 sweep searched for a _red_, so it raised `btn-primary` and `nav-item-active` and never looked at the other three shared fills. `btn-success` sat at green-600 (**3.22:1**) and `btn-warning` at yellow-600 (**2.94:1**) — below the 4.5:1 AA floor for normal text, not merely short of AAA — and `btn-info` at blue-600 (5.25:1) was AA only. They are now green-800, amber-800 and blue-800 (amber, because yellow-800 is 6.84:1 and misses AAA by a hair). `primaryFillContrast.test.ts` no longer bans one shade by name: it reads every `@utility` pairing `text-white` with a fill out of `index.css` and measures it, so a new one is checked the day it is added and an unknown shade fails loudly rather than being skipped. **The shade hexes in the bullet above are Tailwind v3 values and are not what this build paints** — v4 authors the palette in OKLCH, so red-600 is `oklch(57.7% 0.245 27.325)` and measures 4.77:1, not the 4.83:1 the v3 `#dc2626` gives. Every ratio quoted here is measured from `node_modules/tailwindcss/theme.css`, which is also where the test reads the palette from, so an upgrade that moves a shade is reported rather than silently changing what these numbers mean. **Call sites are held to AA, not AAA** — `mobile-accessibility.spec.ts` asserts axe's AA contrast rule at zero and ratchets the AAA-only findings per route.
+- **Shared component/mobile utilities:** `styles/index.css` defines reusable `@utility` classes (grouped and documented in that file) — prefer these over repeating inline class strings or hand-rolling arbitrary values. Component utilities: `form-input`/`form-label`, `card`/`card-secondary`, `btn-primary`/`btn-icon` (44px touch target), `alert-*`, `badge`, `modal-body`. Mobile utilities: `tab-scroll` (scrollable bordered tab bar) and `hscroll` (scrollable strip) for tab/pill rows that would overflow a phone; `mobile-touch-target` (44px at every width) and `touch-target-phone` (44px on phones only, for a control whose desktop density must not change — a wrapped row of status pills, a dense filter strip); `pb-safe` / `action-bar-safe` for bottom bars that must clear the iPhone home indicator; `rwd-table` for tables that reflow to stacked cards under 768px. When adding a new shared pattern, define it as an `@utility` under the matching group header rather than scattering arbitrary values
 - **UX component library:** Reusable components in `components/ux/` — use these before building custom UI: `Skeleton`/`SkeletonCard`/`SkeletonPage` (loading states), `Pagination`, `EmptyState`, `ConfirmDialog`, `PromptDialog` (single typed value), `Tooltip`, `CommandPalette`, `SortableHeader`, `Breadcrumbs`, `ProgressSteps`, `Collapsible`, `DateRangePicker`, `FileDropzone`, `InlineEdit`, `PageTransition`, `ScanSuccessFlash`/`FlashlightToggle` (barcode-scanner overlays). **Confirmations go through `useConfirm()`**, whose dialog is mounted once by `ConfirmProvider` at the app root — see Pitfall #16
 - **Settings screens:** All three (Organization, Events, Scheduling) render through `components/settings/SettingsLayout.tsx` — section sidebar with descriptions on desktop, scrollable tab strip on phones, body in a surface card, `aria-current` on the active section. A new settings screen uses this rather than a fourth design; the section list is a `SettingsSection[]` declared beside the screen (see `modules/scheduling/components/schedulingSettingsSections.ts`). Show a Save/Reset footer **only** on sections the footer actually writes
 - **How a section is addressed differs, deliberately** _(2026-09-05)_: Organization and Events mirror the selected section into `?tab=`; **Scheduling's sections are routes** (`/scheduling/admin/settings/<section>`). Scheduling moved when it moved into the Administration hub, where a section is a destination — a hub card, a link from Inventory, an officer's bookmark — and a `?tab=` that only a `useState` reads is not addressable: it cannot be linked to, refreshed into, or reached with the back button. The other two are reached one way, from their own screen, and have no such pressure. A new settings screen inside an administration hub should follow Scheduling; a standalone one should follow the other two. `/scheduling/admin/settings?tab=…` still resolves — `SchedulingSettingsRedirect` forwards it to the section's route — so links written against the older contract keep working
