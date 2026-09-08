@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 04 (Storefront & payments, pass 4)** — PR
-[#PRNUM](https://github.com/thegspiro/the-logbook/pull/PRNUM), branch
+[#2395](https://github.com/thegspiro/the-logbook/pull/2395), branch
 `claude/security-review-storefront-payments`. This module is the most
 heavily-audited in the codebase (a dedicated module audit, two app-review
 passes, and three prior security-review passes) — scoped by `git diff`
@@ -11271,7 +11271,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) — PR #PRNUM opened
+### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) — PR #2395 opened
 
 The **Open PR** row read "None" and 04 was the first ⬜ row, so this is a
 feature iteration rather than a tend pass. Scoped by `git diff` between pass
