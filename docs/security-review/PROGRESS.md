@@ -16,14 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
-(`83a55e0`, squash) — fully green, no unresolved review threads, merged
-directly by the repo owner rather than a watchdog check on this iteration.
-One fix this pass: **USR-9 (MED)** — the property-return-drop notification
-email's fallback template had no HTML escaping on officer-typed free text
-(a second, independent bug in the same code also crashed and silently
-dropped the notification on a stray backslash). See the superseded note
-below for the full write-up. Next: 08 Membership pipeline.
+**Feature 08 (Membership pipeline, pass 5)** — PR
+[#2405](https://github.com/thegspiro/the-logbook/pull/2405), branch
+`claude/security-review-membership-pipeline-pass5`. One fix this pass:
+**MP-27 (HIGH)** — `update_prospect`, `set_prospect_status`, and
+`bulk_set_prospect_status` each read the prospect's row unlocked before
+checking the guard that prevents a status change from clobbering (or a
+second transfer call from reopening) a completed transfer-to-membership —
+a concurrent, correctly-locked `transfer_to_membership` could commit in the
+gap, letting the status change silently overwrite the just-committed
+`transferred` status and, via a follow-up transfer call, mint a second
+`User` account for the same prospect. Fixed by locking the row on all three
+paths, mirroring the pattern already used by `complete_step`/
+`regress_prospect`/`transfer_to_membership`/`update_election_package`/
+`assign_package_to_election`. 3 pre-existing FLAGGED items (MP-10, MP-19's
+`/widget-summary` half, MP-22) re-verified unchanged. Subscribed to PR
+activity. Next feature once this merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
