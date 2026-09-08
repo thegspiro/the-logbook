@@ -8,6 +8,8 @@ the transfer-to-membership workflow.
 
 import inspect
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import text
@@ -893,6 +895,128 @@ class TestTransferToMembership:
             "acquiring the row lock -- the check-before-write race is still "
             "open even though a lock call exists somewhere in the function"
         )
+
+    def test_update_prospect_locks_before_checking_transferred(self):
+        """MP-08 pass 5: update_prospect's generic status guard (MP-9, pass
+        1) read the prospect with a plain (unlocked) get_prospect call, then
+        checked ``prospect.status == ProspectStatus.TRANSFERRED`` before
+        writing a caller-supplied ``status``. Under REPEATABLE READ a plain
+        SELECT answers from a snapshot that predates a concurrent
+        transfer_to_membership's commit, and the eventual UPDATE this method
+        issues has no WHERE on the old status -- so an unlocked read lets
+        this endpoint's write silently clobber a transfer that landed in the
+        gap between the read and this transaction's own commit, reopening
+        the double-transfer race transfer_to_membership's own lock (pass 2)
+        exists to prevent, via this update endpoint instead of the transfer
+        one. Source-inspected, matching
+        test_transfer_locks_the_prospect_before_checking_status above."""
+        source = inspect.getsource(MembershipPipelineService.update_prospect)
+        assert "lock_for_update=True" in source, (
+            "update_prospect no longer locks the prospect row before "
+            "checking its status -- reintroduces the double-transfer race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        status_check_at = source.index("ProspectStatus.TRANSFERRED")
+        assert lock_at < status_check_at, (
+            "update_prospect checks the prospect's status before acquiring "
+            "the row lock -- the check-before-write race is still open even "
+            "though a lock call exists somewhere in the function"
+        )
+
+    def test_set_prospect_status_locks_before_applying_change(self):
+        """MP-08 pass 5: same race as
+        test_update_prospect_locks_before_checking_transferred, on the
+        dedicated single-prospect status endpoint. The TRANSFERRED guard
+        itself lives in _apply_status_change, so this asserts the row lock
+        is acquired in set_prospect_status before that guard runs, rather
+        than comparing string offsets within a single function body."""
+        source = inspect.getsource(MembershipPipelineService.set_prospect_status)
+        assert "lock_for_update=True" in source, (
+            "set_prospect_status no longer locks the prospect row before "
+            "applying the status change -- reintroduces the double-transfer "
+            "race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        apply_at = source.index("_apply_status_change(")
+        assert lock_at < apply_at, (
+            "set_prospect_status calls _apply_status_change before "
+            "acquiring the row lock -- the check-before-write race is "
+            "still open even though a lock call exists somewhere in the "
+            "function"
+        )
+
+    def test_bulk_set_prospect_status_locks_before_applying_change(self):
+        """MP-08 pass 5: same race, on the bulk status endpoint.
+        bulk_set_prospect_status's inner _set_status closure received an
+        already-fetched, unlocked prospect from _bulk_apply's own read (that
+        read exists only to report "not found" per id and to capture
+        full_name for the result row) and applied the status change
+        directly against it -- the same unlocked-read-then-write shape as
+        the single-prospect endpoint, just reached through the bulk path
+        instead."""
+        source = inspect.getsource(MembershipPipelineService.bulk_set_prospect_status)
+        assert "lock_for_update=True" in source, (
+            "bulk_set_prospect_status no longer locks the prospect row "
+            "before applying the status change -- reintroduces the "
+            "double-transfer race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        apply_at = source.index("_apply_status_change(")
+        assert lock_at < apply_at, (
+            "bulk_set_prospect_status calls _apply_status_change before "
+            "acquiring the row lock -- the check-before-write race is "
+            "still open even though a lock call exists somewhere in the "
+            "function"
+        )
+
+    async def test_bulk_apply_releases_the_lock_after_a_rejected_item(self):
+        """Codex review, PR #2405: bulk_set_prospect_status's per-item
+        callback (_set_status) locks the prospect row with a FOR UPDATE read
+        before its ValueError-raising guard. _bulk_apply's own ``except
+        ValueError`` branch caught that and moved on to the next id without
+        ever ending the transaction -- so the FOR UPDATE lock stayed held
+        for the rest of the batch. A selection that includes even one
+        already-transferred or already-at-target prospect would hold that
+        row locked until a later item's own commit (or the whole request
+        ending) released it, blocking every other write against it -- and
+        two overlapping batches processed in opposite orders could deadlock
+        on each other's held locks.
+
+        Asserts commit(), not rollback(): every current ``apply`` callback
+        raises its ValueError from a guard clause before writing anything,
+        so there is nothing to discard, and commit() is what is actually
+        safe to call here -- rollback() breaks the db_session fixture's
+        create_savepoint-mode session with a MissingGreenlet error (see the
+        comment at the call site, and
+        tests/test_prospect_bulk_actions.py::TestBulkAdvance::
+        test_one_failure_does_not_abort_the_rest, which already exercises
+        this exact branch through the real database and would have caught
+        a rollback() regression here). Unit-level rather than a real
+        two-connection lock test: this asserts the one thing that actually
+        changed, that the transaction ends before the loop continues past a
+        rejected item, using a mocked ``db`` so no real lock needs to be
+        held to observe it."""
+        service = MembershipPipelineService(db=AsyncMock())
+        org_id = str(uuid.uuid4())
+        prospect_id = str(uuid.uuid4())
+        prospect = SimpleNamespace(id=prospect_id, full_name="Rejected Prospect")
+
+        async def _apply(_prospect):
+            raise ValueError("Prospect is already dropped")
+
+        with patch.object(service, "get_prospect", AsyncMock(return_value=prospect)):
+            results = await service._bulk_apply([prospect_id], org_id, _apply)
+
+        assert results == [
+            {
+                "prospect_id": prospect_id,
+                "name": "Rejected Prospect",
+                "succeeded": False,
+                "error": "Prospect is already dropped",
+            }
+        ]
+        service.db.commit.assert_awaited_once()
+        service.db.rollback.assert_not_awaited()
 
     async def test_transfer_creates_user(
         self, db_session: AsyncSession, setup_org_and_admin

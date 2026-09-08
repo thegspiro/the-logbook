@@ -233,6 +233,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 43 AAA-only contrast findings remain at individual call sites, held by the
   per-route budget. The shared utilities are all AAA.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
+
+**Security**
+
+- **Editing or bulk-changing a prospective member's status raced converting
+  them to a full member.** `PUT /prospects/{id}`, `POST /prospects/{id}/status`,
+  and the bulk status endpoint each read the applicant's record without
+  locking it before checking whether they had already been converted to a
+  member. If one of those requests landed in the narrow window between a
+  concurrent "transfer to membership" request's own read and its commit, the
+  status check could pass against stale data and silently overwrite the
+  just-completed conversion back to an ordinary applicant status — while the
+  new member account it had already created stayed live. Because the
+  transfer flow's only safeguard against transferring the same applicant
+  twice was that same status field, a second transfer attempt afterward
+  could then create a **second** account for the same applicant. Fixed by
+  locking the applicant's record before evaluating the status guard on all
+  three paths, matching how the transfer flow itself was already protected.
+
+### A rejected item in a bulk applicant status change could hold its row lock for the rest of the batch (2026-09-08)
+
+**Security**
+
+- **The lock added by the fix above had its own leak on the rejected-item
+  path.** When a bulk status-change selection included a prospect already at
+  the target status (or already converted to a member), that item's newly
+  locked read correctly rejected the change, but the code caught the
+  rejection and moved on to the next item without ending that item's
+  transaction — leaving its row lock held until a later item's own commit or
+  the whole batch finished. A batch that included such an item could block
+  every other request touching that same applicant (a transfer, another
+  status change, another bulk sweep that overlapped it) for as long as the
+  batch took to finish, and two overlapping batches processed in opposite
+  orders could deadlock on each other's held locks. Fixed by ending the
+  rejected item's transaction before continuing the batch.
 
 ### A member-drop notification could inject unescaped HTML, and could silently fail to send (2026-09-08)
 

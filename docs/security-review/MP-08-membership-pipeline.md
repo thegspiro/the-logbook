@@ -1,8 +1,286 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3), 2026-09-02 (pass 4 round 4), 2026-09-08 (pass 5) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, pass 4 round 3, and pass 4 round 4), [#2405](https://github.com/thegspiro/the-logbook/pull/2405) (pass 5)
 
 ---
+
+## Pass 5 (2026-09-08) — 1 fixed, 0 flagged (3 prior FLAGGED items re-verified unchanged)
+
+**Scope.** Re-verified this feature is at the current head of a five-pass
+rotation and that nothing landed against it since pass 4 round 4 (2026-09-02)
+beyond one comment-only touch: `git log` on all six files in scope
+(`endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, `utils/prospect_fields.py`) since PR #2177 merged
+shows exactly one commit, `f8ea3f6` (2026-09-06) — its only touch to this
+feature is a stale-comment fix in `transfer_prospect`
+(`users.create_member` → `users.create`, matching a permission rename that
+happened elsewhere); no functional line changed. Re-enumerated all 51 routes
+programmatically (method + path) — identical set to pass 1's inventory, same
+50-of-51 `require_permission(...)` count (the one exception, `/approve-step`,
+is the same documented intentional auth-only gate MP-11 fixed the response
+shape of). `docs/module-audit/membership-pipeline.md` and
+`docs/app-review/membership-pipeline.md` re-read: no open findings in either,
+consistent with pass 1's original scope note.
+
+This pass specifically targeted the three angles called out for this
+iteration: (1) org-scoping on every prospect/applicant by-id lookup, (2)
+whether any part of the pipeline is reachable pre-authentication, and (3)
+multi-approval/stage-advancement logic for a TOCTOU or duplicate-advancement
+race.
+
+**(1) Org-scoping** — re-confirmed via the route inventory (unchanged) and by
+re-reading `app/api/prospect_privacy.py` in full: `block_self_prospect_access`
+is still wired as the router-level dependency
+(`membership_pipeline.py:105`, `APIRouter(dependencies=[...])`), and
+`block_self_interview_access` is still wired on both interview-mutation
+routes (MP-12). No regression.
+
+**(2) Pre-authentication surface** — two paths, both already covered by prior
+passes and re-verified rather than re-derived:
+
+- `GET /public/v1/portal/application-status/{token}`
+  (`app/api/public/portal.py:545`) — the token-scoped application-status
+  check documented in `docs/module-audit/membership-pipeline.md`'s Notes
+  section. Re-confirmed: 256-bit `secrets.token_urlsafe(32)` token
+  (`membership_pipeline_service.py:1138`), globally unique+indexed column
+  (`models/membership_pipeline.py:286`), IP rate limit applied before the DB
+  lookup, `no-store`/`no-referrer`/`noindex` response headers, a 30-day
+  sliding TTL, and a response payload limited to first/last name, status, and
+  public-visible stage names — no address/DOB/phone/notes/documents.
+- The public-form-to-prospect path: `POST /public/v1/forms/{slug}/submit`
+  (`app/api/public/forms.py:139`) can, for a "membership interest" form,
+  reach `MembershipPipelineService.create_prospect` via
+  `FormsService._process_membership_interest`
+  (`forms_service.py:1709`). This boundary is new territory for this
+  feature's own review (the public-forms endpoint itself is out of scope —
+  it belongs to the forms/public-surface feature — but the prospect-creation
+  call it makes is squarely this feature's write path). Traced the full
+  chain: `organization_id` is taken from the already-org-scoped `form` row,
+  never from client input; `pipeline_id` is resolved server-side
+  (`_resolve_pipeline_for_form`); the submission endpoint requires a CAPTCHA,
+  a 10/minute per-IP rate limit, a honeypot field, and (via
+  `enforce_daily_cap=True`) a per-form daily submission cap. `create_prospect`
+  itself (`membership_pipeline_service.py:1053`) validates a client-supplied
+  `pipeline_id` in-org (MP-2) and `referred_by` in-org (MP2-2/MP-5), and
+  handles the duplicate-email race with `begin_nested()` + an `IntegrityError`
+  fallback to the racing insert's own row rather than a 500. No finding —
+  this boundary is already hardened to the standard the rest of this feature
+  holds.
+
+**(3) TOCTOU / duplicate-advancement races — MP-27, found and fixed below.**
+Mapped every writer of `prospect.status` and `prospect.current_step_id`
+against whether its read is a locking one. `complete_step`,
+`regress_prospect`, and `transfer_to_membership` all correctly lock
+(pass 1-2's own work); `update_election_package` and
+`assign_package_to_election` correctly lock (pass 3-4's work) — but
+`update_prospect`, `set_prospect_status`, and `bulk_set_prospect_status`,
+the three writers that can set `prospect.status` to an arbitrary caller-chosen
+value, all read the prospect with a **plain, unlocked** `get_prospect` call
+before evaluating the exact guard (`prospect.status ==
+ProspectStatus.TRANSFERRED`) that MP-9/MP-17 exist to enforce.
+
+### MP-27 — HIGH — `update_prospect`/`set_prospect_status`/`bulk_set_prospect_status` read-then-write the TRANSFERRED guard unlocked, reopening the double-transfer race one layer up — ✅ FIXED
+
+**What:** three status-writing paths — `update_prospect`
+(`membership_pipeline_service.py:1219`, MP-9's guard),
+`set_prospect_status` (`:2276`), and `bulk_set_prospect_status`'s
+`_set_status` closure (`:2185`, via `_apply_status_change`) — each read the
+prospect with `get_prospect(prospect_id, organization_id)`, no
+`lock_for_update`, then check `prospect.status == ProspectStatus.TRANSFERRED`
+against that read before writing a caller-supplied target status. Under
+InnoDB REPEATABLE READ a plain `SELECT` answers from the transaction's own
+snapshot, which does not advance just because another transaction committed
+in the meantime — and the eventual `UPDATE` these methods issue carries no
+`WHERE status = :old_status` (SQLAlchemy's ORM UPDATE is keyed on `id` alone),
+so nothing at the database layer re-checks the guard's premise at write time
+either.
+
+**Failure scenario:** a coordinator calls `POST /prospects/{id}/transfer`
+(routes to the correctly-locked `transfer_to_membership`). In the window
+between that call's own `SELECT ... FOR UPDATE` read and its commit, a
+second, unlocked request — `PUT /prospects/{id}` with any body that includes
+`status`, or `POST /prospects/{id}/status`, or a `POST
+/prospects/bulk-status` sweep that happens to include this prospect —
+performs its own plain read, observes the **pre-transfer** status (e.g.
+`active`), passes the `!= TRANSFERRED` guard, and at its own commit issues an
+unconditional `UPDATE ... SET status = 'rejected' WHERE id = ...` (or
+whatever target it was given). That `UPDATE` is not blocked by the transfer's
+already-released lock (the transfer committed and released it before this
+second transaction's commit), so it succeeds — silently overwriting the
+just-committed `transferred` status back to an ordinary applicant status,
+**while the transfer's other effects (`transferred_user_id`, a new `User`
+row, a welcome email) already happened and are not rolled back.**
+
+The consequence compounds: `transfer_to_membership`'s **only** re-transfer
+guard is `prospect.status == ProspectStatus.TRANSFERRED`
+(`membership_pipeline_service.py:2461`) — there is no separate check on
+`transferred_user_id is not None`, and no unique constraint on that column
+(`models/membership_pipeline.py:290`, a plain nullable FK). So once the race
+above has clobbered `status` back to a non-`transferred` value, a **second**
+`POST /prospects/{id}/transfer` call passes the guard cleanly and calls
+`_do_transfer` again — minting a **second** `User` account for the same
+prospect, with the second write to `prospect.transferred_user_id` silently
+overwriting the first and orphaning it from the prospect record while both
+`User` rows remain live. This is exactly the double-transfer defect pass 2's
+`transfer_to_membership` lock (Codex-found, that pass) was written to close,
+reopened via a side door the earlier fix never touched.
+
+This is not a hypothetical interleaving unique to malicious timing —
+`update_prospect` is the module's single most general write path (the
+frontend's edit-applicant form posts through it, `status` included per
+pass 1's own MP-9 writeup), and `bulk_set_prospect_status` is a
+coordinator-facing bulk sweep that runs one status change per selected
+prospect in a loop; either landing in the same few-hundred-millisecond
+window as a transfer on the same applicant is a realistic double-click /
+concurrent-tab scenario for two coordinators working the same pipeline, not
+an exotic attack.
+
+**Where:** `update_prospect` (`membership_pipeline_service.py:1227`,
+pre-fix), `set_prospect_status` (`:2290`, pre-fix), `bulk_set_prospect_status`
+→ `_set_status` (`:2204`, pre-fix, operating on the unlocked prospect
+`_bulk_apply` had already fetched for its own "not found"/`full_name`
+bookkeeping).
+
+**Fix:** mirrors the established pattern from `complete_step` /
+`regress_prospect` / `transfer_to_membership` / `update_election_package` /
+`assign_package_to_election` exactly — add `lock_for_update=True` to the read
+that precedes the guard:
+
+- `update_prospect` and `set_prospect_status`: their existing
+  `get_prospect(...)` call now passes `lock_for_update=True`. No other line
+  changed — the guard logic, the write logic, and the response shape are all
+  untouched, so this is pure serialization, not a behavior change for any
+  legitimate single-request caller.
+- `bulk_set_prospect_status`: `_bulk_apply`'s own per-id fetch (shared with
+  `bulk_advance_prospects`, which is unaffected — its writes go through the
+  already-locked `complete_step`) is left as-is, since it exists only for
+  existence-checking and the result row's `name` field. `_set_status` now
+  performs its own additional locked re-fetch of the same prospect
+  immediately before calling `_apply_status_change`, so the guard always
+  evaluates the row under the lock rather than the outer, unlocked copy.
+
+**Considered and declined:** changing `_bulk_apply`'s own shared fetch to
+always lock, instead of adding a second, closure-local locked fetch inside
+`_set_status`. Declined because `_bulk_apply` is shared with
+`bulk_advance_prospects`, whose actual write path (`advance_prospect` →
+`complete_step`) already re-fetches and locks independently — always locking
+the shared outer fetch would add a lock acquisition with no corresponding
+guard evaluation on that path, and widen a shared helper's contract for the
+benefit of only one of its two callers. The extra query the chosen fix adds
+per bulk-status item is one additional indexed by-id `SELECT ... FOR UPDATE`
+in a path that is not a hot loop (a coordinator-triggered admin action, not a
+per-request read), so the tradeoff favors the smaller, caller-local change.
+
+Covered by three new source-inspection tests in
+`backend/tests/test_membership_pipeline_flow.py`
+(`TestTransferToMembership`), matching the file's own established pattern
+for `test_transfer_locks_the_prospect_before_checking_status`:
+`test_update_prospect_locks_before_checking_transferred`,
+`test_set_prospect_status_locks_before_applying_change`, and
+`test_bulk_set_prospect_status_locks_before_applying_change` — each asserts
+`lock_for_update=True` appears in the method's source and precedes the
+guard it protects (the `ProspectStatus.TRANSFERRED` comparison for
+`update_prospect`, the call into `_apply_status_change` for the other two,
+since that guard lives in a shared helper rather than inline). All three
+were independently confirmed to fail against the pre-fix code (`git stash`
+on `membership_pipeline_service.py` only, tests left in place) before the
+fix was applied, then confirmed to pass after.
+
+### MP-28 — P2 — `_bulk_apply`'s rejected-item path left the MP-27 row lock held for the rest of the batch (Codex review, PR #2405) — ✅ FIXED
+
+**What:** the MP-27 fix above gave `bulk_set_prospect_status`'s `_set_status`
+closure its own locked re-fetch (`get_prospect(..., lock_for_update=True)`)
+immediately before `_apply_status_change`'s guard. When that guard rejects
+the item — already `TRANSFERRED`, or already at the requested target status
+— `_apply_status_change` raises `ValueError`, and `_bulk_apply`'s `except
+ValueError` branch caught it and moved straight to the next id in the batch
+**without ending the transaction the locked read had opened.** The `FOR
+UPDATE` lock, and the open transaction under it, stayed held — not
+released until either a later item's own `commit()` (inside a different
+iteration's `apply()` call) or the whole request finished.
+
+**Failure scenario:** a coordinator selects a mix of prospects for a bulk
+status change, and the selection happens to include one that is already at
+the target status (an easy, ordinary mistake — re-submitting a batch, or a
+UI multi-select that didn't clear). That single item's rejected pass now
+holds `FOR UPDATE` on its row for the remainder of the batch's processing
+time. Any other request touching that same prospect — a transfer, a
+different status change, another bulk sweep that also happens to include
+it — blocks until this batch finishes. At larger batch sizes (a “select
+all” sweep of a stale cohort) the hold time grows with the batch, and two
+overlapping batches that include overlapping prospects in opposite orders
+can deadlock on each other's held locks.
+
+**Where:** `membership_pipeline_service.py`, `_bulk_apply`'s `except
+ValueError` branch (the same function MP-27 did not touch, since MP-27's
+own new lock acquisition happens inside the `apply` callback passed _into_
+`_bulk_apply`, not in `_bulk_apply` itself).
+
+**Fix:** end the transaction in the `except ValueError` branch before
+continuing the loop — via `commit()`, not `rollback()`. Every current
+`apply` callback (`advance_prospect`, `_apply_status_change`) raises its
+`ValueError` from a guard clause before making any change, so there is
+nothing pending to discard, and `commit()` releases the lock the same way a
+successful item's own `commit()` two lines below already does. `rollback()`
+looks like the more obviously "correct" choice for a rejected item and was
+tried first — it is **not** safe here: this session can be (and in every
+test using the `db_session` fixture, is) bound to an externally-managed
+connection with `join_transaction_mode="create_savepoint"`, and a raw
+`rollback()` on that combination left the session's async/greenlet bridge
+unable to run the next query (`MissingGreenlet: greenlet_spawn has not been
+called`) — not a hypothetical, but an actual regression caught by two
+**pre-existing** tests that already exercise this exact branch through a
+real database:
+`test_prospect_bulk_actions.py::TestBulkAdvance::test_one_failure_does_not_abort_the_rest`
+and
+`test_rejected_prospect_dropped.py::TestSingleStatusChange::test_transferred_cannot_be_set_by_a_status_change`
+both failed with that error the moment `rollback()` was added, and both
+pass again with `commit()` in its place. A code comment at the call site
+records this so a future edit doesn't rediscover it by breaking CI. If a
+future `apply` callback needs to write something before it can determine
+whether to raise, it must roll that partial write back itself before
+raising — this branch commits unconditionally and cannot tell the
+difference.
+
+**Guard test:** `test_bulk_apply_releases_the_lock_after_a_rejected_item` in
+`test_membership_pipeline_flow.py` — unit-level (mocked `db`) rather than a
+real two-connection lock test, asserting the one thing that changed:
+`db.commit()` is awaited once and `db.rollback()` is never awaited when
+`_bulk_apply`'s callback raises `ValueError`. Confirmed to fail (0 commit
+calls) against the code as it stood right after the MP-27 fix, before this
+one, and to pass after.
+
+Covered by three new source-inspection tests in
+`backend/tests/test_membership_pipeline_flow.py`
+(`TestTransferToMembership`), matching the file's own established pattern
+for `test_transfer_locks_the_prospect_before_checking_status`:
+`test_update_prospect_locks_before_checking_transferred`,
+`test_set_prospect_status_locks_before_applying_change`, and
+`test_bulk_set_prospect_status_locks_before_applying_change` — each asserts
+`lock_for_update=True` appears in the method's source and precedes the
+guard it protects (the `ProspectStatus.TRANSFERRED` comparison for
+`update_prospect`, the call into `_apply_status_change` for the other two,
+since that guard lives in a shared helper rather than inline). All three
+were independently confirmed to fail against the pre-fix code (`git stash`
+on `membership_pipeline_service.py` only, tests left in place) before the
+fix was applied, then confirmed to pass after. A fourth test, MP-28's
+`test_bulk_apply_releases_the_lock_after_a_rejected_item`, covers the
+`_bulk_apply` fix above.
+
+### Completion gate (pass 5, re-run after the MP-28 fix)
+
+| Check                                                               | Result                                                                                                                                                           |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                       | pass, 0 violations                                                                                                                                               |
+| `black --check app/ tests/ alembic/`                                | pass, 0 files would be reformatted                                                                                                                               |
+| `isort --check-only app/ tests/ alembic/`                           | pass, 0 violations                                                                                                                                               |
+| `python3 scripts/validate_migrations.py --strict`                   | pass — single head, no schema change this pass                                                                                                                   |
+| new guard tests (4 in `test_membership_pipeline_flow.py`)           | 4 passed; all 4 independently confirmed to fail against their respective pre-fix code                                                                            |
+| scoped pytest (`-k "membership or prospect or pipeline"`, 30 files) | 611 passed / 1 skipped (pre-existing/environmental, `py_vapid`) / 0 failed                                                                                       |
+| full backend suite (`pytest tests/ -q`)                             | 11855 passed / 21 skipped (all pre-existing/environmental — `py_vapid`, no Docker daemon/registry, opt-in API contract suite) / 0 failed                         |
+| `npm run typecheck` (frontend)                                      | pass, 0 errors — no frontend file touched this pass; whole-repo run via the aliased-compiler wrapper                                                             |
+| `npm run lint` (frontend)                                           | pass, 0 errors, 2 pre-existing warnings (unrelated file, `CallTypeChips.tsx`, `react-refresh/only-export-components`) — well under the max-warnings-10 threshold |
 
 ## Pass 4, round 4 (2026-09-02) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
 

@@ -16,14 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
-(`83a55e0`, squash) — fully green, no unresolved review threads, merged
-directly by the repo owner rather than a watchdog check on this iteration.
-One fix this pass: **USR-9 (MED)** — the property-return-drop notification
-email's fallback template had no HTML escaping on officer-typed free text
-(a second, independent bug in the same code also crashed and silently
-dropped the notification on a stray backslash). See the superseded note
-below for the full write-up. Next: 08 Membership pipeline.
+**Feature 08 (Membership pipeline, pass 5 follow-up)** — PR
+[#2406](https://github.com/thegspiro/the-logbook/pull/2406), branch
+`claude/security-review-membership-pipeline-pass5-followup`. PR #2405 (the
+pass 5 PR carrying MP-27) was merged directly by the repo owner before this
+session could push a fix for a second Codex finding on that same PR — so
+that fix lands here instead, on a new branch per CLAUDE.md Pitfall #24
+(never reuse a merged PR's branch name). **MP-28 (P2/MED, Codex review of
+PR #2405)** — `_bulk_apply`'s `except ValueError` branch (the rejected-item
+path) left the `FOR UPDATE` lock MP-27's own fix had just acquired held for
+the rest of the batch instead of ending the transaction, blocking (and,
+across two overlapping batches, potentially deadlocking) any other write to
+that prospect until the batch finished. Fixed by committing (not rolling
+back — a raw `rollback()` breaks the test session's async/greenlet bridge
+under `join_transaction_mode="create_savepoint"`) in that branch, safe
+because every current `apply` callback raises before mutating anything.
+Replied on PR #2405's P2 thread and resolved it; replied on its P1 thread
+(a request for genuine two-session concurrency test infrastructure, which
+this repo has no precedent for anywhere — including
+`test_capacity_locking.py`, whose docstring claims real concurrency but
+whose checks are source-inspection only) explaining it's a repo-wide gap
+out of scope for a one-line fix, left unresolved. Subscribed to PR
+activity. Next feature once this merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11401,7 +11415,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -11435,6 +11449,126 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405) — new PR #2406
+
+Codex reviewed PR #2405 and flagged two issues on the MP-27 fix itself
+(P2 lock leak, P1 test-rigor ask). Fixed the P2 finding, verified locally,
+and went to push — but PR #2405 had already been merged directly by the
+repo owner in the interim, with only MP-27 (the title still read "1 fix, 0
+flagged"). Per CLAUDE.md Pitfall #24, pushed the fix to a new branch
+(`claude/security-review-membership-pipeline-pass5-followup`, based on
+current `main` which already carries PR #2405's merge) instead of the
+merged branch, and opened it as a new PR, #2406.
+
+**MP-28 (P2/MED, fixed)** — `_bulk_apply`'s `except ValueError` branch (the
+path taken when an item is rejected — e.g. already at the target status)
+caught the exception and moved to the next id without ending the
+transaction MP-27's new locked `get_prospect` re-fetch had opened inside
+that closure. The `FOR UPDATE` lock stayed held for the rest of the batch,
+blocking any other write to that prospect's row until a later item's own
+`commit()` or the request's end released it, and two overlapping batches
+processed in opposite orders could deadlock on each other's held locks.
+Fixed by ending the transaction in that branch via `await
+self.db.commit()`. `rollback()` was tried first and looks like the more
+obviously correct choice for a rejected item, but is not safe here: this
+session can be (and in the `db_session` test fixture, is) bound to an
+externally-managed connection using
+`join_transaction_mode="create_savepoint"`, and a raw `rollback()` on that
+combination breaks the session's async/greenlet bridge
+(`MissingGreenlet: greenlet_spawn has not been called`) — reproduced
+directly against two pre-existing tests
+(`test_prospect_bulk_actions.py::TestBulkAdvance::test_one_failure_does_not_abort_the_rest`
+and
+`test_rejected_prospect_dropped.py::TestSingleStatusChange::test_transferred_cannot_be_set_by_a_status_change`),
+both of which exercise this exact branch and both of which failed with that
+error under `rollback()` and pass again under `commit()`. `commit()` is
+data-safe here because every current `apply` callback
+(`advance_prospect`, `_apply_status_change`) raises its `ValueError` from a
+guard clause before making any change, so there is nothing pending to
+discard. New guard test,
+`test_bulk_apply_releases_the_lock_after_a_rejected_item`, independently
+confirmed to fail against the pre-fix code.
+
+The second Codex thread (P1) asked for a test exercising the lock against a
+genuinely concurrent second transaction rather than only source-inspection
+of the fixed code. No test anywhere in this repository — including
+`test_capacity_locking.py`, whose own docstring claims real two-session
+concurrency — actually drives two live, overlapping DB sessions against a
+lock; the existing pattern throughout is a single session asserting the
+locked query was issued (`with_for_update=True` on the mock/spy) or, at
+most, a source-level trace. Building genuine multi-connection concurrency
+test infrastructure is a repo-wide gap, not something a one-line lock-leak
+fix's scope covers — replied on the thread (after #2405 had already
+merged, so the reply and resolve both landed on the closed PR) explaining
+the precedent rather than adding new test infrastructure, and left that
+thread unresolved since it wasn't acted on.
+
+Updated `docs/security-review/MP-08-membership-pipeline.md` with the MP-28
+write-up and refreshed completion-gate numbers. Completion gate re-run:
+flake8/black/isort clean; 4 guard tests (up from 3) in
+`test_membership_pipeline_flow.py`, all independently confirmed to fail
+pre-fix; scoped pytest 611 passed / 1 skipped (up from 610); full backend
+suite 11855 passed / 21 skipped / 0 failed (up from 11854). No frontend file
+touched.
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5) — 1 fixed (HIGH), 0 flagged (3 pre-existing flags re-verified, unchanged) — PR opened
+
+Confirmed `origin/main` tip matched the briefing (`ae4fe98`). GitHub PR search
+turned up one stray open PR, #2403 — a duplicate of the already-merged #2404
+(same PROGRESS.md bookkeeping, opened concurrently by a race between two
+watchdog checks) — closed as a duplicate before starting; the Open PR row
+itself already read "None". Rotation row 08 marked 🔄. Verified
+`claude/security-review-membership-pipeline` (used by PR #2176, pass 3) and
+`claude/security-review-membership-pipeline-round2` (used by PR #2177, pass 4) have both already merged, per CLAUDE.md Pitfall #24 branched as
+`claude/security-review-membership-pipeline-pass5` instead.
+
+Re-read `CHECKLIST.md`, the relevant `SEC-00` sections, `docs/module-audit/`
+and `docs/app-review/`'s membership-pipeline docs (no open findings in
+either), and all four prior passes' write-ups in
+`MP-08-membership-pipeline.md` before touching code. Confirmed via `git log`
+that only one comment-only commit (`f8ea3f6`) touched this feature's six
+files since PR #2177 merged (2026-09-02) — re-enumerated all 51 routes
+programmatically, identical to pass 1's inventory, same permission gates.
+Targeted this iteration's three specific angles: org-scoping (unchanged, all
+by-id routes still resolve through `block_self_prospect_access`/
+`block_self_interview_access`), pre-authentication reachability (the
+token-scoped `/application-status/{token}` status check and the
+public-form-to-`create_prospect` boundary via `FormsService
+._process_membership_interest` — both already hardened, no finding), and
+stage-advancement/multi-approval TOCTOU races.
+
+**MP-27 (HIGH, fixed)** — mapped every writer of `prospect.status` against
+whether its read locks the row. `complete_step`/`regress_prospect`/
+`transfer_to_membership` (pass 1-2) and `update_election_package`/
+`assign_package_to_election` (pass 3-4) all correctly lock, but
+`update_prospect` (MP-9's TRANSFERRED guard, pass 1),
+`set_prospect_status`, and `bulk_set_prospect_status` all read the prospect
+with a plain, unlocked `get_prospect` call before evaluating that same
+guard. A status-change request racing a concurrent `transfer_prospect` call
+can read the pre-transfer status, pass the guard, and then unconditionally
+overwrite the just-committed `transferred` status back to an ordinary one —
+and since `transfer_to_membership`'s only re-transfer guard is that same
+status field (no separate check on `transferred_user_id`, no unique
+constraint on it), a second transfer call afterward mints a **second** `User`
+account for the same prospect, reopening the exact double-transfer defect
+pass 2's `transfer_to_membership` lock was written to close, via a side door
+that fix never touched. Fixed by adding `lock_for_update=True` to the same
+three call sites, mirroring the established pattern exactly. 3 new
+source-inspection guard tests in `test_membership_pipeline_flow.py`, each
+independently confirmed to fail against the pre-fix code via `git stash`.
+
+Re-verified all three still-open flagged items (MP-10 unbounded
+election-package list/creation, MP-19's `/widget-summary` half, MP-22's
+document-deletion ordering tradeoff) are unchanged in the current code —
+current line numbers checked, no re-derivation, no re-fix. Completion gate:
+flake8/black/isort clean; `validate_migrations.py --strict` clean (single
+head, no schema change); scoped pytest (30 files matching
+`membership`/`prospect`/`pipeline`) 610 passed / 1 skipped; full backend
+suite 11854 passed / 21 skipped (all pre-existing/environmental) / 0 failed;
+frontend `typecheck`/`lint` both clean (no frontend file touched this pass).
+PR opened: `claude/security-review-membership-pipeline-pass5`. Next: 09
+Medical screening (PHI).
 
 ### 2026-09-08 — Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
 
