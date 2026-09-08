@@ -34,7 +34,10 @@ from app.models.membership_pipeline import (
     ProspectiveMember,
 )
 from app.services.event_service import EventService, attendance_is_finalized
-from app.services.membership_pipeline_service import MembershipPipelineService
+from app.services.membership_pipeline_service import (
+    MembershipPipelineService,
+    meeting_config_matches_event,
+)
 
 
 class GuestCheckInService:
@@ -320,24 +323,12 @@ class GuestCheckInService:
         So the type the coordinator actually chose wins, the pinned id is the
         fallback for a stage built without one, and a stage naming no event at
         all takes any recorded attendance.
+
+        The rule itself now lives beside the stage gate that has to apply the
+        same test to a *stored* attendance record, so offering an advance here
+        and granting it there cannot drift apart.
         """
-        linked_event_type = config.get("linked_event_type")
-        if linked_event_type:
-            event_type = (
-                event.event_type.value
-                if hasattr(event.event_type, "value")
-                else event.event_type
-            )
-            if str(event_type) != str(linked_event_type):
-                return False
-            linked_category = config.get("linked_event_category")
-            return not linked_category or event.custom_category == linked_category
-
-        linked_event_id = config.get("linked_event_id")
-        if linked_event_id:
-            return str(linked_event_id) == str(event.id)
-
-        return True
+        return meeting_config_matches_event(config, event)
 
     async def try_advance_attendance_pipeline(
         self, prospect_id: str, event: Event

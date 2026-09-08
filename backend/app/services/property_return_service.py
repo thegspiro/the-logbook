@@ -244,10 +244,39 @@ class PropertyReturnService:
         html = self._render_html(report_data, custom_instructions, reason=reason)
         return report_data, html
 
-    async def _find_separations_folder(
+    async def _peek_separations_folder(
         self, organization_id: str
     ) -> Optional[DocumentFolder]:
-        """Locking read for the org's separations folder.
+        """Non-locking fast-path read for the org's separations folder.
+
+        Deliberately plain, not ``with_for_update`` (Codex review, PR #2411):
+        a locking read that matches no row takes a gap lock, and gap locks
+        from different transactions are mutually compatible — so this read,
+        if it locked, could interleave with ``DocumentService.
+        initialize_system_folders`` (which now reconciles this same
+        "member-separations" system folder in under an organization-row
+        lock taken *first*) in the exact shape that deadlocked FAC-45: this
+        method would hold the folder-row gap lock and then block on the
+        organization row, while the other transaction holds the
+        organization lock and blocks on this same gap taking its insert
+        intention lock. Mirrors the peek-then-lock shape ``ensure_facility_
+        folder``/``ensure_member_folder`` already use in ``documents_
+        service.py`` — the fast path never takes a lock the organization
+        lock doesn't already cover, so it can never be the transaction
+        holding a lock the organization-lock holder is waiting on.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == organization_id,
+                DocumentFolder.slug == self.SEPARATIONS_FOLDER_SLUG,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_separations_folder(
+        self, organization_id: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's separations folder, slow-path only.
 
         ``with_for_update`` on the *read* is the second half of pitfall #27,
         and it is load-bearing here rather than defensive: the caller has
@@ -255,7 +284,10 @@ class PropertyReturnService:
         under this app's default REPEATABLE READ the transaction's snapshot
         predates the organization lock taken below. A plain ``SELECT`` would
         still answer "no folder yet" from that older snapshot even after
-        waiting for a concurrent transaction that created one.
+        waiting for a concurrent transaction that created one. Only safe to
+        call once the organization row is already locked (see
+        ``_peek_separations_folder`` for why an unlocked caller must not use
+        this as its fast path).
         """
         result = await self.db.execute(
             select(DocumentFolder)
@@ -280,13 +312,13 @@ class PropertyReturnService:
 
         Get-or-create with no uniqueness constraint behind ``(organization_id,
         slug)`` is the read-then-write of pitfall #27, so it takes the same
-        shape ``ensure_facility_folder`` uses: a fast path for the case the
-        folder already exists, then the organization row locked and the check
-        repeated under it. Two members dropped in the same moment would
-        otherwise both insert, and every later read raises
-        ``MultipleResultsFound`` — permanently, for that department.
+        shape ``ensure_facility_folder`` uses: a non-locking peek for the case
+        the folder already exists, then the organization row locked and the
+        check repeated (as a locking read) under it. Two members dropped in
+        the same moment would otherwise both insert, and every later read
+        raises ``MultipleResultsFound`` — permanently, for that department.
         """
-        folder = await self._find_separations_folder(organization_id)
+        folder = await self._peek_separations_folder(organization_id)
         if folder is not None:
             return folder
 
@@ -300,7 +332,7 @@ class PropertyReturnService:
             .with_for_update()
         )
 
-        folder = await self._find_separations_folder(organization_id)
+        folder = await self._lock_separations_folder(organization_id)
         if folder is not None:
             return folder
 

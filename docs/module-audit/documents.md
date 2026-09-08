@@ -102,8 +102,18 @@ retain intended access, while apparatus remains leadership-only.
   in-org verification.
 - `DocumentUpdate.status` is a free `Optional[str]` set via `setattr` with no
   validation against `DocumentStatus`.
-  All are behind `documents.manage` (leadership), so these are data-integrity
-  gaps, not privilege escalations. **Status:** flagged (XC-1 class).
+  All are behind `documents.manage` (leadership), so these were data-integrity
+  gaps, not privilege escalations.
+
+**Doc correction (security review DOC-10 pass 4, 2026-09-08):** this entry's
+own header already said FIXED; its closing line still read "Status: flagged"
+underneath it, a stale leftover from before the fix landed. All three gaps
+are fixed and re-confirmed intact by every pass of `docs/security-review/
+DOC-10-documents-legal.md` since: `create_folder`/`update_folder` validate
+`parent_id`/`owner_user_id` via `assert_in_org`, `update_document` validates
+`folder_id` the same way, and `DocumentUpdate.status` is `Optional[DocumentStatus]`
+in the schema (a free-string 500 path was cleared by app-review pass 3's
+"Latent-500 lens" review, `docs/app-review/documents.md`).
 
 ## Notes
 

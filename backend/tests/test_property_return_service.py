@@ -317,13 +317,19 @@ class TestSaveAsDocument:
         added = [c.args[0] for c in db.add.call_args_list]
         assert not [o for o in added if isinstance(o, DocumentFolder)]
 
-    async def test_existence_checks_lock_their_rows(self):
-        """Both folder reads are locking reads (pitfall #27's second half).
+    async def test_fast_path_peek_does_not_lock(self):
+        """Codex review, PR #2411 round 6: the fast-path folder read must be
+        a plain SELECT, not a locking one.
 
-        The caller has already read the member, the organization and the
-        assignment rows, so the transaction's REPEATABLE READ snapshot
-        predates the lock. A plain SELECT would report "no folder yet" even
-        after waiting for the transaction that created one.
+        A locking read that matches no row takes a gap lock, and different
+        transactions' gap locks are mutually compatible -- so a locking fast
+        path here could interleave with ``initialize_system_folders`` (which
+        now reconciles this same "member-separations" system folder under an
+        organization-row lock taken *first*) in the FAC-45 deadlock shape:
+        this method holds the folder-row gap lock and blocks on the
+        organization row, while the other transaction holds the organization
+        lock and blocks on this same gap's insert intention lock. Only the
+        organization lock and the post-lock re-check may take FOR UPDATE.
         """
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(None))
@@ -338,7 +344,15 @@ class TestSaveAsDocument:
 
         statements = [str(c.args[0]) for c in db.execute.call_args_list]
         assert len(statements) == 3
-        assert all("FOR UPDATE" in s for s in statements)
+        assert "FOR UPDATE" not in statements[0], (
+            "the fast-path peek must not lock -- a locking read here can "
+            "deadlock against initialize_system_folders's organization-first "
+            "lock order"
+        )
+        assert all("FOR UPDATE" in s for s in statements[1:]), (
+            "the organization-row lock and the post-lock re-check must both "
+            "remain locking reads (pitfall #27's second half)"
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

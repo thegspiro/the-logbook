@@ -13,18 +13,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockPut = vi.fn();
 const mockGet = vi.fn();
+const mockPost = vi.fn();
 
 vi.mock('../../../utils/createApiClient', () => ({
   createApiClient: () => ({
     get: (...args: unknown[]) => mockGet(...args) as unknown,
     put: (...args: unknown[]) => mockPut(...args) as unknown,
-    post: vi.fn(),
+    post: (...args: unknown[]) => mockPost(...args) as unknown,
     delete: vi.fn(),
   }),
 }));
 
 import { pipelineService } from './api';
-import type { BackendStepResponse, PipelineStageUpdate } from '../types';
+import type { BackendStepResponse, PipelineStageCreate, PipelineStageUpdate } from '../types';
 
 const backendStep = (overrides: Partial<BackendStepResponse> = {}): BackendStepResponse => ({
   id: 'step-1',
@@ -53,6 +54,17 @@ const stageUpdate = (overrides: Partial<PipelineStageUpdate> = {}): PipelineStag
   stage_type: 'meeting',
   config: { meeting_type: 'informational', meeting_description: '' },
   sort_order: 1,
+  is_required: true,
+  notify_prospect_on_completion: false,
+  public_visible: true,
+  ...overrides,
+});
+
+/** The payload the stage dialog hands the service for a brand-new stage. */
+const stageCreate = (overrides: Partial<PipelineStageCreate> = {}): PipelineStageCreate => ({
+  name: 'Interest Meeting',
+  stage_type: 'meeting',
+  config: { meeting_type: 'informational', meeting_description: '' },
   is_required: true,
   notify_prospect_on_completion: false,
   public_visible: true,
@@ -117,5 +129,30 @@ describe('pipelineService stage mapping', () => {
 
     expect(stage.config).toHaveProperty(arrayKey);
     expect(Array.isArray((stage.config as Record<string, unknown>)[arrayKey])).toBe(true);
+  });
+
+  describe('creating a stage', () => {
+    beforeEach(() => {
+      mockPost.mockResolvedValue({ data: backendStep() });
+    });
+
+    it('sends no sort_order, so the server appends the stage after the last one', async () => {
+      // The dialog used to number a new stage from the count of existing
+      // stages. Deleting a stage left a gap, so one deletion was enough for
+      // the next stage added to land on a live stage's number — and a tie in
+      // sort_order decides both the board's column order and where an advance
+      // goes, differently from one page load to the next.
+      await pipelineService.addStage('pipeline-1', stageCreate());
+
+      const payload = mockPost.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(payload.sort_order).toBeUndefined();
+    });
+
+    it('still carries an order through when one is given deliberately', async () => {
+      await pipelineService.addStage('pipeline-1', stageCreate({ sort_order: 4 }));
+
+      const payload = mockPost.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(payload).toHaveProperty('sort_order', 4);
+    });
   });
 });

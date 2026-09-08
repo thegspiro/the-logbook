@@ -13,7 +13,7 @@ import secrets
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Optional
 
 from loguru import logger
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -25,7 +25,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from app.core.constants import OFFICE_CATALOG
 from app.models.election import Election, ElectionStatus
 from app.models.email_template import EmailTemplate
-from app.models.event import Event
+from app.models.event import Event, EventExternalAttendee
 from app.models.membership_pipeline import (
     ActionType,
     InterviewRecommendation,
@@ -124,6 +124,70 @@ DUPLICATE_MEMBER_REFUSAL = (
     "convert them automatically. Review the existing members list, then "
     "convert or reactivate from there."
 )
+
+
+def effective_step_type(step: MembershipPipelineStep) -> PipelineStepType:
+    """The stage type a step behaves as, resolving the legacy ``action`` shape.
+
+    Before the typed stages existed, a document, meeting or email stage was
+    stored as ``step_type='action'`` with the kind in ``action_type``. Those
+    rows are still live — the stage editor renders them as their modern
+    equivalent (``mapStepTypeToFrontend``) and only rewrites ``step_type`` when
+    somebody saves the stage — so any code that dispatches on ``step_type``
+    alone silently treats them as untyped.
+
+    That matters twice here. A trigger matched against an exact type stops
+    advancing a legacy document stage that used to advance on upload; and a
+    legacy meeting stage skips the attendance gate entirely, which is the very
+    bug this module was changed to close. Both dispatch through this instead.
+
+    Only the unambiguous ``action_type`` mapping is resolved. The frontend also
+    guesses at ELECTION_VOTE / STATUS_PAGE_TOGGLE / FORM_SUBMISSION from the
+    shape of ``config``; those are presentation heuristics, and none of them
+    carries a completion gate, so they are deliberately not replicated into a
+    decision about whether an applicant may move.
+    """
+    if step.step_type != PipelineStepType.ACTION:
+        return step.step_type
+
+    action = step.action_type
+    raw = action.value if isinstance(action, ActionType) else action
+    return {
+        ActionType.SEND_EMAIL.value: PipelineStepType.AUTOMATED_EMAIL,
+        ActionType.SCHEDULE_MEETING.value: PipelineStepType.MEETING,
+        ActionType.COLLECT_DOCUMENT.value: PipelineStepType.DOCUMENT_UPLOAD,
+    }.get(raw, PipelineStepType.ACTION)
+
+
+def meeting_config_matches_event(config: Dict[str, Any], event: Event) -> bool:
+    """Whether a meeting stage's config accepts ``event`` as its meeting.
+
+    So the type the coordinator actually chose wins, the pinned id is the
+    fallback for a stage built without one, and a stage naming no event at
+    all takes any recorded attendance.
+
+    Lives here rather than on ``GuestCheckInService`` because two callers now
+    need it: the check-in hook that offers an advance, and the stage gate that
+    decides whether an advance has its evidence. ``GuestCheckInService``
+    keeps its own method, delegating, so its behaviour is unchanged.
+    """
+    linked_event_type = config.get("linked_event_type")
+    if linked_event_type:
+        event_type = (
+            event.event_type.value
+            if hasattr(event.event_type, "value")
+            else event.event_type
+        )
+        if str(event_type) != str(linked_event_type):
+            return False
+        linked_category = config.get("linked_event_category")
+        return not linked_category or event.custom_category == linked_category
+
+    linked_event_id = config.get("linked_event_id")
+    if linked_event_id:
+        return str(linked_event_id) == str(event.id)
+
+    return True
 
 
 def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
@@ -226,9 +290,21 @@ class MembershipPipelineService:
         return pipelines
 
     async def get_pipeline(
-        self, pipeline_id: str, organization_id: str
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        *,
+        lock_for_update: bool = False,
     ) -> Optional[MembershipPipeline]:
-        """Get a single pipeline by ID"""
+        """Get a single pipeline by ID.
+
+        ``lock_for_update`` takes a row lock on the pipeline itself, which is
+        what serializes work that reads the step list and then writes a value
+        derived from it (see ``add_step``'s sort_order allocation). The lock is
+        on the parent row only — ``steps`` is loaded by a separate SELECT — so
+        it orders those allocations against each other without locking every
+        step against unrelated reads.
+        """
         query = (
             select(MembershipPipeline)
             .where(
@@ -243,6 +319,8 @@ class MembershipPipelineService:
             # collection, not the one cached at creation time.
             .execution_options(populate_existing=True)
         )
+        if lock_for_update:
+            query = query.with_for_update(of=MembershipPipeline)
         result = await self.db.execute(query)
         return result.scalars().first()
 
@@ -471,7 +549,17 @@ class MembershipPipelineService:
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
         """Add a step to a pipeline"""
-        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        # Locked, because the sort_order allocation below reads the step list
+        # and writes a value derived from it. Two coordinators adding a stage
+        # at once — or one of them double-clicking, or two API clients — both
+        # read the same steps, compute the same max+1 and both insert it:
+        # (pipeline_id, sort_order) carries a plain index, not a unique
+        # constraint, so nothing downstream refuses the duplicate and the
+        # ambiguous ordering this method exists to prevent comes straight back.
+        # The lock is released by the commit at the end of this method.
+        pipeline = await self.get_pipeline(
+            pipeline_id, organization_id, lock_for_update=True
+        )
         if not pipeline:
             return None
 
@@ -480,9 +568,22 @@ class MembershipPipelineService:
         )
         await self._assert_form_in_org(data.get("config"), organization_id)
 
-        # Determine sort_order if not provided
-        if "sort_order" not in data or data["sort_order"] is None:
-            max_order = max((s.sort_order for s in pipeline.steps), default=-1)
+        # Determine sort_order if not provided — or if the one provided would
+        # collide. sort_order is not just display order: "the next stage" is
+        # an index into the steps sorted by it, so two stages sharing a value
+        # make both the column order and the destination of an advance depend
+        # on how the sort happened to break the tie. The builder used to send
+        # ``stages.length``, which collides with a live stage the moment any
+        # earlier stage has been deleted (deletion left gaps). An explicit,
+        # non-colliding value is still honoured, so the API is unchanged for
+        # callers that pick their own order.
+        taken = {s.sort_order for s in pipeline.steps}
+        if (
+            "sort_order" not in data
+            or data["sort_order"] is None
+            or data["sort_order"] in taken
+        ):
+            max_order = max(taken, default=-1)
             data["sort_order"] = max_order + 1
 
         step = MembershipPipelineStep(
@@ -675,6 +776,21 @@ class MembershipPipelineService:
         form_id = config.get("form_id")
 
         await self.db.delete(step)
+        await self.db.flush()
+
+        # Close the gap the delete leaves. Left sparse, the next stage the
+        # builder adds is numbered from the *count* of stages and so lands on
+        # a value a survivor already holds — and a tie makes both the column
+        # order and the destination of an advance arbitrary. Renumbering here
+        # is what keeps that from ever arising; relative order is preserved.
+        survivors = sorted(
+            (s for s in pipeline.steps if str(s.id) != str(step_id)),
+            key=lambda s: s.sort_order,
+        )
+        for index, survivor in enumerate(survivors):
+            if survivor.sort_order != index:
+                survivor.sort_order = index
+
         await self.db.commit()
 
         # If the deleted step referenced a form, remove the auto-created
@@ -1337,6 +1453,8 @@ class MembershipPipelineService:
         prospect: ProspectiveMember,
         step: MembershipPipelineStep,
         action_result: Optional[Dict[str, Any]] = None,
+        *,
+        automated: bool = False,
     ) -> None:
         """
         Validate that stage-specific requirements are met before allowing
@@ -1345,9 +1463,18 @@ class MembershipPipelineService:
         ``action_result`` is the payload submitted with the completion
         request; gates that read action_result grade it merged over the
         stored progress row (see _effective_action_result).
+
+        ``automated`` marks a completion nobody clicked — an integration
+        webhook, a check-in hook, a screening result. The meeting gate below
+        applies only to those: a coordinator who watched somebody walk in is
+        better evidence of attendance than any record, and blocking them would
+        have made "Advance" unusable on the stage type it exists for.
         """
         config = step.config or {}
-        step_type = step.step_type
+        # Resolved, not raw: a legacy ``action`` + ``schedule_meeting`` stage is
+        # a meeting stage, and dispatching on step_type alone would hand it the
+        # no-gate path the MEETING branch below exists to remove.
+        step_type = effective_step_type(step)
 
         if step_type == PipelineStepType.INTERVIEW_REQUIREMENT:
             required_count = config.get("required_count", 1)
@@ -1483,6 +1610,90 @@ class MembershipPipelineService:
                     raise ValueError(
                         f"Medical screenings not yet passed: " f"{', '.join(missing)}."
                     )
+
+        elif step_type == PipelineStepType.MEETING and automated:
+            await self._assert_meeting_attended(prospect, step, action_result)
+
+    async def _assert_meeting_attended(
+        self,
+        prospect: ProspectiveMember,
+        step: MembershipPipelineStep,
+        action_result: Optional[Dict[str, Any]],
+    ) -> None:
+        """Refuse an automated advance off a meeting nobody attended.
+
+        A meeting stage had no gate at all, so anything reaching complete_step
+        completed it: a stage whose box reads "auto-advance when attendance is
+        recorded" advanced on a document upload, on a recorded interview, and
+        on a booking made for a meeting weeks away. The box named attendance;
+        nothing ever looked for any.
+
+        Two things count as attendance, and no third:
+
+        * a check-in — an ``EventExternalAttendee`` row for this applicant with
+          ``checked_in`` set, at an event this stage accepts whose **check-in
+          window has opened**;
+        * a Cal.com ``MEETING_ENDED`` webhook, for a stage that schedules
+          through Cal.com. That payload is built by the signature-verified
+          receiver, never by a client, and Cal.com only sends it once the
+          booked meeting is over.
+
+        The window, rather than the start time, is what separates presence from
+        paperwork. A kiosk sign-in can only happen inside it, so it is no
+        constraint there — but a staff check-in is written by hand at any time,
+        and the window is what stops a coordinator entering next Monday's
+        expected guests from advancing all of them today. Grading on
+        ``start_datetime`` instead looked equivalent and was not: FLEXIBLE and
+        WINDOW policies open check-in 15–60 minutes early, so an applicant who
+        arrived on time and signed in before the hour was refused, and since
+        nobody checks in twice, no later event ever retried the gate — real
+        attendance, stage stuck.
+
+        Deliberately *not* evidence: ``ProspectEventLink``. Entering a meeting
+        stage auto-links the next matching *future* event
+        (``_auto_link_event_for_step``), so treating the link as attendance
+        would re-create the bug in a new place.
+        """
+        # Local import: event_service imports no pipeline code today, but this
+        # module is imported by guest_check_in_service, which imports both.
+        from app.services.event_service import EventService
+
+        config = step.config or {}
+
+        if (
+            config.get("scheduling_provider") == "calcom"
+            and (action_result or {}).get("source") == "calcom"
+        ):
+            return
+
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            select(Event)
+            .join(EventExternalAttendee, EventExternalAttendee.event_id == Event.id)
+            .where(
+                EventExternalAttendee.prospect_id == str(prospect.id),
+                EventExternalAttendee.checked_in.is_(True),
+                Event.organization_id == prospect.organization_id,
+                Event.is_cancelled.is_(False),
+            )
+        )
+
+        def _check_in_has_opened(event: Event) -> bool:
+            check_in_start, _ = EventService._get_check_in_window(event)
+            return now >= check_in_start
+
+        for event in result.scalars():
+            if meeting_config_matches_event(config, event) and _check_in_has_opened(
+                event
+            ):
+                return
+
+        raise ValueError(
+            f"No attendance has been recorded for '{step.name}' yet. "
+            "This stage advances once the applicant is checked in at the "
+            "meeting, and not before that meeting's check-in window opens. "
+            "Advance them by hand if they attended and it was not recorded."
+        )
 
     async def _authorized_multi_approval_result(
         self,
@@ -1688,9 +1899,16 @@ class MembershipPipelineService:
         action_result: Optional[Dict[str, Any]] = None,
         *,
         skip_requirements: bool = False,
+        automated: bool = False,
         additional_activity: Optional[_ActivityEvent] = None,
     ) -> Optional[ProspectiveMember]:
-        """Mark a step as completed for a prospect"""
+        """Mark a step as completed for a prospect.
+
+        ``automated`` says nobody clicked this: it is set by the auto-advance
+        helper and the integration webhook path, and read by the meeting gate
+        in :meth:`_validate_step_completion`. It defaults to False so every
+        existing caller keeps the behaviour it has.
+        """
         # Serialize progression for this prospect. Without a row lock, two
         # coordinators can both validate the same current stage and create two
         # completion/audit records before either transaction observes the
@@ -1776,7 +1994,9 @@ class MembershipPipelineService:
         # Keeping this server-side avoids accepting a client-controlled
         # ``skipped`` flag on the ordinary completion endpoint.
         if not skip_requirements:
-            await self._validate_step_completion(prospect, step, action_result)
+            await self._validate_step_completion(
+                prospect, step, action_result, automated=automated
+            )
 
         # A skip is a coordinator bypass, not an approval — it must never
         # convert the prospect to a member, even if a stage flagged
@@ -1907,10 +2127,33 @@ class MembershipPipelineService:
             return None
         if not prospect.pipeline or not prospect.current_step_id:
             raise ValueError("Prospect has no current stage to skip")
+        # Asserted here as well as inside complete_step so that a hold, a
+        # rejection or a withdrawal is what the coordinator is told about,
+        # rather than the required-stage refusal below — a stopped applicant
+        # is not being kept in place by the stage's own rules.
+        _assert_movable(prospect, "skipped")
         steps = sorted(prospect.pipeline.steps, key=lambda step: step.sort_order)
         if steps and str(prospect.current_step_id) == str(steps[-1].id):
             raise ValueError(
                 "The final stage cannot be skipped; convert or reject instead"
+            )
+
+        # ``required`` was written, stored and badged in the stage list, and
+        # read by exactly one line of this service — a serializer. Skip ignored
+        # it entirely, so a stage a department had marked required could be
+        # stepped over with two clicks and the badge meant nothing. A required
+        # stage is now completed or it is not passed; a department that wants
+        # to bypass one un-ticks Required on the stage first, which is a
+        # deliberate, auditable change to the pipeline rather than a quiet
+        # exception for one applicant.
+        current_step = next(
+            (s for s in steps if str(s.id) == str(prospect.current_step_id)),
+            None,
+        )
+        if current_step is not None and current_step.required:
+            raise ValueError(
+                f"'{current_step.name}' is a required stage and cannot be "
+                "skipped. Complete it, or un-tick Required on the stage first."
             )
 
         return await self.complete_step(
@@ -1933,10 +2176,20 @@ class MembershipPipelineService:
         provider_value: str,
         reference_config_key: str,
         event_reference: str,
-        completed_by: str,
+        completed_by: Optional[str] = None,
         action_result: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, str]]:
         """Auto-advance a prospect when an integration event arrives.
+
+        ``completed_by`` must be a real ``users.id`` or None: it lands on
+        ``ProspectStepProgress.completed_by`` and on the activity log, both
+        foreign keys to that table. The receivers used to pass a descriptive
+        sentinel ("integration:calcom"), which no user row can satisfy — so on
+        MySQL the advance died on the constraint and the webhook silently did
+        nothing. Which integration acted is recorded in ``action_result`` and
+        in the audit event instead; that is the same resolution
+        ``forms_service._auto_advance_pipeline_step`` documents for its own
+        system-triggered advance.
 
         Finds an active prospect in the org whose email matches one of
         ``emails`` and whose current step is of ``step_type`` configured with
@@ -2001,6 +2254,7 @@ class MembershipPipelineService:
                 step_id=str(step.id),
                 completed_by=completed_by,
                 action_result=action_result,
+                automated=True,
             )
             return {"prospect_id": str(prospect.id), "step_id": str(step.id)}
 
@@ -2925,16 +3179,11 @@ class MembershipPipelineService:
         """Return True if the step should trigger an automated email.
 
         Matches both the modern ``automated_email`` step type and the
-        legacy pattern of ``action`` + ``action_type='send_email'``.
+        legacy pattern of ``action`` + ``action_type='send_email'`` — which is
+        what :func:`effective_step_type` resolves, so the legacy mapping is
+        written once rather than once per caller that needs it.
         """
-        if step.step_type == PipelineStepType.AUTOMATED_EMAIL:
-            return True
-        if step.step_type == PipelineStepType.ACTION:
-            action = step.action_type
-            raw = action.value if isinstance(action, ActionType) else action
-            if raw == ActionType.SEND_EMAIL.value:
-                return True
-        return False
+        return effective_step_type(step) == PipelineStepType.AUTOMATED_EMAIL
 
     async def _fetch_meeting_details(
         self,
@@ -3589,6 +3838,7 @@ class MembershipPipelineService:
         step_id: str,
         completed_by: Optional[str],
         trigger: str,
+        for_step_types: AbstractSet[PipelineStepType],
         action_result: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
@@ -3598,6 +3848,16 @@ class MembershipPipelineService:
         and whether the prospect is currently on that step.  If both
         conditions are met, calls ``complete_step`` which will validate
         step-specific requirements before advancing.
+
+        ``for_step_types`` names the stage types this trigger is evidence for,
+        and is not optional. Without it this helper was type-blind — it asked
+        only "is auto_advance set, and is this the current stage?" — so a
+        document upload or a recorded interview completed a *meeting* stage
+        whose checkbox reads "auto-advance when attendance is recorded". The
+        frontend feeds it directly: uploads send the applicant's current stage
+        id whatever that stage is, and an interview with no stage id defaults
+        to the current one. A trigger now advances only the kind of stage it
+        actually says something about.
 
         Returns True if auto-advance succeeded, False otherwise.
         """
@@ -3619,6 +3879,7 @@ class MembershipPipelineService:
         )
         if (
             not step
+            or effective_step_type(step) not in for_step_types
             or not (step.config or {}).get("auto_advance")
             or str(prospect.current_step_id) != str(step_id)
         ):
@@ -3635,6 +3896,7 @@ class MembershipPipelineService:
                 completed_by=completed_by,
                 notes=f"Auto-advanced on {trigger}",
                 action_result=result,
+                automated=True,
             )
             logger.info(
                 f"Auto-advanced prospect {prospect_id} "
@@ -3695,7 +3957,7 @@ class MembershipPipelineService:
             ),
             None,
         )
-        if step is None or step.step_type != step_type:
+        if step is None or effective_step_type(step) != step_type:
             return False
         if config_matches and not config_matches(step.config or {}):
             return False
@@ -3706,6 +3968,7 @@ class MembershipPipelineService:
             step_id=str(step.id),
             completed_by=completed_by,
             trigger=trigger,
+            for_step_types={step_type},
             action_result=action_result,
         )
 
@@ -4551,6 +4814,7 @@ class MembershipPipelineService:
                 step_id=step_id,
                 completed_by=uploaded_by,
                 trigger="document upload",
+                for_step_types={PipelineStepType.DOCUMENT_UPLOAD},
                 action_result={"document_id": doc.id},
             )
 
@@ -5669,6 +5933,7 @@ class MembershipPipelineService:
                 step_id=effective_step_id,
                 completed_by=interviewer_id,
                 trigger="interview submission",
+                for_step_types={PipelineStepType.INTERVIEW_REQUIREMENT},
                 action_result={"interview_id": interview.id},
             )
 
@@ -5738,6 +6003,7 @@ class MembershipPipelineService:
                 step_id=interview_step_id,
                 completed_by=interviewer_id,
                 trigger="interview update",
+                for_step_types={PipelineStepType.INTERVIEW_REQUIREMENT},
                 action_result={"interview_id": interview_id},
             )
 

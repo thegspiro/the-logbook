@@ -250,7 +250,14 @@ When you set a **Webhook Secret**, the connect dialog shows a **callback URL**:
 https://your-logbook-host/api/public/v1/webhooks/calcom/{integration_id}
 ```
 
-Add this URL as a Cal.com webhook subscribed to the **BOOKING_CREATED** event, using the same secret. Cal.com signs the body with HMAC-SHA256 and sends the `X-Cal-Signature-256` header. When an applicant books, The Logbook matches the attendee's email to a prospective member whose current stage is a Cal.com-backed **Meeting** stage and **advances them automatically**.
+Add this URL as a Cal.com webhook subscribed to the **MEETING_ENDED** event, using the same secret. Cal.com signs the body with HMAC-SHA256 and sends the `X-Cal-Signature-256` header. Once the booked meeting has finished, The Logbook matches the attendee's email to a prospective member whose current stage is a Cal.com-backed **Meeting** stage and **advances them automatically**.
+
+> **Subscribe `MEETING_ENDED`, not `BOOKING_CREATED`.** A booking is an
+> intention, not attendance — advancing on it moved an applicant on the moment
+> they picked a slot, weeks before the meeting. An attendee Cal.com has marked
+> as a **no-show** is ignored, so a meeting nobody joined advances nobody. Cal.com
+> cannot prove somebody was present, though: if your department needs presence
+> recorded rather than assumed, leave the stage on manual advancement.
 
 ### Using Cal.com in the Membership Pipeline
 
