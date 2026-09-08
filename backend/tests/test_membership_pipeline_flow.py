@@ -1152,10 +1152,17 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
     is the MP-27 commit and already carries the lock on all three paths, so
     it cannot serve as the "unlocked" baseline): at that revision none of
     the three paths calls `get_prospect` with `lock_for_update=True`, so
-    `_tracking_get_prospect` never sets `lock_attempted` and all three
-    tests below fail at the 10-second `asyncio.wait_for(lock_attempted.
-    wait(), ...)` -- they never even reach the `assert not writer_task.
-    done()` check -- and pass against current code."""
+    `_tracking_get_prospect` never sets `lock_attempted` -- but
+    `writer_task` does not complete either. The unlocked `SELECT` itself
+    returns instantly (MVCC reads never wait on another transaction's row
+    lock), but the eventual `UPDATE` the write issues at its own flush/
+    commit is a real row-level write, which MySQL always serializes via
+    genuine locks regardless of isolation level -- so it queues behind
+    `locker`'s still-held `FOR UPDATE` lock on that exact row and never
+    finishes. Neither task in the `asyncio.wait({lock_wait_task,
+    writer_task}, ...)` race below completes, so all three tests below hit
+    the explicit `raise asyncio.TimeoutError(...)` for that case, and pass
+    against current code."""
 
     @pytest.fixture
     async def two_sessions(self, _initialize_database):
@@ -1424,11 +1431,35 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
                         [rejected_id, paused_id], org_id, "on_hold", changed_by=None
                     )
                 )
-                await asyncio.wait_for(rejected_item_done.wait(), timeout=10)
-                assert not bulk_task.done(), (
-                    "the batch finished before the paused item was ever "
-                    "released -- the pause point was never reached"
-                )
+                pause_wait_task = asyncio.create_task(rejected_item_done.wait())
+                try:
+                    done, _pending = await asyncio.wait(
+                        {pause_wait_task, bulk_task},
+                        timeout=10,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if bulk_task in done:
+                        # Codex (PR #2408): if the batch raises (or
+                        # returns) before the paused item ever reaches
+                        # _pausing_apply_status_change -- e.g. a
+                        # _bulk_apply setup regression -- waiting out the
+                        # full 10s for an event that can now never fire
+                        # buries the real failure behind a confusing
+                        # timeout. `.result()` re-raises it immediately.
+                        bulk_task.result()
+                        pytest.fail(
+                            "the batch finished before the paused item "
+                            "was ever released -- the pause point was "
+                            "never reached"
+                        )
+                    if pause_wait_task not in done:
+                        raise asyncio.TimeoutError(
+                            "neither the pause point nor the batch "
+                            "completed within 10s"
+                        )
+                finally:
+                    if not pause_wait_task.done():
+                        pause_wait_task.cancel()
 
                 # The core assertion: the rejected item's lock must be free
                 # *now*, mid-batch, not merely by the time the whole call
@@ -1473,11 +1504,21 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
                 resume_paused_item.set()
                 results = await asyncio.wait_for(bulk_task, timeout=10)
         finally:
+            bulk_cancelled = False
             if bulk_task is not None and not bulk_task.done():
                 bulk_task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await bulk_task
-            await bulk_session.rollback()
+                bulk_cancelled = True
+            if bulk_cancelled:
+                # invalidate(), not rollback(): same reasoning as the
+                # class above -- cancelling a task mid-DB-read can leave
+                # its connection unusable, and invalidate() is guaranteed
+                # not to raise even then, so it can't skip the explicit
+                # teardown below.
+                await bulk_session.invalidate()
+            else:
+                await bulk_session.rollback()
             await checker_session.rollback()
             await _teardown_membership_race_org(org_id, [rejected_id, paused_id])
 
