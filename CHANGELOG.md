@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A department store manager can no longer settle their own order's balance (2026-09-08)
+
+**Security**
+
+- **Advancing a store order's status to "Paid" no longer lets a manager clear
+  their own balance.** Marking an order paid, waiving it, and refunding it
+  already required a second person when the manager placing the order and the
+  manager approving the payment were the same member — but changing the
+  order's status directly to "Paid" settled the same balance to zero through
+  a separate code path that carried no such check. A `storefront.manage`
+  holder who had also placed a personal order could zero it out, alone, with
+  no money changing hands. That path now requires a different person too,
+  matching every other way a store order gets marked paid.
+
 ### The public portal's data whitelist works, and its hourly key limit holds (2026-09-08)
 
 **Fixed**

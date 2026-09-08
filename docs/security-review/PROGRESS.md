@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 04 (Storefront & payments, pass 4)** — PR
+[#PRNUM](https://github.com/thegspiro/the-logbook/pull/PRNUM), branch
+`claude/security-review-storefront-payments`. This module is the most
+heavily-audited in the codebase (a dedicated module audit, two app-review
+passes, and three prior security-review passes) — scoped by `git diff`
+against pass 3's own closing merge (`59b8ccff1`, PR #2138) across the full
+domain those passes established, the same method pass 3 used and for the
+same reason. **One finding: SF-7 (MED, fixed).** `update_order_status` — a
+route distinct from `record_payment`/`mark_order_paid`/`waive_order_payment`,
+all three guarded by SF-6 — has its own branch that performs the identical
+ledger settlement (`payment_status = PAID`, `amount_paid = order.total`,
+`paid_at = now()`) whenever a caller advances an order's fulfillment status
+to `PAID`, and carried none of the other four's separation-of-duties check.
+A `storefront.manage` holder who also placed their own order could call
+`POST /orders/{their_own_order_id}/status` with `{"status": "paid"}` (or the
+bulk-status sibling, across an entire selection) and zero their own balance
+with no money moved and no second person involved — the exact scenario SF-6's
+own write-up named, reached through a fourth path that fix never touched.
+Fixed with the same `assert_different_person` guard, positioned before any
+mutation. Also reviewed and confirmed clean this pass: a new
+`exclude_cancelled` order-list filter (additive to an already org-scoped
+query); the admin console's move into Inventory Administration and adoption
+of the shared `AdminHubFrame`/`AdminMetricsSettings` (all six new metric
+resolvers and the attention-queue function are org-scoped from
+`MetricContext`, and the endpoint layer resolves the module's own
+`storefront.manage` permission before any of it runs); and a 1,875-line
+cross-feature grant-restoration migration that pattern-matches on
+`storefront.*` dozens of times but changes no storefront-specific policy (a
+false positive of the same shape MP-08/ELEC-06/GF-22 already reported for
+their own domains against the same migration). Full write-up: the **Pass 4**
+section of `docs/security-review/SF-04-storefront-payments.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 03 pass 4 merged), preserved for history</summary>
+
 **None.** Feature 03 (Public surface & webhooks, pass 4)'s PR #2393 merged
 (`d03530fc`) — 4 findings from the original pass (3 fixed, 1 flagged, one of
 the four flagged in part) plus 3 more real findings from two further Codex
@@ -58,6 +93,8 @@ and every finding — the original four plus the three Codex found after —
 predates pass 3. Full write-up: the **Pass 4** section of
 `docs/security-review/PUB-03-public-surface-webhooks.md`. Next: 04 Storefront
 & payments.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2393 (pass 4), preserved for history</summary>
@@ -11195,7 +11232,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
@@ -11233,6 +11270,42 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 04 (Storefront & payments, pass 4) — PR #PRNUM opened
+
+The **Open PR** row read "None" and 04 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass. Scoped by `git diff` between pass
+3's closing merge (`59b8ccff1`, PR #2138) and current `HEAD`, the same method
+pass 3 used: two small backend additions (`exclude_cancelled` order filter),
+a real UI move (the admin console relocating into Inventory Administration
+onto the shared `AdminHubFrame`), and a large cross-feature grant-restoration
+migration confirmed a false positive by content, matching what MP-08/ELEC-06/
+GF-22 already found for their own domains against the same migration.
+
+**One finding, MED, fixed: SF-7.** `update_order_status` settles an order's
+payment ledger (`payment_status = PAID`, `amount_paid = total`, `paid_at =
+now()`) through its own branch, independent of the four methods SF-6 already
+guarded (`record_payment`/`mark_order_paid`/`waive_order_payment`, plus
+`record_payment` itself once SF-6 closed the wrapper-only gap) — and carried
+none of their `assert_different_person` check. A `storefront.manage` holder
+who also owned the order could call `POST /orders/{id}/status`
+(`{"status": "paid"}`) or its bulk sibling and self-settle with no money
+moved and no second person, exactly the scenario SF-6 already named as
+plausible. Fixed with the same guard, positioned before any mutation; guard
+tests confirmed red against the pre-fix method, then green. Full write-up:
+the **Pass 4** section of `docs/security-review/SF-04-storefront-payments.md`.
+
+Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
+438 revisions, single head; scoped backend tests (`-k "storefront or
+payment"`) 718 passed, 1 skipped (environment-only); full backend suite
+11,835 passed, 21 skipped (all environment-only); cross-cutting guard tests
+(org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep,
+endpoint-auth coverage) 56 passed; `npm run typecheck` 0 errors; `npm run
+lint` 0 errors, 2 pre-existing warnings (unrelated `CallTypeChips.tsx`,
+within budget — see the findings doc for a worktree `node_modules` false
+signal encountered and root-caused before this result); `vitest run
+src/modules/storefront/ src/components/admin/` 205 passed (18 files).
+Rotation row 04 -> ✅. Next: 05 Finance & approvals.
 
 ### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) ✅ merged — PR #2393
 
