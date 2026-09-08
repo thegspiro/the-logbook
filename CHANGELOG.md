@@ -22,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently a no-op regardless of how many requests arrived. Fixed by making
   both wrappers `async` and awaiting the limiter, matching every other
   rate-limited route in the app; a regression test now fails if either wrapper
-  stops being awaitable.
+  stops being awaitable. That fix initially left ballot reads and vote
+  submissions tracked against the same counter, so a few ordinary lookups
+  could exhaust a voter's vote-submission limit before they ever cast a
+  ballot; each request kind now has its own counter.
 
 ### The budget summary and approval-chain preview always returned "not found" (2026-09-08)
 

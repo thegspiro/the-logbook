@@ -154,11 +154,53 @@ return value drives the coroutine regardless of whether the wrapper itself
 was ever awaited by anything (which is exactly the distinction FastAPI's own
 resolution makes and the bug depended on).
 
-**Pass 4 summary: 1 fixed (ELEC-41, HIGH), 0 flagged this pass — 5 prior
-findings (ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still
-accurately open/flagged, no drift, no re-report needed.**
+### ELEC-42 — MED — Ballot read and vote limiters shared one bucket (Codex review, PR #2400) — ✅ FIXED
 
-**Completion gate (pass 4):**
+**What:** ELEC-41's fix made both wrappers `await check_rate_limit(...)`, but
+neither passed `scope`. `check_rate_limit`'s `scope` parameter defaults to
+`"auth"`, and its own docstring is explicit about why that default is unsafe
+to leave in place for more than one caller: "Without it, every ... limiter
+shared a single ... bucket, so unrelated operations drained each other's
+budget." That is exactly what happened here — `_ballot_read_rate_limit` (10
+req/min) and `_ballot_vote_rate_limit` (5 req/min, the stricter cap) both
+tracked against the same `auth:{ip}` counter.
+
+**Failure scenario:** a voter looks up their ballot, previews it, and
+re-checks their receipt a few times before submitting (5 read requests) —
+ordinary behavior for the one ballot most voters cast once. Their next
+request, the actual vote, lands on a bucket already at the 5-request cap
+shared with those reads and is rejected with 429. Worse, when Redis is
+unavailable the fallback in-memory limiter's lockout (300s for reads, 600s
+for votes — whichever wrapper trips it first) blocks **both** request kinds
+together, and the lockout is per-IP, so every voter behind the same NAT
+(a firehouse's own network, a shared office) is locked out by one person's
+ordinary read traffic.
+
+**Where:** `backend/app/api/v1/endpoints/elections.py` (the same
+`_ballot_read_rate_limit`/`_ballot_vote_rate_limit` wrappers ELEC-41 fixed).
+
+**Fix:** each wrapper now passes its own stable `scope`
+(`"ballot_read"` / `"ballot_vote"`), matching the convention used everywhere
+else `check_rate_limit` is called with more than one caller in a module
+(`app/api/v1/onboarding.py`, `app/core/security_middleware.py`'s own
+login/register/password-reset/token-refresh/password-change scopes). No
+change to the request-count/window/lockout values themselves — only the
+bucket the counts are tracked under.
+
+**Guard test:** extended `backend/tests/test_election_ballot_rate_limit.py`
+with `test_ballot_read_and_vote_limiters_do_not_share_a_bucket` (asserts the
+two wrappers' `scope` kwargs are both present and distinct) and added a
+`scope` assertion to each existing `test_*_actually_invokes_the_limiter`
+test. Confirmed all three fail against the pre-fix (no-`scope`) code —
+`KeyError: 'scope'` on the two updated tests, and the new test — by stashing
+the fix and re-running, then confirmed green after restoring it.
+
+**Pass 4 summary: 2 fixed (ELEC-41 HIGH, ELEC-42 MED — the second caught by
+Codex review on this pass's own PR), 0 flagged this pass — 5 prior findings
+(ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still accurately
+open/flagged, no drift, no re-report needed.**
+
+**Completion gate (pass 4, re-run after the ELEC-42 fix):**
 
 | Check                                                       | Result                                                                                                                       |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -166,15 +208,15 @@ accurately open/flagged, no drift, no re-report needed.**
 | `black --check app/ tests/ alembic/`                        | ✅ clean (1536 files)                                                                                                        |
 | `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin) | ✅ clean                                                                                                                     |
 | `python3 scripts/validate_migrations.py --strict`           | ✅ 438 revisions, single head (`1603bd9c59e7`) — no migration this pass                                                      |
-| `pytest tests/ -q -k "election or ballot or quorum"`        | ✅ 554 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed                                                    |
-| `pytest tests/test_election_ballot_rate_limit.py -v`        | ✅ 6 passed (new guard tests); confirmed 2 fail against the pre-fix code by stashing the fix and re-running                  |
-| `pytest tests/ -q` (full backend suite)                     | ✅ 11849 passed, 21 skipped (pre-existing/environmental — py_vapid, Docker unavailable, opt-in API-contract suite), 0 failed |
+| `pytest tests/ -q -k "election or ballot or quorum"`        | ✅ 555 passed (554 + 1 new), 1 skipped (pre-existing `py_vapid` optional dep), 0 failed                                      |
+| `pytest tests/test_election_ballot_rate_limit.py -v`        | ✅ 7 passed (6 + 1 new); confirmed 3 fail against the pre-ELEC-42-fix code by stashing the fix and re-running                |
+| `pytest tests/ -q` (full backend suite)                     | ✅ 11850 passed, 21 skipped (pre-existing/environmental — py_vapid, Docker unavailable, opt-in API-contract suite), 0 failed |
 | `npm run typecheck` (frontend, aliased-compiler wrapper)    | ✅ 0 errors — no frontend file changed this pass, run anyway per gate                                                        |
 | `npm run lint` (frontend)                                   | ✅ 0 errors, 2 pre-existing warnings in an unrelated file (`CallTypeChips.tsx`), well under `--max-warnings 10`              |
 
-New guard test: `backend/tests/test_election_ballot_rate_limit.py` (6 tests —
-see ELEC-41 above for what each asserts and why the naive form would not have
-caught the bug).
+New guard test: `backend/tests/test_election_ballot_rate_limit.py` (7 tests —
+see ELEC-41 and ELEC-42 above for what each asserts and why the naive form
+would not have caught either bug).
 
 ---
 

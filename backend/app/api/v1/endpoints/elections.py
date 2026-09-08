@@ -126,7 +126,11 @@ async def _ballot_read_rate_limit(
 ) -> None:
     """10 requests/minute per IP for ballot reads."""
     return await check_rate_limit(
-        request, max_requests=10, window_seconds=60, lockout_seconds=300
+        request,
+        max_requests=10,
+        window_seconds=60,
+        lockout_seconds=300,
+        scope="ballot_read",
     )
 
 
@@ -135,7 +139,11 @@ async def _ballot_vote_rate_limit(
 ) -> None:
     """5 requests/minute per IP for vote submissions."""
     return await check_rate_limit(
-        request, max_requests=5, window_seconds=60, lockout_seconds=600
+        request,
+        max_requests=5,
+        window_seconds=60,
+        lockout_seconds=600,
+        scope="ballot_vote",
     )
 
 

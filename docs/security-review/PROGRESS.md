@@ -18,9 +18,9 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 06 (Elections & ballots, pass 4)** — PR
 [#2400](https://github.com/thegspiro/the-logbook/pull/2400), branch
-`claude/security-review-elections-ballots`. One fix, HIGH severity:
-**ELEC-41** — the two rate-limit `Depends()` wrappers guarding all 4 public
-token-based ballot routes (`ballot/lookup`, `ballot/vote`, `ballot/vote/bulk`,
+`claude/security-review-elections-ballots`. Two fixes: **ELEC-41 (HIGH)** —
+the two rate-limit `Depends()` wrappers guarding all 4 public token-based
+ballot routes (`ballot/lookup`, `ballot/vote`, `ballot/vote/bulk`,
 `verify-receipt`) were plain `def` functions calling the (`async def`)
 `check_rate_limit` without `await`, which only constructs a coroutine and
 never runs the limiter — silently disabling rate limiting on this module's
@@ -28,11 +28,20 @@ entire public voting surface, invisibly to FastAPI (which decides whether to
 await a dependency by inspecting the callable itself, not its return value).
 Fixed by making both wrappers `async def` and awaiting the call; new guard
 test asserts `inspect.iscoroutinefunction()` on both (confirmed to fail on
-the pre-fix code by stashing the fix and re-running). Five prior findings
-(ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40) re-verified still accurately
-open/flagged, no drift. Full checklist worked fresh across all 7 dimensions.
-Gate: flake8/black/isort clean; migration validator passed (no migration
-this pass); scoped pytest 554 passed; full backend suite 11,849 passed, 21
+the pre-fix code by stashing the fix and re-running). **ELEC-42 (MED, found
+by Codex review on this PR)** — that ELEC-41 fix left both wrappers sharing
+`check_rate_limit`'s default `"auth"` scope, so ballot reads and vote
+submissions tracked against one bucket: a few ordinary lookups could exhaust
+the stricter vote-submission cap before a voter ever cast their ballot, and
+a Redis-unavailable lockout would block both request kinds together for
+every voter behind one IP. Fixed by giving each wrapper its own stable
+`scope` (`"ballot_read"`/`"ballot_vote"`), matching the convention used
+everywhere else in the codebase `check_rate_limit` has more than one caller.
+Five prior findings (ELEC-12, ELEC-14, ELEC-16, ELEC-28, ELEC-40)
+re-verified still accurately open/flagged, no drift. Full checklist worked
+fresh across all 7 dimensions. Gate (re-run after the ELEC-42 fix):
+flake8/black/isort clean; migration validator passed (no migration this
+pass); scoped pytest 555 passed; full backend suite 11,850 passed, 21
 pre-existing skips, 0 failed; frontend typecheck/lint both clean (no
 frontend file changed). See `docs/security-review/ELEC-06-elections-ballots.md`
 pass 4 for the full write-up. Next feature (once this PR merges): 07 Users &
@@ -11361,7 +11370,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 06 (Elections & ballots, pass 4) — 1 fixed (HIGH), 0 flagged — PR opened
+### 2026-09-08 — Feature 06 (Elections & ballots, pass 4) — 2 fixed (HIGH + MED), 0 flagged — PR opened, then a Codex round fixed ELEC-42
 
 Confirmed `origin/main` tip matched the briefing (`ccb8451`) and no
 security-review PR was open (search for `security(elections` returned only
@@ -11398,6 +11407,25 @@ the fix and re-running) to fail on the pre-fix code; a naive
 awaiting the wrapper's return value drives the coroutine regardless of
 whether the wrapper itself is ever awaited by anything.
 
+**Codex round on PR #2400** caught a real issue in the ELEC-41 fix itself.
+**ELEC-42 (MED, fixed) — the two wrappers shared one rate-limit bucket.**
+Neither passed `scope` to `check_rate_limit`, so both fell back to its
+default `"auth"` bucket — `check_rate_limit`'s own docstring warns this is
+exactly the failure mode `scope` exists to prevent ("unrelated operations
+drained each other's budget"). A voter who looked up their ballot and
+checked their receipt a few times (ordinary behavior) could exhaust the
+stricter 5/minute vote-submission cap before ever submitting, and a
+Redis-unavailable lockout would block both reads and votes together for
+every voter behind the same IP. Fixed by giving each wrapper its own stable
+`scope` (`"ballot_read"`/`"ballot_vote"`), matching the convention used
+everywhere else in this codebase `check_rate_limit` has more than one
+caller (`app/api/v1/onboarding.py`, the login/register/password-reset/
+token-refresh/password-change scopes in `security_middleware.py` itself).
+Extended the guard test with a new
+`test_ballot_read_and_vote_limiters_do_not_share_a_bucket` test plus `scope`
+assertions on the two existing invocation tests; confirmed all three fail
+against the pre-fix (no-`scope`) code and pass after. Thread resolved.
+
 Also re-verified, unchanged from pass 3, no re-report needed: ELEC-12
 (unbounded `SavedBallotTemplate` list/create, flagged), ELEC-14
 (`verify_vote_receipt`'s credential as a GET query param, flagged), ELEC-16
@@ -11409,13 +11437,14 @@ accept/decline-nomination, tenant isolation on candidate CRUD and PDF
 exports, injection/CSV n/a, ballot-secrecy IP/UA purge at close, abuse
 resistance — where ELEC-41 was found, schema/migration integrity).
 
-**Gate: flake8/black/isort clean on `app/ tests/ alembic/`; migration
-validator passed (438 revisions, single head); scoped pytest (`election or
-ballot or quorum`) 554 passed, 1 pre-existing skip; full backend suite
-11,849 passed, 21 pre-existing/environmental skips, 0 failed; frontend
-`npm run typecheck` 0 errors and `npm run lint` 0 errors (2 pre-existing
-warnings in an unrelated file) — no frontend file changed this pass, both
-run anyway per the gate.** See `docs/security-review/ELEC-06-elections-ballots.md`
+**Gate (re-run after the ELEC-42 fix): flake8/black/isort clean on
+`app/ tests/ alembic/`; migration validator passed (438 revisions, single
+head); scoped pytest (`election or ballot or quorum`) 555 passed (554 + 1
+new), 1 pre-existing skip; full backend suite 11,850 passed, 21
+pre-existing/environmental skips, 0 failed; frontend `npm run typecheck` 0
+errors and `npm run lint` 0 errors (2 pre-existing warnings in an unrelated
+file) — no frontend file changed this pass, both run anyway per the gate.**
+See `docs/security-review/ELEC-06-elections-ballots.md`
 pass 4 for the full write-up. `docs/module-audit/elections.md` corrected
 (the "Public endpoints rate-limited" verified-good claim was false until
 this fix) and `CHANGELOG.md` updated under `[Unreleased]`. Rotation row 06

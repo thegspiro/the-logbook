@@ -70,6 +70,7 @@ async def test_ballot_read_rate_limit_actually_invokes_the_limiter():
     assert kwargs["max_requests"] == 10
     assert kwargs["window_seconds"] == 60
     assert kwargs["lockout_seconds"] == 300
+    assert kwargs["scope"] == "ballot_read"
 
 
 async def test_ballot_vote_rate_limit_actually_invokes_the_limiter():
@@ -80,6 +81,29 @@ async def test_ballot_vote_rate_limit_actually_invokes_the_limiter():
     assert kwargs["max_requests"] == 5
     assert kwargs["window_seconds"] == 60
     assert kwargs["lockout_seconds"] == 600
+    assert kwargs["scope"] == "ballot_vote"
+
+
+async def test_ballot_read_and_vote_limiters_do_not_share_a_bucket():
+    """Codex review, PR #2400: both wrappers omitted `scope`, so both fell
+    back to `check_rate_limit`'s default `"auth"` bucket. Read traffic
+    (lookup, receipt-verify) would then count against the vote limiter's
+    stricter 5/minute cap and vice versa — a handful of legitimate reads
+    could 429 a voter's actual submission, and with Redis unavailable the
+    shared bucket's lockout would block both request kinds together. Each
+    wrapper must pass its own stable `scope` so `check_rate_limit` tracks
+    them independently (see its docstring in `security_middleware.py`).
+    """
+    with patch.object(elec, "check_rate_limit", new=AsyncMock()) as mock_check:
+        await elec._ballot_read_rate_limit(MagicMock())
+        await elec._ballot_vote_rate_limit(MagicMock())
+    read_scope = mock_check.await_args_list[0].kwargs["scope"]
+    vote_scope = mock_check.await_args_list[1].kwargs["scope"]
+    assert read_scope, "the read wrapper must pass an explicit scope"
+    assert vote_scope, "the vote wrapper must pass an explicit scope"
+    assert (
+        read_scope != vote_scope
+    ), "ballot reads and vote submissions must not share a rate-limit bucket"
 
 
 async def test_ballot_read_rate_limit_propagates_limit_exceeded():
