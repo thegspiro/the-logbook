@@ -275,4 +275,43 @@ describe('skip link target', () => {
         'or route the branches through one shared shell that has it'
     ).toEqual([]);
   });
+
+  it('is not duplicated by a page that already sits inside AppLayout', () => {
+    /**
+     * The inverse of the rule above, and the one that actually regressed.
+     *
+     * A page reached through `AppLayout` inherits the landmark, so giving it one
+     * of its own nests a second `<main>` inside the first and puts the id on two
+     * elements — `document.getElementById` then answers with whichever the
+     * browser met first, and the skip link lands somewhere arbitrary. Twice now
+     * a sweep for "pages missing the target" has over-collected: once a helper
+     * component declared beside a public page, once `ShiftReportPrintPage`,
+     * which is mounted by `getSchedulingRoutes()` well inside the layout route.
+     *
+     * Neither was visible to the sweep above, which only ever asks whether a
+     * public page is missing the target — never whether a protected one has
+     * acquired it.
+     */
+    const owners = new Set([...pages, 'components/layout/AppLayout.tsx']);
+
+    // Comments discuss the id (this file's own header does); only markup counts.
+    const stripComments = (source: string): string =>
+      source
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .split('\n')
+        .filter((line) => !/^\s*\/\//.test(line))
+        .join('\n');
+
+    const offenders = globSync(path.join(SRC, '**/*.tsx'))
+      .map((file) => path.relative(SRC, file))
+      .filter((file) => !owners.has(file) && !file.endsWith('.test.tsx'))
+      .filter((file) => stripComments(read(file)).includes('id="main-content"'));
+
+    expect(
+      offenders,
+      'these files are only ever rendered inside AppLayout, which already provides ' +
+        '<main id="main-content">; a second one duplicates the id and makes the skip ' +
+        'link target ambiguous'
+    ).toEqual([]);
+  });
 });
