@@ -16,6 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+None. PR #2409 (Feature 09, Medical screening, pass 4 — MS-10) merged clean,
+all 17 CI checks green, no unresolved review threads. Next: 10 Documents &
+legal.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09 pass 4, PR #2409, merged), preserved for history</summary>
+
 **Feature 09 (Medical screening, pass 4)** — PR
 [#2409](https://github.com/thegspiro/the-logbook/pull/2409), branch
 `claude/security-review-medical-screening-pass4` (new name; the plain
@@ -38,6 +45,8 @@ vitest 29 passed; full backend suite run as a sanity check even though no
 backend file was touched — 11855 passed, 21 skipped (pre-existing/
 environmental), 0 failed; backend linters/migration validator were not run
 since no backend file changed.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406, merged), preserved for history</summary>
@@ -11444,7 +11453,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
@@ -11477,6 +11486,14 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 09 (Medical screening, pass 4)'s PR #2409 merged
+
+PR #2409 was fully green (17/17 CI checks, including the "CI Success"
+aggregate) with no unresolved review threads (Codex's review completed
+with zero findings). Merged (squash, `expectedHeadSha` matching the PR's
+head). **Open PR** row cleared, rotation row 09 confirmed ✅. Next: 10
+Documents & legal.
 
 ### 2026-09-08 — Feature 09 (Medical screening, pass 4) — 1 fixed, 0 flagged — new PR #2409
 
