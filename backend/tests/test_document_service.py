@@ -163,6 +163,31 @@ class TestInitializeSystemFoldersIsLocked:
             "lock and still create a duplicate `members` root"
         )
 
+    def test_existence_check_is_itself_a_locking_read(self):
+        """Codex review, PR #2411, Pitfall #27's second half: locking the
+        organization row is not sufficient on its own. ``publish_minutes``
+        already reads a folder via ``get_folder_by_slug`` before calling
+        this method, which under this app's default REPEATABLE READ
+        establishes the transaction's snapshot before the organization
+        lock above is acquired -- a plain count would still answer from
+        that earlier snapshot and could report zero system folders even
+        though a concurrent transaction already created and committed one
+        while this one waited for the lock.
+        """
+        source = inspect.getsource(DocumentService.initialize_system_folders)
+        _, sep, rest = source.partition("existing = await self.db.execute(")
+        assert sep, (
+            "expected to find the system-folder existence check to anchor "
+            "the search for a locking read"
+        )
+        existence_check, _, _ = rest.partition("if (existing.scalar()")
+        assert "with_for_update()" in existence_check, (
+            "the existence check itself must be a locking read "
+            "(with_for_update()), not just guarded by the organization "
+            "row's lock -- a plain SELECT can still answer from a stale "
+            "REPEATABLE READ snapshot taken before that lock was acquired"
+        )
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

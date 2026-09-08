@@ -24,8 +24,8 @@ documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
 out this pass).
 
-Three fixes this pass (the third added after Codex review of this PR's own
-commit found two more gaps in the first two):
+Five fixes this pass — three added across two further rounds of Codex
+review on this PR's own commits, finding gaps in the first two fixes:
 
 - **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
   directly by `documents.py`'s own `GET /documents/my-folder`, was a
@@ -56,9 +56,27 @@ commit found two more gaps in the first two):
   system folders and both create a `members` root, since there's no
   uniqueness constraint on `(organization_id, slug)` — reopening DOC-28's
   exact symptom through a second, unlocked creator. Fixed by giving
-  `initialize_system_folders` the same organization-row lock. New guard
-  test (`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked`),
-  confirmed to fail pre-fix via `git stash`.
+  `initialize_system_folders` the same organization-row lock, plus a
+  second round: that lock alone wasn't sufficient (Pitfall #27's second
+  half, Codex review of this fix itself) — `publish_minutes` already reads
+  a folder via `get_folder_by_slug` before calling this method, so under
+  REPEATABLE READ the transaction's snapshot predates the lock, and a
+  plain existence count could still answer from that stale snapshot.
+  Made the existence check itself a locking read too. 2 new guard tests
+  (`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked`),
+  each confirmed to fail pre-fix via `git stash`.
+- **DOC-28 fast-path predicate re-check (MED, Codex review of this PR's
+  DOC-29 commit)** — `ensure_member_folder`'s fast path locks the peeked
+  personal folder by `_lock_folder_by_id`, which matches only the primary
+  key, not `(parent_id, owner_user_id)`. If a `documents.manage` holder
+  reassigns that folder's owner (or reparents it) between the peek and
+  the lock, the locked row was still returned as-is — handing back a
+  folder to a member who, by the time the request is served, no longer
+  owns it. Fixed by re-checking both predicates after the lock and
+  falling through to the slow path (which correctly creates a fresh
+  folder for this member) when they no longer match. New guard test
+  (`test_falls_through_if_ownership_changed_under_the_lock`), confirmed
+  to fail pre-fix via `git stash`.
 
 Also on this PR's first commit, Codex found the new
 `TestEnsureMemberFolderIsLocked::test_locks_the_organization_row` guard
@@ -68,6 +86,12 @@ called a non-locking `_peek_*` helper instead of the locking one, since the
 now-unused locking helper's own definition still contains the string.
 Rewritten to check the slow path calls the locking helpers by name;
 verified the rewritten test fails when that exact regression is injected.
+
+Also caught and fixed independently of Codex, after the first push: CI's
+"Backend Unit Tests" job (no database provisioned) failed because
+`test_repeated_calls_return_the_same_folder` (a real-database test from
+the original commit) was missing `@pytest.mark.integration`, unlike every
+other `db_session`-using test in the file. Added the marker.
 
 DOC-8 (unbounded `list_revisions`) re-verified still open, not re-flagged.
 XC-4 (member-separations folder, an unrelated ad hoc security fix that
@@ -11632,6 +11656,57 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 3) — 2 fixed (Codex review of PR #2411's DOC-29 commit)
+
+Codex reviewed PR #2411's DOC-29 fix commit (`49e8b75`) and found two more
+real gaps — one in each of that commit's two changed files.
+
+**Fast-path ownership re-check (MED, fixed).** `ensure_member_folder`'s
+fast path locks the peeked personal folder via `_lock_folder_by_id`, which
+matches only the folder's primary key — not `(parent_id, owner_user_id)`.
+If a `documents.manage` holder reassigns that folder's owner or reparents
+it in the window between the peek and the lock, the locked row was
+returned as-is: the caller could receive a folder (and its document
+listing) that, by the time the request completed, belonged to someone
+else. Not caught by the existing guard tests, since none exercised a
+mismatch between the peeked and locked state. Fixed by re-checking
+`parent_id`/`owner_user_id` after the lock and falling through to the slow
+path when they no longer match — the slow path's own locked re-fetch by
+`(parent_id, owner_user_id)` correctly finds nothing for this member (since
+ownership moved) and creates a fresh folder, rather than erroring or
+looping. New guard test,
+`test_falls_through_if_ownership_changed_under_the_lock`, confirmed to
+fail against the pre-fix code via `git stash`.
+
+**DOC-29's own lock wasn't sufficient (MED, fixed) — Pitfall #27's second
+half, again.** The previous round's fix locked the `Organization` row
+before `initialize_system_folders`'s existence check, but left that check
+itself a plain `SELECT`. `publish_minutes` (the method's only caller)
+already reads a folder via `get_folder_by_slug` before ever calling
+`initialize_system_folders`, which under this app's default REPEATABLE
+READ establishes the transaction's read-view snapshot at that first read —
+before the organization lock is acquired. A plain count taken after the
+lock still answers from that earlier snapshot, so it could report zero
+system folders even though a concurrent `ensure_member_folder` had already
+created and committed one while this transaction waited on the lock — the
+exact DOC-29 race, reopened by an incomplete fix. Verified directly (a
+throwaway script against the real database) that `SELECT
+count(...) ... FOR UPDATE` is valid SQL and executes as a locking read.
+Fixed by adding `.with_for_update()` to the existence-check query itself.
+New guard test,
+`test_existence_check_is_itself_a_locking_read`, confirmed to fail
+against the pre-fix code via `git stash`.
+
+Replied on both Codex threads and resolved them, plus the two threads from
+the prior round (DOC-9 doc-overclaim correction, test-rigor rewrite) —
+all four addressed and resolved on this PR.
+
+Completion gate re-run: flake8/black/isort clean on all four changed
+Python files; `validate_migrations.py --strict` pass (unchanged, no
+migration touched); scoped tests 275 passed; full backend suite 11866
+passed / 21 skipped (pre-existing/environmental) / 0 failed (up from
+11864, the two new guard tests). No frontend file touched.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4 follow-up) — 2 fixed (Codex review of PR #2411's own commit)
 

@@ -1335,7 +1335,19 @@ class DocumentsService:
             )
             if peeked_folder is not None:
                 member_folder = await self._lock_folder_by_id(peeked_folder.id)
-                if member_folder is not None:
+                # Codex review, PR #2411: _lock_folder_by_id matches only
+                # the primary key, not (parent_id, owner_user_id) -- if a
+                # documents.manage holder reassigns this folder's owner or
+                # reparents it between the peek above and this lock, the
+                # locked row is still returned as-is. Re-check both
+                # predicates so a folder that no longer belongs to this
+                # member under this root falls through to the slow path's
+                # own locked re-fetch instead of being handed back.
+                if (
+                    member_folder is not None
+                    and member_folder.parent_id == members_root.id
+                    and member_folder.owner_user_id == user_id_str
+                ):
                     return member_folder
 
         org = await self.db.scalar(

@@ -51,6 +51,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "members" root, since nothing enforces there can only be one. Fixed by
   having both get-or-creates lock the same row before checking, so whichever
   runs first is guaranteed to finish before the other looks.
+- **That lock alone wasn't quite enough.** Locking before the check doesn't
+  help if the check itself can still answer from data read earlier in the
+  same request — and minutes publishing does read a folder earlier. Fixed
+  by making the existence check itself read current data instead of
+  whatever was visible when the request started.
+- **A member's own Documents folder could briefly be shown to the wrong
+  person.** The fast path for finding a member's personal folder locked it
+  by id only, without re-confirming it still belonged to that member. If an
+  admin reassigned the folder's owner in the narrow window between the
+  lookup and the lock, the original member could still be served a folder
+  that, by the time the response went out, was no longer theirs. Fixed by
+  re-checking ownership after the lock and creating a fresh folder for that
+  member when it no longer matches.
 
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 

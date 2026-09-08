@@ -3077,6 +3077,52 @@ class TestEnsureMemberFolderIsLocked:
             "serialize on one shared organization row"
         )
 
+    async def test_falls_through_if_ownership_changed_under_the_lock(self):
+        """Codex review, PR #2411: ``_lock_folder_by_id`` matches only the
+        folder's primary key, not ``(parent_id, owner_user_id)``. If a
+        ``documents.manage`` holder reassigns this folder's owner (or
+        reparents it) between the fast path's peek and its lock, the
+        locked row no longer belongs to this member under this root and
+        must not be handed back as this member's folder.
+        """
+        root = SimpleNamespace(id="members-root")
+        peeked_folder = SimpleNamespace(id="folder-1")
+        # The locked re-fetch of that same id finds it reassigned to a
+        # different owner in the meantime.
+        reassigned_folder = SimpleNamespace(
+            id="folder-1", parent_id="members-root", owner_user_id="someone-else"
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: members root already exists
+                _one(peeked_folder),  # fast-path: peek finds a folder
+                _one(reassigned_folder),  # fast-path: locked re-fetch by
+                # id -- same row, ownership changed underneath
+                _one(root),  # slow path: members root, locked, re-confirmed
+                _one(None),  # slow path: this user's folder, locked --
+                # none, since the old one now belongs to someone else
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        user = SimpleNamespace(id="user-1", first_name="Jane", last_name="Smith")
+        folder = await DocumentsService(db).ensure_member_folder("org-1", user)
+
+        assert folder is not reassigned_folder, (
+            "the fast path returned the folder even though the locked "
+            "re-fetch showed it had already been reassigned to a "
+            "different owner"
+        )
+        assert folder.owner_user_id == "user-1", (
+            "the slow path should have created a new personal folder for "
+            "this member instead of returning the reassigned one"
+        )
+
     async def test_reuses_the_folder_a_concurrent_visit_created(self):
         """The re-check under the organization lock, not just the fast path.
 

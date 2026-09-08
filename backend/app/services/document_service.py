@@ -50,10 +50,22 @@ class DocumentService:
         if org is None:
             raise ValueError("Organization not found")
 
+        # Codex review, PR #2411: locking the organization row above is not
+        # sufficient on its own (Pitfall #27's second half). publish_minutes
+        # already reads a folder via get_folder_by_slug before calling this
+        # method, which under this app's default REPEATABLE READ establishes
+        # the transaction's snapshot before the lock above is acquired. A
+        # plain count here would still answer from that earlier snapshot and
+        # could report zero system folders even though a concurrent
+        # ensure_member_folder already created and committed one while this
+        # transaction waited for the lock. Making the count itself a locking
+        # read forces a current read, not the transaction's original
+        # snapshot.
         existing = await self.db.execute(
             select(func.count(DocumentFolder.id))
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.is_system.is_(True))
+            .with_for_update()
         )
         if (existing.scalar() or 0) > 0:
             return await self.list_folders(organization_id)
