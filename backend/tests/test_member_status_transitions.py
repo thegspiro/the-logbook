@@ -165,3 +165,88 @@ async def test_property_return_email_releases_session_before_delivery(monkeypatc
         member_email="member@example.com",
     )
     assert session_was_open_during_send is False
+
+
+@pytest.mark.asyncio
+async def test_default_property_return_email_escapes_html_but_not_text(monkeypatch):
+    """USR-9: the fallback (no admin-customized template) HTML body must
+    escape free-text context values — `reason`, `member_name`,
+    `performed_by_name` — the same way EmailTemplateService.render() does for
+    a customized template. Without this, an officer's `reason` text (or a
+    member's own stored name) reaches this HTML email, and every CC'd admin's
+    inbox, unescaped."""
+    captured: dict = {}
+
+    class Result:
+        def scalar_one_or_none(self):
+            return SimpleNamespace(name="Test Department")
+
+    class Session:
+        async def execute(self, _query):
+            return Result()
+
+    async def get_session():
+        yield Session()
+
+    class TemplateService:
+        def __init__(self, _session):
+            pass
+
+        async def get_template(self, *_args):
+            # No admin-customized template on file — forces the fallback path.
+            return None
+
+    class EmailService:
+        def __init__(self, _organization):
+            pass
+
+        async def send_email(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.member_status.database_manager.get_session",
+        get_session,
+    )
+    monkeypatch.setattr("app.services.email_service.EmailService", EmailService)
+    monkeypatch.setattr(
+        "app.services.email_template_service.EmailTemplateService", TemplateService
+    )
+
+    malicious_reason = '<img src=x onerror="alert(1)">Did not return \\1 items'
+    await _send_property_return_email(
+        organization_id="org-1",
+        to_emails=["member@example.com"],
+        cc_emails=["chief@example.com"],
+        report_data={
+            "member_name": "<b>Evil</b> Member",
+            "drop_type_display": "Voluntary",
+            "reason": malicious_reason,
+            "effective_date": "2026-08-12",
+            "return_deadline": "2026-08-26",
+            "item_count": 0,
+            "items": [],
+            "total_value": 0,
+            "performed_by_name": "Test Admin",
+            "performed_by_title": "Chief",
+        },
+        member_email="member@example.com",
+    )
+
+    html_body = captured["html_body"]
+    text_body = captured["text_body"]
+
+    # The raw markup must never reach the HTML body unescaped.
+    assert "<img src=x onerror=" not in html_body
+    assert "<b>Evil</b>" not in html_body
+    assert "&lt;img src=x onerror=" in html_body
+    assert "&lt;b&gt;Evil&lt;/b&gt;" in html_body
+    # A literal backslash-digit sequence in user text must not be
+    # misinterpreted by re.sub as a backreference (which raises `re.error`
+    # for an out-of-range group, or substitutes the wrong text for an
+    # in-range one) — this call must not raise, and the text must survive.
+    assert "\\1 items" in html_body
+
+    # The plain-text body is not markup and must not be escaped — an
+    # escaped "<b>" would just be visual noise there, not a mitigation.
+    assert "<b>Evil</b>" in text_body
+    assert "<img src=x onerror=" in text_body

@@ -16,6 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 07 (Users & organizations, pass 4)** — PR
+[#2402](https://github.com/thegspiro/the-logbook/pull/2402), branch
+`claude/security-review-users-organizations`. One fix this pass:
+**USR-9 (MED)** — the property-return-drop notification email's fallback
+template (used whenever an organization hasn't customized its
+`MEMBER_DROPPED` email, which is most departments — `ensure_default_
+templates()` only runs from the Email Templates admin screen) interpolated
+`reason`/`member_name`/`performed_by_name` into the HTML body with **no
+escaping**, unlike the customized-template path (`EmailTemplateService.
+render()`), which does escape. A `reason` an officer types when dropping a
+member could carry markup straight into the departed member's inbox and
+every CC'd admin's. The same loop's `re.sub(pattern, str(val), ...)` also
+mis-treated the replacement as backslash-processed, so a `reason` containing
+a literal `\1`-shaped sequence raised inside the try/except and silently
+dropped the notification entirely (caught, logged, never surfaced). Fixed:
+escape every context value except the one already-safe pre-built markup key
+(`items_list_html`), leave the plain-text alternative unescaped (matching
+`_replace_variables`'s own rule), and pass the replacement as a closure so a
+backslash sequence can't be misread as a backreference. Guarded by a new
+test in `test_member_status_transitions.py`, confirmed to fail against the
+pre-fix code via `git stash` (reproducing both the missed escaping and the
+exact `invalid group reference 1` crash). Full checklist worked fresh across
+all 7 dimensions; USR-5 (unbounded lists) and USR-8 (over-broad `GET /users`
+field set) re-verified still open/flagged, unchanged, not re-derived. Gate:
+flake8/black/isort clean; migration validator passed (no migration this
+pass); scoped pytest 433 passed; full backend suite 11851 passed, 21
+pre-existing skips, 0 failed; frontend typecheck 0 errors; frontend lint 0
+errors (2 pre-existing warnings, unrelated file, well under the
+max-warnings-10 threshold — no frontend file changed this pass). See
+`docs/security-review/USR-07-users-organizations.md` pass 4 for the full
+write-up.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 06 pass 4, PR #2400, merged), preserved for history</summary>
+
 **None.** Feature 06 (Elections & ballots, pass 4)'s PR #2400 merged
 (`de8db76d`, squash) by a 30-minute watchdog check — fully green (17/17
 checks including `CI Success`), `mergeable_state: clean`, Codex review
@@ -26,6 +61,8 @@ rate limiters were completely inert, an unawaited coroutine) and ELEC-42
 wrappers shared one rate-limit bucket instead of tracking reads and votes
 separately). See the superseded note below for the full write-up. Next: 07
 Users & organizations.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 06 pass 4, PR #2400), preserved for history</summary>
@@ -11349,7 +11386,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
@@ -11384,6 +11421,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 07 (Users & organizations, pass 4) — 1 fixed (MED), 0 flagged (2 pre-existing flags re-verified, unchanged) — PR opened
+
+Confirmed `origin/main` tip matched the briefing (`da63e38`) and no
+security-review PR was open (GitHub PR search returned only unrelated
+mobile-accessibility and dependabot PRs; Open PR row read "None"). Rotation
+row 07 marked 🔄. Worked the full checklist across all 7 dimensions against
+the diff since pass 3's merge commit (`b267ee1`, PR #2280) — a six-site
+defense-in-depth org-filter hardening from a separate, already-closed
+tenancy burn-down (`1d580ea`, not this rotation's own work, re-verified
+rather than re-derived), plus a new `MembersSettingsPage`/`MembershipIdSection`
+frontend module and its three backing `organizations.py` routes, which
+predate pass 3's merge point despite pass 3's own route count being short by
+three across the two files (reconciled in the findings file; not new code
+slipping through unreviewed). All 65 routes across the four files
+re-enumerated by mechanical extraction, not sampling.
+
+**USR-9 (MED, fixed)** — `_send_property_return_email`'s fallback template
+(used whenever an org hasn't customized its `MEMBER_DROPPED` email — most
+departments, since that only happens by visiting the Email Templates admin
+screen) spliced `reason`/`member_name`/`performed_by_name` into the outbound
+HTML notice with no escaping, unlike the customized-template path
+(`EmailTemplateService.render()`), which does escape the same context. An
+officer's typed drop `reason` could carry markup into the departed member's
+inbox and every CC'd admin's. The same `re.sub` call also mistreated its
+replacement as backslash-processed, so a `reason` containing a literal
+`\1`-shaped sequence raised `re.error` inside the enclosing try/except and
+silently dropped the notification (caught, logged, invisible to the
+officer). Fixed by escaping every context value except the one pre-built,
+already-safe markup key, leaving the plain-text alternative unescaped
+(matching the customized-template path's own rule), and passing the
+replacement as a closure so a backslash sequence can't be misread as a
+backreference. New test in `test_member_status_transitions.py`, confirmed to
+fail against the pre-fix code via `git stash` (reproducing both the missed
+escaping and the exact `invalid group reference 1 at position 46` crash).
+
+USR-5 (unbounded lists) and USR-8 (over-broad `GET /users` field set for
+`members.view`-tier callers) re-verified still open/flagged, current line
+numbers unchanged since pass 3 — not re-derived, mirrored forward as-is. All
+privilege-escalation ceiling wiring, self-or-admin gating, and org-scoping
+re-confirmed by direct read (not taken on prior passes' word) at every by-id
+site across all four files, plus the two new membership-ID routes (the
+`PATCH` route's `settings.edit` gate confirmed held only by `president`/
+`it_manager` among the 27 seeded positions — not an over-broad grant).
+
+Gate: flake8/black/isort clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` passed (438 revisions, single head, no
+migration this pass); scoped pytest (`-k "member_status or member_leave or
+property_return or user_list or platoon or users or organization or
+rank_grant or role_edit or audit_history or ceiling or administrative"`) 433
+passed, 1 pre-existing skip, 0 failed; full backend suite 11851 passed, 21
+pre-existing skips, 0 failed; `npm run typecheck` 0 errors; `npm run lint` 0
+errors, 2 pre-existing warnings in an unrelated file (well under the
+max-warnings-10 threshold) — no frontend file modified this pass. (`npm ci`
+was run at the worktree root first, per this rotation's documented worktree
+quirk — the first `npm run lint` attempt before that showed 1116
+false-positive warnings from unresolved TypeScript types, which vanished
+entirely afterward.)
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md` pass 4.
 
 ### 2026-09-08 — Feature 06 (Elections & ballots, pass 4)'s PR #2400 merged, watchdog recorded it
 
