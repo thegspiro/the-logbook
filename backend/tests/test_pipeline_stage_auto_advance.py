@@ -934,3 +934,67 @@ class TestMeetingStageNeedsRealAttendance:
         )
 
         assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_an_early_arrival_inside_the_check_in_window_advances(
+        self, db_session: AsyncSession, org
+    ):
+        """Check-in windows open 15–60 minutes early, so an applicant who
+        turns up on time and signs in before the hour is genuinely present.
+        Grading on start_datetime refused exactly them — and since nobody
+        checks in twice, no later event retried the gate, leaving a stage
+        stuck on attendance that had actually been recorded."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        # FLEXIBLE with no explicit lead time opens check-in an hour early.
+        starting_soon = _make_event(
+            org,
+            start_datetime=now + timedelta(minutes=20),
+            end_datetime=now + timedelta(hours=2),
+        )
+        db_session.add(starting_soon)
+        await db_session.flush()
+
+        attendee, error, _ = await GuestCheckInService(db_session).check_in_guest(
+            event=starting_soon,
+            organization_id=org,
+            first_name="Dana",
+            last_name="Reed",
+            email=prospect.email,
+        )
+
+        assert error is None
+        assert attendee.checked_in is True
+        assert await _current_step_id(svc, prospect.id, org) != str(gate.id)
+
+    async def test_a_check_in_before_the_window_opens_does_not_advance(
+        self, db_session: AsyncSession, org
+    ):
+        """The window, not the start time, is what separates presence from
+        paperwork: a staff check-in is written by hand at any time, so an
+        entry made for next week's meeting must still advance nobody."""
+        svc, prospect, gate = await self._meeting_stage(db_session, org)
+        now = datetime.now(timezone.utc)
+        next_week = _make_event(
+            org,
+            start_datetime=now + timedelta(days=7),
+            end_datetime=now + timedelta(days=7, hours=2),
+        )
+        attendee = EventExternalAttendee(
+            id=_uid(),
+            organization_id=org,
+            event_id=str(next_week.id),
+            name="Dana Reed",
+            email=f"staff-{_uid()[:8]}@example.com",
+            prospect_id=prospect.id,
+            checked_in=True,
+            checked_in_at=now,
+        )
+        db_session.add_all([next_week, attendee])
+        await db_session.commit()
+
+        advanced = await GuestCheckInService(
+            db_session
+        ).try_advance_attendance_pipeline(str(prospect.id), next_week)
+
+        assert advanced is False
+        assert await _current_step_id(svc, prospect.id, org) == str(gate.id)

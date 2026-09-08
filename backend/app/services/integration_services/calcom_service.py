@@ -31,9 +31,11 @@ def _normalize_base_url(api_base_url: str) -> str:
 # Cal.com webhook triggers that mean a new booking was made.
 BOOKING_CREATED_EVENTS = frozenset({"BOOKING_CREATED"})
 
-# Cal.com webhook triggers that mean the booked meeting actually happened.
-# A booking is an intention; only this says the meeting took place, which is
-# what a membership pipeline's meeting stage is waiting on.
+# Cal.com webhook triggers that mean the booked meeting has finished.
+# A booking is an intention; this is the closest thing Cal.com offers to a
+# statement that the meeting took place, which is what a membership pipeline's
+# meeting stage is waiting on. It is not proof of presence on its own — see
+# ``parse_webhook_event`` on no-shows.
 MEETING_ENDED_EVENTS = frozenset({"MEETING_ENDED"})
 
 
@@ -44,6 +46,19 @@ def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
     trigger, whether it represents a new booking (``created``) or a meeting
     that has finished (``attended``), the booking uid, and the attendee emails
     so a booking can be correlated back to a prospect.
+
+    **An attendee Cal.com has marked as a no-show is dropped from
+    ``attendee_emails``**, so a booking nobody joined advances nobody: the
+    correlation downstream is by email, and an absent email matches no
+    prospect. Cal.com sends ``noShow`` on an attendee once someone marks them
+    absent; where it does not send the field at all the list is unchanged, so
+    this narrows the trigger and never widens it.
+
+    What ``attended`` claims, exactly: the booked meeting's interval ended and
+    Cal.com is not telling us this attendee missed it. That is weaker than a
+    check-in at a Logbook event, which is a positive record of somebody
+    arriving. A department that needs presence proved rather than assumed
+    should leave the stage on manual advancement.
     """
     trigger = str(payload.get("triggerEvent") or "")
     data = payload.get("payload") or {}
@@ -51,7 +66,9 @@ def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
         data = {}
     attendees = data.get("attendees") or []
     emails = [
-        a.get("email", "") for a in attendees if isinstance(a, dict) and a.get("email")
+        a.get("email", "")
+        for a in attendees
+        if isinstance(a, dict) and a.get("email") and a.get("noShow") is not True
     ]
     event_type = data.get("eventType") or {}
     if not isinstance(event_type, dict):

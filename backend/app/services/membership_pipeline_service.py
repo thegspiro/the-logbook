@@ -257,9 +257,21 @@ class MembershipPipelineService:
         return pipelines
 
     async def get_pipeline(
-        self, pipeline_id: str, organization_id: str
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        *,
+        lock_for_update: bool = False,
     ) -> Optional[MembershipPipeline]:
-        """Get a single pipeline by ID"""
+        """Get a single pipeline by ID.
+
+        ``lock_for_update`` takes a row lock on the pipeline itself, which is
+        what serializes work that reads the step list and then writes a value
+        derived from it (see ``add_step``'s sort_order allocation). The lock is
+        on the parent row only — ``steps`` is loaded by a separate SELECT — so
+        it orders those allocations against each other without locking every
+        step against unrelated reads.
+        """
         query = (
             select(MembershipPipeline)
             .where(
@@ -274,6 +286,8 @@ class MembershipPipelineService:
             # collection, not the one cached at creation time.
             .execution_options(populate_existing=True)
         )
+        if lock_for_update:
+            query = query.with_for_update(of=MembershipPipeline)
         result = await self.db.execute(query)
         return result.scalars().first()
 
@@ -502,7 +516,17 @@ class MembershipPipelineService:
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
         """Add a step to a pipeline"""
-        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        # Locked, because the sort_order allocation below reads the step list
+        # and writes a value derived from it. Two coordinators adding a stage
+        # at once — or one of them double-clicking, or two API clients — both
+        # read the same steps, compute the same max+1 and both insert it:
+        # (pipeline_id, sort_order) carries a plain index, not a unique
+        # constraint, so nothing downstream refuses the duplicate and the
+        # ambiguous ordering this method exists to prevent comes straight back.
+        # The lock is released by the commit at the end of this method.
+        pipeline = await self.get_pipeline(
+            pipeline_id, organization_id, lock_for_update=True
+        )
         if not pipeline:
             return None
 
@@ -1571,19 +1595,33 @@ class MembershipPipelineService:
         Two things count as attendance, and no third:
 
         * a check-in — an ``EventExternalAttendee`` row for this applicant with
-          ``checked_in`` set, at an event this stage accepts which has actually
-          started. The start-time test is what stops a coordinator's advance
-          check-in for next Monday's meeting from advancing anybody today;
+          ``checked_in`` set, at an event this stage accepts whose **check-in
+          window has opened**;
         * a Cal.com ``MEETING_ENDED`` webhook, for a stage that schedules
           through Cal.com. That payload is built by the signature-verified
           receiver, never by a client, and Cal.com only sends it once the
           booked meeting is over.
+
+        The window, rather than the start time, is what separates presence from
+        paperwork. A kiosk sign-in can only happen inside it, so it is no
+        constraint there — but a staff check-in is written by hand at any time,
+        and the window is what stops a coordinator entering next Monday's
+        expected guests from advancing all of them today. Grading on
+        ``start_datetime`` instead looked equivalent and was not: FLEXIBLE and
+        WINDOW policies open check-in 15–60 minutes early, so an applicant who
+        arrived on time and signed in before the hour was refused, and since
+        nobody checks in twice, no later event ever retried the gate — real
+        attendance, stage stuck.
 
         Deliberately *not* evidence: ``ProspectEventLink``. Entering a meeting
         stage auto-links the next matching *future* event
         (``_auto_link_event_for_step``), so treating the link as attendance
         would re-create the bug in a new place.
         """
+        # Local import: event_service imports no pipeline code today, but this
+        # module is imported by guest_check_in_service, which imports both.
+        from app.services.event_service import EventService
+
         config = step.config or {}
 
         if (
@@ -1601,18 +1639,23 @@ class MembershipPipelineService:
                 EventExternalAttendee.checked_in.is_(True),
                 Event.organization_id == prospect.organization_id,
                 Event.is_cancelled.is_(False),
-                Event.start_datetime <= now,
             )
         )
-        if any(
-            meeting_config_matches_event(config, event) for event in result.scalars()
-        ):
-            return
+
+        def _check_in_has_opened(event: Event) -> bool:
+            check_in_start, _ = EventService._get_check_in_window(event)
+            return now >= check_in_start
+
+        for event in result.scalars():
+            if meeting_config_matches_event(config, event) and _check_in_has_opened(
+                event
+            ):
+                return
 
         raise ValueError(
             f"No attendance has been recorded for '{step.name}' yet. "
             "This stage advances once the applicant is checked in at the "
-            "meeting, which cannot happen before the meeting starts. "
+            "meeting, and not before that meeting's check-in window opens. "
             "Advance them by hand if they attended and it was not recorded."
         )
 

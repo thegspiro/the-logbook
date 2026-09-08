@@ -44,19 +44,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   migration renumbers the pipelines that already drifted. Adding a stage is
   also guarded against a double-click creating two.
 
+- **An applicant who arrived on time could still be left behind.** Check-in
+  windows open 15–60 minutes before an event starts, so somebody signing in at
+  ten to the hour is genuinely present — but the meeting gate first written
+  here graded on the start time, refused them, and never retried, because
+  nobody checks in twice. The gate now accepts a check-in from the moment that
+  meeting's check-in window opens, which still leaves a coordinator's advance
+  entry for next week's meeting advancing nobody.
+- **Two coordinators adding a stage at the same moment could both take the
+  same position.** The allocation read the stage list and wrote a number
+  derived from it without holding the pipeline, so two overlapping requests
+  read the same list and picked the same slot — recreating the ambiguous
+  ordering above. That read now takes a row lock on the pipeline.
+- **A stage added with no position could still land first instead of last.**
+  The stage dialog stopped sending one, but the request schema defaulted it to
+  0 and the endpoint sent every field, so the server saw a deliberate "put it
+  first" — and on a pipeline whose stages start at 5 that was not even a
+  collision. An omitted position now arrives omitted.
+
 **Changed**
 
 - **Cal.com advances a meeting stage when the meeting ends, not when it is
   booked.** `BOOKING_CREATED` is a booking, not attendance: an applicant who
-  picked a slot three weeks out advanced the moment they picked it.
+  picked a slot three weeks out advanced the moment they picked it. An attendee
+  Cal.com marks as a **no-show** is now ignored, so a meeting nobody joined
+  advances nobody. Cal.com still cannot establish presence the way a check-in
+  at a Logbook event does — a department that needs presence recorded rather
+  than assumed should leave the stage on manual advancement.
   **Action required** for departments using Cal.com self-scheduling: subscribe
   `MEETING_ENDED` on the Cal.com webhook, or the stage will wait for a manual
-  advance.
+  advance. The connect dialog, the integrations training guide, the module
+  reference and the Cal.com wiki all name the new trigger.
 - Both integration webhooks recorded the advance against a descriptive
   placeholder ("integration:calcom") in a column that is a foreign key to the
   users table, so on MySQL the advance failed on the constraint and the webhook
   quietly did nothing. The acting integration is recorded in the step's result
   and the audit event instead.
+
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 
 **Fixed**
