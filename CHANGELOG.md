@@ -1,9 +1,24 @@
 # Changelog
 
-All notable changes to The Logbook project will be documented in this file.
+This file records notable changes up to the commit that closed it on 2026-09-08.
+The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+> **This file is closed to new entries.** The freeze takes effect at the commit
+> that added this note, not at the end of that calendar day — changes merged
+> later on 2026-09-08 are already outside it. Everything below is kept as
+> written; nothing is added. Changes shipped from the freeze onward are read
+> from the merged pull requests, and their narrative lives in
+> [`docs/security-review/`](docs/security-review/PROGRESS.md),
+> [`docs/app-review/PROGRESS.md`](docs/app-review/PROGRESS.md),
+> [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) and — for anything
+> that can block an upgrade — [`docs/UPGRADING.md`](docs/UPGRADING.md).
+>
+> The reason is mechanical, not a judgement that the history stopped mattering:
+> every pull request appended to `## [Unreleased]` at the same file offset, so
+> concurrent branches conflicted on the pair every time. See
+> [Changelog entries are no longer part of a pull request](CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request).
 
 ## [Unreleased]
 

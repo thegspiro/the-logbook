@@ -96,10 +96,12 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md) for detailed information about the pro
 1. **Update Documentation**: Ensure any new features or changes are documented
 2. **Add Tests**: All new code should include appropriate tests
 3. **Follow Code Style**: Run `npm run lint` and `npm run format`
-4. **Update CHANGELOG**: Add your changes to the unreleased section
-5. **Pass CI/CD**: Ensure all tests pass in GitHub Actions
-6. **Get Reviews**: At least one maintainer must approve your PR
-7. **Squash Commits**: Clean up commit history before merging
+4. **Pass CI/CD**: Ensure all tests pass in GitHub Actions
+5. **Get Reviews**: At least one maintainer must approve your PR
+6. **Squash Commits**: Clean up commit history before merging
+
+`CHANGELOG.md` is closed to new entries — do not add one. See
+[Changelog entries are no longer part of a pull request](../CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request).
 
 ### PR Title Format
 
