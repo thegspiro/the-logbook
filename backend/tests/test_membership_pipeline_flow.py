@@ -1225,7 +1225,6 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
             return await original_get_prospect(*args, **kwargs)
 
         writer_task = None
-        writer_cancelled = False
         try:
             with patch.object(service, "get_prospect", _tracking_get_prospect):
                 writer_task = asyncio.create_task(
@@ -1290,7 +1289,15 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
                 writer_task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await writer_task
-                writer_cancelled = True
+            # Codex (PR #2413): checking `.cancelled()` here, not just
+            # whether *this* block performed the cancel, is what catches
+            # the case where the `asyncio.wait_for(writer_task, ...)`
+            # inside the `try` above timed out -- `wait_for` cancels and
+            # awaits the task itself before raising `TimeoutError`, so by
+            # the time this `finally` runs the task is already done and
+            # the cancel-here branch above never executes, even though
+            # the task genuinely was cancelled mid-flight.
+            writer_cancelled = writer_task is not None and writer_task.cancelled()
             await locker.rollback()
             if writer_cancelled:
                 # invalidate(), not rollback(): cancelling a task
@@ -1504,12 +1511,18 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
                 resume_paused_item.set()
                 results = await asyncio.wait_for(bulk_task, timeout=10)
         finally:
-            bulk_cancelled = False
             if bulk_task is not None and not bulk_task.done():
                 bulk_task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await bulk_task
-                bulk_cancelled = True
+            # Codex (PR #2413): `.cancelled()` after the task has settled,
+            # not just whether *this* block performed the cancel -- the
+            # final `asyncio.wait_for(bulk_task, timeout=10)` above cancels
+            # and awaits the task itself on a timeout, so by the time this
+            # `finally` runs the task is already done and the cancel-here
+            # branch never executes, even though it genuinely was
+            # cancelled mid-DB-read.
+            bulk_cancelled = bulk_task is not None and bulk_task.cancelled()
             if bulk_cancelled:
                 # invalidate(), not rollback(): same reasoning as the
                 # class above -- cancelling a task mid-DB-read can leave
