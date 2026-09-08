@@ -16,14 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
-(`83a55e0`, squash) — fully green, no unresolved review threads, merged
-directly by the repo owner rather than a watchdog check on this iteration.
-One fix this pass: **USR-9 (MED)** — the property-return-drop notification
-email's fallback template had no HTML escaping on officer-typed free text
-(a second, independent bug in the same code also crashed and silently
-dropped the notification on a stray backslash). See the superseded note
-below for the full write-up. Next: 08 Membership pipeline.
+**Feature 08 (Membership pipeline, pass 5)** — PR
+[#2405](https://github.com/thegspiro/the-logbook/pull/2405), branch
+`claude/security-review-membership-pipeline-pass5`. One fix this pass:
+**MP-27 (HIGH)** — `update_prospect`, `set_prospect_status`, and
+`bulk_set_prospect_status` each read the prospect's row unlocked before
+checking the guard that prevents a status change from clobbering (or a
+second transfer call from reopening) a completed transfer-to-membership —
+a concurrent, correctly-locked `transfer_to_membership` could commit in the
+gap, letting the status change silently overwrite the just-committed
+`transferred` status and, via a follow-up transfer call, mint a second
+`User` account for the same prospect. Fixed by locking the row on all three
+paths, mirroring the pattern already used by `complete_step`/
+`regress_prospect`/`transfer_to_membership`/`update_election_package`/
+`assign_package_to_election`. 3 pre-existing FLAGGED items (MP-10, MP-19's
+`/widget-summary` half, MP-22) re-verified unchanged. Subscribed to PR
+activity. Next feature once this merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11401,7 +11409,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
@@ -11435,6 +11443,64 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5) — 1 fixed (HIGH), 0 flagged (3 pre-existing flags re-verified, unchanged) — PR opened
+
+Confirmed `origin/main` tip matched the briefing (`ae4fe98`). GitHub PR search
+turned up one stray open PR, #2403 — a duplicate of the already-merged #2404
+(same PROGRESS.md bookkeeping, opened concurrently by a race between two
+watchdog checks) — closed as a duplicate before starting; the Open PR row
+itself already read "None". Rotation row 08 marked 🔄. Verified
+`claude/security-review-membership-pipeline` (used by PR #2176, pass 3) and
+`claude/security-review-membership-pipeline-round2` (used by PR #2177, pass 4) have both already merged, per CLAUDE.md Pitfall #24 branched as
+`claude/security-review-membership-pipeline-pass5` instead.
+
+Re-read `CHECKLIST.md`, the relevant `SEC-00` sections, `docs/module-audit/`
+and `docs/app-review/`'s membership-pipeline docs (no open findings in
+either), and all four prior passes' write-ups in
+`MP-08-membership-pipeline.md` before touching code. Confirmed via `git log`
+that only one comment-only commit (`f8ea3f6`) touched this feature's six
+files since PR #2177 merged (2026-09-02) — re-enumerated all 51 routes
+programmatically, identical to pass 1's inventory, same permission gates.
+Targeted this iteration's three specific angles: org-scoping (unchanged, all
+by-id routes still resolve through `block_self_prospect_access`/
+`block_self_interview_access`), pre-authentication reachability (the
+token-scoped `/application-status/{token}` status check and the
+public-form-to-`create_prospect` boundary via `FormsService
+._process_membership_interest` — both already hardened, no finding), and
+stage-advancement/multi-approval TOCTOU races.
+
+**MP-27 (HIGH, fixed)** — mapped every writer of `prospect.status` against
+whether its read locks the row. `complete_step`/`regress_prospect`/
+`transfer_to_membership` (pass 1-2) and `update_election_package`/
+`assign_package_to_election` (pass 3-4) all correctly lock, but
+`update_prospect` (MP-9's TRANSFERRED guard, pass 1),
+`set_prospect_status`, and `bulk_set_prospect_status` all read the prospect
+with a plain, unlocked `get_prospect` call before evaluating that same
+guard. A status-change request racing a concurrent `transfer_prospect` call
+can read the pre-transfer status, pass the guard, and then unconditionally
+overwrite the just-committed `transferred` status back to an ordinary one —
+and since `transfer_to_membership`'s only re-transfer guard is that same
+status field (no separate check on `transferred_user_id`, no unique
+constraint on it), a second transfer call afterward mints a **second** `User`
+account for the same prospect, reopening the exact double-transfer defect
+pass 2's `transfer_to_membership` lock was written to close, via a side door
+that fix never touched. Fixed by adding `lock_for_update=True` to the same
+three call sites, mirroring the established pattern exactly. 3 new
+source-inspection guard tests in `test_membership_pipeline_flow.py`, each
+independently confirmed to fail against the pre-fix code via `git stash`.
+
+Re-verified all three still-open flagged items (MP-10 unbounded
+election-package list/creation, MP-19's `/widget-summary` half, MP-22's
+document-deletion ordering tradeoff) are unchanged in the current code —
+current line numbers checked, no re-derivation, no re-fix. Completion gate:
+flake8/black/isort clean; `validate_migrations.py --strict` clean (single
+head, no schema change); scoped pytest (30 files matching
+`membership`/`prospect`/`pipeline`) 610 passed / 1 skipped; full backend
+suite 11854 passed / 21 skipped (all pre-existing/environmental) / 0 failed;
+frontend `typecheck`/`lint` both clean (no frontend file touched this pass).
+PR opened: `claude/security-review-membership-pipeline-pass5`. Next: 09
+Medical screening (PHI).
 
 ### 2026-09-08 — Feature 07 (Users & organizations, pass 4)'s PR #2402 merged
 
