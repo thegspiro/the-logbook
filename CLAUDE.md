@@ -116,6 +116,15 @@ unchanged — resolve the `## [Unreleased]` conflict by keeping both sides, as
 below. Do not strip an existing entry out of someone else's open branch, and do
 not delete anything already in `CHANGELOG.md`.
 
+**Two things still edit the file, and neither is a per-PR entry.** A **release
+cut** — `docs/RELEASE_CANDIDATE_PLAN.md` item 3.2, retitling `## [Unreleased]`
+as a dated version section — rearranges frozen history rather than adding to it,
+and stays part of the release process. A **monthly archive move** does the same,
+relocating closed `###` sections into `docs/changelog/`. Both are deliberate,
+infrequent, and done alone rather than riding along with a feature branch, so
+neither reintroduces the offset collision this freeze exists to end. What is
+banned is a pull request appending its own change's entry.
+
 ## Pre-Commit Verification Checklist
 
 Before committing any changes, mentally verify these items (the most frequent sources of bugs):
@@ -129,7 +138,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **No unused imports (frontend or backend)** — TypeScript strict mode rejects them; Python flake8 F401 catches them. Remove all unused imports before committing
 - [ ] **No Python lint violations** — no F401 (unused imports), F811 (redefined unused), F821 (undefined names), E303 (excess blank lines), or W291/W293 (trailing whitespace). Run `flake8` on changed files before committing
 - [ ] **Seed migrations registered** — new seed data files added to `SEED_DATA_FILES`; org_id is nullable for system records
-- [ ] **No `CHANGELOG.md` in the diff** — the file is closed to new entries (see above); `docs/UPGRADING.md` is the exemption for upgrade-blocking changes
+- [ ] **No `CHANGELOG.md` entry in the diff** — the file is closed to new entries (see above). `docs/UPGRADING.md` carries upgrade-blocking changes instead; a release cut or archive move may still edit `CHANGELOG.md`, on its own branch
 - [ ] **JSON column deep copy** — code modifying nested keys in JSON columns uses `copy.deepcopy()` or `flag_modified()`, never `dict()` shallow copy
 
 ## Project Overview

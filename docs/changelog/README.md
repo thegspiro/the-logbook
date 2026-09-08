@@ -36,5 +36,12 @@ see [Changelog entries are no longer part of a pull
 request](../../CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request)
 for why, and for where a change's narrative goes instead.
 
-Everything below the freeze date is read from the merged pull requests, which
+Everything from the freeze onward is read from the merged pull requests, which
 carry the same detail with none of the merge cost.
+
+**Moving a closed month here is still allowed**, and is the one thing that
+touches these files. `CHANGELOG.md` still holds its final months; relocating
+their `###` sections into a new file here — rewriting root-relative links to
+`../../` and adding a row to the table above — relocates frozen history rather
+than adding to it, so the reason for the split survives the freeze. Do it on its
+own branch, never alongside a feature change.

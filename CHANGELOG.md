@@ -1,12 +1,14 @@
 # Changelog
 
-All notable changes to The Logbook project through **2026-09-08** are documented
-in this file. The format is based on
+This file records notable changes up to the commit that closed it on 2026-09-08.
+The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> **This file is closed to new entries as of 2026-09-08.** Everything below is
-> kept as written; nothing is added. Changes shipped after that date are read
+> **This file is closed to new entries.** The freeze takes effect at the commit
+> that added this note, not at the end of that calendar day — changes merged
+> later on 2026-09-08 are already outside it. Everything below is kept as
+> written; nothing is added. Changes shipped from the freeze onward are read
 > from the merged pull requests, and their narrative lives in
 > [`docs/security-review/`](docs/security-review/PROGRESS.md),
 > [`docs/app-review/PROGRESS.md`](docs/app-review/PROGRESS.md),

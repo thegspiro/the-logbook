@@ -247,6 +247,8 @@ The one exemption is `docs/UPGRADING.md`: a change that can stop an existing dep
 
 Branches opened before the freeze still carry entries. Merging one is unchanged: resolve the conflict by keeping both sides. Never delete existing changelog content.
 
+Two maintenance operations still edit the file and are not per-PR entries: a **release cut** (`docs/RELEASE_CANDIDATE_PLAN.md` item 3.2, retitling `## [Unreleased]` as a dated version section) and a **monthly archive move** into `docs/changelog/`. Both rearrange frozen history rather than adding to it, and are done on their own branch rather than alongside a feature change. What is banned is a pull request appending its own change's entry.
+
 See `CLAUDE.md` → "Changelog Entries Are No Longer Part of a Pull Request".
 
 ## Completion Gate
