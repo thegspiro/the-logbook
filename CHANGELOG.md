@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The public portal's data whitelist works, and its hourly key limit holds (2026-09-08)
+
+**Fixed**
+
+- **The public website API no longer returns an error when only some fields
+  are shared.** A department chooses field by field what its public website may
+  read — name, phone, description, member count and so on — and nothing is
+  shared until somebody enables it. That starting state, and every state short
+  of "everything enabled", made the organization-information and
+  organization-statistics endpoints answer with an error instead of the empty
+  or partial document they were supposed to return. A department that had
+  shared only its name and phone number got nothing at all. Both now return
+  exactly the fields that are enabled, with the rest left empty.
+
+- **Fields a department has not shared no longer come back as explicit
+  nulls, or partial shares as every unshared field alongside them.** Making
+  the endpoints tolerate an unshared field (above) left them serialising it
+  as `"field": null` instead of omitting it outright, and a partial share
+  returned every field that was _not_ enabled right alongside the ones that
+  were — both endpoints now return only the fields actually enabled.
+
+**Security**
+
+- **A public-website API request that the server ultimately rejects can no
+  longer be recorded in the access log as having succeeded.** The log entry
+  was written before the response was fully checked, so a request whose
+  reply failed a late check still landed in the log as a success — hiding
+  exactly the failures an administrator or the portal's own abuse detection
+  would want to see.
+
+- **A public-website API key can no longer exceed its hourly request
+  allowance.** The allowance is counted in memory and periodically reconciled
+  against the recorded request log. Because that log only ever kept requests
+  that finished successfully, a caller whose requests were being refused —
+  every request is refused while the portal is switched off — had its running
+  count reset to zero each time it approached the ceiling, and so never reached
+  it. The reconciliation can still correct the count upwards, which is what it
+  is for across multiple server processes, but it can no longer push it down.
+  That reconciliation check also compared against the wrong time window,
+  which could freeze a key's count too high for the rest of the hour right
+  after the hour changed; it now compares against the same hour the count
+  itself tracks.
+
+- **The public portal's access log now records the requests that failed.** The
+  log is what an administrator reads to spot abuse, and what the portal's own
+  anomaly detection reads to flag it. Entries written for a refused or failed
+  request were discarded along with the rest of that request's database work,
+  so the log showed only traffic that had succeeded — the least interesting
+  half. Refusals and failures are now kept.
+
 ### Read-only permissions stopped counting as write permission, and a rank reorder got a ceiling (2026-09-08)
 
 **Security**

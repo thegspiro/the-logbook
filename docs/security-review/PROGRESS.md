@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 03 (Public surface & webhooks, pass 4)** — PR
+[#2393](https://github.com/thegspiro/the-logbook/pull/2393), branch
+`claude/security-review-public-surface-webhooks-pass4`. Pass 4's fourth
+feature, and the rotation's highest-risk category — every route here is
+reachable with zero credentials. **Four findings: three fixed, one flagged
+(plus one of the four flagged in part).** The one that matters is **PUB-5
+(MED, fixed)** — `check_rate_limit` reconciled its in-memory per-API-key
+hourly tally against a `COUNT(*)` over `public_portal_access_log` by
+**assigning** the database's answer, and that table only ever carried requests
+that committed: `get_db` rolls the session back on any raised exception, and a
+401/429 never reaches the handler that writes the row at all. A department
+with its portal switched off answers 503 to every call, persists nothing, and
+so reset its tally to zero every time it neared the ceiling — the hourly key
+quota was never reached. Now `max(current_count, db_count)`: the database can
+still raise a per-process tally to the cross-process truth, but never lower
+it. Also fixed: **PUB-6 (LOW)** — every field on the two whitelist-filtered
+portal response models was a Pydantic-v2 `Optional[T]` with no default, i.e.
+**required**, so the data whitelist's default-deny state (the one every
+deployment starts in — nothing seeds the table) made
+`/organization/info` and `/organization/stats` answer 500 to every request
+rather than the empty document they are supposed to return; and **PUB-8's**
+first half (LOW) — the access log's error-path rows were rolled back with the
+request transaction, so the log an operator reads to spot abuse recorded only
+traffic that had succeeded. Flagged: **PUB-7 (LOW)** — `GET /events/public`
+500s whenever an events field is whitelisted, because the handler's keys and
+`PublicEvent`'s required fields disagree on three names, and repairing it
+means choosing between two documented contracts; and **PUB-8's** second half
+— nothing has ever written a 401 access-log row, so `detect_anomalies`'
+failed-auth branch is unreachable, and wiring it up needs two `nullable=False`
+FK columns made nullable. Both mirrored into `docs/KNOWN_LIMITATIONS.md`.
+This is the first pass on this feature to read all 13 files in full rather
+than the diff, and all four findings predate pass 3. Full write-up: the
+**Pass 4** section of
+`docs/security-review/PUB-03-public-surface-webhooks.md`.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 02 pass 4 merged), preserved for history</summary>
+
 **None.** Feature 02 (Permissions & roles, pass 4)'s PR #2391 merged
 (`a96b7370`) — 4 findings, 3 fixed, 1 flagged. The one that matters is
 **PERM-5** (MED, flagged) — the three user↔position assignment routes carry
@@ -31,6 +69,8 @@ shadowing class already documented for `black`). Merged once CI was fully
 green and Codex's review completed clean on the fix commit. Full write-up:
 the **Pass 4** section of `docs/security-review/PERM-02-permissions-roles.md`.
 Next: 03 Public surface & webhooks.
+
+</details>
 
 <details>
 <summary>Superseded — PR #2391 (pass 4), preserved for history</summary>
@@ -11106,7 +11146,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
@@ -11145,6 +11185,130 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) — PR #2393 opened
+
+The **Open PR** row read "None" and 03 was the first ⬜ row, so this is a
+feature iteration rather than a tend pass.
+
+**4 findings: 3 fixed, 1 flagged** (PUB-8 is fixed in one half and flagged in
+the other, so the flagged column really reads "one and a half"). Both flagged
+items are mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Read in full, not diffed — and that is the whole story of this pass.**
+`git log 9f7e3f314..main -- backend/app/api/public/
+backend/app/core/public_portal_security.py` (pass 3's own closing commit, with
+the file set pass 3 corrected itself into using) returns two commits, both
+feature 27's Integrations work on the webhook transports and one docstring.
+A diff-scoped pass — which is what passes 2 and 3 were — would have had
+nothing to look at and would have closed clean for the third time running.
+Reading all 13 files end to end instead, the same methodology change PERM-02's
+pass 4 made, found four defects, every one of them older than pass 3, and
+three of them in code passes 1–3 had summarised as verified good. Route count
+re-derived and unchanged at 20; file count unchanged at 12.
+
+- **PUB-5 (MED, fixed)** — `check_rate_limit` keeps a per-process in-memory
+  tally per API key and, at 90 % of the key's hourly limit, replaces it with a
+  `COUNT(*)` over `public_portal_access_log` — **assigning** the database's
+  answer rather than reconciling with it. That table only ever carried
+  requests that committed: `get_db` rolls the request's session back on any
+  raised exception (asserted with a real `TestClient` request in the guard
+  test rather than assumed), every non-200 answer on this router is an
+  `HTTPException`, and a 401/429 is raised from the dependency before the
+  handler that writes the row runs at all. So for a caller whose requests
+  error the count is 0 forever: a department with its portal switched off
+  answers 503 to every call, the in-memory tally climbs to 900 of 1 000, the
+  query answers 0, the tally resets to 0, and the loop repeats — the per-key
+  hourly quota is never reached, leaving only the per-IP 100/min limiter,
+  which permits ~6 000 requests/hour against a 1 000/hour ceiling. Fixed with
+  `max(current_count, db_count)`: the database can still raise a per-process
+  tally to the cross-process truth, which is the multi-worker case the query
+  exists for, but it can no longer lower one.
+- **PUB-6 (LOW, fixed)** — under Pydantic v2, `Optional[T]` with no default is
+  a **required** field that merely accepts `None`, and every field on
+  `PublicOrganizationInfo` and `PublicOrganizationStats` was declared that
+  way. `portal.py` constructs both from a whitelist-filtered dictionary, and
+  nothing seeds `public_portal_data_whitelist` — rows exist only once an
+  administrator adds them, and `bulk-update` updates rather than creates. So
+  the default-deny state every deployment starts in produced
+  `Model(**{})` → `ValidationError` → the handler's own `except Exception` →
+  **500 on every request** to `/organization/info` and `/organization/stats`;
+  a partially-whitelisted department fared no better, since all nine (and all
+  six) fields had to be enabled, and even a complete whitelist could still
+  500 because `mailing_address` was typed `Dict[str, str]` against a dict the
+  handler builds with a `None` `line2`. Two prior audits recorded "whitelist
+  is default-deny" on the strength of the filter alone, without ever
+  exercising the model it feeds. Fixed by defaulting every field and widening
+  the address value type — the shape `docs/PUBLIC_API_DOCUMENTATION.md`
+  already documents, and nothing new is exposed because the filter upstream is
+  untouched.
+- **PUB-8 (LOW, half fixed / half flagged)** — `log_access` ends at
+  `db.flush()`, so all six `except` branches in `portal.py` wrote an
+  access-log row for the 503/404/500 they were about to raise and then had it
+  rolled back on the way out; the log an operator reads to spot abuse, and
+  that `detect_anomalies` reads on every request, held only traffic that had
+  succeeded. The row is now committed, guarded, so a failed audit write is
+  logged and rolled back rather than replacing the answer the caller was owed
+  (safe because these handlers write nothing else and the session is
+  `expire_on_commit=False`). The other half is flagged: **nothing in `app/`
+  has ever written a 401 row** — `authenticate_api_key` raises from the
+  dependency — so `detect_anomalies`' failed-auth branch is unreachable, and
+  writing one needs `PublicPortalAccessLog.organization_id` and `config_id`
+  made nullable (an unknown key cannot be attributed to an organization),
+  which is a migration plus a decision about how an unattributable row is
+  scoped for the per-organization admin read.
+- **PUB-7 (LOW, flagged)** — `GET /events/public`'s handler emits
+  `{title, description, start_datetime, end_datetime, location, event_type}`
+  while `response_model=list[PublicEvent]` requires
+  `{id, title, description, event_type, start_time, end_time, location,
+is_public}`, all required, three of the names absent from what the handler
+  produces. With nothing whitelisted `filtered_event` is `{}` and the guard
+  skips it, so the route returns `[]` — which is why this has never surfaced.
+  Whitelist one events field with one upcoming public-education event and
+  FastAPI's response serialisation raises outside the handler's `try`: the
+  department's public website gets a 500 exactly when an administrator
+  finishes configuring it. Flagged rather than fixed because the repair is a
+  public-contract decision — the published documentation carries the
+  **schema's** names, so re-keying the handler voids whitelist rows an
+  administrator may already have created and forces a call on whether the
+  internal event `id` and `is_public` become whitelistable on an
+  unauthenticated surface, while re-declaring `PublicEvent` contradicts the
+  docs and any client written against them.
+
+**Re-verified still current:** all four webhook receivers verify before they
+act and fail closed when unconfigured (HMAC over the raw body with
+`compare_digest` for Salesforce/Cal.com, either that or the shared secret for
+Documenso, PayPal's own verify API treating anything but `SUCCESS` as
+untrusted); none of the four trusts the payload for tenancy, all resolving the
+organization from a row selected by `(id, integration_type, enabled)`; replay
+fingerprinting is ordered after verification at all four and, at Salesforce,
+still after payload-shape validation, which is PUB-1 round 2's fix; the
+finance token path still holds `with_for_update()`, the PENDING re-check, the
+expiry check and PUB-4's `EMAIL`-approver self-approval guard, with the token
+cleared before the flush; `display.py`'s two rejection gates still precede the
+atomic daily-cap `INCR`. Zero `csv.writer` and zero `like`/`ilike` anywhere in
+the 13 files. No public response is reachable by the frontend response cache —
+re-derived at all seven `/api/public/v1/...` call sites, each of which uses
+bare `axios`, bare `fetch`, or a `createApiClient()` instance. Five things
+were checked and deliberately **not** raised (the naive/aware
+`token_expires_at` comparison, which `core/database.py`'s global `load`
+listener already settles; the legacy-prefix bcrypt fan-out PP-4 already
+recorded; `get_user_by_calendar_token` not filtering `is_active`;
+`PublicFormResponse` returning `form.id`; and a non-dict JSON body reaching
+`payload.get` on the signed-only Salesforce route) — recorded in the write-up
+so pass 5 does not spend the time again.
+
+**Completion gate:** flake8 / black / isort all clean on `app/ tests/
+alembic/` at CI's pinned versions (7.3.0 with flake8-pytest-style 2.2.0 /
+26.5.1 / 9.0.1) — PT006 caught two `@pytest.mark.parametrize` calls in the new
+guard tests, this time in the _opposite_ direction to PR #2391's (a single
+argname wants a plain string, not a one-element tuple), fixed before commit;
+`validate_migrations.py --strict` single head `1603bd9c59e7`;
+`test_org_scoping_ratchet.py` + endpoint-auth + LIKE + CSV + capacity ratchets
+56 passed; scoped tests 495 passed, 1 skipped (`py_vapid`, pre-existing);
+**full backend suite 11 831 passed, 21 skipped, 0 failed**;
+`check_docs_links.py` 351 files, 0 broken links. No frontend file modified, so
+`tsc`/`eslint` are n/a.
 
 ### 2026-09-08 — Feature 02 (Permissions & roles, pass 4)'s PR #2391 merged, watchdog recorded it
 
