@@ -683,3 +683,72 @@ class TestWebhookParsing:
         )
         assert parsed["created"] is False
         assert parsed["attendee_emails"] == []
+
+    def test_a_booking_is_not_attendance(self):
+        """Booking a slot three weeks out is an intention, not a meeting that
+        happened — and the pipeline stage it advances advertises "auto-advance
+        when attendance is recorded". Advancing on BOOKING_CREATED made the act
+        of booking count as having turned up."""
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "BOOKING_CREATED",
+                "payload": {
+                    "uid": "bk-3",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [{"email": "x@y.com"}],
+                },
+            }
+        )
+        assert parsed["created"] is True
+        assert parsed["attended"] is False
+
+    def test_a_finished_meeting_is_attendance(self):
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "MEETING_ENDED",
+                "payload": {
+                    "uid": "bk-3",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [{"email": "x@y.com"}],
+                },
+            }
+        )
+        assert parsed["attended"] is True
+        assert parsed["created"] is False
+        assert parsed["event_type_slug"] == "membership-interview"
+        assert parsed["attendee_emails"] == ["x@y.com"]
+
+    def test_a_no_show_is_dropped_from_the_attendees(self):
+        """MEETING_ENDED says the interval ended, not that anyone turned up.
+        Correlation downstream is by email, so dropping a no-show here is what
+        stops a booking nobody joined from advancing their stage."""
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "MEETING_ENDED",
+                "payload": {
+                    "uid": "bk-4",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [
+                        {"email": "absent@y.com", "noShow": True},
+                        {"email": "present@y.com", "noShow": False},
+                    ],
+                },
+            }
+        )
+        assert parsed["attended"] is True
+        assert parsed["attendee_emails"] == ["present@y.com"]
+
+    def test_an_attendee_without_a_no_show_field_still_counts(self):
+        """Cal.com does not always send noShow; absence of the field must
+        narrow nothing, or the trigger stops working for everyone."""
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "MEETING_ENDED",
+                "payload": {
+                    "uid": "bk-5",
+                    "eventType": {"slug": "membership-interview"},
+                    "attendees": [{"email": "x@y.com"}, {"email": "z@y.com"}],
+                },
+            }
+        )
+        assert parsed["attendee_emails"] == ["x@y.com", "z@y.com"]

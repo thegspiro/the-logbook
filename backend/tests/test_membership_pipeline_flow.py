@@ -635,6 +635,9 @@ class TestProspectProgression:
             "items": [{"id": "background", "label": "Background check"}],
             "require_all": True,
         }
+        # A required stage refuses the skip before its own gate is consulted;
+        # this case is about what a skip does once it is allowed to happen.
+        steps[0].required = False
         await db_session.commit()
 
         prospect = await svc.create_prospect(
@@ -691,6 +694,9 @@ class TestProspectProgression:
                 "step_type": "checkbox",
                 "sort_order": 0,
                 "is_final_step": True,
+                # Skippable on purpose: a required stage is refused outright,
+                # and the point here is that an allowed skip does not transfer.
+                "required": False,
             },
         )
         await svc.add_step(
@@ -1539,3 +1545,89 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
         assert by_id[rejected_id]["succeeded"] is False
         assert "already on_hold" in by_id[rejected_id]["error"]
         assert by_id[paused_id]["succeeded"] is True
+
+
+class TestAddStepSerializesSortOrder:
+    """Two add-stage requests for one pipeline must not allocate the same slot.
+
+    ``add_step`` reads the pipeline's steps and writes a value derived from
+    them (``max + 1``, or the caller's own value when it does not collide).
+    Read unlocked, two coordinators — or one double-click, or two API clients —
+    both see the same steps and pick the same number. ``(pipeline_id,
+    sort_order)`` carries a plain index rather than a unique constraint, so
+    both inserts succeed and the ambiguous ordering the allocation exists to
+    prevent comes straight back: with a tie, both the board's column order and
+    the destination of an advance depend on how the sort broke it.
+
+    Asserted as "the read takes the lock", the way ``TestTransferStatusRace``
+    above asserts MP-27's, because the race itself cannot be forced
+    deterministically from outside: ``add_step`` owns its commit, so there is
+    no point at which a test can hold one caller between its read and its
+    insert. A two-session test written the obvious way passes without the lock
+    too and proves nothing — InnoDB takes its own shared lock on the parent
+    pipeline row for the child insert's foreign key, so the second caller
+    blocks at *insert* time regardless. By then both have already read the
+    same steps and chosen the same number, which is the bug.
+    """
+
+    async def test_the_allocation_reads_the_pipeline_under_a_row_lock(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        service = MembershipPipelineService(db_session)
+        pipeline = await service.create_pipeline(
+            organization_id=org_id, name=f"Lock-{_uid()[:8]}"
+        )
+
+        locked_reads = []
+        original_get_pipeline = service.get_pipeline
+
+        async def _tracking_get_pipeline(*args, **kwargs):
+            locked_reads.append(bool(kwargs.get("lock_for_update")))
+            return await original_get_pipeline(*args, **kwargs)
+
+        with patch.object(service, "get_pipeline", _tracking_get_pipeline):
+            first = await service.add_step(
+                pipeline.id, org_id, {"name": "First", "step_type": "checkbox"}
+            )
+            second = await service.add_step(
+                pipeline.id, org_id, {"name": "Second", "step_type": "checkbox"}
+            )
+
+        assert locked_reads, "add_step did not read the pipeline at all"
+        assert all(locked_reads), (
+            "add_step read the pipeline without a row lock, so two concurrent "
+            "adds can read the same steps and allocate the same sort_order"
+        )
+        assert [first.sort_order, second.sort_order] == [0, 1]
+
+    async def test_an_omitted_order_appends_on_a_sparse_pipeline(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """The stage dialog omits sort_order so the server places the stage
+        last. That only works if "omitted" survives request validation: the
+        schema defaulted it to 0 and the endpoint dumped every field, so the
+        server saw an explicit 0 — and on a pipeline whose live stages start
+        at 5 that is not even a collision, so the new stage silently went
+        first instead of last."""
+        from app.schemas.membership_pipeline import PipelineStepCreate
+
+        org_id, _ = setup_org_and_admin
+        service = MembershipPipelineService(db_session)
+        pipeline = await service.create_pipeline(
+            organization_id=org_id, name=f"Sparse-{_uid()[:8]}"
+        )
+        for name, order in (("Fifth", 5), ("Sixth", 6)):
+            await service.add_step(
+                pipeline.id,
+                org_id,
+                {"name": name, "step_type": "checkbox", "sort_order": order},
+            )
+
+        payload = PipelineStepCreate(name="Appended", step_type="checkbox")
+        dumped = payload.model_dump(exclude_unset=True)
+        assert "sort_order" not in dumped
+
+        appended = await service.add_step(pipeline.id, org_id, dumped)
+
+        assert appended.sort_order == 7

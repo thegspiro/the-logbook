@@ -72,10 +72,10 @@ const applicant = {
   ],
 } as unknown as Applicant;
 
-function renderDrawer() {
+function renderDrawer(overrides: Partial<Applicant> = {}) {
   return renderWithRouter(
     <ApplicantDetailDrawer
-      applicant={applicant}
+      applicant={{ ...applicant, ...overrides }}
       isOpen
       onClose={vi.fn()}
       onConvert={vi.fn()}
@@ -127,6 +127,28 @@ describe('ApplicantDetailDrawer stage progress', () => {
     await screen.findByText('Stage History');
 
     expect(screen.getByText(/1 of 4 stages completed/)).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer skip action', () => {
+  // The Required flag was stored and badged in the stage list and read by no
+  // logic at all: a stage a department had marked required could be stepped
+  // over with two clicks. The server refuses it now; the button says so before
+  // the click rather than after it.
+  it('offers Skip on a stage that is not required', async () => {
+    renderDrawer({ current_stage_required: false });
+    await screen.findByText('Stage History');
+
+    expect(screen.getByRole('button', { name: /skip/i })).toBeEnabled();
+  });
+
+  it('disables Skip on a required stage and says why', async () => {
+    renderDrawer({ current_stage_required: true });
+    await screen.findByText('Stage History');
+
+    const skip = screen.getByRole('button', { name: /skip/i });
+    expect(skip).toBeDisabled();
+    expect(skip).toHaveAttribute('title', expect.stringContaining('Required'));
   });
 });
 

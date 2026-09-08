@@ -159,7 +159,11 @@ async def documenso_inbound_webhook(
             provider_value="documenso",
             reference_config_key="documenso_template_id",
             event_reference=event["template_id"],
-            completed_by="integration:documenso",
+            # No user signed this off. completed_by is a FK to users.id, so a
+            # descriptive sentinel is not a free-text label — it fails the
+            # constraint and loses the advance. The source is recorded in
+            # action_result and the audit event below.
+            completed_by=None,
             action_result={"document_title": event["title"], "source": "documenso"},
         )
 
@@ -186,11 +190,18 @@ async def calcom_inbound_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Receive a Cal.com webhook and advance a meeting stage on a new booking.
+    """Receive a Cal.com webhook and advance a meeting stage once the meeting ends.
 
     Cal.com signs the raw body with HMAC-SHA256 and sends it in the
-    ``X-Cal-Signature-256`` header. Only ``BOOKING_CREATED`` events advance a
-    stage; other events are acknowledged and ignored.
+    ``X-Cal-Signature-256`` header. Only ``MEETING_ENDED`` events advance a
+    stage; other events — ``BOOKING_CREATED`` among them — are acknowledged
+    and ignored.
+
+    It used to be ``BOOKING_CREATED``, which is a booking, not attendance:
+    an applicant who picked a slot three weeks out advanced the moment they
+    picked it, off a meeting stage whose own checkbox says "auto-advance when
+    attendance is recorded". Departments using Cal.com must subscribe
+    ``MEETING_ENDED`` on their Cal.com webhook for the advance to happen.
     """
     await _rate_limit_webhook(request, "calcom_webhook")
     integration = await _load_integration(db, integration_id, "calcom")
@@ -215,7 +226,7 @@ async def calcom_inbound_webhook(
     event = calcom_service.parse_webhook_event(payload)
 
     advanced = None
-    if event["created"] and event["attendee_emails"]:
+    if event["attended"] and event["attendee_emails"]:
         service = MembershipPipelineService(db)
         advanced = await service.complete_current_step_for_integration_event(
             organization_id=str(integration.organization_id),
@@ -225,7 +236,8 @@ async def calcom_inbound_webhook(
             provider_value="calcom",
             reference_config_key="calcom_booking_url",
             event_reference=event["event_type_slug"],
-            completed_by="integration:calcom",
+            # As above: a FK to users.id, and no user did this.
+            completed_by=None,
             action_result={"booking_uid": event["booking_uid"], "source": "calcom"},
         )
 

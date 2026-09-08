@@ -108,25 +108,32 @@ const EventRequestStatusPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div
+      <main
+        id="main-content"
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
-        role="status"
-        aria-live="polite"
       >
-        <Loader2 className="text-theme-accent-red h-8 w-8 animate-spin" />
-      </div>
+        {/* Live region on a child: `role="status"` on the <main> would override
+            its implicit landmark role and leave the skip link's target inert. */}
+        <div role="status" aria-live="polite">
+          <Loader2 className="text-theme-accent-red h-8 w-8 animate-spin" />
+          <span className="sr-only">Loading request status...</span>
+        </div>
+      </main>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br px-4"
+      >
         <div className="bg-theme-surface w-full max-w-md rounded-xl p-8 text-center shadow-lg">
           <XCircle className="text-theme-accent-red mx-auto mb-4 h-12 w-12" />
           <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Request Not Found</h1>
           <p className="text-theme-text-secondary">{error || 'Unable to find this event request.'}</p>
         </div>
-      </div>
+      </main>
     );
   }
 

@@ -16,6 +16,196 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2411 (Feature 10, Documents & legal, pass 4 — ten fixes across
+six further rounds of Codex review on the PR's own commits) merged clean,
+17/17 CI checks green, every actionable review thread resolved. Feature 10
+is now fully closed for this pass. One thread was left open rather than
+resolved: a P1 Codex finding asking to remove this PR's pre-freeze
+`CHANGELOG.md` entries, stood down on with a citation to `CLAUDE.md`/
+`AGENTS.md`'s own explicit rule that a branch opened before the 2026-09-08
+freeze keeps its entries and a merge resolves by keeping both sides — this
+PR opened before the freeze landed on `main`, so its entries predate it.
+Next: 11 Inventory.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10 pass 4, PR #2411), preserved for history</summary>
+
+**Feature 10 (Documents & legal, pass 4)** — PR
+[#2411](https://github.com/thegspiro/the-logbook/pull/2411), branch
+`claude/security-review-documents-legal-pass4` (new name; `claude/security-
+review-doc`, `claude/security-review-doc-followup`, `claude/security-review-
+documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
+each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
+out this pass).
+
+Ten fixes this pass — eight added across six further rounds of Codex
+review on this PR's own commits, finding gaps in the prior fixes:
+
+- **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
+  directly by `documents.py`'s own `GET /documents/my-folder`, was a
+  get-or-create with no lock — two concurrent first-visits by the same
+  member could both insert a personal folder, after which every later call
+  raised `MultipleResultsFound` (500) for that member, permanently. Fixed
+  with the same organization-row-locked, double-checked, peek-then-lock
+  shape `ensure_facility_folder` was hardened into by independent facilities
+  work. 4 new guard tests
+  (`tests/test_documents_access.py::TestEnsureMemberFolderIsLocked`),
+  confirmed to fail pre-fix (3 of 4) via `git stash`.
+- **DOC-9 (MED)** — the N+1-per-folder half is fixed as a byproduct of
+  independent facilities-module concurrency work landed since pass 3,
+  re-verified sound against current code (not the diff). The remaining
+  half is **not** fixed and was initially overclaimed as fully resolved in
+  `KNOWN_LIMITATIONS.md` (Codex review of this PR's first commit,
+  corrected): `accessible_folder_ids`, called by every folder/document
+  listing path including `get_folders`, still materializes every folder
+  in the organization with no `LIMIT` before computing per-folder access —
+  the page-level `skip`/`limit` bounds only what's returned, not that
+  underlying scan. Left open, correctly labeled "Partially resolved".
+- **DOC-29 (MED, new, Codex review of this PR's own commit)** —
+  `DocumentService.initialize_system_folders` (`document_service.py`, a
+  separate service class, used by `publish_minutes`) is the _other_
+  get-or-create for an organization's `members` system folder, and DOC-28's
+  fix never reached it: a brand-new org's first minutes-publish racing a
+  member's first `/documents/my-folder` visit could each observe zero
+  system folders and both create a `members` root, since there's no
+  uniqueness constraint on `(organization_id, slug)` — reopening DOC-28's
+  exact symptom through a second, unlocked creator. Fixed across three
+  rounds: (1) gave `initialize_system_folders` the same organization-row
+  lock; (2) that lock alone wasn't sufficient (Pitfall #27's second half,
+  Codex review of fix 1) — `publish_minutes` already reads a folder via
+  `get_folder_by_slug` before calling this method, so under REPEATABLE
+  READ the transaction's snapshot predates the lock, and a plain
+  existence count could still answer from that stale snapshot; made the
+  existence check itself a locking read; (3) that locking read still
+  short-circuited on **any** existing system folder rather than **all**
+  of them (Codex review of fix 2) — since `ensure_member_folder` only
+  ever creates the single `members` definition, a member visiting before
+  anyone published minutes left just that one folder in place, and the
+  next `publish_minutes` call found a nonzero count, returned without
+  creating `meeting-minutes`, and raised `RuntimeError` — a real,
+  pre-existing bug (present even without concurrency) that the locking
+  fix made newly reachable in the race case; rewrote the check to
+  reconcile against the specific missing slugs instead of an
+  all-or-nothing create. 3 new guard tests total
+  (`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked`),
+  each confirmed to fail pre-fix via `git stash`/reverted-code checks.
+- **`ensure_apparatus_folder`/`ensure_event_folder` unlocked (MED, Codex
+  review of round 4's own commit)** — round 4's reconciliation can create
+  the "apparatus"/"events" system folders under the organization lock
+  when they're among what's missing, but `DocumentsService.
+ensure_apparatus_folder`/`ensure_event_folder` (the on-demand creators
+  reached on an apparatus's or event's first document upload) never took
+  that lock — a genuinely pre-existing gap, not new to this pass, but one
+  the reconciliation change sits directly next to. With no uniqueness
+  constraint on `(organization_id, slug)`, a concurrent first
+  apparatus/event upload racing a concurrent minutes publish could each
+  observe the root absent and both create one — the same DOC-28/DOC-29
+  shape, one level over. Fixed by hardening both the same way as
+  `ensure_facility_folder` (FAC-42/43/45): peek-then-lock fast path,
+  organization-locked double-checked slow path, with matching
+  `_peek_*_root`/`_lock_*_root`/`_peek_*_folder`/`_lock_*_folder` helper
+  pairs. 4 new guard tests
+  (`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked`),
+  the two source-inspection ones confirmed to fail pre-fix via a
+  reverted-code check.
+- **`PropertyReturnService._get_or_create_separations_folder`'s fast path
+  used a locking read (MED, deadlock risk; Codex review of round 5's own
+  commit)** — round 4's reconciliation made `initialize_system_folders`
+  create the "member-separations" system folder too (it's in
+  `SYSTEM_FOLDERS`) whenever missing, taking the organization-row lock
+  _first_ and then a locking existence check — the correct order this
+  entire pass has been hardening every get-or-create into. But
+  `property_return_service.py`'s independent get-or-create for that same
+  folder (predates this pass, from separate `member-separations` work on
+  2026-09-07) did the reverse: its fast path called a _locking_ read
+  (`.with_for_update()`) on the folder row before ever touching the
+  organization row. A locking read matching no row takes a gap lock, and
+  gap locks from different transactions are mutually compatible — so a
+  first property-return report racing a first minutes-publish could each
+  gap-lock the missing folder row, then each block waiting for the other's
+  next lock (the organization row for one, the gap's insert-intention lock
+  for the other): a real InnoDB deadlock, not merely a slow path. This is
+  the FAC-45 shape exactly, and this file's own docstring for that method
+  already named `ensure_facility_folder` as the pattern to follow, but
+  implemented "fast path" as a second call to the _locking_ read instead of
+  a non-locking peek. Fixed by adding `_peek_separations_folder` (plain
+  `SELECT`, no `FOR UPDATE`) for the fast path and reserving the existing
+  locking read, renamed `_lock_separations_folder`, for the organization-
+  locked slow path only — matching `ensure_facility_folder`/
+  `ensure_apparatus_folder`/`ensure_member_folder`'s exact shape. The
+  existing guard test asserting all three reads locked was rewritten to
+  assert the fast-path peek does _not_ lock and the other two still do,
+  confirmed to fail against the pre-fix code.
+- **DOC-28 fast-path predicate re-check (MED, Codex review of this PR's
+  DOC-29 commit)** — `ensure_member_folder`'s fast path locks the peeked
+  personal folder by `_lock_folder_by_id`, which matches only the primary
+  key, not `(parent_id, owner_user_id)`. If a `documents.manage` holder
+  reassigns that folder's owner (or reparents it) between the peek and
+  the lock, the locked row was still returned as-is — handing back a
+  folder to a member who, by the time the request is served, no longer
+  owns it. Fixed by re-checking both predicates after the lock and
+  falling through to the slow path (which correctly creates a fresh
+  folder for this member) when they no longer match. New guard test
+  (`test_falls_through_if_ownership_changed_under_the_lock`), confirmed
+  to fail pre-fix via `git stash`.
+- **`ensure_apparatus_folder`/`ensure_event_folder` had the same fast-path
+  predicate gap (MED, Codex review of round 5's own commit)** — the DOC-28
+  fast-path predicate re-check above was fixed only on `ensure_member_
+folder`; round 5 (earlier the same day) had copied `_lock_folder_by_id`'s
+  lock-by-id-only fast path into `ensure_apparatus_folder`/`ensure_event_
+folder` without the analogous re-check, reopening the identical gap one
+  level over: a `documents.manage` holder reparenting an apparatus/event
+  folder between the peek and the lock would still hand it back as-is,
+  producing an empty tree for one caller (`get_apparatus_folders` finds no
+  folder under the expected root) and, on the events side, returning a
+  moved folder's metadata and document count to an `events.view` caller
+  with no ACL re-check. Fixed with the same predicate re-check shape —
+  `parent_id`/`slug` for both, since neither has an owner concept — falling
+  through to the slow path when they no longer match. 2 new guard tests
+  (`test_apparatus_falls_through_if_reparented_under_the_lock`,
+  `test_event_falls_through_if_reparented_under_the_lock`), confirmed to
+  fail pre-fix via `git stash`.
+
+Also on this PR's first commit, Codex found the new
+`TestEnsureMemberFolderIsLocked::test_locks_the_organization_row` guard
+test only counted `with_for_update()` occurrences across the method and
+both helper _definitions_ — which would stay green even if the slow path
+called a non-locking `_peek_*` helper instead of the locking one, since the
+now-unused locking helper's own definition still contains the string.
+Rewritten to check the slow path calls the locking helpers by name;
+verified the rewritten test fails when that exact regression is injected.
+
+Also caught and fixed independently of Codex, after the first push: CI's
+"Backend Unit Tests" job (no database provisioned) failed because
+`test_repeated_calls_return_the_same_folder` (a real-database test from
+the original commit) was missing `@pytest.mark.integration`, unlike every
+other `db_session`-using test in the file. Added the marker.
+
+DOC-8 (unbounded `list_revisions`) re-verified still open, not re-flagged.
+XC-4 (member-separations folder, an unrelated ad hoc security fix that
+landed in a file this feature shares) re-verified sound. One stale doc
+correction: `docs/module-audit/documents.md`'s DOC-6 entry had a header
+saying FIXED contradicted by its own closing line saying "flagged" —
+corrected, no finding reopened.
+
+This PR was opened directly against a merge conflict in this section: a
+concurrent rotation iteration's PR #2408 (below) had merged to `main` in
+the interim without a docs-only follow-up yet recording it, so both PRs'
+Open PR notes landed on the same section at once. By the time this
+conflict was re-resolved against current `main` (this PR having since
+picked up three further Codex-review rounds of its own), PR #2413 —
+MP-29's own round 4, on top of #2408 — had also merged, fully closing
+Feature 08. Resolved here by folding both #2408 and #2413 into the
+Superseded history below as merged, and keeping this PR (#2411, genuinely
+still open) as the current entry.
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408/#2413, merged), preserved for history</summary>
+
 **None.** PR #2413 (Feature 08, Membership pipeline, pass 5, MP-29 round 4
 — cancellation-detection and stale-docstring fixes on top of #2408) merged
 clean, 17/17 CI checks green, its one Codex thread resolved. Feature 08 is
@@ -90,6 +280,8 @@ is therefore already done; next feature once _this_ PR merges is 10
 **None.** PR #2409 (Feature 09, Medical screening, pass 4 — MS-10) merged
 clean, all 17 CI checks green, no unresolved review threads. Next: 10
 Documents & legal.
+
+</details>
 
 </details>
 
@@ -11536,7 +11728,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -11568,6 +11760,452 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4)'s PR #2411 merged
+
+Ten fixes across the original commit and six further rounds of Codex review
+on the PR's own commits, finding gaps in the prior fixes each time — see the
+prior Log entries below for each round's detail. 17/17 CI checks green on
+the final head, `mergeable_state: clean`, every actionable review thread
+resolved. Squash-merged as `070a28c2c`.
+
+The one thread left open rather than resolved: a P1 Codex finding on the
+final commit asking to remove this PR's two pre-freeze `CHANGELOG.md`
+sections, reading their position below the freeze notice (a mechanical
+consequence of merging `main` in) as new entries added after the freeze.
+Stood down on, citing `CLAUDE.md`/`AGENTS.md`'s own explicit rule that a
+branch opened before the 2026-09-08 freeze keeps its entries and a merge
+resolves by keeping both sides, never deleting existing content — this PR
+opened at 19:27 UTC on 2026-09-08, before the freeze commit landed on
+`main` later the same day, so it is exactly that case.
+
+Feature 10 is now fully closed for this pass. Next: 11 Inventory.
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 7) — 1 fixed, the DOC-28 predicate gap replicated into two siblings (Codex review of PR #2411's round-5 commit)
+
+Codex reviewed round 5's apparatus/event locking fix directly (a separate
+finding from round 6's, on the same commit) and found it had copied
+`_lock_folder_by_id`'s lock-by-id-only fast path from `ensure_member_
+folder` into `ensure_apparatus_folder`/`ensure_event_folder` without also
+copying the DOC-28 predicate re-check that same commit's own sibling fix
+added for the member case. `_lock_folder_by_id` matches only the row's
+primary key; if a `documents.manage` holder reparents an apparatus/event
+folder in the window between the fast path's non-locking peek and its
+by-id lock, the locked row is still returned as-is without confirming it's
+still under the expected root.
+
+**Failure scenario:** on the apparatus side, `get_apparatus_folders`
+resolves the folder by walking from the (now-wrong) expected root and
+finds nothing, producing an empty folder tree instead of recreating one.
+On the events side, worse: `ensure_event_folder` returns the moved
+folder — including its metadata and document count — directly to an
+`events.view` caller, with no subsequent ACL check confirming the caller
+should see whatever the folder was reparented to.
+
+**Fix:** added the same post-lock predicate re-check to both methods,
+using `parent_id` and `slug` (neither apparatus nor event folders have an
+owner concept, so the DOC-28 fix's `owner_user_id` check doesn't apply;
+`(parent_id, slug)` is the correct pair, matching what `_peek_apparatus_
+folder`/`_lock_apparatus_folder` and their event equivalents already key
+on) — falling through to the slow path, which correctly re-resolves under
+the organization lock, when they no longer match.
+
+**Test:** two new guard tests,
+`test_apparatus_falls_through_if_reparented_under_the_lock` and
+`test_event_falls_through_if_reparented_under_the_lock`, mirroring
+`TestEnsureMemberFolderIsLocked::test_falls_through_if_ownership_
+changed_under_the_lock`'s mocked-race shape: the fast path's locked
+re-fetch returns the same folder id with a different `parent_id`, and the
+test asserts the method does not return that row directly. Both confirmed
+to fail against the pre-fix code via `git stash` of `documents_service.py`
+and pass after.
+
+Completion gate re-run: flake8/black/isort clean; scoped documents/
+facilities/property-return test files pass; full backend suite unchanged
+in count from round 6 aside from the two new tests (11873 passed, 21
+skipped, 0 failed).
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 6) — 1 fixed, a lock-order deadlock in a different file (Codex review of PR #2411's round-5 commit)
+
+Codex reviewed round 5's apparatus/event locking fix and, while re-reading
+the reconciliation code it sits beside, found that `initialize_system_
+folders`'s reconciliation (round 4) also creates the "member-separations"
+system folder when missing — it's a `SYSTEM_FOLDERS` entry like any other
+— under the organization-row lock taken _first_, the correct order this
+whole pass has been standardizing on. `property_return_service.py`'s own,
+independent get-or-create for that same folder
+(`_get_or_create_separations_folder`, from unrelated `member-separations`
+work that landed 2026-09-07, before this PR) does the opposite order: its
+fast path called a _locking_ read (`.with_for_update()`) on the folder row
+before ever touching the organization row.
+
+**Why this is a real deadlock, not just a suboptimal lock order.** A
+locking read that matches no row takes a gap lock in InnoDB, and gap locks
+held by different transactions are mutually compatible with each other —
+so two concurrent first-time callers (a first property-return report
+racing a first minutes-publish, on a department that has never had either)
+can both gap-lock the same absent "member-separations" row via their
+respective fast paths. Each then tries to acquire what the other already
+holds: the property-return transaction blocks waiting for the organization
+row (held by the reconciliation transaction), while the reconciliation
+transaction blocks taking an insert-intention lock on the same gap
+(already held by the property-return transaction's gap lock) when it goes
+to create the folder. Neither can proceed — an actual InnoDB deadlock,
+which MySQL detects and resolves by killing one transaction's query with
+an error, not a race that merely picks a loser silently.
+
+This is the identical shape independent facilities-module work already
+named and fixed as FAC-45, and `_get_or_create_separations_folder`'s own
+docstring already cited `ensure_facility_folder` as the pattern being
+followed — it just implemented "fast path" as a second call to the locking
+read instead of a non-locking peek, missing the specific reason FAC-45's
+fast path has to be non-locking.
+
+**Fix:** added `_peek_separations_folder` (plain `SELECT`, no
+`with_for_update()`) for the fast path in `property_return_service.py`;
+the existing locking read (renamed `_lock_separations_folder`) is now
+reserved for the organization-locked slow path only, matching
+`ensure_facility_folder`/`ensure_apparatus_folder`/`ensure_member_folder`'s
+exact peek-then-lock shape.
+
+**Test:** the file's existing guard test,
+`test_existence_checks_lock_their_rows`, asserted all three reads in the
+method locked — encoding the very assumption this bug rested on. Rewrote
+it as `test_fast_path_peek_does_not_lock`, asserting the first read has no
+`FOR UPDATE` and the remaining two still do; confirmed to fail against the
+pre-fix code via `git stash` of `property_return_service.py` and pass
+after.
+
+Completion gate re-run: flake8/black/isort clean on both changed files;
+`pytest tests/test_property_return_service.py tests/test_documents_access.py
+tests/test_document_service.py tests/test_legal_documents.py
+tests/test_facility_folder_access.py tests/test_facilities_folders.py`
+215 passed; full backend suite unchanged in count from round 5 (no test
+added or removed — the guard test was rewritten in place, not added
+alongside).
+
+Separately, Codex also flagged (P1) that this PR's `CHANGELOG.md` carries
+two entries from before the file was closed to new entries on 2026-09-08 —
+correctly observing they sit below the freeze notice after a merge from
+`main`, but incorrectly reading that as new entries added after the
+freeze. Both CLAUDE.md and AGENTS.md state explicitly, for exactly this
+situation: "Branches opened before the freeze still carry entries...
+resolve the conflict by keeping both sides... Never delete existing
+changelog content." This PR opened at 19:27 UTC on 2026-09-08, before the
+freeze landed on `main` later the same day, so its own pre-freeze entries
+(added across rounds 1-4, before the freeze existed) are exactly the case
+that rule describes. Replied on the thread citing both documents rather
+than deleting the entries.
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 5) — 1 fixed, hardened two more get-or-creates (Codex review of PR #2411's round-4 commit)
+
+Codex reviewed round 4's reconciliation fix (`1f95ef3`) and found that it
+now creates the "apparatus" and "events" system folders (whenever they're
+among what's missing) under the organization lock — but the _other_
+get-or-create for each of those same roots, `DocumentsService.
+ensure_apparatus_folder`/`ensure_event_folder` in `documents_service.py`
+(reached whenever an apparatus's or event's first document is uploaded),
+never took that lock.
+
+**This is a genuinely pre-existing gap, not one round 4 introduced.** The
+original code (before any of this pass's work) already inserted every
+`SYSTEM_FOLDERS` entry — including "apparatus" and "events" —
+unconditionally whenever no system folders existed at all, with no
+coordination with these two on-demand creators either. Round 4's
+reconciliation changed _when_ those two roots can get created here (also
+on subsequent calls, not only the very first ever), not _whether_ the
+race against the unlocked on-demand creators exists. Owned and fixed
+anyway, per the same non-negotiable-errors reasoning as round 4's own fix:
+it sits directly in the code this pass is actively touching, and Codex's
+review of this pass's own diff surfaced it.
+
+**Fix:** hardened `ensure_apparatus_folder` and `ensure_event_folder` the
+same way `ensure_facility_folder` already was (FAC-42/43/45, from
+independent facilities-module work): a peek-then-lock fast path
+(`_peek_apparatus_root`/`_peek_events_root`,
+`_peek_apparatus_folder`/`_peek_event_folder`, then `_lock_folder_by_id`
+once a specific row's id is confirmed) that never touches the
+organization row when nothing needs creating; a slow path that locks the
+organization row and re-checks both folders as locking reads
+(`_lock_apparatus_root`/`_lock_events_root`,
+`_lock_apparatus_folder`/`_lock_event_folder`) before creating. Mirrors
+the established pattern precisely, including the FAC-45 gap-lock-avoidance
+shape (peek by `(parent_id, slug)` on the fast path, lock only by a
+known-id point lookup there; the `(parent_id, slug)` locking read is
+reserved for the slow path, where a gap lock is safe to take).
+
+New guard tests in
+`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked`
+(4 cases): source-inspection checks per method (org-row lock present on
+the slow path, fast path never locks, slow path calls the locking helpers
+by name — matching the DOC-28 test-rigor lesson from round 1, not a bare
+`with_for_update()` count), each confirmed to fail against the pre-fix
+code via a reverted-file check; plus a real-database idempotency test per
+method mirroring `test_repeated_calls_return_the_same_folder`, both marked
+`@pytest.mark.integration`.
+
+Completion gate re-run: flake8/black/isort clean; `validate_migrations.py
+--strict` pass (unchanged, no migration touched); scoped tests (documents/
+legal/facilities/facility-permissions/facility-document-race/property-
+return/minutes/apparatus-type-projection feature files) 389 passed; full
+backend suite 11871 passed / 21 skipped (pre-existing/environmental) / 0
+failed (up from 11867, the four new guard tests). No frontend file
+touched.
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 4) — 1 fixed, a real pre-existing bug (Codex review of PR #2411's round-3 commit)
+
+Codex reviewed round 3's fix (`a6484b3`) and found that making the
+existence check a locking read exposed — rather than fixed — a second,
+independent defect in the same method: `if (existing.scalar() or 0) > 0:
+return await self.list_folders(...)` treats "some system folder exists"
+as "every system folder exists". `ensure_member_folder`'s own
+get-or-create only ever inserts the single `members` definition, never
+the full `SYSTEM_FOLDERS` set, so a member visiting their Documents
+folder before anyone had ever published minutes for that org left
+exactly one system folder in place. The next `publish_minutes` call then
+read a nonzero count, returned early without creating `meeting-minutes`,
+and `next((f for f in folders if f.slug == "meeting-minutes"), None)`
+came back `None` — an unconditional `RuntimeError`, a user-visible
+publish failure.
+
+**This bug predates this pass entirely and does not require concurrency
+to trigger** — the plain, ordinary sequence of "a member opens Documents
+before the first meeting minutes get published" was already broken before
+any of this pass's locking work; round 3's own locking fix just made the
+concurrent case of it newly deterministic rather than merely possible.
+Owned and fixed here rather than left as a known gap, per CLAUDE.md's
+non-negotiable "no acceptable pre-existing errors" rule — it surfaced
+directly out of code this pass was already touching.
+
+**Fix:** rewrote the existence check to read existing system-folder
+_slugs_ (still a locking read) rather than a bare count, compute exactly
+which `SYSTEM_FOLDERS` definitions are missing, and create only those —
+reconciling instead of an all-or-nothing create. Returns
+`list_folders(organization_id)` in both the reconcile and short-circuit
+branches now (previously the full-creation path returned the freshly
+created objects directly), which also removes the need for the
+per-object `db.refresh()` loop the old code used.
+
+New guard test,
+`test_reconciles_missing_system_folders_around_an_existing_one`
+(real database): creates an org with only a `members` system folder
+already present (simulating `ensure_member_folder` having won first),
+calls `initialize_system_folders`, and asserts `meeting-minutes` is now
+present and `members` was not duplicated. Confirmed to fail against the
+pre-fix code with the exact symptom described — `slugs == ["members"]`,
+`meeting-minutes` absent — and pass after. The two existing guard tests'
+source-inspection anchors were updated to match the rewritten method
+(`existing_result`/`missing_defs` in place of `existing`/`existing.scalar()`).
+
+Removed the now-unused `func` import from `document_service.py`
+(flake8 F401).
+
+Replied on the Codex thread and resolved it.
+
+Completion gate re-run: flake8/black/isort clean; `validate_migrations.py
+--strict` pass (unchanged, no migration touched); scoped tests (documents/
+legal/facilities/property-return/minutes feature files) 351 passed; full
+backend suite 11867 passed / 21 skipped (pre-existing/environmental) / 0
+failed (up from 11866, the one new guard test). No frontend file touched.
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 3) — 2 fixed (Codex review of PR #2411's DOC-29 commit)
+
+Codex reviewed PR #2411's DOC-29 fix commit (`49e8b75`) and found two more
+real gaps — one in each of that commit's two changed files.
+
+**Fast-path ownership re-check (MED, fixed).** `ensure_member_folder`'s
+fast path locks the peeked personal folder via `_lock_folder_by_id`, which
+matches only the folder's primary key — not `(parent_id, owner_user_id)`.
+If a `documents.manage` holder reassigns that folder's owner or reparents
+it in the window between the peek and the lock, the locked row was
+returned as-is: the caller could receive a folder (and its document
+listing) that, by the time the request completed, belonged to someone
+else. Not caught by the existing guard tests, since none exercised a
+mismatch between the peeked and locked state. Fixed by re-checking
+`parent_id`/`owner_user_id` after the lock and falling through to the slow
+path when they no longer match — the slow path's own locked re-fetch by
+`(parent_id, owner_user_id)` correctly finds nothing for this member (since
+ownership moved) and creates a fresh folder, rather than erroring or
+looping. New guard test,
+`test_falls_through_if_ownership_changed_under_the_lock`, confirmed to
+fail against the pre-fix code via `git stash`.
+
+**DOC-29's own lock wasn't sufficient (MED, fixed) — Pitfall #27's second
+half, again.** The previous round's fix locked the `Organization` row
+before `initialize_system_folders`'s existence check, but left that check
+itself a plain `SELECT`. `publish_minutes` (the method's only caller)
+already reads a folder via `get_folder_by_slug` before ever calling
+`initialize_system_folders`, which under this app's default REPEATABLE
+READ establishes the transaction's read-view snapshot at that first read —
+before the organization lock is acquired. A plain count taken after the
+lock still answers from that earlier snapshot, so it could report zero
+system folders even though a concurrent `ensure_member_folder` had already
+created and committed one while this transaction waited on the lock — the
+exact DOC-29 race, reopened by an incomplete fix. Verified directly (a
+throwaway script against the real database) that `SELECT
+count(...) ... FOR UPDATE` is valid SQL and executes as a locking read.
+Fixed by adding `.with_for_update()` to the existence-check query itself.
+New guard test,
+`test_existence_check_is_itself_a_locking_read`, confirmed to fail
+against the pre-fix code via `git stash`.
+
+Replied on both Codex threads and resolved them, plus the two threads from
+the prior round (DOC-9 doc-overclaim correction, test-rigor rewrite) —
+all four addressed and resolved on this PR.
+
+Completion gate re-run: flake8/black/isort clean on all four changed
+Python files; `validate_migrations.py --strict` pass (unchanged, no
+migration touched); scoped tests 275 passed; full backend suite 11866
+passed / 21 skipped (pre-existing/environmental) / 0 failed (up from
+11864, the two new guard tests). No frontend file touched.
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4 follow-up) — 2 fixed (Codex review of PR #2411's own commit)
+
+Codex reviewed PR #2411's first commit (`3b9015f`) and flagged three
+things, two of them real production/doc issues and one a test-rigor gap
+in this pass's own new guard test.
+
+**DOC-29 (MED, new, fixed).** `DocumentService.initialize_system_folders`
+(`document_service.py`) is the _other_ get-or-create for an organization's
+`members` system folder — `DocumentsService.ensure_member_folder`
+(`documents_service.py`, DOC-28 above) is the one this pass already
+locked. `initialize_system_folders` had no lock at all: it counts existing
+`is_system` folders and, if none exist, inserts the whole `SYSTEM_FOLDERS`
+set unconditionally. Its only caller is `publish_minutes`
+(`POST /minutes/{id}/publish`), so a brand-new organization's first
+minutes-publish racing a member's first `GET /documents/my-folder` could
+each observe zero system folders before either commits: one inserts a full
+`SYSTEM_FOLDERS` set (including its own `members` root), the other inserts
+a `members` root plus the member's personal folder under it. With no
+uniqueness constraint on `(organization_id, slug)`, both `members` rows
+persist, and a later deterministic-ordering pick of "the" `members` root
+can miss the one holding that member's folder — reopening DOC-28's exact
+symptom through a second, unlocked creator DOC-28's own lock never
+reached. Fixed by giving `initialize_system_folders` the same
+`Organization`-row `.with_for_update()` lock before its existence check,
+so both get-or-creates now serialize on the same mutex. New guard test
+(`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked::
+test_locks_the_organization_row_before_the_existence_check`), confirmed to
+fail against the pre-fix code via `git stash` of `document_service.py`
+only.
+
+**DOC-9 correction (MED, doc fix).** This pass's own first commit had
+marked `docs/KNOWN_LIMITATIONS.md`'s "Documents — Folder Listing Is
+Unbounded and N+1" entry "✅ Resolved". Codex correctly flagged that as an
+overclaim: `get_folders` calls `accessible_folder_ids` before its own
+paginated query, and that method still selects and materializes **every
+folder in the organization** with no `LIMIT`, computing per-folder access
+in a loop — the `skip`/`limit` fixed this pass bounds only the page
+returned, not that underlying scan. Corrected `KNOWN_LIMITATIONS.md` and
+`DOC-10-documents-legal.md`'s DOC-9 write-up to state both halves
+separately: N+1-per-folder resolved, the `accessible_folder_ids` scan
+still unbounded and left open (shared by every folder/document listing
+path in the service, so bounding it is a wider change than this finding's
+scope).
+
+**Test-rigor gap (P2, fixed).** The new
+`TestEnsureMemberFolderIsLocked::test_locks_the_organization_row` guard
+test counted `with_for_update()` occurrences across the combined source of
+`ensure_member_folder` and its two locking-helper _definitions_ (>= 3).
+That stays green even if the slow path swapped a locking helper's call
+site for its non-locking `_peek_*` counterpart, since the now-unused
+locking helper's own definition still contains the string — the guard
+wouldn't catch the exact regression it exists to catch. Rewritten to
+partition the slow path's source and assert it calls
+`self._lock_members_root(` and `self._lock_member_personal_folder(` by
+name; separately asserts `with_for_update()` appears in the organization
+row's own lock statement. Verified by injecting the exact regression
+(swapping `_lock_member_personal_folder` for `_peek_member_personal_
+folder` at the call site) and confirming the rewritten test fails while
+the old count-based version would not have.
+
+Completion gate re-run: flake8/black/isort clean on all four changed
+Python files; `validate_migrations.py --strict` pass (438 revisions,
+single head, unchanged); scoped tests (documents/legal/facilities/
+property-return feature files) 273 passed; full backend suite 11864
+passed / 21 skipped (pre-existing/environmental) / 0 failed (up from
+11863, the one new guard test). No frontend file touched.
+
+Also caught and fixed after pushing: CI's "Backend Unit Tests" job
+(`pytest -m "not integration and not slow and not docker"`, no database
+provisioned) failed on the merge commit —
+`TestEnsureMemberFolderIsLocked::test_repeated_calls_return_the_same_folder`
+(the real-database idempotency test from this pass's original commit) was
+missing `@pytest.mark.integration`, unlike every other `db_session`-using
+test in the file. Added the marker; verified locally that the unit-test
+filter now excludes it and the full class still passes against a real
+database.
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4) — 2 fixed, 0 flagged (new) — new PR
+
+Full 7-dimension checklist worked fresh against current code. Read
+`docs/security-review/CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+and prior findings (`docs/security-review/DOC-10-documents-legal.md`
+passes 1–3, `docs/module-audit/documents.md`, `docs/app-review/
+documents.md`) before touching code, per the rotation's standing
+discipline.
+
+`documents_service.py` had grown from 1208 to 1947 lines since pass 3 —
+not from this rotation, but from a large body of facilities-module
+concurrency hardening (FAC-22 through FAC-45) that lives in this shared
+file because facility document/photo folders are provisioned through it.
+Read in full rather than credited on the strength of the file's own name.
+That review found:
+
+- **DOC-9 re-verified fixed** — previously flagged unbounded/N+1
+  `get_folders`, fixed as a byproduct of the facilities work (which needed
+  accurate paginated folder counts for facility sub-trees). Re-verified
+  against current code and its own guard test
+  (`TestFolderListing`, asserting exactly 3 queries regardless of folder
+  count), not credited on faith. `KNOWN_LIMITATIONS.md` updated to
+  Resolved.
+- **DOC-28 (MED), new and fixed** — `ensure_member_folder`
+  (`documents_service.py`), called directly by `documents.py`'s own `GET
+/documents/my-folder`, was a get-or-create with no lock — the exact
+  Pitfall #27 shape the facilities work had just spent five rounds
+  hardening `ensure_facility_folder` against, but that hardening was never
+  extended to this sibling method, which (unlike the facility/apparatus/
+  event helpers) is reachable directly from a route this feature owns and
+  is a genuinely hot path (every member's own Documents page). Two
+  concurrent first-visits by the same member could both insert a personal
+  folder; every later call then raised `MultipleResultsFound` (500) for
+  that member, permanently. Fixed with the same organization-row-locked,
+  double-checked, peek-then-lock shape `ensure_facility_folder` now uses,
+  reusing its existing `_lock_folder_by_id` helper. 4 new guard tests
+  (`TestEnsureMemberFolderIsLocked`), confirmed to fail pre-fix (3 of 4)
+  via `git stash`.
+- **DOC-8 re-verified still open** (unbounded `legal_service.py::
+list_revisions`), not re-flagged — unchanged, no other module's work has
+  touched it.
+- **XC-4 re-verified sound** — an unrelated ad hoc security pass
+  (`ae423afa3`, 2026-09-07, ordered "Fix two data-leakage findings")
+  landed a `member-separations` leadership-only folder + migration in a
+  file this feature shares; read in full and confirmed correct (locking
+  shape, migration table-existence guard, stated irreversibility), not
+  re-implemented.
+- **One stale-doc correction**: `docs/module-audit/documents.md`'s DOC-6
+  entry had a header reading "✅ FIXED" contradicted by its own closing
+  line reading "Status: flagged" — a leftover from before the fix landed.
+  Corrected; no finding reopened.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean on
+both changed files (`documents_service.py`,
+`tests/test_documents_access.py`); `python3 scripts/validate_migrations.py
+--strict` pass (438 revisions, single head, unchanged — no migration
+touched); the feature's own test files (`test_documents_access.py`,
+`test_legal_documents.py`, `test_print_documents.py`,
+`test_public_legal.py`, `test_facility_folder_access.py`,
+`test_facilities_folders.py`, `test_property_return_service.py`) — 262
+passed; full backend suite (`pytest tests/`) — 11859 passed, 21 skipped
+(pre-existing: Docker/registry unavailable, `pywebpush` not installed,
+API-contract server-mode opt-in), 0 failed. No frontend file touched, so
+`tsc --noEmit`/`eslint .` not run (the one frontend commit since pass 3,
+`f41ed91c6`, was read for review only).
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
+`docs/KNOWN_LIMITATIONS.md` and `docs/module-audit/documents.md` updated.
+`CHANGELOG.md` entry added. Rotation row 10 → ⏳ (awaiting PR merge). **Open
+PR** row updated with the branch and finding summary above.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5)'s PR #2413 merged — feature fully closed
 
@@ -11755,8 +12393,6 @@ pytest 615 passed / 1 skipped / 0 failed; full backend suite 11821 passed
 modules — legal-text display, onboarding integration, facilities
 onboarding, agency position seeding), not investigated further as out of
 scope for this fix. No frontend file touched.
-
-### 2026-09-08 — Feature 09 (Medical screening, pass 4) — 1 fixed, 0 flagged — new PR #2409, merged out of turn while #2408 was still open
 
 ### 2026-09-08 — Feature 09 (Medical screening, pass 4)'s PR #2409 merged
 

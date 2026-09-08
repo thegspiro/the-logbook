@@ -16,7 +16,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.membership_pipeline import ProspectStatus, StepProgressStatus
+from app.models.membership_pipeline import (
+    PipelineStepType,
+    ProspectStatus,
+    StepProgressStatus,
+)
 from app.services.membership_pipeline_service import MembershipPipelineService
 
 pytestmark = [pytest.mark.integration]
@@ -185,6 +189,7 @@ class TestStatusStopsMovement:
             step_id=first.id,
             completed_by=admin_id,
             trigger="test_event",
+            for_step_types={PipelineStepType.MANUAL_APPROVAL},
         )
 
         # A no-op, not an exception: the event-driven caller is writing its
@@ -537,6 +542,7 @@ class TestAutoTransferRefusal:
             step_id=step.id,
             completed_by=admin_id,
             trigger="test_event",
+            for_step_types={PipelineStepType.MANUAL_APPROVAL},
         )
         assert moved is False
 
@@ -554,3 +560,119 @@ class TestAutoTransferRefusal:
             assert _status_of(landed) != "completed"
         assert after.status == ProspectStatus.ACTIVE
         assert after.transferred_user_id is None
+
+
+class TestRequiredStagesCannotBeSkipped:
+    """``required`` was written, stored and badged, and read by no logic.
+
+    A department could mark a stage Required — a background check, an interest
+    meeting — and skip it with two clicks anyway, because ``skip_current_step``
+    never looked at the flag. The badge said one thing and the button did
+    another.
+    """
+
+    async def test_a_required_stage_refuses_the_skip(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        with pytest.raises(ValueError, match="required stage"):
+            await svc.skip_current_step(
+                prospect_id=prospect.id,
+                organization_id=org_id,
+                skipped_by=admin_id,
+            )
+
+        await db_session.refresh(prospect)
+        assert str(prospect.current_step_id) == str(steps[0].id)
+
+    async def test_an_optional_stage_still_skips(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """The escape hatch is un-ticking Required on the stage, which is a
+        deliberate change to the pipeline rather than a quiet exception made
+        for one applicant."""
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        await svc.update_step(
+            step_id=steps[0].id,
+            pipeline_id=pipeline.id,
+            organization_id=org_id,
+            data={"required": False},
+        )
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        await svc.skip_current_step(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            skipped_by=admin_id,
+        )
+
+        await db_session.refresh(prospect)
+        assert str(prospect.current_step_id) == str(steps[1].id)
+
+
+class TestStageOrderStaysUnique:
+    """Two stages sharing a sort_order made the board's column order and the
+    destination of an advance depend on how the sort broke the tie.
+
+    The builder numbered a new stage from the *count* of existing stages, and
+    deleting a stage left a gap — so one deletion was enough for the next added
+    stage to land on a live stage's number.
+    """
+
+    async def test_a_colliding_sort_order_is_placed_last_instead(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+
+        added = await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Collides", "step_type": "manual_approval", "sort_order": 1},
+        )
+
+        assert added.sort_order == 3
+        orders = sorted(s.sort_order for s in [*steps, added])
+        assert orders == [0, 1, 2, 3]
+
+    async def test_deleting_a_stage_closes_the_gap_it_leaves(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 4)
+
+        assert await svc.delete_step(steps[1].id, pipeline.id, org_id) is True
+
+        refreshed = await svc.get_pipeline(pipeline.id, org_id)
+        remaining = sorted(refreshed.steps, key=lambda s: s.sort_order)
+        assert [s.sort_order for s in remaining] == [0, 1, 2]
+        assert [s.name for s in remaining] == ["Stage 1", "Stage 3", "Stage 4"]
+
+    async def test_the_stage_added_after_a_deletion_does_not_collide(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """The original sequence, end to end: delete a middle stage, add
+        another, and the two must not land on the same number."""
+        org_id, _ = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 4)
+        await svc.delete_step(steps[1].id, pipeline.id, org_id)
+
+        await svc.add_step(
+            pipeline.id,
+            org_id,
+            {"name": "Added Later", "step_type": "manual_approval"},
+        )
+
+        refreshed = await svc.get_pipeline(pipeline.id, org_id)
+        orders = [s.sort_order for s in refreshed.steps]
+        assert sorted(orders) == [0, 1, 2, 3]
+        assert len(set(orders)) == len(orders)

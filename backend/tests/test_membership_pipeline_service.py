@@ -559,12 +559,15 @@ class TestSkipNeverTransfers:
 
     @staticmethod
     def _pipeline_with_misplaced_final_flag():
+        # required=False: a required stage refuses the skip outright, and this
+        # case is about what a skip does once it is allowed.
         flagged_mid = SimpleNamespace(
             id="s1",
             sort_order=0,
             step_type=PipelineStepType.CHECKLIST,
             config={"items": ["Vote held"], "require_all": True},
             is_final_step=True,
+            required=False,
             notify_prospect_on_completion=False,
         )
         actual_last = SimpleNamespace(
@@ -573,6 +576,7 @@ class TestSkipNeverTransfers:
             step_type=PipelineStepType.CHECKLIST,
             config={},
             is_final_step=False,
+            required=False,
             notify_prospect_on_completion=False,
         )
         return SimpleNamespace(

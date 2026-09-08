@@ -22,6 +22,73 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Two concurrent visits to a member's own Documents folder could both create it (2026-09-08)
+
+**Security**
+
+- **`GET /documents/my-folder`'s get-or-create had no lock.** Two concurrent
+  first-visits by the same member — two browser tabs, a retried request —
+  could both see "no personal folder yet" and both insert one; the existing
+  lookup then raised `MultipleResultsFound` on every later visit for that
+  member, an unhandled 500 with no way to recover short of deleting the
+  duplicate row by hand. Not a cross-tenant issue — every document still
+  landed in the caller's own organization — a data-integrity/availability
+  one: an ordinary double-tap could permanently lock a member out of their
+  own document folder. Fixed by giving `ensure_member_folder` the same
+  organization-row-locked, double-checked get-or-create shape already used
+  elsewhere in this module for the analogous facility-folder and
+  member-separations-folder races, with a peek-before-lock fast path so a
+  member revisiting an already-created folder never blocks on it. Guarded
+  by `TestEnsureMemberFolderIsLocked`, confirmed to fail against the pre-fix
+  code.
+- **The Documents folder listing's N+1 query is now fixed** (credited to
+  independent facilities-module work, re-verified sound by this pass):
+  `get_folders` previously issued one extra `func.count` query per folder to
+  populate its document count and had no pagination at all; it now takes
+  `skip`/`limit` and answers with exactly one count query plus one grouped
+  subquery for the whole page, regardless of how many folders exist. The
+  page size is now bounded, but the access-scope computation behind every
+  such listing is not: `accessible_folder_ids` still loads every folder in
+  the organization before computing per-folder access, so this is a partial
+  fix — tracked in `KNOWN_LIMITATIONS.md`.
+
+### A brand-new organization's first minutes publish could race a member's first Documents visit into creating a duplicate root folder (2026-09-08)
+
+**Security**
+
+- **The fix above had its own gap, on the other code path that creates the
+  same folder.** `initialize_system_folders` (used when publishing meeting
+  minutes, to create the system folder set on first use) is a second,
+  independent get-or-create for the same shared "members" root folder the
+  fix above locks — and it took no lock at all. A brand-new organization's
+  first minutes publish racing a member's first visit to their own
+  Documents folder could each see no system folders yet and both create a
+  "members" root, since nothing enforces there can only be one. Fixed by
+  having both get-or-creates lock the same row before checking, so whichever
+  runs first is guaranteed to finish before the other looks.
+- **That lock alone wasn't quite enough.** Locking before the check doesn't
+  help if the check itself can still answer from data read earlier in the
+  same request — and minutes publishing does read a folder earlier. Fixed
+  by making the existence check itself read current data instead of
+  whatever was visible when the request started.
+- **A member's own Documents folder could briefly be shown to the wrong
+  person.** The fast path for finding a member's personal folder locked it
+  by id only, without re-confirming it still belonged to that member. If an
+  admin reassigned the folder's owner in the narrow window between the
+  lookup and the lock, the original member could still be served a folder
+  that, by the time the response went out, was no longer theirs. Fixed by
+  re-checking ownership after the lock and creating a fresh folder for that
+  member when it no longer matches.
+- **Publishing an organization's first meeting minutes could fail outright
+  if a member had ever visited their own Documents folder first.** The
+  system-folder setup treated "at least one default folder already exists"
+  as "every default folder already exists" and skipped creating the rest —
+  including the one meeting minutes are filed into. A department where any
+  member opened Documents before the first meeting minutes were published
+  hit this every time, not just under a race. Fixed to create only the
+  specific folders actually missing, rather than assuming none are needed
+  once any one exists.
+
 ### The shift-report print test waits for the timer it advances (2026-09-07)
 
 **Fixed**

@@ -291,18 +291,24 @@ const PublicFormPage = () => {
 
   if (loading) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
+      >
         <div className="text-center">
           <div className="mb-4 inline-block h-10 w-10 animate-spin rounded-full border-t-3 border-b-3 border-blue-500"></div>
           <p className="text-theme-text-secondary">Loading form...</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (error && !form) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="bg-theme-surface max-w-md rounded-xl p-8 text-center shadow-lg">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
             <svg
@@ -322,13 +328,16 @@ const PublicFormPage = () => {
           <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Form Not Available</h2>
           <p className="text-theme-text-secondary">{error}</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (submitted) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="bg-theme-surface max-w-md rounded-xl p-8 text-center shadow-lg">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
             <svg
@@ -354,7 +363,7 @@ const PublicFormPage = () => {
             </button>
           )}
         </div>
-      </div>
+      </main>
     );
   }
 

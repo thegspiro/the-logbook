@@ -8,6 +8,7 @@ visibility, and the allowed-roles restriction, plus the permission/role
 collection helpers. Pure logic; no DB.
 """
 
+import inspect
 import io
 import json
 from datetime import datetime, timezone
@@ -90,6 +91,16 @@ def _folder(
 
 def _svc():
     return DocumentsService(MagicMock())
+
+
+def _one(obj):
+    """A ``db.execute(...)`` result mock whose ``scalar_one_or_none()``
+    returns *obj* -- used by the mocked-db race test in
+    ``TestEnsureMemberFolderIsLocked``, matching the pattern
+    ``test_property_return_service.py`` uses for the analogous
+    member-separations-folder race.
+    """
+    return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
 class TestHelpers:
@@ -2991,6 +3002,398 @@ class TestFolderAndDocumentAuditLogging:
         assert entry is not None
         assert entry.event_data["document_id"] == str(document.id)
         assert "name" in entry.event_data["fields"]
+
+
+class TestEnsureMemberFolderIsLocked:
+    """DOC-28: ``ensure_member_folder`` is a get-or-create with no uniqueness
+    constraint behind ``(organization_id, parent_id, owner_user_id)``
+    (Pitfall #27 shape). Two concurrent first-visits to the same member's
+    ``GET /documents/my-folder`` -- two browser tabs, a retried request --
+    would otherwise both see "no folder yet" and both insert a personal
+    folder, after which every later read raises ``MultipleResultsFound`` for
+    that member, permanently.
+
+    Unlike the once-per-facility/apparatus/event siblings (out of this
+    feature's scope -- they're reached from other modules' endpoints), this
+    one is called directly from ``documents.py``'s ``GET /my-folder`` route
+    and is a genuinely hot path: every member visits their own Documents
+    page. It takes the same fast/slow, peek-then-lock shape
+    ``ensure_facility_folder`` was hardened into (FAC-42/43/45), covered here
+    with the same source-inspection technique
+    ``test_facilities_folders.py::TestFolderCreationIsLocked`` uses for that
+    method, plus an end-to-end idempotency check against a real database.
+    """
+
+    def test_locks_the_organization_row(self):
+        source = inspect.getsource(DocumentsService.ensure_member_folder)
+        fast_path, sep, slow_path = source.partition("org = await self.db.scalar(")
+        assert sep, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        org_lock_statement, _, rest_of_slow_path = slow_path.partition(
+            'raise ValueError("Organization not found")'
+        )
+        assert "with_for_update()" in org_lock_statement, (
+            "ensure_member_folder's slow path must lock the organization "
+            "row before re-checking, or two concurrent first-visits can "
+            "both pass the fast-path check and both create a folder"
+        )
+
+        # Check the slow path *calls* the locking helpers by name, not
+        # just that `with_for_update()` appears somewhere in the combined
+        # source of the method and both helper definitions (Codex review,
+        # PR #2411). That weaker, count-based version of this test would
+        # still pass if the slow path called the non-locking
+        # `_peek_member_personal_folder(...)` instead of
+        # `_lock_member_personal_folder(...)`, since the now-unused
+        # locking helper's own definition still contains the string --
+        # reintroducing the exact race this test exists to catch while
+        # staying green.
+        assert "self._lock_members_root(" in rest_of_slow_path, (
+            "ensure_member_folder's slow path must re-fetch the members "
+            "root through the locking helper (_lock_members_root), not a "
+            "peek, or a concurrently-created root can be missed under the "
+            "lock"
+        )
+        assert "self._lock_member_personal_folder(" in rest_of_slow_path, (
+            "ensure_member_folder's slow path must re-fetch the personal "
+            "folder through the locking helper (_lock_member_personal_"
+            "folder), not a peek, or two concurrent first-visits can both "
+            "create one"
+        )
+
+    def test_fast_path_skips_the_organization_lock(self):
+        source = inspect.getsource(DocumentsService.ensure_member_folder)
+        fast_path, _, slow_path = source.partition("org = await self.db.scalar(")
+        assert slow_path, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_member_folder's fast path (before the organization lock "
+            "is acquired) must not itself take a lock -- every member "
+            "revisiting their already-created folder would otherwise "
+            "serialize on one shared organization row"
+        )
+
+    async def test_falls_through_if_ownership_changed_under_the_lock(self):
+        """Codex review, PR #2411: ``_lock_folder_by_id`` matches only the
+        folder's primary key, not ``(parent_id, owner_user_id)``. If a
+        ``documents.manage`` holder reassigns this folder's owner (or
+        reparents it) between the fast path's peek and its lock, the
+        locked row no longer belongs to this member under this root and
+        must not be handed back as this member's folder.
+        """
+        root = SimpleNamespace(id="members-root")
+        peeked_folder = SimpleNamespace(id="folder-1")
+        # The locked re-fetch of that same id finds it reassigned to a
+        # different owner in the meantime.
+        reassigned_folder = SimpleNamespace(
+            id="folder-1", parent_id="members-root", owner_user_id="someone-else"
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: members root already exists
+                _one(peeked_folder),  # fast-path: peek finds a folder
+                _one(reassigned_folder),  # fast-path: locked re-fetch by
+                # id -- same row, ownership changed underneath
+                _one(root),  # slow path: members root, locked, re-confirmed
+                _one(None),  # slow path: this user's folder, locked --
+                # none, since the old one now belongs to someone else
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        user = SimpleNamespace(id="user-1", first_name="Jane", last_name="Smith")
+        folder = await DocumentsService(db).ensure_member_folder("org-1", user)
+
+        assert folder is not reassigned_folder, (
+            "the fast path returned the folder even though the locked "
+            "re-fetch showed it had already been reassigned to a "
+            "different owner"
+        )
+        assert folder.owner_user_id == "user-1", (
+            "the slow path should have created a new personal folder for "
+            "this member instead of returning the reassigned one"
+        )
+
+    async def test_reuses_the_folder_a_concurrent_visit_created(self):
+        """The re-check under the organization lock, not just the fast path.
+
+        Mirrors ``test_property_return_service.py``'s
+        ``test_reuses_folder_a_concurrent_drop_created`` for the analogous
+        member-separations-folder race: the members root already exists
+        (the common case -- shared across every member), this member's own
+        folder does not yet on the fast-path peek, and a concurrent request
+        wins the race and commits while this one waits on the organization
+        lock. The slow path's re-check must return the winner's folder, not
+        insert a second one.
+        """
+        root = SimpleNamespace(id="members-root")
+        winner = SimpleNamespace(id="folder-created-by-the-other-request")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: members root already exists
+                _one(None),  # fast-path: this member's own folder -- not yet
+                _one(root),  # slow path: members root, locked, re-confirmed
+                _one(winner),  # slow path: personal folder, locked -- the
+                # concurrent visit already created and committed it
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        user = SimpleNamespace(id="user-1", first_name="Jane", last_name="Smith")
+        folder = await DocumentsService(db).ensure_member_folder("org-1", user)
+
+        assert folder.id == "folder-created-by-the-other-request"
+        added = [c.args[0] for c in db.add.call_args_list]
+        assert not [o for o in added if isinstance(o, DocumentFolder)], (
+            "the slow path's re-check found the concurrently-created folder "
+            "but a duplicate DocumentFolder was added anyway"
+        )
+
+    @pytest.mark.integration
+    async def test_repeated_calls_return_the_same_folder(self, db_session):
+        """End-to-end against a real database: not just that a lock is
+        taken, but that the get-or-create is actually idempotent.
+        """
+        org = Organization(name="Member Folder VFD", slug="member-folder-race")
+        db_session.add(org)
+        await db_session.flush()
+        user = User(
+            organization_id=org.id,
+            username="firefighter1",
+            email="firefighter1@example.com",
+            first_name="Jane",
+            last_name="Smith",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        first = await service.ensure_member_folder(org.id, user)
+        second = await service.ensure_member_folder(org.id, user)
+
+        assert first.id == second.id
+
+        count = await db_session.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == org.id,
+                DocumentFolder.owner_user_id == user.id,
+            )
+        )
+        assert len(count.scalars().all()) == 1
+
+
+class TestEnsureApparatusAndEventFolderAreLocked:
+    """Codex review, PR #2411 (round 5): ``DocumentService.
+    initialize_system_folders``'s reconciliation (round 4) can create the
+    "apparatus"/"events" system folders under the organization lock when
+    they're among what's missing -- but ``DocumentsService.
+    ensure_apparatus_folder``/``ensure_event_folder`` are the *other*
+    get-or-create for those same roots, reached whenever an apparatus's or
+    event's first document is uploaded, and neither took that lock. With no
+    uniqueness constraint behind ``(organization_id, slug)``, a concurrent
+    first apparatus/event upload racing a concurrent minutes publish could
+    each observe the root absent and both create one -- the exact DOC-28/
+    DOC-29 shape, one level over. Hardened both the same way as
+    ``ensure_facility_folder`` (FAC-42/43/45): peek-then-lock fast path,
+    organization-locked double-checked slow path.
+    """
+
+    def test_apparatus_locks_the_organization_row_on_the_slow_path(self):
+        source = inspect.getsource(DocumentsService.ensure_apparatus_folder)
+        fast_path, sep, slow_path = source.partition("org = await self.db.scalar(")
+        assert sep, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_apparatus_folder's fast path must not itself take a "
+            "lock, or every apparatus revisiting its already-created "
+            "folder would serialize on one shared organization row"
+        )
+        org_lock_statement, _, rest_of_slow_path = slow_path.partition(
+            'raise ValueError("Organization not found")'
+        )
+        assert "with_for_update()" in org_lock_statement, (
+            "ensure_apparatus_folder's slow path must lock the "
+            "organization row before re-checking, or a concurrent "
+            "initialize_system_folders reconciliation and a concurrent "
+            "first apparatus upload can both create the 'apparatus' root"
+        )
+        assert "self._lock_apparatus_root(" in rest_of_slow_path, (
+            "the slow path must re-fetch the apparatus root through the "
+            "locking helper, not a peek"
+        )
+        assert "self._lock_apparatus_folder(" in rest_of_slow_path, (
+            "the slow path must re-fetch the per-apparatus folder through "
+            "the locking helper, not a peek"
+        )
+
+    def test_event_locks_the_organization_row_on_the_slow_path(self):
+        source = inspect.getsource(DocumentsService.ensure_event_folder)
+        fast_path, sep, slow_path = source.partition("org = await self.db.scalar(")
+        assert sep, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_event_folder's fast path must not itself take a lock, "
+            "or every event revisiting its already-created folder would "
+            "serialize on one shared organization row"
+        )
+        org_lock_statement, _, rest_of_slow_path = slow_path.partition(
+            'raise ValueError("Organization not found")'
+        )
+        assert "with_for_update()" in org_lock_statement, (
+            "ensure_event_folder's slow path must lock the organization "
+            "row before re-checking, or a concurrent "
+            "initialize_system_folders reconciliation and a concurrent "
+            "first event upload can both create the 'events' root"
+        )
+        assert "self._lock_events_root(" in rest_of_slow_path, (
+            "the slow path must re-fetch the events root through the "
+            "locking helper, not a peek"
+        )
+        assert "self._lock_event_folder(" in rest_of_slow_path, (
+            "the slow path must re-fetch the per-event folder through the "
+            "locking helper, not a peek"
+        )
+
+    async def test_apparatus_falls_through_if_reparented_under_the_lock(self):
+        """Codex review, PR #2411 (round 7): ``_lock_folder_by_id`` matches
+        only the folder's primary key, not ``(parent_id, slug)``. If a
+        ``documents.manage`` holder reparents this folder between the fast
+        path's peek and its lock, the locked row no longer sits under this
+        apparatus root and must not be handed back as this apparatus's
+        folder.
+        """
+        root = SimpleNamespace(id="apparatus-root")
+        peeked_folder = SimpleNamespace(id="folder-1")
+        # The locked re-fetch of that same id finds it reparented elsewhere.
+        reparented_folder = SimpleNamespace(
+            id="folder-1", parent_id="some-other-root", slug="apparatus-appar-1"
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: apparatus root already exists
+                _one(peeked_folder),  # fast-path: peek finds a folder
+                _one(reparented_folder),  # fast-path: locked re-fetch by
+                # id -- same row, parent changed underneath
+                _one(root),  # slow path: apparatus root, locked, re-confirmed
+                _one(None),  # slow path: this apparatus's folder, locked --
+                # none, since the old one is no longer under this root
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        folder = await DocumentsService(db).ensure_apparatus_folder(
+            "org-1", "appar-1", "Engine 1"
+        )
+
+        assert folder is not reparented_folder, (
+            "the fast path returned the folder even though the locked "
+            "re-fetch showed it had already been reparented away from "
+            "this apparatus root"
+        )
+
+    async def test_event_falls_through_if_reparented_under_the_lock(self):
+        """Codex review, PR #2411 (round 7): same as the apparatus case
+        above, for ``ensure_event_folder``.
+        """
+        root = SimpleNamespace(id="events-root")
+        peeked_folder = SimpleNamespace(id="folder-1")
+        reparented_folder = SimpleNamespace(
+            id="folder-1", parent_id="some-other-root", slug="event-evt-1"
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: events root already exists
+                _one(peeked_folder),  # fast-path: peek finds a folder
+                _one(reparented_folder),  # fast-path: locked re-fetch by
+                # id -- same row, parent changed underneath
+                _one(root),  # slow path: events root, locked, re-confirmed
+                _one(None),  # slow path: this event's folder, locked --
+                # none, since the old one is no longer under this root
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        folder = await DocumentsService(db).ensure_event_folder(
+            "org-1", "evt-1", "Drill Night"
+        )
+
+        assert folder is not reparented_folder, (
+            "the fast path returned the folder even though the locked "
+            "re-fetch showed it had already been reparented away from "
+            "this events root"
+        )
+
+    @pytest.mark.integration
+    async def test_apparatus_folder_is_idempotent(self, db_session):
+        """End-to-end against a real database, mirroring
+        ``test_repeated_calls_return_the_same_folder``.
+        """
+        org = Organization(name="Apparatus Lock VFD", slug="apparatus-lock-vfd")
+        db_session.add(org)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        first = await service.ensure_apparatus_folder(org.id, "appar-1", "Engine 1")
+        second = await service.ensure_apparatus_folder(org.id, "appar-1", "Engine 1")
+
+        assert first.id == second.id
+        count = await db_session.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == org.id,
+                DocumentFolder.slug == "apparatus-appar-1",
+            )
+        )
+        assert len(count.scalars().all()) == 1
+
+    @pytest.mark.integration
+    async def test_event_folder_is_idempotent(self, db_session):
+        """End-to-end against a real database, mirroring
+        ``test_repeated_calls_return_the_same_folder``.
+        """
+        org = Organization(name="Event Lock VFD", slug="event-lock-vfd")
+        db_session.add(org)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        first = await service.ensure_event_folder(org.id, "evt-1", "Drill Night")
+        second = await service.ensure_event_folder(org.id, "evt-1", "Drill Night")
+
+        assert first.id == second.id
+        count = await db_session.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == org.id,
+                DocumentFolder.slug == "event-evt-1",
+            )
+        )
+        assert len(count.scalars().all()) == 1
 
 
 if __name__ == "__main__":  # pragma: no cover
