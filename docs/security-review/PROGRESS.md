@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 08 (Membership pipeline, pass 5, MP-29)** — PR TBD, branch
+**Feature 08 (Membership pipeline, pass 5, MP-29)** — PR
+[#2408](https://github.com/thegspiro/the-logbook/pull/2408), branch
 `claude/security-review-membership-pipeline-mp29`. PR #2406 (MP-28, the
 lock-leak fix on PR #2405's rejected-bulk-item path) has since merged to
 `main`. This PR closes the other thread PR #2406 stood down on: PR #2405's
@@ -37,9 +38,46 @@ blocks on the lock and then correctly observes the committed
 `TRANSFERRED` status once it releases; a second new test proves MP-28's
 fix actually releases the lock at the database level rather than only
 satisfying a mocked assertion. Both independently confirmed to fail
-against their pre-fix commits. Will reply on PR #2405's P1 thread and
-resolve it once this PR is up. Subscribed to PR activity. Next feature
+against their pre-fix commits. Replied on PR #2405's P1 thread; will
+resolve it once this PR merges. Subscribed to PR activity. Next feature
 once this merges: 09 Medical screening (PHI).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406, merged), preserved for history</summary>
+
+**None.** PR #2406 (Feature 08, Membership pipeline, pass 5 follow-up —
+MP-28) merged clean, all 17 CI checks green, no unresolved review threads.
+Next: 09 Medical screening (PHI).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406), preserved for history</summary>
+
+**Feature 08 (Membership pipeline, pass 5 follow-up)** — PR
+[#2406](https://github.com/thegspiro/the-logbook/pull/2406), branch
+`claude/security-review-membership-pipeline-pass5-followup`. PR #2405 (the
+pass 5 PR carrying MP-27) was merged directly by the repo owner before this
+session could push a fix for a second Codex finding on that same PR — so
+that fix lands here instead, on a new branch per CLAUDE.md Pitfall #24
+(never reuse a merged PR's branch name). **MP-28 (P2/MED, Codex review of
+PR #2405)** — `_bulk_apply`'s `except ValueError` branch (the rejected-item
+path) left the `FOR UPDATE` lock MP-27's own fix had just acquired held for
+the rest of the batch instead of ending the transaction, blocking (and,
+across two overlapping batches, potentially deadlocking) any other write to
+that prospect until the batch finished. Fixed by committing (not rolling
+back — a raw `rollback()` breaks the test session's async/greenlet bridge
+under `join_transaction_mode="create_savepoint"`) in that branch, safe
+because every current `apply` callback raises before mutating anything.
+Replied on PR #2405's P2 thread and resolved it; replied on its P1 thread
+(a request for genuine two-session concurrency test infrastructure, which
+this repo has no precedent for anywhere — including
+`test_capacity_locking.py`, whose docstring claims real concurrency but
+whose checks are source-inspection only) explaining it's a repo-wide gap
+out of scope for a one-line fix, left unresolved. Subscribed to PR
+activity. Next feature once this merges: 09 Medical screening (PHI).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07 pass 4, PR #2402), preserved for history</summary>
@@ -11503,6 +11541,14 @@ pytest 615 passed / 1 skipped / 0 failed; full backend suite 11821 passed
 modules — legal-text display, onboarding integration, facilities
 onboarding, agency position seeding), not investigated further as out of
 scope for this fix. No frontend file touched.
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up)'s PR #2406 merged
+
+PR #2406 was fully green (17/17 CI checks, including the "CI Success"
+aggregate) with no unresolved review threads (Codex's own review of the
+PR completed with zero findings). Merged (squash, `expectedHeadSha`
+matching the PR's head). **Open PR** row cleared, rotation row 08
+confirmed ✅. Next: 09 Medical screening (PHI).
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5 follow-up) — 1 fixed (P2/MED, Codex review of PR #2405) — new PR #2406
 
