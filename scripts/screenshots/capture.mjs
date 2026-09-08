@@ -630,14 +630,28 @@ async function main() {
         // then shows up in whatever is captured next.
         //
         // In a `finally` because a shot that fails half-way has still done
-        // whatever its prepare step managed before failing, and the cleanup is
-        // wrapped so its own error cannot replace the failure being reported.
+        // whatever its prepare step managed before failing.
         try {
           await shot.cleanup(page);
         } catch (error) {
-          console.log(
-            `      cleanup after ${shot.id} failed: ${String(error).split("\n")[0]}`,
-          );
+          const detail = String(error).split("\n")[0];
+          console.log(`      cleanup after ${shot.id} failed: ${detail}`);
+
+          // A cleanup that threw means the persisted state is probably still
+          // there — the pins this shot created are still on the account. Only
+          // logging it left the result `ok` and the exit code 0, so the report
+          // claimed a stateful shot had tidied up when it had not, and the
+          // leftovers turned up in whatever ran next with nothing to explain
+          // them. Demote the result instead.
+          //
+          // An existing failure is preserved rather than overwritten: the
+          // capture error is what a reader needs, and the cleanup very likely
+          // failed for the same reason.
+          const result = results.find((r) => r.id === shot.id);
+          if (result && result.status === "ok") {
+            result.status = "failed";
+            result.error = `cleanup failed: ${detail}`;
+          }
         }
       }
     }

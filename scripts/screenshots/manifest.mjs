@@ -1848,14 +1848,44 @@ export function openCallVolumeReport(mode) {
  * that pins has to both start from a known state and hand one back: without the
  * first, a second run pins three MORE items and the section grows every time;
  * without the second, `--only 05-02` leaves them for whatever is captured next.
+ *
+ * Bounded, and it insists the count actually drops. `togglePin` catches an API
+ * error and re-renders the same Unpin button, so a loop that only asked "is one
+ * still there?" would click a failing control every 600ms forever — hanging the
+ * entire capture command on a transient backend blip rather than failing the one
+ * shot. Both limits throw instead of returning quietly: this runs as cleanup for
+ * a shot that persisted state, and giving up in silence leaves exactly the pins
+ * the caller is relying on it to have removed.
  */
+const UNPIN_LIMIT = 25;
+
 async function unpinEverything(page) {
-  for (;;) {
-    const unpin = page.getByRole("button", { name: /^Unpin / }).first();
-    if (!(await unpin.count())) break;
-    await unpin.click();
-    await page.waitForTimeout(600);
+  const unpinButtons = page.getByRole("button", { name: /^Unpin / });
+
+  for (let cleared = 0; cleared < UNPIN_LIMIT; cleared += 1) {
+    const before = await unpinButtons.count();
+    if (!before) return;
+
+    await unpinButtons.first().click();
+
+    // Poll for the count to fall rather than sleeping a fixed 600ms: a click
+    // that silently failed leaves `before` unchanged, and this is what turns
+    // that into a timeout instead of another lap.
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      if ((await unpinButtons.count()) < before) break;
+      if (Date.now() > deadline) {
+        throw new Error(
+          `unpin did not take effect: still ${before} pinned after 10s`,
+        );
+      }
+      await page.waitForTimeout(250);
+    }
   }
+
+  throw new Error(
+    `unpin cleanup gave up after ${UNPIN_LIMIT} pins — the list is not draining`,
+  );
 }
 
 export const SHOTS = [
