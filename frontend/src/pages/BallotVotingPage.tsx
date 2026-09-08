@@ -281,18 +281,24 @@ export const BallotVotingPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br"
+      >
         <div className="text-center" role="status" aria-live="polite">
           <div className="mb-4 inline-block h-10 w-10 animate-spin rounded-full border-t-4 border-b-4 border-red-600"></div>
           <p className="text-theme-text-secondary">Loading your ballot...</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (error && !election) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="bg-theme-surface w-full max-w-md rounded-lg p-8 text-center shadow-lg">
           <div className="mb-4 text-5xl text-red-600">!</div>
           <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Unable to Load Ballot</h1>
@@ -301,13 +307,16 @@ export const BallotVotingPage: React.FC = () => {
             If you believe this is an error, please contact your organization secretary.
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (submitted && submitResult) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="bg-theme-surface w-full max-w-md rounded-lg p-8 text-center shadow-lg">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
             <svg
@@ -340,7 +349,7 @@ export const BallotVotingPage: React.FC = () => {
             <p className="mt-2">You may close this page.</p>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 

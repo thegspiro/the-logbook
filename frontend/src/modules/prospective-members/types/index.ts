@@ -378,7 +378,13 @@ export interface PipelineStageCreate {
   description?: string | undefined;
   stage_type: StageType;
   config: StageConfig;
-  sort_order: number;
+  /**
+   * Omit on a new stage and let the server place it last. Numbering a new
+   * stage from the count of existing ones collided with a live stage the
+   * moment any earlier stage had been deleted, and a tie in sort_order makes
+   * both the column order and the destination of an advance arbitrary.
+   */
+  sort_order?: number | undefined;
   is_required?: boolean | undefined;
   inactivity_timeout_days?: number | null | undefined;
   notify_prospect_on_completion?: boolean | undefined;
@@ -513,6 +519,8 @@ export interface Applicant {
   current_stage_name?: string | undefined;
   current_stage_type?: StageType | undefined;
   current_stage_config?: StageConfig | undefined;
+  /** Whether the stage is marked Required. A required stage cannot be skipped. */
+  current_stage_required?: boolean | undefined;
   stage_entered_at: string;
   target_membership_type: TargetMembershipType;
   target_role_id?: string | undefined;
@@ -1079,7 +1087,8 @@ export interface BackendStepCreatePayload {
   description?: string | undefined;
   step_type: string;
   action_type?: string | undefined;
-  sort_order: number;
+  /** Omitted for a new stage: the server appends it after the last one. */
+  sort_order?: number | undefined;
   required: boolean;
   config?: Record<string, unknown> | undefined;
   notify_prospect_on_completion: boolean;

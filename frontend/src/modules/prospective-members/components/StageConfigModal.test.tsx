@@ -112,7 +112,6 @@ const defaultProps = {
   isOpen: true,
   onClose: vi.fn(),
   onSave: vi.fn(),
-  existingStageCount: 0,
 };
 
 describe('StageConfigModal', () => {
@@ -564,6 +563,38 @@ describe('StageConfigModal', () => {
       content: 'Details here',
       enabled: true,
     });
+  });
+
+  it('saves once when Add Stage is double-clicked', async () => {
+    // onSave fires the create request and returns before it lands, and the
+    // dialog only unmounts on the re-render that follows. A second click
+    // arriving in between posted the stage twice, which is how a pipeline ends
+    // up with two identically named columns.
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Interest Meeting');
+    const addStage = screen.getByText('Add Stage');
+    await user.click(addStage);
+    await user.click(addStage);
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits sort_order on a new stage so the server places it', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<StageConfigModal {...defaultProps} onSave={onSave} />);
+
+    await user.click(screen.getByText('Meeting'));
+    await user.type(screen.getByLabelText(/stage name/i), 'Interest Meeting');
+    await user.click(screen.getByText('Add Stage'));
+
+    const savedData = onSave.mock.calls[0]?.[0] as PipelineStageCreate | undefined;
+    expect(savedData).toBeDefined();
+    expect(savedData).not.toHaveProperty('sort_order');
   });
 
   // =========================================================================

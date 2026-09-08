@@ -473,7 +473,10 @@ const OnboardingCheck: React.FC = () => {
 
   if (error) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="card w-full max-w-md p-8 text-center">
           <div className="text-theme-accent-red mb-4 text-6xl">{schemaError ? '🔧' : '⚠️'}</div>
           <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">
@@ -545,7 +548,7 @@ const OnboardingCheck: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 

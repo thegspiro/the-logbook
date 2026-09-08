@@ -1218,8 +1218,8 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-theme-text-muted mt-1 text-xs">
-                Set a secret to auto-advance a prospect&apos;s interview stage when they book. Add this URL as a Cal.com
-                webhook (BOOKING_CREATED) using the same secret:
+                Set a secret to auto-advance a prospect&apos;s interview stage once their meeting has finished. Add this
+                URL as a Cal.com webhook (MEETING_ENDED) using the same secret:
               </p>
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
                 {webhookCallbackUrl('calcom', integration.id)}

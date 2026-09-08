@@ -77,6 +77,10 @@ const ShiftReportPrintPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [report, labelsReady]);
 
+  // No landmark on any branch here, deliberately: this route is registered
+  // inside the AppLayout <Route>, which already renders the page's single
+  // <main id="main-content">. A second one nested inside it would duplicate
+  // the id and leave the skip link pointing at whichever came first.
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -118,7 +122,7 @@ const ShiftReportPrintPage: React.FC = () => {
     <>
       <PrintPageStyles margin="0.6in 0.75in" />
 
-      <div data-page-main className="shift-report-print-shell" id="main-content">
+      <div data-page-main className="shift-report-print-shell">
         <article className="shift-report-print" aria-labelledby="shift-report-title">
           <header className="shift-report-print__header">
             <div>

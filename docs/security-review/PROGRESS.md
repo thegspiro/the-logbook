@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2411 (Feature 10, Documents & legal, pass 4 — ten fixes across
+six further rounds of Codex review on the PR's own commits) merged clean,
+17/17 CI checks green, every actionable review thread resolved. Feature 10
+is now fully closed for this pass. One thread was left open rather than
+resolved: a P1 Codex finding asking to remove this PR's pre-freeze
+`CHANGELOG.md` entries, stood down on with a citation to `CLAUDE.md`/
+`AGENTS.md`'s own explicit rule that a branch opened before the 2026-09-08
+freeze keeps its entries and a merge resolves by keeping both sides — this
+PR opened before the freeze landed on `main`, so its entries predate it.
+Next: 11 Inventory.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10 pass 4, PR #2411), preserved for history</summary>
+
 **Feature 10 (Documents & legal, pass 4)** — PR
 [#2411](https://github.com/thegspiro/the-logbook/pull/2411), branch
 `claude/security-review-documents-legal-pass4` (new name; `claude/security-
@@ -186,6 +200,8 @@ Superseded history below as merged, and keeping this PR (#2411, genuinely
 still open) as the current entry.
 
 Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408/#2413, merged), preserved for history</summary>
@@ -11712,7 +11728,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -11744,6 +11760,26 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4)'s PR #2411 merged
+
+Ten fixes across the original commit and six further rounds of Codex review
+on the PR's own commits, finding gaps in the prior fixes each time — see the
+prior Log entries below for each round's detail. 17/17 CI checks green on
+the final head, `mergeable_state: clean`, every actionable review thread
+resolved. Squash-merged as `070a28c2c`.
+
+The one thread left open rather than resolved: a P1 Codex finding on the
+final commit asking to remove this PR's two pre-freeze `CHANGELOG.md`
+sections, reading their position below the freeze notice (a mechanical
+consequence of merging `main` in) as new entries added after the freeze.
+Stood down on, citing `CLAUDE.md`/`AGENTS.md`'s own explicit rule that a
+branch opened before the 2026-09-08 freeze keeps its entries and a merge
+resolves by keeping both sides, never deleting existing content — this PR
+opened at 19:27 UTC on 2026-09-08, before the freeze commit landed on
+`main` later the same day, so it is exactly that case.
+
+Feature 10 is now fully closed for this pass. Next: 11 Inventory.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 7) — 1 fixed, the DOC-28 predicate gap replicated into two siblings (Codex review of PR #2411's round-5 commit)
 

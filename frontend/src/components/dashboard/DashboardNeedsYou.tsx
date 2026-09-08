@@ -80,7 +80,7 @@ const DashboardNeedsYou: React.FC<DashboardNeedsYouProps> = ({ items }) => {
           Needs you
         </h2>
         <span
-          className="bg-theme-alert-danger-icon inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white tabular-nums"
+          className="bg-theme-alert-danger-icon inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white tabular-nums dark:text-slate-950"
           aria-label={`${items.length} item${items.length === 1 ? '' : 's'} need your attention`}
         >
           {items.length}

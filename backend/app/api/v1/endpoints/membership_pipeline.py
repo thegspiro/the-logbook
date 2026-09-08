@@ -535,7 +535,15 @@ async def add_step(
         step = await service.add_step(
             str(pipeline_id),
             current_user.organization_id,
-            data.model_dump(),
+            # exclude_unset, as update_step already does, so a field the client
+            # left out arrives absent rather than as the schema's default.
+            # add_step places a stage with no sort_order after the last one;
+            # dumping the default 0 instead told it the caller had asked for
+            # position 0, and on a pipeline whose live stages start at 5 that
+            # is not even a collision — the new stage silently went first.
+            # Every other field add_step reads has the same fallback here as
+            # the schema declares, so nothing else changes shape.
+            data.model_dump(exclude_unset=True),
         )
     except ValueError as e:
         raise HTTPException(

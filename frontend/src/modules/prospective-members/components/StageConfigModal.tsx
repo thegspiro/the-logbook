@@ -4,7 +4,7 @@
  * Modal for configuring a pipeline stage's type and requirements.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useDialog } from '../../../hooks/useDialog';
 import { DialogPortal } from '../../../components/DialogPortal';
@@ -70,7 +70,6 @@ interface StageConfigModalProps {
   onClose: () => void;
   onSave: (stage: PipelineStageCreate) => void;
   editingStage?: PipelineStage | null;
-  existingStageCount: number;
 }
 
 const STAGE_TYPE_OPTIONS: { value: StageType; label: string; icon: React.ElementType; description: string }[] = [
@@ -297,13 +296,7 @@ const STAGE_PRESETS: StagePreset[] = [
   },
 ];
 
-export const StageConfigModal: React.FC<StageConfigModalProps> = ({
-  isOpen,
-  onClose,
-  onSave,
-  editingStage,
-  existingStageCount,
-}) => {
+export const StageConfigModal: React.FC<StageConfigModalProps> = ({ isOpen, onClose, onSave, editingStage }) => {
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
 
   const tz = useTimezone();
@@ -327,6 +320,13 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+
+  // One save per open — see handleSave. A ref rather than state because the
+  // guard has to hold within the click that sets it, before any re-render.
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    if (isOpen) submittedRef.current = false;
+  }, [isOpen]);
 
   // Fetch published forms when the modal opens
   useEffect(() => {
@@ -611,6 +611,12 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   };
 
   const handleSave = () => {
+    // onSave fires the create request and returns before it lands, so a second
+    // click that reaches the handler before this modal unmounts posts the stage
+    // twice — which is how a pipeline ends up with two identically named
+    // columns. One save per open.
+    if (submittedRef.current) return;
+
     const found = validate();
     if (Object.keys(found).length > 0) {
       // The offending field's message renders beside the field, which on a
@@ -644,13 +650,19 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       description: description.trim() || undefined,
       stage_type: stageType,
       config: finalConfig,
-      sort_order: editingStage ? editingStage.sort_order : existingStageCount,
+      // An edit keeps the stage where it is. A new stage carries no order at
+      // all and the server appends it: numbering from the count of existing
+      // stages collided with a live stage as soon as any earlier stage had
+      // been deleted, and two stages sharing a sort_order make both the column
+      // order and the destination of an advance arbitrary.
+      ...(editingStage ? { sort_order: editingStage.sort_order } : {}),
       is_required: isRequired,
       inactivity_timeout_days: hasTimeoutOverride ? timeoutOverrideDays : null,
       notify_prospect_on_completion: notifyProspect,
       public_visible: publicVisible,
     };
 
+    submittedRef.current = true;
     onSave(stageData);
     onClose();
   };

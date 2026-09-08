@@ -60,11 +60,14 @@ const Welcome: React.FC = () => {
   // Show a brief loading state while we check onboarding status
   if (checking) {
     return (
-      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+      <main
+        id="main-content"
+        className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+      >
         <div className="text-center">
           <div className="border-theme-accent-red mb-4 inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4"></div>
         </div>
-      </div>
+      </main>
     );
   }
 

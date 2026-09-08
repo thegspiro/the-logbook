@@ -16,7 +16,7 @@ prospective member's stage.
 - **Self-Hostable** — Point the integration at Cal.com Cloud or your own `https://<host>/api/v1`
 - **View Bookings** — A **Bookings** panel on the Cal.com card lists upcoming bookings (title, attendee, time, status) pulled from the connected account
 - **Pipeline Self-Scheduling Stage** — A **Meeting** pipeline stage can present a Cal.com booking link; applicants see a **Schedule** button on their public status page
-- **Auto-Advance on Booking** — With a webhook secret configured, a new booking advances the matching prospect's stage automatically, correlated by the attendee's email
+- **Auto-Advance on Attendance** — With a webhook secret configured and the Cal.com webhook subscribed to `MEETING_ENDED`, a finished meeting advances the matching prospect's stage automatically, correlated by the attendee's email
 - **Secure Inbound Webhook** — Rate-limited, HMAC-verified, audit-logged receiver mirroring the Salesforce webhook
 
 ---
@@ -56,8 +56,8 @@ POST   /api/public/v1/webhooks/calcom/{integration_id}   # Booking-event receive
 Unauthenticated by design. Rate limited (30 requests/minute per IP) and verified
 against the per-integration `webhook_secret` via an HMAC-SHA256 body signature in
 the `X-Cal-Signature-256` header. An integration with **no** webhook secret
-rejects all inbound payloads. Only `BOOKING_CREATED` events advance a stage;
-other triggers are acknowledged and ignored.
+rejects all inbound payloads. Only `MEETING_ENDED` events advance a stage; all
+other triggers — `BOOKING_CREATED` among them — are acknowledged and ignored.
 
 ---
 
@@ -66,13 +66,21 @@ other triggers are acknowledged and ignored.
 1. A coordinator sets a **Meeting** stage's scheduling method to _Cal.com_ and
    pastes the booking link.
 2. The applicant books a time via that link using the email they applied with.
-3. Cal.com posts a `BOOKING_CREATED` event to the callback URL.
+3. The meeting takes place, and Cal.com posts a `MEETING_ENDED` event to the
+   callback URL.
 4. The Logbook verifies the HMAC signature, then matches the attendee's email to
    an **active** prospect whose **current** stage is a Cal.com-backed meeting
    stage, and completes that stage — advancing the applicant.
 
 Correlation is by attendee email; no live Cal.com API call is required to close
 the loop.
+
+> **Subscribe `MEETING_ENDED`, not `BOOKING_CREATED`.** The receiver used to
+> advance on `BOOKING_CREATED`, which is a booking rather than attendance: an
+> applicant who picked a slot three weeks out advanced the moment they picked
+> it, off a stage whose own setting reads "auto-advance when attendance is
+> recorded". Add `MEETING_ENDED` to the Cal.com webhook's triggers, or the
+> stage will wait for a coordinator to advance it by hand.
 
 ---
 
@@ -104,9 +112,9 @@ Secret values (`api_key`, `webhook_secret`) are stored in the encrypted
 | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Webhook received with no secret configured                      | Rejected with 401 — the endpoint never trusts unverified payloads      |
 | Signature mismatch                                              | Rejected with 401; logged                                              |
-| `BOOKING_CREATED` for an email with no matching active prospect | Acknowledged; no stage advanced (normal, non-error)                    |
+| `MEETING_ENDED` for an email with no matching active prospect   | Acknowledged; no stage advanced (normal, non-error)                    |
 | Matching prospect's current stage isn't a Cal.com meeting stage | Acknowledged; not advanced                                             |
-| Non-creation trigger (cancelled, rescheduled)                   | Acknowledged and ignored                                               |
+| Any other trigger (`BOOKING_CREATED`, cancelled, rescheduled)   | Acknowledged and ignored — a booking is not attendance                 |
 | Bookings fetch fails upstream                                   | `GET /integrations/calcom/bookings` returns 502 with a sanitized error |
 | Self-hosted base URL points at a private/internal address       | Rejected at save time by SSRF URL validation                           |
 
