@@ -64,16 +64,28 @@ const EventCheckInMonitoringPage: React.FC = () => {
     try {
       setError(null);
       const data = await eventService.getCheckInMonitoring(eventId);
-      // The two activity lists are rendered unguarded below (`.length`,
-      // `.map`), and `api.get<T>` asserts the response shape rather than
-      // verifying it — so a payload that is valid JSON but not this type took
-      // the page down through the ErrorBoundary. Normalizing at the boundary
-      // keeps that invariant in one place rather than at every read.
-      setStats({
-        ...data,
-        recent_check_ins: Array.isArray(data?.recent_check_ins) ? data.recent_check_ins : [],
-        early_check_ins: Array.isArray(data?.early_check_ins) ? data.early_check_ins : [],
-      });
+      // `api.get<T>` asserts the response shape rather than verifying it, and
+      // the two activity lists are read unguarded below (`.length`, `.map`), so
+      // a payload that is valid JSON but not this type took the page down
+      // through the ErrorBoundary.
+      //
+      // Rejected rather than patched up. Filling in empty lists still leaves
+      // every scalar undefined, and the page then renders blank totals, a bare
+      // "%", an inactive check-in badge and "N/A" event times as though that
+      // were the live picture — worse than an error for the officer working the
+      // door from it. The `catch` below already has an error state; this hands
+      // the failure to it.
+      const complete =
+        !!data &&
+        Array.isArray(data.recent_check_ins) &&
+        Array.isArray(data.early_check_ins) &&
+        typeof data.total_checked_in === 'number' &&
+        typeof data.total_eligible_members === 'number' &&
+        typeof data.check_in_rate === 'number';
+      if (!complete) {
+        throw new Error('The check-in monitoring service returned an unexpected response.');
+      }
+      setStats(data);
       setLastUpdated(new Date());
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load monitoring data'));

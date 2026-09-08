@@ -82,6 +82,13 @@ const ADVISORY_BUDGET: Record<string, number> = {
 const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/dashboard': 9,
   '/members/admin': 3,
+  // Both render substantive bodies now that helpers.ts serves them a
+  // correctly shaped payload; before, each measured an empty state.
+  // 2, not 1: raising the warning badge to amber-800 cleared its AA failure
+  // (4.47:1) and left it AAA-only (6.31:1), which is where the other two
+  // severity badges already sit. Call sites are held to AA by policy.
+  '/admin/audit-log': 2,
+  '/events/1/monitoring': 1,
   '/scheduling/admin/closeout': 5,
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,

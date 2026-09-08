@@ -294,14 +294,33 @@ const MedicalSuppliesPage: React.FC = () => {
               // `expiring.map` as a non-array and took the whole page down
               // through the ErrorBoundary — the failure a phone actually sees
               // when station Wi-Fi answers 200 with a portal page.
-              setItems(Array.isArray(data.items) ? data.items : []);
+              //
+              // Rejected rather than emptied, here and for the two lists below.
+              // Substituting `[]` marks the section loaded, clears its error and
+              // renders "Nothing expiring" over stock that may well be expiring;
+              // throwing hands it to the section's own error and stale-data
+              // handling, which is already built for exactly this.
+              if (!Array.isArray(data.items)) {
+                throw new Error('The supply table service returned an unexpected response.');
+              }
+              setItems(data.items);
               setItemPage({ total: data.total, skip: data.skip, limit: data.limit });
               // Stamped from this closure's own values, not from the render's
               // `filterKey`: those are what the request actually asked for.
               setItemsFilterKey(requestedFilterKey);
             }
-            if (section === 'categories') setCategories(Array.isArray(value) ? (value as InventoryCategory[]) : []);
-            if (section === 'expiring') setExpiring(Array.isArray(value) ? (value as ExpiringLot[]) : []);
+            if (section === 'categories') {
+              if (!Array.isArray(value)) {
+                throw new Error('The category list service returned an unexpected response.');
+              }
+              setCategories(value as InventoryCategory[]);
+            }
+            if (section === 'expiring') {
+              if (!Array.isArray(value)) {
+                throw new Error('The expiring stock service returned an unexpected response.');
+              }
+              setExpiring(value as ExpiringLot[]);
+            }
           } catch (reason: unknown) {
             if (superseded()) return;
             if (section === 'items' && controller?.signal.aborted) return;

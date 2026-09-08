@@ -24,7 +24,10 @@ import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
   info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
-  warning: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  // amber-800, not amber-700: the tint blends to #fef0da over white, where
+  // amber-700 measures 4.47:1 — under the 4.5:1 floor by a hair, on a 12px
+  // badge. The blue and red rows clear it at -700 (5.64:1, 5.32:1) and stay.
+  warning: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
   critical: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
 };
 
@@ -71,17 +74,23 @@ const AuditLogPage: React.FC = () => {
       // `api.get<T>` asserts the wire format rather than verifying it, so a
       // response that is merely well-formed JSON — a captive portal on station
       // Wi-Fi, a proxy error page, an endpoint mid-rename — arrives typed as
-      // AuditLogStats with every field undefined. Normalizing here keeps the
-      // two tallies below (`Object.keys(by_category)`, `by_severity.critical`)
-      // reading real objects; without it the page died through the
-      // ErrorBoundary instead of rendering an empty log.
-      setEntries(Array.isArray(list?.logs) ? list.logs : []);
-      setTotal(typeof list?.total === 'number' ? list.total : 0);
-      setStats({
-        total: statsData?.total ?? 0,
-        by_severity: statsData?.by_severity ?? {},
-        by_category: statsData?.by_category ?? {},
-      });
+      // AuditLogStats with every field undefined, and reading it unchecked took
+      // the page down through the ErrorBoundary.
+      //
+      // Rejected rather than emptied. Substituting `[]` and `{}` would render
+      // "No audit events found" over a broken endpoint, which tells an
+      // administrator the security log is clear at the moment it cannot be
+      // read — the one wrong answer this page must never give. Throwing puts
+      // the failure in the error state below, where it stays visible.
+      if (!Array.isArray(list?.logs)) {
+        throw new Error('The audit log service returned an unexpected response.');
+      }
+      if (!statsData?.by_category || !statsData.by_severity) {
+        throw new Error('The audit log statistics service returned an unexpected response.');
+      }
+      setEntries(list.logs);
+      setTotal(typeof list.total === 'number' ? list.total : 0);
+      setStats(statsData);
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load audit log'));
     } finally {
