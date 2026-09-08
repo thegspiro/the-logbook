@@ -11,7 +11,7 @@ from typing import List, Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
@@ -32,30 +32,68 @@ class DocumentService:
     async def initialize_system_folders(
         self, organization_id: UUID, created_by: UUID
     ) -> List[DocumentFolder]:
-        """Create system folders for an organization if none exist"""
-        existing = await self.db.execute(
-            select(func.count(DocumentFolder.id))
+        """Create any system folders for an organization that don't exist yet"""
+        # Locked before the existence check so this can't race
+        # DocumentsService.ensure_member_folder's own organization-row lock
+        # (Codex review, PR #2411): both are get-or-create paths that can
+        # independently insert the "members" system folder, and with no
+        # uniqueness constraint behind (organization_id, slug), a concurrent
+        # first documents.py visit and a concurrent minutes publish could
+        # each observe zero system folders and both create a full set,
+        # leaving a duplicate "members" root that doesn't contain the
+        # member's already-created personal folder.
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
+        # Codex review, PR #2411: locking the organization row above is not
+        # sufficient on its own (Pitfall #27's second half). publish_minutes
+        # already reads a folder via get_folder_by_slug before calling this
+        # method, which under this app's default REPEATABLE READ establishes
+        # the transaction's snapshot before the lock above is acquired. A
+        # plain read here would still answer from that earlier snapshot and
+        # could report zero system folders even though a concurrent
+        # ensure_member_folder already created and committed one while this
+        # transaction waited for the lock. Making this a locking read forces
+        # a current read, not the transaction's original snapshot.
+        #
+        # Reading slugs rather than a bare count (Codex review, round 2):
+        # ensure_member_folder's own get-or-create only ever inserts the
+        # single "members" definition, never the full SYSTEM_FOLDERS set --
+        # "some system folder exists" is not the same fact as "every system
+        # folder exists". Short-circuiting on any nonzero count let a member
+        # visiting their Documents folder before anyone had ever published
+        # minutes silently starve every other system folder: the next
+        # publish_minutes call found "members" already present, returned
+        # without creating "meeting-minutes", and failed with a
+        # RuntimeError. Reconciling against the missing slugs instead of an
+        # all-or-nothing create fixes this for every caller, not only the
+        # race that surfaced it.
+        existing_result = await self.db.execute(
+            select(DocumentFolder.slug)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.is_system.is_(True))
+            .with_for_update()
         )
-        if (existing.scalar() or 0) > 0:
-            return await self.list_folders(organization_id)
+        existing_slugs = set(existing_result.scalars().all())
+        missing_defs = [d for d in SYSTEM_FOLDERS if d["slug"] not in existing_slugs]
 
-        folders = []
-        for folder_def in SYSTEM_FOLDERS:
-            folder = DocumentFolder(
-                organization_id=str(organization_id),
-                created_by=str(created_by),
-                is_system=True,
-                **folder_def,
-            )
-            self.db.add(folder)
-            folders.append(folder)
+        if missing_defs:
+            for folder_def in missing_defs:
+                folder = DocumentFolder(
+                    organization_id=str(organization_id),
+                    created_by=str(created_by),
+                    is_system=True,
+                    **folder_def,
+                )
+                self.db.add(folder)
+            await self.db.commit()
 
-        await self.db.commit()
-        for f in folders:
-            await self.db.refresh(f)
-        return folders
+        return await self.list_folders(organization_id)
 
     async def list_folders(
         self, organization_id: UUID, parent_id: Optional[str] = None

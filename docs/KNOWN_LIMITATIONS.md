@@ -2470,19 +2470,39 @@ response envelope this screen currently expects (full `drafts`/`history`
 arrays inline per document type), a frontend-contract change rather than a
 drop-in. (Security review DOC-8, `docs/security-review/DOC-10-documents-legal.md`.)
 
-## Documents — Folder Listing Is Unbounded and N+1 (2026-08-25)
+## Documents — Folder Listing Is Unbounded and N+1 (2026-08-25) — Partially resolved 2026-09-07; the ACL scan behind it is still unbounded
 
 `get_folders` (`documents_service.py`) loads every folder at a given level
 (root, or under one `parent_id`) with no `LIMIT`, then issues one additional
 `func.count` query per folder to populate its document count — N+1, not just
 unpaginated. Access control is sound — org-scoped and filtered through the
-same folder-visibility rules the listing enforces — so this is a scaling
+same folder-visibility rules the listing enforces — so this was a scaling
 concern, not a leak: any `documents.manage` holder can create folders with no
-per-org cap, so both the row count and the query count grow with however many
-folders a department has created, with no ceiling.
+per-org cap, so both the row count and the query count grew with however many
+folders a department had created, with no ceiling.
 
-Not fixed for the same reason as the entries above and below: pagination is a
-response-envelope/frontend-contract change, not a drop-in. (Security review
+**The N+1-per-folder part is resolved** by facilities-module work (landed
+independently of this rotation; re-verified by security review DOC-10 pass
+4): `get_folders` now takes `skip`/`limit`, runs one `func.count` for the
+total plus one grouped subquery for the whole page's document counts — never
+a query per folder — and `FoldersListResponse` carries `skip`/`limit`
+alongside `total`. `GET /documents/folders` passes pagination through from
+the request. Covered by `tests/test_documents_access.py::TestFolderListing`,
+which asserts exactly 3 queries regardless of how many folders a level
+holds.
+
+**Still unbounded, and not touched by the above** (Codex review of security
+review DOC-10 pass 4, PR #2411): every call to `get_folders` first calls
+`accessible_folder_ids`, whose own query (`documents_service.py`) selects
+and materializes **every folder in the organization** with no `LIMIT`, then
+computes access per folder in a loop, before the paginated listing query
+even runs. The `skip`/`limit` above bounds only the page returned to the
+caller — memory and per-request row-processing cost for this access-scope
+computation still grows without limit as an organization accumulates
+folders. `accessible_folder_ids` is shared by every folder- and
+document-listing/aggregate path in this service (`get_folders`,
+`get_summary`, and others), so fixing it is a wider change than this
+finding's own scope — left open rather than fixed here. (Security review
 DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
 
 ## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)
