@@ -1165,7 +1165,10 @@ class FinanceService:
                     "entity_type": row.entity_type.value,
                     "entity_id": row.entity_id,
                     "entity_title": row.title,
-                    "entity_amount": float(row.amount),
+                    # Decimal straight through -- PendingApprovalResponse
+                    # types this Decimal; a float round-trip here would be a
+                    # needless precision hazard for no benefit.
+                    "entity_amount": row.amount,
                     "requester_name": requester_name,
                     "step_name": row.step_name,
                     "step_order": row.step_order,

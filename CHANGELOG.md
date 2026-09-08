@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The budget summary and approval-chain preview always returned "not found" (2026-09-08)
+
+**Fixed**
+
+- **The finance module's budget summary and approval-chain preview endpoints
+  never worked.** Both were registered after a same-shaped `/{id}` route in
+  the API, so every request to them was intercepted by the by-id lookup
+  instead — with the fixed word ("summary", "preview") treated as an id that
+  never matched a real record, always answering "not found." Reordering the
+  routes makes both reachable; a test now fails if either is ever shadowed
+  again. Previewing an approval chain for parameters that genuinely match
+  none now correctly answers "not found" rather than a generic server error.
+
 ### A department store manager can no longer settle their own order's balance (2026-09-08)
 
 **Security**
