@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2413 (Feature 08, Membership pipeline, pass 5, MP-29 round 4
+— cancellation-detection and stale-docstring fixes on top of #2408) merged
+clean, 17/17 CI checks green, its one Codex thread resolved. Feature 08 is
+now fully closed across all rounds (MP-27 via #2405, MP-28 via #2406,
+MP-29 and its four Codex-review rounds via #2408 and #2413). Next: 10
+Documents & legal.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408/#2413), preserved for history</summary>
+
 **Feature 08 (Membership pipeline, pass 5, MP-29)** — PR
 [#2408](https://github.com/thegspiro/the-logbook/pull/2408), branch
 `claude/security-review-membership-pipeline-mp29`. PR #2406 (MP-28, the
@@ -71,6 +81,8 @@ one finishing — a mild "one PR at a time" violation caused by the pointer
 only updating on merge, not on open, not this session's to fix. Feature 09
 is therefore already done; next feature once _this_ PR merges is 10
 (Documents & legal, confirmed by `main`'s own post-#2409-merge pointer).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, pass 4, PR #2409, merged out of turn while #2408 was still open), preserved for history</summary>
@@ -11556,6 +11568,27 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5)'s PR #2413 merged — feature fully closed
+
+PR #2408 merged mid-fix (as #2406 had before it), so its last two Codex
+findings landed in a follow-up, #2413: (1) preserving `bulk_task`'s
+original failure instead of burying it behind a 10s timeout when the task
+raised before reaching its pause point (same fix already applied to the
+sibling `writer_task` case), and (2) correcting the class docstring's
+claimed pre-fix failure mechanism a second time to match the code's
+current wait logic. A fifth Codex round on #2413 itself then found the
+cancellation-detection flag in both `finally` blocks missed the case where
+`asyncio.wait_for(task, timeout=10)`'s own internal timeout cancels the
+task before this code ever sees it not-done — fixed by checking
+`task.cancelled()` after the task has settled, covering both self-
+initiated and `wait_for`-initiated cancellation. Codex's next review pass
+on the fix found nothing further. PR #2413 merged fully green (17/17 CI
+checks, `mergeable_state: clean`), its one review thread resolved.
+
+Feature 08's pass 5 is now completely closed across every round: MP-27
+(#2405), MP-28 (#2406), MP-29 and its four Codex-review rounds (#2408,
+#2413). **Open PR** row cleared. Next: 10 Documents & legal.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 rounds 3-4) — 4 more test-robustness fixes (Codex review of PR #2408)
 
