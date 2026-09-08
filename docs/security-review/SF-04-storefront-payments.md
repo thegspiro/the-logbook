@@ -1,6 +1,254 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-08 (pass 4) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 4 (2026-09-08) — one real finding: a fourth self-settlement path SF-6 didn't reach
+
+**Scope, using the same `git diff`-between-tree-states method pass 3 used, for
+the same reason.** Diffed pass 3's own closing merge (`59b8ccff1`, PR #2138)
+against current `HEAD` (`d03530fce`) across the full domain pass 3 established:
+`storefront.py`, `storefront_service.py`, `storefront_notification_service.py`,
+`email_templates_storefront.py`, `storefront_preview_service.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`, `utils/embroidery.py`, the
+entire `frontend/src/modules/storefront/` tree, and every migration whose
+filename or content matches storefront/embroidery/personalization/thread/grant
+terms.
+
+**Backend, real changes:** `storefront.py` (+8 — a new `exclude_cancelled`
+query parameter on `list_orders`) and `storefront_service.py` (+10 — the same
+parameter threaded into the query, plus one new filter clause). Both read in
+full; the filter is additive to an already org-scoped query
+(`StoreOrder.organization_id == organization_id` is already a `list_orders`
+predicate this diff does not touch) and introduces no new by-id access.
+
+**Frontend, real changes, all one feature: the admin console moved into
+Inventory Administration and adopted the shared `AdminHubFrame`.**
+`routes.tsx` (path moved `/store/admin` → `/inventory/admin/store`, with an
+unwrapped `<Navigate>` redirect kept at the old address — same shape as every
+other redirect in the app: the target route still carries
+`requiredPermission="storefront.manage"` and the storefront module gate, so
+refusing at the redirect would only change which page says no, not who gets
+in). `StoreAdminPage.tsx` (310-line rewrite onto `AdminHubFrame` /
+`AdminMetricsSettings`, tab state moved into `?tab=`), `StoreOrdersTab.tsx` /
+`StorePaymentsTab.tsx` (small additions wiring the new `excludeCancelled`
+filter and an `onChanged` call on dismiss), `services/api.ts` (+2, the
+`excludeCancelled` param mirrored to match the backend). All read in full,
+alongside their test-file diffs (`StoreAdminPage.test.tsx` +197,
+`routes.test.tsx`, `StoreOrdersTab.test.tsx`, `StorePaymentsTab.test.tsx`) —
+the tests cover the redirect, the module gate at the new path, the
+`Object.prototype.hasOwnProperty` guard against a `?payment=toString`
+prototype-chain hit, and the loading-state guard on the "back to Inventory"
+link (`isModuleOn` reports every module on while a lookup is in flight, so the
+link is suppressed until it resolves, mirroring `ProtectedRoute`'s own module
+gate).
+
+**Shared dependency this feature now calls for the first time, reviewed for
+what it actually does with storefront data:** `app/services/admin_hub_service.py`
+(not itself in this feature's domain — it is feature 32's, `admin_hub.py` /
+`Locations & kiosk` — but `StoreAdminPage`'s new headline metrics and
+"Needs attention" queue are read from it, so the storefront-specific code
+inside it is in scope here). Read `_storefront_attention` and all six
+`MetricSpec` resolvers (`_store_open_orders`, `_store_awaiting_payment`,
+`_store_outstanding_balance`, `_store_pending_verification`,
+`_store_ready_for_pickup`, `_store_active_products`) in full: every query
+filters `organization_id` from `MetricContext` (itself built from
+`user.organization_id`, never a client-supplied value), and the
+`_store_pending_verification_criteria`/`_store_open_orders_criteria` helpers
+those resolvers share are the same predicate the endpoint layer uses, not a
+re-derivation of it (the shape Pitfall #29 warns about). The endpoint layer
+(`admin_hub.py`) resolves `spec.permission` (`"storefront.manage"`) before any
+of this code runs, and refuses an unknown or unauthorized module with a bare
+404 rather than a 403 — deliberately, per its own docstring, so a caller who
+may not administer Training cannot learn from this endpoint whether the
+department runs it. `AdminHubFrame.tsx`'s own diff this window (+53, a
+`summary` opt-out flag for hubs with mixed administrator types, a
+`breadcrumbs` override, and an `attention ?? []` defensive fallback) does not
+change anything storefront's page passes into it. Not a full audit of
+`admin_hub_service.py` — that document is feature 32's — but the six
+resolvers and one attention function storefront's page actually exercises are
+now verified, not merely trusted.
+
+**Grant migration, reviewed as a false-positive the way pass 3's method
+already established.** The largest migration touching this domain since pass 3,
+`20260901_1320_f7b3c8d2e569_restore_seeded_position_grants.py` (1,875 lines),
+matches on `storefront.*`/`storefront.manage`/`storefront.order`/
+`storefront.view` dozens of times — but it is a general seeded-grant
+correction (the onboarding wizard's position editor was overwriting
+`DEFAULT_POSITIONS`' seeded permissions with a heuristic's answer on every
+department's first Continue; see its own docstring), not a storefront-specific
+schema or grant-policy change, and every hit is one more permission string
+inside a per-position stored-list literal the migration is restoring to what
+`DEFAULT_POSITIONS` already seeds. Already independently reviewed for its own
+domain by `ELEC-06`, `GF-22` and `MP-08`'s equivalent passes; storefront's own
+findings here treat it the same way MP-08 did — a false positive from a
+content grep, not a change to re-derive. The two storefront-specific grant
+backfill migrations that also changed
+(`a4f8c1b92d17_backfill_storefront_member_grants.py`,
+`b3e8d1f45a27_grant_corporate_storefront_access.py`) each gained only a
+corrected code comment (the `positions`-table-existence guard was defensive,
+not load-bearing — `positions` is in fact built by the migration chain, not
+by `create_all`, contrary to what the original comment claimed); no logic
+changed in either.
+
+### SF-7 — MED — `update_order_status` had its own, unguarded path to self-settle a payment — ✅ FIXED
+
+**What:** `mark_order_paid`, `waive_order_payment`, `refund_order` and
+`record_payment` (the shared engine all three delegate to, guarded directly
+since SF-6 closed the gap where it was reachable around the wrapper) all call
+`assert_different_person(actor_id, order.user_id, ...)` before touching the
+payment ledger. `update_order_status` has its own, independent branch that
+does the exact same ledger mutation — `payment_status = PAID`,
+`amount_paid = order.total`, `paid_at = now()` — whenever the caller advances
+an order's fulfillment `status` to `PAID`, and it carried none of the four
+siblings' guard.
+
+**Where:** `app/services/storefront_service.py:1774` (pre-fix; the
+`elif status == StoreOrderStatus.PAID and order.payment_status not in
+(PAID, WAIVED):` branch), reached from `POST /orders/{order_id}/status`
+(`storefront.py:1223`) and its bulk sibling
+`POST /orders/bulk-status` → `bulk_update_status` →
+`update_order_status` (`storefront.py:1503`, `storefront_service.py:2307`).
+
+**Failure scenario:** exactly the scenario SF-6's own write-up already named
+as plausible for a small department — a `storefront.manage` holder who also
+placed their own order. SF-6 closed the three settlement wrappers and the
+direct `record_payment` endpoint; this branch settles the same ledger through
+a fourth, separate method the earlier fix never touched. That caller calls
+`POST /orders/{their_own_order_id}/status` with `{"status": "paid"}` (a status
+value the schema accepts unconditionally — `PAID` is not one of the
+`_PAYMENT_GATED_STATUSES` this method already refuses to advance into without
+settlement, because this branch is not "advancing past a gate," it _is_ the
+settlement) and their own balance zeroes out, `paid_at` is stamped, and the
+order flips to `PAID` — with no money having moved and no second person
+involved. `bulk_update_order_status` reaches the identical branch per order in
+one call, so the same bypass works across an entire selection at once.
+
+**Impact:** MED — same class and severity as SF-6, which this is a direct
+continuation of: a control that closed three-and-a-half of what were, it now
+turns out, five paths into the same ledger mutation
+(`record_payment`/`mark_order_paid`/`waive_order_payment`/`refund_order`
+already guarded; `update_order_status` was not). Not a cross-tenant issue —
+`get_order` still resolves the order org-scoped before any of this runs — and
+not reachable by a member with no management grant. The risk is specifically
+the SF-6-documented overlap: a `storefront.manage` holder who is also a
+member placing personal orders through the same store.
+
+**Fix:** computed the settlement predicate once
+(`settles_payment = status == StoreOrderStatus.PAID and order.payment_status
+not in (PAID, WAIVED)`) and called `assert_different_person(actor_id,
+order.user_id, action="mark paid via a status update on", record="order")`
+under it, positioned before `order.status = status` — i.e. before any
+mutation, matching where the check sits in `record_payment` and
+`waive_order_payment`. `assert_different_person` no-ops when `actor_id` is
+`None`; no production caller passes `None` into `update_order_status` today
+(confirmed by grep — every caller is the endpoint layer, which always supplies
+`current_user.id`), but the exemption is part of the shared control and is
+tested here too so it holds if one ever does.
+
+**Guard tests** (`backend/tests/test_storefront_service.py`):
+`test_cannot_settle_your_own_order_via_status_update` (asserts
+`SeparationOfDutiesError` when `actor_id == order.user_id`, and that the order
+is left unmutated — status, payment status and `amount_paid` all unchanged —
+confirming the guard fires before any assignment, not merely before commit);
+`test_an_officer_may_settle_someone_elses_order_via_status_update` (a distinct
+actor still settles the order normally); `test_reconciliation_may_settle_via_status_update_with_no_actor`
+(the `actor_id=None` exemption holds here too). Verified red-then-green: ran
+the first test against the pre-fix method (`git stash` on
+`storefront_service.py` only) — `Failed: DID NOT RAISE
+SeparationOfDutiesError` — then restored the fix and reconfirmed all three
+green, alongside the full existing `-k storefront` suite (no test asserted
+same-actor behavior on this path before, so nothing needed updating).
+
+**No other findings.** The `exclude_cancelled` filter, the `AdminHubFrame`
+migration, and the grant-migration correction above are all reviewed and
+clean. Re-verified, unchanged since pass 3: 48/48 endpoints gated (route
+count and permission table re-enumerated independently below, not assumed
+from pass 1); all 7 `.ilike()` calls still pass `escape=LIKE_ESCAPE_CHAR`;
+`export_orders_csv` still uses `SafeCsvWriter`; zero raw SQL; `_price_lines`
+still prices every line from the catalog; PayPal webhook signature
+verification, replay guard and audit logging untouched.
+
+## Route inventory (re-enumerated this pass, not carried over)
+
+All 48 routes, permission dependency read directly from each handler's
+signature (not from a prior pass's table):
+
+| Method              | Path                                                                                                                         | Permission                                                 | Notes                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| GET                 | `/storefront`                                                                                                                | `storefront.view`                                          |                                                        |
+| POST                | `/orders`                                                                                                                    | `storefront.order`                                         |                                                        |
+| GET                 | `/orders/mine`                                                                                                               | `storefront.view`                                          | self-scoped (`user_id`)                                |
+| GET                 | `/orders/mine/{order_id}`                                                                                                    | `storefront.view`                                          | self-scoped                                            |
+| PATCH               | `/orders/mine/{order_id}/payment-method`                                                                                     | `storefront.view`                                          | self-scoped                                            |
+| POST                | `/orders/mine/{order_id}/report-payment`                                                                                     | `storefront.view`                                          | self-scoped                                            |
+| POST                | `/orders/mine/{order_id}/cancel`                                                                                             | `storefront.view`                                          | self-scoped                                            |
+| GET/PUT             | `/settings`                                                                                                                  | `storefront.manage`                                        |                                                        |
+| GET                 | `/settings/notifications/{notice}/preview`                                                                                   | `storefront.manage`                                        |                                                        |
+| POST                | `/settings/notifications/{notice}/test`                                                                                      | `storefront.manage`                                        | sends only to caller's own email                       |
+| GET/POST/PUT/DELETE | `/products*`, `/products/{id}/image`                                                                                         | `storefront.manage` (`GET .../image` is `storefront.view`) |                                                        |
+| GET/POST/PUT/DELETE | `/windows*` (9 routes)                                                                                                       | `storefront.manage`                                        |                                                        |
+| GET                 | `/dashboard`                                                                                                                 | `storefront.manage`                                        |                                                        |
+| GET                 | `/orders`, `/orders/export`, `/orders/{id}`                                                                                  | `storefront.manage`                                        |                                                        |
+| POST                | `/orders/{id}/status`, `/payments`, `/mark-paid`, `/waive`, `/refund`, `/cancel`, `/messages`, `bulk-payment`, `bulk-status` | `storefront.manage`                                        | SF-7 fix is on `/status` and `bulk-status`             |
+| PUT                 | `/orders/{id}/notes`                                                                                                         | `storefront.manage`                                        |                                                        |
+| GET                 | `/permissions`                                                                                                               | _(none — `get_current_user` only)_                         | deliberate self-probe, returns only caller's own flags |
+| GET                 | `/payments`, POST `/payments/{id}/apply`, `/ignore`                                                                          | `storefront.manage`                                        |                                                        |
+
+47/48 permission-gated; the one exception is the documented self-probe,
+unchanged since pass 1.
+
+## Schema & migration notes
+
+No storefront model or migration touched this pass. The two storefront grant
+migrations that changed carry a comment correction only (see above); the
+large cross-feature grant-restoration migration is reviewed above as a false
+positive.
+
+## Guard tests added
+
+| Test                                                               | Invariant asserted                                                                                                               |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `test_cannot_settle_your_own_order_via_status_update`              | `update_order_status` refuses to settle an order's own owner's balance to `PAID`, and leaves the order unmutated when it refuses |
+| `test_an_officer_may_settle_someone_elses_order_via_status_update` | The guard does not block a legitimate settlement by a different person                                                           |
+| `test_reconciliation_may_settle_via_status_update_with_no_actor`   | The `actor_id=None` exemption (for any future automated caller) holds on this path too                                           |
+
+## Completion gate
+
+| Check                                                                                                               | Result                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                       | ✅ 0 violations                                                                                                                   |
+| `black --check app/ tests/ alembic/`                                                                                | ✅ clean (1 file reformatted during this pass, re-verified clean after)                                                           |
+| `isort --check-only app/ tests/ alembic/`                                                                           | ✅ clean                                                                                                                          |
+| `python3 scripts/validate_migrations.py --strict`                                                                   | ✅ 438 revisions, single head (`1603bd9c59e7`)                                                                                    |
+| backend tests (scoped: `-k "storefront or payment"`)                                                                | ✅ 718 passed, 1 skipped (environment-only: `py_vapid` not installed)                                                             |
+| backend tests (full suite)                                                                                          | ✅ 11,835 passed, 21 skipped (all environment-only: optional deps, Docker daemon/registry unavailable, opt-in API-contract suite) |
+| cross-cutting guard tests (org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, endpoint-auth coverage) | ✅ 56 passed                                                                                                                      |
+| `npm run typecheck`                                                                                                 | ✅ 0 errors                                                                                                                       |
+| `npm run lint` (`eslint --max-warnings 10`)                                                                         | ✅ 0 errors, 2 pre-existing warnings (unrelated `CallTypeChips.tsx`, within budget) — see note below                              |
+| `vitest run src/modules/storefront/ src/components/admin/`                                                          | ✅ 205 passed (18 files)                                                                                                          |
+
+**Note on the frontend gate:** the first `npm run lint` in this pass's sandbox
+reported 1,116 warnings across ~20 files, all `@typescript-eslint/no-unsafe-*`
+on Node-API calls (`fs.readdirSync`, `path.join`, etc.) in test/integrity-check
+scripts unrelated to storefront. Root-caused before treating it as a finding:
+this worktree had no `node_modules` of its own, so npm's directory-walk-up
+resolution reached the shared checkout's root `node_modules` (present) but
+never its `frontend/node_modules/@types/node` (a workspace-hoisted location a
+level the walk-up does not pass through), leaving every `node:fs`/`node:path`
+import untyped for typescript-eslint's type-aware rules. Confirmed environment-only,
+not a code regression, three ways: (1) `@types/node` was genuinely absent from
+every `node_modules` directory physically inside this worktree; (2)
+yesterday's Feature 34 pass 4 (2026-09-07, same repository state modulo one
+day) recorded `eslint . 0 errors / 2 pre-existing warnings` from a normal
+checkout; (3) linking this worktree's `node_modules` to the shared checkout's
+(a local, gitignored, uncommitted fix — nothing checked in changes) reproduced
+that exact same 2-warning result immediately, both on the single previously-flagged
+file in isolation and on a full `npm run lint` run. Recorded here rather than
+silently rerun so the next pass over this file — or over any feature reviewed
+from a similarly bare worktree — isn't surprised by the same false signal.
 
 ---
 
