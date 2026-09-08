@@ -267,6 +267,41 @@ count), the two source-inspection ones confirmed to fail against the
 pre-fix code via a reverted-file check; plus a real-database idempotency
 test per method, both marked `@pytest.mark.integration`.
 
+### `PropertyReturnService._get_or_create_separations_folder`'s fast path locked, risking a deadlock against `initialize_system_folders` (Codex review of round 5's own fix) — ✅ FIXED
+
+**What:** `property_return_service.py`'s independent get-or-create for the
+"member-separations" system folder (from unrelated work that landed
+2026-09-07, before this PR) locks the folder row on _both_ reads — its
+fast path calls the same `with_for_update()` read as its post-organization-
+lock recheck. `initialize_system_folders`'s reconciliation (round 4)
+creates that same folder too when missing, correctly locking the
+organization row first.
+
+**Failure scenario:** a locking read matching no row takes a gap lock, and
+gap locks from different transactions are mutually compatible. A
+department's first property-return report racing its first minutes
+publish can have both transactions gap-lock the same absent folder row via
+their respective fast paths, then each block on what the other holds: the
+property-return transaction waits on the organization row, the
+reconciliation transaction waits on the same gap's insert-intention lock
+when it tries to create the folder. Neither can proceed — a genuine
+InnoDB deadlock. The identical shape independent facilities-module work
+already named and fixed as FAC-45; this method's own docstring already
+cited `ensure_facility_folder` as the pattern, but implemented "fast path"
+as a second locking read instead of a non-locking peek.
+
+**Fix:** added `_peek_separations_folder` (plain `SELECT`) for the fast
+path; the existing locking read, renamed `_lock_separations_folder`, is
+now reserved for the organization-locked slow path only — matching
+`ensure_facility_folder`/`ensure_apparatus_folder`/`ensure_member_folder`'s
+exact peek-then-lock shape.
+
+**Verified:** the file's existing guard test asserted all three reads
+locked, encoding the assumption this bug rested on. Rewritten as
+`test_fast_path_peek_does_not_lock`, asserting the first read has no
+`FOR UPDATE` and the other two still do; confirmed to fail against the
+pre-fix code and pass after.
+
 ### Re-verified still open, not re-flagged
 
 - **DOC-8** (`legal_service.py::list_revisions` unbounded — no
@@ -358,6 +393,11 @@ cases, rounds 2-4) and `tests/test_documents_access.py::
 TestEnsureApparatusAndEventFolderAreLocked` (4 cases, round 5) — see
 DOC-29 and the two additional findings above. Each source-inspection case
 independently confirmed to fail against its pre-fix code.
+`tests/test_property_return_service.py::TestSaveAsDocument::
+test_fast_path_peek_does_not_lock` (round 6, rewritten from the file's
+pre-existing `test_existence_checks_lock_their_rows`) — see the
+`PropertyReturnService` finding above; confirmed to fail against the
+pre-fix code via `git stash` of `property_return_service.py`.
 
 ## Next
 

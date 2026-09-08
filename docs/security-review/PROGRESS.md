@@ -24,7 +24,7 @@ documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
 out this pass).
 
-Eight fixes this pass — six added across four further rounds of Codex
+Nine fixes this pass — seven added across five further rounds of Codex
 review on this PR's own commits, finding gaps in the prior fixes:
 
 - **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
@@ -94,6 +94,34 @@ ensure_apparatus_folder`/`ensure_event_folder` (the on-demand creators
   (`tests/test_documents_access.py::TestEnsureApparatusAndEventFolderAreLocked`),
   the two source-inspection ones confirmed to fail pre-fix via a
   reverted-code check.
+- **`PropertyReturnService._get_or_create_separations_folder`'s fast path
+  used a locking read (MED, deadlock risk; Codex review of round 5's own
+  commit)** — round 4's reconciliation made `initialize_system_folders`
+  create the "member-separations" system folder too (it's in
+  `SYSTEM_FOLDERS`) whenever missing, taking the organization-row lock
+  _first_ and then a locking existence check — the correct order this
+  entire pass has been hardening every get-or-create into. But
+  `property_return_service.py`'s independent get-or-create for that same
+  folder (predates this pass, from separate `member-separations` work on
+  2026-09-07) did the reverse: its fast path called a _locking_ read
+  (`.with_for_update()`) on the folder row before ever touching the
+  organization row. A locking read matching no row takes a gap lock, and
+  gap locks from different transactions are mutually compatible — so a
+  first property-return report racing a first minutes-publish could each
+  gap-lock the missing folder row, then each block waiting for the other's
+  next lock (the organization row for one, the gap's insert-intention lock
+  for the other): a real InnoDB deadlock, not merely a slow path. This is
+  the FAC-45 shape exactly, and this file's own docstring for that method
+  already named `ensure_facility_folder` as the pattern to follow, but
+  implemented "fast path" as a second call to the _locking_ read instead of
+  a non-locking peek. Fixed by adding `_peek_separations_folder` (plain
+  `SELECT`, no `FOR UPDATE`) for the fast path and reserving the existing
+  locking read, renamed `_lock_separations_folder`, for the organization-
+  locked slow path only — matching `ensure_facility_folder`/
+  `ensure_apparatus_folder`/`ensure_member_folder`'s exact shape. The
+  existing guard test asserting all three reads locked was rewritten to
+  assert the fast-path peek does _not_ lock and the other two still do,
+  confirmed to fail against the pre-fix code.
 - **DOC-28 fast-path predicate re-check (MED, Codex review of this PR's
   DOC-29 commit)** — `ensure_member_folder`'s fast path locks the peeked
   personal folder by `_lock_folder_by_id`, which matches only the primary
@@ -11699,6 +11727,78 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 6) — 1 fixed, a lock-order deadlock in a different file (Codex review of PR #2411's round-5 commit)
+
+Codex reviewed round 5's apparatus/event locking fix and, while re-reading
+the reconciliation code it sits beside, found that `initialize_system_
+folders`'s reconciliation (round 4) also creates the "member-separations"
+system folder when missing — it's a `SYSTEM_FOLDERS` entry like any other
+— under the organization-row lock taken _first_, the correct order this
+whole pass has been standardizing on. `property_return_service.py`'s own,
+independent get-or-create for that same folder
+(`_get_or_create_separations_folder`, from unrelated `member-separations`
+work that landed 2026-09-07, before this PR) does the opposite order: its
+fast path called a _locking_ read (`.with_for_update()`) on the folder row
+before ever touching the organization row.
+
+**Why this is a real deadlock, not just a suboptimal lock order.** A
+locking read that matches no row takes a gap lock in InnoDB, and gap locks
+held by different transactions are mutually compatible with each other —
+so two concurrent first-time callers (a first property-return report
+racing a first minutes-publish, on a department that has never had either)
+can both gap-lock the same absent "member-separations" row via their
+respective fast paths. Each then tries to acquire what the other already
+holds: the property-return transaction blocks waiting for the organization
+row (held by the reconciliation transaction), while the reconciliation
+transaction blocks taking an insert-intention lock on the same gap
+(already held by the property-return transaction's gap lock) when it goes
+to create the folder. Neither can proceed — an actual InnoDB deadlock,
+which MySQL detects and resolves by killing one transaction's query with
+an error, not a race that merely picks a loser silently.
+
+This is the identical shape independent facilities-module work already
+named and fixed as FAC-45, and `_get_or_create_separations_folder`'s own
+docstring already cited `ensure_facility_folder` as the pattern being
+followed — it just implemented "fast path" as a second call to the locking
+read instead of a non-locking peek, missing the specific reason FAC-45's
+fast path has to be non-locking.
+
+**Fix:** added `_peek_separations_folder` (plain `SELECT`, no
+`with_for_update()`) for the fast path in `property_return_service.py`;
+the existing locking read (renamed `_lock_separations_folder`) is now
+reserved for the organization-locked slow path only, matching
+`ensure_facility_folder`/`ensure_apparatus_folder`/`ensure_member_folder`'s
+exact peek-then-lock shape.
+
+**Test:** the file's existing guard test,
+`test_existence_checks_lock_their_rows`, asserted all three reads in the
+method locked — encoding the very assumption this bug rested on. Rewrote
+it as `test_fast_path_peek_does_not_lock`, asserting the first read has no
+`FOR UPDATE` and the remaining two still do; confirmed to fail against the
+pre-fix code via `git stash` of `property_return_service.py` and pass
+after.
+
+Completion gate re-run: flake8/black/isort clean on both changed files;
+`pytest tests/test_property_return_service.py tests/test_documents_access.py
+tests/test_document_service.py tests/test_legal_documents.py
+tests/test_facility_folder_access.py tests/test_facilities_folders.py`
+215 passed; full backend suite unchanged in count from round 5 (no test
+added or removed — the guard test was rewritten in place, not added
+alongside).
+
+Separately, Codex also flagged (P1) that this PR's `CHANGELOG.md` carries
+two entries from before the file was closed to new entries on 2026-09-08 —
+correctly observing they sit below the freeze notice after a merge from
+`main`, but incorrectly reading that as new entries added after the
+freeze. Both CLAUDE.md and AGENTS.md state explicitly, for exactly this
+situation: "Branches opened before the freeze still carry entries...
+resolve the conflict by keeping both sides... Never delete existing
+changelog content." This PR opened at 19:27 UTC on 2026-09-08, before the
+freeze landed on `main` later the same day, so its own pre-freeze entries
+(added across rounds 1-4, before the freeze existed) are exactly the case
+that rule describes. Replied on the thread citing both documents rather
+than deleting the entries.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4, round 5) — 1 fixed, hardened two more get-or-creates (Codex review of PR #2411's round-4 commit)
 
