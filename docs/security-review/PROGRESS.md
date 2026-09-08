@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 07 (Users & organizations, pass 4)** — PR pending (branch
-`claude/security-review-users-organizations`, not yet pushed as of this
-edit — see the next PROGRESS.md update for the PR link). One fix this pass:
+**Feature 07 (Users & organizations, pass 4)** — PR
+[#2402](https://github.com/thegspiro/the-logbook/pull/2402), branch
+`claude/security-review-users-organizations`. One fix this pass:
 **USR-9 (MED)** — the property-return-drop notification email's fallback
 template (used whenever an organization hasn't customized its
 `MEMBER_DROPPED` email, which is most departments — `ensure_default_

@@ -1,6 +1,6 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), PR pending (pass 4)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2), [#2402](https://github.com/thegspiro/the-logbook/pull/2402) (pass 4)
 
 ---
 
