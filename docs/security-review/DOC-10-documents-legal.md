@@ -34,18 +34,19 @@ existence checks as locking reads — the same Pitfall #27 shape
 already-filed reports, and states its own irreversibility — restoring the
 disclosure — in the downgrade). Sound; not re-implemented here.
 
-### DOC-9 — MED — `get_folders` unbounded and N+1 — ✅ re-verified FIXED (external work, credited)
+### DOC-9 — MED — `get_folders` unbounded and N+1 — 🩹 partially fixed (external work, credited); the ACL scan behind it is still unbounded
 
-Previously flagged (pass 1) and re-verified still open as recently as pass 3. As of this pass it is fixed — not by this rotation, but as a byproduct of
-the facilities concurrency work described above, which needed `get_folders`
-to report accurate paginated counts for facility sub-trees. `get_folders`
-(`documents_service.py`) now takes `skip`/`limit`, runs exactly one
-`func.count` for the level's total and one `LEFT OUTER JOIN` against a
-grouped-by-`folder_id` subquery for the whole page's document counts —
-never a query per folder — and orders by `sort_order, name, id` so a tied
-sort key can't repeat or skip a row across pages. `GET /documents/folders`
-(`documents.py`) passes `PaginationParams` through, and
-`FoldersListResponse` now carries `skip`/`limit` alongside `total`.
+Previously flagged (pass 1) and re-verified still open as recently as pass 3. As of this pass the N+1-per-folder part is fixed — not by this rotation,
+but as a byproduct of the facilities concurrency work described above,
+which needed `get_folders` to report accurate paginated counts for facility
+sub-trees. `get_folders` (`documents_service.py`) now takes `skip`/`limit`,
+runs exactly one `func.count` for the level's total and one `LEFT OUTER
+JOIN` against a grouped-by-`folder_id` subquery for the whole page's
+document counts — never a query per folder — and orders by
+`sort_order, name, id` so a tied sort key can't repeat or skip a row across
+pages. `GET /documents/folders` (`documents.py`) passes `PaginationParams`
+through, and `FoldersListResponse` now carries `skip`/`limit` alongside
+`total`.
 
 Re-verified against current code, not the diff: read `get_folders` in full,
 confirmed the query shape does not regress to one count per folder, and ran
@@ -53,8 +54,22 @@ the existing `TestFolderListing` class
 (`tests/test_documents_access.py`), which asserts **exactly 3** `db.execute`
 calls for a 4-folder level regardless of page size — the specific assertion
 that would catch an N+1 regression, not merely a smoke test that the
-response shape is right. `docs/KNOWN_LIMITATIONS.md`'s "Documents — Folder
-Listing Is Unbounded and N+1" entry corrected to Resolved (see Doc updates).
+response shape is right.
+
+**Not fixed, and this pass's own `docs/KNOWN_LIMITATIONS.md` correction
+overclaimed it (Codex review of this PR):** `get_folders` calls
+`accessible_folder_ids` before running its own paginated query, and that
+method selects and materializes **every folder in the organization** with
+no `LIMIT`, computing access per folder in a loop. The `skip`/`limit` above
+bounds only the page handed back to the caller — the access-scope
+computation behind every call still costs memory and row-processing
+proportional to the organization's total folder count, unbounded. This
+pass's first edit to `docs/KNOWN_LIMITATIONS.md` marked the whole entry
+"✅ Resolved", which hid this remaining scaling problem; corrected to
+"Partially resolved" with both halves stated separately (see Doc updates).
+`accessible_folder_ids` is shared by every folder- and document-listing/
+aggregate path in this service, so bounding it is a wider change than this
+finding's own scope — left open, not fixed, here.
 
 ### DOC-28 — MED — `ensure_member_folder` was a get-or-create with no lock, reachable directly from a documents.py route — ✅ FIXED
 
@@ -110,13 +125,13 @@ nothing takes a gap lock, and many members' first-ever Documents-page visit
 root concurrency shape that produced FAC-45's reproducible deadlock.
 
 Covered by `tests/test_documents_access.py::TestEnsureMemberFolderIsLocked`
-(4 cases): a source-inspection test that the method plus its two locking-
-read helpers together take at least 3 `with_for_update()` reads (matching
-`test_facilities_folders.py::TestFolderCreationIsLocked`'s own technique for
-`ensure_facility_folder`); a source-inspection test that the fast path
-(before the organization lock) never itself takes a lock; a mocked-db test
-that the slow path's re-check returns a folder a concurrent request already
-committed rather than inserting a duplicate (mirroring
+(4 cases): a source-inspection test that the organization-row lock is taken
+on the slow path _and_ that the slow path calls the two locking helpers
+(`_lock_members_root`, `_lock_member_personal_folder`) by name rather than
+their non-locking `_peek_*` counterparts; a source-inspection test that the
+fast path (before the organization lock) never itself takes a lock; a
+mocked-db test that the slow path's re-check returns a folder a concurrent
+request already committed rather than inserting a duplicate (mirroring
 `test_property_return_service.py::test_reuses_folder_a_concurrent_drop_created`);
 and an end-to-end test against a real database asserting two calls for the
 same member return the same folder id and exactly one row exists. All 4
@@ -125,6 +140,59 @@ file (3 of 4 — the source-inspection pair and the mocked-race test; the
 real-database idempotency test passes both before and after, since the bug
 is a race, not an ordinary correctness defect the non-concurrent path would
 also trip).
+
+The first version of the locking-source-inspection test only counted
+`with_for_update()` occurrences across the combined source of the method
+and both helper _definitions_ (Codex review of this PR) — a regression that
+swapped a locking helper's call site for its non-locking `_peek_*`
+counterpart, leaving the now-unused locking helper's own definition in
+place, would have kept that count unchanged and stayed green while
+reintroducing the exact race this test exists to catch. Rewritten to check
+the slow path's source text calls the locking helpers by name instead.
+
+### DOC-29 — MED — `initialize_system_folders` could race `ensure_member_folder`'s new lock and still create a duplicate root (Codex review of this PR) — ✅ FIXED
+
+**What:** DOC-28's fix serializes `ensure_member_folder`'s own get-or-create
+of the `members` system folder behind an `Organization`-row lock, but that
+lock only ever competes with other callers that also take it.
+`DocumentService.initialize_system_folders` (`document_service.py`, a
+separate service class from `DocumentsService`, used only by
+`publish_minutes` when the `meeting-minutes` system folder doesn't exist
+yet) is the _other_ get-or-create for the same `members` folder — it counts
+existing `is_system` folders for the organization and, if none exist,
+inserts the entire `SYSTEM_FOLDERS` set unconditionally, with no lock at
+all.
+
+**Failure scenario:** a brand-new organization's first `POST
+/minutes/{id}/publish` (a leadership action, once the first meeting is
+approved) races a member's first `GET /documents/my-folder` in another
+request. Both observe zero system/`members` folders before either commits:
+`initialize_system_folders` inserts a full `SYSTEM_FOLDERS` set including
+its own `members` root, while `ensure_member_folder`'s locked slow path
+inserts a `members` root plus that member's personal folder under it. There
+is no uniqueness constraint on `(organization_id, slug)`, so both `members`
+rows persist. Whichever one a later query's deterministic ordering picks
+first may not be the one holding that member's personal folder, so a
+subsequent visit to `/documents/my-folder` can miss it and create a
+_second_ personal folder for the same member under the other `members` row
+— the identical downstream symptom DOC-28 fixed, reopened through a second
+creator DOC-28's own lock never reached.
+
+**Fix:** `initialize_system_folders` now takes the same `Organization`-row
+lock (`.with_for_update()`) before its existence check, participating in
+the same mutex `ensure_member_folder`'s slow path uses. Whichever of the
+two get-or-creates runs first now holds the lock for its whole
+check-then-insert, and the other blocks until it commits and releases —
+so the second one's existence check always sees the first one's rows.
+
+**Verified:** `flake8`/`black --check`/`isort --check-only` clean on
+`document_service.py`; full `pytest tests/` suite re-run clean after the
+change (including `test_property_return_service.py`'s and `test_
+documents_access.py`'s existing coverage of code paths that call
+`initialize_system_folders`/create system folders) — no test asserted this
+method runs outside a transaction that could deadlock against another
+`with_for_update()` holder, and none does (its only caller,
+`publish_minutes`, takes no other lock first).
 
 ### Re-verified still open, not re-flagged
 

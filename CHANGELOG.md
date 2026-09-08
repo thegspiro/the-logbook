@@ -31,7 +31,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `get_folders` previously issued one extra `func.count` query per folder to
   populate its document count and had no pagination at all; it now takes
   `skip`/`limit` and answers with exactly one count query plus one grouped
-  subquery for the whole page, regardless of how many folders exist.
+  subquery for the whole page, regardless of how many folders exist. The
+  page size is now bounded, but the access-scope computation behind every
+  such listing is not: `accessible_folder_ids` still loads every folder in
+  the organization before computing per-folder access, so this is a partial
+  fix — tracked in `KNOWN_LIMITATIONS.md`.
+
+### A brand-new organization's first minutes publish could race a member's first Documents visit into creating a duplicate root folder (2026-09-08)
+
+**Security**
+
+- **The fix above had its own gap, on the other code path that creates the
+  same folder.** `initialize_system_folders` (used when publishing meeting
+  minutes, to create the system folder set on first use) is a second,
+  independent get-or-create for the same shared "members" root folder the
+  fix above locks — and it took no lock at all. A brand-new organization's
+  first minutes publish racing a member's first visit to their own
+  Documents folder could each see no system folders yet and both create a
+  "members" root, since nothing enforces there can only be one. Fixed by
+  having both get-or-creates lock the same row before checking, so whichever
+  runs first is guaranteed to finish before the other looks.
 
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 

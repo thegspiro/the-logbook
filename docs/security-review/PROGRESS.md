@@ -24,7 +24,8 @@ documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
 each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
 out this pass).
 
-Two fixes this pass:
+Three fixes this pass (the third added after Codex review of this PR's own
+commit found two more gaps in the first two):
 
 - **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
   directly by `documents.py`'s own `GET /documents/my-folder`, was a
@@ -36,10 +37,37 @@ Two fixes this pass:
   work. 4 new guard tests
   (`tests/test_documents_access.py::TestEnsureMemberFolderIsLocked`),
   confirmed to fail pre-fix (3 of 4) via `git stash`.
-- **DOC-9 (MED)** — re-verified fixed. Previously flagged unbounded/N+1;
-  fixed as a byproduct of independent facilities-module concurrency work
-  landed since pass 3, re-verified sound against current code (not the
-  diff) rather than credited on faith.
+- **DOC-9 (MED)** — the N+1-per-folder half is fixed as a byproduct of
+  independent facilities-module concurrency work landed since pass 3,
+  re-verified sound against current code (not the diff). The remaining
+  half is **not** fixed and was initially overclaimed as fully resolved in
+  `KNOWN_LIMITATIONS.md` (Codex review of this PR's first commit,
+  corrected): `accessible_folder_ids`, called by every folder/document
+  listing path including `get_folders`, still materializes every folder
+  in the organization with no `LIMIT` before computing per-folder access —
+  the page-level `skip`/`limit` bounds only what's returned, not that
+  underlying scan. Left open, correctly labeled "Partially resolved".
+- **DOC-29 (MED, new, Codex review of this PR's own commit)** —
+  `DocumentService.initialize_system_folders` (`document_service.py`, a
+  separate service class, used by `publish_minutes`) is the _other_
+  get-or-create for an organization's `members` system folder, and DOC-28's
+  fix never reached it: a brand-new org's first minutes-publish racing a
+  member's first `/documents/my-folder` visit could each observe zero
+  system folders and both create a `members` root, since there's no
+  uniqueness constraint on `(organization_id, slug)` — reopening DOC-28's
+  exact symptom through a second, unlocked creator. Fixed by giving
+  `initialize_system_folders` the same organization-row lock. New guard
+  test (`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked`),
+  confirmed to fail pre-fix via `git stash`.
+
+Also on this PR's first commit, Codex found the new
+`TestEnsureMemberFolderIsLocked::test_locks_the_organization_row` guard
+test only counted `with_for_update()` occurrences across the method and
+both helper _definitions_ — which would stay green even if the slow path
+called a non-locking `_peek_*` helper instead of the locking one, since the
+now-unused locking helper's own definition still contains the string.
+Rewritten to check the slow path calls the locking helpers by name;
+verified the rewritten test fails when that exact regression is injected.
 
 DOC-8 (unbounded `list_revisions`) re-verified still open, not re-flagged.
 XC-4 (member-separations folder, an unrelated ad hoc security fix that
@@ -11604,6 +11632,73 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4 follow-up) — 2 fixed (Codex review of PR #2411's own commit)
+
+Codex reviewed PR #2411's first commit (`3b9015f`) and flagged three
+things, two of them real production/doc issues and one a test-rigor gap
+in this pass's own new guard test.
+
+**DOC-29 (MED, new, fixed).** `DocumentService.initialize_system_folders`
+(`document_service.py`) is the _other_ get-or-create for an organization's
+`members` system folder — `DocumentsService.ensure_member_folder`
+(`documents_service.py`, DOC-28 above) is the one this pass already
+locked. `initialize_system_folders` had no lock at all: it counts existing
+`is_system` folders and, if none exist, inserts the whole `SYSTEM_FOLDERS`
+set unconditionally. Its only caller is `publish_minutes`
+(`POST /minutes/{id}/publish`), so a brand-new organization's first
+minutes-publish racing a member's first `GET /documents/my-folder` could
+each observe zero system folders before either commits: one inserts a full
+`SYSTEM_FOLDERS` set (including its own `members` root), the other inserts
+a `members` root plus the member's personal folder under it. With no
+uniqueness constraint on `(organization_id, slug)`, both `members` rows
+persist, and a later deterministic-ordering pick of "the" `members` root
+can miss the one holding that member's folder — reopening DOC-28's exact
+symptom through a second, unlocked creator DOC-28's own lock never
+reached. Fixed by giving `initialize_system_folders` the same
+`Organization`-row `.with_for_update()` lock before its existence check,
+so both get-or-creates now serialize on the same mutex. New guard test
+(`tests/test_document_service.py::TestInitializeSystemFoldersIsLocked::
+test_locks_the_organization_row_before_the_existence_check`), confirmed to
+fail against the pre-fix code via `git stash` of `document_service.py`
+only.
+
+**DOC-9 correction (MED, doc fix).** This pass's own first commit had
+marked `docs/KNOWN_LIMITATIONS.md`'s "Documents — Folder Listing Is
+Unbounded and N+1" entry "✅ Resolved". Codex correctly flagged that as an
+overclaim: `get_folders` calls `accessible_folder_ids` before its own
+paginated query, and that method still selects and materializes **every
+folder in the organization** with no `LIMIT`, computing per-folder access
+in a loop — the `skip`/`limit` fixed this pass bounds only the page
+returned, not that underlying scan. Corrected `KNOWN_LIMITATIONS.md` and
+`DOC-10-documents-legal.md`'s DOC-9 write-up to state both halves
+separately: N+1-per-folder resolved, the `accessible_folder_ids` scan
+still unbounded and left open (shared by every folder/document listing
+path in the service, so bounding it is a wider change than this finding's
+scope).
+
+**Test-rigor gap (P2, fixed).** The new
+`TestEnsureMemberFolderIsLocked::test_locks_the_organization_row` guard
+test counted `with_for_update()` occurrences across the combined source of
+`ensure_member_folder` and its two locking-helper _definitions_ (>= 3).
+That stays green even if the slow path swapped a locking helper's call
+site for its non-locking `_peek_*` counterpart, since the now-unused
+locking helper's own definition still contains the string — the guard
+wouldn't catch the exact regression it exists to catch. Rewritten to
+partition the slow path's source and assert it calls
+`self._lock_members_root(` and `self._lock_member_personal_folder(` by
+name; separately asserts `with_for_update()` appears in the organization
+row's own lock statement. Verified by injecting the exact regression
+(swapping `_lock_member_personal_folder` for `_peek_member_personal_
+folder` at the call site) and confirming the rewritten test fails while
+the old count-based version would not have.
+
+Completion gate re-run: flake8/black/isort clean on all four changed
+Python files; `validate_migrations.py --strict` pass (438 revisions,
+single head, unchanged); scoped tests (documents/legal/facilities/
+property-return feature files) 273 passed; full backend suite 11864
+passed / 21 skipped (pre-existing/environmental) / 0 failed (up from
+11863, the one new guard test). No frontend file touched.
 
 ### 2026-09-08 — Feature 10 (Documents & legal, pass 4) — 2 fixed, 0 flagged (new) — new PR
 

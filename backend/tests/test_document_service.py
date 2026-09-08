@@ -6,6 +6,7 @@ focus on HTML escaping of member-supplied text (XSS) and present/absent
 attendee partitioning, plus the timezone helper. DB mocked; no MySQL.
 """
 
+import inspect
 from datetime import datetime
 from datetime import timezone as tz
 from types import SimpleNamespace
@@ -132,6 +133,35 @@ class TestPublishMinutesExecutiveGuard:
         )
         with pytest.raises(ValueError, match="approved"):
             await _svc().publish_minutes(minutes, "org-1", "user-1")
+
+
+class TestInitializeSystemFoldersIsLocked:
+    """DOC-29: ``initialize_system_folders`` is the *other* get-or-create for
+    an organization's ``members`` system folder --
+    ``DocumentsService.ensure_member_folder`` (documents_service.py) is the
+    one this feature's own DOC-28 fix locked. This method had no lock at
+    all: a brand-new organization's first ``POST /minutes/{id}/publish``
+    (which creates the whole ``SYSTEM_FOLDERS`` set, including ``members``,
+    if none exist yet) could race a member's first ``GET
+    /documents/my-folder`` and, since there is no uniqueness constraint
+    behind ``(organization_id, slug)``, both create a ``members`` row --
+    reopening DOC-28's exact failure mode through a second, unlocked
+    creator DOC-28's own lock never reached.
+    """
+
+    def test_locks_the_organization_row_before_the_existence_check(self):
+        source = inspect.getsource(DocumentService.initialize_system_folders)
+        before_check, sep, _ = source.partition("existing = await self.db.execute(")
+        assert sep, (
+            "expected to find the system-folder existence check to anchor "
+            "the search for a lock taken before it"
+        )
+        assert "with_for_update()" in before_check, (
+            "initialize_system_folders must lock the organization row "
+            "before its existence check, or it can race "
+            "DocumentsService.ensure_member_folder's own organization-row "
+            "lock and still create a duplicate `members` root"
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

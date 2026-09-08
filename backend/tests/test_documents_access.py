@@ -3025,19 +3025,41 @@ class TestEnsureMemberFolderIsLocked:
     """
 
     def test_locks_the_organization_row(self):
-        source = "".join(
-            inspect.getsource(fn)
-            for fn in (
-                DocumentsService.ensure_member_folder,
-                DocumentsService._lock_members_root,
-                DocumentsService._lock_member_personal_folder,
-            )
+        source = inspect.getsource(DocumentsService.ensure_member_folder)
+        fast_path, sep, slow_path = source.partition("org = await self.db.scalar(")
+        assert sep, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
         )
-        assert source.count("with_for_update()") >= 3, (
-            "ensure_member_folder (plus its two locking-read helpers) must "
-            "take 3 locking reads (organization + members_root + personal "
-            "folder) on its slow path, or two concurrent first-visits by "
-            "the same member can both decide no folder exists and both "
+        org_lock_statement, _, rest_of_slow_path = slow_path.partition(
+            'raise ValueError("Organization not found")'
+        )
+        assert "with_for_update()" in org_lock_statement, (
+            "ensure_member_folder's slow path must lock the organization "
+            "row before re-checking, or two concurrent first-visits can "
+            "both pass the fast-path check and both create a folder"
+        )
+
+        # Check the slow path *calls* the locking helpers by name, not
+        # just that `with_for_update()` appears somewhere in the combined
+        # source of the method and both helper definitions (Codex review,
+        # PR #2411). That weaker, count-based version of this test would
+        # still pass if the slow path called the non-locking
+        # `_peek_member_personal_folder(...)` instead of
+        # `_lock_member_personal_folder(...)`, since the now-unused
+        # locking helper's own definition still contains the string --
+        # reintroducing the exact race this test exists to catch while
+        # staying green.
+        assert "self._lock_members_root(" in rest_of_slow_path, (
+            "ensure_member_folder's slow path must re-fetch the members "
+            "root through the locking helper (_lock_members_root), not a "
+            "peek, or a concurrently-created root can be missed under the "
+            "lock"
+        )
+        assert "self._lock_member_personal_folder(" in rest_of_slow_path, (
+            "ensure_member_folder's slow path must re-fetch the personal "
+            "folder through the locking helper (_lock_member_personal_"
+            "folder), not a peek, or two concurrent first-visits can both "
             "create one"
         )
 

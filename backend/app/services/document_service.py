@@ -33,6 +33,23 @@ class DocumentService:
         self, organization_id: UUID, created_by: UUID
     ) -> List[DocumentFolder]:
         """Create system folders for an organization if none exist"""
+        # Locked before the existence check so this can't race
+        # DocumentsService.ensure_member_folder's own organization-row lock
+        # (Codex review, PR #2411): both are get-or-create paths that can
+        # independently insert the "members" system folder, and with no
+        # uniqueness constraint behind (organization_id, slug), a concurrent
+        # first documents.py visit and a concurrent minutes publish could
+        # each observe zero system folders and both create a full set,
+        # leaving a duplicate "members" root that doesn't contain the
+        # member's already-created personal folder.
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
         existing = await self.db.execute(
             select(func.count(DocumentFolder.id))
             .where(DocumentFolder.organization_id == str(organization_id))
