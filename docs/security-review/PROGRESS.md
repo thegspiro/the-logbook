@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** Feature 03 (Public surface & webhooks, pass 4)'s PR #2393 merged
+(`d03530fc`) — 4 findings from the original pass (3 fixed, 1 flagged, one of
+the four flagged in part) plus 3 more real findings from two further Codex
+rounds after the PR opened, all fixed. **PUB-5 (MED, fixed)** was the one that
+mattered originally — `check_rate_limit` reconciled its in-memory per-API-key
+hourly tally against a `COUNT(*)` over `public_portal_access_log` by
+**assigning** the database's answer, letting a department with its portal
+switched off (503 to every call, nothing persisted) reset its tally to zero
+every time it neared the ceiling. Fixed with
+`max(current_count, db_count)` — but Codex then found **PUB-5b**: that
+reconciliation query still counted a rolling "last 60 minutes" window while
+the tally and `X-RateLimit-Reset` both key off a fixed clock-hour bucket, so
+right after an hour turned over the rolling window could pull in the previous
+bucket's traffic, and the now-monotonic `max()` would let that inflated count
+stick for the rest of the new hour, 429ing legitimate requests. Fixed by
+scoping the query to the same clock-hour bucket. Also from the original pass:
+**PUB-6 (LOW, fixed)** — every field on the two whitelist-filtered portal
+response models was a required Pydantic-v2 `Optional[T]` with no default, so
+the data whitelist's default-deny state made `/organization/info` and
+`/organization/stats` 500 on every request instead of returning the empty
+document they should. Codex then found **PUB-9**: the PUB-6 fix's defaults
+made an unwhitelisted field round-trip back out as an explicit `null` instead
+of being omitted (and a partial whitelist leaked every field it had _not_
+enabled), because neither route set `response_model_exclude_unset=True`.
+Fixed. **PUB-8's** first half (LOW, fixed) committed the access log's
+error-path rows instead of letting them roll back with the request
+transaction — Codex then found **PUB-10**: all three success paths logged 200
+_before_ the response value was actually validated, so a response-validation
+failure downstream (concretely reachable via PUB-7 on `/events/public`) still
+recorded as a 200 the client never received. Fixed by constructing (and
+thereby validating) the response before logging success. Flagged, unchanged:
+**PUB-7 (LOW)** — `GET /events/public` 500s whenever an events field is
+whitelisted, because the handler's keys and `PublicEvent`'s required fields
+disagree on three names, and repairing it means choosing between two
+documented contracts; and **PUB-8's** second half — nothing has ever written a
+401 access-log row, and wiring it up needs two `nullable=False` FK columns
+made nullable. Both mirrored into `docs/KNOWN_LIMITATIONS.md`. This was the
+first pass on this feature to read all 13 files in full rather than the diff,
+and every finding — the original four plus the three Codex found after —
+predates pass 3. Full write-up: the **Pass 4** section of
+`docs/security-review/PUB-03-public-surface-webhooks.md`. Next: 04 Storefront
+& payments.
+
+<details>
+<summary>Superseded — PR #2393 (pass 4), preserved for history</summary>
+
 **Feature 03 (Public surface & webhooks, pass 4)** — PR
 [#2393](https://github.com/thegspiro/the-logbook/pull/2393), branch
 `claude/security-review-public-surface-webhooks-pass4`. Pass 4's fourth
@@ -50,6 +96,8 @@ This is the first pass on this feature to read all 13 files in full rather
 than the diff, and all four findings predate pass 3. Full write-up: the
 **Pass 4** section of
 `docs/security-review/PUB-03-public-surface-webhooks.md`.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 02 pass 4 merged), preserved for history</summary>
@@ -11185,6 +11233,41 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) ✅ merged — PR #2393
+
+Two further Codex rounds landed after the PR opened, both real, both fixed:
+
+**Round 2 (PUB-9, PUB-10):** PUB-6's null-default fix let an unwhitelisted
+field round-trip back out as an explicit `null` instead of being omitted (and
+a partial whitelist leaked every field it had _not_ enabled) because neither
+organization route set `response_model_exclude_unset=True` — fixed by adding
+it to both. Separately, all three success paths logged 200 _before_ the
+response value was actually validated against `response_model`, so a
+validation failure downstream (concretely reachable via the already-flagged
+PUB-7 on `/events/public`) still recorded as a 200 the client never received —
+fixed by constructing (and thereby validating) the response before calling
+`log_public_api_request`, still inside the `try`. `/events/public` now builds
+a `PublicEvent` per event inside the loop instead of appending the raw dict.
+
+**Round 3 (PUB-5b):** the PUB-5 fix's reconciliation query still counted a
+rolling "last 60 minutes" window while the tally and `X-RateLimit-Reset` both
+key off a fixed clock-hour bucket. Right after an hour turned over, the
+rolling window could still include the previous bucket's traffic, and because
+the reconciled count can only raise the in-memory tally and never lower it, an
+inflated `db_count` would stick for the rest of the new hour — 429ing
+legitimate requests until the bucket rolled over again. Fixed by scoping the
+query to `datetime.fromtimestamp(hour_timestamp, tz=timezone.utc)` instead of
+`now - timedelta(hours=1)`. Added
+`test_reconciliation_query_scopes_to_the_current_hour_bucket`, which captures
+the compiled query's actual lower-bound literal; verified red against the
+rolling-window version first.
+
+Both rounds' write-ups added to `PUB-03-public-surface-webhooks.md` (PUB-9,
+PUB-10, PUB-5b) and `CHANGELOG.md`. CI green (17/17) on the final head, Codex's
+review of that commit found nothing further, all three review threads
+resolved, no merge conflict. Merged (`d03530fc`). Rotation row 03 stays ✅
+(already marked at PR-open per convention). Next: 04 Storefront & payments.
 
 ### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) — PR #2393 opened
 
