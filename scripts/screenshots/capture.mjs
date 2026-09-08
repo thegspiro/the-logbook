@@ -232,6 +232,29 @@ const EMPTY_STATE_MAX_LINE = 80;
  * the failure this whole check exists to prevent.
  */
 
+/**
+ * The text of every <option> on the page.
+ *
+ * A `<select>`'s option labels come back inside `innerText`, and a control's
+ * label is not content: the items list's "Group by" control offers
+ * **No grouping**, which the whole-short-line arm of EMPTY_STATE reads as an
+ * empty state and which held back four perfectly good captures of a fully
+ * populated page. Excluded by exact line match rather than by stripping the
+ * elements — a cloned, detached subtree has no layout, so `innerText` on it
+ * degrades to `textContent`, collapsing the line breaks the scan below depends
+ * on and disabling the check outright.
+ *
+ * `allTextContents` rather than `allInnerTexts`: the options of a closed select
+ * are not rendered, and `innerText` on an unrendered element is unreliable.
+ */
+async function optionLabels(page) {
+  const texts = await page
+    .locator("option")
+    .allTextContents()
+    .catch(() => []);
+  return new Set(texts.map((t) => t.trim()).filter(Boolean));
+}
+
 async function detectEmptyState(page, selector) {
   // Scan what the image will actually contain. A clipped shot pictures one
   // section, and scanning the whole page around it flags copy that is nowhere
@@ -251,9 +274,11 @@ async function detectEmptyState(page, selector) {
   // the Privacy Choices section. Scoping to `selector` was the previous
   // mitigation, but a fullPage shot has no selector to scope to, so the guard
   // has to hold on the text itself.
+  const options = await optionLabels(page);
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length > EMPTY_STATE_MAX_LINE) continue;
+    if (options.has(trimmed)) continue;
     const match = trimmed.match(EMPTY_STATE);
     if (match) return match[0].trim();
   }

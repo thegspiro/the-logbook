@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training guide: the items list pictured as it now is (2026-09-08)
+
+**Changed**
+
+- Re-captured the five guide-05 and guide-10 screenshots of the inventory items
+  list that the pinning, grouping and Size-column work changed. `05-01` and
+  `05-47` had been queued as stale since 2026-08-10 and never re-shot, so this
+  clears that debt too.
+- **Added** `05-02-items-pinned` and `05-03-items-grouped`, with the guide text
+  to go with them. The guides had no coverage of either feature.
+
+**Fixed**
+
+- **The capture pipeline read a `<select>` option label as an empty state.**
+  `EMPTY_STATE`'s whole-short-line arm matches "No grouping" — the default
+  option of the new Group by control — so four captures of a fully populated
+  33-item list were held back as needing "richer seed data". Option labels are
+  now excluded from the scan by exact line match. Not by stripping the elements:
+  a detached clone has no layout, `innerText` on it degrades to `textContent`,
+  and the collapsed line breaks would have disabled the check outright.
+
+**Notes**
+
+- `05-70-inventory-table-mobile` was re-shot and came back byte-identical. The
+  pin sits in a cell with no `data-label`, which the `rwd-table` reflow hides,
+  and the Order row exists only in the Pinned table — so the phone capture of
+  the Available list was never stale. Recorded in `SCREENSHOT_CURRENCY.md`
+  rather than dropped silently.
+- The eleven other manifest entries routed at `/inventory/items` open a modal
+  over the page and are cropped to it; they were left alone deliberately.
+
 ### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
 
 **Security**

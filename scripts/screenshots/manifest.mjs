@@ -5418,6 +5418,74 @@ export const SHOTS = [
     route: "/inventory/items",
   },
   {
+    id: "05-02-items-pinned",
+    doc: "05-inventory.md",
+    line: 83,
+    anchor: "The items list with three items pinned",
+    alt: "The items list with a Pinned section above Available, each pinned row carrying a drag handle and up/down arrows",
+    route: "/inventory/items",
+    // Pinned through the UI rather than the API: the picture should show what
+    // a quartermaster does, and pinning by hand also proves the control is
+    // reachable at this viewport.
+    prepare: async (page) => {
+      // Pins are stored per member and survive between runs, so clear them
+      // first: without this a second run pins three MORE items and the section
+      // grows every time the shot is taken.
+      for (;;) {
+        const unpin = page.getByRole("button", { name: /^Unpin / }).first();
+        if (!(await unpin.count())) break;
+        await unpin.click();
+        await page.waitForTimeout(600);
+      }
+      for (let i = 0; i < 3; i += 1) {
+        const pin = page.getByRole("button", { name: /^Pin / }).first();
+        await pin.click();
+        // Each click reloads the list, so the next unpinned row is only
+        // addressable once the Pinned section has absorbed the last one.
+        await page
+          .getByRole("table", { name: "Pinned" })
+          .waitFor({ timeout: 10_000 })
+          .catch(() => {});
+        await page.waitForTimeout(600);
+      }
+    },
+  },
+  {
+    id: "05-03-items-grouped",
+    doc: "05-inventory.md",
+    line: 103,
+    anchor: "The items list grouped by Category",
+    alt: "The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // Unpin first. Pins are stored per member and 05-02 leaves three behind,
+      // so without this the Pinned section eats the frame and the group
+      // headings this shot exists to picture fall below the fold.
+      for (;;) {
+        const unpin = page.getByRole("button", { name: /^Unpin / }).first();
+        if (!(await unpin.count())) break;
+        await unpin.click();
+        await page.waitForTimeout(600);
+      }
+      await page.getByLabel("Group by:").selectOption("category");
+      // The grouping is applied only once rows fetched FOR that dimension
+      // arrive, so wait for a heading rather than for the select to settle.
+      await page
+        .getByRole("button", { name: /\(\d+\)/ })
+        .first()
+        .waitFor({ timeout: 10_000 })
+        .catch(() => {});
+      await page.waitForTimeout(600);
+      // Bring the Group by control to the top of the frame so the control and
+      // the headings it produces are in the same picture.
+      await page
+        .locator("#group-by")
+        .evaluate((el) => el.scrollIntoView({ block: "start" }))
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "05-03-inventory-categories",
     doc: "05-inventory.md",
     line: 95,
@@ -7905,8 +7973,7 @@ export const SHOTS = [
     id: "03-25-equipment-checks-tab",
     doc: "03-scheduling.md",
     line: 1329,
-    anchor:
-      "Screenshot of Fleet Readiness showing a list of apparatus with",
+    anchor: "Screenshot of Fleet Readiness showing a list of apparatus with",
     alt: "Fleet Readiness listing each apparatus with its check status",
     route: "/inventory/checklists",
     fullPage: true,
