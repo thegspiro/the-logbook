@@ -1,6 +1,289 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4)
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3), 2026-09-07 (out-of-band, ahead of pass 4), 2026-09-08 (pass 4) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged), [#2381](https://github.com/thegspiro/the-logbook/pull/2381) (out-of-band data-leakage sweep, prior art for pass 4), #2387 (pass 4)
+
+Passes are recorded in this one file rather than a new `SEC<n>-00-*.md` per
+lap — the sweeps are cumulative and a reader needs the earlier method beside
+the later result to tell a re-verification from a first run. Newest pass first.
+
+---
+
+## Pass 4 (2026-09-08) — re-sweep, PR #2381's prior art re-verified, plus one sweep class new to this file
+
+**Backend:** whole `app/` tree (1521 routes across 79 `app/api/` files; 437
+Alembic revisions, single head `b1e7c3a92f45`)
+**Frontend:** `frontend/src/utils/apiCache.ts` and the axios clients that
+consume it
+**Migrations:** none written this pass
+
+### Scope
+
+Read in full: `frontend/src/utils/apiCache.ts` (374 L),
+`backend/tests/test_api_cache_pii_exclusions.py` (275 L), `safe_error_detail`
+and its neighbours in `app/core/utils.py`, the two handlers named in SEC4-1 /
+SEC4-2, `app/core/public_portal_security.py`'s rate-limit caches, and
+`app/utils/ssrf_transport.py`.
+
+Swept mechanically (AST or guard test, method stated per row below) rather than
+read: the tracker sweep's 25 hits, the JSON shallow-copy sweep's 5 hits, the
+`safe_error_detail` sweep's 64 hits, the 15 upload handlers, and the 13
+`log_audit_event` payloads naming a PII-shaped key.
+
+**Not read this pass:** the module-level code each rotation feature owns —
+that is what features 01–34 are for, and re-reading it here would duplicate
+them rather than sweep across them. No verdict below covers a per-module
+finding.
+
+### Re-verified standing sweeps
+
+| #   | Class swept                                     | Method                                                                                                                                                                                                                       | Result                                                                                                                                                                                                                                                                 |
+| --- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports (Pitfall #15)      | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py`, plus `tests/test_csv_writer_sweep.py`                                                                                                                  | **clean** — 0 sites; guard test passes                                                                                                                                                                                                                                 |
+| 2   | `SET NULL` on `NOT NULL` columns (Pitfall #2)   | `test_database_schema.py::test_set_null_fks_are_nullable`                                                                                                                                                                    | **clean** — passes                                                                                                                                                                                                                                                     |
+| 3   | Proxy-IP attribution                            | grep `request.client.host`                                                                                                                                                                                                   | **clean** — same 3 hits as passes 1–3 (2 comments, 1 deliberate use inside `get_client_ip`)                                                                                                                                                                            |
+| 4   | Alembic chain integrity                         | `backend/scripts/validate_migrations.py --strict`                                                                                                                                                                            | **clean** — 437 revisions (up from pass 3's 399), single head `b1e7c3a92f45`, no duplicate ids                                                                                                                                                                         |
+| 5   | LIKE-wildcard handling (Pitfall #25)            | `tests/test_like_escaping.py` (2 guard tests)                                                                                                                                                                                | **clean** — both pass; no new call site dropped `escape=` or re-inlined the transform                                                                                                                                                                                  |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)         | `grep -rn "BaseHTTPMiddleware" app/`                                                                                                                                                                                         | **clean** — 0 usages; 7 comments in `security_middleware.py` and 1 in the newer `app/mcp/transport.py` document the ban                                                                                                                                                |
+| 7   | Unbounded in-memory trackers (Pitfall #9)       | AST walk for `self.<name> = {}/set()/defaultdict()/OrderedDict()/deque()` and the module-level equivalent, whole `app/` tree, including `ast.AnnAssign` (pass 3's regex-shaped version would have missed the annotated ones) | **clean** — 25 trackers, every one bounded; see below                                                                                                                                                                                                                  |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16) | grep `frontend/src/` excluding tests; confirmed `noBlockingBrowserDialogs` still wired in `eslint.config.js`                                                                                                                 | **clean** — 0 raw calls; the ESLint rule is present                                                                                                                                                                                                                    |
+| 9   | JSON shallow-copy-then-nested-mutate (#12)      | grep for `dict(<obj>.<attr>` on model attributes, then read each hit                                                                                                                                                         | **clean** — 5 hits, all top-level key assignment on the copy (which is the correct pattern) or already `copy.deepcopy`                                                                                                                                                 |
+| 10  | Org-scoping / IDOR ratchet (Pitfall #14)        | `tests/test_org_scoping_ratchet.py`                                                                                                                                                                                          | **clean** — passes; no new unscoped by-id query on an org-carrying model                                                                                                                                                                                               |
+| 11  | Capacity-check locking (Pitfall #27)            | `tests/test_capacity_locking.py`                                                                                                                                                                                             | **clean** — passes; both halves (parent `for_update`, counting read `with_for_update`) still asserted at every site                                                                                                                                                    |
+| 12  | Route auth coverage                             | `tests/test_endpoint_auth_coverage.py`                                                                                                                                                                                       | **clean** — 24 unauthenticated handlers under `app/api/v1/endpoints/`, all 24 on the reviewed allowlist, 0 stale entries. Reconciles with pass 3's 69: + 24 `onboarding.py` + 20 `app/api/public/*` + 1 `api.py` root, none of which that test's directory glob covers |
+
+**Sweep 7, in detail, because pass 3 spent nine Codex rounds here.** All 25
+trackers are bounded, and the mechanism differs per tracker, so each was
+checked rather than pattern-matched: `public_portal_security`'s two
+rate-limit caches (`_MAX_RATE_LIMIT_KEYS` 5 000 / `_MAX_IP_RATE_LIMIT_KEYS`
+10 000, with `cleanup_rate_limit_cache()` doing stale-then-LRU eviction — and
+these are the ones an **unauthenticated** caller keys, so they matter most);
+`geoip._ip_cache` (`_cache_max_size` 10 000, drops 1 000 at a time);
+`suspicious_ip` (`_MAX_KEYS` 10 000, LRU); `security_middleware._keys` /
+`_saturation_reject_until` and `security_monitoring`'s five trackers (capped
+by pass 3's own fixes); `mcp/transport._hits` (`_MAX_TRACKED_KEYS` 5 000,
+`popitem(last=False)`); `websocket_manager` (`MAX_CONNECTIONS_PER_ORG` 200);
+`microsoft_oauth._app_cache` / `_recent_failures` (`_MAX_CACHED_APPS` 16).
+The remainder are bounded by construction rather than by a cap, which is a
+different claim and is stated as such: `security.py`'s three cipher caches key
+on `(encryption key, KDF work factor)`; `microsoft_oauth._registrations` keys
+on configured tenant/client; `email_theme._SHELL_COLOURWAYS` keys on a
+colourway name; and `notification_rules._cache`,
+`storefront_notification_service._templates` and
+`salesforce_service.skipped_fields` are **per-instance**, not process-global —
+they die with the request or task that made them. None of these can be grown
+by a caller.
+
+### New sweep class (first run in this file)
+
+| #   | Class swept                                           | Method                                                                                                                                       | Result                          |
+| --- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 13  | Raw exception text reaching the client (checklist §5) | AST walk of every `ast.ExceptHandler` in `app/` whose caught type is broad, looking for the bound name inside an `HTTPException(detail=...)` | **2 findings — SEC4-1, SEC4-2** |
+
+64 sites matched the shape. 62 are custom domain exceptions raised by this
+codebase with a curated message — `BudgetLimitExceededError`,
+`LastAdministratorError`, `SeparationOfDutiesError`, `PrinterUnreachableError`,
+`SalesforceOAuthError` (whose messages are OAuth error _codes_:
+`invalid_state`, `missing_client_id`, `token_exchange_failed`),
+`ImageValidationError`. Echoing those is the point of raising them, and
+`safe_error_detail` would replace a useful sentence with a generic one. The
+two exceptions were the two handlers catching bare `Exception` and formatting
+whatever came out, both fixed below.
+
+The related shapes were checked and are clean: `except ValueError as e:
+detail=str(e)` (the largest group by far) is behaviourally what
+`safe_error_detail` does for a `ValueError` anyway, minus the unsafe-pattern
+regex and the 300-character cap — worth converging on eventually, but a
+mechanical rewrite of ~200 call sites is not a security-review-iteration
+change and nothing about it is a live disclosure.
+
+**Also checked, no finding, recorded so it is not re-derived:**
+
+- **Uploads** (checklist §4): 15 `UploadFile` handlers. Every one that stores
+  or serves the bytes validates by magic byte (`magic.from_buffer`) rather
+  than the client-supplied `Content-Type` — including the two that re-encode
+  rather than store the original (`users.py:2239` avatar,
+  `storefront.py:733` product image), which magic-check _before_ re-encoding.
+  The four that do not magic-check (`inventory.py:1385`, `training.py:1969`,
+  `training.py:3220`, `events.py:3481`) parse CSV text that is never stored or
+  served, where a magic-byte check has nothing to assert; three of those four
+  additionally go through `read_upload_limited`. The `await file.read()` sites are
+  **not** an unbounded-buffer finding: `RequestSizeLimitMiddleware`
+  (`main.py:2113`, `settings.MAX_REQUEST_BODY_SIZE`) caps the body two ways —
+  a Content-Length fast path and a byte-counting `receive` wrapper for a
+  chunked upload that lies about it — before any handler reads.
+- **SSRF re-validation at send time** (checklist §4): every service that posts
+  to a stored URL re-validates it at send (`assert_outbound_url_safe` in
+  `webhook_service`, `slack_service`, `discord_service`, `teams_service`,
+  `calcom_service`, `audit_ship_service`), and `external_training_service`
+  goes further, pinning the connection through `SSRFSafeAsyncTransport`. The
+  remaining `httpx` callers target hardcoded hosts (`weather_service`'s NWS
+  base, the breached-password and CAPTCHA providers) or provider endpoints
+  derived from OAuth config.
+- **PII in audit payloads** (checklist §5): 13 `log_audit_event` calls name a
+  PII-shaped key. All 13 are cases where the identifier _is_ the subject of
+  the audited event — `email` on login/registration/user-admin events,
+  `ip_address` on IP-security events, `prospect_email` on a pipeline decision,
+  `deleted_full_name` on a user deletion (the row it names no longer exists,
+  which is precisely why the audit trail has to carry it). None is incidental.
+
+### PR #2381's prior art, re-verified (the pass-4 action item)
+
+**(a) All six unratcheted genuine fixes are still excluded.**
+`/inventory/allowances/check/{user_id}/{category_id}`,
+`/inventory/clearances` and `/inventory/requests` by prefix;
+`/inventory/items/{item_id}/exposures`, `/.../history` and `/.../issuances`
+by substring. Re-derived rather than assumed: each was run back through the
+ratchet's own `_is_excluded()`.
+
+**They were, and remained, unguarded** — confirmed by re-running the ratchet's
+analysis with the exclusion list ignored. Four of the six carry a
+`response_model` whose schema graph names none of `PII_FIELDS`; the other two
+(`/inventory/items/{item_id}/history`, `/inventory/requests`) have **no
+`response_model` at all**, which puts them in the 141 routes the file's own
+docstring says it cannot see. Closed this pass — see SEC4-3.
+
+**(b) The three unratcheted no-ops are still inert**, on both axes PR #2381
+identified:
+
+| Route                                                  | Why it was a no-op                                                         | Still true?                                                                                                                                                                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/apparatus/evoc-check/{apparatus_id}/{user_id}`       | apparatus module's own `createApiClient()`, which has no cache interceptor | **yes** — `modules/apparatus/services/api.ts:7` still builds its client from `createApiClient`, and `getCached`/`setCacheIfCurrent`/`isCacheable` are still imported by exactly one file, `services/apiClient.ts` |
+| `/inventory/clearances/{clearance_id}`                 | no frontend wrapper on any client                                          | **yes** — no call site references the path                                                                                                                                                                        |
+| `/training/instructors/validate/{user_id}/{course_id}` | wrapper on the cached client with zero call sites                          | **yes** — `validateInstructor` appears exactly once in `frontend/src`, its own declaration                                                                                                                        |
+
+**(c) Nothing landed after PR #2381 with either leak shape.** The diff from
+`ae423afa` (PR #2381's own commit) to `34e6fa70` touches 10 files under
+`backend/app/` and `frontend/src/`, all inventory-grouping or
+security-middleware work: one new response field (`group_key`, a grouping
+key, no member data), one endpoint whose gate was **tightened**
+(`GET /inventory/items/colors`, `get_current_user` → `require_permission("inventory.view")`),
+and one new denylist entry. No new GET route, and no new write into a
+documents folder or any other shared-audience container — `grep source_type=`
+still returns the same two generated-document writers XC-4 accounted for.
+
+## Verified good ✅
+
+- **Every cache exclusion PR #2381 added is still in place**, and the nine
+  that no automated check covered now have one (SEC4-3). Mechanism: the pinned
+  list runs through the same `_is_excluded()` the ratchet uses, so it tracks
+  the real denylist rather than a copy of it.
+- **The response cache is reachable from exactly one axios instance.**
+  Mechanism: `getCached` / `setCacheIfCurrent` / `isCacheable` are imported
+  only by `frontend/src/services/apiClient.ts`; module clients come from
+  `utils/createApiClient` and have no cache interceptor. This is what makes
+  "no-op today" a defensible verdict for the three routes in (b) — and what
+  makes it fragile enough to be worth pinning.
+- **All 24 unauthenticated `v1/endpoints` handlers are on a reviewed
+  allowlist**, with no stale entries. Mechanism:
+  `tests/test_endpoint_auth_coverage.py`, which fails in both directions.
+- **All 25 in-memory trackers are bounded.** Mechanism: named per tracker in
+  sweep 7 above — a cap plus eviction for the ten that a caller can key, and
+  a bounded or per-instance key space for the rest.
+
+## Findings
+
+### SEC4-1 — LOW — SMTP failure text returned verbatim to the caller — ✅ FIXED
+
+**What:** `email_test_results` wrapped `EmailService.send_email` in a bare
+`except Exception` and put `str(e)` straight into the 500's `detail`. Every
+other error path in this file goes through `safe_error_detail`.
+**Where:** `backend/app/api/v1/endpoints/skills_testing.py:3157`.
+**Failure scenario:** a training officer (`training.manage`) posts to
+`/training/skills-testing/tests/{id}/email-results` while the configured SMTP
+host is unreachable or rejecting. `socket.gaierror` renders as
+`[Errno -2] Name or service not known: 'smtp.internal.example.org'` and
+`smtplib.SMTPAuthenticationError` as `(535, b'5.7.8 Username and Password not
+accepted')` — the mail host's name and the provider's own auth-failure
+response, returned to the browser. Repeating the call with the endpoint down
+is a cheap way to enumerate mail infrastructure.
+**Impact:** internal infrastructure disclosure to any holder of
+`training.manage`. Not a cross-tenant leak and not reachable
+unauthenticated, which is why this is LOW rather than MED.
+**Fix:** `safe_error_detail(e, fallback="Failed to send email")` — the real
+exception is still logged at ERROR for ops, the client gets the fallback.
+
+### SEC4-2 — LOW — A bare `except Exception` reported internal faults as a 422 with the Python message — ✅ FIXED
+
+**What:** `_validate_config` caught **any** exception from constructing the
+integration's Pydantic config model and returned it as
+`Invalid config for {type}: {e}` with a 422.
+**Where:** `backend/app/api/v1/endpoints/integrations.py:344`.
+**Failure scenario:** a `@field_validator` on an integration config schema
+dereferences a `None` (a stored config written before a field was added, then
+merged into the PATCH validation payload at
+`integrations.py:721`: `{**(integration.config or {}), **config}`). The
+`AttributeError` — `'NoneType' object has no attribute 'lower'` — is reported
+to the client as a validation complaint about their own input. The status is
+wrong (a server fault presented as a client error, so it never reaches the
+500-rate alerting), and the message is raw Python internals.
+**Impact:** internals disclosure to an integrations admin, plus a
+misclassified fault that hides a real bug. Low: the caller already holds the
+integration-management permission and the message is not another tenant's
+data.
+**Fix:** narrowed to `except ValidationError` (imported from `pydantic`).
+Pydantic's own verdict — which is a statement about the caller's input —
+still reaches them unchanged; anything else propagates and becomes a generic 500. Safe to narrow because the config arrives as JSON, so its keys are always
+strings and `schema_cls(**config)` cannot raise the `TypeError` the broad
+clause would otherwise have been catching.
+
+### SEC4-3 — MED — Nine cache exclusions protecting member PII had no regression guard — ✅ FIXED
+
+**What:** `tests/test_api_cache_pii_exclusions.py` is the only automated check
+on `apiCache.ts`'s denylist, and it flags a route only when the route declares
+a `response_model` whose schema graph names one of 20 `PII_FIELDS`. Nine of the
+18 routes PR #2381 excluded satisfy neither condition, so their exclusion was
+held in place by nothing at all.
+**Where:** `backend/tests/test_api_cache_pii_exclusions.py` (the gap);
+`frontend/src/utils/apiCache.ts:102–104,142,145,152` (the lines with no guard
+behind them).
+**Failure scenario:** someone tidying the denylist — or resolving a merge
+conflict in it, which is a 90-line array that two branches touch — drops
+`'/inventory/clearances'`. Every test in the repository still passes.
+`GET /inventory/clearances` (who is leaving the department, the separation
+type, the notes, and the equipment value still owed) is then held for 30s
+fresh / 90s stale in a cache keyed by URL with **no user identity in the key**,
+so on a shared station terminal the next member to sign in and open Inventory
+is served it. This is the exact shape CLAUDE.md Pitfall #16 describes: an
+invariant that held on review discipline until it did not.
+**Impact:** MED. No live disclosure today — this is a guard for a fix, not a
+fix — but the class it guards is member PII on a shared terminal, and its
+absence is silent by construction.
+**Fix:** `PINNED_EXCLUSIONS`, a frozen dict of URL → why-it-is-excluded, and
+two tests: one asserting each stays excluded (run through the ratchet's own
+`_is_excluded`, not a re-implementation), one asserting each still names a
+real route so a stale pin has to be deleted rather than left as decoration.
+Verified by deleting `'/inventory/clearances'` from `apiCache.ts` and
+confirming the suite goes red, naming both affected routes, then restoring it.
+The three inert-today routes are pinned alongside the six live ones, for the
+reason PR #2381's own write-up gives: the apparatus module can gain a cache
+interceptor and a wrapper can gain a caller, and neither change touches this
+file.
+
+## Schema & migration notes
+
+No migration written this pass. Chain re-validated: 437 revisions, single head
+`b1e7c3a92f45`, no duplicate ids, no orphans (`validate_migrations.py
+--strict`). `test_set_null_fks_are_nullable` and
+`test_migration_create_all_tables` both pass.
+
+## Guard tests added
+
+| Test                                                                                             | Invariant asserted                                                                                                                            |
+| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_api_cache_pii_exclusions.py::test_pinned_pii_routes_stay_excluded_from_the_frontend_cache` | The nine hand-judged cache exclusions the schema scan cannot see stay excluded. Fails with the route URL and the reason it was pinned.        |
+| `test_api_cache_pii_exclusions.py::test_pinned_routes_all_still_exist`                           | Every pinned URL still resolves to a v1 GET route, so a renamed or deleted route forces the pin to be re-decided instead of silently rotting. |
+
+## Completion gate
+
+| Check                                             | Result                                                                                                                                                                                 |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ clean                                                                                                                                                                               |
+| `black --check app/ tests/ alembic/`              | ✅ 1527 files unchanged                                                                                                                                                                |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (isort 9.0.1, CI's pinned version)                                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 437 revisions, single head                                                                                                                                                          |
+| backend tests (scoped)                            | ✅ 174 passed — integrations, skills-testing, cache ratchet                                                                                                                            |
+| cross-cutting guard tests                         | ✅ 115 passed — LIKE escaping, CSV sweep, org-scoping ratchet, capacity locking, endpoint-auth coverage, `create_all`-table migration tolerance; plus `test_set_null_fks_are_nullable` |
+| `tsc --noEmit` / `eslint .`                       | n/a — no frontend source changed this pass                                                                                                                                             |
 
 ---
 
@@ -99,6 +382,14 @@ caller or a cache interceptor, which is lower priority but not zero; and
 (c) sweep any endpoint or module-service change landed after PR #2381 for
 the same two shapes (shared-container writes, cache-by-default
 exclusions) rather than assuming this list is exhaustive going forward.
+
+**Done — pass 4 (2026-09-08), see that section above.** (a) all six still
+excluded and all six confirmed still unratcheted, now pinned by
+`test_pinned_pii_routes_stay_excluded_from_the_frontend_cache` (SEC4-3, which
+pins the three no-ops from (b) as well); (b) all three still inert on both
+axes; (c) the post-#2381 diff carries neither leak shape. **Pass 5 should not
+re-derive any of this** — re-run the pin test, and sweep whatever has landed
+since PR #2387.
 
 ## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
 
