@@ -89,7 +89,14 @@ const AuditLogPage: React.FC = () => {
       if (!Array.isArray(list?.logs) || typeof list.total !== 'number') {
         throw new Error('The audit log service returned an unexpected response.');
       }
-      if (!statsData?.by_category || !statsData.by_severity) {
+      // The maps are checked for being objects, not merely truthy: a string or
+      // an array is truthy and reaches `Object.entries` as something that
+      // renders nothing. `total` is checked for the same reason `list.total` is
+      // — it is the "Total events" figure, and a missing one renders as blank
+      // beside a populated table, which reads as "the log is fine" rather than
+      // as a failure.
+      const isMap = (value: unknown) => typeof value === 'object' && value !== null && !Array.isArray(value);
+      if (!isMap(statsData?.by_category) || !isMap(statsData?.by_severity) || typeof statsData?.total !== 'number') {
         throw new Error('The audit log statistics service returned an unexpected response.');
       }
       setEntries(list.logs);

@@ -75,15 +75,41 @@ const EventCheckInMonitoringPage: React.FC = () => {
       // were the live picture — worse than an error for the officer working the
       // door from it. The `catch` below already has an error state; this hands
       // the failure to it.
-      const complete =
-        !!data &&
-        Array.isArray(data.recent_check_ins) &&
-        Array.isArray(data.early_check_ins) &&
-        typeof data.total_checked_in === 'number' &&
-        typeof data.total_eligible_members === 'number' &&
-        typeof data.check_in_rate === 'number';
-      if (!complete) {
-        throw new Error('The check-in monitoring service returned an unexpected response.');
+      //
+      // Every required field, not a sample of them. A first version checked the
+      // two arrays and three of the counters, which still accepted a response
+      // missing `event_name`, `is_check_in_active` and both window timestamps —
+      // exactly the blank-and-plausible render the check exists to prevent.
+      // `created_by_name`, `avg_check_in_time_minutes` and `last_check_in_at`
+      // are absent: the type makes them optional or nullable, and the page
+      // renders each one's empty case deliberately.
+      const REQUIRED: Array<[keyof CheckInMonitoringStats, 'string' | 'number' | 'boolean' | 'array']> = [
+        ['event_id', 'string'],
+        ['event_name', 'string'],
+        ['event_type', 'string'],
+        ['start_datetime', 'string'],
+        ['end_datetime', 'string'],
+        ['check_in_window_start', 'string'],
+        ['check_in_window_end', 'string'],
+        ['is_check_in_active', 'boolean'],
+        ['total_eligible_members', 'number'],
+        ['total_rsvps', 'number'],
+        ['total_checked_in', 'number'],
+        ['check_in_rate', 'number'],
+        ['early_check_in_count', 'number'],
+        ['early_check_in_threshold_minutes', 'number'],
+        ['recent_check_ins', 'array'],
+        ['early_check_ins', 'array'],
+      ];
+      const missing = data
+        ? REQUIRED.filter(([field, kind]) =>
+            kind === 'array' ? !Array.isArray(data[field]) : typeof data[field] !== kind
+          ).map(([field]) => field)
+        : REQUIRED.map(([field]) => field);
+      if (missing.length > 0) {
+        throw new Error(
+          `The check-in monitoring service returned an unexpected response (missing: ${missing.join(', ')}).`
+        );
       }
       setStats(data);
       setLastUpdated(new Date());

@@ -301,7 +301,17 @@ const MedicalSuppliesPage: React.FC = () => {
             let itemPaging: { total: number; skip: number; limit: number } | null = null;
             if (section === 'items') {
               const data = (value ?? {}) as { items: InventoryItem[]; total: number; skip: number; limit: number };
-              if (!Array.isArray(data.items)) {
+              // The paging metadata is validated with the array, not stored
+              // blind beside it. `itemPage.total > 0` is what renders the
+              // pagination control, so an undefined `total` hides it: page one
+              // shows, and every later supply is unreachable with nothing on
+              // screen saying so.
+              if (
+                !Array.isArray(data.items) ||
+                typeof data.total !== 'number' ||
+                typeof data.skip !== 'number' ||
+                typeof data.limit !== 'number'
+              ) {
                 throw new Error('The supply table service returned an unexpected response.');
               }
               items = data.items;

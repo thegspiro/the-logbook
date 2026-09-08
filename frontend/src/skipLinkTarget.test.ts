@@ -26,47 +26,164 @@
 
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
+import { globSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 
+/** Read a source file under `src/`. */
+const read = (relative: string): string => fs.readFileSync(path.join(SRC, relative), 'utf8');
+
 /**
- * Pages App.tsx renders outside `<AppLayout>`, by the route path that reaches
- * them. Listed rather than parsed: they are a handful, they change rarely, and
- * a parser that got the layout boundary subtly wrong would quietly check
- * nothing.
+ * The page components a chunk of route JSX references.
+ *
+ * Opening tag names only. Two shapes defeat anything cleverer: a route's
+ * element is often wrapped (`element={<Suspense><PublicFormPage /></Suspense>}`),
+ * so matching on `element=` reads `Suspense` and reports the page as covered
+ * without ever looking at it; and a self-closing matcher (`<([A-Z]\w+)[^>]*\/>`)
+ * reads `<Route path="/" element={<Welcome />} />` as a single `Route` tag and
+ * swallows the page name inside it. Both fail by finding *fewer* pages, which
+ * is why the count assertion in the first test is not decoration.
  */
-const PUBLIC_PAGES = [
-  'pages/LoginPage.tsx',
-  'pages/ForgotPasswordPage.tsx',
-  'pages/ResetPasswordPage.tsx',
-  'pages/OAuthCallbackPage.tsx',
-  'pages/legal/LegalPage.tsx',
-];
+const renderedComponents = (jsx: string): string[] => {
+  const wrappers = new Set([
+    'Route',
+    'Routes',
+    'Suspense',
+    'Navigate',
+    'React',
+    'Fragment',
+    'ProtectedRoute',
+    'AppLayout',
+    'PullToRefreshProvider',
+  ]);
+  return [...new Set([...jsx.matchAll(/<([A-Z]\w+)/g)].map(([, name]) => name ?? ''))].filter(
+    (name) => !wrappers.has(name)
+  );
+};
 
-/** Every component the onboarding router renders, read from the router. */
-const onboardingPages = (): string[] => {
-  const routes = fs.readFileSync(path.join(SRC, 'modules/onboarding/routes.tsx'), 'utf8');
-  const rendered = new Set([...routes.matchAll(/element=\{<([A-Z]\w+)\s*\/?>/g)].map(([, name]) => name ?? ''));
-  // `<Navigate>` is react-router's redirect, not a page of this app.
-  rendered.delete('Navigate');
+/**
+ * Everything `App.tsx` renders outside the `AppLayout` route, plus every page
+ * the route factories it calls out there render.
+ *
+ * Derived rather than listed. It was a hardcoded array of five, and that was
+ * the same mistake this test exists to catch: five public route factories
+ * (`getProspectiveMembersPublicRoutes` and friends) and `FinanceApprovalPage`
+ * render outside the layout, none was in the list, and all seven of their pages
+ * were missing the landmark while the test passed.
+ *
+ * The layout boundary is found by removing the one `<Route element={... AppLayout ...}>`
+ * block, brace-matched, from the `<Routes>` body. Anything left is public. The
+ * count assertion below is what stops a parse that silently matches nothing.
+ */
+const publicPages = (): string[] => {
+  const app = read('App.tsx');
+  const routesBody = app.slice(app.indexOf('<Routes>'), app.lastIndexOf('</Routes>'));
 
-  return [...rendered].map((name) => {
-    const file = `modules/onboarding/pages/${name}.tsx`;
-    if (fs.existsSync(path.join(SRC, file))) return file;
-    // A placeholder step or two lives beside the pages rather than among them.
-    return 'modules/onboarding/components/PlaceholderPages.tsx';
+  // Excise the AppLayout route and its children, by `<Route>` depth.
+  //
+  // The tag scan has to be brace-aware. A route's `element` prop contains
+  // markup — `element={<ProtectedRoute><AppLayout /></ProtectedRoute>}` — so
+  // neither `[^>]*>` (which stops at the first `>` inside the prop) nor a bare
+  // `/>` token (which matches every self-closing element nested anywhere in the
+  // block) finds the right boundary. Both failure modes end the block early and
+  // leak the protected routes into the public set.
+  const tagEnd = (from: number): { end: number; selfClosing: boolean } => {
+    let braces = 0;
+    for (let i = from; i < routesBody.length; i++) {
+      const char = routesBody[i];
+      if (char === '{') braces++;
+      else if (char === '}') braces--;
+      else if (char === '>' && braces === 0) {
+        return { end: i + 1, selfClosing: routesBody[i - 1] === '/' };
+      }
+    }
+    return { end: routesBody.length, selfClosing: false };
+  };
+
+  const layoutStart = routesBody.lastIndexOf('<Route', routesBody.indexOf('<AppLayout'));
+  let depth = 0;
+  let layoutEnd = routesBody.length;
+  for (let i = layoutStart; i < routesBody.length;) {
+    if (routesBody.startsWith('</Route>', i)) {
+      depth--;
+      i += '</Route>'.length;
+    } else if (routesBody.startsWith('<Route', i)) {
+      const tag = tagEnd(i);
+      if (!tag.selfClosing) depth++;
+      i = tag.end;
+    } else {
+      i++;
+      continue;
+    }
+    if (depth === 0) {
+      layoutEnd = i;
+      break;
+    }
+  }
+  const publicJsx = routesBody.slice(0, layoutStart) + routesBody.slice(layoutEnd);
+
+  // Route factories called out here render their own pages; read each one.
+  const factories = [...publicJsx.matchAll(/\{(get\w+Routes)\(\)\}/g)].map(([, name]) => name ?? '');
+  const factoryJsx = factories.flatMap((factory) => {
+    const file = globSync(path.join(SRC, 'modules/*/routes.tsx')).find((candidate) =>
+      fs.readFileSync(candidate, 'utf8').includes(`export const ${factory}`)
+    );
+    if (!file) throw new Error(`no module router exports ${factory}`);
+    const source = fs.readFileSync(file, 'utf8');
+    const from = source.indexOf(`export const ${factory}`);
+    const to = source.indexOf('\nexport ', from + 1);
+    return renderedComponents(source.slice(from, to === -1 ? undefined : to));
+  });
+
+  const names = [...new Set([...renderedComponents(publicJsx), ...factoryJsx])];
+
+  return names.map((name) => {
+    const byFilename = globSync(path.join(SRC, `**/${name}.tsx`));
+    // Ambiguity fails loudly rather than checking whichever file sorted first.
+    if (byFilename.length > 1) {
+      throw new Error(`expected at most one file named ${name}.tsx, found ${byFilename.length}`);
+    }
+    if (byFilename.length === 1) return path.relative(SRC, byFilename[0] ?? '');
+
+    // A component can live in a file named for something else — onboarding's
+    // placeholder steps share `components/PlaceholderPages.tsx`.
+    const declaring = globSync(path.join(SRC, '**/*.tsx')).filter((file) =>
+      new RegExp(`(?:export )?const ${name}\\b|function ${name}\\b`).test(fs.readFileSync(file, 'utf8'))
+    );
+    if (declaring.length !== 1) {
+      throw new Error(`cannot locate ${name}: ${declaring.length} files declare it`);
+    }
+    return path.relative(SRC, declaring[0] ?? '');
   });
 };
 
 describe('skip link target', () => {
-  const pages = [...new Set([...PUBLIC_PAGES, ...onboardingPages()])];
+  const pages = [...new Set(publicPages())];
 
   it('covers the onboarding wizard and the pre-auth pages', () => {
     // A guard against the sweep quietly emptying: if the router is refactored
     // into a shape the matcher does not read, this is what says so.
-    expect(pages.length).toBeGreaterThanOrEqual(15);
+    expect(pages.length).toBeGreaterThanOrEqual(25);
+
+    // The pages the hardcoded list missed. Named so a future refactor of the
+    // router that stops reaching them fails here rather than silently shrinking
+    // the sweep back to the handful it started as.
+    for (const page of [
+      'pages/LoginPage.tsx',
+      'pages/PublicFormPage.tsx',
+      'pages/BallotVotingPage.tsx',
+      'pages/GuestCheckInPage.tsx',
+      'pages/LocationKioskPage.tsx',
+      'pages/FinanceApprovalPage.tsx',
+      'pages/EventRequestStatusPage.tsx',
+      'modules/prospective-members/pages/ApplicationStatusPage.tsx',
+      'modules/onboarding/pages/Welcome.tsx',
+    ]) {
+      expect(pages, `${page} is no longer reached by the sweep`).toContain(page);
+    }
+
     for (const page of pages) {
       expect(fs.existsSync(path.join(SRC, page)), `${page} does not exist`).toBe(true);
     }

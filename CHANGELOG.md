@@ -78,6 +78,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   broken. Both are documented in the spec.
 - Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
+### Seven public pages had no skip-link target, and four payload guards were partial (2026-09-08)
+
+**Fixed**
+
+- **The skip-link guard checked a hardcoded list of five pages and missed
+  seven.** `App.tsx` renders five module public-route factories
+  (`getProspectiveMembersPublicRoutes`, forms, events, elections, facilities)
+  plus `FinanceApprovalPage` outside `AppLayout`, and none was in the list —
+  so `ApplicationStatusPage`, `PublicFormPage`, `EventRequestStatusPage`,
+  `BallotVotingPage`, `LocationKioskPage`, `GuestCheckInPage` and
+  `FinanceApprovalPage` all rendered with `index.html`'s skip link pointing at
+  nothing, while the test passed. That is the same assumption-instead-of-
+  measurement failure the guard was written to catch, committed in the guard
+  itself. All seven now render `<main id="main-content">`, and the list is
+  derived: the `AppLayout` route is excised from `<Routes>` by tag depth and
+  every remaining page — including those the factories render — is checked.
+- **The check-in monitoring guard validated 3 of its 16 required fields.** A
+  response carrying the two arrays and three counters but missing `event_name`,
+  `is_check_in_active` or the window timestamps was accepted, and the dashboard
+  rendered blank totals and an incorrect inactive badge as live data. All
+  required fields are checked now, and the error names the missing ones.
+- **The medical supplies guard validated `items` but not its paging metadata.**
+  `itemPage.total > 0` is what renders the pagination control, so an undefined
+  `total` showed page one and made every later supply unreachable.
+- **The audit-log statistics guard checked its maps for truthiness only**, so a
+  string or an array passed, and it did not check `total` at all — leaving a
+  blank "Total events" beside a populated table, which reads as a healthy log.
+
+**Changed**
+
+- **The applicant pipeline tabs implement the whole tab pattern**, not the half
+  of it that announces a contract. `role="tab"` tells a screen-reader user the
+  arrow keys move between views and that Tab leaves the strip; without roving
+  `tabIndex` and an Arrow/Home/End handler neither was true. Now matches
+  `AdminHubFrame`, which is where the app already does this properly, and the
+  five views share one `role="tabpanel"` so `aria-controls` names something
+  that exists.
+
 ### Gradient buttons were never contrast-checked, and four onboarding pages had no skip-link target (2026-09-08)
 
 **Fixed**

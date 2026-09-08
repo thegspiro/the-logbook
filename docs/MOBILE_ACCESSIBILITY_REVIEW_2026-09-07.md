@@ -129,6 +129,25 @@ step 1 twice and count it as coverage of two routes. `skipLinkTarget.test.ts`
 checks the assumption where it is exact — in the source, for every page
 reachable outside `AppLayout`.
 
+**And the first version of that guard made the same mistake it was written to
+catch.** Its list of pre-auth pages was hardcoded — five entries, with a comment
+arguing that they "are a handful, they change rarely, and a parser that got the
+layout boundary subtly wrong would quietly check nothing". Every clause was
+reasonable and the conclusion was wrong: `App.tsx` renders five module public
+route factories and `FinanceApprovalPage` outside the layout, none was in the
+list, and **all seven of those pages were missing the landmark while the test
+reported the sweep clean**. A hardcoded list is an assumption about coverage
+wearing the costume of a measurement, which is the thesis of this whole review.
+
+The list is derived now: the `AppLayout` route is excised from `<Routes>` by tag
+depth, and every page left — including the ones the route factories render — is
+checked. Two parsing details cost a cycle each and are worth recording, because
+both fail by finding _fewer_ pages rather than by erroring: a `<Route …>` tag
+cannot be delimited with `[^>]*>` when its `element` prop contains markup, and a
+`<([A-Z]\w+)[^>]*/>` matcher reads `<Route path="/" element={<Welcome />} />` as
+a single `Route` tag and swallows the page name inside it. The count assertion
+in that test is not decoration; it is the only thing that catches either.
+
 ### What axe could not decide
 
 axe reports a node it cannot measure as _incomplete_, not as a violation, and

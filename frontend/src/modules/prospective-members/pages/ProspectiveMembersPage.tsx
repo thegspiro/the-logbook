@@ -5,7 +5,7 @@
  * Supports kanban and table views with stats, search, and filtering.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { DialogPortal } from '../../../components/DialogPortal';
 import {
@@ -33,6 +33,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import type { PipelineTab } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
 import { PipelineTable } from '../components/PipelineTable';
 import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
@@ -106,6 +107,42 @@ export const ProspectiveMembersPage: React.FC = () => {
     setActiveTab,
     setDetailDrawerOpen,
   } = useProspectiveMembersStore();
+
+  // The tab strip, as data. Roving `tabIndex` and the arrow handler below need
+  // the order and the ids in one place; five hand-written buttons could not
+  // supply either without repeating the index arithmetic five times.
+  const PIPELINE_TABS: Array<{ id: PipelineTab; label: string; count?: number | undefined }> = [
+    { id: 'active', label: 'Active Pipeline' },
+    { id: 'inactive', label: 'Inactive Applications', count: pipelineStats?.inactive_count },
+    { id: 'rejected', label: 'Rejected', count: pipelineStats?.rejected_count },
+    { id: 'withdrawn', label: 'Withdrawn', count: pipelineStats?.withdrawn_count },
+    { id: 'converted', label: 'Converted', count: pipelineStats?.converted_count },
+  ];
+
+  const tabRefs = useRef<Partial<Record<PipelineTab, HTMLButtonElement | null>>>({});
+
+  /**
+   * Arrow/Home/End across the strip, with focus following the selection.
+   *
+   * This is the half of `role="tab"` that is easy to leave out and is not
+   * optional: the role tells a screen-reader user the arrows move between
+   * views, so without it the widget announces a contract it does not keep.
+   */
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const ids = PIPELINE_TABS.map((tab) => tab.id);
+    const current = ids.indexOf(activeTab);
+    let next: number | undefined;
+    if (event.key === 'ArrowRight') next = (current + 1) % ids.length;
+    if (event.key === 'ArrowLeft') next = (current - 1 + ids.length) % ids.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = ids.length - 1;
+    if (next === undefined) return;
+    event.preventDefault();
+    const nextId = ids[next];
+    if (nextId === undefined) return;
+    setActiveTab(nextId);
+    tabRefs.current[nextId]?.focus();
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -524,844 +561,489 @@ export const ProspectiveMembersPage: React.FC = () => {
           `role="tablist"`, not `<nav>`: these buttons swap an in-page panel,
           they do not navigate, and announcing them as a navigation landmark
           tells a screen-reader user the wrong thing about where they are.
-          `aria-selected` is what says which view is showing — without it,
-          moving between the five gave no programmatic signal at all. The
-          container takes no `tabIndex`: the buttons inside are focusable, so
-          the keyboard already reaches the scrolled-off end and a tab stop on
-          the strip itself is one the user has to press through for nothing. */}
+
+          The role is the whole pattern or none of it. Declaring `role="tab"`
+          tells a screen-reader user the arrow keys move between views and that
+          Tab leaves the strip; without roving `tabIndex` and the arrow handler,
+          neither is true, and the promise is worse than the plain buttons it
+          replaced. This mirrors `AdminHubFrame`, which is where the app already
+          does it properly — same roving index, same Arrow/Home/End set, same
+          focus move on change.
+
+          The container takes no `tabIndex`: the tabs inside are focusable, so
+          the keyboard already reaches the scrolled-off end, and a tab stop on
+          the strip itself is one more press for nothing. */}
       <div className="tab-scroll mb-4" data-mobile-scroll-region role="tablist" aria-label="Applicant pipeline views">
-        <button
-          onClick={() => setActiveTab('active')}
-          role="tab"
-          aria-selected={activeTab === 'active'}
-          className={`min-h-11 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'active'
-              ? 'text-theme-text-primary border-red-500'
-              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
-          }`}
-        >
-          Active Pipeline
-        </button>
-        <button
-          onClick={() => setActiveTab('inactive')}
-          role="tab"
-          aria-selected={activeTab === 'inactive'}
-          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'inactive'
-              ? 'text-theme-text-primary border-red-500'
-              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
-          }`}
-        >
-          Inactive Applications
-          {pipelineStats && pipelineStats.inactive_count > 0 && (
-            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
-              {pipelineStats.inactive_count}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('rejected')}
-          role="tab"
-          aria-selected={activeTab === 'rejected'}
-          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'rejected'
-              ? 'text-theme-text-primary border-red-500'
-              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
-          }`}
-        >
-          Rejected
-          {pipelineStats && pipelineStats.rejected_count > 0 && (
-            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
-              {pipelineStats.rejected_count}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('withdrawn')}
-          role="tab"
-          aria-selected={activeTab === 'withdrawn'}
-          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'withdrawn'
-              ? 'text-theme-text-primary border-red-500'
-              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
-          }`}
-        >
-          Withdrawn
-          {pipelineStats && pipelineStats.withdrawn_count > 0 && (
-            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
-              {pipelineStats.withdrawn_count}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('converted')}
-          role="tab"
-          aria-selected={activeTab === 'converted'}
-          className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === 'converted'
-              ? 'text-theme-text-primary border-red-500'
-              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
-          }`}
-        >
-          Converted
-          {pipelineStats && pipelineStats.converted_count > 0 && (
-            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
-              {pipelineStats.converted_count}
-            </span>
-          )}
-        </button>
+        {PIPELINE_TABS.map(({ id, label, count }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              id={`pipeline-tab-${id}`}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls="pipeline-panel"
+              tabIndex={isActive ? 0 : -1}
+              ref={(node) => {
+                tabRefs.current[id] = node;
+              }}
+              onClick={() => setActiveTab(id)}
+              onKeyDown={handleTabKeyDown}
+              className={`flex min-h-11 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'text-theme-text-primary border-red-500'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
+              }`}
+            >
+              {label}
+              {count !== undefined && count > 0 && (
+                <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Controls Bar (Active tab) */}
-      {activeTab === 'active' && (
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {/* Pipeline Selector */}
-          {pipelines.length > 1 && (
-            <select
-              value={currentPipeline?.id ?? ''}
-              onChange={(e) => {
-                const pipeline = pipelines.find((p) => p.id === e.target.value);
-                if (pipeline) void fetchPipeline(pipeline.id);
-              }}
-              className="form-input px-3 text-sm"
-            >
-              {pipelines.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Search */}
-          <div className="relative max-w-md flex-1">
-            <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="Search applicants..."
-              placeholder="Search applicants..."
-              className="form-input placeholder-theme-text-muted pr-4 pl-10 text-sm"
-            />
-          </div>
-
-          {/* Came-from filter. Absent entirely until at least one applicant is
-              linked to an event, so it never offers an empty choice. */}
-          {sourceEvents.length > 0 && (
-            <select
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-              aria-label="Filter by source event"
-              className={`form-input px-3 text-sm ${eventFilter ? 'border-red-500' : ''}`}
-            >
-              <option value="">All sources</option>
-              {sourceEvents.map((event) => (
-                <option key={event.event_id} value={event.event_id}>
-                  {event.title} ({event.prospect_count})
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Status Filter */}
-          <div className="relative">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                statusFilter
-                  ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
-                  : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
-              }`}
-            >
-              <Filter className="h-4 w-4" />
-              Filter
-              {statusFilter && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setStatusFilter('');
-                  }}
-                  className="ml-1"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </button>
-            {showFilters && (
-              <div ref={dialogRef1} className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
-                {(['active', 'on_hold'] as ApplicantStatus[]).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => {
-                      setStatusFilter(status);
-                      setShowFilters(false);
-                    }}
-                    className={`hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm capitalize ${
-                      statusFilter === status ? 'text-red-700 dark:text-red-400' : 'text-theme-text-secondary'
-                    }`}
-                  >
-                    {status.replace('_', ' ')}
-                  </button>
+      {/* The panel the tabs control. One wrapper around all five views, not
+          five panels: the strip is a single-selection widget over one region,
+          and `aria-controls` on a tab has to name an element that exists — a
+          dangling reference is an axe violation, not a harmless hint. */}
+      <div id="pipeline-panel" role="tabpanel" aria-labelledby={`pipeline-tab-${activeTab}`}>
+        {/* Controls Bar (Active tab) */}
+        {activeTab === 'active' && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            {/* Pipeline Selector */}
+            {pipelines.length > 1 && (
+              <select
+                value={currentPipeline?.id ?? ''}
+                onChange={(e) => {
+                  const pipeline = pipelines.find((p) => p.id === e.target.value);
+                  if (pipeline) void fetchPipeline(pipeline.id);
+                }}
+                className="form-input px-3 text-sm"
+              >
+                {pipelines.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
                 ))}
+              </select>
+            )}
+
+            {/* Search */}
+            <div className="relative max-w-md flex-1">
+              <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Search applicants..."
+                placeholder="Search applicants..."
+                className="form-input placeholder-theme-text-muted pr-4 pl-10 text-sm"
+              />
+            </div>
+
+            {/* Came-from filter. Absent entirely until at least one applicant is
+              linked to an event, so it never offers an empty choice. */}
+            {sourceEvents.length > 0 && (
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                aria-label="Filter by source event"
+                className={`form-input px-3 text-sm ${eventFilter ? 'border-red-500' : ''}`}
+              >
+                <option value="">All sources</option>
+                {sourceEvents.map((event) => (
+                  <option key={event.event_id} value={event.event_id}>
+                    {event.title} ({event.prospect_count})
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Status Filter */}
+            <div className="relative">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  statusFilter
+                    ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
+                    : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
+                }`}
+              >
+                <Filter className="h-4 w-4" />
+                Filter
                 {statusFilter && (
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setStatusFilter('');
-                      setShowFilters(false);
                     }}
-                    className="text-theme-text-muted hover:bg-theme-surface-secondary border-theme-surface-border w-full border-t px-4 py-2 text-left text-sm"
+                    className="ml-1"
                   >
-                    Clear filter
+                    <X className="h-3 w-3" />
                   </button>
                 )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1" />
-
-          {/* Refresh */}
-          <button
-            onClick={() => {
-              void fetchApplicants();
-            }}
-            disabled={isLoading}
-            className="text-theme-text-muted hover:text-theme-text-primary min-h-11 min-w-11 p-2 transition-colors disabled:opacity-50"
-            title="Refresh"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* View Toggle */}
-          <div className="card flex items-center">
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`flex min-h-11 items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
-                viewMode === 'kanban' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Kanban
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex min-h-11 items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors ${
-                viewMode === 'table' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
-              }`}
-            >
-              <List className="h-4 w-4" />
-              Table
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
-          <XCircle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
-          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-        </div>
-      )}
-
-      {/* Active Tab Content */}
-      {activeTab === 'active' && (
-        <>
-          {(isLoading || isLoadingPipeline || isLoadingPipelines) && !applicants.length ? (
-            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
-            </div>
-          ) : !currentPipeline ? (
-            <div className="py-20 text-center">
-              <Users className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No pipeline configured</h3>
-              <p className="text-theme-text-muted mb-4">Create a pipeline to start managing prospective members.</p>
-              <button onClick={() => void navigate('/prospective-members/settings')} className="btn-primary px-6">
-                Configure Pipeline
               </button>
-            </div>
-          ) : (
-            <>
-              {/* Bulk Actions Bar */}
-              {selectedApplicants.size > 0 && (
-                <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedApplicants.size === applicants.length}
-                      onChange={toggleAllApplicants}
-                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                    />
-                    {selectedApplicants.size} selected
-                  </label>
-                  <div className="ml-auto flex flex-wrap items-center gap-2">
+              {showFilters && (
+                <div ref={dialogRef1} className="modal-panel absolute top-full left-0 z-10 mt-2 w-48 py-1">
+                  {(['active', 'on_hold'] as ApplicantStatus[]).map((status) => (
                     <button
-                      onClick={() =>
-                        void navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)
-                      }
-                      className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
+                      key={status}
+                      onClick={() => {
+                        setStatusFilter(status);
+                        setShowFilters(false);
+                      }}
+                      className={`hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm capitalize ${
+                        statusFilter === status ? 'text-red-700 dark:text-red-400' : 'text-theme-text-secondary'
+                      }`}
                     >
-                      <Printer className="h-3.5 w-3.5" />
-                      Print Badges
+                      {status.replace('_', ' ')}
                     </button>
+                  ))}
+                  {statusFilter && (
                     <button
                       onClick={() => {
-                        void handleBulkAdvance();
+                        setStatusFilter('');
+                        setShowFilters(false);
                       }}
-                      disabled={isBulkAdvancing}
-                      className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                      className="text-theme-text-muted hover:bg-theme-surface-secondary border-theme-surface-border w-full border-t px-4 py-2 text-left text-sm"
                     >
-                      {isBulkAdvancing ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                      Advance All
+                      Clear filter
                     </button>
-                    {showBulkRejectConfirm ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={bulkRejectReason}
-                          onChange={(e) => setBulkRejectReason(e.target.value)}
-                          placeholder="Reason (optional)"
-                          aria-label="Reason for rejecting the selected applicants"
-                          maxLength={1000}
-                          className="form-input w-56 py-1.5 text-sm"
-                        />
-                        <button
-                          onClick={() => {
-                            setShowBulkRejectConfirm(false);
-                            setBulkRejectReason('');
-                          }}
-                          className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => {
-                            void handleBulkReject();
-                          }}
-                          disabled={isBulkRejecting}
-                          className="flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm text-white transition-colors hover:bg-red-900 disabled:opacity-50"
-                        >
-                          {isBulkRejecting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <XCircle className="h-3.5 w-3.5" />
-                          )}
-                          Confirm Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowBulkRejectConfirm(true)}
-                        className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                        Reject All
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setSelectedApplicants(new Set())}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
-                      title="Clear selection"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+                  )}
                 </div>
               )}
-              {viewMode === 'kanban' && (
-                <PipelineKanban
-                  stages={sortedStages}
-                  applicants={applicants}
-                  totalApplicants={totalApplicants}
-                  onApplicantClick={handleApplicantClick}
-                  selectedApplicants={selectedApplicants}
-                  onToggleSelect={toggleApplicantSelection}
-                />
-              )}
-              {viewMode === 'table' && (
-                <PipelineTable
-                  applicants={applicants}
-                  totalApplicants={totalApplicants}
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={(page) => {
-                    void fetchApplicants(page);
-                  }}
-                  onApplicantClick={handleApplicantClick}
-                  selectedApplicants={selectedApplicants}
-                  onToggleSelect={toggleApplicantSelection}
-                  onToggleAll={toggleAllApplicants}
-                />
-              )}
-            </>
-          )}
-        </>
-      )}
+            </div>
 
-      {/* Inactive Tab Content */}
-      {activeTab === 'inactive' && (
-        <div>
-          {/* Inactive Bulk Actions */}
-          {selectedInactive.size > 0 && (
-            <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
-              <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    void handleBulkReactivate();
-                  }}
-                  disabled={isBulkReactivating}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
-                >
-                  {isBulkReactivating ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  )}
-                  Reactivate
-                </button>
-                <button
-                  onClick={() => setShowPurgeConfirm(true)}
-                  disabled={isPurging}
-                  className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Purge Selected
+            <div className="flex-1" />
+
+            {/* Refresh */}
+            <button
+              onClick={() => {
+                void fetchApplicants();
+              }}
+              disabled={isLoading}
+              className="text-theme-text-muted hover:text-theme-text-primary min-h-11 min-w-11 p-2 transition-colors disabled:opacity-50"
+              title="Refresh"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+
+            {/* View Toggle */}
+            <div className="card flex items-center">
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`flex min-h-11 items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
+                  viewMode === 'kanban'
+                    ? 'bg-red-800 text-white'
+                    : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Kanban
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex min-h-11 items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors ${
+                  viewMode === 'table' ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                }`}
+              >
+                <List className="h-4 w-4" />
+                Table
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
+            <XCircle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* Active Tab Content */}
+        {activeTab === 'active' && (
+          <>
+            {(isLoading || isLoadingPipeline || isLoadingPipelines) && !applicants.length ? (
+              <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+              </div>
+            ) : !currentPipeline ? (
+              <div className="py-20 text-center">
+                <Users className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+                <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No pipeline configured</h3>
+                <p className="text-theme-text-muted mb-4">Create a pipeline to start managing prospective members.</p>
+                <button onClick={() => void navigate('/prospective-members/settings')} className="btn-primary px-6">
+                  Configure Pipeline
                 </button>
               </div>
-            </div>
-          )}
-
-          {isLoadingInactive ? (
-            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
-            </div>
-          ) : inactiveApplicants.length === 0 ? (
-            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-              <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
-              <p className="text-theme-text-muted text-sm">
-                All applications are currently active or have been resolved.
-              </p>
-            </div>
-          ) : (
-            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th scope="col" className="w-10 p-3">
+            ) : (
+              <>
+                {/* Bulk Actions Bar */}
+                {selectedApplicants.size > 0 && (
+                  <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
+                    <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
-                        checked={selectedInactive.size === inactiveApplicants.length && inactiveApplicants.length > 0}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedInactive(new Set(inactiveApplicants.map((a) => a.id)));
-                          } else {
-                            setSelectedInactive(new Set());
-                          }
-                        }}
+                        checked={selectedApplicants.size === applicants.length}
+                        onChange={toggleAllApplicants}
                         className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                       />
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Name
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Email
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Last Stage
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Inactive Since
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Days Idle
-                    </th>
-                    <th scope="col" className="w-28 p-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inactiveApplicants.map((applicant) => (
-                    <tr
-                      key={applicant.id}
-                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
-                    >
-                      <td className="p-3">
+                      {selectedApplicants.size} selected
+                    </label>
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() =>
+                          void navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)
+                        }
+                        className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Print Badges
+                      </button>
+                      <button
+                        onClick={() => {
+                          void handleBulkAdvance();
+                        }}
+                        disabled={isBulkAdvancing}
+                        className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {isBulkAdvancing ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        Advance All
+                      </button>
+                      {showBulkRejectConfirm ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={bulkRejectReason}
+                            onChange={(e) => setBulkRejectReason(e.target.value)}
+                            placeholder="Reason (optional)"
+                            aria-label="Reason for rejecting the selected applicants"
+                            maxLength={1000}
+                            className="form-input w-56 py-1.5 text-sm"
+                          />
+                          <button
+                            onClick={() => {
+                              setShowBulkRejectConfirm(false);
+                              setBulkRejectReason('');
+                            }}
+                            className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              void handleBulkReject();
+                            }}
+                            disabled={isBulkRejecting}
+                            className="flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+                          >
+                            {isBulkRejecting ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <XCircle className="h-3.5 w-3.5" />
+                            )}
+                            Confirm Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowBulkRejectConfirm(true)}
+                          className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Reject All
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setSelectedApplicants(new Set())}
+                        className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
+                        title="Clear selection"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {viewMode === 'kanban' && (
+                  <PipelineKanban
+                    stages={sortedStages}
+                    applicants={applicants}
+                    totalApplicants={totalApplicants}
+                    onApplicantClick={handleApplicantClick}
+                    selectedApplicants={selectedApplicants}
+                    onToggleSelect={toggleApplicantSelection}
+                  />
+                )}
+                {viewMode === 'table' && (
+                  <PipelineTable
+                    applicants={applicants}
+                    totalApplicants={totalApplicants}
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={(page) => {
+                      void fetchApplicants(page);
+                    }}
+                    onApplicantClick={handleApplicantClick}
+                    selectedApplicants={selectedApplicants}
+                    onToggleSelect={toggleApplicantSelection}
+                    onToggleAll={toggleAllApplicants}
+                  />
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Inactive Tab Content */}
+        {activeTab === 'inactive' && (
+          <div>
+            {/* Inactive Bulk Actions */}
+            {selectedInactive.size > 0 && (
+              <div className="card mb-3 flex flex-wrap items-center gap-3 p-3">
+                <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      void handleBulkReactivate();
+                    }}
+                    disabled={isBulkReactivating}
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-800 disabled:opacity-50"
+                  >
+                    {isBulkReactivating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    )}
+                    Reactivate
+                  </button>
+                  <button
+                    onClick={() => setShowPurgeConfirm(true)}
+                    disabled={isPurging}
+                    className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Purge Selected
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isLoadingInactive ? (
+              <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+              </div>
+            ) : inactiveApplicants.length === 0 ? (
+              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+                <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
+                <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
+                <p className="text-theme-text-muted text-sm">
+                  All applications are currently active or have been resolved.
+                </p>
+              </div>
+            ) : (
+              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-theme-surface-border border-b">
+                      <th scope="col" className="w-10 p-3">
                         <input
                           type="checkbox"
-                          checked={selectedInactive.has(applicant.id)}
+                          checked={selectedInactive.size === inactiveApplicants.length && inactiveApplicants.length > 0}
                           onChange={(e) => {
-                            const next = new Set(selectedInactive);
                             if (e.target.checked) {
-                              next.add(applicant.id);
+                              setSelectedInactive(new Set(inactiveApplicants.map((a) => a.id)));
                             } else {
-                              next.delete(applicant.id);
+                              setSelectedInactive(new Set());
                             }
-                            setSelectedInactive(next);
                           }}
                           className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                         />
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                            {getInitials(applicant.first_name, applicant.last_name)}
-                          </div>
-                          <span className="text-theme-text-secondary text-sm font-medium">
-                            {applicant.first_name} {applicant.last_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
-                        {applicant.current_stage_name ?? '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
-                        {applicant.deactivated_at ? formatDate(applicant.deactivated_at, tz) : '—'}
-                      </td>
-                      <td className="text-theme-text-muted p-3 text-sm">{applicant.days_since_activity}d</td>
-                      <td className="p-3">
-                        <button
-                          onClick={() => {
-                            void (async () => {
-                              try {
-                                await reactivateApplicant(applicant.id);
-                                toast.success(`${applicant.first_name} reactivated`);
-                              } catch {
-                                toast.error('Failed to reactivate');
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Name
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Email
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Last Stage
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Inactive Since
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Days Idle
+                      </th>
+                      <th scope="col" className="w-28 p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inactiveApplicants.map((applicant) => (
+                      <tr
+                        key={applicant.id}
+                        className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
+                      >
+                        <td className="p-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedInactive.has(applicant.id)}
+                            onChange={(e) => {
+                              const next = new Set(selectedInactive);
+                              if (e.target.checked) {
+                                next.add(applicant.id);
+                              } else {
+                                next.delete(applicant.id);
                               }
-                            })();
-                          }}
-                          disabled={isReactivating}
-                          className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                          Reactivate
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {inactiveTotalPages > 1 && (
-                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
-                  <p className="text-theme-text-muted text-sm">
-                    Page {inactiveCurrentPage} of {inactiveTotalPages} ({inactiveTotalApplicants} total)
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        void fetchInactiveApplicants(inactiveCurrentPage - 1);
-                      }}
-                      disabled={inactiveCurrentPage <= 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => {
-                        void fetchInactiveApplicants(inactiveCurrentPage + 1);
-                      }}
-                      disabled={inactiveCurrentPage >= inactiveTotalPages}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Purge Note */}
-          {inactiveApplicants.length > 0 && (
-            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
-              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <p className="text-theme-text-muted text-xs">
-                Inactive applications are excluded from pipeline statistics. Purging permanently deletes applicant data
-                and cannot be undone. Consider reactivating applications before purging if you are unsure.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Rejected Tab Content */}
-      {activeTab === 'rejected' && (
-        <div>
-          {isLoadingRejected ? (
-            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
-            </div>
-          ) : rejectedApplicants.length === 0 ? (
-            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-              <XCircle className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No rejected applications</h3>
-              <p className="text-theme-text-muted text-sm">
-                Applicants the department declines are removed from the pipeline and kept here.
-              </p>
-            </div>
-          ) : (
-            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Name
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Email
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Stage Reached
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Last Activity
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Days in Pipeline
-                    </th>
-                    <th scope="col" className="w-32 p-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rejectedApplicants.map((applicant) => (
-                    <tr
-                      key={applicant.id}
-                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
-                    >
-                      <td className="p-3">
-                        <div
-                          className="flex cursor-pointer items-center gap-2.5"
-                          onClick={() => {
-                            void fetchApplicant(applicant.id);
-                          }}
-                        >
-                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                            {getInitials(applicant.first_name, applicant.last_name)}
+                              setSelectedInactive(next);
+                            }}
+                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                              {getInitials(applicant.first_name, applicant.last_name)}
+                            </div>
+                            <span className="text-theme-text-secondary text-sm font-medium">
+                              {applicant.first_name} {applicant.last_name}
+                            </span>
                           </div>
-                          <span className="text-theme-text-secondary text-sm font-medium">
-                            {applicant.first_name} {applicant.last_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
-                        {applicant.current_stage_name ?? '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
-                        {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
-                        {applicant.days_in_pipeline}d
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              void fetchApplicant(applicant.id);
-                            }}
-                            className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
-                          >
-                            View
-                          </button>
-                          <button
-                            onClick={() => {
-                              void (async () => {
-                                try {
-                                  await reactivateApplicant(applicant.id);
-                                  toast.success(`${applicant.first_name} reactivated`);
-                                } catch (err: unknown) {
-                                  toast.error(getErrorMessage(err, 'Failed to reactivate'));
-                                }
-                              })();
-                            }}
-                            disabled={isReactivating}
-                            className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                            Reactivate
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rejectedTotalPages > 1 && (
-                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
-                  <p className="text-theme-text-muted text-sm">
-                    Page {rejectedCurrentPage} of {rejectedTotalPages} ({rejectedTotalApplicants} total)
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        void fetchRejectedApplicants(rejectedCurrentPage - 1);
-                      }}
-                      disabled={rejectedCurrentPage <= 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => {
-                        void fetchRejectedApplicants(rejectedCurrentPage + 1);
-                      }}
-                      disabled={rejectedCurrentPage >= rejectedTotalPages}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Info Note */}
-          {rejectedApplicants.length > 0 && (
-            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
-              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <p className="text-theme-text-muted text-xs">
-                Rejected applications are out of the pipeline: they are off the board, cannot be put forward for
-                election and cannot be interviewed. Open one and expand its activity log to see the reason recorded with
-                the decision. Reactivating returns an applicant to the stage they were rejected at.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Withdrawn Tab Content */}
-      {activeTab === 'withdrawn' && (
-        <div>
-          {isLoadingWithdrawn ? (
-            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
-            </div>
-          ) : withdrawnApplicants.length === 0 ? (
-            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-              <Archive className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No withdrawn applications</h3>
-              <p className="text-theme-text-muted text-sm">
-                Applicants who voluntarily withdraw from the pipeline will appear here.
-              </p>
-            </div>
-          ) : (
-            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Name
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Email
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Last Stage
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Withdrawn Date
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Reason
-                    </th>
-                    <th scope="col" className="w-32 p-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {withdrawnApplicants.map((applicant) => (
-                    <tr
-                      key={applicant.id}
-                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
-                    >
-                      <td className="p-3">
-                        <div
-                          className="flex cursor-pointer items-center gap-2.5"
-                          onClick={() => {
-                            void fetchApplicant(applicant.id);
-                          }}
-                        >
-                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                            {getInitials(applicant.first_name, applicant.last_name)}
-                          </div>
-                          <span className="text-theme-text-secondary text-sm font-medium">
-                            {applicant.first_name} {applicant.last_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
-                        {applicant.current_stage_name ?? '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
-                        {applicant.withdrawn_at ? formatDate(applicant.withdrawn_at, tz) : '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm">
-                        {applicant.withdrawal_reason ?? '—'}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              void fetchApplicant(applicant.id);
-                            }}
-                            className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
-                          >
-                            View
-                          </button>
+                        </td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.current_stage_name ?? '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          {applicant.deactivated_at ? formatDate(applicant.deactivated_at, tz) : '—'}
+                        </td>
+                        <td className="text-theme-text-muted p-3 text-sm">{applicant.days_since_activity}d</td>
+                        <td className="p-3">
                           <button
                             onClick={() => {
                               void (async () => {
@@ -1379,197 +1061,518 @@ export const ProspectiveMembersPage: React.FC = () => {
                             <RotateCcw className="h-3 w-3" />
                             Reactivate
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {withdrawnTotalPages > 1 && (
-                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
-                  <p className="text-theme-text-muted text-sm">
-                    Page {withdrawnCurrentPage} of {withdrawnTotalPages} ({withdrawnTotalApplicants} total)
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        void fetchWithdrawnApplicants(withdrawnCurrentPage - 1);
-                      }}
-                      disabled={withdrawnCurrentPage <= 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => {
-                        void fetchWithdrawnApplicants(withdrawnCurrentPage + 1);
-                      }}
-                      disabled={withdrawnCurrentPage >= withdrawnTotalPages}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Next
-                    </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {inactiveTotalPages > 1 && (
+                  <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                    <p className="text-theme-text-muted text-sm">
+                      Page {inactiveCurrentPage} of {inactiveTotalPages} ({inactiveTotalApplicants} total)
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          void fetchInactiveApplicants(inactiveCurrentPage - 1);
+                        }}
+                        disabled={inactiveCurrentPage <= 1}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => {
+                          void fetchInactiveApplicants(inactiveCurrentPage + 1);
+                        }}
+                        disabled={inactiveCurrentPage >= inactiveTotalPages}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
 
-          {/* Info Note */}
-          {withdrawnApplicants.length > 0 && (
-            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
-              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <p className="text-theme-text-muted text-xs">
-                Withdrawn applications are from prospective members who voluntarily left the pipeline process. You can
-                reactivate them to place them back into the active pipeline at their previous stage.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+            {/* Purge Note */}
+            {inactiveApplicants.length > 0 && (
+              <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
+                <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p className="text-theme-text-muted text-xs">
+                  Inactive applications are excluded from pipeline statistics. Purging permanently deletes applicant
+                  data and cannot be undone. Consider reactivating applications before purging if you are unsure.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
-      {/* Converted Tab Content */}
-      {activeTab === 'converted' && (
-        <div>
-          {isLoadingConverted ? (
-            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
-            </div>
-          ) : convertedApplicants.length === 0 ? (
-            <div className="card bg-theme-input-bg border-dashed py-20 text-center">
-              <CheckCircle2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
-              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No converted applications</h3>
-              <p className="text-theme-text-muted text-sm">
-                Applicants voted in and transferred to membership are kept here with their application history.
-              </p>
-            </div>
-          ) : (
-            <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Name
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Email
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Final Stage
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Last Activity
-                    </th>
-                    <th
-                      scope="col"
-                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
-                    >
-                      Days in Pipeline
-                    </th>
-                    <th scope="col" className="w-20 p-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {convertedApplicants.map((applicant) => (
-                    <tr
-                      key={applicant.id}
-                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
-                    >
-                      <td className="p-3">
-                        <div
-                          className="flex cursor-pointer items-center gap-2.5"
-                          onClick={() => {
-                            void fetchApplicant(applicant.id);
-                          }}
-                        >
-                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                            {getInitials(applicant.first_name, applicant.last_name)}
+        {/* Rejected Tab Content */}
+        {activeTab === 'rejected' && (
+          <div>
+            {isLoadingRejected ? (
+              <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+              </div>
+            ) : rejectedApplicants.length === 0 ? (
+              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+                <XCircle className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+                <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No rejected applications</h3>
+                <p className="text-theme-text-muted text-sm">
+                  Applicants the department declines are removed from the pipeline and kept here.
+                </p>
+              </div>
+            ) : (
+              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-theme-surface-border border-b">
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Name
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Email
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Stage Reached
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Last Activity
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Days in Pipeline
+                      </th>
+                      <th scope="col" className="w-32 p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rejectedApplicants.map((applicant) => (
+                      <tr
+                        key={applicant.id}
+                        className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
+                      >
+                        <td className="p-3">
+                          <div
+                            className="flex cursor-pointer items-center gap-2.5"
+                            onClick={() => {
+                              void fetchApplicant(applicant.id);
+                            }}
+                          >
+                            <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                              {getInitials(applicant.first_name, applicant.last_name)}
+                            </div>
+                            <span className="text-theme-text-secondary text-sm font-medium">
+                              {applicant.first_name} {applicant.last_name}
+                            </span>
                           </div>
-                          <span className="text-theme-text-secondary text-sm font-medium">
-                            {applicant.first_name} {applicant.last_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
-                        {applicant.current_stage_name ?? '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
-                        {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
-                      </td>
-                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
-                        {applicant.days_in_pipeline}d
-                      </td>
-                      <td className="p-3">
-                        {/* View only. These applicants are members now — there
-                            is no reactivating them, and the backend refuses it. */}
-                        <button
-                          onClick={() => {
-                            void fetchApplicant(applicant.id);
-                          }}
-                          className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {convertedTotalPages > 1 && (
-                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
-                  <p className="text-theme-text-muted text-sm">
-                    Page {convertedCurrentPage} of {convertedTotalPages} ({convertedTotalApplicants} total)
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        void fetchConvertedApplicants(convertedCurrentPage - 1);
-                      }}
-                      disabled={convertedCurrentPage <= 1}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      onClick={() => {
-                        void fetchConvertedApplicants(convertedCurrentPage + 1);
-                      }}
-                      disabled={convertedCurrentPage >= convertedTotalPages}
-                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
-                    >
-                      Next
-                    </button>
+                        </td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.current_stage_name ?? '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          {applicant.days_in_pipeline}d
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                void fetchApplicant(applicant.id);
+                              }}
+                              className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                void (async () => {
+                                  try {
+                                    await reactivateApplicant(applicant.id);
+                                    toast.success(`${applicant.first_name} reactivated`);
+                                  } catch (err: unknown) {
+                                    toast.error(getErrorMessage(err, 'Failed to reactivate'));
+                                  }
+                                })();
+                              }}
+                              disabled={isReactivating}
+                              className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              Reactivate
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {rejectedTotalPages > 1 && (
+                  <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                    <p className="text-theme-text-muted text-sm">
+                      Page {rejectedCurrentPage} of {rejectedTotalPages} ({rejectedTotalApplicants} total)
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          void fetchRejectedApplicants(rejectedCurrentPage - 1);
+                        }}
+                        disabled={rejectedCurrentPage <= 1}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => {
+                          void fetchRejectedApplicants(rejectedCurrentPage + 1);
+                        }}
+                        disabled={rejectedCurrentPage >= rejectedTotalPages}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
 
-          {/* Info Note */}
-          {convertedApplicants.length > 0 && (
-            <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
-              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <p className="text-theme-text-muted text-xs">
-                These applicants were voted in and now hold member records. Their application history, documents and
-                interviews are kept here; manage the member themselves from the members list.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+            {/* Info Note */}
+            {rejectedApplicants.length > 0 && (
+              <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
+                <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p className="text-theme-text-muted text-xs">
+                  Rejected applications are out of the pipeline: they are off the board, cannot be put forward for
+                  election and cannot be interviewed. Open one and expand its activity log to see the reason recorded
+                  with the decision. Reactivating returns an applicant to the stage they were rejected at.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Withdrawn Tab Content */}
+        {activeTab === 'withdrawn' && (
+          <div>
+            {isLoadingWithdrawn ? (
+              <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+              </div>
+            ) : withdrawnApplicants.length === 0 ? (
+              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+                <Archive className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+                <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No withdrawn applications</h3>
+                <p className="text-theme-text-muted text-sm">
+                  Applicants who voluntarily withdraw from the pipeline will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-theme-surface-border border-b">
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Name
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Email
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Last Stage
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Withdrawn Date
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Reason
+                      </th>
+                      <th scope="col" className="w-32 p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {withdrawnApplicants.map((applicant) => (
+                      <tr
+                        key={applicant.id}
+                        className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
+                      >
+                        <td className="p-3">
+                          <div
+                            className="flex cursor-pointer items-center gap-2.5"
+                            onClick={() => {
+                              void fetchApplicant(applicant.id);
+                            }}
+                          >
+                            <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                              {getInitials(applicant.first_name, applicant.last_name)}
+                            </div>
+                            <span className="text-theme-text-secondary text-sm font-medium">
+                              {applicant.first_name} {applicant.last_name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.current_stage_name ?? '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          {applicant.withdrawn_at ? formatDate(applicant.withdrawn_at, tz) : '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm">
+                          {applicant.withdrawal_reason ?? '—'}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                void fetchApplicant(applicant.id);
+                              }}
+                              className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                void (async () => {
+                                  try {
+                                    await reactivateApplicant(applicant.id);
+                                    toast.success(`${applicant.first_name} reactivated`);
+                                  } catch {
+                                    toast.error('Failed to reactivate');
+                                  }
+                                })();
+                              }}
+                              disabled={isReactivating}
+                              className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              Reactivate
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {withdrawnTotalPages > 1 && (
+                  <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                    <p className="text-theme-text-muted text-sm">
+                      Page {withdrawnCurrentPage} of {withdrawnTotalPages} ({withdrawnTotalApplicants} total)
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          void fetchWithdrawnApplicants(withdrawnCurrentPage - 1);
+                        }}
+                        disabled={withdrawnCurrentPage <= 1}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => {
+                          void fetchWithdrawnApplicants(withdrawnCurrentPage + 1);
+                        }}
+                        disabled={withdrawnCurrentPage >= withdrawnTotalPages}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Info Note */}
+            {withdrawnApplicants.length > 0 && (
+              <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
+                <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p className="text-theme-text-muted text-xs">
+                  Withdrawn applications are from prospective members who voluntarily left the pipeline process. You can
+                  reactivate them to place them back into the active pipeline at their previous stage.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Converted Tab Content */}
+        {activeTab === 'converted' && (
+          <div>
+            {isLoadingConverted ? (
+              <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+                <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
+              </div>
+            ) : convertedApplicants.length === 0 ? (
+              <div className="card bg-theme-input-bg border-dashed py-20 text-center">
+                <CheckCircle2 className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+                <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No converted applications</h3>
+                <p className="text-theme-text-muted text-sm">
+                  Applicants voted in and transferred to membership are kept here with their application history.
+                </p>
+              </div>
+            ) : (
+              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-theme-surface-border border-b">
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Name
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Email
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Final Stage
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Last Activity
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Days in Pipeline
+                      </th>
+                      <th scope="col" className="w-20 p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {convertedApplicants.map((applicant) => (
+                      <tr
+                        key={applicant.id}
+                        className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
+                      >
+                        <td className="p-3">
+                          <div
+                            className="flex cursor-pointer items-center gap-2.5"
+                            onClick={() => {
+                              void fetchApplicant(applicant.id);
+                            }}
+                          >
+                            <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                              {getInitials(applicant.first_name, applicant.last_name)}
+                            </div>
+                            <span className="text-theme-text-secondary text-sm font-medium">
+                              {applicant.first_name} {applicant.last_name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.current_stage_name ?? '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
+                        </td>
+                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                          {applicant.days_in_pipeline}d
+                        </td>
+                        <td className="p-3">
+                          {/* View only. These applicants are members now — there
+                            is no reactivating them, and the backend refuses it. */}
+                          <button
+                            onClick={() => {
+                              void fetchApplicant(applicant.id);
+                            }}
+                            className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {convertedTotalPages > 1 && (
+                  <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                    <p className="text-theme-text-muted text-sm">
+                      Page {convertedCurrentPage} of {convertedTotalPages} ({convertedTotalApplicants} total)
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          void fetchConvertedApplicants(convertedCurrentPage - 1);
+                        }}
+                        disabled={convertedCurrentPage <= 1}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => {
+                          void fetchConvertedApplicants(convertedCurrentPage + 1);
+                        }}
+                        disabled={convertedCurrentPage >= convertedTotalPages}
+                        className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Info Note */}
+            {convertedApplicants.length > 0 && (
+              <div className="card bg-theme-input-bg mt-4 flex items-start gap-2 p-3">
+                <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <p className="text-theme-text-muted text-xs">
+                  These applicants were voted in and now hold member records. Their application history, documents and
+                  interviews are kept here; manage the member themselves from the members list.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (

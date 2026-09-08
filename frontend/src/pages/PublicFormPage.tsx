@@ -362,7 +362,7 @@ const PublicFormPage = () => {
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-8">
-      <div className="mx-auto max-w-2xl">
+      <main id="main-content" className="mx-auto max-w-2xl">
         {/* Header */}
         <div className="bg-theme-surface mb-6 overflow-hidden rounded-xl shadow-lg">
           <div className="bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6">
@@ -473,7 +473,7 @@ const PublicFormPage = () => {
 
         {/* Footer */}
         <p className="text-theme-text-muted mt-6 text-center text-xs">Powered by The Logbook</p>
-      </div>
+      </main>
     </div>
   );
 };
