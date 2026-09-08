@@ -1,12 +1,57 @@
 # Changelog
 
-All notable changes to The Logbook project will be documented in this file.
+This file records notable changes up to the commit that closed it on 2026-09-08.
+The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+> **This file is closed to new entries.** The freeze takes effect at the commit
+> that added this note, not at the end of that calendar day — changes merged
+> later on 2026-09-08 are already outside it. Everything below is kept as
+> written; nothing is added. Changes shipped from the freeze onward are read
+> from the merged pull requests, and their narrative lives in
+> [`docs/security-review/`](docs/security-review/PROGRESS.md),
+> [`docs/app-review/PROGRESS.md`](docs/app-review/PROGRESS.md),
+> [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) and — for anything
+> that can block an upgrade — [`docs/UPGRADING.md`](docs/UPGRADING.md).
+>
+> The reason is mechanical, not a judgement that the history stopped mattering:
+> every pull request appended to `## [Unreleased]` at the same file offset, so
+> concurrent branches conflicted on the pair every time. See
+> [Changelog entries are no longer part of a pull request](CLAUDE.md#changelog-entries-are-no-longer-part-of-a-pull-request).
 
 ## [Unreleased]
 
+### The shift-report print test waits for the timer it advances (2026-09-07)
+
+**Fixed**
+
+- **`ShiftReportPrintPage.test.tsx` no longer races the effect it is
+  measuring.** Its six tests advance fake timers to reach the print timeout, but
+  that timer is scheduled by an effect gated on report state — it does not exist
+  until the fetch's promise has resolved, React has committed, and the passive
+  effect has run. What the tests waited on instead was `getReport` having been
+  _called_, which is already true synchronously inside `render`: the wait
+  resolved immediately and guaranteed none of those three steps. Normally they
+  happened during the advance's first yield anyway; under a loaded machine they
+  did not, and `advanceTimersByTimeAsync` advanced a clock carrying no print
+  timer. That is how a pre-commit `vitest related` run came to fail in
+  scheduling while someone was committing to inventory.
+- A longer advance would not have fixed it: `tickAsync` snapshots its target
+  after its first yield, so an effect landing later is late however far the
+  clock is asked to travel. The tests now settle through `act` first — the one
+  thing that guarantees passive effects have flushed — advancing by zero, which
+  costs no fake-clock budget. Same idiom already used by
+  `EventQRCodePage.test.tsx`.
+- The negative test gains meaning it did not have. "Waits for the call-type
+  labels before printing" asserts `window.print` was _not_ called; under the
+  race it passed because nothing had been scheduled to call it, which is
+  indistinguishable from the component correctly waiting. Demonstrated both
+  ways: with one macrotask of injected latency the old tests fail three ways
+  while that one still passes, and the label-wait removed from the component
+  still turns it red after the change.
+
+No production change — the component's behaviour was correct throughout.
 ### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
 
 **Fixed**

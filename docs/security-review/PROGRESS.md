@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2413 (Feature 08, Membership pipeline, pass 5, MP-29 round 4
+— cancellation-detection and stale-docstring fixes on top of #2408) merged
+clean, 17/17 CI checks green, its one Codex thread resolved. Feature 08 is
+now fully closed across all rounds (MP-27 via #2405, MP-28 via #2406,
+MP-29 and its four Codex-review rounds via #2408 and #2413). Next: 10
+Documents & legal.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08 pass 5, MP-29, PR #2408/#2413), preserved for history</summary>
+
 **Feature 08 (Membership pipeline, pass 5, MP-29)** — PR
 [#2408](https://github.com/thegspiro/the-logbook/pull/2408), branch
 `claude/security-review-membership-pipeline-mp29`. PR #2406 (MP-28, the
@@ -71,6 +81,8 @@ one finishing — a mild "one PR at a time" violation caused by the pointer
 only updating on merge, not on open, not this session's to fix. Feature 09
 is therefore already done; next feature once _this_ PR merges is 10
 (Documents & legal, confirmed by `main`'s own post-#2409-merge pointer).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, pass 4, PR #2409, merged out of turn while #2408 was still open), preserved for history</summary>
@@ -11556,6 +11568,75 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5)'s PR #2413 merged — feature fully closed
+
+PR #2408 merged mid-fix (as #2406 had before it), so its last two Codex
+findings landed in a follow-up, #2413: (1) preserving `bulk_task`'s
+original failure instead of burying it behind a 10s timeout when the task
+raised before reaching its pause point (same fix already applied to the
+sibling `writer_task` case), and (2) correcting the class docstring's
+claimed pre-fix failure mechanism a second time to match the code's
+current wait logic. A fifth Codex round on #2413 itself then found the
+cancellation-detection flag in both `finally` blocks missed the case where
+`asyncio.wait_for(task, timeout=10)`'s own internal timeout cancels the
+task before this code ever sees it not-done — fixed by checking
+`task.cancelled()` after the task has settled, covering both self-
+initiated and `wait_for`-initiated cancellation. Codex's next review pass
+on the fix found nothing further. PR #2413 merged fully green (17/17 CI
+checks, `mergeable_state: clean`), its one review thread resolved.
+
+Feature 08's pass 5 is now completely closed across every round: MP-27
+(#2405), MP-28 (#2406), MP-29 and its four Codex-review rounds (#2408,
+#2413). **Open PR** row cleared. Next: 10 Documents & legal.
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 rounds 3-4) — 4 more test-robustness fixes (Codex review of PR #2408)
+
+Two further Codex rounds on PR #2408, both about the new tests' own
+robustness rather than coverage gaps or production code:
+
+**Round 3:** the class docstring had drifted from actual behavior (said
+the "still blocked" assertion fires; the test actually times out earlier,
+waiting on `lock_attempted`) — corrected. The bulk-lock test's
+`checker_session.rollback()` after a cancelled-mid-read lock check was
+wrapped in a bare `except Exception: pass`, which could silently discard a
+real connection error and let the outer teardown's own `rollback()` either
+mask the intended `pytest.fail()` behind a secondary exception, or succeed
+and hide that anything went wrong — replaced with `invalidate()` (which
+SQLAlchemy guarantees does not raise even on an already-broken connection)
+specifically on that failure path.
+
+**Round 4:** in both `_run_against_in_flight_transfer` and the bulk-lock
+test, a background task that raised (or returned) before ever reaching the
+point being tracked left the test waiting out a full 10s for an event that
+could no longer fire, burying the real exception behind a confusing
+timeout with the task's own error left unretrieved. Both now race the
+tracked event against the task itself
+(`asyncio.wait(..., return_when=FIRST_COMPLETED)`) and immediately
+propagate the task's result/exception if it finishes first. Cancelling
+either task mid-DB-read can also leave its session's connection unusable,
+so both `finally` blocks now call `invalidate()` instead of `rollback()`
+specifically when the task was cancelled, keeping the explicit row-cleanup
+teardown running unconditionally. This also meant correcting the class
+docstring a second time: with the race in place, the actual pre-MP-27
+mechanism turned out more subtle than originally documented — the unlocked
+`SELECT` returns instantly (MVCC reads never wait on another transaction's
+row lock), but the `UPDATE` the write eventually issues at its own
+flush/commit is a real row-level write that InnoDB always serializes via
+genuine locks, so it queues behind the locker's `FOR UPDATE` and never
+completes either. _Neither_ side of the race finishes, so the explicit
+`TimeoutError` fires — verified directly by re-running against `ae4fe98`
+after the change, not just re-derived from reading the diff.
+
+Completion gate re-run after both rounds: flake8/black/isort clean; all 8
+guard tests pass and each independently reconfirmed to fail against its
+correct pre-fix state (including the corrected `ae4fe98` mechanism above,
+and the bulk test's pre-MP-28 failure still reporting a single clean
+`pytest.fail()`, not masked by anything); scoped pytest 806 passed / 1
+skipped / 0 failed; full backend suite 11859 passed / 21 skipped / 0
+failed. Updated `docs/security-review/MP-08-membership-pipeline.md` with
+both rounds' write-up. All 8 Codex review threads on this PR now replied
+to and resolved.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 round 2) — 3 fixed (Codex review of PR #2408, one a real CI failure)
 

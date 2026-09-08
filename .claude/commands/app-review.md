@@ -55,7 +55,8 @@ into one run and do not leave a feature half-reviewed.
 7. **Update the tracker.** Mark the feature ✅ in `PROGRESS.md` and append a log
    entry summarizing: what was verified good, fixes applied (with ids), findings
    flagged, and the next feature. Mirror owner-decision items into
-   `docs/KNOWN_LIMITATIONS.md` and user-visible changes into `CHANGELOG.md`.
+   `docs/KNOWN_LIMITATIONS.md`. Do **not** write to `CHANGELOG.md` — it is
+   closed to new entries; the user-visible narrative belongs in `PROGRESS.md`.
 
 8. **Commit and push** to `claude/app-review-checklist-tdif23`:
 

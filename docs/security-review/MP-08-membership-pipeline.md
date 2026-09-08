@@ -322,11 +322,10 @@ asserted from re-reading the diff):
    had actually been run. Re-verified against the true parent, `ae4fe98`
    (the last commit before MP-27): all three
    `TestStatusWritesBlockOnAndObserveAConcurrentTransfer` tests fail
-   against that revision — `get_prospect` is never called with
-   `lock_for_update=True` on any of the three paths, so the tracking patch
-   never fires and `asyncio.wait_for(lock_attempted.wait(), timeout=10)`
-   times out outright, rather than reaching (and passing) the "still
-   blocked" assertion.
+   against that revision. This account itself needed a further correction
+   in the next Codex round (item 5 below) once the test's own wait logic
+   changed — see there for the mechanism that actually reproduces on the
+   current test code.
 2. **The blocked-check raced scheduling latency, not the lock.**
    `lock_attempted` was set the instant the locked query was _issued_, not
    once it had time to actually resolve — so `assert not
@@ -363,24 +362,63 @@ explicitly), and the leftover-rows regression by temporarily removing the
 teardown call and re-running the full scoped suite, which reproduced the
 exact CI failure above.
 
+Two more Codex rounds followed on this same PR, both test-robustness
+issues rather than production-code or coverage gaps:
+
+4. **Docstring drift and a swallowed rollback error (round 3).** The class
+   docstring's claimed failure point had drifted from the actual behavior
+   (it said the "still blocked" assertion fires; the test in fact times out
+   earlier, at the `lock_attempted` wait). Corrected. Separately, the
+   bulk-lock test's `checker_session.rollback()` after a cancelled-mid-read
+   lock check was wrapped in a bare `except Exception: pass`, which could
+   silently discard a real connection error and let the outer teardown's
+   own `rollback()` either mask the intended `pytest.fail()` behind a
+   secondary exception, or succeed and hide that anything went wrong.
+   Replaced with `invalidate()` (which SQLAlchemy guarantees does not raise
+   even on an already-broken connection) on the failure path, and a normal
+   `rollback()` only when the connection is known healthy.
+5. **Writer/bulk-task failures could be buried behind a confusing timeout
+   (round 4).** In both `_run_against_in_flight_transfer` and the bulk-lock
+   test, if the background task raised (or returned) before ever reaching
+   the point being tracked — a setup or validation regression, say — the
+   test waited out the full 10s for an event that could no longer fire,
+   reporting a timeout while the real exception sat unretrieved on the
+   task. Both now race the tracked event against the task itself
+   (`asyncio.wait(..., return_when=FIRST_COMPLETED)`) and immediately
+   propagate the task's result/exception if it finishes first. Cancelling
+   either task mid-DB-read can also leave its session's connection
+   unusable, so both `finally` blocks now call `invalidate()` instead of
+   `rollback()` specifically when the task was cancelled, so the explicit
+   row-cleanup teardown always still runs. This round also corrected the
+   class docstring again: with the new race in place, the true pre-MP-27
+   mechanism is more subtle than "the tracked event times out" alone — the
+   unlocked `SELECT` itself returns instantly (MVCC reads never wait on
+   another transaction's row lock), but the `UPDATE` the write eventually
+   issues at its own flush/commit is a real row-level write, which InnoDB
+   always serializes via genuine locks regardless of isolation level, so it
+   queues behind the locker's held `FOR UPDATE` and never completes either
+   — meaning _neither_ side of the race finishes and the explicit
+   `TimeoutError` fires, verified directly against `ae4fe98` after the
+   change.
+
 The three pass-5 source-inspection tests and MP-28's mocked guard test are
 kept alongside these, per the existing
 `test_transfer_locks_the_prospect_before_checking_status` precedent noted
 in its own docstring — a fast tripwire for the lock call or the commit
 call disappearing entirely, not a substitute for the concurrency proof.
 
-### Completion gate (pass 5, re-run after the MP-28 and MP-29 fixes)
+### Completion gate (pass 5, final — after MP-28, MP-29, and rounds 3-4)
 
-| Check                                                                                      | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                              | pass, 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `black --check app/ tests/ alembic/`                                                       | pass, 0 files would be reformatted                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `isort --check-only app/ tests/ alembic/`                                                  | pass, 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `python3 scripts/validate_migrations.py --strict`                                          | pass — single head, no schema change this pass                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| new guard tests (8 in `test_membership_pipeline_flow.py`)                                  | 8 passed (4 from MP-27/MP-28, 4 new from MP-29); each independently confirmed to fail against its own pre-fix code, including the three findings fixed after Codex's review of this PR (see above)                                                                                                                                                                                                                                                                                                    |
-| scoped pytest (`-k "membership or prospect or pipeline or agency_position or onboarding"`) | 806 passed / 1 skipped (`py_vapid`) / 0 failed                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| full backend suite (`pytest tests/ -q`)                                                    | 11859 passed / 21 skipped / 0 failed. A prior run of this suite (before the leftover-rows fix above) showed 38 failures in `test_agency_position_seeding.py`/`test_onboarding_integration.py`/`test_facilities_onboarding.py`/`test_public_legal.py`, misdiagnosed at the time as pre-existing/environmental — they were this PR's own bug: uncleaned `Organization` rows from the concurrency tests tripping `OnboardingService.create_organization`'s single-org guard. Re-run clean after the fix. |
-| `npm run typecheck` / `npm run lint` (frontend)                                            | not run this round — no frontend file touched                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Check                                                                                      | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                              | pass, 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `black --check app/ tests/ alembic/`                                                       | pass, 0 files would be reformatted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `isort --check-only app/ tests/ alembic/`                                                  | pass, 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                          | pass — single head, no schema change this pass                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| new guard tests (8 in `test_membership_pipeline_flow.py`)                                  | 8 passed (4 from MP-27/MP-28, 4 new from MP-29); each independently confirmed to fail against its own correct pre-fix state across all four Codex rounds on this PR (see above)                                                                                                                                                                                                                                                                                                                                                               |
+| scoped pytest (`-k "membership or prospect or pipeline or agency_position or onboarding"`) | 806 passed / 1 skipped (`py_vapid`) / 0 failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| full backend suite (`pytest tests/ -q`)                                                    | 11859 passed / 21 skipped / 0 failed. A prior run of this suite (before the leftover-rows fix above) showed 38 failures in `test_agency_position_seeding.py`/`test_onboarding_integration.py`/`test_facilities_onboarding.py`/`test_public_legal.py`, misdiagnosed at the time as pre-existing/environmental — they were this PR's own bug: uncleaned `Organization` rows from the concurrency tests tripping `OnboardingService.create_organization`'s single-org guard. Re-run clean after the fix, and clean again after all later rounds. |
+| `npm run typecheck` / `npm run lint` (frontend)                                            | not run this round — no frontend file touched                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Pass 4, round 4 (2026-09-02) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
 
