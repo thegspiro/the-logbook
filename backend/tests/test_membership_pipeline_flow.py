@@ -8,6 +8,8 @@ the transfer-to-membership workflow.
 
 import inspect
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import text
@@ -966,6 +968,55 @@ class TestTransferToMembership:
             "still open even though a lock call exists somewhere in the "
             "function"
         )
+
+    async def test_bulk_apply_releases_the_lock_after_a_rejected_item(self):
+        """Codex review, PR #2405: bulk_set_prospect_status's per-item
+        callback (_set_status) locks the prospect row with a FOR UPDATE read
+        before its ValueError-raising guard. _bulk_apply's own ``except
+        ValueError`` branch caught that and moved on to the next id without
+        ever ending the transaction -- so the FOR UPDATE lock stayed held
+        for the rest of the batch. A selection that includes even one
+        already-transferred or already-at-target prospect would hold that
+        row locked until a later item's own commit (or the whole request
+        ending) released it, blocking every other write against it -- and
+        two overlapping batches processed in opposite orders could deadlock
+        on each other's held locks.
+
+        Asserts commit(), not rollback(): every current ``apply`` callback
+        raises its ValueError from a guard clause before writing anything,
+        so there is nothing to discard, and commit() is what is actually
+        safe to call here -- rollback() breaks the db_session fixture's
+        create_savepoint-mode session with a MissingGreenlet error (see the
+        comment at the call site, and
+        tests/test_prospect_bulk_actions.py::TestBulkAdvance::
+        test_one_failure_does_not_abort_the_rest, which already exercises
+        this exact branch through the real database and would have caught
+        a rollback() regression here). Unit-level rather than a real
+        two-connection lock test: this asserts the one thing that actually
+        changed, that the transaction ends before the loop continues past a
+        rejected item, using a mocked ``db`` so no real lock needs to be
+        held to observe it."""
+        service = MembershipPipelineService(db=AsyncMock())
+        org_id = str(uuid.uuid4())
+        prospect_id = str(uuid.uuid4())
+        prospect = SimpleNamespace(id=prospect_id, full_name="Rejected Prospect")
+
+        async def _apply(_prospect):
+            raise ValueError("Prospect is already dropped")
+
+        with patch.object(service, "get_prospect", AsyncMock(return_value=prospect)):
+            results = await service._bulk_apply([prospect_id], org_id, _apply)
+
+        assert results == [
+            {
+                "prospect_id": prospect_id,
+                "name": "Rejected Prospect",
+                "succeeded": False,
+                "error": "Prospect is already dropped",
+            }
+        ]
+        service.db.commit.assert_awaited_once()
+        service.db.rollback.assert_not_awaited()
 
     async def test_transfer_creates_user(
         self, db_session: AsyncSession, setup_org_and_admin
