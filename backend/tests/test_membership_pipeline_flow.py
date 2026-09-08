@@ -1218,12 +1218,44 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
             return await original_get_prospect(*args, **kwargs)
 
         writer_task = None
+        writer_cancelled = False
         try:
             with patch.object(service, "get_prospect", _tracking_get_prospect):
                 writer_task = asyncio.create_task(
                     run_status_write(service, prospect_id, org_id)
                 )
-                await asyncio.wait_for(lock_attempted.wait(), timeout=10)
+                lock_wait_task = asyncio.create_task(lock_attempted.wait())
+                try:
+                    done, _pending = await asyncio.wait(
+                        {lock_wait_task, writer_task},
+                        timeout=10,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if writer_task in done:
+                        # Codex (PR #2408): if the write raises (or even
+                        # returns) before ever attempting the locked read
+                        # -- e.g. a setup/validation regression -- waiting
+                        # out the full 10s for an event that can now never
+                        # fire buries the real failure behind a confusing
+                        # timeout, and the original exception is left
+                        # unretrieved. `.result()` re-raises it immediately;
+                        # a clean return with no lock attempt is itself a
+                        # bug worth its own message rather than falling
+                        # through to the "still blocked" assertion below.
+                        writer_task.result()
+                        raise AssertionError(
+                            "status write returned without ever "
+                            "attempting a locked read -- "
+                            "lock_for_update was never used"
+                        )
+                    if lock_wait_task not in done:
+                        raise asyncio.TimeoutError(
+                            "neither the locked read nor the status "
+                            "write completed within 10s"
+                        )
+                finally:
+                    if not lock_wait_task.done():
+                        lock_wait_task.cancel()
 
                 # Codex (PR #2408): `lock_attempted` fires the instant the
                 # locked query is *issued*, not once it has actually had
@@ -1251,8 +1283,18 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
                 writer_task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await writer_task
+                writer_cancelled = True
             await locker.rollback()
-            await writer.rollback()
+            if writer_cancelled:
+                # invalidate(), not rollback(): cancelling a task
+                # mid-DB-read (aiomysql doesn't always unwind that
+                # cleanly) can leave the writer's connection unusable,
+                # and unlike rollback(), SQLAlchemy guarantees
+                # invalidate() does not raise even then -- so it can't
+                # prevent the explicit teardown below from running.
+                await writer.invalidate()
+            else:
+                await writer.rollback()
             await _teardown_membership_race_org(org_id, [prospect_id])
 
     async def test_set_prospect_status_sees_the_committed_transfer(self, two_sessions):
