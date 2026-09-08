@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
+
+**Security**
+
+- **Editing or bulk-changing a prospective member's status raced converting
+  them to a full member.** `PUT /prospects/{id}`, `POST /prospects/{id}/status`,
+  and the bulk status endpoint each read the applicant's record without
+  locking it before checking whether they had already been converted to a
+  member. If one of those requests landed in the narrow window between a
+  concurrent "transfer to membership" request's own read and its commit, the
+  status check could pass against stale data and silently overwrite the
+  just-completed conversion back to an ordinary applicant status — while the
+  new member account it had already created stayed live. Because the
+  transfer flow's only safeguard against transferring the same applicant
+  twice was that same status field, a second transfer attempt afterward
+  could then create a **second** account for the same applicant. Fixed by
+  locking the applicant's record before evaluating the status guard on all
+  three paths, matching how the transfer flow itself was already protected.
+
 ### A member-drop notification could inject unescaped HTML, and could silently fail to send (2026-09-08)
 
 **Security**
