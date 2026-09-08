@@ -301,21 +301,67 @@ currently the only other file that needs it), in two new test classes:
   single-record paths, returning a `succeeded: false` result for the bulk
   path, matching each path's real error-reporting shape.
 - `TestBulkApplyReallyReleasesTheLockAfterARejectedItem` — a real-database
-  counterpart to MP-28's mocked guard test: runs `bulk_set_prospect_status`
-  against a prospect already at the target status (the exact rejected-item
-  shape), then has a second, independent session attempt a
-  `SELECT ... FOR UPDATE` on the same row with a 5s `asyncio.wait_for`,
-  proving the lock is actually released at the database level rather than
-  only that `commit()` was called on a mock.
+  counterpart to MP-28's mocked guard test, driving a **two-item** batch
+  (one rejected, one deliberately paused mid-processing via a patched
+  `_apply_status_change`) so a second, independent session's
+  `SELECT ... FOR UPDATE` on the rejected item's row is attempted _while
+  the batch is still running_ on the paused item, rather than only after
+  the whole call returns — the shape that actually distinguishes a true
+  per-item lock release from a regression that commits once after the
+  entire loop (both look identical from outside a one-item batch).
 
-Both were independently confirmed to fail against their respective pre-fix
-code: the concurrency-race tests against the code as it stood right after
-`4107910` (the MP-27 commit, before MP-27's own three source-inspection
-tests existed to catch it — the write path used a plain unlocked read and
-the tests hung until the `asyncio.wait_for` timeout rather than blocking
-correctly), and the real-lock-release test against the code before MP-28's
-fix, reproducing the same timeout MP-28's mocked test caught by a
-different method.
+Three findings from Codex's own review of this PR's first commit
+(`d7f253f`) were fixed before merge, all confirmed against real runs (not
+asserted from re-reading the diff):
+
+1. **Wrong cited pre-fix revision.** The original write-up claimed the
+   concurrency-race tests were verified to fail against `4107910` — but
+   that commit _is_ the MP-27 fix itself (it adds `lock_for_update=True` to
+   all three status-writing paths and the three source-inspection tests),
+   so it cannot serve as the "unlocked" baseline, and no such verification
+   had actually been run. Re-verified against the true parent, `ae4fe98`
+   (the last commit before MP-27): all three
+   `TestStatusWritesBlockOnAndObserveAConcurrentTransfer` tests fail
+   against that revision — `get_prospect` is never called with
+   `lock_for_update=True` on any of the three paths, so the tracking patch
+   never fires and `asyncio.wait_for(lock_attempted.wait(), timeout=10)`
+   times out outright, rather than reaching (and passing) the "still
+   blocked" assertion.
+2. **The blocked-check raced scheduling latency, not the lock.**
+   `lock_attempted` was set the instant the locked query was _issued_, not
+   once it had time to actually resolve — so `assert not
+writer_task.done()` immediately afterward could pass for the wrong
+   reason if an unlocked regression happened to return before the next
+   event-loop tick. Added the same `await asyncio.sleep(0.2)` observation
+   window `test_facility_document_reference_race.py`'s FAC-37 fix uses for
+   exactly this reason, between the event firing and the "still blocked"
+   assertion.
+3. **Committed rows were never cleaned up.** Both new test classes use
+   real, independently-committing sessions specifically so they can
+   demonstrate cross-transaction visibility — but a real commit needs a
+   real, explicit delete, and neither class had one. This broke CI outright
+   (not merely theoretical): `test_agency_position_seeding.py` and
+   `test_onboarding_integration.py` failed with `ValueError: An
+organization has already been created`, because
+   `OnboardingService.create_organization` refuses to run against a
+   database that already has one, and this PR's own concurrency tests were
+   leaving several behind. Added `_teardown_membership_race_org`,
+   deleting the created `ProspectiveMember` row(s) then the `Organization`
+   in a fresh cleanup session, matching
+   `test_facility_document_reference_race.py`'s `_teardown_org` — verified
+   directly (query the table before/after a run) that no rows survive,
+   including when the test itself fails.
+
+All four (the three above, plus MP-29 itself) independently confirmed to
+fail against their respective pre-fix states before passing against
+current code: the concurrency-race tests against `ae4fe98` (see above), the
+lock-release test against the commit before MP-28 (times out attempting
+the checker's locked read — surfaced as `asyncio.CancelledError` rather
+than `asyncio.TimeoutError` on this environment's aiomysql driver when a
+read is cancelled mid-flight, which the `except` clause now catches
+explicitly), and the leftover-rows regression by temporarily removing the
+teardown call and re-running the full scoped suite, which reproduced the
+exact CI failure above.
 
 The three pass-5 source-inspection tests and MP-28's mocked guard test are
 kept alongside these, per the existing
@@ -325,16 +371,16 @@ call disappearing entirely, not a substitute for the concurrency proof.
 
 ### Completion gate (pass 5, re-run after the MP-28 and MP-29 fixes)
 
-| Check                                                               | Result                                                                                                                                                                         |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `flake8 app/ tests/ alembic/`                                       | pass, 0 violations                                                                                                                                                             |
-| `black --check app/ tests/ alembic/`                                | pass, 0 files would be reformatted                                                                                                                                             |
-| `isort --check-only app/ tests/ alembic/`                           | pass, 0 violations                                                                                                                                                             |
-| `python3 scripts/validate_migrations.py --strict`                   | pass — single head, no schema change this pass                                                                                                                                 |
-| new guard tests (8 in `test_membership_pipeline_flow.py`)           | 8 passed (4 from MP-27/MP-28, 4 new from MP-29); each independently confirmed to fail against its own pre-fix code                                                             |
-| scoped pytest (`-k "membership or prospect or pipeline"`, 30 files) | 615 passed / 1 skipped (pre-existing/environmental, `py_vapid`) / 0 failed                                                                                                     |
-| full backend suite (`pytest tests/ -q`)                             | see PROGRESS.md log entry for this fix — 38 pre-existing/environmental failures in unrelated modules reproduce identically without this diff; 0 failures caused by this change |
-| `npm run typecheck` / `npm run lint` (frontend)                     | not run this round — no frontend file touched                                                                                                                                  |
+| Check                                                                                      | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                              | pass, 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `black --check app/ tests/ alembic/`                                                       | pass, 0 files would be reformatted                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `isort --check-only app/ tests/ alembic/`                                                  | pass, 0 violations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                          | pass — single head, no schema change this pass                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| new guard tests (8 in `test_membership_pipeline_flow.py`)                                  | 8 passed (4 from MP-27/MP-28, 4 new from MP-29); each independently confirmed to fail against its own pre-fix code, including the three findings fixed after Codex's review of this PR (see above)                                                                                                                                                                                                                                                                                                    |
+| scoped pytest (`-k "membership or prospect or pipeline or agency_position or onboarding"`) | 806 passed / 1 skipped (`py_vapid`) / 0 failed                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| full backend suite (`pytest tests/ -q`)                                                    | 11859 passed / 21 skipped / 0 failed. A prior run of this suite (before the leftover-rows fix above) showed 38 failures in `test_agency_position_seeding.py`/`test_onboarding_integration.py`/`test_facilities_onboarding.py`/`test_public_legal.py`, misdiagnosed at the time as pre-existing/environmental — they were this PR's own bug: uncleaned `Organization` rows from the concurrency tests tripping `OnboardingService.create_organization`'s single-org guard. Re-run clean after the fix. |
+| `npm run typecheck` / `npm run lint` (frontend)                                            | not run this round — no frontend file touched                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Pass 4, round 4 (2026-09-02) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
 

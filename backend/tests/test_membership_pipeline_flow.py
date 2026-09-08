@@ -1109,6 +1109,33 @@ class TestTransferToMembership:
 # =========================================================================
 
 
+async def _teardown_membership_race_org(org_id, prospect_ids=()):
+    """Deletes the rows a concurrency test committed for real. These tests
+    use `database_manager.session_factory` sessions specifically because
+    they need genuine cross-transaction visibility -- the savepoint-based
+    `db_session` fixture never truly commits, so its rollback cannot stand
+    in for cleanup here the way it does everywhere else in this file.
+    Matches `test_facility_document_reference_race.py`'s `_teardown_org`:
+    a real commit needs a real, explicit delete, or the row (and, for an
+    Organization, `OnboardingService.create_organization`'s "one org already
+    exists" guard) outlives the test."""
+    factory = database_manager.session_factory
+    cleanup = factory()
+    try:
+        for prospect_id in prospect_ids:
+            await cleanup.execute(
+                ProspectiveMember.__table__.delete().where(
+                    ProspectiveMember.id == prospect_id
+                )
+            )
+        await cleanup.execute(
+            Organization.__table__.delete().where(Organization.id == org_id)
+        )
+        await cleanup.commit()
+    finally:
+        await cleanup.close()
+
+
 class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
     """Each status-writing path's new lock must not just exist in source,
     it must actually serialize against an in-flight transfer -- blocking
@@ -1120,7 +1147,14 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
     A genuine two-session race test for this exact lock chain has
     precedent in this repository: `test_facility_document_reference_race.py`
     drives real, independently-committing sessions against FAC-29's
-    locking reads the same way this class does."""
+    locking reads the same way this class does. Verified against the true
+    pre-MP-27 revision (`ae4fe98`, `4107910`'s parent -- `4107910` itself
+    is the MP-27 commit and already carries the lock on all three paths, so
+    it cannot serve as the "unlocked" baseline): all three tests below fail
+    against that revision's `membership_pipeline_service.py` (the write
+    proceeds immediately instead of blocking, so the
+    `assert not writer_task.done()` check fires), and pass against current
+    code."""
 
     @pytest.fixture
     async def two_sessions(self, _initialize_database):
@@ -1190,6 +1224,17 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
                 )
                 await asyncio.wait_for(lock_attempted.wait(), timeout=10)
 
+                # Codex (PR #2408): `lock_attempted` fires the instant the
+                # locked query is *issued*, not once it has actually had
+                # time to resolve -- so without a beat here, an unlocked
+                # regression that returns almost immediately could still
+                # look "not done" purely from scheduling latency, passing
+                # this assertion for the wrong reason. Same 0.2s observation
+                # window as test_facility_document_reference_race.py's
+                # FAC-37 fix, for the same reason: give a genuinely-fast
+                # unlocked read time to actually complete before checking.
+                await asyncio.sleep(0.2)
+
                 # Still blocked on the transfer's lock -- not yet having
                 # read (let alone acted on) the row.
                 assert not writer_task.done(), (
@@ -1207,6 +1252,7 @@ class TestStatusWritesBlockOnAndObserveAConcurrentTransfer:
                     await writer_task
             await locker.rollback()
             await writer.rollback()
+            await _teardown_membership_race_org(org_id, [prospect_id])
 
     async def test_set_prospect_status_sees_the_committed_transfer(self, two_sessions):
         async def _write(service, prospect_id, org_id):
@@ -1246,8 +1292,17 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
     it proves the fix calls the right method, not that a real InnoDB row
     lock is actually released. This drives the real service call against a
     real database and confirms a second, independent session can acquire
-    the same row's lock immediately afterward, using the same two-session
-    technique as the class above."""
+    the same row's lock, using the same two-session technique as the class
+    above.
+
+    Codex (PR #2408): checking the lock only after the whole bulk call
+    returns cannot distinguish a per-item release from a regression that
+    commits once after the entire loop -- both look identical from outside
+    a one-item batch, since either way the lock is gone by the time the
+    call returns. This uses a **two**-item batch (one rejected, one
+    deliberately paused mid-processing) so the checker session attempts the
+    rejected item's lock *while the batch is still running* -- a scenario
+    only a true per-item release passes."""
 
     @pytest.fixture
     async def two_sessions(self, _initialize_database):
@@ -1260,58 +1315,128 @@ class TestBulkApplyReallyReleasesTheLockAfterARejectedItem:
                 await session.rollback()
                 await session.close()
 
-    async def test_lock_is_released_after_a_rejected_bulk_item(self, two_sessions):
+    async def test_lock_is_released_before_the_batch_finishes(self, two_sessions):
         bulk_session, checker_session = two_sessions
         org = Organization(name="Race Test VFD", slug=f"mp28-bulk-{_uid()[:12]}")
         bulk_session.add(org)
         await bulk_session.flush()
-        prospect = ProspectiveMember(
+        # rejected: already at the target status, so _apply_status_change
+        # raises before this item's own commit -- the shape MP-28 fixes.
+        rejected = ProspectiveMember(
             organization_id=org.id,
             first_name="Bulk",
             last_name="Reject",
             email=f"{_uid()}@example.com",
+            status=ProspectStatus.ON_HOLD,
+        )
+        # paused: a normal, accepted item -- held mid-flight (see below) so
+        # the batch is still inside `_bulk_apply`'s loop when the checker
+        # session probes the *rejected* item's row.
+        paused = ProspectiveMember(
+            organization_id=org.id,
+            first_name="Bulk",
+            last_name="Paused",
+            email=f"{_uid()}@example.com",
             status=ProspectStatus.ACTIVE,
         )
-        bulk_session.add(prospect)
+        bulk_session.add_all([rejected, paused])
         await bulk_session.flush()
-        # Captured as plain strings before any commit: an object's
-        # attributes are expired after `commit()` (the fix's own end-of-
-        # transaction call, same as after any commit), and an expired
-        # attribute can't be lazily refreshed from plain (non-awaited)
-        # Python code -- only from inside an actually-awaited ORM call.
+        # Captured as plain strings before any commit: commit() expires
+        # every attribute on every object the session has loaded, and an
+        # expired attribute can't be lazily refreshed from plain
+        # (non-awaited) Python code -- only from inside an actually-awaited
+        # ORM call.
         org_id = str(org.id)
-        prospect_id = str(prospect.id)
+        rejected_id = str(rejected.id)
+        paused_id = str(paused.id)
         await bulk_session.commit()
 
         service = MembershipPipelineService(bulk_session)
-        # Target status equals the current status -- _apply_status_change's
-        # "Prospect is already {target}" ValueError, raised *after*
-        # _set_status's locked re-fetch has already taken the row lock.
-        results = await service.bulk_set_prospect_status(
-            [prospect_id], org_id, "active", changed_by=None
-        )
-        assert len(results) == 1
-        assert results[0]["succeeded"] is False
-        assert "already active" in results[0]["error"]
+        rejected_item_done = asyncio.Event()
+        resume_paused_item = asyncio.Event()
+        original_apply_status_change = service._apply_status_change
 
-        # If the rejected item's lock were still held, this locking read
-        # from a second, independent session would block until MySQL's
-        # lock-wait timeout; with MP-28's fix it returns immediately
-        # because `_bulk_apply` ends the transaction after the ValueError.
+        async def _pausing_apply_status_change(
+            prospect, target, changed_by, reason, bulk
+        ):
+            if str(prospect.id) == paused_id:
+                # The rejected item has already raised, and _bulk_apply's
+                # except-ValueError branch has already ended that item's
+                # transaction -- its lock should be releasable right now,
+                # even though this second item's own locked read (taken by
+                # _set_status just before this call) is still open.
+                rejected_item_done.set()
+                await resume_paused_item.wait()
+            return await original_apply_status_change(
+                prospect, target, changed_by, reason, bulk
+            )
+
+        bulk_task = None
         try:
-            await asyncio.wait_for(
-                checker_session.execute(
-                    select(ProspectiveMember.id)
-                    .where(ProspectiveMember.id == prospect_id)
-                    .with_for_update()
-                ),
-                timeout=5,
-            )
-        except asyncio.TimeoutError:
-            pytest.fail(
-                "a rejected bulk item left the prospect row locked -- "
-                "_bulk_apply did not end the transaction after the "
-                "ValueError"
-            )
+            with patch.object(
+                service, "_apply_status_change", _pausing_apply_status_change
+            ):
+                bulk_task = asyncio.create_task(
+                    service.bulk_set_prospect_status(
+                        [rejected_id, paused_id], org_id, "on_hold", changed_by=None
+                    )
+                )
+                await asyncio.wait_for(rejected_item_done.wait(), timeout=10)
+                assert not bulk_task.done(), (
+                    "the batch finished before the paused item was ever "
+                    "released -- the pause point was never reached"
+                )
+
+                # The core assertion: the rejected item's lock must be free
+                # *now*, mid-batch, not merely by the time the whole call
+                # eventually returns.
+                try:
+                    await asyncio.wait_for(
+                        checker_session.execute(
+                            select(ProspectiveMember.id)
+                            .where(ProspectiveMember.id == rejected_id)
+                            .with_for_update()
+                        ),
+                        timeout=5,
+                    )
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    # A cancelled-mid-read DBAPI call can surface as
+                    # CancelledError rather than the TimeoutError
+                    # wait_for() normally converts it to (aiomysql doesn't
+                    # always unwind a cancelled read cleanly) -- observed
+                    # directly against the pre-MP-28 code this test guards
+                    # against, so both must be treated as "still locked".
+                    pytest.fail(
+                        "the rejected item's row is still locked while a "
+                        "later item in the same batch is still processing "
+                        "-- _bulk_apply is not releasing the lock at the "
+                        "item boundary"
+                    )
+                finally:
+                    try:
+                        await checker_session.rollback()
+                    except Exception:
+                        # The connection can be left unusable by a
+                        # cancelled-mid-read call above; the fixture's own
+                        # teardown closes the session regardless, so a
+                        # failed rollback here must not mask the
+                        # pytest.fail() that already ran (or hide a
+                        # genuine pass) behind a secondary connection
+                        # error.
+                        pass
+
+                resume_paused_item.set()
+                results = await asyncio.wait_for(bulk_task, timeout=10)
         finally:
+            if bulk_task is not None and not bulk_task.done():
+                bulk_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await bulk_task
+            await bulk_session.rollback()
             await checker_session.rollback()
+            await _teardown_membership_race_org(org_id, [rejected_id, paused_id])
+
+        by_id = {r["prospect_id"]: r for r in results}
+        assert by_id[rejected_id]["succeeded"] is False
+        assert "already on_hold" in by_id[rejected_id]["error"]
+        assert by_id[paused_id]["succeeded"] is True

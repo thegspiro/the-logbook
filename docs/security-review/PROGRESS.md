@@ -39,8 +39,29 @@ blocks on the lock and then correctly observes the committed
 fix actually releases the lock at the database level rather than only
 satisfying a mocked assertion. Both independently confirmed to fail
 against their pre-fix commits. Replied on PR #2405's P1 thread; will
-resolve it once this PR merges. Subscribed to PR activity. Next feature
-once this merges: 09 Medical screening (PHI).
+resolve it once this PR merges.
+
+**Codex reviewed this PR itself (`d7f253f`) and found three more issues,
+all fixed before merge:** (1) the write-up's claimed pre-fix revision
+(`4107910`) was wrong — that commit _is_ the MP-27 fix, so it can't be the
+unlocked baseline; re-verified against the true parent, `ae4fe98`. (2) the
+"still blocked" check raced scheduling latency rather than the lock itself
+(`lock_attempted` fires the instant the query is issued, not once it has
+had time to resolve) — added the same 0.2s observation window
+`test_facility_document_reference_race.py`'s FAC-37 fix uses for the same
+reason. (3) — the one that actually broke CI — neither new test class
+cleaned up the real rows its real, independently-committing sessions
+committed, which left `Organization` rows behind and made
+`test_agency_position_seeding.py`/`test_onboarding_integration.py` fail
+with "An organization has already been created" (`OnboardingService.
+create_organization`'s single-org guard). Added `_teardown_membership_race_
+org`, matching `test_facility_document_reference_race.py`'s own
+`_teardown_org`. Also rebuilt the bulk-lock test as a genuine two-item
+batch (one rejected, one deliberately paused) so it checks the lock is
+released _before_ the whole call returns, not only after — a plain
+one-item version can't tell a true per-item release from a regression that
+commits once at the end of the loop. Subscribed to PR activity. Next
+feature once this merges: 09 Medical screening (PHI).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08 pass 5 follow-up, PR #2406, merged), preserved for history</summary>
@@ -11489,6 +11510,72 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29 round 2) — 3 fixed (Codex review of PR #2408, one a real CI failure)
+
+Codex reviewed PR #2408's own first commit (`d7f253f`) and found three
+issues, all in the new tests themselves rather than production code:
+
+**Cited the wrong pre-fix revision (P2, fixed).** The write-up claimed
+`TestStatusWritesBlockOnAndObserveAConcurrentTransfer` was verified against
+`4107910` — impossible, since `4107910` is the MP-27 commit that adds the
+lock and the three source-inspection tests, so it can't be the "unlocked"
+baseline, and no such verification had actually been run against it.
+Re-ran against the true parent, `ae4fe98`: all three tests correctly fail
+(the tracking patch on `get_prospect` never fires, since no path calls it
+with `lock_for_update=True` at that revision, so
+`asyncio.wait_for(lock_attempted.wait(), timeout=10)` times out outright).
+Corrected the doc.
+
+**The "still blocked" check could pass for the wrong reason (P1, fixed).**
+`lock_attempted` was set the instant the locked query was issued, not once
+it had time to resolve, so an unlocked regression that happened to return
+within the same event-loop tick could still satisfy `assert not
+writer_task.done()`. Added the same `await asyncio.sleep(0.2)` observation
+window `test_facility_document_reference_race.py`'s FAC-37 fix uses, for
+the identical reason.
+
+**Committed rows were never cleaned up (P1, fixed — and this one actually
+broke CI).** Both new test classes use real, independently-committing
+sessions on purpose (to demonstrate cross-transaction visibility at all),
+but neither deleted what it created. PR #2408's own CI caught this for
+real: `test_agency_position_seeding.py` and `test_onboarding_integration.py`
+failed with `ValueError: An organization has already been created`
+(`OnboardingService.create_organization` refuses to run against a database
+that already has one), because this PR's concurrency tests had left
+several `Organization` rows behind. A prior full-suite run in this session
+had already hit the same 38 failures and, not yet having found this cause,
+recorded them as "pre-existing/environmental" in PR #2408's own
+description — that was wrong; they were this PR's own bug. Fixed with
+`_teardown_membership_race_org`, matching `test_facility_document_reference_
+race.py`'s `_teardown_org`: deletes the created `ProspectiveMember` row(s)
+then the `Organization` in a fresh session, in a `finally` so it runs even
+when the test itself fails. Verified directly (queried the table before and
+after a run) that no rows survive. Full backend suite re-run clean after
+the fix: 11859 passed / 21 skipped / 0 failed — the 38 that were
+misdiagnosed as unrelated are gone along with the leftover rows that caused
+them.
+
+Also rebuilt `TestBulkApplyReallyReleasesTheLockAfterARejectedItem` as a
+genuine two-item batch (one rejected, one deliberately paused via a patched
+`_apply_status_change`) rather than a single-item one, per a fourth Codex
+comment: checking the lock only after a one-item batch's call returns
+can't distinguish a true per-item release from a regression that commits
+once after the whole loop — both look identical from outside a one-item
+batch. The rebuilt test attempts the rejected item's lock from a second
+session _while the batch is still processing the paused item_, which only
+a real per-item release passes; confirmed to fail against the code before
+MP-28's fix (a `CancelledError` surfaces instead of the expected
+`TimeoutError` when this environment's aiomysql driver has a read
+cancelled mid-flight — the `except` clause now catches both).
+
+Completion gate re-run after all four fixes: flake8/black/isort clean;
+8 guard tests in `test_membership_pipeline_flow.py`, each independently
+confirmed to fail against its own pre-fix state; scoped pytest (adding
+`agency_position`/`onboarding` to the usual filter, to cover what broke)
+806 passed / 1 skipped / 0 failed; full backend suite 11859 passed / 21
+skipped / 0 failed. Updated `docs/security-review/MP-08-membership-pipeline.md`
+(MP-29 write-up) to record all three fixes and the corrected numbers.
 
 ### 2026-09-08 — Feature 08 (Membership pipeline, pass 5, MP-29) — 1 fixed (P1, Codex review of PR #2405), closing the gap #2406 stood down on
 
