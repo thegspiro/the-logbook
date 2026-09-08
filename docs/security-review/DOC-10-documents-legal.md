@@ -1,6 +1,221 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), (this PR) (pass 4)
+
+---
+
+## Pass 4 (2026-09-08)
+
+**Scope.** Full domain since pass 3's merge (`72a04062`, PR #2187): every
+backend file this rotation declares, `models/document.py`, and every
+migration since (content-grepped for `document_folders`/
+`legal_document_revisions`/`documents`/`legal_documents`, not filename).
+`documents_service.py` grew from 1208 to 1947 lines since pass 3 — not from
+work by this rotation, but from a large body of facilities-module concurrency
+hardening (FAC-22 through FAC-45, `docs/security-review/FAC-12-facilities.md`,
+not yet reached in this pass of the rotation) that lives in this shared file
+because facility document/photo folders are provisioned through it. Read in
+full rather than skimmed on the strength of that file's own name, per this
+rotation's standing "read the real code" discipline — see Verified good
+below for what that review found, including one real gap that work's own
+pattern did not extend to a route this feature owns.
+
+Also re-verified, as prior art this rotation did not produce: PR `ae423afa3`
+("Fix two data-leakage findings: separation reports, response cache",
+2026-09-07, an ad hoc security pass distinct from this rotation) added a
+`member-separations` system folder (`LEADERSHIP` visibility) and moved
+`PropertyReturnService.save_as_document` to file property-return reports
+there instead of the `ORGANIZATION`-visibility "Reports" folder — recorded as
+XC-4 in `docs/module-audit/CROSS-CUTTING.md`. Read in full: the folder
+registry entry, the get-or-create's locking (organization row, then both
+existence checks as locking reads — the same Pitfall #27 shape
+`ensure_facility_folder` uses), and the accompanying migration (guards
+`document_folders`/`documents` table existence per Pitfall #26, moves
+already-filed reports, and states its own irreversibility — restoring the
+disclosure — in the downgrade). Sound; not re-implemented here.
+
+### DOC-9 — MED — `get_folders` unbounded and N+1 — ✅ re-verified FIXED (external work, credited)
+
+Previously flagged (pass 1) and re-verified still open as recently as pass 3. As of this pass it is fixed — not by this rotation, but as a byproduct of
+the facilities concurrency work described above, which needed `get_folders`
+to report accurate paginated counts for facility sub-trees. `get_folders`
+(`documents_service.py`) now takes `skip`/`limit`, runs exactly one
+`func.count` for the level's total and one `LEFT OUTER JOIN` against a
+grouped-by-`folder_id` subquery for the whole page's document counts —
+never a query per folder — and orders by `sort_order, name, id` so a tied
+sort key can't repeat or skip a row across pages. `GET /documents/folders`
+(`documents.py`) passes `PaginationParams` through, and
+`FoldersListResponse` now carries `skip`/`limit` alongside `total`.
+
+Re-verified against current code, not the diff: read `get_folders` in full,
+confirmed the query shape does not regress to one count per folder, and ran
+the existing `TestFolderListing` class
+(`tests/test_documents_access.py`), which asserts **exactly 3** `db.execute`
+calls for a 4-folder level regardless of page size — the specific assertion
+that would catch an N+1 regression, not merely a smoke test that the
+response shape is right. `docs/KNOWN_LIMITATIONS.md`'s "Documents — Folder
+Listing Is Unbounded and N+1" entry corrected to Resolved (see Doc updates).
+
+### DOC-28 — MED — `ensure_member_folder` was a get-or-create with no lock, reachable directly from a documents.py route — ✅ FIXED
+
+The facilities work above hardened `ensure_facility_folder` into a careful
+fast/slow, peek-then-lock shape across three separate fixes (FAC-42
+organization-lock-only-when-needed, FAC-43 skip-locking-the-shared-root,
+FAC-45 avoid-a-gap-lock-deadlock) specifically because it is a check-then-
+insert with no uniqueness constraint behind `(organization_id, slug)` —
+Pitfall #27's shape. `ensure_member_folder` (`documents_service.py`) is the
+exact same shape, one level structure over (a shared `members` root, then a
+per-owner personal folder keyed on `(parent_id, owner_user_id)`), and had
+none of that hardening: a plain unlocked `SELECT` for the root, a plain
+unlocked `SELECT` for the caller's own folder, and an unconditional insert
+on either miss.
+
+Unlike `ensure_apparatus_folder`/`ensure_facility_folder`/`ensure_event_folder`
+(all out of this feature's scope per pass 1's own Scope section — reached
+only from other modules' endpoints), `ensure_member_folder` is called
+directly by `documents.py`'s own `GET /documents/my-folder`
+(`documents.py:519`) — squarely in this feature's scope — and unlike the
+once-per-facility/apparatus/event helpers, it is a genuinely hot path: every
+member who opens the Documents page hits it, not just whoever happens to
+administer one specific facility/apparatus/event. Two concurrent
+first-visits by the same member — two browser tabs, a retried request after
+a slow response — could both see "no personal folder yet" and both insert
+one. `DocumentFolder` carries no uniqueness constraint on
+`(parent_id, owner_user_id)`, so both inserts would succeed, and the
+existing code's `result.scalar_one_or_none()` on the lookup would then raise
+`MultipleResultsFound` on every subsequent call to `GET /documents/my-folder`
+for that member — an unhandled 500, permanently, until someone manually
+deleted the duplicate row — exactly the failure mode
+`_get_or_create_separations_folder`'s own docstring (added the day before
+this pass, in the PR reviewed above) names for the analogous case.
+
+Not a cross-tenant or access-control gap — `organization_id` is set
+correctly on every insert either way — a data-integrity/availability one: a
+member could end up permanently unable to reach their own personal document
+folder because of an ordinary double-tap or a slow network retry.
+
+Fixed by giving `ensure_member_folder` the same fast/slow, peek-then-lock
+shape `ensure_facility_folder` was hardened into, reusing the existing
+generic `_lock_folder_by_id` helper for the fast path's point lookup: a
+non-locking peek for the root and the caller's own folder first (returns
+immediately if both already exist — the overwhelming majority of calls,
+since this creates once per member ever); only when something is missing
+does it fall through to a slow path that locks the `Organization` row and
+re-checks both folders as locking reads (double-checked locking) before
+creating. The peek-before-lock ordering on the personal-folder check
+specifically avoids the gap-lock deadlock FAC-45 found and fixed for the
+analogous per-facility case — a `.with_for_update()` lookup that matches
+nothing takes a gap lock, and many members' first-ever Documents-page visit
+(e.g. right after onboarding) is the same many-different-keys-under-one-
+root concurrency shape that produced FAC-45's reproducible deadlock.
+
+Covered by `tests/test_documents_access.py::TestEnsureMemberFolderIsLocked`
+(4 cases): a source-inspection test that the method plus its two locking-
+read helpers together take at least 3 `with_for_update()` reads (matching
+`test_facilities_folders.py::TestFolderCreationIsLocked`'s own technique for
+`ensure_facility_folder`); a source-inspection test that the fast path
+(before the organization lock) never itself takes a lock; a mocked-db test
+that the slow path's re-check returns a folder a concurrent request already
+committed rather than inserting a duplicate (mirroring
+`test_property_return_service.py::test_reuses_folder_a_concurrent_drop_created`);
+and an end-to-end test against a real database asserting two calls for the
+same member return the same folder id and exactly one row exists. All 4
+confirmed to fail against the pre-fix code via `git stash` of the service
+file (3 of 4 — the source-inspection pair and the mocked-race test; the
+real-database idempotency test passes both before and after, since the bug
+is a race, not an ordinary correctness defect the non-concurrent path would
+also trip).
+
+### Re-verified still open, not re-flagged
+
+- **DOC-8** (`legal_service.py::list_revisions` unbounded — no
+  `LIMIT`/`OFFSET`) — read in full this pass, unchanged. Same class as this
+  rotation's other unbounded-list findings; a response-envelope/frontend-
+  contract change, left for an owner decision. Unlike DOC-9, no other
+  module's work has touched `list_revisions` or `get_legal_documents`.
+
+### Verified good ✅ (additional, this pass)
+
+- **The facilities-driven locking work in `documents_service.py` does not
+  regress any of this feature's own invariants.** Read `create_folder`,
+  `get_folders`, `can_access_folder`/`_folder_admits_user`,
+  `accessible_folder_ids`, `update_folder`, `delete_folder`, `create_document`,
+  `get_documents`, `get_document_by_id`, `update_document`, and
+  `delete_document` in full against current code. The `require_write`
+  parameter threaded through the ACL chain (a folder's `required_permissions`
+  can list a read-only entry — e.g. a facility folder's
+  `facilities.view_sensitive` — and a mutation must not be authorized by
+  holding only that tier) is applied consistently at every documents.py
+  write route that resolves a folder's ACL: `create_folder`'s destination
+  check, `update_folder`'s own-folder and destination checks,
+  `delete_folder`'s own-folder check (and, one level down, its subtree walk
+  via `_folder_admits_user(..., require_write=True)`), `upload_document`'s
+  destination check, `update_document`'s own-document and destination
+  checks, and `delete_document`'s own-document check — traced call site by
+  call site, not assumed from the pattern holding once.
+- **`_delete_facility_document_references`'s permission gate
+  (`facilities.delete`/`.manage`, FAC-26) does not create a new way to
+  delete a document without `documents.manage`.** It runs _inside_
+  `delete_document`/`delete_folder`, both of which are already gated on
+  `documents.manage` at the router level — this check can only make a
+  `documents.manage`-holding delete additionally fail (when it would
+  orphan a facility's reference and the caller lacks the facility-side
+  permission too), never succeed on lesser authority.
+- **`permission_matches_any_write`'s read/write classification does not
+  misclassify any permission this feature's own folders gate on.**
+  `FACILITY_SENSITIVE_PERMISSIONS` (`facilities.view_sensitive`,
+  `.edit`, `.manage`) is the only `required_permissions` list this feature
+  populates; `is_read_only_permission` (`core/permissions.py`) correctly
+  reads only `.view_sensitive` as read-only, and
+  `tests/test_permission_read_write_tiers.py` pins the classification by
+  name, not merely by suffix heuristic.
+- **No CSV/spreadsheet export exists in this feature**, re-confirmed by
+  grep across all six declared files and their services — unchanged from
+  every prior pass.
+- **`LIKE`/`ilike` escaping is intact everywhere this pass touched or read**:
+  `Document.name`/`.description`/`.tags` in `get_documents`, and
+  `FacilityDocument.file_path`/`FacilityPhoto.file_path` in
+  `_match_facility_document_references` — all pass `escape=LIKE_ESCAPE_CHAR`.
+- **The XC-4 fix (member-separations folder) does not conflict with or
+  duplicate this feature's own system-folder handling.** It reuses the
+  existing `SYSTEM_FOLDERS` registry shape, the existing
+  `FolderVisibility.LEADERSHIP` enum value, and the same get-or-create-with-
+  organization-lock pattern this pass's own DOC-28 fix now also uses for
+  the member-folder case — no new mechanism introduced.
+
+## Doc updates
+
+- `docs/KNOWN_LIMITATIONS.md` — the "Documents — Folder Listing Is Unbounded
+  and N+1" entry marked Resolved, crediting the facilities-driven fix
+  (re-verified, not taken on faith) and this pass's own guard-test coverage.
+- `docs/module-audit/documents.md` — DOC-6's entry corrected: its header
+  already read "✅ FIXED" but the closing line beneath it still said
+  "Status: flagged", a stale leftover from before the fix landed. No finding
+  reopened — the three underlying gaps were already fixed and are
+  re-confirmed intact here; only the contradictory text is corrected.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                      | Result                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                              | pass, 0 violations                                                                                                                                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                       | pass                                                                                                                                                               |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                  | pass                                                                                                                                                               |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                          | pass, 438 revisions, single head, unchanged this pass (no migration touched)                                                                                       |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py tests/test_facilities_folders.py tests/test_property_return_service.py` | 262 passed                                                                                                                                                         |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                       | 11859 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed                         |
+| `tsc --noEmit` / `eslint .` (frontend)                                                                                                                                                                                                     | not run — no frontend file changed this pass (verified by `git status`; the one frontend change since pass 3, `f41ed91c6`, was read for review only, not modified) |
+
+Guard tests added this pass: `tests/test_documents_access.py::
+TestEnsureMemberFolderIsLocked` (4 cases) — see DOC-28. Confirmed to fail
+against pre-fix code via `git stash` of `documents_service.py` (3 of 4 —
+the source-inspection pair and the mocked concurrent-race test; the fourth,
+an end-to-end idempotency check against a real database, passes both before
+and after since it does not exercise the race itself).
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 

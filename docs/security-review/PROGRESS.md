@@ -16,9 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. PR #2409 (Feature 09, Medical screening, pass 4 — MS-10) merged clean,
-all 17 CI checks green, no unresolved review threads. Next: 10 Documents &
-legal.
+**Feature 10 (Documents & legal, pass 4)** — branch
+`claude/security-review-documents-legal-pass4` (new name; `claude/security-
+review-doc`, `claude/security-review-doc-followup`, `claude/security-review-
+documents-legal-10-pass2`, and `claude/security-review-documents-legal` were
+each used and merged by passes 1–3, so CLAUDE.md Pitfall #24 rules all four
+out this pass). PR: pending creation, will be recorded here once opened.
+
+Two fixes this pass:
+
+- **DOC-28 (MED)** — `ensure_member_folder` (`documents_service.py`), called
+  directly by `documents.py`'s own `GET /documents/my-folder`, was a
+  get-or-create with no lock — two concurrent first-visits by the same
+  member could both insert a personal folder, after which every later call
+  raised `MultipleResultsFound` (500) for that member, permanently. Fixed
+  with the same organization-row-locked, double-checked, peek-then-lock
+  shape `ensure_facility_folder` was hardened into by independent facilities
+  work. 4 new guard tests
+  (`tests/test_documents_access.py::TestEnsureMemberFolderIsLocked`),
+  confirmed to fail pre-fix (3 of 4) via `git stash`.
+- **DOC-9 (MED)** — re-verified fixed. Previously flagged unbounded/N+1;
+  fixed as a byproduct of independent facilities-module concurrency work
+  landed since pass 3, re-verified sound against current code (not the
+  diff) rather than credited on faith.
+
+DOC-8 (unbounded `list_revisions`) re-verified still open, not re-flagged.
+XC-4 (member-separations folder, an unrelated ad hoc security fix that
+landed in a file this feature shares) re-verified sound. One stale doc
+correction: `docs/module-audit/documents.md`'s DOC-6 entry had a header
+saying FIXED contradicted by its own closing line saying "flagged" —
+corrected, no finding reopened.
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09 pass 4, PR #2409, merged), preserved for history</summary>
@@ -11454,7 +11483,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
@@ -11486,6 +11515,77 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-08 — Feature 10 (Documents & legal, pass 4) — 2 fixed, 0 flagged (new) — new PR
+
+Full 7-dimension checklist worked fresh against current code. Read
+`docs/security-review/CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+and prior findings (`docs/security-review/DOC-10-documents-legal.md`
+passes 1–3, `docs/module-audit/documents.md`, `docs/app-review/
+documents.md`) before touching code, per the rotation's standing
+discipline.
+
+`documents_service.py` had grown from 1208 to 1947 lines since pass 3 —
+not from this rotation, but from a large body of facilities-module
+concurrency hardening (FAC-22 through FAC-45) that lives in this shared
+file because facility document/photo folders are provisioned through it.
+Read in full rather than credited on the strength of the file's own name.
+That review found:
+
+- **DOC-9 re-verified fixed** — previously flagged unbounded/N+1
+  `get_folders`, fixed as a byproduct of the facilities work (which needed
+  accurate paginated folder counts for facility sub-trees). Re-verified
+  against current code and its own guard test
+  (`TestFolderListing`, asserting exactly 3 queries regardless of folder
+  count), not credited on faith. `KNOWN_LIMITATIONS.md` updated to
+  Resolved.
+- **DOC-28 (MED), new and fixed** — `ensure_member_folder`
+  (`documents_service.py`), called directly by `documents.py`'s own `GET
+/documents/my-folder`, was a get-or-create with no lock — the exact
+  Pitfall #27 shape the facilities work had just spent five rounds
+  hardening `ensure_facility_folder` against, but that hardening was never
+  extended to this sibling method, which (unlike the facility/apparatus/
+  event helpers) is reachable directly from a route this feature owns and
+  is a genuinely hot path (every member's own Documents page). Two
+  concurrent first-visits by the same member could both insert a personal
+  folder; every later call then raised `MultipleResultsFound` (500) for
+  that member, permanently. Fixed with the same organization-row-locked,
+  double-checked, peek-then-lock shape `ensure_facility_folder` now uses,
+  reusing its existing `_lock_folder_by_id` helper. 4 new guard tests
+  (`TestEnsureMemberFolderIsLocked`), confirmed to fail pre-fix (3 of 4)
+  via `git stash`.
+- **DOC-8 re-verified still open** (unbounded `legal_service.py::
+list_revisions`), not re-flagged — unchanged, no other module's work has
+  touched it.
+- **XC-4 re-verified sound** — an unrelated ad hoc security pass
+  (`ae423afa3`, 2026-09-07, ordered "Fix two data-leakage findings")
+  landed a `member-separations` leadership-only folder + migration in a
+  file this feature shares; read in full and confirmed correct (locking
+  shape, migration table-existence guard, stated irreversibility), not
+  re-implemented.
+- **One stale-doc correction**: `docs/module-audit/documents.md`'s DOC-6
+  entry had a header reading "✅ FIXED" contradicted by its own closing
+  line reading "Status: flagged" — a leftover from before the fix landed.
+  Corrected; no finding reopened.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean on
+both changed files (`documents_service.py`,
+`tests/test_documents_access.py`); `python3 scripts/validate_migrations.py
+--strict` pass (438 revisions, single head, unchanged — no migration
+touched); the feature's own test files (`test_documents_access.py`,
+`test_legal_documents.py`, `test_print_documents.py`,
+`test_public_legal.py`, `test_facility_folder_access.py`,
+`test_facilities_folders.py`, `test_property_return_service.py`) — 262
+passed; full backend suite (`pytest tests/`) — 11859 passed, 21 skipped
+(pre-existing: Docker/registry unavailable, `pywebpush` not installed,
+API-contract server-mode opt-in), 0 failed. No frontend file touched, so
+`tsc --noEmit`/`eslint .` not run (the one frontend commit since pass 3,
+`f41ed91c6`, was read for review only).
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md` → Pass 4.
+`docs/KNOWN_LIMITATIONS.md` and `docs/module-audit/documents.md` updated.
+`CHANGELOG.md` entry added. Rotation row 10 → ⏳ (awaiting PR merge). **Open
+PR** row updated with the branch and finding summary above.
 
 ### 2026-09-08 — Feature 09 (Medical screening, pass 4)'s PR #2409 merged
 

@@ -8,6 +8,7 @@ visibility, and the allowed-roles restriction, plus the permission/role
 collection helpers. Pure logic; no DB.
 """
 
+import inspect
 import io
 import json
 from datetime import datetime, timezone
@@ -90,6 +91,16 @@ def _folder(
 
 def _svc():
     return DocumentsService(MagicMock())
+
+
+def _one(obj):
+    """A ``db.execute(...)`` result mock whose ``scalar_one_or_none()``
+    returns *obj* -- used by the mocked-db race test in
+    ``TestEnsureMemberFolderIsLocked``, matching the pattern
+    ``test_property_return_service.py`` uses for the analogous
+    member-separations-folder race.
+    """
+    return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
 class TestHelpers:
@@ -2991,6 +3002,129 @@ class TestFolderAndDocumentAuditLogging:
         assert entry is not None
         assert entry.event_data["document_id"] == str(document.id)
         assert "name" in entry.event_data["fields"]
+
+
+class TestEnsureMemberFolderIsLocked:
+    """DOC-28: ``ensure_member_folder`` is a get-or-create with no uniqueness
+    constraint behind ``(organization_id, parent_id, owner_user_id)``
+    (Pitfall #27 shape). Two concurrent first-visits to the same member's
+    ``GET /documents/my-folder`` -- two browser tabs, a retried request --
+    would otherwise both see "no folder yet" and both insert a personal
+    folder, after which every later read raises ``MultipleResultsFound`` for
+    that member, permanently.
+
+    Unlike the once-per-facility/apparatus/event siblings (out of this
+    feature's scope -- they're reached from other modules' endpoints), this
+    one is called directly from ``documents.py``'s ``GET /my-folder`` route
+    and is a genuinely hot path: every member visits their own Documents
+    page. It takes the same fast/slow, peek-then-lock shape
+    ``ensure_facility_folder`` was hardened into (FAC-42/43/45), covered here
+    with the same source-inspection technique
+    ``test_facilities_folders.py::TestFolderCreationIsLocked`` uses for that
+    method, plus an end-to-end idempotency check against a real database.
+    """
+
+    def test_locks_the_organization_row(self):
+        source = "".join(
+            inspect.getsource(fn)
+            for fn in (
+                DocumentsService.ensure_member_folder,
+                DocumentsService._lock_members_root,
+                DocumentsService._lock_member_personal_folder,
+            )
+        )
+        assert source.count("with_for_update()") >= 3, (
+            "ensure_member_folder (plus its two locking-read helpers) must "
+            "take 3 locking reads (organization + members_root + personal "
+            "folder) on its slow path, or two concurrent first-visits by "
+            "the same member can both decide no folder exists and both "
+            "create one"
+        )
+
+    def test_fast_path_skips_the_organization_lock(self):
+        source = inspect.getsource(DocumentsService.ensure_member_folder)
+        fast_path, _, slow_path = source.partition("org = await self.db.scalar(")
+        assert slow_path, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_member_folder's fast path (before the organization lock "
+            "is acquired) must not itself take a lock -- every member "
+            "revisiting their already-created folder would otherwise "
+            "serialize on one shared organization row"
+        )
+
+    async def test_reuses_the_folder_a_concurrent_visit_created(self):
+        """The re-check under the organization lock, not just the fast path.
+
+        Mirrors ``test_property_return_service.py``'s
+        ``test_reuses_folder_a_concurrent_drop_created`` for the analogous
+        member-separations-folder race: the members root already exists
+        (the common case -- shared across every member), this member's own
+        folder does not yet on the fast-path peek, and a concurrent request
+        wins the race and commits while this one waits on the organization
+        lock. The slow path's re-check must return the winner's folder, not
+        insert a second one.
+        """
+        root = SimpleNamespace(id="members-root")
+        winner = SimpleNamespace(id="folder-created-by-the-other-request")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(root),  # fast-path: members root already exists
+                _one(None),  # fast-path: this member's own folder -- not yet
+                _one(root),  # slow path: members root, locked, re-confirmed
+                _one(winner),  # slow path: personal folder, locked -- the
+                # concurrent visit already created and committed it
+            ]
+        )
+        db.scalar = AsyncMock(return_value=SimpleNamespace(id="org-1"))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.flush = AsyncMock()
+
+        user = SimpleNamespace(id="user-1", first_name="Jane", last_name="Smith")
+        folder = await DocumentsService(db).ensure_member_folder("org-1", user)
+
+        assert folder.id == "folder-created-by-the-other-request"
+        added = [c.args[0] for c in db.add.call_args_list]
+        assert not [o for o in added if isinstance(o, DocumentFolder)], (
+            "the slow path's re-check found the concurrently-created folder "
+            "but a duplicate DocumentFolder was added anyway"
+        )
+
+    async def test_repeated_calls_return_the_same_folder(self, db_session):
+        """End-to-end against a real database: not just that a lock is
+        taken, but that the get-or-create is actually idempotent.
+        """
+        org = Organization(name="Member Folder VFD", slug="member-folder-race")
+        db_session.add(org)
+        await db_session.flush()
+        user = User(
+            organization_id=org.id,
+            username="firefighter1",
+            email="firefighter1@example.com",
+            first_name="Jane",
+            last_name="Smith",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        first = await service.ensure_member_folder(org.id, user)
+        second = await service.ensure_member_folder(org.id, user)
+
+        assert first.id == second.id
+
+        count = await db_session.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == org.id,
+                DocumentFolder.owner_user_id == user.id,
+            )
+        )
+        assert len(count.scalars().all()) == 1
 
 
 if __name__ == "__main__":  # pragma: no cover

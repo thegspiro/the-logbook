@@ -1200,6 +1200,100 @@ class DocumentsService:
     # Per-Member Folder Management
     # ============================================
 
+    async def _peek_members_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Non-locking read for the org's 'Member Files' system folder.
+
+        Safe as a plain read for the same reason as ``_peek_facilities_root``:
+        a system folder can be neither moved (``update_folder`` refuses it)
+        nor deleted (``delete_folder`` refuses it), so once this row is
+        visible to any snapshot it stays visible, at the same id, forever. A
+        stale peek can only under-report existence, never hand back a wrong
+        id — an under-report simply falls through to the slow path's own
+        locking, double-checked re-read.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == "members")
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_members_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's 'Member Files' system folder.
+
+        A standalone method purely so ``ensure_member_folder`` can call it
+        from its slow (creation-guarded) path without duplicating the query,
+        and so a test can patch-and-track it — same rationale as
+        ``_lock_facilities_root``.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == "members")
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _peek_member_personal_folder(
+        self, members_root_id: str, user_id: str
+    ) -> Optional[DocumentFolder]:
+        """Non-locking existence check for one member's own personal folder.
+
+        Used only by ``ensure_member_folder``'s fast path, paired with
+        ``_lock_folder_by_id``. Unlike the members root, a personal folder
+        genuinely can be deleted, so a stale "not found" here isn't
+        automatically harmless on its own — but it doesn't need to be: it
+        always falls through to the slow path's own locking, double-checked
+        re-read under the organization lock, which is unaffected by this
+        method's staleness. What this peek exists to avoid is calling a
+        ``.with_for_update()`` lookup that might match nothing (and
+        therefore take a gap lock) before that organization lock is
+        acquired — the exact deadlock ``_peek_facility_folder`` avoids for
+        the analogous facility-folder case (FAC-45): many members loading
+        their own Documents page for the first time (e.g. right after
+        onboarding) is the same concurrent-first-access shape as many
+        different facilities' folders being created at once.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == members_root_id)
+            .where(DocumentFolder.owner_user_id == user_id)
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_member_personal_folder(
+        self, members_root_id: str, user_id: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for one member's own personal folder, under the root.
+
+        Same reuse/testability rationale as ``_lock_members_root``. Used by
+        ``ensure_member_folder``'s slow path only — the fast path's own
+        existence check goes through ``_peek_member_personal_folder`` /
+        ``_lock_folder_by_id`` instead, for the gap-lock reason documented
+        on that peek.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == members_root_id)
+            .where(DocumentFolder.owner_user_id == user_id)
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_member_folder(
         self, organization_id: UUID, user: User
     ) -> DocumentFolder:
@@ -1211,15 +1305,50 @@ class DocumentsService:
         Folder hierarchy:
           Member Files/              (system, visibility=organization)
             └── Last, First/         (owner=user, visibility=owner)
+
+        This is a read-then-write with no uniqueness constraint behind
+        ``(organization_id, parent_id, owner_user_id)`` (Pitfall #27 shape):
+        two concurrent first-visits to ``GET /documents/my-folder`` by the
+        same member — two browser tabs, a retried request — would otherwise
+        both see "no folder yet" and both insert one, after which every
+        later read raises ``MultipleResultsFound`` for that member,
+        permanently. Unlike the once-per-facility/apparatus/event helpers,
+        this one is reachable directly from a documents.py route and is a
+        genuinely hot path (every member visits their own Documents page),
+        so it takes the same fast/slow, peek-then-lock shape
+        ``ensure_facility_folder`` was hardened into (FAC-42/43/45) rather
+        than an unconditional organization lock on every call.
+
+        The fast path never blocks on the organization row and never takes
+        a lock that might match nothing (which would take a gap lock and
+        risk the exact deadlock FAC-45 found for facilities). Only when
+        something is actually missing does this fall through to the slow
+        path, which locks the organization row and re-checks both folders
+        again under that lock (double-checked locking) before creating.
         """
-        # Find the 'members' system folder
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == "members")
-            .where(DocumentFolder.is_system.is_(True))
+        user_id_str = str(user.id)
+
+        members_root = await self._peek_members_root(organization_id)
+        if members_root is not None:
+            peeked_folder = await self._peek_member_personal_folder(
+                members_root.id, user_id_str
+            )
+            if peeked_folder is not None:
+                member_folder = await self._lock_folder_by_id(peeked_folder.id)
+                if member_folder is not None:
+                    return member_folder
+
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
         )
-        members_root = result.scalar_one_or_none()
+        if org is None:
+            raise ValueError("Organization not found")
+
+        # Re-check under the org lock -- a concurrent transaction may have
+        # created either row between the fast-path check above and here.
+        members_root = await self._lock_members_root(organization_id)
 
         if not members_root:
             # Auto-create if missing (e.g. org created before this feature)
@@ -1241,14 +1370,9 @@ class DocumentsService:
             await self.db.flush()
             await self.db.refresh(members_root)
 
-        # Check if user already has a personal folder
-        user_id_str = str(user.id)
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.parent_id == members_root.id)
-            .where(DocumentFolder.owner_user_id == user_id_str)
+        member_folder = await self._lock_member_personal_folder(
+            members_root.id, user_id_str
         )
-        member_folder = result.scalar_one_or_none()
 
         if not member_folder:
             folder_name = f"{user.last_name}, {user.first_name}"

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two concurrent visits to a member's own Documents folder could both create it (2026-09-08)
+
+**Security**
+
+- **`GET /documents/my-folder`'s get-or-create had no lock.** Two concurrent
+  first-visits by the same member — two browser tabs, a retried request —
+  could both see "no personal folder yet" and both insert one; the existing
+  lookup then raised `MultipleResultsFound` on every later visit for that
+  member, an unhandled 500 with no way to recover short of deleting the
+  duplicate row by hand. Not a cross-tenant issue — every document still
+  landed in the caller's own organization — a data-integrity/availability
+  one: an ordinary double-tap could permanently lock a member out of their
+  own document folder. Fixed by giving `ensure_member_folder` the same
+  organization-row-locked, double-checked get-or-create shape already used
+  elsewhere in this module for the analogous facility-folder and
+  member-separations-folder races, with a peek-before-lock fast path so a
+  member revisiting an already-created folder never blocks on it. Guarded
+  by `TestEnsureMemberFolderIsLocked`, confirmed to fail against the pre-fix
+  code.
+- **The Documents folder listing's N+1 query is now fixed** (credited to
+  independent facilities-module work, re-verified sound by this pass):
+  `get_folders` previously issued one extra `func.count` query per folder to
+  populate its document count and had no pagination at all; it now takes
+  `skip`/`limit` and answers with exactly one count query plus one grouped
+  subquery for the whole page, regardless of how many folders exist.
+
 ### Clearing a medical screening record or requirement field silently kept the old value (2026-09-08)
 
 **Security**
