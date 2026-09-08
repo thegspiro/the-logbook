@@ -16,13 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 11 (Inventory, pass 4)** — branch
+**Feature 11 (Inventory, pass 4)** — PR
+[#2422](https://github.com/thegspiro/the-logbook/pull/2422), branch
 `claude/security-review-inventory-pass1` (fresh name for this rotation pass;
 `claude/security-review-inventory-lockorder` and the pass-1/pass-2 branch
 names were each used and merged by earlier passes, so CLAUDE.md Pitfall #24
-rules them out). PR opening now — 0 fixes, 0 new findings, 4 prior flags
-(INV-8, INV-9, INV-16, INV-17) re-verified still open. Docs-only diff (no
-backend or frontend code changed). See the Log entry above and
+rules them out). 0 fixes, 0 new findings, 4 prior flags (INV-8, INV-9,
+INV-16, INV-17) re-verified still open. Docs-only diff (no backend or
+frontend code changed). Awaiting CI. See the Log entry above and
 `INV-11-inventory.md` for detail.
 
 <details>
