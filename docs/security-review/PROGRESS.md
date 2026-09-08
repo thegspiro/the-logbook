@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 03 (Public surface & webhooks, pass 4)** — PR
-[#PRNUM](https://github.com/thegspiro/the-logbook/pull/PRNUM), branch
+[#2393](https://github.com/thegspiro/the-logbook/pull/2393), branch
 `claude/security-review-public-surface-webhooks-pass4`. Pass 4's fourth
 feature, and the rotation's highest-risk category — every route here is
 reachable with zero credentials. **Four findings: three fixed, one flagged
@@ -11186,7 +11186,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) — PR #PRNUM opened
+### 2026-09-08 — Feature 03 (Public surface & webhooks, pass 4) — PR #2393 opened
 
 The **Open PR** row read "None" and 03 was the first ⬜ row, so this is a
 feature iteration rather than a tend pass.
