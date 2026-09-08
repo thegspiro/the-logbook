@@ -33,6 +33,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** Tailwind v4 palette values, only the shades these files actually name. */
 const PALETTE: Record<string, string> = {
   white: '#ffffff',
+  // Measured from the installed Tailwind's `oklch(44.6% 0.043 257.281)` rather
+  // than copied from the v3 table, because that is the colour this build paints.
+  'slate-600': '#45556c',
   'slate-900': '#0f172a',
   'amber-600': '#d97706',
   'amber-800': '#92400e',
