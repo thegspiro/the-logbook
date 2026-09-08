@@ -138,7 +138,7 @@ const RollbackElectionModal: React.FC<RollbackElectionModalProps> = ({
               type="button"
               onClick={() => onSubmit(rollbackReason)}
               disabled={rolling || rollbackReason.trim().length < 10}
-              className="rounded-md bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-50"
+              className="rounded-md bg-orange-700 px-4 py-2 text-white hover:bg-orange-800 disabled:opacity-50"
             >
               {rolling ? 'Rolling Back...' : 'Confirm Rollback'}
             </button>

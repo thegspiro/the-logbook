@@ -490,7 +490,12 @@ export const TestingChecklistPage: React.FC = () => {
           />
         </label>
 
-        <div className="segmented-group hscroll inline-flex gap-1" role="group" aria-label="Filter by result">
+        <div
+          className="segmented-group hscroll inline-flex gap-1"
+          role="group"
+          aria-label="Filter by result"
+          data-mobile-scroll-region
+        >
           {STATUS_FILTERS.map((filter) => (
             <button
               key={filter.value}

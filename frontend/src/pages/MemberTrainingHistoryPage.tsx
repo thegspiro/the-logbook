@@ -342,7 +342,11 @@ export const MemberTrainingHistoryPage: React.FC = () => {
           <Breadcrumbs
             items={[
               { label: 'Members', path: '/members' },
-              { label: user.full_name || user.username, path: `/members/${userId}` },
+              // A third fallback, because the first two can both be empty — a
+              // record still loading, or one carrying neither name — and an
+              // empty label renders a link with no accessible name, which axe
+              // reports as link-name and a screen reader announces as a bare URL.
+              { label: user.full_name || user.username || 'Member', path: `/members/${userId}` },
               { label: 'Training History' },
             ]}
           />
@@ -428,6 +432,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+              aria-label="Filter training records by status"
               className="form-input"
             >
               <option value="all">All Status</option>
@@ -446,6 +451,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 setSortField(field as SortField);
                 setSortOrder(order as SortOrder);
               }}
+              aria-label="Sort training records"
               className="form-input"
             >
               <option value="date-desc">Newest First</option>

@@ -118,7 +118,7 @@ const ShiftReportPrintPage: React.FC = () => {
     <>
       <PrintPageStyles margin="0.6in 0.75in" />
 
-      <main className="shift-report-print-shell" id="main-content">
+      <div data-page-main className="shift-report-print-shell" id="main-content">
         <article className="shift-report-print" aria-labelledby="shift-report-title">
           <header className="shift-report-print__header">
             <div>
@@ -283,7 +283,7 @@ const ShiftReportPrintPage: React.FC = () => {
             <span>Generated {formatDate(new Date(), tz)}</span>
           </footer>
         </article>
-      </main>
+      </div>
     </>
   );
 };

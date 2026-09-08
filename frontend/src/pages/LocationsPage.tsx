@@ -297,7 +297,15 @@ function LocationSetupWizard({
 
   /* ── Render ── */
   return (
-    <div className="modal-overlay z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    // Named directly rather than by `aria-labelledby`: the only text at the top
+    // of this wizard is the current step, which is a span and changes as you
+    // move through it. A dialog's name should be what the dialog is.
+    <div
+      className="modal-overlay z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Location setup"
+    >
       <DialogPanel
         onClose={() => onDismiss?.()}
         className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden"
@@ -1466,13 +1474,14 @@ export default function LocationsPage() {
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="station-dialog-title"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowStationModal(false);
           }}
         >
           <DialogPanel onClose={() => setShowStationModal(false)} className="modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">
+              <h2 id="station-dialog-title" className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
               </h2>
               <button
@@ -1485,9 +1494,12 @@ export default function LocationsPage() {
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <label className={labelCls}>Station Name / Number *</label>
+                <label htmlFor="station-name" className={labelCls}>
+                  Station Name / Number *
+                </label>
                 <input
                   type="text"
+                  id="station-name"
                   value={stationForm.name}
                   onChange={(e) => setStationForm((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g., Station 1, Headquarters"
@@ -1495,9 +1507,12 @@ export default function LocationsPage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Street Address</label>
+                <label htmlFor="station-address" className={labelCls}>
+                  Street Address
+                </label>
                 <input
                   type="text"
+                  id="station-address"
                   value={stationForm.address}
                   onChange={(e) => setStationForm((p) => ({ ...p, address: e.target.value }))}
                   placeholder="123 Main Street"
@@ -1506,29 +1521,38 @@ export default function LocationsPage() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
-                  <label className={labelCls}>City</label>
+                  <label htmlFor="station-city" className={labelCls}>
+                    City
+                  </label>
                   <input
                     type="text"
+                    id="station-city"
                     value={stationForm.city}
                     onChange={(e) => setStationForm((p) => ({ ...p, city: e.target.value }))}
                     className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>State</label>
+                  <label htmlFor="station-state" className={labelCls}>
+                    State
+                  </label>
                   <input
                     type="text"
+                    id="station-state"
                     value={stationForm.state}
                     onChange={(e) => setStationForm((p) => ({ ...p, state: e.target.value }))}
                     className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Zip</label>
+                  <label htmlFor="station-zip" className={labelCls}>
+                    Zip
+                  </label>
                   <input
                     type="text"
                     inputMode="numeric"
                     autoComplete="postal-code"
+                    id="station-zip"
                     value={stationForm.zip}
                     onChange={(e) => setStationForm((p) => ({ ...p, zip: e.target.value }))}
                     className={inputCls}
@@ -1536,8 +1560,11 @@ export default function LocationsPage() {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Description</label>
+                <label htmlFor="station-description" className={labelCls}>
+                  Description
+                </label>
                 <textarea
+                  id="station-description"
                   value={stationForm.description}
                   onChange={(e) => setStationForm((p) => ({ ...p, description: e.target.value }))}
                   rows={2}
@@ -1574,13 +1601,14 @@ export default function LocationsPage() {
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="room-dialog-title"
           onKeyDown={(e) => {
             if (e.key === 'Escape') setShowRoomModal(false);
           }}
         >
           <DialogPanel onClose={() => setShowRoomModal(false)} className="modal-panel-scroll w-full max-w-md">
             <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 className="text-theme-text-primary text-lg font-bold">
+              <h2 id="room-dialog-title" className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
               </h2>
               <button

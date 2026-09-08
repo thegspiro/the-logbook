@@ -252,7 +252,7 @@ const SystemOwnerCreation: React.FC = () => {
       />
 
       {/* Main Content */}
-      <main className="flex flex-1 items-center justify-center p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center p-4 py-8">
         <div className="w-full max-w-2xl">
           {/* Navigation Buttons */}
           <div className="mb-6 flex items-center justify-between">
@@ -622,7 +622,7 @@ const SystemOwnerCreation: React.FC = () => {
                 disabled={!isFormValid || isSaving}
                 className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
                   isFormValid && !isSaving
-                    ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
+                    ? 'transform bg-linear-to-r from-red-700 to-orange-700 text-white shadow-lg hover:scale-105 hover:from-red-800 hover:to-orange-800 hover:shadow-xl'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
                 aria-label="Create System Owner account and continue setup"

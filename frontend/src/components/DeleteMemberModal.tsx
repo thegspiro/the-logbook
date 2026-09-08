@@ -106,7 +106,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
             disabled={deleting}
             className={`flex-1 border px-4 py-2 text-sm font-medium ${
               activeTab === 'soft'
-                ? 'z-10 border-yellow-600 bg-yellow-600 text-white'
+                ? 'z-10 border-yellow-600 bg-yellow-700 text-white'
                 : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-yellow-500 disabled:opacity-50`}
           >

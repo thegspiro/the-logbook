@@ -102,7 +102,7 @@ export const ApplicationStatusPage: React.FC = () => {
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-8">
-      <div className="mx-auto max-w-lg">
+      <main id="main-content" className="mx-auto max-w-lg">
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
@@ -225,7 +225,7 @@ export const ApplicationStatusPage: React.FC = () => {
         <p className="text-theme-text-muted mt-6 text-center text-xs">
           For questions about your application, please contact the department directly.
         </p>
-      </div>
+      </main>
     </div>
   );
 };

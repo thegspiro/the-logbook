@@ -226,7 +226,10 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
     <div className="card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-theme-text-primary text-sm font-semibold">Grant Pipeline</h2>
-        <Link to="/grants/applications" className="text-xs font-medium text-red-600 hover:text-red-700">
+        <Link
+          to="/grants/applications"
+          className="touch-target-phone text-theme-accent-red text-xs font-medium hover:underline"
+        >
           View All
         </Link>
       </div>
@@ -241,7 +244,7 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
             <Link
               key={status}
               to={`/grants/applications?status=${status}`}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 ${colorClass}`}
+              className={`touch-target-phone inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 ${colorClass}`}
             >
               <span>{PIPELINE_STATUS_LABELS[status] ?? status}</span>
               <span className="font-bold">{count}</span>
@@ -269,7 +272,10 @@ const UpcomingDeadlines: React.FC<UpcomingDeadlinesProps> = ({ deadlines, timezo
         <CalendarClock className="text-theme-text-secondary h-4 w-4" />
         <h2 className="text-theme-text-primary text-sm font-semibold">Upcoming Deadlines</h2>
       </div>
-      <Link to="/grants/opportunities" className="text-xs font-medium text-red-600 hover:text-red-700">
+      <Link
+        to="/grants/opportunities"
+        className="touch-target-phone text-theme-accent-red text-xs font-medium hover:underline"
+      >
         View All
       </Link>
     </div>
@@ -392,7 +398,10 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
         <HandCoins className="text-theme-text-secondary h-4 w-4" />
         <h2 className="text-theme-text-primary text-sm font-semibold">Recent Donations</h2>
       </div>
-      <Link to="/grants/donations" className="text-xs font-medium text-red-600 hover:text-red-700">
+      <Link
+        to="/grants/donations"
+        className="touch-target-phone text-theme-accent-red text-xs font-medium hover:underline"
+      >
         View All
       </Link>
     </div>

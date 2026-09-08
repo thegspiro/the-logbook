@@ -33,7 +33,7 @@ export const ProgressSteps: React.FC<ProgressStepsProps> = ({ steps, currentStep
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                     isComplete
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-green-700 text-white'
                       : isCurrent
                         ? 'bg-red-800 text-white ring-2 ring-red-600 ring-offset-2 ring-offset-(--surface-bg)'
                         : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border border'

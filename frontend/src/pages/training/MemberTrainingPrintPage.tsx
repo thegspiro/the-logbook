@@ -69,20 +69,20 @@ const MemberTrainingPrintPage: React.FC = () => {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center" aria-busy="true">
+      <div data-page-main className="flex min-h-screen items-center justify-center" aria-busy="true">
         <p className="text-gray-500" role="status" aria-live="polite">
           Loading training records...
         </p>
-      </main>
+      </div>
     );
   }
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <div data-page-main className="flex min-h-screen items-center justify-center">
         <p className="text-red-600" role="alert">
           {error}
         </p>
-      </main>
+      </div>
     );
   }
 
@@ -98,7 +98,7 @@ const MemberTrainingPrintPage: React.FC = () => {
     <>
       <PrintPageStyles margin="0.5in 0.6in" />
 
-      <main className="member-training-print-shell">
+      <div data-page-main className="member-training-print-shell">
         <article className="member-training-print" aria-labelledby="training-record-title">
           {/* Header */}
           <header className="member-training-print__header">
@@ -290,7 +290,7 @@ const MemberTrainingPrintPage: React.FC = () => {
             <span>Generated {generatedDate}</span>
           </footer>
         </article>
-      </main>
+      </div>
     </>
   );
 };

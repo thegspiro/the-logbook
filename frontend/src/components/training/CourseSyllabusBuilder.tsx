@@ -541,6 +541,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ co
 
       {classes.length === 0 && !adding ? (
         <EmptyState
+          headingLevel={4}
           icon={CalendarRange}
           title="No classes on this syllabus"
           description="Add each subject the course covers and say how many days after the start it happens. Generating a cohort turns this outline into real, dated training events."

@@ -362,7 +362,7 @@ export const BallotVotingPage: React.FC = () => {
       </div>
 
       {/* Ballot Content */}
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      <main id="main-content" className="mx-auto max-w-2xl px-4 py-8">
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
@@ -607,7 +607,7 @@ export const BallotVotingPage: React.FC = () => {
           <p>Your vote is anonymous and securely recorded.</p>
           <p>This voting link is unique to you. Do not share it with others.</p>
         </div>
-      </div>
+      </main>
 
       {/* Confirmation Modal */}
       {showConfirmation && (

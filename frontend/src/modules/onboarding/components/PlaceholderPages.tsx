@@ -18,7 +18,7 @@ export const SecurityCheckPlaceholder: React.FC = () => {
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
-      <div className="card w-full max-w-2xl p-8 text-center">
+      <main id="main-content" className="card w-full max-w-2xl p-8 text-center">
         <div className="mb-4 text-5xl text-blue-700 dark:text-blue-400">{'\uD83D\uDD12'}</div>
         <h2 className="text-theme-text-primary mb-4 text-3xl font-bold">Security Configuration</h2>
         <p className="text-theme-text-secondary mb-6">
@@ -30,7 +30,7 @@ export const SecurityCheckPlaceholder: React.FC = () => {
           <span className="border-theme-surface-border inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"></span>
           <span>Redirecting to module selection...</span>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

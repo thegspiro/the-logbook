@@ -1131,7 +1131,7 @@ const EventRequestsTab: React.FC = () => {
                                       type="button"
                                       onClick={() => void handlePostpone(expandedDetail.id)}
                                       disabled={actionLoading}
-                                      className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
+                                      className="rounded-lg bg-orange-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-800 disabled:opacity-50"
                                     >
                                       Confirm Postpone
                                     </button>

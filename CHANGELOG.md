@@ -57,8 +57,291 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   users table, so on MySQL the advance failed on the constraint and the webhook
   quietly did nothing. The acting integration is recorded in the step's result
   and the audit event instead.
+### Two themes, thirty rules and every dialog had never been measured (2026-09-07)
+
+**Fixed**
+
+- **The application shipped two `main` landmarks on 12 routes.** `AppLayout`
+  declared `role="main"` and 41 pages rendered inside it declared a second
+  `<main>` of their own, nested in the first. The layout now owns one real
+  `<main>`; the page wrappers are `<div data-page-main>`.
+- **The skip link pointed at nothing on every pre-auth page.** `index.html`
+  links to `#main-content`, which only `AppLayout` provided — so on onboarding,
+  forgot-password, reset-password and the OAuth callback it resolved to no
+  element. That is Bypass Blocks (SC 2.4.1) broken on the flow a chief walks
+  through before the application has any other navigation. Onboarding step 1
+  additionally had no `main` at all, leaving every element on it outside a
+  landmark. Sixteen pages now provide the target.
+- **High-contrast mode failed WCAG AA in four places** — the one theme somebody
+  turns on _because_ they need contrast, and the only one with no test coverage
+  anywhere in the repository. `text-red-600` measures 4.35:1 on its black
+  ground and `text-blue-600` 4.06:1, both below the 4.5:1 floor. Both were raw
+  Tailwind colours standing where the theme-aware `--accent-red` /
+  `--accent-blue` tokens belong; those already resolve to 6.2:1 or better in
+  every theme. Dark mode was clean.
+- **`<aside role="navigation">` in the side navigation** contradicted the
+  element's own `complementary` role, and so was flagged on every route in the
+  application. It is a `<nav>`.
+- **`EmptyState` rendered an `h3` directly under the page `h1`**, skipping a
+  level on twenty routes and leaving a hole in the outline a screen reader user
+  navigates by. It defaults to `h2` now, with a `headingLevel` prop for the two
+  ends — `1` where the empty state is the whole page, `3` where it sits under
+  an `h2`.
+- **Two dialogs had no accessible name** (Add Station, Add Requirement — a
+  screen reader announces "dialog" and stops) and **eleven form fields across
+  two more** had visible labels that were never associated with their inputs.
+- **`Collapsible` gave every instance an unnamed `role="region"`**, so a page
+  with several offered a landmark list of identical, indistinguishable entries.
+  Each is now named from its own trigger.
+- **A ninth route was still measuring Access Denied.** `/apparatus` needs
+  `apparatus.view`, which the fixture did not hold. What surfaced it was the
+  `page-has-heading-one` rule: the refusal screen's heading is an `h2`, so a
+  route stuck on it has no `h1` at all.
+
+**Changed**
+
+- **The accessibility pass runs in all three themes and against WCAG 2.2.** It
+  had used the 2.0/2.1 A and AA tags in the light theme only, which excluded
+  `target-size` (SC 2.5.8) and all 30 of axe's best-practice rules — heading
+  order, landmarks, region, dialog names, skip-link. Those found 132 issues on
+  their first run, now 12, ratcheted per route. A/AA is asserted at zero in
+  light, dark and high-contrast.
+- **New `mobile-dialogs.spec.ts`.** The ratchet only ever measured a route's
+  landing state; this opens each page's first create-shaped control and
+  measures the dialog — accessible name, axe A/AA, both ends reachable (Pitfall
+  #21), no overflow at 320px. Seven dialogs, all passing.
+
+**Notes**
+
+- Converting those 41 `<main>` elements silently broke a stylesheet rule keyed
+  to the tag (`[data-page-layout='application'] > :first-child > main`), which
+  gave the pages their outer padding back and squeezed the scheduling
+  calendar's day cells to 41px — under the touch minimum. No type or lint check
+  could see it; the presentation ratchet caught it on the next run. The rule is
+  now keyed to `[data-page-main]`.
+- Building the dialog pass produced two confidently wrong answers worth
+  recording: searching the whole document for the opener made the bottom
+  navigation's global "Add" win on nearly every route, so it measured one
+  quick-add sheet 42 times and reported 42 dialogs; and
+  `querySelector('[role="dialog"]')` returns the first dialog in source order
+  rather than the one that opened, which reported a working focus trap as
+  broken. Both are documented in the spec.
+- Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
+
+### Seven public pages had no skip-link target, and four payload guards were partial (2026-09-08)
+
+**Fixed**
+
+- **The skip-link guard checked a hardcoded list of five pages and missed
+  seven.** `App.tsx` renders five module public-route factories
+  (`getProspectiveMembersPublicRoutes`, forms, events, elections, facilities)
+  plus `FinanceApprovalPage` outside `AppLayout`, and none was in the list —
+  so `ApplicationStatusPage`, `PublicFormPage`, `EventRequestStatusPage`,
+  `BallotVotingPage`, `LocationKioskPage`, `GuestCheckInPage` and
+  `FinanceApprovalPage` all rendered with `index.html`'s skip link pointing at
+  nothing, while the test passed. That is the same assumption-instead-of-
+  measurement failure the guard was written to catch, committed in the guard
+  itself. All seven now render `<main id="main-content">`, and the list is
+  derived: the `AppLayout` route is excised from `<Routes>` by tag depth and
+  every remaining page — including those the factories render — is checked.
+- **The check-in monitoring guard validated 3 of its 16 required fields.** A
+  response carrying the two arrays and three counters but missing `event_name`,
+  `is_check_in_active` or the window timestamps was accepted, and the dashboard
+  rendered blank totals and an incorrect inactive badge as live data. All
+  required fields are checked now, and the error names the missing ones.
+- **The medical supplies guard validated `items` but not its paging metadata.**
+  `itemPage.total > 0` is what renders the pagination control, so an undefined
+  `total` showed page one and made every later supply unreachable.
+- **The audit-log statistics guard checked its maps for truthiness only**, so a
+  string or an array passed, and it did not check `total` at all — leaving a
+  blank "Total events" beside a populated table, which reads as a healthy log.
+
+**Changed**
+
+- **The applicant pipeline tabs implement the whole tab pattern**, not the half
+  of it that announces a contract. `role="tab"` tells a screen-reader user the
+  arrow keys move between views and that Tab leaves the strip; without roving
+  `tabIndex` and an Arrow/Home/End handler neither was true. Now matches
+  `AdminHubFrame`, which is where the app already does this properly, and the
+  five views share one `role="tabpanel"` so `aria-controls` names something
+  that exists.
+
+### Gradient buttons were never contrast-checked, and four onboarding pages had no skip-link target (2026-09-08)
+
+**Fixed**
+
+- **22 gradient call sites paired white text with a fill below the AA floor.**
+  A gradient fill is written `from-red-600 to-orange-600`, not `bg-*`, so the
+  call-site contrast sweep never looked at it — and axe cannot measure one
+  either, because it abstains on a gradient background. The class was invisible
+  to both guards at once. Every onboarding step's primary button was in it:
+  orange-600 is **3.60:1** against white. Also `from-red-500` avatar circles
+  (3.81:1) in the applicant pipeline, and the import/add-member submit buttons
+  (green-600 **3.22:1**, emerald-600 3.65:1, cyan-600 3.62:1). All raised to the
+  lightest shade of the same hue that clears 4.5:1, hover states raised with
+  them. The sweep now measures `from-`, `via-` and `to-` alongside `bg-`.
+- **Four pages that render outside `AppLayout` had no `#main-content`**, so
+  `index.html`'s skip link pointed at nothing: the Welcome screen at `/`, the
+  startup check at `/onboarding`, the module configuration step, and the
+  security-check placeholder. Bypass Blocks (SC 2.4.1), on the first screen
+  anyone sees. The earlier onboarding landmark fix missed them because the
+  mobile ratchet measures one representative step and assumes the rest share its
+  shell — these four build their own. **`skipLinkTarget.test.ts`** now checks
+  that assumption directly, in the source, for every page reachable outside the
+  layout.
+- **The medical supplies page marked a section loaded before validating it.**
+  A malformed response left the section showing "Showing previously loaded data"
+  and "Nothing expiring" simultaneously, because `setLoaded(true)` had already
+  been queued when the shape guard threw. Validation now happens before any
+  state is touched.
+- **The audit log defaulted a missing `total` to zero.** `Pagination` renders
+  nothing at `totalItems === 0`, so a response with a valid first page and no
+  count showed page 1 and made every later page unreachable. It is now checked
+  with `logs` and enters the error path.
+- **The applicant pipeline's view switcher announced itself as navigation.**
+  It was changed to `<nav>` for its accessible name, but the five buttons swap
+  an in-page panel rather than navigating, and none exposed which view was
+  showing. Now `role="tablist"` with `aria-selected`, matching the eight other
+  tab strips in the app, and without the redundant container tab stop.
+
+### The contrast guard measured a palette this build does not paint (2026-09-08)
+
+**Fixed**
+
+- **`primaryFillContrast.test.ts` measured every ratio against Tailwind v3
+  hexes.** Tailwind v4 authors its palette in OKLCH — `amber-700` is
+  `oklch(55.5% 0.163 48.998)`, not the `#b45309` the file's hand-copied table
+  claimed — so the guard was checking colours the browser never renders, and a
+  Tailwind upgrade that moved a shade would have left it green. It now reads
+  `node_modules/tailwindcss/theme.css` and the project's own `@theme`, converts
+  OKLCH to sRGB, and measures that. The corrected figures move a little:
+  red-600 is 4.77:1 (not 4.83), red-800 8.36:1 (not 8.31), green-600 3.22:1,
+  blue-600 5.25:1. Every conclusion the sweep reached still holds.
+- **The same guard could never report an unknown hue**, because it built its
+  match pattern out of the keys of that table — the one shape it could not see
+  was the one nobody had measured. It also only looked inside `className=`, so
+  a class string declared away from its element (Avatar's module-level palette,
+  the status-badge maps in `constants/enums.ts`) went unscanned. Both widened;
+  nothing in the tree measures below 4.5:1 under either.
+- **`EmptyState`'s default heading level promoted nested empty states.** With
+  the default at `h2`, "Nobody yet" inside the "Who's going" card rendered as a
+  peer of the card rather than as its content, which is what a screen-reader
+  user navigating by heading hears. Seventeen nested call sites now state their
+  level (`3` under an `h2` section, `4` under an `h3`), and the prop accepts
+  `4`.
+
+**Changed**
+
+- **`mobile-dialogs.spec.ts` opens every create-shaped control on a route**,
+  not just the first, and its opener vocabulary covers `receive`, `issue`,
+  `assign`, `import` and `generate` — medical supplies' "Receive delivery"
+  dialog was invisible to a pass named "every dialog".
+- **`mobile-accessibility.spec.ts` collects axe's `incomplete` results**, and
+  the reason each one gives is now asserted. axe files a node there when it
+  cannot compute a ratio, and reading only `violations` reported zero for nodes
+  nobody had measured. It turns out to be systemic rather than incidental: the
+  page background is a `linear-gradient`, so axe abstains on roughly **2,200
+  nodes** across the inventory — the dashboard's `h1` included — in every theme.
+  Counting those would be noise that moves with the fixture data, so the pass
+  asserts the stated _reason_ instead (gradient or background image, nothing
+  else), and a new **`themeGradientContrast.test.ts`** measures the case by
+  value: every text tier against every gradient stop, in all three themes, held
+  to the same 4.5:1 floor. That is the text axe was silently skipping on every
+  route, and it clears AA — the worst pairing is `--text-muted` on the dark
+  theme's red-900 stop.
+- **Neither aggregate audit retries on CI.** Both are deterministic against
+  mocked routes, and the accessibility pass alone runs about ten minutes inside
+  a 30-minute job: two retries would have spent the whole budget re-deriving
+  the same result and replaced the assertion's report with a job timeout.
+
+### Mobile coverage reported a fifth of the application it had never measured (2026-09-07)
+
+**Fixed**
+
+- **Three pages died through the ErrorBoundary on a payload that was valid JSON
+  but not the declared type** — `AuditLogPage`, `EventCheckInMonitoringPage` and
+  `MedicalSuppliesPage`. `api.get<T>` asserts a wire format rather than
+  verifying it, so `Object.keys(stats.by_category)`, `stats.recent_check_ins.length`
+  and `expiring.map` each took a whole screen down. On a phone this is the
+  realistic case, not a contrived one: a captive portal on station Wi-Fi answers
+  HTTP 200 with an HTML body. Normalized at the read boundary.
+- **`btn-success` and `btn-warning` failed WCAG AA outright.** White on green-600
+  is 3.22:1 and on yellow-600 is 2.94:1, against a 4.5:1 floor; `btn-info` at
+  blue-600 was 5.25:1, AA but not the AAA the rest of the palette holds. They are
+  now green-800 (7.13:1), amber-800 (7.09:1) and blue-800 (8.72:1). The
+  2026-08-23 sweep that raised the palette searched for a _red_, so these three
+  were never looked at — between them they carry confirm, publish, approve and
+  archive in 101 files.
+- **125 hand-rolled class strings paired `text-white` with a fill below 4.5:1**,
+  across 60 files and outside the mast CSS entirely. All raised to at least AA,
+  hue preserved, minimal shade step.
+- **Eight WCAG AA violations**, now zero application-wide: two `aria-controls`
+  values naming ids that could not exist (the nav submenu id was built from a
+  label containing spaces, so it parsed as several ids), five unlabelled form
+  controls, and one link with no accessible name.
+- **Four elements overflowed a 320px viewport** — the width SC 1.4.10 actually
+  names, where the presentation pass measured 390.
+- **44 controls under the 44px touch minimum and 10 elements running off a 390px
+  screen**, almost all in modules that had never been measured.
+
+**Changed**
+
+- **The mobile ratchet covers 52 routes, up from 43.** Nine modules — finance,
+  grants & fundraising, onboarding, medical supplies, medical screening, IP
+  security, integrations, reports and the public portal, 56 routes between them
+  — had no entry at all. Every one sat in the inventory as `exempt` under the
+  same generated sentence, "covered by its representative module route", naming
+  a representative route that did not exist. 170 of the 196 exemptions use that
+  identical text.
+- **Eight ratcheted routes were measuring `ProtectedRoute`'s Access Denied
+  screen**, which passes every budget while testing nothing. They now carry the
+  grants their pages require. Their fingerprint had been visible in the run
+  output for some time: eight routes reporting an identical `tap 0/9, text 474`.
+- **New `mobile-accessibility.spec.ts`** runs axe (WCAG 2.1 A + AA, asserted at
+  zero) and a 320px reflow check (asserted at zero) over the same routes, plus a
+  ratcheted budget for AAA-only contrast findings. axe is injected from the
+  installed `axe-core` rather than adding `@axe-core/playwright`.
+- **`primaryFillContrast.test.ts` now measures every shared fill**, reading them
+  out of `index.css` instead of banning one shade by name, so a new `@utility`
+  pairing `text-white` with a fill is checked the day it is added.
+- **New `touch-target-phone` utility** — the 44px minimum on phones only.
+  `mobile-touch-target` applies it at every width, which is right for a control
+  that is cramped everywhere and wrong for a wrapped row of status pills.
+- The route list moved to `e2e/mobile-routes.ts`, shared by the presentation
+  ratchet, the accessibility pass and the coverage-integrity check.
+
+**Notes**
+
+- Two refinements stop the presentation pass demanding something WCAG does not:
+  a marked scroll region needs `tabIndex={0}` only when nothing inside it is
+  focusable (forcing it on a `role="tablist"` contradicts ARIA APG), and a link
+  inside running prose is exempt from the touch minimum per SC 2.5.5's Inline
+  case — detected by a sibling _text node_, so a row of adjacent links cannot
+  excuse itself.
+- 43 AAA-only contrast findings remain at individual call sites, held by the
+  per-route budget. The shared utilities are all AAA.
+- Full write-up: `docs/MOBILE_ACCESSIBILITY_REVIEW_2026-09-07.md`.
 
 ### A concurrent status change could reopen the applicant double-transfer bug (2026-09-08)
+
+### Clearing a medical screening record or requirement field silently kept the old value (2026-09-08)
+
+**Security**
+
+- **Blanking a provider name, result summary, note, date, description, role
+  list, or recurrence on an existing screening record or requirement did not
+  clear it.** Both edit forms built their save payload the same way as their
+  create form, converting an emptied field to `undefined` — which never
+  reaches the server as JSON — instead of an explicit `null`. The backend's
+  update path only clears a column when the key is present with a `null`
+  value; an omitted key means "leave this alone." So unchecking a screening's
+  recurrence, or clearing an incorrect provider name, result summary, or
+  note — three PHI fields — showed a success toast while the old value stayed
+  in the database. Fixed by sending an explicit `null` for a blanked field on
+  the edit path only, matching the repo's `blankToNull` convention; the
+  create path is unchanged (a blank field is still omitted). Guarded by
+  `ScreeningFormClearGuards.test.tsx`, confirmed to fail against the pre-fix
+  code.
 
 **Security**
 

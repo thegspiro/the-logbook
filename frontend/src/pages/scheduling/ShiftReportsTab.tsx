@@ -1388,7 +1388,7 @@ export const ShiftReportsTab: React.FC = () => {
                       void handleSaveDraft(true);
                     }}
                     disabled={savingDraft}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-800 disabled:opacity-50"
                   >
                     {savingDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                     Submit Report
@@ -1469,7 +1469,7 @@ export const ShiftReportsTab: React.FC = () => {
             >
               <FileText className="h-3.5 w-3.5" /> Drafts
               {draftBadgeCount > 0 && viewMode !== 'drafts' && (
-                <span className="ml-1 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
+                <span className="ml-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                   {draftBadgeCount}
                 </span>
               )}
@@ -1979,7 +1979,7 @@ export const ShiftReportsTab: React.FC = () => {
                                                     }}
                                                     className={`h-5 w-5 rounded border text-xs font-medium transition-colors ${
                                                       selected.score === n
-                                                        ? 'border-violet-600 bg-violet-500 text-white'
+                                                        ? 'border-violet-600 bg-violet-600 text-white'
                                                         : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
                                                     }`}
                                                   >

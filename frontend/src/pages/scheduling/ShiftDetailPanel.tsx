@@ -1413,7 +1413,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     !showFinalizeChecklist && (
                       <button
                         onClick={() => setShowFinalizeChecklist(true)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-800"
                         aria-label="Close out shift"
                       >
                         <CheckCircle2 className="h-4 w-4" />
@@ -1564,7 +1564,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         void handleCancel();
                       }}
                       disabled={pending.deleting}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-50"
                     >
                       {pending.deleting && <Loader2 className="h-3 w-3 animate-spin" />}
                       Cancel Shift
@@ -1889,7 +1889,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                         void handleFinalize();
                       }}
                       disabled={pending.finalizing || overrideBlocked}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-800 disabled:opacity-50"
                     >
                       {pending.finalizing ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1946,7 +1946,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             void handleReopen();
                           }}
                           disabled={pending.finalizing}
-                          className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                          className="rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-50"
                         >
                           Reopen shift
                         </button>
@@ -2727,7 +2727,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             })();
                           }}
                           disabled={checkingIn}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-800 disabled:opacity-50"
                         >
                           {checkingIn ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />

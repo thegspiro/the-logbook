@@ -129,7 +129,7 @@ const StationSetup: React.FC = () => {
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
-      <main className="flex flex-1 items-start justify-center p-4 py-8">
+      <main id="main-content" tabIndex={-1} className="flex flex-1 items-start justify-center p-4 py-8">
         <div className="w-full max-w-3xl">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10">

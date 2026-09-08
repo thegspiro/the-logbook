@@ -66,7 +66,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
 
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
-      <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
+      <div data-page-main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
         {/* Not when embedded: this also renders inside a Training Administration
             tab, where a trail would sit within the very hub it points at. */}
         {!embedded && <Breadcrumbs underHub="/training/admin" />}
@@ -134,7 +134,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) =>
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 };

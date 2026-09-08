@@ -181,7 +181,7 @@ const GuestCheckInPage: React.FC = () => {
 
   return (
     <div className="bg-theme-surface-secondary mx-auto min-h-screen max-w-xl p-6">
-      <div className="bg-theme-surface rounded-lg p-8 shadow-md">
+      <main id="main-content" className="bg-theme-surface rounded-lg p-8 shadow-md">
         <div className="mb-8 text-center">
           <h1 className="text-theme-text-primary mb-2 text-3xl font-bold">Welcome!</h1>
           {info.organization_name && <p className="text-theme-text-secondary text-lg">{info.organization_name}</p>}
@@ -324,7 +324,7 @@ const GuestCheckInPage: React.FC = () => {
             </p>
           </form>
         )}
-      </div>
+      </main>
     </div>
   );
 };
