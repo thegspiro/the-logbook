@@ -54,7 +54,9 @@ _PYOTP_OWNER = "app/services/mfa_service.py"
 # A binding recorded inside one of these can be skipped entirely at runtime,
 # so a later binding here must not be trusted to have overwritten an earlier
 # one — the call site could still see either value depending on which branch
-# actually ran.
+# actually ran. ``Match``/``match_case`` covers a ``match`` statement's arms,
+# each of which runs at most once, same as an ``if``/``elif`` chain (Codex's
+# fifth-round finding on PR #2389).
 _CONDITIONAL_NODES = (
     ast.If,
     ast.For,
@@ -62,28 +64,51 @@ _CONDITIONAL_NODES = (
     ast.While,
     ast.Try,
     ast.ExceptHandler,
+    ast.Match,
+    ast.match_case,
 )
 
 # (lineno, local_name, real_name, conditional)
 _ScopeBindings = list[tuple[int, str, str, bool]]
 
 
+def _assignment_source_name(value: ast.AST) -> str | None:
+    """The bare name a simple alias assignment's right-hand side refers to.
+
+    Single-hop only: ``check = verify_totp`` records ``verify_totp``, and
+    ``check = mfa_service.verify_totp`` records ``verify_totp`` (matching
+    this file's existing over-inclusive attribute handling — the receiver is
+    never resolved). A chain (``a = verify_totp; b = a``) is not followed:
+    ``b``'s binding records the literal RHS name ``a``, not what ``a`` itself
+    resolves to. Closing that needs general data-flow/constant-propagation
+    analysis this sweep does not attempt.
+    """
+    if isinstance(value, ast.Name):
+        return value.id
+    if isinstance(value, ast.Attribute):
+        return value.attr
+    return None
+
+
 def _local_scope_imports(scope_node: ast.AST) -> _ScopeBindings:
     """``(lineno, local_name, real_name, conditional)`` for each ``from``-import
-    binding made directly in *scope_node*'s own body, sorted by source line.
+    or simple alias assignment made directly in *scope_node*'s own body,
+    sorted by source line.
 
-    Descends into ``if``/``for``/``while``/``try`` blocks (imports there still
-    bind in the enclosing function) but stops at a nested function or class —
-    that scope's own imports belong to it, not to this one. ``conditional`` is
-    True when the import sits inside any of ``_CONDITIONAL_NODES``, at any
-    nesting depth — a branch that might not execute.
+    Descends into ``if``/``for``/``while``/``try``/``match`` blocks (bindings
+    there still bind in the enclosing function) but stops at a nested
+    function or class — that scope's own bindings belong to it, not to this
+    one. ``conditional`` is True when the binding sits inside any of
+    ``_CONDITIONAL_NODES``, at any nesting depth — a branch that might not
+    execute.
 
-    Kept as an ordered list rather than a ``dict`` so a second import re-using
-    the same local name (``... import verify_totp as check`` then, later in
-    the same function, ``... import harmless as check``) doesn't silently
-    overwrite the binding a call made *before* the reassignment resolves
-    against — Codex's third-round finding on PR #2389 against the scope-aware
-    fix that still collapsed same-scope bindings into a flat dict.
+    Kept as an ordered list rather than a ``dict`` so a second binding
+    re-using the same local name (``... import verify_totp as check`` then,
+    later in the same function, ``... import harmless as check``) doesn't
+    silently overwrite the binding a call made *before* the reassignment
+    resolves against — Codex's third-round finding on PR #2389 against the
+    scope-aware fix that still collapsed same-scope bindings into a flat
+    dict.
     """
     bindings: _ScopeBindings = []
 
@@ -101,6 +126,16 @@ def _local_scope_imports(scope_node: ast.AST) -> _ScopeBindings:
                             alias.name,
                             conditional,
                         )
+                    )
+            elif (
+                isinstance(child, ast.Assign)
+                and len(child.targets) == 1
+                and isinstance(child.targets[0], ast.Name)
+            ):
+                source_name = _assignment_source_name(child.value)
+                if source_name is not None:
+                    bindings.append(
+                        (child.lineno, child.targets[0].id, source_name, conditional)
                     )
             walk(child, child_conditional)
 
@@ -153,9 +188,9 @@ def _called_names(node: ast.Call, scope_chain: list[_ScopeBindings]) -> frozense
 
     Resolves a bare ``ast.Name`` through *scope_chain* first, as it stood at
     this call's own line — see ``_resolve_names`` for why this can be more
-    than one candidate. Does not track simple-assignment rebinding
-    (``spend = verify_totp_get_timestep``) — that needs data-flow analysis
-    this sweep does not attempt.
+    than one candidate. Tracks single-hop simple-assignment rebinding
+    (``spend = verify_totp_get_timestep``) via ``_assignment_source_name``;
+    a chain of assignments is not followed — see that function's docstring.
 
     For an ``ast.Attribute`` call, matches on the attribute name alone
     without resolving the receiver's provenance — ``x.verify_totp(...)``
