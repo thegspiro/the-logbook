@@ -3762,6 +3762,79 @@ concurrent catalogue edit, the impact is one hidden row in a search the officer
 can re-run, and the search box narrows results directly. This does not affect
 what is delivered or recorded — only which matches a picker lists.
 
+## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08, narrowed and corrected 2026-09-09)
+
+`index.html` opens with `<a href="#main-content">`, and every page that owns its
+own shell provides that target — `skipLinkTarget.test.ts` checks all of them,
+in both directions. Two **transient** states have no target and cannot be given
+one statically:
+
+| State            | What renders                            | Why it cannot own the id                                                                                                                                                                                                                                                                        |
+| ---------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First chunk load | `PageLoadingFallback` (`App.tsx`)       | React does not unmount the children a `<Suspense>` stands in for on an update — it hides them with `display: none` and leaves them in the DOM, so `getElementById('main-content')` answers with the hidden `AppLayout` main. Focusing a `display: none` element is worse than focusing nothing. |
+| Session check    | `ProtectedRoute`'s two loading branches | Module routes nest `<ProtectedRoute requiredModule=…>` **inside** the layout route, so the same branch can render within `AppLayout`'s `<main>` — a nested landmark and a duplicate id.                                                                                                         |
+
+The `PageLoadingFallback` case is reachable rather than theoretical: finance,
+grants-fundraising and training route to `lazyWithRetry` pages with no inner
+`<Suspense>`, so navigating to one suspends against the global boundary with
+`AppLayout` already mounted. Most other modules wrap their lazy pages in
+`<Suspense fallback={null}>`, which keeps the suspension local — but **not all
+of the reachable routes live in a module**: `App.tsx` mounts
+`LearningCenterPage` and `LearningPathPage` directly inside the layout route,
+both `lazyWithRetry` and neither wrapped. Any inventory of "which routes can
+suspend against the global boundary" has to include those two.
+
+**A third pre-layout state was found and fixed rather than accepted**, and the
+difference is the whole rule here. The top-level `ErrorBoundary` also renders
+outside the layout, but an error boundary **unmounts** the tree it caught —
+`AppLayout`'s main is gone, not hidden — so exactly one `#main-content` is ever
+present and its fallback can own the target. It now does. The two states above
+are the ones that cannot, not the only ones that lacked a target; a new
+full-screen state should be checked against that test (does it replace, or does
+it coexist?) rather than assumed to belong on this list.
+
+**What a fix would take.** Either give every unwrapped route the inner
+`<Suspense>` most modules already have — the three modules above **and** the two
+learning routes in `App.tsx`, since missing any one of them leaves the global
+fallback reachable and the condition for safely putting the id on it false — or
+resolve the skip target at click time against the visible main rather than by
+id. The first is 47 route entries and changes what a page
+swap looks like (a quiet in-layout replace instead of a whole-app spinner); the
+second changes a shared contract that `index.html`, `AppLayout` and three e2e
+specs all read. Both are their own change set.
+
+**What is actually on screen, and what the link actually does.** This paragraph
+has been wrong twice, in both directions, so it states the mechanics rather than
+a conclusion:
+
+- **Activating the link moves nothing.** Focus stays on it. The `role="status"`
+  text is a live region, not a focus target — a `<p>` with no `tabIndex`, so it
+  is not in the tab order and the user does not "land" on it. Nothing is thrown;
+  the link is simply inert.
+- **The screen is not always only a spinner.** `App.tsx` renders
+  `<UpdateNotification />` immediately before, and _outside_, the `<Suspense>`
+  whose fallback this is, so it stays mounted through the loading state. When an
+  update is pending it shows "Reload now" / "Force refresh" plus a dismiss
+  button. So an earlier claim here that these states have no interactive content
+  was false whenever that banner is up.
+
+**Why it is still accepted.** Not because there is nothing interactive, but
+because there is nothing to skip _to_: SC 2.4.1 exists so a keyboard user can
+get past a repeated block of navigation **into the content**, and in these two
+states the content does not exist yet. The banner is a single dismissible strip
+of at most three controls, reachable by one Tab, and it is followed by a spinner
+rather than by a page. A skip link that worked here would land the user on an
+empty region. Both states are also transient and the link is only revealed on
+focus.
+
+**What would void this.** Either state gaining real content or a persistent
+navigation block behind the banner — at which point there is something to skip
+to, and the fix above has to be done.
+
+`skipLinkTarget.test.ts` names both files and explains the constraint in its
+failure message, so the next person to try the obvious fix is told why it is not
+one rather than discovering the duplicate id in review.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
