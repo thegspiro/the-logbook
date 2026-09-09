@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -1066,7 +1066,21 @@ class FacilityRoomResponse(FacilityRoomBase):
 class FacilityEmergencyContactBase(BaseModel):
     facility_id: str
     contact_type: EmergencyContactTypeEnum
-    company_name: str = Field(..., max_length=200)
+    # Individually optional — the shipped ContactsSection.tsx form's own
+    # "company name or contact name is required" rule allows a vendor with no
+    # named contact, or a named contact (e.g. facility staff) with no
+    # company. The "at least one" invariant is enforced on Create (below)
+    # and re-checked against the merged row on Update
+    # (FacilitiesService.update_emergency_contact) — deliberately NOT here,
+    # even though FacilityEmergencyContactResponse also inherits this base:
+    # a response's job is to report whatever is actually in the database,
+    # not to re-enforce a write-time rule against it. FAC-52: a legacy row
+    # written before this rule existed could have company_name="" (a valid
+    # required-string value under the pre-migration schema, which had no
+    # min_length) — enforcing the rule here would fail response
+    # serialization with a 500 on every read of such a row, forever, for a
+    # row nobody has written since.
+    company_name: Optional[str] = Field(None, max_length=200)
     contact_name: Optional[str] = Field(None, max_length=200)
     phone: Optional[str] = Field(None, max_length=50)
     alt_phone: Optional[str] = Field(None, max_length=50)
@@ -1078,7 +1092,11 @@ class FacilityEmergencyContactBase(BaseModel):
 
 
 class FacilityEmergencyContactCreate(FacilityEmergencyContactBase):
-    pass
+    @model_validator(mode="after")
+    def require_company_or_contact_name(self) -> "FacilityEmergencyContactCreate":
+        if not (self.company_name or self.contact_name):
+            raise ValueError("company_name or contact_name is required")
+        return self
 
 
 class FacilityEmergencyContactUpdate(BaseModel):
@@ -1342,8 +1360,19 @@ class FacilityComplianceChecklistResponse(FacilityComplianceChecklistBase):
 
 
 class FacilityComplianceItemCreate(BaseModel):
-    checklist_id: str
-    item_number: Optional[int] = None
+    # Optional, not required: POST /compliance-checklists/{checklist_id}/items
+    # takes the checklist from the URL path, which is authoritative (mirrors
+    # list_compliance_items' own checklist_id parameter). A value supplied
+    # here is ignored by FacilitiesService.create_compliance_item — kept on
+    # the schema only so FacilityComplianceItemUpdate's identical field
+    # doesn't need special-casing wherever both are handled generically.
+    checklist_id: Optional[str] = None
+    # Named to match the already-shipped frontend contract
+    # (ComplianceItemCreate.sort_order in facilitiesServices.ts); the ORM
+    # column underneath is still FacilityComplianceItem.item_number
+    # (unchanged to avoid a migration) — see create_compliance_item's own
+    # translation of this field.
+    sort_order: Optional[int] = None
     description: str
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
@@ -1355,7 +1384,13 @@ class FacilityComplianceItemCreate(BaseModel):
 
 class FacilityComplianceItemUpdate(BaseModel):
     checklist_id: Optional[str] = None
-    item_number: Optional[int] = None
+    # The update endpoint predated the sort_order rename (unlike create, which
+    # FAC-46 made reachable for the first time); accept the previously
+    # documented item_number key too, so an existing caller's PATCH payload
+    # keeps applying instead of being silently dropped as an unknown field.
+    sort_order: Optional[int] = Field(
+        default=None, validation_alias=AliasChoices("sort_order", "item_number")
+    )
     description: Optional[str] = None
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
@@ -1369,7 +1404,12 @@ class FacilityComplianceItemResponse(UTCResponseBase):
     id: str
     organization_id: str
     checklist_id: str
-    item_number: Optional[int] = None
+    # Reads the ORM's item_number column but serializes as sortOrder,
+    # matching the request-side field above and the frontend's ComplianceItem
+    # type (facilitiesServices.ts) — see FacilityComplianceItemCreate.sort_order.
+    sort_order: Optional[int] = Field(
+        default=None, validation_alias="item_number", serialization_alias="sortOrder"
+    )
     description: str
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
