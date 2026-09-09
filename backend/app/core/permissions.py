@@ -912,6 +912,42 @@ def module_checkbox_is_held(module_id: str, action: str, granted: set[str]) -> b
     return f"{prefix}.*" in granted
 
 
+#: A checkbox tier that a *different* module's checkbox also confers, because
+#: the routes behind it accept that module's grant as well as their own.
+#:
+#: Medical Supplies is the only one, and it is not a quirk of the wizard: every
+#: route in ``api/v1/endpoints/medical_supplies.py`` is gated
+#: ``require_permission("inventory.view_medical", "inventory.view")`` or the
+#: manage pair, which is an OR. So the broad Inventory grant opens the module
+#: on its own -- and every seeded position down to ``member`` carries
+#: ``inventory.view``, while ``facilities_manager`` carries
+#: ``inventory.manage`` with no medical grant at all.
+#:
+#: The editor showed those positions an unticked Medical Supplies box, which
+#: was a claim that they could not reach the module. Reporting it instead is
+#: the whole of what this map does: it changes no grant and no route. Unticking
+#: could not revoke the access anyway -- that would mean taking Inventory away
+#: -- so the box is shown ticked and not editable while Inventory confers it.
+#:
+#: ``tests/test_module_checkbox_grants.py`` reads the medical endpoints and
+#: fails if a route stops accepting the broad grant, or if one starts.
+_CHECKBOX_CONFERRED_BY: dict[str, dict[str, tuple[str, str]]] = {
+    "medical_supplies": {
+        "view": ("inventory", "view"),
+        "manage": ("inventory", "manage"),
+    },
+}
+
+
+def module_checkbox_conferred_by(module_id: str, action: str) -> tuple[str, str] | None:
+    """The other checkbox that also confers this one, as ``(module, action)``.
+
+    ``None`` when nothing outside this module's own grants opens it, which is
+    every row but Medical Supplies.
+    """
+    return _CHECKBOX_CONFERRED_BY.get(module_id, {}).get(action)
+
+
 #: Permission -> the module checkbox that owns it, for the ones that are not
 #: named after their own module. Built once; the reverse of the map above.
 _PERMISSION_OWNER: dict[str, str] = {

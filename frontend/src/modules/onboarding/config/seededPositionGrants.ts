@@ -57,6 +57,33 @@ export const MODULE_CHECKBOX_TIERS: Readonly<Record<string, ModuleCheckboxTiers>
   settings: { view: true, manage: true },
 };
 
+/**
+ * A checkbox tier some *other* module's checkbox also confers.
+ *
+ * Medical Supplies is the only one. Its routes are gated
+ * `require_permission('inventory.view_medical', 'inventory.view')` — an OR — so
+ * the broad Inventory grant opens the module on its own, and every seeded
+ * position down to `member` carries `inventory.view`. The editor used to show
+ * those positions an unticked Medical Supplies box, which was a claim they
+ * could not reach the module.
+ *
+ * The pair names the checkbox that confers it, so the editor reads the grid it
+ * is already rendering rather than a stored answer: unticking Inventory here
+ * releases Medical Supplies in the same breath. Ticking is display only —
+ * nothing is written, because unticking could not revoke the access without
+ * taking Inventory away.
+ */
+export type ConferringCheckbox = readonly [module: string, action: 'view' | 'manage'];
+
+export interface ModuleCheckboxConferredBy {
+  view?: ConferringCheckbox;
+  manage?: ConferringCheckbox;
+}
+
+export const MODULE_CHECKBOX_CONFERRED_BY: Readonly<Record<string, ModuleCheckboxConferredBy>> = {
+  medical_supplies: { view: ['inventory', 'view'], manage: ['inventory', 'manage'] },
+};
+
 export interface SeededPositionGrant {
   view: readonly string[];
   manage: readonly string[];

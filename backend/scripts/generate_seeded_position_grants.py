@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.permissions import (  # noqa: E402
     DEFAULT_POSITIONS,
+    module_checkbox_conferred_by,
     module_checkbox_is_held,
     module_checkbox_offered,
 )
@@ -86,6 +87,31 @@ export interface ModuleCheckboxTiers {
 
 export const MODULE_CHECKBOX_TIERS: Readonly<Record<string, ModuleCheckboxTiers>> = {"""
 
+_CONFERRED_HEADER = """/**
+ * A checkbox tier some *other* module's checkbox also confers.
+ *
+ * Medical Supplies is the only one. Its routes are gated
+ * `require_permission('inventory.view_medical', 'inventory.view')` — an OR — so
+ * the broad Inventory grant opens the module on its own, and every seeded
+ * position down to `member` carries `inventory.view`. The editor used to show
+ * those positions an unticked Medical Supplies box, which was a claim they
+ * could not reach the module.
+ *
+ * The pair names the checkbox that confers it, so the editor reads the grid it
+ * is already rendering rather than a stored answer: unticking Inventory here
+ * releases Medical Supplies in the same breath. Ticking is display only —
+ * nothing is written, because unticking could not revoke the access without
+ * taking Inventory away.
+ */
+export type ConferringCheckbox = readonly [module: string, action: 'view' | 'manage'];
+
+export interface ModuleCheckboxConferredBy {
+  view?: ConferringCheckbox;
+  manage?: ConferringCheckbox;
+}
+
+export const MODULE_CHECKBOX_CONFERRED_BY: Readonly<Record<string, ModuleCheckboxConferredBy>> = {"""
+
 _GRANTS_HEADER = """export interface SeededPositionGrant {
   view: readonly string[];
   manage: readonly string[];
@@ -110,6 +136,21 @@ def render() -> str:
         view = "true" if module_checkbox_offered(module_id, "view") else "false"
         manage = "true" if module_checkbox_offered(module_id, "manage") else "false"
         lines.append(f"  {module_id}: {{ view: {view}, manage: {manage} }},")
+    lines.append("};")
+    lines.append("")
+    lines.append(_CONFERRED_HEADER)
+    for module_id in modules:
+        pairs = [
+            (action, module_checkbox_conferred_by(module_id, action))
+            for action in ("view", "manage")
+        ]
+        rendered = [
+            f"{action}: ['{other[0]}', '{other[1]}']"
+            for action, other in pairs
+            if other is not None
+        ]
+        if rendered:
+            lines.append(f"  {module_id}: {{ {', '.join(rendered)} }},")
     lines.append("};")
     lines.append("")
     lines.append(_GRANTS_HEADER)

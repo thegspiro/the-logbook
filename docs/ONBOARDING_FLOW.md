@@ -704,6 +704,26 @@ be the department's own, before there is a right answer.
 > `tests/test_module_checkbox_grants.py` holds every row to permissions that
 > exist.
 
+> **A box another row already confers.** Every medical-supply route is gated
+> `require_permission("inventory.view_medical", "inventory.view")` — an OR — so
+> the broad Inventory grant opens the module on its own, without either medical
+> grant. Every seeded position down to `member` carries `inventory.view`, and
+> `facilities_manager` carries `inventory.manage`, so the editor's unticked
+> Medical Supplies box was telling most of the roster something untrue.
+>
+> It is shown ticked and not editable while Inventory confers it, with the
+> reason on the control. Nothing is written: unticking could not revoke the
+> access without taking Inventory away, and a control that silently does nothing
+> is worse than one that says why it is fixed. The lock is read off the grid
+> being edited rather than off a stored answer, so unticking Inventory releases
+> Medical Supplies in the same breath.
+>
+> `_CHECKBOX_CONFERRED_BY` in `app/core/permissions.py` is the authority,
+> projected to the wizard as the generated `MODULE_CHECKBOX_CONFERRED_BY`.
+> `tests/test_module_checkbox_grants.py` reads the medical endpoints and fails
+> if a route stops accepting the broad grant, or if one starts accepting
+> something the map does not describe.
+
 > **Operational Ranks group (EMT added 2026-06-25):** The position templates
 > include an **Operational Ranks** group — Fire Chief, Deputy Chief, Assistant
 > Chief, Captain, Lieutenant, Engineer/Driver Operator, Firefighter, and **EMT** —

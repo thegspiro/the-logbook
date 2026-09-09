@@ -33,9 +33,11 @@ from app.api.v1.onboarding import (
 from app.core.permissions import (
     ALL_PERMISSIONS,
     DEFAULT_POSITIONS,
+    module_checkbox_conferred_by,
     module_checkbox_grants,
     module_checkbox_is_held,
     module_checkbox_offered,
+    module_checkbox_tier,
     module_for_permission,
 )
 
@@ -192,3 +194,94 @@ def test_the_editor_offers_a_row_for_every_seeded_position():
         "These positions are seeded by the backend but the setup wizard's "
         f"position step never offers them: {missing}"
     )
+
+
+class TestCheckboxesConferredByAnotherModule:
+    """The confer map against the route gates it claims to describe.
+
+    Every medical-supply route is gated ``require_permission(narrow, broad)``,
+    which is an OR — so ``inventory.view`` opens the module's reads and
+    ``inventory.manage`` its writes, without either medical grant. Every seeded
+    position down to ``member`` carries ``inventory.view``, and
+    ``facilities_manager`` carries ``inventory.manage`` with no medical grant at
+    all, so the editor's unticked Medical Supplies box was telling most of the
+    roster something untrue.
+
+    These pin the map to the endpoints. If a medical route stops accepting the
+    broad grant the map is overstating access; if a new one accepts something
+    else, the map is understating it.
+    """
+
+    MEDICAL_ENDPOINTS = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "api"
+        / "v1"
+        / "endpoints"
+        / "medical_supplies.py"
+    )
+
+    def _gates(self) -> list[tuple[str, ...]]:
+        source = self.MEDICAL_ENDPOINTS.read_text()
+        return [
+            tuple(re.findall(r'"([^"]+)"', args))
+            for args in re.findall(r"require_permission\(([^)]*)\)", source, re.S)
+        ]
+
+    def test_the_map_names_the_medical_tiers_inventory_confers(self):
+        assert module_checkbox_conferred_by("medical_supplies", "view") == (
+            "inventory",
+            "view",
+        )
+        assert module_checkbox_conferred_by("medical_supplies", "manage") == (
+            "inventory",
+            "manage",
+        )
+
+    def test_no_other_row_claims_to_be_conferred(self):
+        # A second entry means a second module whose routes accept a foreign
+        # grant, and the editor would be lying about that one too.
+        for module_id in ("inventory", "training", "events", "positions"):
+            for action in ("view", "manage"):
+                assert module_checkbox_conferred_by(module_id, action) is None
+
+    def test_every_medical_route_accepts_the_grant_the_map_names(self):
+        gates = self._gates()
+        assert gates, "no require_permission gates parsed from medical_supplies.py"
+        for gate in gates:
+            narrow = (
+                "inventory.view_medical"
+                if "inventory.view_medical" in gate
+                else "inventory.manage_medical"
+            )
+            action = "view" if narrow.endswith("view_medical") else "manage"
+            conferrer = module_checkbox_conferred_by("medical_supplies", action)
+            assert conferrer is not None
+            broad = module_checkbox_tier(*conferrer).defining
+            assert broad in gate, (
+                f"medical route gated {gate} no longer accepts {broad}; the "
+                "editor's conferred-by note now overstates who can reach it"
+            )
+
+    def test_no_medical_route_accepts_anything_the_map_does_not_name(self):
+        # The other direction: a gate that accepts some third permission is
+        # access the editor still says nothing about.
+        allowed = {
+            "inventory.view_medical",
+            "inventory.manage_medical",
+            module_checkbox_tier("inventory", "view").defining,
+            module_checkbox_tier("inventory", "manage").defining,
+        }
+        for gate in self._gates():
+            unexpected = set(gate) - allowed
+            assert not unexpected, (
+                f"medical route gated {gate} accepts {sorted(unexpected)}, which "
+                "the conferred-by map does not describe"
+            )
+
+    def test_the_conferring_grant_is_one_the_editor_can_actually_show(self):
+        # The pair has to name a checkbox the wizard renders, or the editor has
+        # nothing to read the lock off.
+        conferrer = module_checkbox_conferred_by("medical_supplies", "view")
+        assert conferrer is not None
+        assert module_checkbox_offered(*conferrer)

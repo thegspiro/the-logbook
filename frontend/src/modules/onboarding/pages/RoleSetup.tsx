@@ -11,6 +11,7 @@ import {
   X,
   Eye,
   Edit3,
+  Lock,
   Crown,
   Star,
   UserCog,
@@ -39,9 +40,11 @@ import {
 } from '../components';
 import { useOnboardingStore } from '../store';
 import {
+  MODULE_CHECKBOX_CONFERRED_BY,
   MODULE_CHECKBOX_TIERS,
   MODULE_REGISTRY,
   isAgencyFilteredOut,
+  type ModuleCheckboxConferredBy,
   type ModuleCheckboxTiers,
   type ModuleDefinition,
 } from '../config';
@@ -77,6 +80,7 @@ const buildPermissionCategories = (modules: ModuleDefinition[]) => {
       view: string[];
       manage: string[];
       tiers: ModuleCheckboxTiers;
+      conferredBy: ModuleCheckboxConferredBy;
     }
   > = {};
 
@@ -89,6 +93,7 @@ const buildPermissionCategories = (modules: ModuleDefinition[]) => {
       view: module.permissions.view,
       manage: module.permissions.manage,
       tiers,
+      conferredBy: MODULE_CHECKBOX_CONFERRED_BY[module.id] ?? {},
     };
   });
 
@@ -858,6 +863,30 @@ const PositionSetup: React.FC = () => {
                             <div className="grid grid-cols-1 gap-2">
                               {Object.entries(permissionCategories).map(([catId, cat]) => {
                                 const perms = position.permissions[catId] || { view: false, manage: false };
+                                // A tier another module's checkbox also opens
+                                // is read off the grid being edited, not off a
+                                // stored answer: unticking Inventory releases
+                                // Medical Supplies in the same breath. See
+                                // MODULE_CHECKBOX_CONFERRED_BY.
+                                const conferrer = (tier: 'view' | 'manage') => {
+                                  const pair = cat.conferredBy[tier];
+                                  if (!pair) return null;
+                                  const [moduleId, action] = pair;
+                                  if (!position.permissions[moduleId]?.[action]) return null;
+                                  return permissionCategories[moduleId]?.name ?? moduleId;
+                                };
+                                const viaView = conferrer('view');
+                                const viaManage = conferrer('manage');
+                                // Shown on, and not editable: unticking cannot
+                                // revoke what the other grant confers, and a
+                                // control that silently does nothing is worse
+                                // than one that says why it is fixed.
+                                const viewNote = viaView
+                                  ? `${cat.name} view comes with ${viaView} view and cannot be turned off separately`
+                                  : undefined;
+                                const manageNote = viaManage
+                                  ? `${cat.name} management comes with ${viaManage} manage and cannot be turned off separately`
+                                  : undefined;
 
                                 return (
                                   <div
@@ -871,15 +900,23 @@ const PositionSetup: React.FC = () => {
                                           onClick={() =>
                                             updatePositionPermission(position.id, catId, 'view', !perms.view)
                                           }
-                                          disabled={isITManager}
-                                          aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
+                                          disabled={isITManager || !!viaView}
+                                          title={viewNote}
+                                          aria-label={
+                                            viewNote ??
+                                            `${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`
+                                          }
                                           className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                            perms.view
+                                            perms.view || viaView
                                               ? 'bg-theme-accent-green-muted text-theme-accent-green'
                                               : 'bg-theme-surface text-theme-text-muted'
-                                          } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                          } ${isITManager || viaView ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                         >
-                                          <Eye className="h-3 w-3" aria-hidden="true" />
+                                          {viaView ? (
+                                            <Lock className="h-3 w-3" aria-hidden="true" />
+                                          ) : (
+                                            <Eye className="h-3 w-3" aria-hidden="true" />
+                                          )}
                                           View
                                         </button>
                                       )}
@@ -888,15 +925,23 @@ const PositionSetup: React.FC = () => {
                                           onClick={() =>
                                             updatePositionPermission(position.id, catId, 'manage', !perms.manage)
                                           }
-                                          disabled={isITManager}
-                                          aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
+                                          disabled={isITManager || !!viaManage}
+                                          title={manageNote}
+                                          aria-label={
+                                            manageNote ??
+                                            `${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`
+                                          }
                                           className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                            perms.manage
+                                            perms.manage || viaManage
                                               ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
                                               : 'bg-theme-surface text-theme-text-muted'
-                                          } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                          } ${isITManager || viaManage ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                         >
-                                          <Edit3 className="h-3 w-3" aria-hidden="true" />
+                                          {viaManage ? (
+                                            <Lock className="h-3 w-3" aria-hidden="true" />
+                                          ) : (
+                                            <Edit3 className="h-3 w-3" aria-hidden="true" />
+                                          )}
                                           Manage
                                         </button>
                                       )}
