@@ -314,14 +314,26 @@ class CallTrackingService:
         "Shared" means another unit also responded to that call, so the call
         row belongs to the department rather than to this shift and must
         survive this shift being re-finalized.
+
+        The caller (``record_shift_calls``) runs behind a locked ``Shift``
+        row (``finalize_shift``/``save_closeout_calls``), but that lock does
+        not by itself refresh this transaction's REPEATABLE READ snapshot
+        for ``OrgCallResponse`` — the same gap AP-13 findings 8/9 closed for
+        ``ShiftAttendance``. Without a locking read here, two closeout-calls
+        saves racing on the same shift could each miss the other's
+        just-committed rows and both insert a fresh set, doubling the
+        shift's persisted call responses. ``with_for_update()`` on this
+        existence check is what makes "already recorded" actually current.
         """
         rows = (
             (
                 await self.db.execute(
-                    select(OrgCallResponse.call_id).where(
+                    select(OrgCallResponse.call_id)
+                    .where(
                         OrgCallResponse.shift_id == shift_id,
                         OrgCallResponse.organization_id == organization_id,
                     )
+                    .with_for_update()
                 )
             )
             .scalars()

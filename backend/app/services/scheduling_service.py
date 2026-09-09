@@ -1425,6 +1425,20 @@ class SchedulingService:
         same count and both get in. Locking the shift serializes them on one
         row, the way ``event_service`` already locks the event row before
         counting "going" RSVPs against ``max_attendees``.
+
+        ``for_update`` also asks SQLAlchemy to refresh an already-loaded
+        object's attributes from the freshly-locked row
+        (``populate_existing``). Several endpoints (``finalize_shift``,
+        ``save_closeout_calls``) authorize the caller with a plain,
+        non-locking ``get_shift_by_id`` first (via
+        ``_authorize_shift_management``) before the service method makes its
+        own locking call on the same session. Without ``populate_existing``,
+        SQLAlchemy's identity map returns that earlier object unchanged: the
+        `FOR UPDATE` query still correctly blocks and reads the latest
+        committed row at the database level, but the caller's Python object
+        keeps the stale values from the first read, silently defeating the
+        lock's entire purpose for anything that then reads an attribute off
+        the "locked" shift (e.g. ``shift.is_finalized``).
         """
         query = (
             select(Shift)
@@ -1432,7 +1446,7 @@ class SchedulingService:
             .where(Shift.organization_id == str(organization_id))
         )
         if for_update:
-            query = query.with_for_update()
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -2491,8 +2505,21 @@ class SchedulingService:
         user_id: str,
         organization_id: UUID,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
-        """Member self-service check-in for a shift."""
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        """Member self-service check-in for a shift.
+
+        Locks the shift row (``for_update=True``) for the same reason a seat
+        claim does (see ``get_shift_by_id``'s docstring): this method is a
+        read-then-write — look for an existing attendance row, then insert
+        one if there isn't — and ``ShiftAttendance`` carries no unique
+        constraint on ``(shift_id, user_id)``. Two check-ins landing at once
+        (a bounced NFC tap, or a station tap racing the member's own phone)
+        would otherwise both read "no attendance yet" and both insert a row,
+        leaving a duplicate ``member_check_out``/``get_my_attendance`` cannot
+        resolve — ``scalar_one_or_none()`` raises ``MultipleResultsFound``
+        the moment a second row exists, taking the check-out request down
+        with it rather than reporting a domain error.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
@@ -2531,12 +2558,33 @@ class SchedulingService:
             if not assigned:
                 return None, "You are not assigned to this shift."
 
+        # A locking read, not a plain SELECT: the shift lock above doesn't by
+        # itself refresh this transaction's snapshot for a different table
+        # (the exact mechanism `request_to_join_shift`'s seat count comments
+        # document) — without `with_for_update()` here, a check-in that
+        # queued behind the shift lock would still count the pre-commit
+        # snapshot and conclude there is no existing row.
+        #
+        # populate_existing=True too: NfcTagService._check_in_shift already
+        # preloaded this same row (plainly) via get_my_attendance before
+        # calling here, on this same session — so it's already in the
+        # identity map. Without populate_existing, a concurrent tap that
+        # queued behind the shift lock and then committed its own check-in
+        # would have this locking read genuinely block, unblock, and read
+        # the latest row from the database, but SQLAlchemy would still hand
+        # back the earlier cached object with its stale checked_in_at=None,
+        # letting `existing.checked_in_at` below pass the "Already checked
+        # in" guard and silently overwrite the first tap's timestamp instead
+        # of rejecting the second one.
         existing = (
             await self.db.execute(
-                select(ShiftAttendance).where(
+                select(ShiftAttendance)
+                .where(
                     ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.user_id == user_id,
                 )
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
 
@@ -7505,7 +7553,20 @@ class SchedulingService:
         override). ``pass_down_notes`` records the crew handoff.
         """
         try:
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            # for_update=True for lock-ordering consistency with
+            # member_check_in, not because finalization itself has a
+            # capacity race: that method now locks the shift row before
+            # touching ShiftAttendance, and this method locks ShiftAttendance
+            # rows first (via the auto-close-open-attendance flush below)
+            # before updating the shift row itself at commit. Two methods
+            # taking the same two locks in opposite orders is a textbook
+            # InnoDB deadlock — a check-in landing while an officer finalizes
+            # the same shift could have either transaction aborted with a
+            # deadlock error. Locking the shift here first makes both
+            # methods agree on shift-then-attendance ordering.
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
             if not shift:
                 return None, "Shift not found"
 
@@ -7557,11 +7618,20 @@ class SchedulingService:
                         )
 
             # Create attendance records for manually-entered hours
+            #
+            # Locking read: the shift row above is now locked (for_update),
+            # but that alone does not refresh this transaction's REPEATABLE
+            # READ snapshot for a *different* table. _authorize_shift_management
+            # ran a plain shift query first (the earliest read in this
+            # transaction), which is what establishes that snapshot -- a
+            # concurrent check-in's attendance row committed after that point
+            # but before this locking wait resolved would otherwise be
+            # invisible here, same as Pitfall #27's second half.
             if manual_hours:
                 existing = await self.db.execute(
-                    select(ShiftAttendance.user_id).where(
-                        ShiftAttendance.shift_id == str(shift_id)
-                    )
+                    select(ShiftAttendance.user_id)
+                    .where(ShiftAttendance.shift_id == str(shift_id))
+                    .with_for_update()
                 )
                 existing_user_ids = {row[0] for row in existing.all()}
                 for entry in manual_hours:
@@ -7585,13 +7655,19 @@ class SchedulingService:
                     self.db.add(att)
                 await self.db.flush()
 
-            # Auto-close open attendance (checked in, never checked out)
+            # Auto-close open attendance (checked in, never checked out).
+            # Same locking-read requirement as the manual_hours query above:
+            # the transaction's snapshot predates the shift lock, so this
+            # must be a current read to see a concurrent check-in that
+            # committed while finalize_shift was waiting on the shift lock.
             open_att_result = await self.db.execute(
-                select(ShiftAttendance).where(
+                select(ShiftAttendance)
+                .where(
                     ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.checked_in_at.isnot(None),
                     ShiftAttendance.checked_out_at.is_(None),
                 )
+                .with_for_update()
             )
             for open_att in open_att_result.scalars().all():
                 open_att.checked_out_at = shift.end_time or now
@@ -7637,11 +7713,15 @@ class SchedulingService:
                 )
                 shift.call_count = call_result.scalar() or 0
 
-            # Snapshot total hours from attendance duration
+            # Snapshot total hours from attendance duration. Locking read for
+            # the same reason as the open-attendance query above: this
+            # transaction's snapshot predates the shift lock, so a plain read
+            # here could still miss a row committed by a request that raced
+            # this one and lost.
             hours_result = await self.db.execute(
-                select(
-                    func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0)
-                ).where(ShiftAttendance.shift_id == str(shift_id))
+                select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0))
+                .where(ShiftAttendance.shift_id == str(shift_id))
+                .with_for_update()
             )
             total_min = hours_result.scalar() or 0
             # Not rounded: this is a stored snapshot, and the quarter-hour rule
@@ -7657,8 +7737,15 @@ class SchedulingService:
             # restated: a member who came on at 0300 was not on the 2200 call.
             # It is equally never summed back into a department total — with a
             # four-person crew that multiplies every call by four.
+            #
+            # Locking read, same reason as the two queries above: this is the
+            # final snapshot written onto each attendance row, so it must see
+            # every row actually on the shift, not this transaction's
+            # pre-lock snapshot.
             att_result = await self.db.execute(
-                select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift_id))
+                select(ShiftAttendance)
+                .where(ShiftAttendance.shift_id == str(shift_id))
+                .with_for_update()
             )
             attendance_rows = att_result.scalars().all()
 
@@ -7874,21 +7961,38 @@ class SchedulingService:
         Writes the real attendance rows rather than staging a draft, so the
         hours are correct the moment they are saved even if the officer never
         reaches the last step.
+
+        Locks the shift row (``for_update=True``) before touching any
+        ``ShiftAttendance`` row, matching ``finalize_shift``'s and
+        ``save_closeout_calls``'s order. Without it, the ``_user_in_org``
+        lookup below triggers autoflush on an existing entry's mutated
+        ``checked_in_at``/``checked_out_at`` — an implicit attendance-row
+        lock — before ``shift.closeout_step`` is ever touched, the reverse of
+        ``finalize_shift``'s shift-then-attendance order. A closeout-attendance
+        save racing a finalize on the same shift could deadlock, aborting one
+        of two otherwise unrelated, ordinary requests.
         """
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
             return None, "Shift is already finalized — reopen it to make changes"
 
+        # Locking read: the shift lock above does not refresh this
+        # transaction's REPEATABLE READ snapshot for the ShiftAttendance
+        # table, which was established by _authorize_shift_management's
+        # earlier plain shift query. Without with_for_update() here, a
+        # member who checked in while this request waited on the shift lock
+        # would still read as "no attendance row yet" and get a duplicate
+        # row inserted below.
         existing = {
             str(a.user_id): a
             for a in (
                 (
                     await self.db.execute(
-                        select(ShiftAttendance).where(
-                            ShiftAttendance.shift_id == str(shift_id)
-                        )
+                        select(ShiftAttendance)
+                        .where(ShiftAttendance.shift_id == str(shift_id))
+                        .with_for_update()
                     )
                 )
                 .scalars()
@@ -7953,8 +8057,18 @@ class SchedulingService:
         consequence: an officer who saves this step and abandons the wizard has
         already moved the department's call-volume report, which carries no
         preliminary marker of its own.
+
+        Locks the shift row (``for_update=True``) before touching any
+        ``OrgCall``/``OrgCallResponse`` row, matching ``finalize_shift``'s own
+        order. ``finalize_shift`` also reconciles calls through
+        ``record_shift_calls`` after locking the shift first; this method
+        used to lock those same call rows (via the DELETE/UPDATE inside
+        ``record_shift_calls``) before ever touching the shift row, the
+        reverse order — a save-closeout-calls request racing a finalize on
+        the same shift could deadlock, aborting one of two otherwise
+        unrelated, ordinary requests.
         """
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
