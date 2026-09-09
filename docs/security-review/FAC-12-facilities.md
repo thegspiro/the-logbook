@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on two call sites (the root and per-facility folder lookups); FAC-45 fixed — a same-facility concurrent-creation deadlock the FAC-43 fix left in the per-facility check — pass 3 continued, closing this PR), pass 4 PR TBD (FAC-46 fixed — two unconditional `TypeError`s that broke `create_compliance_item` and `create_emergency_contact` on every call)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -9,6 +9,228 @@ model `app/models/facilities.py`
 **Migrations:** none this iteration (no schema change)
 
 ---
+
+## Pass 4 (2026-09-09)
+
+Full re-review against all seven `CHECKLIST.md` dimensions, reading
+`facilities.py`, `facilities_service.py`, `models/facilities.py`,
+`schemas/facilities.py`, the MCP tool surface (`app/mcp/tools/facilities.py`
+and the shared `app/mcp/registry.py`/`_common.py` it goes through), and the
+frontend module (`frontend/src/modules/facilities/` — all 35 files listed by
+name, `frontend/src/services/facilitiesServices.ts` read in full) end to end,
+not spot-checked. Also re-read `docs/module-audit/facilities.md` and
+`docs/app-review/facilities.md` — nothing left open in either that this pass's
+own findings below don't already re-verify or supersede.
+
+**Route inventory, independently re-counted:** `grep -c '^@router\.'
+facilities.py` → 98; `grep -c 'require_permission('` → 98;
+`grep -c 'require_all_permissions('` → 0; `grep -n 'Depends(get_current_user)'`
+→ no matches. 98/98 routes carry a permission dependency, 0 bare
+`get_current_user`, matching pass 3's count exactly (unchanged since).
+
+**MCP tool surface — read in full, found clean.**
+`app/mcp/tools/facilities.py` (124 L) registers exactly three tools, all
+read-only: `list_facilities`, `get_facility_description`,
+`get_facilities_counts`. Every one calls into `FacilitiesService` with
+`principal.organization_id` — no client-suppliable org id anywhere on this
+surface, so there is no IDOR shape to have. `list_facilities`' `search`
+argument reaches the same `like_pattern()`/`LIKE_ESCAPE_CHAR`-escaped service
+method the HTTP endpoint uses (no separate, unescaped query path for MCP).
+`get_facility_description` resolves `facility_id` through
+`FacilitiesService.get_facility(id, principal.organization_id, ...)`, the same
+org-scoped getter every HTTP route uses — a cross-org id 404s. The file's own
+comment confirms the two lease/tax fields (`lease_expiration`,
+`property_tax_id`) that `_facility_response_for` redacts from a baseline HTTP
+caller are never projected onto the MCP `_facility()` dict at all, so a
+service key cannot see them regardless of the `facilities.view_sensitive`
+question (there is no per-user permission concept on this surface — a
+department either turns the module on for Claude or it doesn't). The shared
+`logbook_registry.py` wrapper this surface goes through (module-gate check,
+per-argument size bound via `check_argument_sizes`, and an audit row on every
+call including refused/rejected/errored ones) is generic, whole-app
+infrastructure already covered by a prior cross-cutting pass — read here to
+confirm this feature's three tools actually go through it correctly (they do:
+`db`/`principal` as the first two parameters per tool, matching
+`_public_signature`'s contract) rather than re-reviewing the wrapper itself.
+
+**Frontend — read in full, no new findings.** Grepped the whole module plus
+`facilitiesServices.ts` for the recurring frontend pitfalls this rotation
+tracks and found none: no `window.confirm`/`alert`/`prompt` (FilesSection's
+own FAC-11 fix from pass 2 holds — `PromptDialog` is still what's used), no
+`dangerouslySetInnerHTML`, no `??` used on a form-value-to-API-payload path
+(the `??`s that exist are all the other direction — populating an edit form
+field from a possibly-null API value, e.g. `OverviewSection.tsx`'s
+`year_built: facility.yearBuilt ?? ''` — which is correct, not the banned
+form-to-payload coercion). `facilitiesServices.ts` imports the shared
+`services/apiClient.ts` instance rather than rolling its own axios instance,
+so it inherits `withCredentials`, the CSRF interceptor, and the 401-refresh
+flow for free — CLAUDE.md Pitfall #7 does not apply here (that pitfall is
+about `modules/*/services/api.ts` files that construct their _own_ instance;
+this file is the shared, top-level `services/` layer, already covered by the
+global instance's own setup). Read `ContactsSection.tsx`,
+`useFacilitiesAccess.ts`, `facilitiesStore.ts`, and `FacilityDetailPage.tsx`
+directly (not just grepped) to confirm this — `ContactsSection.tsx` is what
+led to FAC-46 below, since it's the live caller of the endpoint that finding
+fixes.
+
+**Migrations since pass 3:** none scoped to Facilities. Three general
+baseline-grant-repair migrations landed in this window
+(`20260904_1200_c9a5e21f7b04`, `20260904_1640_d1c7f4a92e63`,
+`20260905_0110_a2e9f6b04c71`) mention `facilities.view` only as one line among
+many modules in a whole-app permission-hygiene sweep unrelated to this
+feature's own code — read to confirm they don't touch anything
+Facilities-specific, and they don't.
+
+**Prior open findings re-verified, not re-derived.** FAC-13 (folder-tree
+over-restriction), FAC-30 (`facilities.delete` cannot pass the generic
+Documents ACL), FAC-41 (org-wide reference lock), and FAC-44 (unindexed
+scan-and-lock on two `document_folders` lookups) are each still present in
+current code exactly as described: `FACILITY_SENSITIVE_PERMISSIONS` in
+`documents_service.py:52` still excludes `facilities.delete`;
+`_match_facility_document_references`, `_lock_facilities_root`, and
+`_lock_facility_folder` are unchanged; `get_facility_folders`'s comment
+(`facilities.py:3820-3828`) still correctly describes the FAC-13 mechanism.
+None of the four needed re-fixing or re-flagging — they're re-confirmed open
+for the same reasons pass 3 gave, not stale claims carried forward unread.
+
+### FAC-46 — HIGH (correctness/availability) — two create paths passed a keyword argument their target didn't accept, crashing with an unconditional `TypeError` on every call — ✅ FIXED
+
+**What:** a whole-file AST sweep (every `Model(...)` construction in
+`facilities_service.py`, explicit keywords and `**schema.model_dump()`
+spreads alike, cross-checked against each model's actual mapped columns —
+see `TestModelConstructorsMatchTheirColumns` below for the reusable version)
+found two service methods passing a keyword their target didn't accept:
+
+1. **`create_compliance_item`** (`facilities_service.py:3271`, called by
+   `POST /compliance-checklists/{checklist_id}/items`,
+   `facilities.py:3680-3685`) — the endpoint calls it with
+   `checklist_id=checklist_id`, but the method's signature was
+   `(self, item_data, organization_id, created_by)` — no `checklist_id`
+   parameter at all. Verified directly against the real signature (not a
+   reimplementation): `inspect.signature(FacilitiesService.
+create_compliance_item).bind(None, checklist_id="x", item_data=object(),
+organization_id="org", created_by="u")` raised `TypeError: got an
+unexpected keyword argument 'checklist_id'`. Not caught by the endpoint's
+   `except ValueError` handler, so it reached the client as a raw 500 — on
+   **every** call, unconditionally, not a race or an edge case. Compounded by
+   a second, independent break in the same path: the request schema
+   (`FacilityComplianceItemCreate.checklist_id: str`) made the field
+   _required_ in the body, while the already-shipped (but never called by any
+   UI component — `grep`-confirmed no consumer of
+   `facilitiesServices.ts`'s `createComplianceItem` anywhere in
+   `frontend/src/modules/facilities/` or `frontend/src/pages/`) frontend type
+   (`ComplianceItemCreate` in `facilitiesServices.ts`) never sends it — so
+   even a caller who supplied the right keyword arguments would have 422'd at
+   the Pydantic-validation layer before ever reaching the method. This one is
+   unreachable through the shipped UI today (no "add compliance item" control
+   exists), but is reachable by anyone with `facilities.create`/`.edit`/
+   `.manage` calling the documented, permission-gated API directly (Swagger,
+   an integration, a future frontend change resuming this dead-but-wired
+   service method).
+2. **`create_emergency_contact`** (`facilities_service.py:2666`, called by
+   `POST /emergency-contacts`, `facilities.py:2599-2604`) — passed
+   `created_by=created_by` into `FacilityEmergencyContact(...)`, but that
+   model (`models/facilities.py:1281`) has no `created_by` column (only its
+   sibling `FacilityComplianceChecklist` does — individual contact rows track
+   no author). SQLAlchemy's declarative constructor rejects any keyword that
+   isn't a mapped attribute:
+   `TypeError: 'created_by' is an invalid keyword argument for
+FacilityEmergencyContact`, on every call. Unlike the compliance-item bug,
+   **this one is wired to real, shipped UI** —
+   `frontend/src/modules/facilities/components/ContactsSection.tsx`'s "Add
+   Emergency Contact" form calls `facilitiesService.createEmergencyContact()`
+   directly on submit — so every attempt by every department to add a
+   facility emergency contact (alarm company, plumber, electrician — exactly
+   the operational/safety data this module exists to hold) has been failing
+   with an unhandled 500, unconditionally, since this method was written.
+
+Neither is a data-exposure or cross-tenant issue — both fail by crashing, not
+by leaking or bypassing an authorization check, so this is squarely a
+correctness/availability finding (the same class as FAC-6 and FAC-17 above:
+"a real HTTP call 500'd on every path"), not an access-control one. It is
+flagged HIGH rather than MED specifically because of #2's blast radius: a
+core, permission-gated, UI-reachable write path in a safety-relevant module
+(emergency contacts for alarm/utility/fire-protection vendors) has never
+worked, for every organization, since it shipped.
+
+**Where:** `backend/app/services/facilities_service.py` (`create_compliance_item`,
+`create_emergency_contact`), `backend/app/schemas/facilities.py`
+(`FacilityComplianceItemCreate.checklist_id`).
+
+**Fix:**
+
+1. `create_compliance_item` now takes `checklist_id: str` as an explicit
+   parameter (matching the endpoint's existing call, and matching
+   `list_compliance_items`' own explicit `checklist_id` parameter — the
+   established shape for this nested resource elsewhere in the same file)
+   and treats the URL path as authoritative: it validates that checklist_id
+   against the org, and constructs the item with `checklist_id=checklist_id`
+   plus `**item_data.model_dump(exclude={"checklist_id"})`, discarding
+   whatever the body's own (now-optional) `checklist_id` said rather than
+   trusting it — so a caller cannot attach an item to a different checklist
+   than the one named in the URL by mismatching the two. Made
+   `FacilityComplianceItemCreate.checklist_id` optional (`Optional[str] =
+None`) since the path supplies it now and the shipped frontend type never
+   sent it in the first place — this is the schema-contract mismatch
+   CLAUDE.md Pitfall #5 describes, and the fix resolves it in the direction
+   that matches the already-shipped (if unused) frontend contract rather than
+   asking a future frontend change to start sending a field the URL already
+   carries. `created_by` stays accepted (endpoint already sends it, matching
+   every sibling create method's signature) but is documented as unstored,
+   since `FacilityComplianceItem` has no such column either — the very same
+   bug shape as #2, just masked behind the `checklist_id` crash until that
+   was fixed (verified in two discrete steps; see Regression tests).
+2. `create_emergency_contact` no longer passes `created_by` into the model
+   constructor — the parameter stays on the method's own signature (endpoint
+   compatibility, sibling-method consistency) but is documented as unstored.
+
+No behavior changes for any path that was actually working before this fix —
+there wasn't one; both methods have crashed on every invocation since they
+were written, so there is no working caller this could regress.
+
+**Regression tests:** `tests/test_facilities_service.py`, new classes
+`TestCreateComplianceItem` (4 tests), `TestCreateEmergencyContact` (1 test),
+and `TestModelConstructorsMatchTheirColumns` (1 test — the reusable version of
+the AST sweep that found both bugs, so a future create method copying the
+same `created_by=created_by` pattern onto a model without that column fails
+here instead of shipping silently). All 6 confirmed to fail against the
+pre-fix source via `git stash push -u` isolating just
+`app/schemas/facilities.py` and `app/services/facilities_service.py` (test
+file kept): `TestCreateComplianceItem` failed with the exact `TypeError`/
+`ValidationError` described above (one test — the compliance-item creation
+itself — was re-run a second time after fixing only the `checklist_id` half,
+independently confirming the `created_by`/`FacilityEmergencyContact`-shaped
+bug also present in `create_compliance_item` before both were fixed
+together), `TestCreateEmergencyContact` failed with the `created_by`
+`TypeError`, and `TestModelConstructorsMatchTheirColumns` failed by listing
+both real mismatches. `git stash apply` restored the fix; all 6 (29 in the
+full file) passed afterward, five with no flakiness (these are pure
+unit/AST tests with mocked sessions, not concurrency-timing-sensitive).
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — this is a straightforward
+bug fix with no remaining product decision, not an owner-facing limitation.
+
+## Completion gate (pass 4)
+
+| Check                                             | Result                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                |
+| `black --check app/ tests/ alembic/`              | ✅ 1541 files unchanged                                        |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                       |
+| `python3 scripts/validate_migrations.py --strict` | ✅ passed (439 migrations, single head, no schema change)      |
+| `pytest tests/test_facilities_service.py`         | ✅ 29 passed (7 new: FAC-46's 6, none pre-existing broken)     |
+| `pytest tests/ -k "facilities or documents"`      | ✅ 331 passed, 1 skipped (pre-existing, optional dependency)   |
+| `pytest tests/` (full backend suite)              | ✅ 11922 passed, 21 skipped (pre-existing Docker/optional-dep) |
+| `tsc --noEmit` / `eslint .`                       | n/a — no frontend file changed this pass                       |
+
+**FAC-46's regression tests independently confirmed against pre-fix code:**
+`git stash push -u` isolating `app/schemas/facilities.py` and
+`app/services/facilities_service.py` only (test file kept) — all 6 new tests
+failed with the exact errors the finding describes; `git stash apply` restored
+the fix and all 29 tests in the file passed. See the finding's own write-up
+for the two-step confirmation detail (the `created_by` bug in
+`create_compliance_item` was independently observed mid-fix, between
+correcting the `checklist_id` mismatch and correcting `created_by`).
 
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 

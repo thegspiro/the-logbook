@@ -1342,7 +1342,13 @@ class FacilityComplianceChecklistResponse(FacilityComplianceChecklistBase):
 
 
 class FacilityComplianceItemCreate(BaseModel):
-    checklist_id: str
+    # Optional, not required: POST /compliance-checklists/{checklist_id}/items
+    # takes the checklist from the URL path, which is authoritative (mirrors
+    # list_compliance_items' own checklist_id parameter). A value supplied
+    # here is ignored by FacilitiesService.create_compliance_item — kept on
+    # the schema only so FacilityComplianceItemUpdate's identical field
+    # doesn't need special-casing wherever both are handled generically.
+    checklist_id: Optional[str] = None
     item_number: Optional[int] = None
     description: str
     is_compliant: Optional[bool] = None

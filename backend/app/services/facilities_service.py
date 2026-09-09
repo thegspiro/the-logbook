@@ -2669,7 +2669,12 @@ class FacilitiesService:
         organization_id: str,
         created_by: str,
     ) -> FacilityEmergencyContact:
-        """Create an emergency contact"""
+        """Create an emergency contact.
+
+        ``created_by`` is accepted to match the endpoint's call and every
+        sibling create method's signature, but is not stored:
+        FacilityEmergencyContact has no created_by column.
+        """
         # Verify facility exists
         facility = await self.get_facility(
             contact_data.facility_id, organization_id, include_relations=False
@@ -2679,7 +2684,6 @@ class FacilitiesService:
 
         contact = FacilityEmergencyContact(
             organization_id=organization_id,
-            created_by=created_by,
             **contact_data.model_dump(),
         )
 
@@ -3270,22 +3274,34 @@ class FacilitiesService:
 
     async def create_compliance_item(
         self,
+        checklist_id: str,
         item_data: FacilityComplianceItemCreate,
         organization_id: str,
         created_by: str,
     ) -> FacilityComplianceItem:
-        """Create a compliance item"""
+        """Create a compliance item under ``checklist_id`` (from the URL path).
+
+        The path segment is authoritative, matching list_compliance_items'
+        own explicit checklist_id parameter — any (now-unused) value on
+        item_data.checklist_id is discarded rather than trusted, so a caller
+        cannot attach an item to a different checklist than the one named in
+        the URL by mismatching the two.
+
+        ``created_by`` is accepted (and required) to match every sibling
+        create method's signature and the endpoint's existing call, but is
+        not stored: unlike its parent FacilityComplianceChecklist,
+        FacilityComplianceItem has no created_by column — only the checklist
+        as a whole tracks an author; individual checklist items don't.
+        """
         # Verify checklist exists and belongs to org
-        checklist = await self.get_compliance_checklist(
-            item_data.checklist_id, organization_id
-        )
+        checklist = await self.get_compliance_checklist(checklist_id, organization_id)
         if not checklist:
             raise ValueError("Invalid compliance checklist")
 
         item = FacilityComplianceItem(
             organization_id=organization_id,
-            created_by=created_by,
-            **item_data.model_dump(),
+            checklist_id=checklist_id,
+            **item_data.model_dump(exclude={"checklist_id"}),
         )
 
         self.db.add(item)

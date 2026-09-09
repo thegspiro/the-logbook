@@ -16,6 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 12 (Facilities, pass 4)** — PR TBD, branch
+`claude/security-review-facilities-pass4` (fresh name; no facilities-review
+branch exists locally or on origin from passes 1–3, so CLAUDE.md Pitfall #24
+poses no collision here). 1 fixed (FAC-46, HIGH — two unconditional
+`TypeError`s that broke `create_compliance_item` and `create_emergency_contact`
+on every single call, one of them wired to real shipped UI), 4 prior flags
+(FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open and unchanged since
+pass 3. Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4.
+Completion gate green. Awaiting CI and review.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422, merged), preserved for history</summary>
+
 **None.** PR #2422 (Feature 11, Inventory, pass 4) merged clean, 17/17 CI
 checks green, mergeable_state clean. Squash-merged as `92a4917e7`. Feature
 11 is now fully closed for this pass — see the Log entries and
@@ -23,9 +36,6 @@ checks green, mergeable_state clean. Squash-merged as `92a4917e7`. Feature
 across the two rounds (one, INV-26, a P1 genuine cross-tenant write), 5
 still open (INV-22 newly flagged this pass; INV-8, INV-9, INV-16, INV-17
 re-verified). Next: 12 Facilities.
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422), preserved for history</summary>
 
 **Feature 11 (Inventory, pass 4)** — PR
 [#2422](https://github.com/thegspiro/the-logbook/pull/2422), branch
@@ -11770,7 +11780,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -11800,6 +11810,58 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
+
+Full re-review against all seven checklist dimensions: `facilities.py` (98
+routes, all permission-gated — re-counted, unchanged since pass 3),
+`facilities_service.py` read end to end, the MCP tool surface
+(`app/mcp/tools/facilities.py`, three read-only tools, all org-scoped, no
+sensitive fields projected — found clean), and the frontend module (all 35
+files in `frontend/src/modules/facilities/` plus
+`frontend/src/services/facilitiesServices.ts`) read/grepped for the
+recurring pitfalls, no new findings there.
+
+**FAC-46 (HIGH, fixed)** — a whole-file AST sweep of every `Model(...)`
+constructor call in `facilities_service.py` against each model's actual
+mapped columns found two service methods passing a keyword argument their
+target didn't accept: `create_compliance_item` called with
+`checklist_id=checklist_id` by its only caller but the method's signature
+didn't have that parameter (`TypeError` on every call, verified directly by
+binding the endpoint's exact call shape against the real signature — also
+compounded by a required-body-field schema mismatch that meant even a
+well-formed call would 422 before reaching the crash, since the shipped
+frontend type never sends `checklist_id`; this path is unreachable through
+today's UI, no "add compliance item" control exists), and
+`create_emergency_contact` passing `created_by=created_by` into
+`FacilityEmergencyContact(...)`, a model with no such column — this one
+**is** wired to real, shipped UI (`ContactsSection.tsx`'s "Add Emergency
+Contact" form), so every attempt to add a facility emergency contact has
+been failing with an unhandled 500 for every organization using this
+screen, unconditionally, since the method was written. Fixed both (the
+compliance-item path now takes `checklist_id` as an explicit,
+path-authoritative parameter matching `list_compliance_items`' own shape;
+neither method stores `created_by` where the model has no column for it,
+though both keep accepting it for signature consistency). 6 new guard
+tests, all confirmed to fail against the pre-fix source via `git stash`
+isolating just the two source files, including a reusable
+`TestModelConstructorsMatchTheirColumns` sweep so a future create method
+copying the same pattern fails a test instead of shipping silently.
+
+**Prior open findings re-verified, not re-derived:** FAC-13 (folder-tree
+over-restriction), FAC-30 (`facilities.delete` can't pass the generic
+Documents ACL), FAC-41 (org-wide reference lock), FAC-44 (unindexed
+scan-and-lock on two folder lookups) — all four confirmed still present in
+current code exactly as pass 3 described; none needed re-fixing. FAC-30,
+FAC-41 and FAC-44 had never been mirrored to `KNOWN_LIMITATIONS.md` despite
+being open owner-decision items since pass 3 — added this pass, alongside
+the already-present FAC-13 entry.
+
+Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4. Full
+completion gate green (flake8/black/isort clean, migrations valid, 331
+facilities/documents tests + full 11922-test backend suite passed; no
+frontend file changed this pass, so `tsc`/`eslint` not run). Next: 13
+Apparatus & NFC.
 
 ### 2026-09-09 — Feature 11 (Inventory, pass 4)'s PR #2422 merged
 
