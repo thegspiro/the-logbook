@@ -142,9 +142,17 @@ async def create_rank(
     # ladder, so a roster officer adding a rung sees no difference, and a
     # request that asked for the top is answered with a rung at the bottom
     # instead of a 403 for a field the officer never chose.
+    #
+    # One past the highest sort_order, NOT the row count. delete_rank removes a
+    # row without renumbering the survivors, so the values go sparse: a ladder
+    # holding a single rank at order 6 has a count of 1, and appending "at
+    # position 1" puts the new rung five places *above* the only rung there is.
+    # Since inventory reads a lower sort_order as more senior, that hands the
+    # roster officer exactly the rung this carve-out exists to deny them.
     if not _may_order_ladder(current_user):
         existing = await service.list_ranks(current_user.organization_id)
-        data = data.model_copy(update={"sort_order": len(existing)})
+        highest = max((rank.sort_order or 0) for rank in existing) if existing else -1
+        data = data.model_copy(update={"sort_order": highest + 1})
 
     async with handle_service_errors("Failed to create rank"):
         rank = await service.create_rank(

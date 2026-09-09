@@ -37,6 +37,11 @@ def _caller(perms):
     )
 
 
+def _ladder(*sort_orders):
+    """Rank rows carrying only what the append arithmetic reads off them."""
+    return [SimpleNamespace(sort_order=order) for order in sort_orders]
+
+
 def _gate_permissions(handler):
     """The permission strings a handler's require_permission dependency accepts."""
     for param in inspect.signature(handler).parameters.values():
@@ -166,7 +171,7 @@ class TestLadderOrdering:
         with patch.object(
             operational_ranks.OperationalRankService,
             "list_ranks",
-            new=AsyncMock(return_value=[object(), object(), object()]),
+            new=AsyncMock(return_value=_ladder(0, 1, 2)),
         ):
             with patch.object(
                 operational_ranks.OperationalRankService, "create_rank", new=created
@@ -185,6 +190,106 @@ class TestLadderOrdering:
         # Three ranks already exist, so the new one is the fourth -- not the 0
         # the request asked for.
         assert created.await_args.kwargs["data"].sort_order == 3
+
+    async def test_a_new_rung_clears_a_gapped_ladder_rather_than_counting_rows(self):
+        """The row count is not the bottom of the ladder once anything is deleted.
+
+        ``delete_rank`` removes a row without renumbering the survivors, so a
+        ladder holding one rank at order 6 has a count of 1. Appending "at
+        position 1" would put the new rung five places *above* the only rung
+        there is -- and inventory reads the lower number as the more senior one,
+        which hands the roster officer precisely the rung the ordering carve-out
+        exists to deny them.
+        """
+        caller = _caller(["members.manage"])
+        created = AsyncMock(
+            return_value=SimpleNamespace(
+                id="00000000-0000-0000-0000-000000000001",
+                organization_id="00000000-0000-0000-0000-000000000002",
+                rank_code="probationary",
+                display_name="Probationary",
+                description=None,
+                sort_order=7,
+                is_active=True,
+                eligible_positions=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        payload = SimpleNamespace(
+            rank_code="probationary",
+            sort_order=1,
+            model_copy=lambda update: SimpleNamespace(
+                rank_code="probationary", **update
+            ),
+        )
+
+        with patch.object(
+            operational_ranks.OperationalRankService,
+            "list_ranks",
+            new=AsyncMock(return_value=_ladder(6)),
+        ):
+            with patch.object(
+                operational_ranks.OperationalRankService, "create_rank", new=created
+            ):
+                with patch(
+                    "app.api.v1.endpoints.users.report_privilege_escalation_attempt",
+                    new=AsyncMock(),
+                ):
+                    await operational_ranks.create_rank(
+                        request=MagicMock(client=None, headers={}),
+                        data=payload,
+                        db=MagicMock(),
+                        current_user=caller,
+                    )
+
+        # One past the highest, not one past the count.
+        assert created.await_args.kwargs["data"].sort_order == 7
+
+    async def test_the_first_rung_of_an_empty_ladder_starts_at_zero(self):
+        caller = _caller(["members.manage"])
+        created = AsyncMock(
+            return_value=SimpleNamespace(
+                id="00000000-0000-0000-0000-000000000001",
+                organization_id="00000000-0000-0000-0000-000000000002",
+                rank_code="probationary",
+                display_name="Probationary",
+                description=None,
+                sort_order=0,
+                is_active=True,
+                eligible_positions=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        payload = SimpleNamespace(
+            rank_code="probationary",
+            sort_order=4,
+            model_copy=lambda update: SimpleNamespace(
+                rank_code="probationary", **update
+            ),
+        )
+
+        with patch.object(
+            operational_ranks.OperationalRankService,
+            "list_ranks",
+            new=AsyncMock(return_value=[]),
+        ):
+            with patch.object(
+                operational_ranks.OperationalRankService, "create_rank", new=created
+            ):
+                with patch(
+                    "app.api.v1.endpoints.users.report_privilege_escalation_attempt",
+                    new=AsyncMock(),
+                ):
+                    await operational_ranks.create_rank(
+                        request=MagicMock(client=None, headers={}),
+                        data=payload,
+                        db=MagicMock(),
+                        current_user=caller,
+                    )
+
+        assert created.await_args.kwargs["data"].sort_order == 0
 
     async def test_the_requested_order_is_honoured_with_the_grant(self):
         # Wildcard so the rank ceiling is not what this measures: `captain`

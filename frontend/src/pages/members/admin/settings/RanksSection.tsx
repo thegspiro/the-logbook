@@ -36,11 +36,21 @@
 
 import React from 'react';
 import { useRankEditor } from '../../../../hooks/useRankEditor';
+import { useAuthStore } from '../../../../stores/authStore';
 import RanksSettingsSection from '../../../../components/settings/RanksSettingsSection';
 import { SettingsPanelHead } from '../../../../components/settings/SettingsPanelHead';
 
 const RanksSection: React.FC = () => {
   const editor = useRankEditor();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+
+  // Not the grant this section stands on. A rank's sort_order is read by the
+  // inventory rule as a predicate — a lower number is treated as more senior —
+  // so placing a rank decides who sees restricted stock, and ordering kept
+  // `settings.manage` when the ladder's contents moved to `members.manage`.
+  // The controls have to follow the endpoint: offered to an officer it refuses,
+  // every click moved the row optimistically, failed, and snapped back.
+  const canReorder = checkPermission('settings.manage');
 
   return (
     <div className="space-y-6">
@@ -91,6 +101,7 @@ const RanksSection: React.FC = () => {
           onMoveRank={(index, direction) => {
             void editor.handleMoveRank(index, direction);
           }}
+          canReorder={canReorder}
           onToggleEligiblePosition={(rank, pos) => {
             void editor.handleToggleEligiblePosition(rank, pos);
           }}
