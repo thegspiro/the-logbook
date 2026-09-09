@@ -216,3 +216,48 @@ describe('useTierEditor saving', () => {
     expect(result.current.dirty).toBe(false);
   });
 });
+
+describe('useTierEditor and a ladder that was never saved', () => {
+  beforeEach(installDefaults);
+
+  it('opens dirty when the backend synthesized the ladder', async () => {
+    // `_load_tiers` reads the stored section, so a synthesized ladder is
+    // proposed rather than in effect: nothing advances and no benefit applies
+    // until it is saved. Presenting it as clean would show a department
+    // settings that no reader honours.
+    getTierConfig.mockResolvedValue(config({ is_saved: false }));
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(true);
+  });
+
+  it('opens clean when the ladder is stored', async () => {
+    getTierConfig.mockResolvedValue(config({ is_saved: true }));
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('opens clean when the backend does not say', async () => {
+    // An older backend has no such field, and a missing answer must not be read
+    // as "unsaved" — that would make every load dirty and every screen nag.
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('does not send the saved-state flag back', async () => {
+    // It is a statement about whether the section exists. Storing it would be
+    // storing an answer about the storage.
+    getTierConfig.mockResolvedValue(config({ is_saved: false }));
+    const result = await loaded();
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    const sent = updateTierConfig.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('is_saved');
+    expect(sent).not.toHaveProperty('member_counts');
+  });
+});

@@ -59,7 +59,7 @@ const ITTeamBackupAccess: React.FC = () => {
   // The ladder as it stands now. The System Owner is signed in from the
   // previous step, so this reads the organization's real ranks rather than a
   // hardcoded list — and it seeds the agency defaults on first load.
-  const { rankOptions } = useRanks();
+  const { rankOptions, loading: ranksLoading, failed: ranksFailed, refetch: refetchRanks } = useRanks();
 
   // Validation errors (local state - no need to persist)
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -343,22 +343,52 @@ const ITTeamBackupAccess: React.FC = () => {
                       <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                         Operational Rank
                       </label>
-                      <select
-                        value={member.rank ?? ''}
-                        onChange={(e) => updateITMember(member.id, 'rank', e.target.value)}
-                        className="form-input py-3 transition-all"
-                        aria-label={`Operational rank for IT contact ${index + 1}`}
-                      >
-                        <option value="">No rank</option>
-                        {rankOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-theme-text-muted mt-1 text-xs">
-                        Optional. You can edit the ladder itself on the next step.
-                      </p>
+                      {/* A failed read renders as an empty list, which is
+                          indistinguishable from a department with no ranks —
+                          and here that reads as a valid "No rank" choice, so
+                          every contact would be created without the rank the
+                          administrator meant to give them. Say the list is
+                          missing instead. */}
+                      {ranksFailed && !ranksLoading ? (
+                        <div className="alert-warning" role="alert">
+                          <p className="text-theme-text-primary text-sm font-medium">
+                            The rank list could not be loaded.
+                          </p>
+                          <p className="text-theme-text-muted mt-1 text-sm">
+                            Your ranks are not shown, not missing. Leave this and set ranks on the next step, or try
+                            again.
+                          </p>
+                          <button
+                            type="button"
+                            className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
+                            onClick={() => {
+                              void refetchRanks();
+                            }}
+                          >
+                            Try again
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            value={member.rank ?? ''}
+                            onChange={(e) => updateITMember(member.id, 'rank', e.target.value)}
+                            className="form-input py-3 transition-all"
+                            disabled={ranksLoading}
+                            aria-label={`Operational rank for IT contact ${index + 1}`}
+                          >
+                            <option value="">{ranksLoading ? 'Loading ranks…' : 'No rank'}</option>
+                            {rankOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-theme-text-muted mt-1 text-xs">
+                            Optional. You can edit the ladder itself on the next step.
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     {/* Email */}

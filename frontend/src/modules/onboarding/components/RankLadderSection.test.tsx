@@ -208,3 +208,36 @@ describe('RankLadderSection with the System Owner signed in', () => {
     await waitFor(() => expect(picker).toHaveValue(''));
   });
 });
+
+describe('an unsaved rank form', () => {
+  beforeEach(installDefaults);
+
+  it('reports itself pending once something has been typed', async () => {
+    // Add Rank and Edit Rank hold their value locally until the nested button
+    // is pressed. The step's Continue unmounts this section, so it has to say
+    // when there is something to lose.
+    const user = userEvent.setup();
+    const onPendingChange = vi.fn();
+    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    await screen.findByText('Captain');
+
+    await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
+    await user.type(screen.getByPlaceholderText('e.g. Captain'), 'X');
+
+    await waitFor(() => expect(onPendingChange).toHaveBeenLastCalledWith(true));
+  });
+
+  it('does not report an empty form as pending', async () => {
+    // Opening Add Rank and thinking better of it is not unsaved work, and a
+    // guard nobody can satisfy without noticing the box is open is worse than
+    // none.
+    const user = userEvent.setup();
+    const onPendingChange = vi.fn();
+    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    await screen.findByText('Captain');
+
+    await user.click(screen.getByRole('button', { name: /add rank/i }));
+
+    expect(onPendingChange).not.toHaveBeenCalledWith(true);
+  });
+});

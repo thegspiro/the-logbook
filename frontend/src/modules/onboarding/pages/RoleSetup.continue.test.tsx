@@ -33,12 +33,16 @@ vi.mock('react-hot-toast', () => ({
 // The two ladders each own an API of their own; this file is about the step's
 // Continue, so they are stubbed down to what it needs to know.
 let ladderDirty = false;
+let rankFormPending = false;
 vi.mock('../components', async () => {
   const actual = await vi.importActual<typeof import('../components')>('../components');
   const React = await import('react');
   return {
     ...actual,
-    RankLadderSection: () => null,
+    RankLadderSection: ({ onPendingChange }: { onPendingChange?: (p: boolean) => void }) => {
+      React.useEffect(() => onPendingChange?.(rankFormPending), [onPendingChange]);
+      return null;
+    },
     MembershipLadderSection: ({ onDirtyChange }: { onDirtyChange?: (d: boolean) => void }) => {
       React.useEffect(() => onDirtyChange?.(ladderDirty), [onDirtyChange]);
       return null;
@@ -62,6 +66,7 @@ const renderStep = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   ladderDirty = false;
+  rankFormPending = false;
   savePositionsConfig.mockResolvedValue({ data: { created: [], updated: [], removed: [] } });
   useOnboardingStore.setState({
     departmentName: 'Falls Church VFD',
@@ -114,5 +119,69 @@ describe('unsaved membership ladder edits', () => {
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('membership tier changes'));
+  });
+});
+
+describe('a draft saved before unticking meant deletion', () => {
+  it('restores the positions that draft never named', async () => {
+    // The build before this one preselected six positions, because leaving one
+    // unticked meant "do not submit it" and the row survived regardless. That
+    // draft is in localStorage. Restoring it verbatim and submitting it now
+    // deletes the twenty-three it does not name — the same defect the
+    // all-position initialisation exists to prevent, reached through a resumed
+    // session instead of a fresh mount.
+    useOnboardingStore.setState({
+      positionsConfig: {
+        it_manager: { id: 'it_manager', name: 'IT Manager', description: '', permissions: {}, priority: 100 },
+        member: { id: 'member', name: 'Regular Member', description: '', permissions: {}, priority: 10 },
+      },
+      reconciledSeededSlugs: [],
+    });
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
+    const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
+    const ids = sent.positions.map((p) => p.id);
+    for (const id of ['captain', 'lieutenant', 'firefighter', 'treasurer']) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  it('leaves an untick alone once the draft has been topped up', async () => {
+    // The marker is what separates "written by the old build" from "narrowed on
+    // purpose". A draft that already carries it is the administrator's own.
+    useOnboardingStore.setState({
+      positionsConfig: {
+        it_manager: { id: 'it_manager', name: 'IT Manager', description: '', permissions: {}, priority: 100 },
+        member: { id: 'member', name: 'Regular Member', description: '', permissions: {}, priority: 10 },
+      },
+      reconciledSeededSlugs: ['@all-positions-baseline'],
+    });
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
+    const sent = savePositionsConfig.mock.calls[0]?.[0] as { positions: { id: string }[] };
+    expect(sent.positions.map((p) => p.id)).not.toContain('captain');
+  });
+});
+
+describe('an unsaved rank edit', () => {
+  it('refuses to continue, the way an unsaved tier edit does', async () => {
+    // The rank editor's Add/Edit form is typed but not yet written, and
+    // Continue unmounts the section that holds it.
+    rankFormPending = true;
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    expect(savePositionsConfig).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('rank you are editing'));
   });
 });

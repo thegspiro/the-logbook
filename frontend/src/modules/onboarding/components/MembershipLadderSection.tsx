@@ -59,6 +59,19 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
         </div>
       </div>
 
+      {/* The System Owner's account exists by this step and
+          `register_user` leaves it on the column default
+          `membership_type='active'`, so the matching rung reports one holder
+          and its remove button is disabled — with no control on this step for
+          moving them. Renaming it *is* allowed: the backend's occupied-tier
+          guard compares tier ids, and the editor's rename changes the display
+          name only. Saying which is which turns a dead button into a route. */}
+      <p className="alert-info mb-4 text-sm">
+        Your own account already sits on the second rung, so that one can be renamed to whatever your bylaws call it but
+        not removed while you are on it. A department that has no such stage can remove it later, from Members →
+        Settings → Membership Tiers, once the roster is loaded and you have moved yourself.
+      </p>
+
       {editor.failed && !editor.loading ? (
         <div className="alert-danger" role="alert">
           <p className="text-theme-text-primary text-sm font-medium">The membership ladder could not be loaded.</p>

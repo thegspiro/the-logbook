@@ -50,7 +50,12 @@ export function useTierEditor() {
         tiers: [...(data.tiers ?? [])].sort((a, b) => a.sort_order - b.sort_order),
       });
       setFailed(false);
-      setDirty(false);
+      // A ladder the backend synthesized rather than read is *proposed*, not in
+      // effect: `MembershipTierService._load_tiers` still sees nothing stored,
+      // so advancement does not run and no benefit applies. Opening dirty is
+      // what makes Save the obvious next action instead of leaving a department
+      // looking at settings no reader honours.
+      setDirty(data.is_saved === false);
     } catch {
       // A failed load is not an empty ladder. Rendering "no tiers configured"
       // would tell a department it has no membership structure because a
@@ -173,7 +178,8 @@ export function useTierEditor() {
     if (!config) return;
     setSaving(true);
     try {
-      const { member_counts: _counts, ...payload } = config;
+      // Both are reports about the roster and about storage, not config.
+      const { member_counts: _counts, is_saved: _isSaved, ...payload } = config;
       await memberStatusService.updateTierConfig(payload);
       toast.success('Membership tiers saved');
       await fetchConfig();

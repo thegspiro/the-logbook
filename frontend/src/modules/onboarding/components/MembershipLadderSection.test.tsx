@@ -96,3 +96,26 @@ describe('MembershipLadderSection', () => {
     expect(screen.queryByText(/no tiers configured/i)).not.toBeInTheDocument();
   });
 });
+
+describe('the rung the System Owner is already on', () => {
+  beforeEach(installDefaults);
+
+  it('says it can be renamed but not removed while they hold it', async () => {
+    // `register_user` leaves the owner on the column default
+    // `membership_type='active'`, so that rung reports a holder and its remove
+    // button is disabled for the whole of setup — with no control here for
+    // moving them. The backend's guard is id-based, so renaming *is* allowed;
+    // a disabled button with no explanation reads as a bug.
+    render(<MembershipLadderSection />);
+
+    expect(
+      await screen.findByText(/can be renamed to whatever your bylaws call it but not removed/i)
+    ).toBeInTheDocument();
+  });
+
+  it('names where removal becomes possible later', async () => {
+    render(<MembershipLadderSection />);
+
+    expect(await screen.findByText(/Members → Settings → Membership Tiers/i)).toBeInTheDocument();
+  });
+});

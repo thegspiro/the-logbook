@@ -27,6 +27,7 @@ export function useRanks(activeOnly = true) {
     ranks: initialCachedRanks ?? [],
   }));
   const [loadingState, setLoadingState] = useState({ key: cacheKeyString, loading: initialCachedRanks === null });
+  const [failed, setFailed] = useState(false);
 
   // Never expose results belonging to the previous filter or organization,
   // even during the render before the key-change effect runs.
@@ -44,8 +45,14 @@ export function useRanks(activeOnly = true) {
       if (currentKeyRef.current === cacheKeyString) {
         setRankState({ key: cacheKeyString, ranks: data });
       }
+      if (currentKeyRef.current === cacheKeyString) setFailed(false);
     } catch {
-      // Fall back to empty; dropdowns will have no options until retry
+      // Reported, not only swallowed. Falling back to an empty list renders a
+      // dropdown that looks like a department with no ranks rather than a read
+      // that did not answer — and on the onboarding IT step that reads as a
+      // valid "No rank" choice, so every contact is created without the rank
+      // the administrator picked. Consumers that do not care may ignore this.
+      if (currentKeyRef.current === cacheKeyString) setFailed(true);
     } finally {
       if (currentKeyRef.current === cacheKeyString) {
         setLoadingState({ key: cacheKeyString, loading: false });
@@ -81,5 +88,5 @@ export function useRanks(activeOnly = true) {
     [ranks]
   );
 
-  return { ranks, rankOptions, loading, refetch, formatRank };
+  return { ranks, rankOptions, loading, failed, refetch, formatRank };
 }

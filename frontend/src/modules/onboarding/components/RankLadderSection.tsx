@@ -27,8 +27,33 @@ import { getErrorMessage } from '../../../utils/errorHandling';
  * for that to happen, because there is no "before" to notice the change
  * against.
  */
-const RankLadderSection: React.FC = () => {
+interface RankLadderSectionProps {
+  /**
+   * Told whenever a rank add or edit is typed but not yet saved.
+   *
+   * Unlike the ladder's other actions, which each write on their own, Add Rank
+   * and Edit Rank hold their value in a local form until the nested Add/Save
+   * button is pressed. Pressing the *step's* Continue instead unmounts this
+   * section and discards it — the same silent loss the membership ladder's
+   * guard exists to prevent, one section over. The step guards its Continue on
+   * this.
+   */
+  onPendingChange?: (pending: boolean) => void;
+}
+
+const RankLadderSection: React.FC<RankLadderSectionProps> = ({ onPendingChange }) => {
   const editor = useRankEditor({ allowCodeEdit: false });
+
+  // A form is pending only once something has been typed into it: opening Add
+  // Rank and thinking better of it is not unsaved work, and blocking Continue
+  // on an empty box would be a guard nobody could satisfy without noticing the
+  // box was open at all.
+  const rankFormPending =
+    (editor.addingRank || editor.editingRank !== null) && editor.rankForm.display_name.trim().length > 0;
+
+  useEffect(() => {
+    onPendingChange?.(rankFormPending);
+  }, [rankFormPending, onPendingChange]);
 
   // The System Owner's own rank. They are a real signed-in account by this
   // step — created two steps earlier — so this writes straight through the
