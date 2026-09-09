@@ -853,6 +853,98 @@ failed against the pre-fix source — the compiled `ORDER BY` had no
 `git stash apply` restored the fix. FAC-56 has no backend-testable seam (a
 type-only correction); verified via `tsc --noEmit` passing clean.
 
+### FAC-57 — MED (correctness — race), Codex review of `4c86f48189`, FAC-51's own fix — the merge-then-validate name check was a plain read, so two concurrent PATCHes each clearing a different name could each pass it against a stale snapshot of the other — ✅ FIXED
+
+**What:** Codex's seventh consecutive review round pointed out that
+FAC-51's fix — re-checking `contact.company_name or contact.contact_name`
+against the merged in-memory object before committing — was still a
+**plain** read (`get_emergency_contact` with no locking). Under InnoDB's
+default REPEATABLE READ, a plain `SELECT` answers from the snapshot taken
+at the transaction's first read; it is not refreshed by anything that
+happens afterward, including a concurrent transaction's commit. So: two
+PATCHes arrive together, one clearing `company_name` (leaving
+`contact_name` set) and the other clearing `contact_name` (leaving
+`company_name` set). Each loads the row before the other commits, each
+sees the _other_ field still populated in its own snapshot, each check
+passes, each commits — and because each request's in-memory object only
+ever touched the one field it was clearing, SQLAlchemy's UPDATE for each
+only sets that one column, so both writes land: the row ends with
+**both** fields NULL, precisely the state FAC-51 was written to make
+impossible. This is CLAUDE.md Pitfall #27's shape exactly ("a check that
+depends on a read must be a locking read, or the row lock alone doesn't
+help") — just with a cross-field invariant standing in for a capacity
+count.
+
+**Where:** `backend/app/services/facilities_service.py`
+(`get_emergency_contact`, `update_emergency_contact`).
+
+**Fix:** `get_emergency_contact` gained a `for_update: bool = False`
+parameter (`query.with_for_update(of=FacilityEmergencyContact)` when set),
+mirroring the identical, already-established pattern in
+`admin_hours_service.py::_get_active_session`.
+`update_emergency_contact` now calls it with `for_update=True`. A locking
+read always returns the latest _committed_ version regardless of when the
+transaction's own snapshot was taken (unlike a plain `SELECT`), so the
+second request to reach this row blocks until the first commits, then
+re-reads fresh data — sees the first request's already-cleared field —
+and correctly raises `ValueError` rather than compounding it. The read
+path (the GET endpoint) and `delete_emergency_contact` were left as plain
+reads; neither has a merge-then-validate step that a stale snapshot could
+corrupt.
+
+**Regression test:** `tests/test_emergency_contact_name_race.py` (new
+file), following the same two-real-session pattern this codebase already
+uses for this exact class of bug
+(`test_facility_document_reference_race.py`, itself built for FAC-29/
+FAC-34/FAC-36 on the Documents module) — the shared savepoint-based
+`db_session` fixture never truly commits, so it cannot demonstrate
+cross-transaction visibility at all. The test deterministically forces the
+race rather than relying on incidental `asyncio` scheduling: session A
+takes the lock directly (mirroring `update_emergency_contact`'s own first
+step), session B's `update_emergency_contact` is started as a task and
+proven genuinely blocked (`not b_task.done()` after its own locking read
+is confirmed attempted), A completes and commits, and B is asserted to
+unblock into a `ValueError` — with the DB re-read by a third, independent
+session afterward to confirm the surviving name. Confirmed to fail against
+the pre-fix source (`git stash push -u` isolating
+`app/services/facilities_service.py` only, test file kept) with
+`TypeError: FacilitiesService.get_emergency_contact() got an unexpected
+keyword argument 'for_update'` — the exact parameter this fix adds not
+existing yet is itself a correct failure signal, since the test's whole
+premise is that parameter's behavior. `git stash apply` restored the fix;
+the test then passed, confirmed stable across 4 consecutive runs (no
+timing-dependent flakiness) rather than accepted on a single green run —
+an earlier draft of this same test, which raced two full
+`update_emergency_contact()` calls via bare `asyncio.gather` with no
+explicit synchronization, passed on _both_ sides of the stash (a false
+negative caught before commit, not after) because nothing forced the two
+tasks' DB round-trips to actually interleave.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a correctness fix with no
+remaining product decision.
+
+## Completion gate (pass 4, round 21 — Codex review of `4c86f48189`, FAC-55/FAC-56's own fix; FAC-57)
+
+| Check                                                                                 | Result                                                                                   |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `flake8 app/services/facilities_service.py tests/test_emergency_contact_name_race.py` | ✅ 0 violations                                                                          |
+| `black --check` (same files)                                                          | ✅ clean                                                                                 |
+| `isort --check-only` (same files)                                                     | ✅ clean                                                                                 |
+| `pytest tests/test_facilities_service.py`                                             | ✅ 39 passed (unchanged — FAC-57's guard test lives in its own file, integration-marked) |
+| `pytest tests/test_emergency_contact_name_race.py -m integration`                     | ✅ 1 passed, stable across 4 consecutive runs                                            |
+| `pytest tests/ -k "facilit or emergency_contact_name_race"`                           | ✅ 182 passed, 1 skipped (pre-existing, optional dependency)                             |
+| `python scripts/generate_schema_docs.py` (from `backend/`)                            | ✅ no diff — no model column changed this round                                          |
+
+**FAC-57's regression test independently confirmed against pre-fix code:**
+`git stash push -u -m "fac57-guard-check-<ts>"` isolating
+`app/services/facilities_service.py` only (test file kept, per this
+worktree's shared-stash-stack protocol). Failed pre-fix with `TypeError`
+on the not-yet-existing `for_update` parameter; `git stash apply` restored
+the fix and the test passed, re-run 4 times to rule out the exact kind of
+flakiness a first draft of this test (bare `asyncio.gather`, no explicit
+interleaving control) turned out to have — see the finding's own write-up
+for that draft's false-negative result.
+
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 
 **Not routine rotation work.** Codex posted this P1 finding on PR #2191's

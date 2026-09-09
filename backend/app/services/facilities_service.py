@@ -2654,14 +2654,33 @@ class FacilitiesService:
         return list(result.scalars().all())
 
     async def get_emergency_contact(
-        self, contact_id: str, organization_id: str
+        self,
+        contact_id: str,
+        organization_id: str,
+        for_update: bool = False,
     ) -> Optional[FacilityEmergencyContact]:
-        """Get emergency contact by ID"""
-        result = await self.db.execute(
+        """Get emergency contact by ID.
+
+        ``for_update``: a locking read, for `update_emergency_contact`'s
+        merge-then-validate name check (FAC-51). Two concurrent PATCHes each
+        clearing a *different* name (company_name on one, contact_name on
+        the other) can each load the row before either commits, so each
+        sees the other field still set and passes the invariant check --
+        then both commits land, leaving both fields NULL (Pitfall #27: a
+        plain SELECT can still answer from a stale snapshot even under
+        REPEATABLE READ). Locking the row here serializes the two requests
+        so the second sees the first's committed write before it re-checks.
+        The read path (the GET endpoint) and `delete_emergency_contact`
+        never need this.
+        """
+        query = (
             select(FacilityEmergencyContact)
             .where(FacilityEmergencyContact.id == contact_id)
             .where(FacilityEmergencyContact.organization_id == organization_id)
         )
+        if for_update:
+            query = query.with_for_update(of=FacilityEmergencyContact)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_emergency_contact(
@@ -2701,7 +2720,14 @@ class FacilitiesService:
         organization_id: str,
     ) -> Optional[FacilityEmergencyContact]:
         """Update emergency contact"""
-        contact = await self.get_emergency_contact(contact_id, organization_id)
+        # for_update=True (FAC-57): this method's own name-invariant check
+        # below is a merge-then-validate read of the row, and without the
+        # lock two concurrent PATCHes each clearing a *different* name can
+        # each pass it against a pre-commit snapshot of the other field
+        # (Pitfall #27). Locking here serializes them.
+        contact = await self.get_emergency_contact(
+            contact_id, organization_id, for_update=True
+        )
         if not contact:
             return None
 
