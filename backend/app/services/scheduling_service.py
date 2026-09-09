@@ -2491,8 +2491,21 @@ class SchedulingService:
         user_id: str,
         organization_id: UUID,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
-        """Member self-service check-in for a shift."""
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        """Member self-service check-in for a shift.
+
+        Locks the shift row (``for_update=True``) for the same reason a seat
+        claim does (see ``get_shift_by_id``'s docstring): this method is a
+        read-then-write — look for an existing attendance row, then insert
+        one if there isn't — and ``ShiftAttendance`` carries no unique
+        constraint on ``(shift_id, user_id)``. Two check-ins landing at once
+        (a bounced NFC tap, or a station tap racing the member's own phone)
+        would otherwise both read "no attendance yet" and both insert a row,
+        leaving a duplicate ``member_check_out``/``get_my_attendance`` cannot
+        resolve — ``scalar_one_or_none()`` raises ``MultipleResultsFound``
+        the moment a second row exists, taking the check-out request down
+        with it rather than reporting a domain error.
+        """
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
@@ -2531,12 +2544,20 @@ class SchedulingService:
             if not assigned:
                 return None, "You are not assigned to this shift."
 
+        # A locking read, not a plain SELECT: the shift lock above doesn't by
+        # itself refresh this transaction's snapshot for a different table
+        # (the exact mechanism `request_to_join_shift`'s seat count comments
+        # document) — without `with_for_update()` here, a check-in that
+        # queued behind the shift lock would still count the pre-commit
+        # snapshot and conclude there is no existing row.
         existing = (
             await self.db.execute(
-                select(ShiftAttendance).where(
+                select(ShiftAttendance)
+                .where(
                     ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.user_id == user_id,
                 )
+                .with_for_update()
             )
         ).scalar_one_or_none()
 

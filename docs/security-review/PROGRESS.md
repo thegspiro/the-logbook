@@ -16,8 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 12 (Facilities, pass 4)** — PR
-[#2425](https://github.com/thegspiro/the-logbook/pull/2425), branch
+**Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4)** — PR TBD, branch
+`security-review/apparatus-nfc-2026-09-09` (fresh name — `git ls-remote`
+checked against every apparatus/nfc/AP-13 branch in this repo's history
+before creating it, per CLAUDE.md Pitfall #24). Assigned directly out of
+rotation order (the normal ⬜-first pick was 12 Facilities, already merged —
+see below); Feature 13 was the explicit assignment for this pass. 1 fixed
+(P2 — `SchedulingService.member_check_in`, one of the three targets the NFC
+check-in station dispatches into, was a read-then-write on `ShiftAttendance`
+with no row lock and no unique constraint to fall back on; a bounced NFC tap
+could create a duplicate attendance row and leave `member_check_out`/
+`get_my_attendance` crashing with `MultipleResultsFound` on every later call
+for that pair). Rest of the feature re-verified clean: 88/88 + 5/5 route auth
+coverage, all 36 `SET NULL` FKs still `nullable=True`, all 4 `.ilike()` sites
+still escaped, both target endpoints the frontend's new archive-modal fix
+calls (`change_apparatus_status`/`archive_apparatus`) org-scoped and
+correctly gated. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
+→ Pass 11. Completion gate green (full backend suite: 11934 passed, 21
+pre-existing skips, 0 failed; flake8/black/isort clean; no frontend files
+touched this pass).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12 pass 4, PR #2425), preserved for history</summary>
+
+**Feature 12 (Facilities, pass 4) ✅ merged** — PR
+[#2425](https://github.com/thegspiro/the-logbook/pull/2425) merged
+2026-09-09 04:59 UTC (this file's own "Awaiting CI and review" note was
+stale — confirmed merged via the GitHub API directly rather than trusted as
+written, since the two facts disagreed). Branch
 `claude/security-review-facilities-pass4` (fresh name; no facilities-review
 branch exists locally or on origin from passes 1–3, so CLAUDE.md Pitfall #24
 poses no collision here). 1 fixed (FAC-46, HIGH — two unconditional
@@ -25,7 +51,9 @@ poses no collision here). 1 fixed (FAC-46, HIGH — two unconditional
 on every single call, one of them wired to real shipped UI), 4 prior flags
 (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open and unchanged since
 pass 3. Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4.
-Completion gate green. Awaiting CI and review.
+Rotation row 12 updated accordingly.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422, merged), preserved for history</summary>
@@ -11781,8 +11809,8 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⏳     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
@@ -11811,6 +11839,45 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)
+
+Assigned directly (not the ⬜-first pick, which was 12 Facilities — already
+merged as PR #2425 by a concurrent session; see that entry below and the
+rotation-row correction it prompted). Diffed against pass 10's merge
+(`05372cb91`): only a schema alias fix (`ApparatusStatusChange`/
+`ApparatusArchive` gained `alias_generator=to_camel`) and a frontend fix for
+a dead `Archive` button (previously navigated to a non-existent route; now a
+proper `ArchiveApparatusModal`) had landed since. Re-ran the mechanical
+checks fresh (route-auth AST walk: 88/88 + 5/5 unchanged; `.ilike()` escape
+grep: all 4 sites still pass `escape=LIKE_ESCAPE_CHAR`; `SET NULL`/
+`nullable=True` pairing: all 36 FKs still correct) and traced every check-in
+code path this feature dispatches into, per this pass's specific brief on
+CLAUDE.md Pitfall #27.
+
+**AP-13 finding 2 (P2, fixed)** — `SchedulingService.member_check_in` (one of
+the three targets `NfcTagService.check_in`'s station dispatch delegates to,
+alongside `EventService.self_check_in` and `AdminHoursService.clock_in`) was
+a read-then-write on `ShiftAttendance` with no row lock at all, unlike its
+two dispatch siblings, and `shift_attendance` carries no unique constraint on
+`(shift_id, user_id)` to fall back on. A bounced NFC tap (a card held too
+long, or a member tapping twice) could create a duplicate attendance row;
+`member_check_out`/`get_my_attendance` then crash with
+`MultipleResultsFound` on every later call for that shift+member pair.
+Root-cause-fixed in `scheduling_service.py` (not one of this feature's
+declared files, but the trigger is this feature's own primary interaction —
+see the write-up's scope note for the reasoning, which follows pass 3's
+AP-8-vs-`TrainingCategory` precedent) using the same `for_update=True` +
+locking-read pattern this file already uses for shift seat-capacity checks.
+Reproduced live with two real, independently-committing sessions before
+being called a finding; new guard test
+(`tests/test_shift_check_in_race.py`) confirmed failing (`TimeoutError`)
+against the pre-fix method via `git stash push -u` on the fix alone, passing
+with the fix restored. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11. Completion gate
+green: full backend suite 11934 passed / 21 pre-existing skips / 0 failed;
+flake8/black/isort clean; no frontend files touched this pass so no
+`tsc`/`eslint` run.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
 

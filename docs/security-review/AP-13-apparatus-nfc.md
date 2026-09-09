@@ -1,12 +1,253 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), PR TBD (pass 11 — rotation pass 4)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
-`evoc_level_service.py`, `services/driver_exception_service.py` (new),
-`api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
+`evoc_level_service.py`, `services/driver_exception_service.py`,
+`api/v1/endpoints/nfc_tags.py` (5 routes), `services/nfc_tag_service.py`
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 11 (2026-09-09, rotation pass 4) — one P2 fixed: `member_check_in` is the one check-in path in this feature's reach with no capacity/race lock at all
+
+**Scope for this pass.** Rotation pass 4 assigned Feature 13 directly (out of
+the normal ⬜-first order) rather than after Facilities; row 13 was still ⬜
+going in. `git diff` from pass 10's merge (`05372cb91`) to this pass's start
+touched only `schemas/apparatus.py` (+6 lines — `ApparatusStatusChange`/
+`ApparatusArchive` gained `alias_generator=to_camel` so the frontend's
+camelCase archive payload validates; behavior-neutral, `populate_by_name`
+keeps snake_case callers working) and six frontend files fixing a dead
+`Archive` button (it navigated to `/apparatus/{id}/archive`, which matches no
+route, and dropped the user on the dashboard with the apparatus still in
+service — now a proper `ArchiveApparatusModal` posting the same endpoint
+`archive_apparatus` already gated on `apparatus.manage`). `apparatus_service.py`,
+`nfc_tag_service.py`, `evoc_level_service.py`, `driver_exception_service.py`,
+and both model files are byte-identical to pass 10. Given that, this pass
+re-ran the mechanical checks fresh (route-auth AST walk, `.ilike()` escape
+grep, `SET NULL`/`nullable=True` pairing) rather than re-deriving them, spot-
+read `change_apparatus_status`/`archive_apparatus` (the two routes the
+frontend diff touches) end to end, and — per this pass's explicit brief —
+traced every check-in code path this feature owns or dispatches into for the
+CLAUDE.md Pitfall #27 shape (a capacity/uniqueness read-then-write with no
+row lock).
+
+**What "check-in" means in this feature, corrected from the brief's framing.**
+There is no apparatus/equipment check-in concept anywhere in
+`apparatus_service.py` (confirmed by grep — no `check_in`/`checkout`/
+`active_session` in that file at all). The check-in surface this feature
+actually owns is `nfc_tags.py`'s station endpoint: a member ID card tapped at
+a kiosk, dispatched by `NfcTagService.check_in` to one of three targets —
+shift, event, or admin-hours — each resolved through an org-scoped getter and
+then handed to that target module's own existing service method
+(`SchedulingService.member_check_in`, `EventService.self_check_in`,
+`AdminHoursService.clock_in`), exactly as pass 2 documented and by design
+(`nfc_tag_service.py:8-13`'s own docstring). Auditing "the check-in path this
+feature drives" therefore means following the dispatch into whichever of
+those three methods actually mutates the row, not stopping at the dispatch
+itself.
+
+### AP-13 finding 2 (pass 11) — P2 (data integrity + reachable crash) — `SchedulingService.member_check_in` is a read-then-write on `ShiftAttendance`, which carries no unique constraint, and unlike its two NFC-dispatch siblings took no lock at all — ✅ FIXED
+
+**What:** `member_check_in` reads for an existing `ShiftAttendance` row
+(`shift_id`, `user_id`) with a plain `SELECT`, then either updates that row
+or inserts a new one. Two check-ins landing at once — the textbook case is a
+bounced NFC tap (a card held a beat too long, or a member who tapped, didn't
+see the kiosk update, and tapped again; `nfc_tag_service.py`'s own
+`MIN_TOGGLE_SECONDS` comment names this exact bounce scenario for the
+direction-resolution logic one call up), or the kiosk racing the member's own
+phone — can both read "no attendance yet" and both insert a row.
+`shift_attendance` has no unique index on `(shift_id, user_id)` (confirmed by
+reading the full model, `app/models/training.py:3041-3067` — only
+single-column indexes on `shift_id` and `user_id` separately), so nothing at
+the database layer stops the second insert either.
+
+The two siblings this method sits beside in the same dispatch — the ones the
+NFC feature actually delegates to — do not have this gap:
+`AdminHoursService.clock_in` locks the caller's `User` row and takes its
+active-session check as a locking read specifically to serialize concurrent
+clock-ins (`app/services/admin_hours_service.py:219-234`, with a comment
+naming Pitfall #27 by number); `EventService.self_check_in` locks the parent
+`Event` row before touching `EventRSVP`, and `EventRSVP` additionally carries
+a DB-level unique index on `(event_id, user_id)`
+(`app/models/event.py:406-411`) as a second line of defense. `member_check_in`
+had neither: no row lock, and `ShiftAttendance` has no unique constraint to
+fall back on. `get_shift_by_id` — the very method `member_check_in` calls to
+load its parent row — already has a `for_update` parameter for exactly this
+purpose, with a docstring pointing at the seat-capacity checks in
+`request_to_join_shift` as the pattern to follow
+(`app/services/scheduling_service.py:1417-1437`); `member_check_in` simply
+did not pass it.
+
+**Where:** `backend/app/services/scheduling_service.py`, `member_check_in`
+(pre-fix: shift fetched without `for_update`, existing-attendance check a
+plain `SELECT`).
+
+**Impact, and why this is P2 not P1:** not a cross-tenant or authorization
+issue — both racing requests are the same member checking in to the same
+shift, so there is no IDOR shape here. Two consequences, one silent and one
+loud:
+
+- **Data integrity.** A duplicate `ShiftAttendance` row for one member on one
+  shift misrepresents attendance — reporting, hours-history and any
+  finalization math that assumes one row per member per shift now has two,
+  one of which never gets a `checked_out_at`.
+- **Reachable crash.** `member_check_out` and `get_my_attendance` both read
+  the attendance row with `scalar_one_or_none()`, which raises
+  `MultipleResultsFound` the instant more than one row matches. Once the
+  race has fired once for a shift+member pair, every subsequent check-out or
+  attendance-read for that pair throws an unhandled exception (a 500, not
+  the caught `ValueError` → 400 the rest of this method uses for domain
+  refusals) until someone manually deletes the duplicate row. A kiosk bounce
+  — a genuinely ordinary, not-attacker-driven event — can put a member's
+  attendance record into a state where checking out crashes.
+
+**Fix:** two changes, mirroring the pattern `get_shift_by_id`'s own docstring
+already points at and `request_to_join_shift`'s seat-capacity checks already
+use elsewhere in this same file:
+
+1. `shift = await self.get_shift_by_id(shift_id, organization_id)` →
+   `..., for_update=True)` — locks the shift row, serializing concurrent
+   check-ins for that shift the way a seat claim is serialized.
+2. The `existing` `ShiftAttendance` lookup gained `.with_for_update()`. This
+   is the part CLAUDE.md Pitfall #27 calls out as the one everybody misses:
+   under InnoDB's default REPEATABLE READ a plain `SELECT` answers from the
+   snapshot taken at the transaction's _first_ read (in a real request,
+   that's whatever `get_current_user`'s own lookup read before this method
+   was ever called), and taking the shift lock does not by itself refresh
+   that snapshot for a different table. A second check-in that blocked on
+   the shift lock and then ran a plain `SELECT` for `existing` could still
+   see the pre-commit "no row yet" snapshot and insert anyway. Only a
+   locking read on the count/existence check itself always returns the
+   latest committed version.
+
+Both changes are additive locking, not a behavior change for the
+non-concurrent case: a single check-in still reads, still decides, still
+writes, just now inside a lock instead of outside one.
+
+**Failure scenario, reproduced live** (two real, independently-committing
+sessions — the savepoint-based `db_session` fixture never truly commits and
+so cannot demonstrate cross-transaction visibility): session A locks the
+shift row exactly as `member_check_in`'s first line now does; session B — the
+real, unmodified `member_check_in`, instrumented only to signal an
+`asyncio.Event` the moment it reaches its own locking shift-fetch — is
+started concurrently and confirmed still blocked (`assert not b_task.done()`)
+after the event fires plus a 200ms grace window, proving genuine DB-level
+blocking rather than incidental scheduler ordering. Session A then inserts
+the attendance row a first tap would have written and commits, releasing the
+lock. Session B unblocks, and — because its own `existing` read is now a
+locking read — correctly resolves to `(None, "Already checked in")` instead
+of inserting a second row. A fresh third session confirms exactly one
+`ShiftAttendance` row exists for the pair afterward.
+
+Pre-fix, the same test times out waiting for the tracking `Event` — session
+B's `get_shift_by_id` is never called with `for_update=True`, so it never
+blocks on session A's lock at all, which is itself the failure signature for
+a test whose entire premise is that parameter being passed (mirroring
+`test_emergency_contact_name_race.py`'s own note about the same technique).
+Confirmed via `git stash push -u` on the fix alone (test kept, fix stashed):
+`TimeoutError` pre-fix, passes post-fix, stash re-applied and dropped only
+after both were verified.
+
+**Scope note — why this is fixed here rather than flagged for Scheduling's
+own rotation slot (Feature 15).** `member_check_in`/`member_check_out` live in
+`scheduling_service.py`, not one of this feature's declared files, which is
+the same shape as pass 3's AP-8 (fixed, `apparatus.py`'s own model) versus its
+sibling `TrainingCategory.subcategories` (flagged, not fixed, because it lives
+in Training's own model file with no reachable trigger from this feature's
+routes). This one reads differently: the trigger _is_ this feature's own
+primary interaction — a tap at the NFC check-in station this rotation slot
+owns end to end (`nfc_tags.py` → `nfc_tag_service.py::_check_in_shift` →
+`member_check_in`) — not merely a structurally-similar bug living in a
+same-shaped column elsewhere. CLAUDE.md's own root-cause rule ("fix it at its
+root cause, in the same commit... the age or origin of an error never
+downgrades your obligation to address it") and the Hard Stop clause's
+"exceeds scope" bar (hundreds of violations across unrelated files) both
+point the same direction for a single, well-contained, two-line lock in one
+method with an existing, already-proven-safe pattern in the same file to
+follow. `member_check_out` was read and left alone: it mutates a single
+already-existing row (no insert), so a race there is a last-writer-wins on
+`duration_minutes` between two commits seconds apart, not a duplicate-row or
+crash risk, and locking it would not be closing a comparable gap.
+
+## Guard test added (pass 11)
+
+- `backend/tests/test_shift_check_in_race.py` —
+  `TestMemberCheckInIsALockingReadThenWrite::
+test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
+  real, independently-committing sessions per the pattern in
+  `test_emergency_contact_name_race.py`/`test_apparatus_check_template_compartment_race.py`.
+  Confirmed failing (`TimeoutError`) against the pre-fix method via
+  `git stash push -u` on the fix alone, confirmed passing with the fix
+  restored.
+
+## Completion gate (pass 11)
+
+| Check                                                                                                    | Result                                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                            | ✅ 0 violations                                                                                                                                 |
+| `black --check app/ tests/ alembic/`                                                                     | ✅ clean (1544 files)                                                                                                                           |
+| `isort --check-only app/ tests/ alembic/`                                                                | ✅ clean                                                                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                        | ✅ single head, no schema change                                                                                                                |
+| `pytest tests/test_shift_check_in_race.py`                                                               | ✅ 1 passed                                                                                                                                     |
+| `pytest` (scheduling/NFC/admin-hours/event keyword set, 27 files)                                        | ✅ 847 passed                                                                                                                                   |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"` | ✅ 1126 passed, 1 skipped (pre-existing optional-dep skip)                                                                                      |
+| `pytest tests/` (full backend suite)                                                                     | ✅ 11934 passed, 21 skipped (pre-existing Docker/optional-dep skips), 0 failed                                                                  |
+| `tsc --noEmit` / `eslint .`                                                                              | n/a — no frontend files modified this pass (the frontend diff since pass 10 was already on `main`, reviewed and found clean, not authored here) |
+
+### Verified good ✅ (re-confirmed this pass, mechanism named)
+
+- **Route auth coverage 88/88 (`apparatus.py`) + 5/5 (`nfc_tags.py`)** —
+  fresh AST walk this pass, same result as passes 2/3. Every route function's
+  signature also carries a `current_user` parameter (checked separately by
+  regex, since the AST walk only confirms _a_ `Depends(...)` is present, not
+  which one).
+- **`change_apparatus_status`/`archive_apparatus`** (the two routes the
+  frontend's new `ArchiveApparatusModal` actually calls) — both resolve their
+  target through `get_apparatus(apparatus_id, organization_id, ...)` before
+  mutating (XC-3), gated on `apparatus.edit`/`.manage` and `apparatus.manage`
+  respectively (matches sensitivity), and `ApparatusArchive`/
+  `ApparatusStatusChange` carry no client-supplied FK ids (XC-1 does not
+  apply — every field is a scalar disposal/status detail).
+- **LIKE escaping** — all 4 `.ilike()` sites in `apparatus_service.py`
+  (`list_apparatus`'s `make`/`unit_number`/`name`/`vin` filters) still pass
+  `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`.
+- **`SET NULL` nullability** — all 36 `ondelete="SET NULL"` FKs across
+  `models/apparatus.py`/`models/nfc_tag.py` still pair with `nullable=True`
+  (every multi-line declaration read individually, not just grepped).
+- **`NfcTag` uid uniqueness is DB-enforced** — `uq_nfc_tag_org_uid` (a real
+  unique index on `(organization_id, uid_hash)`,
+  `app/models/nfc_tag.py:135`) means a concurrent double-registration of the
+  same physical card cannot silently succeed twice even without an
+  application-level lock — the second `INSERT` fails at the database. Named
+  explicitly because it's the same _shape_ of gap `ShiftAttendance` had, just
+  already closed by a constraint that table has and `shift_attendance` does
+  not.
+- **`EventService.self_check_in`'s locking already matches Pitfall #27
+  correctly** — locks the parent `Event` row before any `EventRSVP` read or
+  write, and `EventRSVP` additionally carries `uq`-style unique index
+  `ix_event_rsvps_event_user` on `(event_id, user_id)` as a second, DB-level
+  backstop. Traced directly (not re-cited) since it's one of the three NFC
+  dispatch targets.
+- **`AdminHoursService.clock_in`'s locking already matches Pitfall #27
+  correctly** — locks the caller's `User` row, then takes its own
+  active-session check as a locking read, with an explicit Pitfall #27
+  comment at the call site. Traced directly for the same reason.
+- **Archive/status-change frontend wiring** — the new `ArchiveApparatusModal`
+  builds its create payload with `|| `/conditional-spread (never `??`),
+  correctly re-fetches the full apparatus record after archiving
+  (`onArchived` → `fetchApparatus(id)`, Pitfall #11), and the `Archive`
+  button stays gated on `canManage` (`apparatus.manage`) client-side,
+  matching the endpoint's own gate. Uses the shared `createApiClient()`
+  factory (Pitfall #7 — auth/CSRF wired). No `window.confirm`; the modal's
+  own named buttons ("Keep in service" / "Archive apparatus") are the
+  confirmation.
+- **`require_nfc_id_cards`** — fails closed on a missing integration row
+  (Pitfall #19: reader before UI), org-scoped, checked server-side on every
+  route rather than trusted from the nav.
+- **`docs/app-review/apparatus.md` / `docs/module-audit/apparatus.md`** — no
+  open (🚩) findings in either as of this pass.
 
 ---
 
