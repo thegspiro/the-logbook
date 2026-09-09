@@ -21,16 +21,27 @@ feature. The rotation cannot outrun its own review queue.
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
 ls-remote` checked against every equipment/EC-14 branch in this repo's
 history before creating it, per CLAUDE.md Pitfall #24; none existed). 0
-fixed, 0 flagged — near-zero diff since pass 3 (only
-`shift_completion_service.py` changed, +50/-8, and that change was an
-already-merged correctness fix from a non-rotation commit, re-verified
-clean against all seven checklist dimensions from this feature's own lens
-rather than re-trusted). One stale figure corrected: pass 3's route count
-for `equipment_check.py` was recorded as 57; re-derived by AST walk and
-independent grep this pass, both agree on 50 — every route pass 3 named by
-name is still present and still correctly gated, only the total was
-mis-added. Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md`
-→ Pass 4.
+fixed, 0 flagged, after a real correction round. The draft's diff scope was
+too narrow in five ways Codex review caught: two routes omitted from the
+57→50 route-count correction itself (`list_templates`/`get_template`, both
+`check_view`-or-`check_submit`-or-`check_manage`); a second migration
+touching `shift_completion_reports`
+(`20260905_1900_c9f4a2b71d38_rename_reserved_call_type_slug`) not reviewed
+alongside the one that was; `ShiftDetailPanel.tsx`/`ShiftCheckInPage.tsx`
+diffed against the wrong path (assumed under `modules/inventory/pages/`,
+actually `pages/scheduling/` — silently returned an empty diff instead of
+`ShiftDetailPanel.tsx`'s real +1806/-1553); `ApparatusDetailPage.tsx`/
+`FleetBoardPage.tsx`/`MyChecklistsPage.tsx` not diffed at all; and
+`scheduled_tasks.py`/`scheduling_service.py` — pass 2's own established
+adjacent-surface rule — not re-checked at all. All five verified against
+real code; the "no findings" conclusion held once corrected (the
+`scheduling_service.py` diff turned out to be almost entirely this
+rotation's own already-merged AP-13 findings 5–10, one genuinely new and
+genuinely out-of-scope Scheduling-only feature, and nothing EC-14-shaped).
+Also corrected the completion gate: `npx tsc --noEmit` resolves the
+linter's TS 5.9, not the build's aliased TS7 — reran as `npm run typecheck`,
+still 0 errors. Full write-up:
+`docs/security-review/EC-14-equipment-check-shifts.md` → Pass 4.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13 closed, merge recorded via PR #2429), preserved for history</summary>
@@ -12136,7 +12147,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, 1 stale count corrected
+### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, corrected after Codex found the draft's diff scope too narrow in five ways
 
 Diffed against pass 3's baseline (`b267ee1ca`): of the six declared backend
 files, only `shift_completion_service.py` changed (+50/-8), and that change
@@ -12144,38 +12155,51 @@ files, only `shift_completion_service.py` changed (+50/-8), and that change
 correctness fix from a non-rotation commit — read in full against all seven
 checklist dimensions rather than trusted because it shipped clean elsewhere.
 Tenant isolation clean: the new helper takes no client-supplied id, reading
-only `report.organization_id` off an already org-validated report. The
-migration its docstring cites (`20260905_2200_d7c1b95e2a40`, also new since
-pass 3) scopes its per-row backfill to each report's own organization,
-guards table existence, and reads JSON defensively — no finding.
+only `report.organization_id` off an already org-validated report.
 
-Route count correction: pass 3 recorded `equipment_check.py` at 57 routes.
-Since the file is byte-identical to pass 3's own baseline commit, this pass
-re-derived the count directly (AST walk + independent grep, both agree) and
-got 50 — every route pass 3 named by name and its permission class is still
-correct, only the addition was wrong. Corrected in the doc rather than
-carried forward, in the manner of `SEC-00`'s "22 vs 20" `public/*` count fix.
+**Codex review of the draft PR caught five real scope gaps**, all fixed in
+the doc rather than disputed: (1) the 57→50 route-count correction itself
+omitted two routes (`list_templates`/`get_template`, both `check_view`-or-
+`check_submit`-or-`check_manage` — 48+2=50, matching); (2) a second
+migration touching `shift_completion_reports`
+(`20260905_1900_c9f4a2b71d38_rename_reserved_call_type_slug`, one revision
+before the one that was reviewed) was never read — read in full this round,
+org-scoped correctly, no finding; (3) `ShiftDetailPanel.tsx`/
+`ShiftCheckInPage.tsx` were diffed against the wrong assumed path
+(`modules/inventory/pages/`, when pass 1 never stated a path and both
+actually live at `pages/scheduling/`) — the wrong path silently returned an
+empty diff, hiding `ShiftDetailPanel.tsx`'s real +1806/-1553 (mostly an
+accessibility restructure; grepped every added line for the checklist's red
+flags, zero hits, no finding); (4) three more declared frontend files
+(`ApparatusDetailPage.tsx`/`FleetBoardPage.tsx`/`MyChecklistsPage.tsx`)
+weren't diffed at all (small, cosmetic/permission-honesty fixes, no
+finding); (5) `scheduled_tasks.py`/`scheduling_service.py` — pass 2's own
+established "review when `ShiftCompletionService` reads what changed" rule
+— were never re-checked despite both changing since pass 3.
+`scheduled_tasks.py`'s diff turned out to touch only messaging-feature
+functions EC-14 has no stake in. `scheduling_service.py`'s 330-line diff
+turned out to be almost entirely this rotation's own already-merged AP-13
+findings 5–10 (confirmed via `git log`: the dominant commit is `1005d5bac`,
+PR #2428, merged earlier this same pass) plus one genuinely new,
+genuinely-Scheduling-only feature (`get_closeout_backlog` — checked whether
+`ShiftCompletionService` reads it; it doesn't, so out of scope by the same
+rule that put it in scope for `responding_members` last time) — no finding
+either way.
 
-Frontend: 7 of the 12 declared module files changed. Two
-(`EquipmentCheckTemplateBuilder.tsx`/`.test.tsx`) are AP-13's own
-autosave/concurrency territory per pass 3's existing carve-out — traced the
-diff to AP-13's pass 10/11 commits, confirmed nothing auth- or
-tenant-scoping-shaped in it. One (`EquipmentRequestsPage.tsx`) now calls a
-new Inventory-owned endpoint (`GET /inventory/requests/{id}/fulfillment-
-options`) — feature 11's territory, not this feature's; noted rather than
-reviewed here, to avoid duplicating that rotation entry. The rest
-(`EquipmentCheckForm.tsx`'s unmount-race fix and a contrast fix,
-`EquipmentKitsPage.tsx`/`MyEquipmentPage.tsx`'s breadcrumb/touch-target
-additions, `apiCache.ts`'s 15 new `SEC4-3`-pinned PII exclusions) are
-cosmetic or already reviewed under feature 00's lens. Full write-up:
-`docs/security-review/EC-14-equipment-check-shifts.md` → Pass 4.
+Also corrected the completion gate: the draft ran `npx tsc --noEmit`, which
+resolves the linter's TS 5.9 rather than the build's aliased TS7 — reran as
+`npm run typecheck` per CLAUDE.md's "Two TypeScript installs" section, still
+0 errors.
+
+Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
+Pass 4.
 
 Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
 440 revisions, single head; scoped suite 397 passed / 1 pre-existing skip;
-full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `tsc
---noEmit` 0 errors; `eslint .` 0 errors (2 pre-existing, unrelated warnings);
-`vitest run apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx` 185
-passed. Rotation row 14 → ⏳ (awaiting PR merge). Next after merge: 15
+full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `npm run
+typecheck` 0 errors; `eslint .` 0 errors (2 pre-existing, unrelated
+warnings); `vitest run apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx`
+185 passed. Rotation row 14 → ⏳ (awaiting PR merge). Next after merge: 15
 Scheduling.
 
 ### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)
