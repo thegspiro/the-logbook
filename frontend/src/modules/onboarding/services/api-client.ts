@@ -587,6 +587,22 @@ class SecureApiClient {
     founded_year?: number | undefined;
     tax_id?: string | undefined;
     logo?: string | undefined;
+    /**
+     * How member numbers are assigned, if the department uses them.
+     *
+     * Omitted rather than sent as an explicit "off" when the question was
+     * skipped: the backend leaves the shipped default alone for an absent
+     * block, so a department that never saw the question and one that answered
+     * "no" are not stored the same way.
+     */
+    membership_id?:
+      | {
+          enabled: boolean;
+          auto_generate: boolean;
+          prefix: string;
+          next_number: number;
+        }
+      | undefined;
   }): Promise<
     ApiResponse<{
       id: string;

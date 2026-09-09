@@ -47,6 +47,8 @@ and module steps all run against a signed-in session.
 
 - Name, organization type, timezone and contact details
 - Mailing and physical address, department identifiers (FDID / State ID / Dept ID)
+- Whether members carry numbers, and where the sequence starts — asked here so
+  the accounts this wizard creates are numbered too
 - Logo (optional)
 - Commits the organization, and creates the headquarters facility and location
   from the department address

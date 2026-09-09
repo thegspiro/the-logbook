@@ -17,7 +17,8 @@ This document describes the complete onboarding flow for The Logbook application
 ┌─ 1. Organization Setup ──────────────── /onboarding/start
 │  POST /onboarding/session/organization
 │  Name, type, timezone, contact info, mailing + physical address,
-│  department identifiers (FDID / State ID / Dept ID), logo.
+│  department identifiers (FDID / State ID / Dept ID), member
+│  numbering, logo.
 │  COMMITS the organization, and creates the HQ Facility + Location
 │  from the department address.
 └─ v
@@ -167,6 +168,15 @@ Response: {
 5. **Department Identifiers**:
    - Identifier Type: `FDID`, `State ID`, or `Department ID`
    - Corresponding ID field based on selection
+   - **Member numbers** — whether members carry a badge/roster number, and if
+     so its prefix and where the sequence starts. Asked here rather than on a
+     members screen because the counter only numbers members created after it
+     is switched on: the System Owner arrives at step 9 and the IT team at step
+     10, so a department that answered later ended up with its first accounts
+     holding no number and the roster import starting at the number they should
+     have had. Omitted from the payload when the answer is no, which leaves the
+     shipped default (`enabled: false`) rather than writing an explicit one —
+     so "we do not number members" and "nobody asked" stay distinguishable.
 
 6. **Additional Information**:
    - County/Jurisdiction
@@ -208,7 +218,13 @@ Body: {
   county?: string,
   founded_year?: number,
   tax_id?: string,
-  logo?: string  // Base64 data URL
+  logo?: string,  // Base64 data URL
+  membership_id?: {   // omitted entirely when the department does not number members
+    enabled: boolean,
+    auto_generate: boolean,
+    prefix: string,
+    next_number: number
+  }
 }
 Response: {
   id: string,

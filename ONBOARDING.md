@@ -49,6 +49,9 @@ number of screens a user sees depends on the services they select.
 - Configure timezone, contact info, mailing/physical addresses
 - Upload organization logo (optional)
 - Set department identifiers (FDID, State ID, or Department ID)
+- Say whether members carry numbers, with a prefix and a starting number. Asked
+  here because the counter only numbers members created after it is on — the
+  System Owner and IT team are created later in this same wizard.
 - **Commits to database immediately**
 
 #### Step 2: Stations

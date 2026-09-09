@@ -1156,6 +1156,20 @@ async def verify_database(request: Request, db: AsyncSession = Depends(get_db)):
     return result
 
 
+def _membership_id_settings(data: OrganizationSetupCreate) -> dict:
+    """The organization settings step 1 writes, or an empty dict.
+
+    Only ``membership_id`` is set here; every other key keeps whatever
+    ``create_organization`` defaults it to. Omitting the block entirely leaves
+    the shipped default (numbering off) rather than writing an explicit "off",
+    so a department that skipped the question is indistinguishable from one
+    that has never seen it.
+    """
+    if data.membership_id is None:
+        return {}
+    return {"membership_id": data.membership_id.model_dump()}
+
+
 @router.post("/organization", response_model=OrganizationSetupResponse)
 async def create_organization(
     request: Request,
@@ -1233,6 +1247,7 @@ async def create_organization(
             county=org_data.county,
             founded_year=org_data.founded_year,
             logo=validate_logo_image(org_data.logo),
+            settings_dict=_membership_id_settings(org_data),
         )
 
         await db.commit()
@@ -2099,6 +2114,7 @@ async def save_session_organization(
             county=data.county,
             founded_year=data.founded_year,
             logo=validate_logo_image(data.logo),  # Validate and sanitize logo
+            settings_dict=_membership_id_settings(data),
         )
 
         # Store organization ID in session for subsequent steps

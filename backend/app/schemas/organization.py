@@ -1258,6 +1258,23 @@ class OrganizationSetupCreate(BaseModel):
         None, description="Logo as base64 data URL or external URL"
     )
 
+    # Member numbering.
+    #
+    # Asked here, in step 1, rather than on a members screen, because the
+    # counter only produces a coherent sequence for members created after it is
+    # switched on. The System Owner is created in step 9 and the IT team in step
+    # 10, so a department that turned numbering on afterwards ended up with its
+    # first two or three members holding no number at all and the roster import
+    # starting at 0001 behind them -- an off-by-a-few nobody notices until a
+    # badge is printed.
+    membership_id: Optional[MembershipIdSettings] = Field(
+        None,
+        description=(
+            "How member numbers are assigned. Omitted leaves the shipped "
+            "default, which is off."
+        ),
+    )
+
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:

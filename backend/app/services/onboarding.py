@@ -8,6 +8,7 @@ This module guides users through initial setup and can be disabled once complete
 import copy
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
@@ -27,6 +28,7 @@ from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.services.auth_service import AuthService
 from app.services.operational_rank_service import OperationalRankService
+from app.services.organization_service import OrganizationService
 from app.utils.positions import normalize_stored_positions
 
 # ── Modules the setup wizard offers ───────────────────────────────────────
@@ -1020,6 +1022,7 @@ class OnboardingService:
         """
         auth_service = AuthService(self.db)
         rank_service = OperationalRankService(self.db)
+        org_service = OrganizationService(self.db)
         created_users: List[User] = []
 
         # Look up the member role once
@@ -1079,6 +1082,10 @@ class OnboardingService:
 
             temp_password = generate_temporary_password()
 
+            # Numbered in the order the wizard collected them, continuing the
+            # sequence the System Owner started. Nothing here to type a number
+            # into, so this is the only chance these accounts get one without an
+            # officer editing each profile after setup.
             user, error = await auth_service.register_user(
                 organization_id=organization_id,
                 username=username,
@@ -1086,6 +1093,9 @@ class OnboardingService:
                 password=temp_password,
                 first_name=first_name,
                 last_name=last_name,
+                membership_number=await org_service.generate_next_membership_id(
+                    UUID(organization_id)
+                ),
             )
 
             if error or not user:
@@ -1176,6 +1186,17 @@ class OnboardingService:
         # Use AuthService to create user with proper password hashing
         auth_service = AuthService(self.db)
 
+        # The System Owner is member number one, when the department numbers its
+        # members at all. Assigned here rather than left for later because the
+        # counter only advances for members created after numbering is switched
+        # on: a department that turned it on afterwards had its first accounts
+        # holding no number and the roster import starting at the number they
+        # should have had. A typed number wins -- an officer transcribing an
+        # existing badge is not asking for the next one in the sequence.
+        assigned_number = membership_number or await OrganizationService(
+            self.db
+        ).generate_next_membership_id(UUID(organization_id))
+
         user, error = await auth_service.register_user(
             organization_id=organization_id,
             username=username,
@@ -1183,7 +1204,7 @@ class OnboardingService:
             password=password,
             first_name=first_name,
             last_name=last_name,
-            membership_number=membership_number,
+            membership_number=assigned_number,
             # The System Owner chooses their own password in the onboarding
             # form, so there is no temporary password to force-change. Leaving
             # this True would 403 every request outside the auth allow-list via
