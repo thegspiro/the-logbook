@@ -166,6 +166,80 @@ const publicPages = (): Array<{ file: string; component: string }> => {
 };
 
 /**
+ * The line numbers of every component-level render branch in `page` that does
+ * not provide the skip-link target.
+ *
+ * Shared by both directions of the sweep, deliberately. It was inlined in the
+ * public-page check and the replacing-shell check used a file-wide
+ * `includes()` instead — which is the *first* defect this whole sweep was
+ * written to fix ("the file mentions the id" is not "every branch has it"),
+ * reintroduced in the check meant to supersede it. `AppLayout` renders the
+ * target in two branches, at its left-nav and bottom-nav roots; deleting it
+ * from either one left the other, and a substring check stayed green while
+ * that layout's skip link dangled.
+ */
+const branchesMissingTarget = (page: string, component: string): number[] => {
+  const source = read(page);
+  // Only this component's own body. A helper declared beside it in the same
+  // file returns markup at the same indentation, and that markup is rendered
+  // *inside* the component — so its root is not a render branch and must not
+  // be given the landmark.
+  const declaration = new RegExp(
+    `(?:export\\s+)?(?:const\\s+${component}\\b|function\\s+${component}\\b|class\\s+${component}\\b)`
+  ).exec(source);
+  const bodyStart = declaration?.index ?? 0;
+  const next = /\n(?:export\s+)?(?:const|function|class)\s+[A-Z]\w*/.exec(source.slice(bodyStart + 1));
+  const bodyEnd = next ? bodyStart + 1 + next.index : source.length;
+  const offset = source.slice(0, bodyStart).split('\n').length - 1;
+  const lines = source.slice(bodyStart, bodyEnd).split('\n');
+
+  // How deep a component-level return sits. A function component's body is at
+  // 2 and an `if` branch inside it at 4; a class puts its returns inside
+  // `render()`, two levels further in. Deeper than that is a `.map()` callback
+  // or a nested helper, which renders a fragment rather than a page.
+  const maxIndent = /^(?:export\s+)?class\b/.test(declaration?.[0] ?? '') ? 6 : 4;
+  const missing: number[] = [];
+
+  lines.forEach((line, index) => {
+    const opener = /^(\s*)return \($/.exec(line);
+    if (!opener || (opener[1] ?? '').length > maxIndent) return;
+
+    // Balance the parens to take the whole returned expression.
+    let depth = 0;
+    const body: string[] = [];
+    for (let k = index; k < lines.length; k++) {
+      const current = lines[k] ?? '';
+      depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
+      body.push(current);
+      if (depth <= 0) break;
+    }
+    const jsx = body.slice(1).join('\n');
+
+    // Only a branch that returns markup directly. A helper returning an object
+    // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
+    // state, and OnboardingCheck has one.
+    if (!/^\s*</.test(jsx)) return;
+    if (jsx.includes('id="main-content"')) return;
+
+    // A root that is a local component can carry the target itself —
+    // `FinanceApprovalPage` renders every branch through one `<Shell>`.
+    const root = /<([A-Z]\w+)/.exec(jsx);
+    if (root?.[1]) {
+      const rootDeclaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
+      if (
+        rootDeclaration &&
+        source.slice(rootDeclaration.index, rootDeclaration.index + 2000).includes('id="main-content"')
+      ) {
+        return;
+      }
+    }
+    missing.push(offset + index + 1);
+  });
+
+  return missing;
+};
+
+/**
  * Shells outside the public page set that provide the target themselves.
  *
  * What they have in common is that each *replaces* whatever else would hold the
@@ -228,57 +302,7 @@ describe('skip link target', () => {
      * unlabelled landmark; the user cannot skip to content either way.
      */
     const findings = entries.flatMap(({ file: page, component }) => {
-      const source = read(page);
-      // Only the page component's own body. A helper declared beside it in the
-      // same file returns markup at the same indentation, and that markup is
-      // rendered *inside* the page — so its root is not a render branch and
-      // must not be given the landmark.
-      const declaration = new RegExp(`(?:export\\s+)?(?:const\\s+${component}\\b|function\\s+${component}\\b)`).exec(
-        source
-      );
-      const bodyStart = declaration?.index ?? 0;
-      const next = /\n(?:export\s+)?(?:const|function)\s+[A-Z]\w*/.exec(source.slice(bodyStart + 1));
-      const bodyEnd = next ? bodyStart + 1 + next.index : source.length;
-      const offset = source.slice(0, bodyStart).split('\n').length - 1;
-      const lines = source.slice(bodyStart, bodyEnd).split('\n');
-      const missing: number[] = [];
-
-      lines.forEach((line, index) => {
-        // A component-level return, by indentation: the component body sits at
-        // 2, an `if` branch inside it at 4. Deeper is a `.map()` callback or a
-        // nested helper, which renders a fragment rather than a page.
-        const opener = /^(\s*)return \($/.exec(line);
-        if (!opener || (opener[1] ?? '').length > 4) return;
-
-        // Balance the parens to take the whole returned expression.
-        let depth = 0;
-        const body: string[] = [];
-        for (let k = index; k < lines.length; k++) {
-          const current = lines[k] ?? '';
-          depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
-          body.push(current);
-          if (depth <= 0) break;
-        }
-        const jsx = body.slice(1).join('\n');
-
-        // Only a branch that returns markup directly. A helper returning an
-        // object whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is
-        // not a render state, and OnboardingCheck has one.
-        if (!/^\s*</.test(jsx)) return;
-        if (jsx.includes('id="main-content"')) return;
-
-        // A root that is a local component can carry the target itself —
-        // `FinanceApprovalPage` renders every branch through one `<Shell>`.
-        const root = /<([A-Z]\w+)/.exec(jsx);
-        if (root?.[1]) {
-          const declaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
-          if (declaration && source.slice(declaration.index, declaration.index + 2000).includes('id="main-content"')) {
-            return;
-          }
-        }
-        missing.push(offset + index + 1);
-      });
-
+      const missing = branchesMissingTarget(page, component);
       return missing.length > 0
         ? [`${page} — no skip-link target in the branch(es) returning at line ${missing.join(', ')}`]
         : [];
@@ -383,9 +407,11 @@ describe('skip link target', () => {
      * unmounts the subtree it caught, so `AppLayout`'s main is gone rather than
      * hidden.
      */
-    const missing = Object.entries(REPLACING_SHELLS)
-      .filter(([file]) => !read(file).includes('id="main-content"'))
-      .map(([file, why]) => `${file} (${why})`);
+    const missing = Object.entries(REPLACING_SHELLS).flatMap(([file, why]) => {
+      const component = path.basename(file, '.tsx');
+      const branches = branchesMissingTarget(file, component);
+      return branches.length > 0 ? [`${file} — branch(es) at line ${branches.join(', ')} (${why})`] : [];
+    });
 
     expect(
       missing,
