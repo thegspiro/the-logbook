@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2425 (Feature 12, Facilities, pass 4) merged clean, 17/17 CI
+checks green, `mergeable_state: clean`. Squash-merged as `d24934d67`. Feature
+12 is now fully closed for this pass — see the Log entries and
+`FAC-12-facilities.md` for the full correction history (the pass's own
+initial review plus seven subsequent Codex review rounds, each finding
+additional or fix-related bugs — some independent, pre-existing bugs
+(one, FAC-47, a crash had been masking until an earlier round's fix made
+its path reachable; another, FAC-50, independently observable via a 422
+the whole time); others genuine regressions in a prior round's own fix):
+`FAC-46` through `FAC-57`, 12 findings total, all fixed; the 4 prior flags
+(FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open, unchanged since
+pass 3. Next: 13 Apparatus & NFC.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12 pass 4, PR #2425), preserved for history</summary>
+
 **Feature 12 (Facilities, pass 4)** — PR
 [#2425](https://github.com/thegspiro/the-logbook/pull/2425), branch
 `claude/security-review-facilities-pass4` (fresh name; no facilities-review
@@ -26,6 +42,8 @@ on every single call, one of them wired to real shipped UI), 4 prior flags
 (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open and unchanged since
 pass 3. Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4.
 Completion gate green. Awaiting CI and review.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422, merged), preserved for history</summary>
@@ -11781,7 +11799,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -11811,6 +11829,66 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
+
+The pass's own initial review (FAC-46, HIGH — two unconditional
+`TypeError`s, one wired to real shipped UI) plus seven subsequent Codex
+review rounds, each finding additional or fix-related bugs, through FAC-57
+(a genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
+merge-then-validate fix). Not the longest single-PR correction chain this
+rotation has seen: pass 3's "round N" numbering is a pass-wide ordinal
+spanning three PRs (#2191, #2195, #2198), not a per-PR count, but PR #2198
+(FAC-29 through FAC-45) alone still carried 8 of those numbered rounds on
+top of its own initial review (pass-3 rounds 8 through 14, plus round 16;
+round 15 was not its own completion-gate round) — comparable to, and
+arguably longer than, this PR's initial review plus seven. Not every round
+found a regression in
+the previous one's fix, and not every independent bug was masked the same
+way: FAC-47 was a pre-existing field-name mismatch a crash had genuinely
+been masking, reachable only once FAC-46's fix let
+`create_compliance_item` actually run; FAC-50 was independently observable
+the whole time — a contact-name-only submission 422'd at the schema layer
+before ever reaching the method FAC-46 fixed, so FAC-46's crash never
+stood between a caller and this defect. FAC-48, FAC-51, FAC-52, FAC-54 and
+FAC-57 were genuine regressions in a prior round's fix. 12 findings total
+(FAC-46 through FAC-57), all
+fixed. 4 prior flags (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still
+open, unchanged since pass 3. 17/17 CI checks green on the final head,
+`mergeable_state: clean`, all 11 review threads resolved. Squash-merged as
+`d24934d67`.
+
+Worth recording for the rotation's own discipline: one of FAC-57's guard
+tests, a first draft racing two full service calls via bare
+`asyncio.gather` with no explicit synchronization, turned out to pass on
+_both_ sides of its own pre-fix `git stash` check — a false negative caught
+before commit by actually running that check, not assumed from the test
+reading correctly. Rewritten with explicit lock/block/release
+synchronization — an `asyncio.Event` fired when the second session reaches
+its own locking read, followed by a bounded wait asserting the task is
+still pending — the same pattern already used throughout
+`test_facility_document_reference_race.py`. That pattern is a heuristic,
+not a hard guarantee: on a sufficiently slow runner the bounded wait could
+still elapse before the second session's query reaches the database, so an
+implementation that accepts the lock parameter without truly acquiring a
+row lock could in principle pass by the two sessions coincidentally
+serializing in the right order anyway. Confirming genuine blocking beyond
+that heuristic would need lock-wait visibility from the database itself
+(e.g. polling `performance_schema.data_lock_waits`), which none of this
+suite's concurrency tests do today; treat this as a known limitation of an
+established, repository-wide test pattern, not a defect specific to
+FAC-57. See `FAC-12-facilities.md` → Pass 4 for the full
+round-by-round detail (FAC-47 through FAC-57): most carry their own
+before/after failure text from a `git stash`-isolated guard test. FAC-49,
+FAC-54 and FAC-56 are type-only corrections with no runtime behavior to
+exercise; FAC-53 is a real shipped runtime behavior (a form's
+payload-construction logic) but was verified without a test harness — the
+module had no existing component-test file and building one was judged
+disproportionate to the fix, per that finding's own write-up. All four
+were verified instead by inspection and `tsc --noEmit`/`eslint` passing
+clean.
+
+Feature 12 is now fully closed for this pass. Next: 13 Apparatus & NFC.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
 
