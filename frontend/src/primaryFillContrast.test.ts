@@ -136,8 +136,15 @@ const splitModifier = (raw: string): { value: string; modifier: string | undefin
  * the variant rather than failing, so `min-[1700px]:bg-orange-600
  * min-[1700px]:text-orange-950 text-white` collapsed into the base bucket and
  * reported a correct call site at 3.60:1.
+ *
+ * A segment may also name a group: `group-hover/item:` scopes to the element
+ * marked `group/item`, and `StorageAreasPage` and `AutomatedEmailConfig` both
+ * use one. The grammar could not consume the `/item`, so the whole prefix
+ * failed and matching restarted *inside* it — reading `group-hover/item:bg-…
+ * dark:group-hover/item:text-…` as two `item:` declarations, which discards
+ * the `dark:` and reports a false dark-theme failure against correct code.
  */
-const VARIANT_PREFIX = String.raw`(?:(?:\[[^\]\s]*\]|[a-z0-9-]+(?:\[[^\]\s]*\])?):)*`;
+const VARIANT_PREFIX = String.raw`(?:(?:\[[^\]\s]*\]|[a-z0-9-]+(?:\[[^\]\s]*\])?(?:\/[a-z0-9-]+)?):)*`;
 
 /** A prefix's variants, splitting only on the colons outside brackets. */
 const splitVariants = (prefix: string): string[] => {
@@ -185,7 +192,13 @@ const modifierOpacity = (modifier: string | undefined): { kind: 'alpha'; alpha: 
   // measured a variable-controlled label as fully opaque, so
   // `text-white/[var(--opacity)]` on black passed at 21:1 while the value it
   // resolves to can make the label invisible.
-  return Number.isFinite(alpha) ? { kind: 'alpha', alpha } : { kind: 'unresolvable' };
+  // Clamped, because a browser clamps it. `bg-white/[2]` is alpha 2, which
+  // Tailwind compiles to `color-mix(in oklab, #fff 200%, transparent)`, and
+  // CSS clamps a colour-mix percentage to 0-100% — so it paints fully opaque
+  // white. Accepting the 2 unclamped classified the fill as translucent and
+  // sent it down the deliberate translucent-fill blind spot, silently skipping
+  // a white label on opaque white.
+  return Number.isFinite(alpha) ? { kind: 'alpha', alpha: Math.max(0, Math.min(1, alpha)) } : { kind: 'unresolvable' };
 };
 
 /** A fill's opacity modifier, as the three outcomes a sweep must tell apart. */
@@ -467,6 +480,43 @@ const expandUtility = (name: string, stack = new Set<string>()): string => {
  * finding into a report at every call site that uses the app's most common
  * container.
  */
+/**
+ * A utility body's raw colour declarations, restated as the Tailwind tokens
+ * they are equivalent to, so one matcher reads both spellings.
+ *
+ * `@utility` bodies mix `@apply` with plain CSS, and the borrow paths below
+ * read only the applied tokens — so a utility that set its colour the ordinary
+ * way contributed nothing at a call site. `review-raw-label bg-white`, where
+ * the utility is just `color: white`, rendered white on white and neither
+ * sweep saw it: the stylesheet pass has no fill to pair with, and the call-site
+ * pass had no foreground. Bracketed so the value resolves through the same
+ * arbitrary-value path the stylesheet pass already sends it down.
+ *
+ * The enclosing selector comes with it. A `&:hover { color: white }` borrowed
+ * unscoped would answer for the base fill and report a call site whose hover
+ * state is the only white one.
+ *
+ * `background-image` is deliberately absent while `background-color` is here.
+ * Both are fills in the stylesheet pass, which measures them where they are
+ * declared; borrowing an *image* to a call site instead reports every user of
+ * a gradient utility that also sets white text, which is ordinary correct code.
+ */
+const rawColourTokens = (body: string): string => {
+  const bracket = (value: string): string =>
+    `[${value
+      .replace(/!\s*important\s*$/, '')
+      .trim()
+      .replace(/\s+/g, '_')}]`;
+  return [
+    ...[...body.matchAll(/(?:^|[\s;{])color\s*:\s*([^;]+);/g)].map(
+      (match) => `${rawVariant(body, match.index ?? 0)}text-${bracket(match[1] ?? '')}`
+    ),
+    ...[...body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g)].map(
+      (match) => `${rawVariant(body, match.index ?? 0)}bg-${bracket(match[2] ?? '')}`
+    ),
+  ].join(' ');
+};
+
 const utilityTokens = (text: string, pattern: string): string =>
   [...text.matchAll(new RegExp(String.raw`(?:^|\s)(${VARIANT_PREFIX})([a-z][\w-]*)`, 'g'))]
     .flatMap(([, variant, token]) => {
@@ -476,7 +526,8 @@ const utilityTokens = (text: string, pattern: string): string =>
       // arrives as `hover:text-white` and covers a `hover:` fill rather than
       // the base one. Requiring whitespace immediately before the name missed
       // the reference entirely, so a variant-scoped override borrowed nothing.
-      return [...expandUtility(token ?? '').matchAll(new RegExp(pattern, 'g'))].map(
+      const expanded = expandUtility(token ?? '');
+      return [...`${expanded} ${rawColourTokens(expanded)}`.matchAll(new RegExp(pattern, 'g'))].map(
         ([whole]) => `${variant ?? ''}${whole}`
       );
     })
@@ -767,7 +818,14 @@ const namesColour = (value: string): boolean => {
  * not resolve. `alpha` is the label's own opacity, composited over the fill.
  */
 const whiteOn = (key: string, alpha = 1): number | null => {
-  const fill = resolveFill(key);
+  // `bg-current` paints the element's own `color`. This sweep asks about a fill
+  // only under a *white* label, so on every element it measures currentColor is
+  // that white and the pairing is white on white — exact here, and only here,
+  // which is why it is resolved at this entry point rather than in the palette:
+  // `text-current` is an inherited foreground, and teaching the palette that
+  // `current` means white would read every one of those as a white label.
+  const fill: FillColour =
+    key === 'current' ? { kind: 'colour', rgb: PALETTE['white'] ?? [255, 255, 255] } : resolveFill(key);
   if (fill.kind !== 'colour') return null;
   return whiteRatioOn(fill.rgb, alpha);
 };
@@ -925,7 +983,7 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
 const FILL_PATTERN =
   String.raw`\b(` +
   VARIANT_PREFIX +
-  String.raw`)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z]+)*-\d{2,3}|white|black)` +
+  String.raw`)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z]+)*-\d{2,3}|white|black|current)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -943,6 +1001,105 @@ const SEMANTIC_FILL_PATTERN =
   String.raw`)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
+
+/**
+ * Tailwind's own important modifier on an applied token.
+ *
+ * `@apply text-white!` compiles to `color: … !important` and so outranks a
+ * later `@apply text-black`, exactly as a raw `color: … !important` outranks a
+ * later declaration. Both token patterns end in `(?![\w-])`, which a `!`
+ * satisfies, so the marker sits just past the match rather than inside it —
+ * which is why this reads the character after the match instead of capturing
+ * it, leaving every group index in those two patterns where the twelve callers
+ * expect them.
+ *
+ * Applied tokens were hard-coded non-important on *both* the fill and the
+ * foreground path, so a later ordinary token won a slot the browser gives to
+ * this one. The raw-declaration half of the same rule already tested for
+ * `!important` on both paths; this is that rule reaching the applied half.
+ */
+const appliedImportant = (body: string, index: number, matched: string): boolean =>
+  body[index + matched.length] === '!';
+
+/**
+ * TypeScript line and block comments blanked to spaces, offset for offset.
+ *
+ * The two source sweeps below read quoted literals and whole lines, and a
+ * comment is neither markup nor a class attribute: a lone
+ * `// Example: "bg-white text-white"` reported a call site that renders
+ * nothing. This is the CSS-comment fix from one round earlier reaching the
+ * TypeScript side — the call-site half of the call-site/stylesheet axis, and
+ * the third copy of one rule after `withoutCssComments` and the JSX-comment
+ * strip in the skip-link sweep.
+ *
+ * Offsets are preserved because `standaloneLiterals` compares its match index
+ * against ranges computed from the same string, and both sweeps report line
+ * numbers derived from it.
+ *
+ * Strings are skipped rather than scanned, so a `//` inside `'https://…'` is
+ * not mistaken for a comment — and regular-expression literals are skipped for
+ * the same reason in reverse: `replace(/'[^']*'/g, …)` holds quotes that would
+ * otherwise open a string state and desynchronise everything after it. A
+ * regex is recognised by what precedes it, the standard heuristic, since a
+ * lone `/` is otherwise division.
+ */
+const withoutTsComments = (source: string): string => {
+  const out = source.split('');
+  const regexMayFollow = /[=(,:;!&|?{}[+\-*%<>~^]/;
+  let index = 0;
+  let previous = '';
+  while (index < source.length) {
+    const character = source[index] ?? '';
+    const next = source[index + 1] ?? '';
+    if (character === '/' && (next === '/' || next === '*')) {
+      const close = next === '/' ? source.indexOf('\n', index) : source.indexOf('*/', index + 2);
+      const end = close === -1 ? source.length : next === '/' ? close : close + 2;
+      for (let at = index; at < end; at += 1) if (out[at] !== '\n') out[at] = ' ';
+      index = end;
+      continue;
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      index += 1;
+      while (index < source.length) {
+        if (source[index] === '\\') {
+          index += 2;
+          continue;
+        }
+        if (source[index] === character) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      previous = character;
+      continue;
+    }
+    if (character === '/' && (previous === '' || regexMayFollow.test(previous))) {
+      index += 1;
+      let inClass = false;
+      while (index < source.length) {
+        const at = source[index];
+        if (at === '\\') {
+          index += 2;
+          continue;
+        }
+        if (at === '\n') break;
+        if (at === '[') inClass = true;
+        else if (at === ']') inClass = false;
+        else if (at === '/' && !inClass) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      previous = '/';
+      continue;
+    }
+    if (!/\s/.test(character)) previous = character;
+    index += 1;
+  }
+  return out.join('');
+};
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];
@@ -969,7 +1126,7 @@ interface Offender {
 const findOffenders = (): Offender[] => {
   const offenders: Offender[] = [];
   for (const file of files) {
-    const lines = fs.readFileSync(file, 'utf8').split('\n');
+    const lines = withoutTsComments(fs.readFileSync(file, 'utf8')).split('\n');
     lines.forEach((line, index) => {
       // An unresolvable modifier counts: `bg-red-600/[var(--o)]` is a red-600
       // fill whose opacity this sweep cannot evaluate, and treating it as a
@@ -1039,7 +1196,7 @@ describe('primary fill contrast', () => {
         const [, variant, colour, modifier] = match;
         if (!namesColour(colour ?? '')) continue;
         declarations.push({
-          important: false,
+          important: appliedImportant(body, match.index ?? 0, match[0]),
           // The enclosing selector scopes an applied token exactly as it scopes
           // a raw declaration — `&:hover { @apply text-black; }` is a hover
           // foreground, and filing it at the base variant overwrote the base
@@ -1131,7 +1288,11 @@ describe('primary fill contrast', () => {
         ...body.matchAll(new RegExp(FILL_PATTERN, 'g')),
         ...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g')),
       ]) {
-        claim(fillSlot(scopedVariant(match.index ?? 0, match[1] ?? ''), match[2] ?? ''), match.index ?? 0, false);
+        claim(
+          fillSlot(scopedVariant(match.index ?? 0, match[1] ?? ''), match[2] ?? ''),
+          match.index ?? 0,
+          appliedImportant(body, match.index ?? 0, match[0])
+        );
       }
       for (const match of body.matchAll(/(?:^|[\s;{])(background-color|background-image|background)\s*:\s*([^;]+);/g)) {
         const scope = rawVariant(body, match.index ?? 0);
@@ -1681,7 +1842,7 @@ describe('primary fill contrast', () => {
     };
 
     for (const file of files) {
-      const source = fs.readFileSync(file, 'utf8');
+      const source = withoutTsComments(fs.readFileSync(file, 'utf8'));
       const values = classNameValues(source);
       const covered = values.map(({ value, end }) => ({ start: end - value.length, end }));
       for (const { value, line } of standaloneLiterals(source, covered)) {

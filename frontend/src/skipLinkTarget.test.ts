@@ -204,6 +204,66 @@ const publicPages = (): Array<{ file: string; component: string }> => {
 };
 
 /**
+ * Markup with its comments removed.
+ *
+ * `{/* <main id="main-content"> *\/}` renders nothing, and leaving one behind
+ * while removing the real landmark satisfied a check for the landmark — a
+ * guard passing on the *remains* of the thing it checks for, which is the
+ * defect this whole file exists to prevent. Line comments are stripped only
+ * when they are the whole line, so a `//` inside `href="https://…"` cannot
+ * take a real `id` written after it on the same line.
+ */
+const withoutComments = (markup: string): string =>
+  markup
+    .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^[ \t]*\/\/.*$/gm, ' ');
+
+/**
+ * The render states one return can produce.
+ *
+ * Exactly one shape is split: a return whose entire body is a conditional,
+ * bare or wrapped in a fragment. That is a choice between two documents, and
+ * each must carry the landmark. A conditional anywhere else chooses *content*
+ * — `<main id="main-content">{ready ? <Table/> : <Empty/>}</main>` is correct
+ * and commonplace — so splitting every ternary would report dozens of pages
+ * that render their landmark exactly once.
+ *
+ * A root-level `&&` is deliberately not split. Its false state renders
+ * nothing, so requiring a target in it would report `<>{banner && <Banner/>}
+ * <main id="main-content"/></>`, where the landmark is a sibling and the page
+ * is right.
+ */
+const renderStates = (markup: string): string[] => {
+  // A branch arrives with the return's own punctuation still attached — the
+  // extraction keeps the `);` that closes `return (`. Left on, it defeats the
+  // fragment match below and every conditional root fell through unsplit,
+  // which is this function silently doing nothing at all.
+  const trimmed = markup.replace(/[\s;)]+$/, '').trim();
+  const fragment = /^<>([\s\S]*)<\/>$/.exec(trimmed) ?? /^<React\.Fragment>([\s\S]*)<\/React\.Fragment>$/.exec(trimmed);
+  const inner = (fragment?.[1] ?? trimmed).trim();
+  if (!inner.startsWith('{') || !inner.endsWith('}')) return [markup];
+
+  const body = inner.slice(1, -1);
+  let depth = 0;
+  let question = -1;
+  let colon = -1;
+  for (let at = 0; at < body.length; at += 1) {
+    const character = body[at];
+    if (character === '(' || character === '[' || character === '{') depth += 1;
+    else if (character === ')' || character === ']' || character === '}') depth -= 1;
+    else if (depth !== 0) continue;
+    else if (character === '?' && question === -1) question = at;
+    // The first depth-zero `:` after the `?` closes it. A nested ternary in
+    // either arm is parenthesised in this codebase's formatting, so its colon
+    // is not at depth zero.
+    else if (character === ':' && question !== -1 && colon === -1) colon = at;
+  }
+  if (question === -1 || colon === -1) return [markup];
+  return [body.slice(question + 1, colon), body.slice(colon + 1)];
+};
+
+/**
  * The line numbers of every component-level render branch in `page` that does
  * not provide the skip-link target.
  *
@@ -293,18 +353,30 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
     // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
     // state, and OnboardingCheck has one.
     if (!/^\s*</.test(jsx)) return;
-    // JSX comments are not markup. `{/* <main id="main-content"> */}` renders
-    // nothing, and leaving one behind while removing the real landmark kept
-    // this check green — a guard satisfied by the *remains* of the thing it
-    // checks for, which is the defect this whole file exists to prevent.
-    if (carriesTarget(jsx.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, ' '))) return;
+    const cleaned = withoutComments(jsx);
+    // Every render state this branch can produce, not the branch as one string.
+    // `carriesTarget` answers "does the text contain the landmark anywhere",
+    // and a conditional at the *root* of a return produces two documents of
+    // which only one may have it: `<>{ready ? <main id="main-content"/> :
+    // <div/>}</>` satisfied the whole-expression check while its second state
+    // rendered no target at all.
+    if (renderStates(cleaned).every(carriesTarget)) return;
 
     // A root that is a local component can carry the target itself —
     // `FinanceApprovalPage` renders every branch through one `<Shell>`.
-    const root = /<([A-Z]\w+)/.exec(jsx);
+    //
+    // Comment-stripped like the branch above. This second call scanned the raw
+    // slice, so commenting out the shell's landmark left all four tests green —
+    // the same "satisfied by the remains" defect the branch check was fixed for
+    // one round earlier, sitting in its other copy. That is why the strip is a
+    // named helper now rather than an inline `replace` at one of two sites.
+    const root = /<([A-Z]\w+)/.exec(cleaned);
     if (root?.[1]) {
       const rootDeclaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
-      if (rootDeclaration && carriesTarget(source.slice(rootDeclaration.index, rootDeclaration.index + 2000))) {
+      if (
+        rootDeclaration &&
+        carriesTarget(withoutComments(source.slice(rootDeclaration.index, rootDeclaration.index + 2000)))
+      ) {
         return;
       }
     }
