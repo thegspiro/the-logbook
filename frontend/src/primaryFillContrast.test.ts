@@ -108,7 +108,13 @@ const splitModifier = (raw: string): { value: string; modifier: string | undefin
  * `opaqueModifier`, so the regex no longer has to encode which spellings mean
  * "fully opaque".
  */
-const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|[\d.]+))?`;
+/**
+ * Tailwind writes an opacity modifier three ways: a bare percentage (`/50`), a
+ * bracketed alpha (`/[.06]`) and a CSS-variable shorthand (`/(--opacity)`),
+ * which compiles to a `color-mix` around `var(--opacity)`. All three are
+ * captured; `modifierOpacity` decides what each means.
+ */
+const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|\([^)\s]*\)|[\d.]+))?`;
 
 /**
  * A Tailwind opacity modifier as an alpha in 0-1; absent means fully opaque.
@@ -118,6 +124,10 @@ const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|[\d.]+))?`;
  */
 const modifierOpacity = (modifier: string | undefined): { kind: 'alpha'; alpha: number } | { kind: 'unresolvable' } => {
   if (modifier === undefined || modifier === '') return { kind: 'alpha', alpha: 1 };
+  // `/(--opacity)` is the shorthand for `/[var(--opacity)]` and is exactly as
+  // unresolvable; it reached this function only because the modifier grammar
+  // learned to capture it.
+  if (modifier.startsWith('(')) return { kind: 'unresolvable' };
   const raw = modifier.startsWith('[') ? modifier.slice(1, modifier.endsWith(']') ? -1 : undefined).trim() : modifier;
   // A bracketed modifier is the alpha channel itself; a bare one is a
   // percentage. `[13%]` is 13% either way, `[.06]` is 6%, `/50` is 50%.
@@ -172,7 +182,7 @@ const whiteLabel = (foreground: string | undefined): WhiteLabel => {
     // `namesColour`, so it is a colour of some kind; whether it is white is
     // exactly what cannot be decided, and guessing "not white" skips the
     // pairing.
-    return value.startsWith('[') && resolveFill(value).kind === 'unresolvable'
+    return (value.startsWith('[') || value.startsWith('(')) && resolveFill(value).kind === 'unresolvable'
       ? { kind: 'unresolvable' }
       : { kind: 'other' };
   }
@@ -202,7 +212,9 @@ const whiteRatioOn = (rgb: { r: number; g: number; b: number }, alpha: number): 
  * foreground can be resolved for the variant that actually paints it.
  */
 const TEXT_PATTERN =
-  String.raw`\b((?:[a-z0-9-]+:)*)text-(\[[^\]\s]*\]|[a-z]+(?:-[a-z0-9]+)*)` + OPACITY_MODIFIER + String.raw`(?![\w-])`;
+  String.raw`\b((?:[a-z0-9-]+:)*)text-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z0-9]+)*)` +
+  OPACITY_MODIFIER +
+  String.raw`(?![\w-])`;
 
 /**
  * A `bg-red-600` with its opacity modifier, if it has one. The `/`-suffixed
@@ -568,6 +580,9 @@ type FillColour =
   { kind: 'colour'; rgb: { r: number; g: number; b: number } } | { kind: 'unresolvable' } | { kind: 'not-a-colour' };
 
 const resolveFill = (key: string): FillColour => {
+  // `bg-(--brand)` is Tailwind's shorthand for `bg-[var(--brand)]`, and is a
+  // colour this sweep cannot compute rather than a non-colour to skip.
+  if (key.startsWith('(')) return { kind: 'unresolvable' };
   if (key.startsWith('[')) {
     const inner = key.slice(1, key.endsWith(']') ? -1 : undefined);
     const typed = /^([a-z-]+):([\s\S]*)$/i.exec(inner);
@@ -626,7 +641,7 @@ const resolveFill = (key: string): FillColour => {
  * colours is something this file can already answer.
  */
 const namesColour = (value: string): boolean => {
-  if (value.startsWith('[')) return resolveFill(value).kind !== 'not-a-colour';
+  if (value.startsWith('[') || value.startsWith('(')) return resolveFill(value).kind !== 'not-a-colour';
   if (value.startsWith('theme-')) return semanticFill(value).size > 0;
   return value === 'transparent' || PALETTE[value] !== undefined;
 };
@@ -696,7 +711,7 @@ const setsColour = (raw: string, word: string): boolean => {
   // `transparent` sets no colour on a flat background, but on a gradient stop
   // it does replace: what shows is whatever backs it.
   if (value === 'transparent') return word !== 'bg';
-  if (value.startsWith('[')) return resolveFill(value).kind !== 'not-a-colour';
+  if (value.startsWith('[') || value.startsWith('(')) return resolveFill(value).kind !== 'not-a-colour';
   if (value.startsWith('theme-')) return semanticFill(value).size > 0;
   return PALETTE[value] !== undefined;
 };
@@ -728,13 +743,17 @@ const setsColour = (raw: string, word: string): boolean => {
  */
 const themesFor = (haystack: string, matchPrefix: string, word: string): string[] => {
   if (/(^|:)dark:/.test(matchPrefix)) return ['dark', 'high-contrast'];
-  const state = matchPrefix.replace(/(^|:)dark:/g, '$1');
-  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const overridden = [`dark:${state}${word}-`, `${state}dark:${word}-`].some((prefix) =>
-    [...haystack.matchAll(new RegExp(String.raw`\b${escape(prefix)}([A-Za-z0-9[\]#.,%():_/-]+)`, 'g'))].some(
-      ([, raw]) => setsColour(raw ?? '', word)
-    )
-  );
+  // The override's variant set, compared canonically rather than by building
+  // the two strings `dark:` could be spliced into. With more than one non-theme
+  // variant there are more than two positions — `sm:dark:hover:` is valid and
+  // was matched by neither endpoint insertion, so a correct adaptive class was
+  // reported as failing in dark. Round 18 canonicalised prefixes for the
+  // foreground lookup and this search kept its own string-building; comparing
+  // sets here is that fix finally reaching its second copy.
+  const wanted = canonicalPrefix(`dark:${matchPrefix}`);
+  const overridden = [
+    ...haystack.matchAll(new RegExp(String.raw`\b((?:[a-z0-9-]+:)*)${word}-([A-Za-z0-9[\]#.,%():_/-]+)`, 'g')),
+  ].some(([, variant, raw]) => canonicalPrefix(variant ?? '') === wanted && setsColour(raw ?? '', word));
   return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
 };
 
@@ -752,7 +771,7 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
  * value to measure and is skipped.
  */
 const FILL_PATTERN =
-  String.raw`\b((?:[a-z0-9-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|[a-z]+-\d{2,3}|white|black)` +
+  String.raw`\b((?:[a-z0-9-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+-\d{2,3}|white|black)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -843,7 +862,6 @@ describe('primary fill contrast', () => {
   it('gives every shared white-on-fill utility a AAA background', () => {
     const failures = [...UTILITY_BODIES.keys()].flatMap((name) => {
       const body = expandUtility(name);
-      if (!body.includes('text-white')) return [];
 
       // Which foreground covers a fill, by variant — the same question the
       // call-site sweep asks. A body-wide `text-white` test paired white with
@@ -856,6 +874,24 @@ describe('primary fill contrast', () => {
         if (!namesColour(colour ?? '')) continue;
         utilityForegrounds.set(canonicalPrefix(variant ?? ''), modifier ? `${colour}/${modifier}` : (colour ?? ''));
       }
+      // A raw `color:` declaration is a foreground too. `@utility` bodies mix
+      // `@apply` with plain CSS — `scrollbar-thin` and `shimmer-skeleton`
+      // already do — and reading only the Tailwind tokens meant a utility that
+      // set its colour the ordinary way had no foreground at all. Wrapped in
+      // brackets so it resolves through the same path as an arbitrary value,
+      // and set last because a raw declaration written after an `@apply` wins.
+      for (const [, declared] of body.matchAll(/(?:^|[\s;{])color\s*:\s*([^;]+);/g)) {
+        utilityForegrounds.set('', `[${(declared ?? '').trim().replace(/\s+/g, '_')}]`);
+      }
+
+      // Nothing white anywhere: this utility is not what the sweep measures.
+      // Asked of the resolved foregrounds rather than by searching the body
+      // text for `text-white`, which was the gate before — and a spelling
+      // check in front of a resolver undoes the resolver, exactly as the
+      // prefilter did to the standalone-literal path. A body setting
+      // `color: white` the ordinary way was skipped whole.
+      if (![...utilityForegrounds.values()].some((value) => isWhite(splitModifier(value).value))) return [];
+
       const coveringForeground = (variant: string): string | undefined =>
         candidatePrefixes(variant)
           .map((candidate) => utilityForegrounds.get(candidate))
@@ -911,7 +947,7 @@ describe('primary fill contrast', () => {
           if (ratio === null) {
             return [
               `${name}: ${prefix}-${key} ${
-                (key ?? '').startsWith('[')
+                (key ?? '').startsWith('[') || (key ?? '').startsWith('(')
                   ? 'is an arbitrary value this sweep cannot resolve to a colour'
                   : 'is not in the installed Tailwind palette'
               }`,
@@ -957,7 +993,32 @@ describe('primary fill contrast', () => {
         }
       );
 
-      return [...palette, ...semantic];
+      // The same for a raw `background` / `background-color`: it paints the
+      // fill this label crosses, and the token scan above cannot see it.
+      const rawFills = [...body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g)].flatMap(
+        ([, property, declared]) => {
+          const value = (declared ?? '').trim().replace(/\s+/g, '_');
+          return THEME_TOKENS.flatMap(({ theme }) => {
+            const label = whiteLabel(themeForeground('', theme));
+            if (label.kind === 'other') return [];
+            if (label.kind === 'unresolvable') {
+              return [`${name}: the white label over ${property} has an opacity this sweep cannot resolve`];
+            }
+            const fill = resolveFill(`[${value}]`);
+            if (fill.kind !== 'colour') {
+              return [`${name}: ${property}: ${declared?.trim()} is a background this sweep cannot resolve`];
+            }
+            const ratio = whiteRatioOn(fill.rgb, label.alpha);
+            return ratio >= 7
+              ? []
+              : [
+                  `${name}: white on ${property}: ${declared?.trim()} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`,
+                ];
+          });
+        }
+      );
+
+      return [...palette, ...semantic, ...rawFills];
     });
 
     expect(failures, 'move the fill two shades darker (600 -> 800) as btn-primary did').toEqual([]);
@@ -1116,7 +1177,7 @@ describe('primary fill contrast', () => {
         if (ratio === null) {
           offenders.push(
             `${path.relative(SRC, file)}:${line} — ${whole} ${
-              (key ?? '').startsWith('[')
+              (key ?? '').startsWith('[') || (key ?? '').startsWith('(')
                 ? 'is an arbitrary value this sweep cannot resolve to a colour'
                 : 'is not in the installed Tailwind palette'
             }`
