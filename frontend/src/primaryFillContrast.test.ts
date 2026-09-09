@@ -214,6 +214,9 @@ const TEXT_PATTERN =
  */
 const RED_600_FILL = String.raw`\bbg-red-600` + OPACITY_MODIFIER + String.raw`(?![\w-])(?!/)`;
 
+/** A CSS percentage component (saturation, lightness), clamped to 0-1. */
+const clampUnit = (raw: string | undefined): number => Math.max(0, Math.min(1, Number(raw) / 100));
+
 /** A CSS colour channel, clamped to the sRGB gamut exactly as a browser does. */
 const clampChannel = (raw: string | undefined): number => Math.max(0, Math.min(255, Number(raw)));
 
@@ -341,10 +344,18 @@ const expandUtility = (name: string, seen = new Set<string>()): string => {
  * container.
  */
 const utilityTokens = (text: string, pattern: string): string =>
-  [...text.matchAll(/(?:^|\s)([a-z][\w-]*)/g)]
-    .map(([, token]) => token ?? '')
-    .filter((token) => UTILITY_BODIES.has(token))
-    .flatMap((token) => [...expandUtility(token).matchAll(new RegExp(pattern, 'g'))].map(([whole]) => whole))
+  [...text.matchAll(/(?:^|\s)((?:[a-z0-9-]+:)*)([a-z][\w-]*)/g)]
+    .flatMap(([, variant, token]) => {
+      if (!UTILITY_BODIES.has(token ?? '')) return [];
+      // The reference's own variant scopes everything the utility brings:
+      // `hover:btn-primary` paints white *while hovered*, so its `text-white`
+      // arrives as `hover:text-white` and covers a `hover:` fill rather than
+      // the base one. Requiring whitespace immediately before the name missed
+      // the reference entirely, so a variant-scoped override borrowed nothing.
+      return [...expandUtility(token ?? '').matchAll(new RegExp(pattern, 'g'))].map(
+        ([whole]) => `${variant ?? ''}${whole}`
+      );
+    })
     .join(' ');
 
 const utilityForegroundText = (text: string): string => utilityTokens(text, TEXT_PATTERN);
@@ -524,7 +535,13 @@ const cssColour = (text: string): { r: number; g: number; b: number } | null => 
   const hsl = /^hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
   if (hsl) {
     if (!opaqueAlpha(hsl[4])) return null;
-    return hslToRgb(Number(hsl[1]), Number(hsl[2]) / 100, Number(hsl[3]) / 100);
+    // Saturation and lightness are clamped to 0-100% by CSS, exactly as the
+    // RGB branch above clamps its channels. That branch was fixed one round
+    // earlier and this one was not, which is this file's most-repeated defect:
+    // the same idea implemented twice, and only the copy someone looked at
+    // gets the correction. `hsl(0 100% 200%)` renders white and was measured
+    // as an out-of-gamut colour that passed.
+    return hslToRgb(Number(hsl[1]), clampUnit(hsl[2]), clampUnit(hsl[3]));
   }
 
   return null;
