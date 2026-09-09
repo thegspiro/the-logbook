@@ -116,6 +116,65 @@ const splitModifier = (raw: string): { value: string; modifier: string | undefin
 const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|[\d.]+))?`;
 
 /**
+ * A Tailwind opacity modifier as an alpha in 0-1; absent means fully opaque.
+ *
+ * Same two syntaxes `opaqueModifier` distinguishes: a bare `/80` is a
+ * percentage, a bracketed one is the alpha channel itself.
+ */
+const modifierAlpha = (modifier: string | undefined): number => {
+  if (modifier === undefined || modifier === '') return 1;
+  if (modifier.startsWith('[')) {
+    const inner = modifier.slice(1, modifier.endsWith(']') ? -1 : undefined).trim();
+    const alpha = inner.endsWith('%') ? Number(inner.slice(0, -1)) / 100 : Number(inner);
+    return Number.isFinite(alpha) ? alpha : 1;
+  }
+  const percent = Number(modifier) / 100;
+  return Number.isFinite(percent) ? percent : 1;
+};
+
+/**
+ * `text-white`'s alpha at this call site, or null when the foreground is not
+ * white.
+ *
+ * The foreground carries an opacity modifier as readily as the fill does, and
+ * the pattern used to stop at the word boundary before it — so `text-white/0`
+ * recorded as opaque white, measured 21:1 against black, and passed while
+ * Tailwind painted nothing at all. Alpha is returned rather than the
+ * foreground being rejected outright, because it can be composited exactly:
+ * the backdrop is the fill being measured, so there is nothing left to guess.
+ */
+const whiteForegroundAlpha = (foreground: string | undefined): number | null => {
+  if (foreground === undefined) return null;
+  const { value, modifier } = splitModifier(foreground);
+  if (value !== 'white') return null;
+  return modifierAlpha(modifier);
+};
+
+/** A translucent foreground composited over the fill it sits on. */
+const composite = (
+  foreground: { r: number; g: number; b: number },
+  background: { r: number; g: number; b: number },
+  alpha: number
+): { r: number; g: number; b: number } => ({
+  r: alpha * foreground.r + (1 - alpha) * background.r,
+  g: alpha * foreground.g + (1 - alpha) * background.g,
+  b: alpha * foreground.b + (1 - alpha) * background.b,
+});
+
+/** The contrast of a possibly translucent white label on a fill. */
+const whiteRatioOn = (rgb: { r: number; g: number; b: number }, alpha: number): number => {
+  const label = composite({ r: 255, g: 255, b: 255 }, rgb, alpha);
+  return contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(label.r, label.g, label.b));
+};
+
+/**
+ * Every `text-*` token with its variant prefix and opacity modifier, so a
+ * foreground can be resolved for the variant that actually paints it.
+ */
+const TEXT_PATTERN =
+  String.raw`\b((?:[a-z0-9-]+:)*)text-(\[[^\]\s]*\]|[a-z]+(?:-[a-z0-9]+)*)` + OPACITY_MODIFIER + String.raw`(?![\w-])`;
+
+/**
  * A `bg-red-600` with its opacity modifier, if it has one. The `/`-suffixed
  * tints are a different pattern and pass; a modifier that resolves to fully
  * opaque is the banned fill itself, and `opaqueModifier` decides which is
@@ -197,6 +256,63 @@ const readPalette = (): Record<string, { r: number; g: number; b: number }> => {
 const INDEX_CSS = fs.readFileSync(path.join(SRC, 'styles', 'index.css'), 'utf8');
 
 const PALETTE = readPalette();
+
+/**
+ * Every shared `@utility` body in the stylesheet, by name.
+ *
+ * Module scope because **both** sweeps need them. The stylesheet pass expands a
+ * composed utility before measuring it; the call-site pass needs the same
+ * bodies to know what foreground a utility named in a `className` supplies.
+ */
+const UTILITY_BODIES = new Map<string, string>(
+  [...INDEX_CSS.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].map(([, name, body]) => [name ?? '', body ?? ''])
+);
+
+/**
+ * A utility body with any composed custom utilities inlined.
+ *
+ * `@utility card-hover { @apply card; … }` is an established pattern here, and
+ * a composed utility inherits the foreground of what it applies — so
+ * `@apply btn-primary bg-orange-600` renders white on orange while its own body
+ * contains no literal `text-white`.
+ *
+ * Each dependency is inlined **at its own token position**, not appended.
+ * Tailwind emits an `@apply`ed utility's declarations where the token sits, so
+ * a composing utility that overrides an inherited foreground renders the
+ * override; appending reversed that order and answered with the foreground the
+ * composition had just replaced.
+ */
+const expandUtility = (name: string, seen = new Set<string>()): string => {
+  if (seen.has(name)) return '';
+  seen.add(name);
+  const body = UTILITY_BODIES.get(name) ?? '';
+  return body.replace(/(^|\s)([a-z][\w-]*)/g, (whole: string, lead: string, token: string) =>
+    UTILITY_BODIES.has(token) ? `${lead}${expandUtility(token, seen)}` : whole
+  );
+};
+
+/**
+ * The `text-*` tokens the shared utilities named in a class string contribute.
+ *
+ * A call site that writes `btn-primary bg-orange-600` overrides the utility's
+ * red fill while `btn-primary` keeps supplying `text-white`, so the pairing
+ * that renders is white on orange-600 at 3.60:1 — and the call-site sweep,
+ * reading only literal `text-*` tokens, saw no foreground at all and skipped
+ * it. The stylesheet pass cannot see it either: the fill is not in the
+ * stylesheet.
+ *
+ * Only the foregrounds are borrowed, never the fills. Injecting a utility's own
+ * fills would re-measure every `card` in the app against `bg-theme-surface` —
+ * a translucent token this sweep reports as unmeasurable — turning one real
+ * finding into a report at every call site that uses the app's most common
+ * container.
+ */
+const utilityForegroundText = (text: string): string =>
+  [...text.matchAll(/(?:^|\s)([a-z][\w-]*)/g)]
+    .map(([, token]) => token ?? '')
+    .filter((token) => UTILITY_BODIES.has(token))
+    .flatMap((token) => [...expandUtility(token).matchAll(new RegExp(TEXT_PATTERN, 'g'))].map(([whole]) => whole))
+    .join(' ');
 
 /**
  * The semantic theme tokens, resolved per theme.
@@ -327,6 +443,12 @@ const cssColour = (text: string): { r: number; g: number; b: number } | null => 
   const hex = hexToRgb(value);
   if (hex) return hex;
 
+  // A CSS colour keyword. Tailwind's own theme defines `white` and `black`, so
+  // they are read from the installed palette rather than hard-coded; any other
+  // keyword falls through and is reported as unresolvable rather than skipped.
+  const keyword = PALETTE[value.toLowerCase()];
+  if (keyword) return keyword;
+
   // Tailwind's own palette is authored with a percentage lightness; a
   // hand-written arbitrary value may use the 0-1 form instead. The alpha is
   // parsed rather than ignored: a prefix-only match read `oklch(0 0 0/0)` as
@@ -393,7 +515,14 @@ const resolveFill = (key: string): FillColour => {
     // syntax was unrecognised. Listing only the *unimplemented* functions put
     // `oklch(0 0 0/0)` in the `not-a-colour` bucket and silently skipped it.
     // A `url(...)` or a bare length is not a fill and must not be reported.
-    return /^(?:#|var\(|color-mix\(|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\()/i.test(inner.trim())
+    // A bare identifier is a colour keyword: `bg-[white]` compiles to
+    // `background-color: white`, and `cssColour` resolves the two Tailwind
+    // defines. An unrecognised one is reported rather than skipped, which does
+    // mean `bg-[cover]` would be reported — deliberately, since the spelling
+    // for that is `bg-cover`, and a false report is something a reader can
+    // correct while a silent skip is what let `bg-[white] text-white` through.
+    const bare = /^[a-z]+$/i.test(inner.trim());
+    return bare || /^(?:#|var\(|color-mix\(|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\()/i.test(inner.trim())
       ? { kind: 'unresolvable' }
       : { kind: 'not-a-colour' };
   }
@@ -401,11 +530,34 @@ const resolveFill = (key: string): FillColour => {
   return rgb ? { kind: 'colour', rgb } : { kind: 'unresolvable' };
 };
 
-/** The measured contrast of white on a fill, or null when it does not resolve. */
-const whiteOn = (key: string): number | null => {
+/**
+ * Does a `text-*` token name a colour at all?
+ *
+ * `text-sm`, `text-center` and `text-balance` live in the same namespace and
+ * set size, alignment and wrapping. Recording one as a foreground is not
+ * harmless: the map is last-write-wins per variant, so `text-white text-sm`
+ * ended with `sm`, read as "not white", and skipped the pairing — a `text-sm`
+ * appended after the colour silently switched the guard off for that element.
+ *
+ * Asked by resolving the token rather than by listing the typography
+ * utilities, for the same reason `setsColour` is: the set of non-colour
+ * `text-*` utilities is open-ended and grows with Tailwind, while the set of
+ * colours is something this file can already answer.
+ */
+const namesColour = (value: string): boolean => {
+  if (value.startsWith('[')) return resolveFill(value).kind !== 'not-a-colour';
+  if (value.startsWith('theme-')) return semanticFill(value).size > 0;
+  return value === 'transparent' || PALETTE[value] !== undefined;
+};
+
+/**
+ * The measured contrast of a white label on a fill, or null when the fill does
+ * not resolve. `alpha` is the label's own opacity, composited over the fill.
+ */
+const whiteOn = (key: string, alpha = 1): number | null => {
   const fill = resolveFill(key);
   if (fill.kind !== 'colour') return null;
-  return contrastRatio(relativeLuminance(fill.rgb.r, fill.rgb.g, fill.rgb.b), relativeLuminance(255, 255, 255));
+  return whiteRatioOn(fill.rgb, alpha);
 };
 
 /**
@@ -500,7 +652,7 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
  * value to measure and is skipped.
  */
 const FILL_PATTERN =
-  String.raw`\b((?:[a-z-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|[a-z]+-\d{2,3}|white|black)` +
+  String.raw`\b((?:[a-z0-9-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|[a-z]+-\d{2,3}|white|black)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -513,7 +665,7 @@ const FILL_PATTERN =
  * names at build time.
  */
 const SEMANTIC_FILL_PATTERN =
-  String.raw`\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)` +
+  String.raw`\b((?:[a-z0-9-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -586,43 +738,8 @@ describe('primary fill contrast', () => {
    * it is added, and an unknown shade fails loudly instead of being skipped.
    */
   it('gives every shared white-on-fill utility a AAA background', () => {
-    const css = INDEX_CSS;
-
-    // Every utility's body, so an `@apply` of another custom utility can be
-    // expanded before the white-foreground gate runs.
-    const bodies = new Map<string, string>(
-      [...css.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].map(([, name, body]) => [name ?? '', body ?? ''])
-    );
-
-    /**
-     * A utility body with any composed custom utilities inlined.
-     *
-     * `@utility card-hover { @apply card; … }` is an established pattern here,
-     * and a composed utility inherits the foreground of what it applies — so
-     * `@apply btn-primary bg-orange-600` renders white on orange while its own
-     * body contains no literal `text-white`. Reading the body alone let that
-     * through, and a call site carries only the composed name, so nothing
-     * downstream could recover it.
-     */
-    const expand = (name: string, seen = new Set<string>()): string => {
-      if (seen.has(name)) return '';
-      seen.add(name);
-      const body = bodies.get(name) ?? '';
-      // Each dependency is inlined **at its own token position**, not appended.
-      // Tailwind emits an `@apply`ed utility's declarations where the token
-      // sits, so a composing utility that overrides an inherited foreground —
-      // `@apply review-inherited text-white` over a `review-inherited` that
-      // sets `text-black` — renders white and must be measured as white.
-      // Appending the dependency after the caller reversed that order, put
-      // `text-black` last, and let `coveringForeground` answer with the
-      // foreground the composition had just overridden.
-      return body.replace(/(^|\s)([a-z][\w-]*)/g, (whole: string, lead: string, token: string) =>
-        bodies.has(token) ? `${lead}${expand(token, seen)}` : whole
-      );
-    };
-
-    const failures = [...bodies.keys()].flatMap((name) => {
-      const body = expand(name);
+    const failures = [...UTILITY_BODIES.keys()].flatMap((name) => {
+      const body = expandUtility(name);
       if (!body.includes('text-white')) return [];
 
       // Which foreground covers a fill, by variant — the same question the
@@ -632,8 +749,9 @@ describe('primary fill contrast', () => {
       // reported at 3.60:1 for a pairing that never renders. Both halves of
       // such a utility are correct; only the cross-pairing is not.
       const utilityForegrounds = new Map<string, string>();
-      for (const [, variant, hue, shade] of body.matchAll(/\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g)) {
-        utilityForegrounds.set(variant ?? '', shade ? `${hue}-${shade}` : (hue ?? ''));
+      for (const [, variant, colour, modifier] of body.matchAll(new RegExp(TEXT_PATTERN, 'g'))) {
+        if (!namesColour(colour ?? '')) continue;
+        utilityForegrounds.set(variant ?? '', modifier ? `${colour}/${modifier}` : (colour ?? ''));
       }
       const coveringForeground = (variant: string): string | undefined =>
         candidatePrefixes(variant)
@@ -669,12 +787,18 @@ describe('primary fill contrast', () => {
         ([, variant, prefix, key, modifier]) => {
           if (!opaqueModifier(modifier)) return [];
           const themes = themesFor(body, variant ?? '', prefix ?? '');
-          if (!themes.some((theme) => themeForeground(variant ?? '', theme) === 'white')) return [];
+          // The lowest white alpha any theme paints over this fill: a
+          // translucent label is composited over it rather than assumed solid.
+          const alphas = themes
+            .map((theme) => whiteForegroundAlpha(themeForeground(variant ?? '', theme)))
+            .filter((alpha): alpha is number => alpha !== null);
+          if (alphas.length === 0) return [];
+          const alpha = Math.min(...alphas);
           const fill = resolveFill(key ?? '');
           // Not every token in the `bg-` namespace paints a colour;
           // `bg-[length:200px_100px]` compiles to background-size.
           if (fill.kind === 'not-a-colour') return [];
-          const ratio = whiteOn(key ?? '');
+          const ratio = whiteOn(key ?? '', alpha);
           if (ratio === null) {
             return [
               `${name}: ${prefix}-${key} ${
@@ -700,10 +824,11 @@ describe('primary fill contrast', () => {
           const themes = themesFor(body, variant ?? '', prefix ?? '');
           return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
             if (!themes.includes(theme)) return [];
-            if (themeForeground(variant ?? '', theme) !== 'white') return [];
+            const alpha = whiteForegroundAlpha(themeForeground(variant ?? '', theme));
+            if (alpha === null) return [];
             const rgb = hexToRgb(value);
             if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
-            const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+            const ratio = whiteRatioOn(rgb, alpha);
             // The same 7:1 AAA floor the numeric branch above applies. This
             // test's contract is that a *shared* utility clears AAA; 4.5:1 is
             // the call-site floor, and using it here let a semantic shared
@@ -771,13 +896,26 @@ describe('primary fill contrast', () => {
     // never looked at it, so this whole class of control was unmeasured on both
     // sides. Every stop is checked, because the worst stop is what the label
     // crosses.
-    const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
-
-    /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
+    /**
+     * The foreground each variant prefix paints, e.g. `''` -> white, `dark:` ->
+     * emerald-950, `''` -> white/80 where the label carries an opacity.
+     *
+     * Shared utilities named in the same class string contribute their own
+     * foregrounds, and they go in **first** so a literal `text-*` at the call
+     * site overwrites them — the author's explicit choice wins over the one it
+     * inherits. Without this, `btn-primary bg-orange-600` had no foreground at
+     * all to the sweep: the utility supplies `text-white`, the call site
+     * overrides only the fill, and the 3.60:1 pairing that renders was visible
+     * to neither this pass nor the stylesheet pass (the fill is not in the
+     * stylesheet).
+     */
     const foregrounds = (text: string): Map<string, string> => {
       const found = new Map<string, string>();
-      for (const [, variant, hue, shade] of text.matchAll(textPattern)) {
-        found.set(variant ?? '', shade ? `${hue}-${shade}` : (hue ?? ''));
+      for (const [, variant, colour, modifier] of `${utilityForegroundText(text)} ${text}`.matchAll(
+        new RegExp(TEXT_PATTERN, 'g')
+      )) {
+        if (!namesColour(colour ?? '')) continue;
+        found.set(variant ?? '', modifier ? `${colour}/${modifier}` : (colour ?? ''));
       }
       return found;
     };
@@ -806,13 +944,16 @@ describe('primary fill contrast', () => {
         const fg = candidatePrefixes(prefix)
           .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
           .find((value) => value !== undefined);
-        if (fg !== 'white') continue;
+        // A translucent white label is composited over this fill rather than
+        // assumed solid: `text-white/0` painted nothing and measured 21:1.
+        const alpha = whiteForegroundAlpha(fg);
+        if (alpha === null) continue;
         const fill = resolveFill(key ?? '');
         // A token in the `bg-` namespace that paints no colour is not a fill:
         // `bg-[length:200px_100px]` compiles to background-size, and reporting
         // it would be a complaint about a colour that does not exist.
         if (fill.kind === 'not-a-colour') continue;
-        const ratio = whiteOn(key ?? '');
+        const ratio = whiteOn(key ?? '', alpha);
         if (ratio === null) {
           offenders.push(
             `${path.relative(SRC, file)}:${line} — ${whole} ${
@@ -824,7 +965,7 @@ describe('primary fill contrast', () => {
           continue;
         }
         if (ratio < 4.5) {
-          offenders.push(`${path.relative(SRC, file)}:${line} — ${prefix}white on ${whole} is ${ratio.toFixed(2)}:1`);
+          offenders.push(`${path.relative(SRC, file)}:${line} — ${prefix}${fg} on ${whole} is ${ratio.toFixed(2)}:1`);
         }
       }
 
@@ -915,8 +1056,8 @@ describe('primary fill contrast', () => {
           // surface token — widening it to any foreground turns 7 findings into
           // 150, nearly all of them icons at 3:1 non-text contrast, which is a
           // different question than the one this check answers.
-          if (fg !== 'white') continue;
-          const foreground = { r: 255, g: 255, b: 255 };
+          const alpha = whiteForegroundAlpha(fg);
+          if (alpha === null) continue;
 
           const rgb = hexToRgb(value);
           // A translucent token over a gradient has no single value to measure.
@@ -928,10 +1069,7 @@ describe('primary fill contrast', () => {
             );
             continue;
           }
-          const themeRatio = contrastRatio(
-            relativeLuminance(rgb.r, rgb.g, rgb.b),
-            relativeLuminance(foreground.r, foreground.g, foreground.b)
-          );
+          const themeRatio = whiteRatioOn(rgb, alpha);
           if (themeRatio < 4.5) {
             offenders.push(
               `${path.relative(SRC, file)}:${line} — ${fg} on ${fill}-${token} is ${themeRatio.toFixed(2)}:1 in ${theme}`
