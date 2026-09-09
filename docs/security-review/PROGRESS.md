@@ -24,9 +24,13 @@ mid-flight by a follow-up push, not a real failure) — confirmed and noted
 on the PR before merging, and the fresh run on the final head (`13c7605`)
 was fully green. Merged via squash, merge commit `aae45c0`. Rotation row
 15 was already ✅ in the PR's own docs update (0 fixed, 0 flagged, 0 new
-findings — SCH-10 re-verified unchanged). No `security-review/events-*` or
-`security-review/EV-16*` branch exists yet (checked via `git ls-remote
---heads`), so the rotation is clear to start **16 Events & requests**
+findings — SCH-10 re-verified unchanged). Checked the actual established
+Claude branch namespace (`claude/security-review-*`, not
+`security-review/*` — e.g. the just-merged Scheduling branch was
+`claude/security-review-scheduling`) via `git ls-remote --heads`: no
+`claude/security-review-events*` branch exists, and no other branch name
+contains "event" apart from an unrelated `claude/public-program-event-
+pipeline-eggwcm`. The rotation is clear to start **16 Events & requests**
 next — nothing is blocking it.
 
 30-minute rotation watchdog: checked GitHub state directly (open PRs, the
@@ -12207,6 +12211,8 @@ Next: 00 cross-cutting baseline (second full pass), once this PR merges.
 Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
 Codex-round log entry above); the 14 original findings plus the 6 Codex
 findings are all resolved with no open items. Rotation row 33 -> done.
+
+</details>
 
 </details>
 
