@@ -1046,3 +1046,210 @@ of a loaded JSON value), no new capacity/count-then-insert pattern.
 | `eslint .`                                                                      | ✅ 0 errors                                                                                                                                                             |
 | `npx vitest run src/modules/scheduling src/pages/scheduling`                    | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
 | `npm run build` (frontend)                                                      | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |
+
+## Pass 4 (2026-09-09) — 0 fixes, 0 new findings, SCH-10 re-verified unchanged
+
+**Baseline:** `8b89f319d` (the merge commit of PR #2212, pass 3's actual landing
+point — found via `git merge-base --is-ancestor` against pass 3's own tip
+commit `05b910382`, not assumed from the doc's prose). Six days and
+substantial churn sit between it and `fda025c8` (this pass's HEAD): a large
+new "editable call types" feature (department-defined call-type slugs, with
+retirement instead of deletion, three follow-on migrations, and multiple of
+its own internal Codex review rounds per its commit messages), a close-out
+backlog queue, a member's own hours-history screen, a late-signup escape
+hatch, and a self-scoped decline-assignment endpoint.
+
+**Diff-scoped, not re-read whole**, consistent with pass 3's practice once a
+baseline commit is reachable (the shallow clone needed deepening to reach it,
+as in prior passes). Real churn against the seven declared/adjacent backend
+files: `scheduling.py` (+503/-20), `scheduling_service.py` (+1083/-47),
+`schemas/scheduling.py` (+152/-4), `models/training.py` (+10, one new
+nullable column), `calcom_service.py` (+30/-9). `scheduling_module_config.py`,
+`calcom_sync.py`, `standing_shift_service.py`,
+`app/mcp/tools/scheduling.py` are byte-identical to pass 3. 79 frontend files
+under `modules/scheduling/`+`pages/scheduling/` changed (+11250/-2322) — grep-swept
+for the checklist's red flags (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`, `date-fns` imports, raw
+`fetch()`) rather than read line-by-line; zero hits, and the same is enforced
+independently by ESLint's `noBlockingBrowserDialogs` rule, which the
+completion gate confirms at 0 errors. Partial-scope, not assumed clean, per
+the same disclosure pass 2/3 used for their own grep-only sweeps.
+
+**Route/permission enumeration re-run from scratch** (not diffed against pass
+3's table): **101/101 routes** (97 in `scheduling.py`, up from 92 — five new:
+`GET /shifts/needing-closeout`, `POST`/`DELETE /shifts/{id}/late-signup`,
+`POST /assignments/{id}/decline`, `GET /my-hours-history`; +3 in
+`scheduling_module_config.py`; +1 in `calcom_sync.py`) carry a recognized auth
+dependency. No route with none. Cross-checked against `git diff` for
+`require_permission`/`Depends(get_current_user)` changes on **existing**
+routes:
+
+- **Eight `.view`-only reads widened to `.view` OR `.manage`**
+  (`list_shifts`, `get_shift`, `get_attendance`, `list_shift_calls`,
+  `list_templates`, `get_template`, `list_patterns`, `get_pattern`,
+  `list_shift_assignments` — nine, not eight; corrected while writing this up).
+  Each carries an in-code comment naming the mechanism: `permission_matches`
+  treats `scheduling.manage` and `scheduling.view` as unrelated literal
+  strings, so a position holding only `.manage` — every page in Scheduling
+  Administration — was refused the reads those same pages are built to show.
+  Strictly widening, not a downgrade: every caller who could read these
+  before still can, and `.manage` already permits every corresponding write.
+  Verified `.manage` is the more sensitive grant, not the reverse
+  (`create_shift`/`update_shift`/`delete_call`/etc. all already required
+  it), so pairing it onto a read is not a XC-2 pattern.
+- **One `require_permission` OR-gate narrowed**: `get_position_roster` went
+  from `("scheduling.manage", "training.view_all", "training.manage")` to
+  `("scheduling.manage")` alone, with a comment explaining why — the roster
+  moved into Scheduling Administration and a training officer's continued
+  access to the whole eligibility/EVOC roster via a wide OR-gate was the
+  finding the code comment itself describes fixing. A narrowing is a
+  behavior change in the opposite (safe) direction from what this checklist
+  exists to catch, so re-verified rather than treated as a red flag: no
+  other route in either file still grants read access to this data through
+  `training.view_all`/`training.manage`.
+
+**New XC-1/XC-3 surface, checked individually:**
+
+- `open_late_signup`/`close_late_signup` (`scheduling_service.py:2085-2168`)
+  resolve the shift via `get_shift_by_id(shift_id, organization_id,
+for_update=True)` — the same already-established org-scoped, row-locked
+  helper every other shift mutation in this file uses. `minutes` is
+  server-clock-relative (`datetime.now(timezone.utc) + timedelta(minutes=...)`),
+  never a client-supplied instant, and is both schema-bounded
+  (`Field(ge=1, le=720)`, 12 hours) and further clamped against the shift's
+  own roster deadline at write time — a reopening made a second before the
+  cutoff cannot smuggle a window past it. Gated on `scheduling.assign` OR the
+  shift's own officer via the existing `_authorize_shift_management` helper.
+- `decline_assignment` (`:4453-4520`) resolves its row by `id` **and**
+  `user_id` **and** `organization_id` in one `WHERE` — the same three-column
+  shape `confirm_assignment` already used — so a foreign assignment id can
+  never cross tenants or users.
+- `get_my_hours_history`/`get_member_month_totals` (`:6630-6776`) filter on
+  both `ShiftAttendance.user_id == user_id` and `Shift.organization_id ==
+organization_id` via the join; self-scoped by the caller's own id, no
+  permission gate needed for the same reason `/my-attendance-history` has
+  none.
+- `get_closeout_backlog`/`closeout_backlog_criteria` (`:1152-1195`,
+  `:212-254`) scope every query on `Shift.organization_id ==
+organization_id`; the raw-SQL `INTERVAL {int(cushion)} HOUR` fragment in
+  `closeout_effective_end` is safe because `cushion` is coerced through
+  `int()` before interpolation (`open_ended_cushion_hours`, which itself
+  degrades to a bounded default rather than raising on a malformed stored
+  setting, per Pitfall #19) — not a string an admin's JSON could turn into
+  SQL.
+
+**New feature reviewed in full: department-editable call types** (`models/
+call_tracking.py`, `services/call_tracking_service.py`, both new since pass
+3 and not previously in this doc's scope, but reached from the declared
+`scheduling.py`'s settings endpoints — reviewed per the "check a file
+`SchedulingService` newly reads" precedent pass 2 established). Read both
+files in full (240 L + 601 L):
+
+- Every query is `organization_id`-scoped; `attach_response` resolves a
+  client-supplied `call_id` against `OrgCall.organization_id ==
+organization_id` before permitting the attach (XC-1) rather than trusting
+  the caller's permission alone (XC-3/Pitfall #14b, cited explicitly in the
+  method's own docstring).
+- `slugs_locked_by_history`'s `ShiftCompletionReport.call_types.like(...)`
+  calls all pass `escape=LIKE_ESCAPE_CHAR` with `like_pattern()`-built
+  patterns (Pitfall #25 compliant) — the only `.like()`/`.ilike()` surface
+  this feature adds; `scheduling_service.py` itself remains at zero.
+  `_partition_existing` explicitly locks (`with_for_update()`) the existing
+  `OrgCallResponse` rows before a finalize/closeout-calls save reconciles
+  them, citing AP-13 findings 8/9 as the precedent for why the shift-row
+  lock alone doesn't refresh a REPEATABLE READ snapshot for a sibling table
+  — Pitfall #27 applied correctly to a table outside `scheduling_service.py`
+  itself.
+- `OrgCall`/`OrgCallResponse` models (`models/call_tracking.py`): the one
+  `ondelete="SET NULL"` column (`OrgCallResponse.shift_id`) is
+  `nullable=True` (Pitfall #2); `MAX_CALLS_PER_SHIFT=100` and
+  `MAX_CALL_TYPES=50` bound both the per-shift write and the org's
+  configured list against a DoS-shaped abuse. `CallTypeOption.slug` is
+  schema-validated (`pattern=r"^[a-z0-9_]+$"`, `max_length=50`) before it can
+  reach `OrgCall.call_type` (`String(50)`).
+- Three new migrations (`a3d7e2f18c45`, `c9f4a2b71d38`, `d7c1b95e2a40`, all
+  2026-09-05) read in full: all guard `shift_completion_reports`/
+  `organizations` existence before touching them (Pitfall #26), use
+  parameterized `sa.text(...).bindparams(...)`/`{"param": value}` throughout
+  — no f-string SQL — are explicitly idempotent, and correctly declare
+  themselves irreversible (no-op `downgrade()`) where the information needed
+  to reverse them was never retained. The table-creation migration
+  (`82bdcb3b1e64`, 2026-08-18, predates pass 3 but was never previously in
+  this doc's scope since the feature hadn't reached `scheduling.py` yet) is
+  itself guarded and correct: both FKs use `nullable=True` where
+  `ondelete="SET NULL"` applies.
+- `add_shift_late_signup_until` (`c9f2a4b71d38`) touches `shifts` without an
+  explicit `_has_table` guard, which looked at first read like a Pitfall #26
+  gap matching the exact shape that migration `e2c8f5a71d40` (pass 2) and
+  `fab0ab7897d3` (pass 3) were praised for adding. **Verified, not assumed,
+  to be safe**: `shifts` is created unconditionally by
+  `20260122_0015_add_training_programs_and_requirements.py`, an ancestor of
+  every migration in this chain — confirmed by running the repo's own
+  `test_migration_create_all_tables.py` detection logic
+  (`_tables_created_by_migrations`) against the source directly, not by
+  trusting pass 3's prose (which called `shifts` "a `create_all`-only
+  table" — that description was already inaccurate then and remains so; not
+  corrected further here since it's a passing reference in a completed
+  section, not a standing claim this pass relies on). `shift_templates` and
+  `basic_apparatus`, the tables `e2c8f5a71d40`/`fab0ab7897d3` guarded, are
+  genuinely create_all-only — the two cases are not the same shape, and the
+  new migration touching only `shifts` needs no guard.
+
+**`calcom_service.py`'s 30-line change** (`parse_webhook_event`, now also
+recognizing `MEETING_ENDED` and dropping Cal.com-flagged no-show attendees
+from `attendee_emails`) is pure parsing logic with no outbound request and no
+DB access — SCH-10 (the DNS-rebinding TOCTOU) is unaffected, since it
+concerns the outbound `httpx` calls in `test_connection`/`list_bookings`,
+neither of which changed. The consuming webhook
+(`api/public/integrations_webhook.py:187-255`, a different rotation
+feature's file, not re-reviewed in full here) still verifies
+`X-Cal-Signature-256` via `verify_hmac_signature` before any payload is
+parsed, still resolves the organization through `integration.organization_id`
+rather than a client-supplied value, and still has replay protection
+(`is_duplicate_webhook`) — spot-checked because the declared file's output
+feeds directly into it, not because the endpoint itself is in scope this
+pass.
+
+**SCH-10 re-verified, unchanged.** `docs/KNOWN_LIMITATIONS.md`'s entry
+(updated by the training-extended and push-service closures) still correctly
+lists `calcom_service.py` among the six remaining unpinned `httpx` call
+sites; nothing in this pass's diff touches the two `assert_outbound_url_safe`
+call sites in that file. Not re-fixed here for the same reason pass 1 flagged
+rather than fixed it: closing it means pinning the resolved address across
+every `create_integration_client()`-based transport at once, not a
+scheduling-scoped change.
+
+**No new findings** on any other checklist dimension: no new
+`.like()`/`.ilike()` call in `scheduling_service.py` itself (still zero); no
+new CSV/export surface; no new Pitfall #12 JSON-mutation (`late_signup_until`
+is a scalar column, not JSON; the call-type settings write is a wholesale
+`model_dump()` reassignment, not an in-place nested mutation); no
+capacity/count-then-insert pattern added without a lock (`_partition_existing`
+above is the one new instance, and it locks). Existing guard tests
+(`test_scheduling_org_scoping.py`, `test_swap_offer_response.py`,
+`test_shift_template_equipment_checks.py`) re-run clean as part of the full
+suite below; no regression in any of pass 1/2/3's fixes.
+
+### Guard tests
+
+None added — no fix was needed this pass. Existing coverage for the new
+surface reviewed above was confirmed present and passing rather than written
+fresh: `test_scheduling_closeout_backlog.py`, `test_member_hours_history.py`,
+`test_shift_signup_window.py`, `test_shift_signup_window_enforcement.py`,
+`test_call_tracking.py`, `test_call_type_provenance_narrowing_migration.py`,
+`test_reserved_call_type_slug_migration.py`, plus decline/late-signup cases
+inside `test_scheduling.py`.
+
+## Completion gate (pass 4)
+
+| Check                                                                                                         | Result                                                                      |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                 | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                                          | ✅ 1555 files unchanged                                                     |
+| `isort --check-only app/ tests/ alembic/`                                                                     | ✅ clean (installed, not skipped)                                           |
+| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 440 revisions                                               |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1247 passed, 1 skipped (pre-existing optional-dep skip)                  |
+| `pytest tests/` (full backend suite)                                                                          | ✅ 11967 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep)     |
+| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                     | ✅ 0 errors                                                                 |
+| `npx eslint .`                                                                                                | ✅ 0 errors                                                                 |
+| `npx vitest run src/modules/scheduling src/pages/scheduling`                                                  | ✅ 672 passed (42 files) — not mandatory, run anyway per pass 3's precedent |
