@@ -790,8 +790,18 @@ organization settings, enabled modules, member sign-ins, SOPs and policies,
 first event, and MFA.
 
 **Module items** appear only when the module is enabled: shift templates,
-training courses and requirements, inventory categories, custom forms, verified
-email delivery, prospective-members pipeline, and integrations.
+training courses and requirements, inventory categories, medical supply
+categories, department store products, custom forms, verified email delivery,
+prospective-members pipeline, and integrations.
+
+A module the wizard offers must either add an item here or be named in
+`MODULES_WITHOUT_SETUP_CHECKLIST_ITEM` with the reason it needs none —
+Elections and Minutes have nothing to configure ahead of time, Apparatus and
+Facilities are covered by essential items whether or not their module is on.
+`tests/test_setup_checklist.py` holds that partition, because turning a module
+on is not the same as making it usable: the Department Store shipped
+enableable and then silently empty, with nothing telling the department its
+catalog was the problem.
 
 Items are either `kind: "auto"` (derived from entity counts) or `kind:
 "review"` (`org_settings`, `modules` — no measurable signal, completed by the

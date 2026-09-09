@@ -110,6 +110,9 @@ number of screens a user sees depends on the services they select.
 
 - Finalizes onboarding and hands off to the Department Setup checklist at `/setup`
 - The checklist derives each step from live entity counts rather than a stored list
+- Module-specific steps appear only for the modules that were enabled — a
+  department that turned on the Department Store is told it needs a catalog
+  before anyone can order
 
 ### 3. Post-Onboarding Checklist
 
