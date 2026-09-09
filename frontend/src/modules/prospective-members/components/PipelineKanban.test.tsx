@@ -42,8 +42,12 @@ const stage = (id: string, name: string, sortOrder: number): PipelineStage =>
 
 const stages = [stage('s1', 'Application', 0), stage('s2', 'Interview', 1), stage('s3', 'Vote', 2)];
 
+// pipeline_id matches the stages above, as the API always sends it. The board
+// uses it to tell its own applicants from another pipeline's, so a fixture
+// without it is not a realistic row.
 const applicant = {
   id: 'app-1',
+  pipeline_id: 'pipe-1',
   first_name: 'Riley',
   last_name: 'Bishop',
   email: 'riley@example.com',
@@ -74,7 +78,9 @@ beforeEach(() => {
 
 describe('PipelineKanban drag-and-drop', () => {
   it('advances an applicant dropped on the next stage', async () => {
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />
+    );
 
     dragTo('Vote');
 
@@ -87,7 +93,9 @@ describe('PipelineKanban drag-and-drop', () => {
   // to undo a mis-drop did nothing but scold them — the Back button in the
   // detail drawer was the only way back.
   it('moves an applicant back when dropped on the previous stage', async () => {
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />
+    );
 
     dragTo('Application');
 
@@ -99,7 +107,9 @@ describe('PipelineKanban drag-and-drop', () => {
   // single meaning to pick — it is refused rather than guessed at.
   it('refuses a drop that skips over a stage, and says so', () => {
     const farAway = { ...applicant, current_stage_id: 's1' };
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[farAway]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[farAway]} onApplicantClick={vi.fn()} />
+    );
 
     dragTo('Vote');
 
@@ -110,7 +120,9 @@ describe('PipelineKanban drag-and-drop', () => {
 
   it('does not move an applicant who is not active', () => {
     const held = { ...applicant, status: 'on_hold' };
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[held]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[held]} onApplicantClick={vi.fn()} />
+    );
 
     dragTo('Application');
 
@@ -119,7 +131,9 @@ describe('PipelineKanban drag-and-drop', () => {
   });
 
   it('does nothing when dropped back on the stage it came from', () => {
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />
+    );
 
     dragTo('Interview');
 
@@ -141,7 +155,9 @@ describe('PipelineKanban applicants with no stage', () => {
 
   it('shows an applicant whose stage id is empty', () => {
     const stageless = { ...applicant, current_stage_id: '', current_stage_name: undefined };
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[stageless]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[stageless]} onApplicantClick={vi.fn()} />
+    );
 
     const column = unassignedColumn();
     expect(column).not.toBeNull();
@@ -150,14 +166,18 @@ describe('PipelineKanban applicants with no stage', () => {
 
   it('shows an applicant whose stage belongs to no column', () => {
     const elsewhere = { ...applicant, current_stage_id: 'deleted-stage' };
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[elsewhere]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[elsewhere]} onApplicantClick={vi.fn()} />
+    );
 
     expect(within(unassignedColumn() as HTMLElement).getByRole('button', { name: /Riley Bishop/ })).toBeInTheDocument();
   });
 
   // A healthy board must look exactly as it always did.
   it('does not render the column when everyone is on a stage', () => {
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />
+    );
 
     expect(unassignedColumn()).toBeNull();
   });
@@ -167,12 +187,77 @@ describe('PipelineKanban applicants with no stage', () => {
   // nothing at all: the card sprang back with no explanation.
   it('explains why an unassigned applicant cannot be dragged onto a stage', () => {
     const stageless = { ...applicant, current_stage_id: '' };
-    renderWithRouter(<PipelineKanban stages={stages} applicants={[stageless]} onApplicantClick={vi.fn()} />);
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[stageless]} onApplicantClick={vi.fn()} />
+    );
 
     dragTo('Interview');
 
     expect(mockAdvance).not.toHaveBeenCalled();
     expect(mockRegress).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('not on a stage of this pipeline'));
+  });
+});
+
+// The store assigns `applicants` only on a successful fetch and its catch
+// leaves the previous list alone, so switching pipeline shows the old one's
+// rows until the new fetch lands — and permanently if it fails. Those rows
+// match no stage on this board. Collecting them into Unassigned would put a
+// card for someone else's pipeline in front of a coordinator, and opening it
+// and pressing Advance moves that applicant along a workflow they are not
+// looking at. A stage mismatch is only "unassigned" for this pipeline's own.
+describe('PipelineKanban applicants from another pipeline', () => {
+  const unassignedColumn = () => screen.queryByRole('group', { name: 'Unassigned applicants' });
+
+  const stranger = {
+    ...applicant,
+    id: 'app-other',
+    pipeline_id: 'pipe-2',
+    first_name: 'Devon',
+    last_name: 'Marsh',
+    current_stage_id: 'other-pipeline-stage',
+  };
+
+  it('does not show an applicant belonging to a different pipeline', () => {
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={stages} applicants={[stranger]} onApplicantClick={vi.fn()} />
+    );
+
+    expect(screen.queryByRole('button', { name: /Devon Marsh/ })).toBeNull();
+    expect(unassignedColumn()).toBeNull();
+  });
+
+  it('keeps this pipeline’s own stray and drops the other pipeline’s', () => {
+    const ourStray = { ...applicant, current_stage_id: '' };
+    renderWithRouter(
+      <PipelineKanban
+        pipelineId="pipe-1"
+        stages={stages}
+        applicants={[ourStray, stranger]}
+        onApplicantClick={vi.fn()}
+      />
+    );
+
+    const column = unassignedColumn();
+    expect(column).not.toBeNull();
+    expect(within(column as HTMLElement).getByRole('button', { name: /Riley Bishop/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Devon Marsh/ })).toBeNull();
+  });
+
+  // Deleting a pipeline's last stage leaves it with no stages and its
+  // prospects with a null current_step_id, so this is reachable rather than
+  // hypothetical. Reading the board's pipeline off stages[0] would make it
+  // undefined here, exclude every applicant, and render a blank board beneath
+  // a non-zero total — which is why the id is a prop.
+  it('still shows this pipeline’s applicants when it has no stages left', () => {
+    const stranded = { ...applicant, current_stage_id: '' };
+    renderWithRouter(
+      <PipelineKanban pipelineId="pipe-1" stages={[]} applicants={[stranded, stranger]} onApplicantClick={vi.fn()} />
+    );
+
+    const column = unassignedColumn();
+    expect(column).not.toBeNull();
+    expect(within(column as HTMLElement).getByRole('button', { name: /Riley Bishop/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Devon Marsh/ })).toBeNull();
   });
 });
