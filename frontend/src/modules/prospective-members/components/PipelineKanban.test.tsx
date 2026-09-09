@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { renderWithRouter } from '../../../test/utils';
 import { PipelineKanban } from './PipelineKanban';
 import type { PipelineStage, ApplicantListItem } from '../types';
@@ -126,5 +126,53 @@ describe('PipelineKanban drag-and-drop', () => {
     expect(mockAdvance).not.toHaveBeenCalled();
     expect(mockRegress).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+});
+
+// The board grouped applicants into a bucket per stage id and silently dropped
+// anyone whose id matched none of them. Two ordinary cases land there: the API
+// maps a null current_step_id to '', which is what a prospect is left holding
+// when the stage they were on is deleted, and a stage id from a pipeline the
+// board is not showing matches nothing either. Those people disappeared from
+// the board entirely while the server-side total kept counting them — a board
+// reading "No applicants" under a header saying there is one.
+describe('PipelineKanban applicants with no stage', () => {
+  const unassignedColumn = () => screen.queryByRole('group', { name: 'Unassigned applicants' });
+
+  it('shows an applicant whose stage id is empty', () => {
+    const stageless = { ...applicant, current_stage_id: '', current_stage_name: undefined };
+    renderWithRouter(<PipelineKanban stages={stages} applicants={[stageless]} onApplicantClick={vi.fn()} />);
+
+    const column = unassignedColumn();
+    expect(column).not.toBeNull();
+    expect(within(column as HTMLElement).getByRole('button', { name: /Riley Bishop/ })).toBeInTheDocument();
+  });
+
+  it('shows an applicant whose stage belongs to no column', () => {
+    const elsewhere = { ...applicant, current_stage_id: 'deleted-stage' };
+    renderWithRouter(<PipelineKanban stages={stages} applicants={[elsewhere]} onApplicantClick={vi.fn()} />);
+
+    expect(within(unassignedColumn() as HTMLElement).getByRole('button', { name: /Riley Bishop/ })).toBeInTheDocument();
+  });
+
+  // A healthy board must look exactly as it always did.
+  it('does not render the column when everyone is on a stage', () => {
+    renderWithRouter(<PipelineKanban stages={stages} applicants={[applicant]} onApplicantClick={vi.fn()} />);
+
+    expect(unassignedColumn()).toBeNull();
+  });
+
+  // There is no stage to advance from, so neither advance nor regress applies.
+  // This previously fell into the same guard as an unknown drop target and did
+  // nothing at all: the card sprang back with no explanation.
+  it('explains why an unassigned applicant cannot be dragged onto a stage', () => {
+    const stageless = { ...applicant, current_stage_id: '' };
+    renderWithRouter(<PipelineKanban stages={stages} applicants={[stageless]} onApplicantClick={vi.fn()} />);
+
+    dragTo('Interview');
+
+    expect(mockAdvance).not.toHaveBeenCalled();
+    expect(mockRegress).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('not on a stage of this pipeline'));
   });
 });
