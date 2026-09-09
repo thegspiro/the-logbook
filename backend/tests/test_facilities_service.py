@@ -35,6 +35,7 @@ from app.schemas.facilities import (
     FacilityComplianceItemUpdate,
     FacilityDocumentResponse,
     FacilityEmergencyContactCreate,
+    FacilityEmergencyContactResponse,
     FacilityEmergencyContactUpdate,
     FacilityOccupantUpdate,
     FacilityPhotoResponse,
@@ -559,6 +560,34 @@ class TestCreateEmergencyContact:
                 facility_id=str(uuid4()),
                 contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
             )
+
+    def test_legacy_blank_name_row_still_serializes(self):
+        """FAC-52: Codex review of the FAC-50 fix, PR #2425. Before this
+        migration, `company_name` was a required `str` with no
+        `min_length`, so a caller could (and, per Codex, plausibly did)
+        persist `company_name=""` -- the only way to functionally "blank" a
+        column that couldn't yet be NULL. `require_company_or_contact_name`
+        originally lived on `FacilityEmergencyContactBase`, which
+        `FacilityEmergencyContactResponse` also inherits -- so reading back
+        exactly such a legacy row would raise `ValidationError` out of
+        `model_validate()` on every single GET/list, forever, for a row
+        nobody has written since. The validator now lives only on `Create`;
+        `Response` reports whatever is actually in the database.
+        """
+        legacy_row = FacilityEmergencyContact(
+            id=str(uuid4()),
+            organization_id=str(uuid4()),
+            facility_id=str(uuid4()),
+            contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            company_name="",
+            contact_name=None,
+            priority=1,
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        response = FacilityEmergencyContactResponse.model_validate(legacy_row)
+        assert response.company_name == ""
 
 
 class TestUpdateEmergencyContact:

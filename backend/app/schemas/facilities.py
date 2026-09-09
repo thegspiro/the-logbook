@@ -1069,8 +1069,17 @@ class FacilityEmergencyContactBase(BaseModel):
     # Individually optional — the shipped ContactsSection.tsx form's own
     # "company name or contact name is required" rule allows a vendor with no
     # named contact, or a named contact (e.g. facility staff) with no
-    # company — but the validator below still requires at least one so the
-    # row has something to identify it by.
+    # company. The "at least one" invariant is enforced on Create (below)
+    # and re-checked against the merged row on Update
+    # (FacilitiesService.update_emergency_contact) — deliberately NOT here,
+    # even though FacilityEmergencyContactResponse also inherits this base:
+    # a response's job is to report whatever is actually in the database,
+    # not to re-enforce a write-time rule against it. FAC-52: a legacy row
+    # written before this rule existed could have company_name="" (a valid
+    # required-string value under the pre-migration schema, which had no
+    # min_length) — enforcing the rule here would fail response
+    # serialization with a 500 on every read of such a row, forever, for a
+    # row nobody has written since.
     company_name: Optional[str] = Field(None, max_length=200)
     contact_name: Optional[str] = Field(None, max_length=200)
     phone: Optional[str] = Field(None, max_length=50)
@@ -1081,15 +1090,13 @@ class FacilityEmergencyContactBase(BaseModel):
     notes: Optional[str] = None
     is_active: bool = True
 
+
+class FacilityEmergencyContactCreate(FacilityEmergencyContactBase):
     @model_validator(mode="after")
-    def require_company_or_contact_name(self) -> "FacilityEmergencyContactBase":
+    def require_company_or_contact_name(self) -> "FacilityEmergencyContactCreate":
         if not (self.company_name or self.contact_name):
             raise ValueError("company_name or contact_name is required")
         return self
-
-
-class FacilityEmergencyContactCreate(FacilityEmergencyContactBase):
-    pass
 
 
 class FacilityEmergencyContactUpdate(BaseModel):

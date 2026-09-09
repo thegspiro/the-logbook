@@ -603,6 +603,164 @@ failed with `DID NOT RAISE ValueError` against the pre-fix source, and the
 permitted-partial-update test passed either way (it never depended on the
 new check firing). `git stash apply` restored the fix.
 
+### FAC-52 — MED (correctness), Codex review of `8e413cf8a3`, FAC-51's own fix — the "at least one name" invariant, when checked on the response schema, turned a plausible legacy row into a permanent 500 on every read — ✅ FIXED
+
+**What:** Codex's fifth consecutive review round on this PR (each of the
+last four caught a real bug in the previous round's own fix) pointed out
+that `require_company_or_contact_name` living on
+`FacilityEmergencyContactBase` — inherited by both `Create` and `Response`
+— was never just an input-side rule. Before FAC-50's migration,
+`company_name` was `str = Field(..., max_length=200)`: required, but with
+no `min_length`, so `company_name=""` was a perfectly valid value under
+both the old schema and the (then `NOT NULL`) database column — and,
+critically, the _only_ way a caller could functionally "blank" the field
+before it could be `NULL`. Any such row, sitting in the database from
+before this PR, would fail `FacilityEmergencyContactResponse.model_validate()`
+the moment this pass's validator started running — not on write, on every
+subsequent read — turning a single legacy row into a permanent 500 for
+every list/get of that facility's contacts, for a row nobody has written
+to since.
+
+**Where:** `backend/app/schemas/facilities.py`
+(`FacilityEmergencyContactBase`, `FacilityEmergencyContactCreate`).
+
+**Fix:** moved `require_company_or_contact_name` off `Base` and onto
+`Create` directly, so it no longer runs when `Response` builds itself from
+a database row — a response's job is to report what is actually stored,
+not to re-enforce a write-time rule against it (the same principle as
+CLAUDE.md Pitfall #29, "a screen reports what the backend decided", turned
+toward validation rather than derivation: a read path defers to whatever
+is genuinely there, rather than deciding a row is invalid after the fact).
+The invariant is unweakened everywhere it matters for _writes_ — `Create`
+still enforces it, and FAC-51's explicit merged-object check in
+`update_emergency_contact` is unaffected (it checks ORM attributes
+directly, never goes through this schema). Also added a data-normalization
+step to FAC-50's own migration (`f1565c64b658`, still unmerged — no
+downstream child revision needed): `UPDATE facility_emergency_contacts SET
+company_name = NULL WHERE company_name = ''`, so `""` and `NULL` don't
+persist side by side as two on-disk spellings of "no company name"
+(CLAUDE.md Pitfall #20's "one canonical stored shape" applied to a scalar
+column). This is cleanup, not the fix itself — the schema change alone
+already stops any row, blank-string or otherwise, from 500ing on read.
+
+**Regression test:** `tests/test_facilities_service.py`,
+`TestCreateEmergencyContact::test_legacy_blank_name_row_still_serializes`
+— builds a `FacilityEmergencyContact` ORM instance with `company_name=""`,
+`contact_name=None` directly (bypassing any schema, as a legacy row
+would have been read from the database) and asserts
+`FacilityEmergencyContactResponse.model_validate()` succeeds. Confirmed to
+fail against the pre-fix source (`git stash push -u` isolating
+`app/schemas/facilities.py` only, test file kept) with
+`pydantic.ValidationError: company_name or contact_name is required` —
+i.e. the exact 500 a real legacy row would have produced. `git stash apply`
+restored the fix; the full file (38 tests) and the 9-file `-k "facilit"`
+sweep (180 tests) both passed clean afterward. The migration's both
+directions were re-verified with `alembic downgrade -1` / `upgrade head`
+against this worktree's live database after adding the backfill statement.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a correctness fix with no
+remaining product decision.
+
+### FAC-53 — MED (correctness, CLAUDE.md Pitfall #1) — the shipped contact editor built its update payload with create-only "omit the blank" logic, so clearing company_name (or any other optional field) while editing silently did nothing — ✅ FIXED
+
+**What:** Same Codex round. `ContactsSection.tsx`'s `handleSave` built one
+`payload` object with `if (formData.x.trim()) payload.x = ...` for every
+optional field, then sent that same payload to either `createEmergencyContact`
+or `updateEmergencyContact` depending on whether an existing contact was
+being edited. That is the create-side idiom (`|| undefined`, omit blanks so
+`""` never reaches a Pydantic validator) — correct for create, and exactly
+backwards for update: the backend applies update payloads with
+`exclude_unset=True`, so an omitted key means "leave this alone," not
+"clear it." FAC-50/51 made `company_name` clearable via an explicit
+`null`, but the shipped editor could never produce one — a user clearing
+only the company name on a contact that also had a `contact_name` would
+see "Contact updated," and the stale company name would still be there on
+reload. This exact form had every other optional text field
+(`contact_name`, `phone`, `alt_phone`, `email`, `service_contract_number`)
+carrying the identical latent bug — it simply had no visible symptom before
+company_name became clearable, since none of the others were ever
+required. Reviewing the one field led straight to the rest of the same
+block.
+
+**Where:** `frontend/src/modules/facilities/components/ContactsSection.tsx`
+(`handleSave`), `frontend/src/services/facilitiesServices.ts`
+(`updateEmergencyContact`).
+
+**Fix:** split `handleSave` into two branches, following the same pattern
+already established elsewhere in this module (`RoomsSection.tsx`'s
+`handleSave`): the update branch now builds every field via `blankToNull`
+(from `utils/formValues.ts`) so a cleared field sends an explicit `null`
+rather than being omitted, sending every field the form owns on every save
+per CLAUDE.md Pitfall #1's closing rule; the create branch keeps the
+original omit-blanks behavior unchanged. `updateEmergencyContact`'s
+parameter type was `Partial<EmergencyContactCreate>`, whose fields are
+`string | undefined` and therefore cannot type-check a `null` argument
+under `exactOptionalPropertyTypes` — added a proper `EmergencyContactUpdate`
+interface (mirroring `RoomUpdate`'s shape) with each clearable field typed
+`string | null`, and changed the service method's signature to it.
+
+**Regression test:** none added — this module has no existing component
+test file to extend, and this is a UI form's payload-construction logic
+rather than backend behavior with a unit-testable seam; the fix was
+verified by reading the resulting `handleSave` against the exact update/
+create contract the backend now expects (matching the already-tested
+FAC-50/51 backend behavior) and by `tsc --noEmit` / `eslint` passing clean.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a correctness fix with no
+remaining product decision.
+
+### FAC-54 — LOW (frontend/backend contract drift, CLAUDE.md Pitfall #5) — `ComplianceItem`'s nullable response fields were typed as optional-only, not optional-and-nullable — ✅ FIXED
+
+**What:** Same Codex round, on FAC-49's own fix. `FacilityComplianceItemResponse`
+declares `isCompliant`, `findings`, `correctiveAction` and
+`correctiveActionDeadline` as `Optional[...]` with no
+`response_model_exclude_none`, so FastAPI serializes an unset one as an
+explicit JSON `null` — not an omitted key. FAC-49 typed the matching
+frontend fields `field?: T`, which TypeScript treats as `T | undefined`;
+`null` is not assignable to that type, so a consumer checking `if (item.isCompliant !== undefined)` would pass a bare `null` through code that
+assumed it had a real boolean.
+
+**Where:** `frontend/src/services/facilitiesServices.ts` (`ComplianceItem`).
+
+**Fix:** widened every nullable response field (`sortOrder`, `isCompliant`,
+`findings`, `correctiveAction`, `correctiveActionDeadline`, `notes`) to
+`T | null` in addition to the existing `?:`, matching what the backend
+schema actually sends. `correctiveActionCompleted` stays non-optional,
+non-nullable — the model column is `nullable=False` with a default.
+
+**Regression test:** none added, for the same reason as FAC-49 — no
+shipped component consumes these fields yet (confirmed unchanged by the
+same repo-wide grep FAC-49's write-up already ran); `tsc --noEmit` is the
+applicable check for a type-only correction and passed clean.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a type-contract fix with
+no remaining product decision.
+
+## Completion gate (pass 4, round 19 — Codex review of `8e413cf8a3`, FAC-51's own fix; FAC-52/FAC-53/FAC-54)
+
+| Check                                                                                                                   | Result                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `flake8 app/schemas/facilities.py alembic/versions/*facility_contact_company_name*.py tests/test_facilities_service.py` | ✅ 0 violations                                                                     |
+| `black --check` (same files)                                                                                            | ✅ clean                                                                            |
+| `isort --check-only` (same files)                                                                                       | ✅ clean                                                                            |
+| `alembic downgrade -1` / `upgrade head`                                                                                 | ✅ both directions apply cleanly, backfill statement included                       |
+| `python3 scripts/validate_migrations.py --strict`                                                                       | ✅ passed (440 migrations, single head `f1565c64b658`)                              |
+| `pytest tests/test_facilities_service.py`                                                                               | ✅ 38 passed (37 baseline after FAC-51, +1 new this round for FAC-52)               |
+| `pytest tests/ -k "facilit"` (9 facility-specific test files)                                                           | ✅ 180 passed, 1 skipped (pre-existing, optional dependency)                        |
+| `python scripts/generate_schema_docs.py` (from `backend/`)                                                              | ✅ no diff — this round changed no model column, only the schema/migration/frontend |
+| `tsc --noEmit` (whole frontend)                                                                                         | ✅ 0 errors                                                                         |
+| `eslint src/services/facilitiesServices.ts src/modules/facilities/components/ContactsSection.tsx`                       | ✅ 0 problems                                                                       |
+
+**FAC-52's regression test independently confirmed against pre-fix code:**
+`git stash push -u -m "fac52-fac53-fac54-guard-check-<ts>"` isolating
+`app/schemas/facilities.py` only (test file kept). The new test failed
+against the pre-fix source with `pydantic.ValidationError: company_name or
+contact_name is required` — the exact 500 a legacy row would have produced
+— and passed after `git stash apply` restored the fix. FAC-53 and FAC-54
+have no backend-testable seam (a frontend form's payload construction and a
+type-only correction, respectively); both verified via `tsc --noEmit` /
+`eslint` passing clean, per each finding's own write-up.
+
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 
 **Not routine rotation work.** Codex posted this P1 finding on PR #2191's

@@ -234,6 +234,18 @@ export interface EmergencyContactCreate {
   priority?: number;
 }
 
+export interface EmergencyContactUpdate {
+  facility_id?: string;
+  contact_type?: string;
+  company_name?: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  alt_phone?: string | null;
+  email?: string | null;
+  service_contract_number?: string | null;
+  priority?: number;
+}
+
 export interface ShutoffLocation {
   id: string;
   facilityId: string;
@@ -411,14 +423,19 @@ export interface ComplianceItem {
   id: string;
   organizationId: string;
   checklistId: string;
-  sortOrder?: number;
+  // Optional-and-nullable: the backend response schema declares these
+  // Optional[...] with no response_model_exclude_none, so FastAPI sends an
+  // explicit JSON null (not an omitted key) whenever the item has no value
+  // yet — a plain `?:` here would type-check a `null` value straight past a
+  // caller that only checked for `undefined`.
+  sortOrder?: number | null;
   description: string;
-  isCompliant?: boolean;
-  findings?: string;
-  correctiveAction?: string;
-  correctiveActionDeadline?: string;
+  isCompliant?: boolean | null;
+  findings?: string | null;
+  correctiveAction?: string | null;
+  correctiveActionDeadline?: string | null;
   correctiveActionCompleted: boolean;
-  notes?: string;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -751,7 +768,7 @@ export const facilitiesService = {
     const response = await api.post<EmergencyContact>('/facilities/emergency-contacts', data);
     return response.data;
   },
-  async updateEmergencyContact(contactId: string, data: Partial<EmergencyContactCreate>): Promise<EmergencyContact> {
+  async updateEmergencyContact(contactId: string, data: EmergencyContactUpdate): Promise<EmergencyContact> {
     const response = await api.patch<EmergencyContact>(`/facilities/emergency-contacts/${contactId}`, data);
     return response.data;
   },
