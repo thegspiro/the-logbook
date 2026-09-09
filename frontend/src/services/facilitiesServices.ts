@@ -210,12 +210,16 @@ export interface EmergencyContact {
   id: string;
   facilityId: string;
   contactType: string;
-  companyName?: string;
-  contactName?: string;
-  phone?: string;
-  altPhone?: string;
-  email?: string;
-  serviceContractNumber?: string;
+  // Optional-and-nullable: FacilityEmergencyContactResponse declares these
+  // Optional[...] with no response_model_exclude_none, so a contact-name-
+  // only record (or one with a cleared field) comes back with an explicit
+  // JSON null, not an omitted key.
+  companyName?: string | null;
+  contactName?: string | null;
+  phone?: string | null;
+  altPhone?: string | null;
+  email?: string | null;
+  serviceContractNumber?: string | null;
   priority?: number;
   isActive?: boolean;
   createdAt: string;

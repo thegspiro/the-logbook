@@ -761,6 +761,98 @@ have no backend-testable seam (a frontend form's payload construction and a
 type-only correction, respectively); both verified via `tsc --noEmit` /
 `eslint` passing clean, per each finding's own write-up.
 
+### FAC-55 — MED (correctness), Codex review of `34926549bd`, FAC-47/48's own fix — the compliance-item list still ignored the sort_order it had just started storing and reading back correctly — ✅ FIXED
+
+**What:** Codex's sixth consecutive review round pointed out that FAC-47/48
+made `sort_order` actually persist (as `item_number`) on both create and
+update, but nothing ever read the column back in order:
+`list_compliance_items` ordered solely by `desc(created_at)`, and
+`facilitiesServices.ts`'s `getComplianceItems` returned that array as-is.
+The full round-trip a user would expect — set an order, see that order —
+never worked, even after every prior round's fix, because the one method
+that lists items never looked at the field the rest of this pass had just
+spent five rounds getting right.
+
+**Where:** `backend/app/services/facilities_service.py`
+(`list_compliance_items`).
+
+**Fix:** added `item_number` as the primary sort key, MySQL-compatible
+NULLs-last via the existing `app/utils/sql_ordering.nulls_last_asc` helper
+(plain SQL-standard `NULLS LAST` is Postgres/SQLite syntax that MySQL
+rejects outright — this project has shipped that exact 500 three times
+before, per that helper's own docstring), keeping the previous
+`desc(created_at)` as the tie-breaker for items sharing an order or with
+none set. The frontend service was left unchanged: it already just returns
+what the backend sends, and re-sorting there too would risk a client-side
+tie-break rule drifting from the server's (CLAUDE.md Pitfall #29 — a
+screen consumes the backend's decision, it doesn't re-derive it) for no
+benefit once the backend already guarantees the order.
+
+**Regression test:** `tests/test_facilities_service.py`, new
+`TestListComplianceItems::test_orders_by_item_number_with_created_at_as_tiebreak`
+— compiles the captured `SELECT` statement against the MySQL dialect
+(matching the existing pattern in this file's `TestDashboardCounts` and in
+`test_grant_service.py`'s `_order_by_clause` tests) and asserts the
+`ORDER BY` clause sorts by `item_number IS NULL` then `item_number` before
+`created_at`, with no literal `NULLS LAST` in the compiled SQL. Confirmed
+to fail against the pre-fix source (`git stash push -u` isolating
+`app/services/facilities_service.py` only, test file kept): the compiled
+`ORDER BY` was just `facility_compliance_items.created_at desc`, with no
+`item_number` reference at all. `git stash apply` restored the fix.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a correctness fix with no
+remaining product decision.
+
+### FAC-56 — LOW (frontend/backend contract drift, CLAUDE.md Pitfall #5) — `EmergencyContact`'s response fields had the identical optional-only-not-nullable gap FAC-54 had just fixed on the sibling ComplianceItem type — ✅ FIXED
+
+**What:** Same Codex round, the mirror image of FAC-54 on the emergency-
+contact side: `FacilityEmergencyContactResponse` (inherited from `Base`)
+declares `company_name`, `contact_name`, `phone`, `alt_phone`, `email` and
+`service_contract_number` all `Optional[...]` with no
+`response_model_exclude_none`, so any of them comes back as an explicit
+JSON `null` — routinely so now, since FAC-50 made `company_name` itself
+nullable and a contact-name-only record will always have it `null`. The
+frontend's `EmergencyContact` interface still typed every one of them
+`field?: T` (`T | undefined`), which does not accept `null`.
+
+**Where:** `frontend/src/services/facilitiesServices.ts`
+(`EmergencyContact`).
+
+**Fix:** widened all six optional response fields to `T | null` in
+addition to the existing `?:`, matching `FacilityEmergencyContactResponse`.
+`priority` and `is_active` were left as `T | undefined` — both have
+non-`None` defaults on the model/schema (`priority` defaults to `1`,
+`is_active` to `True`) and are never written as an explicit `null`.
+
+**Regression test:** none added, for the same reason as FAC-54 — a
+type-only widening with `tsc --noEmit` as the applicable check, which
+passed clean. The existing call sites in `ContactsSection.tsx` (`contact.companyName || ''`, etc.) already treat `null` and `undefined` identically
+via `||`, so nothing needed to change there.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a type-contract fix with
+no remaining product decision.
+
+## Completion gate (pass 4, round 20 — Codex review of `34926549bd`, FAC-52/FAC-53/FAC-54's own fix; FAC-55/FAC-56)
+
+| Check                                                                        | Result                                                                |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/services/facilities_service.py tests/test_facilities_service.py` | ✅ 0 violations                                                       |
+| `black --check` (same files)                                                 | ✅ clean                                                              |
+| `isort --check-only` (same files)                                            | ✅ clean                                                              |
+| `pytest tests/test_facilities_service.py`                                    | ✅ 39 passed (38 baseline after FAC-52, +1 new this round for FAC-55) |
+| `pytest tests/ -k "facilit"` (9 facility-specific test files)                | ✅ 181 passed, 1 skipped (pre-existing, optional dependency)          |
+| `python scripts/generate_schema_docs.py` (from `backend/`)                   | ✅ no diff — no model column changed this round                       |
+| `tsc --noEmit` (whole frontend)                                              | ✅ 0 errors                                                           |
+| `eslint src/services/facilitiesServices.ts`                                  | ✅ 0 problems                                                         |
+
+**FAC-55's regression test independently confirmed against pre-fix code:**
+`git stash push -u -m "fac55-fac56-guard-check-<ts>"` isolating
+`app/services/facilities_service.py` only (test file kept). The new test
+failed against the pre-fix source — the compiled `ORDER BY` had no
+`item_number` reference at all, only `created_at desc` — and passed after
+`git stash apply` restored the fix. FAC-56 has no backend-testable seam (a
+type-only correction); verified via `tsc --noEmit` passing clean.
+
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 
 **Not routine rotation work.** Codex posted this P1 finding on PR #2191's

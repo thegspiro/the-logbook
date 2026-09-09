@@ -80,6 +80,7 @@ from app.schemas.facilities import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many levels of room nesting are allowed (a top-level room is level 1).
@@ -3270,7 +3271,15 @@ class FacilitiesService:
         query = (
             select(FacilityComplianceItem)
             .where(and_(*conditions))
-            .order_by(desc(FacilityComplianceItem.created_at))
+            # FAC-55: order by the caller's requested sort_order (stored as
+            # item_number) rather than solely by created_at, now that
+            # create/update actually store it (FAC-47/48). Items with no
+            # sort_order sort last; created_at (descending, matching the
+            # previous default) breaks ties among equal or missing values.
+            .order_by(
+                *nulls_last_asc(FacilityComplianceItem.item_number),
+                desc(FacilityComplianceItem.created_at),
+            )
             .offset(skip)
             .limit(limit)
         )

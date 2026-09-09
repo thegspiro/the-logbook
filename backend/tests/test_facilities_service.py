@@ -300,6 +300,38 @@ class TestFacilityFileResponseRedaction:
         assert "file_path" not in FacilityDocumentResponse.model_fields
 
 
+class TestListComplianceItems:
+    """FAC-55: Codex review of the FAC-47/FAC-48 fix, PR #2425. Once
+    create/update actually stored the caller's requested `sort_order` (as
+    `item_number`), `list_compliance_items` still ordered solely by
+    descending `created_at` -- so the newly functional ordering was stored
+    but never read back in order. Ordered by `item_number` (NULLs last,
+    MySQL-compatible per `app/utils/sql_ordering.nulls_last_asc` --
+    `NULLS LAST` itself is Postgres/SQLite-only syntax MySQL rejects
+    outright), with the previous `created_at` ordering kept as the
+    tie-breaker for equal or missing values.
+    """
+
+    async def test_orders_by_item_number_with_created_at_as_tiebreak(
+        self, service, mock_db, org_id
+    ):
+        mock_db.execute.return_value = SimpleNamespace(
+            scalars=lambda: SimpleNamespace(all=lambda: [])
+        )
+        await service.list_compliance_items(org_id)
+
+        statement = mock_db.execute.await_args.args[0]
+        sql = str(
+            statement.compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        order_by = sql.split("order by", 1)[1].split("limit", 1)[0]
+        assert "nulls last" not in order_by
+        assert "item_number is null" in order_by
+        assert order_by.index("item_number") < order_by.index("created_at")
+
+
 class TestCreateComplianceItem:
     """FAC-46: the only caller of `create_compliance_item`
     (`POST /compliance-checklists/{checklist_id}/items`) passes
