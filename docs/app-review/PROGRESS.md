@@ -18,7 +18,7 @@ been through a review pass.
 
 | #   | Feature                        | Code                                                                                                                                                                                                                                                                      | Prefix | Status |
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
-| A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ⬜     |
+| A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ⬜     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
@@ -2089,3 +2089,48 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   KNOWN_LIMITATIONS entry marked resolved with the documented residual edge
   (10+ simultaneously _pending_ newer messages; pinning wins). Gate: tsc 0 ·
   eslint 0 · Dashboard tests 16 passed (was 13).
+- **A1 storefront & payments ✅ (pass 5) — SF-8, a HIGH the first four passes
+  could not see.** First Tier A re-run since pass 2; the module has grown ~1.2k
+  lines since (endpoints 1597 → 1660 L, service 2965 → 3345 L) and gained the
+  payment-policy gate, personalization thread colour/method, window rollups and
+  the notification preview surface. Every pass-2 verdict re-verified and still
+  holding — `Decimal` end to end, `SafeCsvWriter`, 44/44 routes gated,
+  `/orders/mine/*` self-scoped, XC-3 clean, webhook fails closed, SF-4's
+  currency guard present. This pass applied the **concurrency lens**, which no
+  earlier pass had, and that is where the module is weakest. **2 fixed, 1
+  flagged.** **SF-8 (HIGH, fixed):** `_price_lines` locked every cart product
+  with `FOR UPDATE` and then compared against a **plain** `SELECT` tally —
+  Pitfall #27's second half, with only the first half present. `create_order`
+  reads settings and windows before reaching the lock, so its REPEATABLE READ
+  snapshot is already open; the loser of two simultaneous submissions blocks on
+  the lock, waits, counts, and still sees the tally from before the winner
+  committed. Both members are sold the last shirt, and `max_per_member` and a
+  window's `quantity_limit` fall the same way. Realistic here because ordering
+  is bursty — the window-opened mail goes to the whole department at once.
+  **Why four passes missed it:** `test_storefront_locking.py` asserts
+  `_lock_products` locks the right ids (the half already correct) and reads as
+  coverage of the whole question, while `test_capacity_locking.py` — the
+  repository's ratchet for this exact rule — imported six services and not this
+  one. Fixed with a `for_update` flag on `_ordered_quantities`, mirroring
+  `scheduling_service.get_shift_by_id`; it is a flag rather than an
+  unconditional lock because the same helper renders the member-facing store,
+  where locking would block submission behind browsing. `FOR UPDATE` on the
+  `GROUP BY` + `JOIN` aggregate was run against the live DB before the change
+  was written. Ratchet extended: `TestStorefrontStockCapacity` asserts the tally
+  locks, the order path passes the flag twice, **and the browse path does not** —
+  the third is what stops the next reader collapsing it. **SF-10 (NIT, fixed):**
+  dead `exclude_order_id` parameter on the same helper. **SF-9 (MED, flagged):**
+  `record_payment` is a read-modify-write on `amount_paid` with no row lock, so
+  the webhook's auto-apply landing while a treasurer works the same order loses
+  a payment off the ledger and the member is chased for money they sent; not
+  fixed because the one-line lock moves transaction boundaries shared by
+  `bulk_mark_paid`'s loop and the unauthenticated webhook, and this contract
+  flags rather than guesses in a payments path. Two options written up; mirrored
+  to KNOWN_LIMITATIONS. Pass-2's webhook-500-on-racing-duplicate item
+  re-verified, still open, deliberately left with SF-9. Also noted, **not**
+  fixed as out of scope: `CHECKLIST.md` and `CLAUDE.md` both point at
+  `docs/endpoint-permissions.md`, which does not exist. Gate: tsc 0 · flake8 0 ·
+  black 1101 unchanged · eslint 0 errors / 2 pre-existing warnings · backend 774
+  passed, 1 skipped · frontend storefront 185 passed (15 files). DB-backed tests
+  **did** run this pass — the session-start hook provides MariaDB and Redis. See
+  storefront.md → Pass 5. Next: A2 auth & session lifecycle.
