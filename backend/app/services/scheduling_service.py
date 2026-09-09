@@ -1425,6 +1425,20 @@ class SchedulingService:
         same count and both get in. Locking the shift serializes them on one
         row, the way ``event_service`` already locks the event row before
         counting "going" RSVPs against ``max_attendees``.
+
+        ``for_update`` also asks SQLAlchemy to refresh an already-loaded
+        object's attributes from the freshly-locked row
+        (``populate_existing``). Several endpoints (``finalize_shift``,
+        ``save_closeout_calls``) authorize the caller with a plain,
+        non-locking ``get_shift_by_id`` first (via
+        ``_authorize_shift_management``) before the service method makes its
+        own locking call on the same session. Without ``populate_existing``,
+        SQLAlchemy's identity map returns that earlier object unchanged: the
+        `FOR UPDATE` query still correctly blocks and reads the latest
+        committed row at the database level, but the caller's Python object
+        keeps the stale values from the first read, silently defeating the
+        lock's entire purpose for anything that then reads an attribute off
+        the "locked" shift (e.g. ``shift.is_finalized``).
         """
         query = (
             select(Shift)
@@ -1432,7 +1446,7 @@ class SchedulingService:
             .where(Shift.organization_id == str(organization_id))
         )
         if for_update:
-            query = query.with_for_update()
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 

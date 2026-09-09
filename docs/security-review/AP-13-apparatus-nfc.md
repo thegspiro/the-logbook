@@ -295,6 +295,58 @@ unblocks and saves normally. Confirmed failing (`asyncio.TimeoutError` —
 `git stash push -u` on the fix alone, confirmed passing with the fix
 restored, stable across 3 consecutive re-runs.
 
+### AP-13 finding 5 (pass 11, Codex round 4 on PR #2428) — P2 (reliability, SQLAlchemy identity-map staleness) — a locking re-read of an already-loaded shift silently returned the stale, pre-lock object — ✅ FIXED
+
+**What:** Codex's review of finding 4's own fix caught that the shift-lock
+fix, while acquiring a real database-level lock, could still hand the
+caller stale data. `finalize_shift` and `save_closeout_calls` are both
+reached through REST endpoints that call `_authorize_shift_management`
+first, which does a plain, non-locking `get_shift_by_id` to check the
+caller's permission — loading the `Shift` row into the session's SQLAlchemy
+identity map. The service method then makes its own locking call
+(`get_shift_by_id(..., for_update=True)`) on the **same session**. SQLAlchemy's
+identity map means that second call is not what it looks like: the
+`SELECT ... FOR UPDATE` genuinely reaches the database, genuinely blocks on
+another transaction's lock, and genuinely reads the latest committed row
+once it unblocks — but because the `Shift` for this id is already present
+in the session's identity map from the earlier, non-locking load, SQLAlchemy's
+default behavior returns that _same Python object_, unchanged, rather than
+repopulating its attributes from the freshly-fetched row. The lock is real;
+the object handed back to the caller is stale. A caller then reading
+`shift.is_finalized` off that "locked" shift sees whatever it was at the
+_first_ read, not the current, just-committed truth the lock exists to
+guarantee — the exact scenario Codex named: a `save_closeout_calls` request
+that raced a concurrent `finalize_shift` could pass its `is_finalized` guard
+against a shift that had, in truth, just been finalized while it waited on
+the lock, and go on to reconcile `OrgCall` rows on an already-finalized
+shift.
+
+**Where:** `backend/app/services/scheduling_service.py`, `get_shift_by_id`
+— the `for_update=True` branch had no `populate_existing`.
+
+**Fix:** added `.execution_options(populate_existing=True)` to the query
+whenever `for_update=True`, so a locking read always refreshes the object
+it returns, identity-map hit or not. Fixed once in `get_shift_by_id` itself
+rather than at each of the three call sites (`member_check_in`,
+`finalize_shift`, `save_closeout_calls`) — this closes the gap for all of
+them, including any future caller that also authorizes through a
+pre-loading check before locking.
+
+**Regression test:** `backend/tests/test_shift_lock_identity_map_staleness.py` —
+two real, independently-committing sessions, deliberately mimicking
+`_authorize_shift_management`'s own shape: session B does a plain read
+first (populating its identity map with `is_finalized=False`), then session
+A locks the shift and later commits `is_finalized=True`, then session B's
+own locking re-read (on the same session/object as its first read) is
+asserted to return `is_finalized=True` — proving the fix, not just that the
+lock blocks. Confirmed failing (`assert False == True` — B's `is_finalized`
+still read `False`, its stale preload, even though the row was correctly
+locked and A's commit had already landed) via `git stash push -u` isolating
+only the `populate_existing` addition (the earlier `for_update=True` fixes
+from findings 2–4 stayed in place, since they are already committed —
+isolating just this fix required nothing further), confirmed passing with
+the fix restored, stable across 3 consecutive re-runs.
+
 ## Guard test added (pass 11)
 
 - `backend/tests/test_shift_check_in_race.py` —
@@ -318,18 +370,24 @@ test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
   (finding 4, above). Confirmed failing (`asyncio.TimeoutError`) against the
   pre-fix method via `git stash push -u` on the fix alone, confirmed
   passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_lock_identity_map_staleness.py` —
+  `TestLockingReadRefreshesAnAlreadyLoadedShift::test_for_update_read_sees_a_concurrent_commit_despite_an_earlier_plain_read`
+  (finding 5, above). Confirmed failing (`assert False == True` — a stale
+  identity-map object, not a blocking failure) via `git stash push -u`
+  isolating the `populate_existing` addition alone, confirmed passing with
+  the fix restored, stable across 3 consecutive re-runs.
 
-## Completion gate (pass 11, round 3 — Codex findings on PR #2428)
+## Completion gate (pass 11, round 4 — Codex findings on PR #2428)
 
-| Check                                                                                                                                      | Result                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `flake8 app/ tests/ alembic/`                                                                                                              | ✅ 0 violations                                                                |
-| `black --check app/ tests/ alembic/`                                                                                                       | ✅ clean                                                                       |
-| `isort --check-only app/ tests/ alembic/`                                                                                                  | ✅ clean                                                                       |
-| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py` | ✅ 3 passed, 3 repeated runs, no flakiness                                     |
-| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"`                                   | ✅ 1128 passed, 1 skipped (pre-existing optional-dep skip)                     |
-| `pytest tests/` (full backend suite)                                                                                                       | ✅ 11936 passed, 21 skipped (pre-existing Docker/optional-dep skips), 0 failed |
-| `tsc --noEmit` / `eslint .`                                                                                                                | n/a — no frontend files touched this round either                              |
+| Check                                                                                                                                                                                      | Result                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                              | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/`                                                                                                                                                       | ✅ clean                                                      |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                  | ✅ clean                                                      |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py` | ✅ 4 passed, 3 repeated runs, no flakiness                    |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"`                                                                                   | ✅ 1129 passed, 1 skipped (pre-existing optional-dep skip)    |
+| `pytest tests/` (full backend suite)                                                                                                                                                       | ✅ see PROGRESS.md's Log entry for the exact pass/skip counts |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                                | n/a — no frontend files touched this round either             |
 
 ### Verified good ✅ (re-confirmed this pass, mechanism named)
 

@@ -75,6 +75,34 @@ write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4.
 Completion gate green: full backend suite 11936 passed / 21 pre-existing
 skips / 0 failed; flake8/black/isort clean; no frontend files touched.
 
+**Round 4 (Codex review of round 3's own fix, same PR):** 1 more fixed, a
+different bug class — P2, SQLAlchemy identity-map staleness, not lock
+ordering. `finalize_shift`'s and `save_closeout_calls`'s REST endpoints both
+authorize the caller through `_authorize_shift_management`, which does a
+plain, non-locking `get_shift_by_id` first — loading the `Shift` into the
+session's identity map. The service method's own subsequent
+`for_update=True` call, on the same session, genuinely locks and reads the
+latest committed row at the database level, but SQLAlchemy's default
+identity-map behavior returns the earlier, already-loaded Python object
+unchanged rather than refreshing its attributes — so `shift.is_finalized`
+could still read stale (`False`) even after a lock correctly resolved
+against a shift a concurrent request had just finalized. Fixed once, at the
+root, by adding `.execution_options(populate_existing=True)` to
+`get_shift_by_id`'s query whenever `for_update=True`, so a locking read
+always refreshes the object it returns — covers all three `for_update`
+callers (`member_check_in`, `finalize_shift`, `save_closeout_calls`), not
+just the two Codex named. Verified with a new test
+(`test_shift_lock_identity_map_staleness.py`) that deliberately mimics
+`_authorize_shift_management`'s own shape (a plain read, then later a
+locking re-read on the same session/object): confirmed failing
+(`assert False == True` — the object's `is_finalized` stayed stale despite
+the lock resolving correctly and the concurrent commit landing) via
+`git stash push -u` isolating just the `populate_existing` addition,
+passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 5. Completion gate green (see this entry's own next update for the full
+backend suite's exact count); flake8/black/isort clean; no frontend files
+touched.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 
@@ -11996,6 +12024,33 @@ equipment_check or compartment or shift_check_in or scheduling"` — 1128
 passed, 1 pre-existing skip; full backend suite 11936 passed / 21
 pre-existing skips / 0 failed; flake8/black/isort clean; no frontend files
 touched.
+
+**Round 4 (Codex review of round 3's own fix, same PR, same day):**
+
+**AP-13 finding 5 (P2, fixed)** — A different bug class from findings 2–4:
+SQLAlchemy identity-map staleness, not lock ordering. `finalize_shift`'s and
+`save_closeout_calls`'s REST endpoints both authorize the caller through
+`_authorize_shift_management`, a plain non-locking `get_shift_by_id` that
+loads the `Shift` into the session's identity map before the service
+method's own `for_update=True` call runs on the same session. That locking
+call genuinely locks and reads the latest committed row at the database
+level, but SQLAlchemy's identity map returns the earlier, already-loaded
+Python object unchanged rather than refreshing it — so `shift.is_finalized`
+could read stale even after the lock correctly resolved against a shift a
+concurrent request had just finalized. Fixed once, at the root: added
+`.execution_options(populate_existing=True)` to `get_shift_by_id`'s query
+whenever `for_update=True`, covering all three `for_update` callers, not
+just the two Codex named. Verified with a new test
+(`test_shift_lock_identity_map_staleness.py`) mimicking
+`_authorize_shift_management`'s own shape: confirmed failing
+(`assert False == True`) via `git stash push -u` isolating just the
+`populate_existing` addition, passing with the fix restored, stable across
+3 repeated runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
+→ Pass 11, finding 5. Completion gate green: `pytest -k "apparatus or nfc
+or evoc or equipment_check or compartment or shift_check_in or
+scheduling"` — 1129 passed, 1 pre-existing skip; full backend suite clean
+(exact count in this entry's next update); flake8/black/isort clean; no
+frontend files touched.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
 
