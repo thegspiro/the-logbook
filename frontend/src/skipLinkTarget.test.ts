@@ -77,7 +77,7 @@ const renderedComponents = (jsx: string): string[] => {
  * block, brace-matched, from the `<Routes>` body. Anything left is public. The
  * count assertion below is what stops a parse that silently matches nothing.
  */
-const publicPages = (): Array<{ file: string; component: string }> => {
+const routeJsx = (): { publicJsx: string; layoutJsx: string } => {
   const app = read('App.tsx');
   const routesBody = app.slice(app.indexOf('<Routes>'), app.lastIndexOf('</Routes>'));
 
@@ -122,22 +122,35 @@ const publicPages = (): Array<{ file: string; component: string }> => {
       break;
     }
   }
-  const publicJsx = routesBody.slice(0, layoutStart) + routesBody.slice(layoutEnd);
+  return {
+    publicJsx: routesBody.slice(0, layoutStart) + routesBody.slice(layoutEnd),
+    layoutJsx: routesBody.slice(layoutStart, layoutEnd),
+  };
+};
 
-  // Route factories called out here render their own pages; read each one.
-  const factories = [...publicJsx.matchAll(/\{(get\w+Routes)\(\)\}/g)].map(([, name]) => name ?? '');
-  const factoryJsx = factories.flatMap((factory) => {
+/** Every page component a slice of route JSX renders, its route factories included. */
+const componentsRenderedIn = (jsx: string): string[] => {
+  const factories = [...jsx.matchAll(/\{(get\w+Routes)\(\)\}/g)].map(([, name]) => name ?? '');
+  const fromFactories = factories.flatMap((factory) => {
+    // Both declaration forms. Matching only `export const` was latent while
+    // this ran on the public slice alone — every public factory happens to be
+    // a const — and threw the moment it was pointed at the layout slice, where
+    // `getMedicalScreeningRoutes` is an `export function`.
+    const declaration = new RegExp(String.raw`export\s+(?:const|function)\s+${factory}\b`);
     const file = globSync(path.join(SRC, 'modules/*/routes.tsx')).find((candidate) =>
-      fs.readFileSync(candidate, 'utf8').includes(`export const ${factory}`)
+      declaration.test(fs.readFileSync(candidate, 'utf8'))
     );
     if (!file) throw new Error(`no module router exports ${factory}`);
     const source = fs.readFileSync(file, 'utf8');
-    const from = source.indexOf(`export const ${factory}`);
+    const from = declaration.exec(source)?.index ?? 0;
     const to = source.indexOf('\nexport ', from + 1);
     return renderedComponents(source.slice(from, to === -1 ? undefined : to));
   });
+  return [...new Set([...renderedComponents(jsx), ...fromFactories])];
+};
 
-  const names = [...new Set([...renderedComponents(publicJsx), ...factoryJsx])];
+const publicPages = (): Array<{ file: string; component: string }> => {
+  const names = componentsRenderedIn(routeJsx().publicJsx);
 
   // The component name travels with the file. A page file often declares
   // helper components beside the page itself, and their returns are indented
@@ -407,6 +420,29 @@ describe('skip link target', () => {
      * unmounts the subtree it caught, so `AppLayout`'s main is gone rather than
      * hidden.
      */
+    // Membership has to be earned by something other than the symptom.
+    //
+    // Being on this list exempts a file from the inverse sweep, and the branch
+    // check below is satisfied by the id being present — which is exactly what
+    // is wrong when a *nested* page acquires one. So a protected page that
+    // accidentally gained the target could be "fixed" by adding it here, and
+    // both halves would go green on the strength of the duplicate itself.
+    //
+    // This derives the disqualifying fact independently of the id: the set of
+    // components `App.tsx` renders *inside* the AppLayout route, factories
+    // expanded. Anything in there is nested by construction and cannot be a
+    // replacement shell, whatever its markup says.
+    const nested = new Set(componentsRenderedIn(routeJsx().layoutJsx));
+    const misfiled = Object.keys(REPLACING_SHELLS)
+      .map((file) => path.basename(file, '.tsx'))
+      .filter((component) => nested.has(component));
+
+    expect(
+      misfiled,
+      'these are rendered inside the AppLayout route, so they cannot be replacement ' +
+        'shells; a nested page with a duplicate id is the defect, not an exemption'
+    ).toEqual([]);
+
     const missing = Object.entries(REPLACING_SHELLS).flatMap(([file, why]) => {
       const component = path.basename(file, '.tsx');
       const branches = branchesMissingTarget(file, component);

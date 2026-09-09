@@ -3687,7 +3687,7 @@ concurrent catalogue edit, the impact is one hidden row in a search the officer
 can re-run, and the search box narrows results directly. This does not affect
 what is delivered or recorded — only which matches a picker lists.
 
-## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08, narrowed 2026-09-09)
+## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08, narrowed and corrected 2026-09-09)
 
 `index.html` opens with `<a href="#main-content">`, and every page that owns its
 own shell provides that target — `skipLinkTarget.test.ts` checks all of them,
@@ -3723,20 +3723,33 @@ swap looks like (a quiet in-layout replace instead of a whole-app spinner); the
 second changes a shared contract that `index.html`, `AppLayout` and three e2e
 specs all read. Both are their own change set.
 
-**Why it is accepted for now.** Neither state has interactive content to skip
-past, which is what SC 2.4.1 exists to protect: both render a spinner and a
-status line and nothing else, so there is no block of navigation between the
-user and the content. Both are also transient, and the link is only revealed on
+**What is actually on screen, and what the link actually does.** This paragraph
+has been wrong twice, in both directions, so it states the mechanics rather than
+a conclusion:
+
+- **Activating the link moves nothing.** Focus stays on it. The `role="status"`
+  text is a live region, not a focus target — a `<p>` with no `tabIndex`, so it
+  is not in the tab order and the user does not "land" on it. Nothing is thrown;
+  the link is simply inert.
+- **The screen is not always only a spinner.** `App.tsx` renders
+  `<UpdateNotification />` immediately before, and _outside_, the `<Suspense>`
+  whose fallback this is, so it stays mounted through the loading state. When an
+  update is pending it shows "Reload now" / "Force refresh" plus a dismiss
+  button. So an earlier claim here that these states have no interactive content
+  was false whenever that banner is up.
+
+**Why it is still accepted.** Not because there is nothing interactive, but
+because there is nothing to skip _to_: SC 2.4.1 exists so a keyboard user can
+get past a repeated block of navigation **into the content**, and in these two
+states the content does not exist yet. The banner is a single dismissible strip
+of at most three controls, reachable by one Tab, and it is followed by a spinner
+rather than by a page. A skip link that worked here would land the user on an
+empty region. Both states are also transient and the link is only revealed on
 focus.
 
-Be precise about what happens if someone does activate it, because an earlier
-draft of this entry was not: **focus stays on the skip link.** The `role="status"`
-text is a live region, not a focus target — it is a `<p>` with no `tabIndex`, so
-it is not in the tab order and the user does not "land" on it. Nothing is thrown
-and nothing moves; the link is inert. That is the cost being accepted, and it is
-smaller than the alternative only because these two screens have nowhere to skip
-_to_. If either ever grows real controls, this stops being acceptable and the
-fix below has to be done.
+**What would void this.** Either state gaining real content or a persistent
+navigation block behind the banner — at which point there is something to skip
+to, and the fix above has to be done.
 
 `skipLinkTarget.test.ts` names both files and explains the constraint in its
 failure message, so the next person to try the obvious fix is told why it is not

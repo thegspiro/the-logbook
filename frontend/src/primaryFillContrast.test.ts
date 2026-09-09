@@ -626,7 +626,18 @@ describe('primary fill contrast', () => {
       const covered = values.map(({ value, end }) => ({ start: end - value.length, end }));
       for (const { value, line } of standaloneLiterals(source, covered)) {
         // Split a template's conditional branches, exactly as the className
-        // path below does. A hoisted `${cond ? 'fill-a text-white' : 'fill-b
+        // path below does — each branch measured as the shared static text
+        // *plus* that branch, never a branch alone.
+        //
+        // The shared text is prepended because a template can put the fill
+        // outside the interpolation and choose only the foreground inside it.
+        // Splitting on its own then inspects the fill with no foreground and
+        // each foreground with no fill, so the pairing is measured by neither
+        // half — a case the old whole-template inspection did catch, which is
+        // how splitting for the ternary gap opened this one. Static text is
+        // shared by every branch, so folding it in cannot pair one branch's
+        // fill with another's foreground; that is the ternary defect and stays
+        // guarded by splitting the branches at all. A hoisted `${cond ? 'fill-a text-white' : 'fill-b
         // text-dark'}` is one literal to the scanner, and reading it whole lets
         // the *second* branch's foreground answer for the first — the same
         // ternary false-positive this file already guards against inside
@@ -638,7 +649,7 @@ describe('primary fill contrast', () => {
         let branches = 0;
         for (const [, single, double] of value.matchAll(/'([^']*)'|"([^"]*)"/g)) {
           branches++;
-          inspect(file, line, single ?? double ?? '', context, staticText);
+          inspect(file, line, `${staticText} ${single ?? double ?? ''}`, context, staticText);
         }
         // A plain literal has no branches; it *is* its own segment.
         if (branches === 0) inspect(file, line, value, new Map());
@@ -650,7 +661,7 @@ describe('primary fill contrast', () => {
         const context = foregrounds(staticText);
         inspect(file, line, staticText, new Map());
         for (const [, single, double] of value.matchAll(/'([^']*)'|"([^"]*)"/g)) {
-          inspect(file, line, single ?? double ?? '', context, staticText);
+          inspect(file, line, `${staticText} ${single ?? double ?? ''}`, context, staticText);
         }
       }
     }
