@@ -535,8 +535,13 @@ const PositionSetup: React.FC = () => {
         return;
       }
 
+      // Name the removals rather than counting them. Unticking a position now
+      // deletes it, and "Removed: 2" gives an administrator no way to notice
+      // they unticked the wrong row.
+      const removed = response.data?.removed ?? [];
       toast.success(
-        `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
+        `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}` +
+          (removed.length > 0 ? `. Removed: ${removed.join(', ')}` : '')
       );
       void navigate('/onboarding/modules');
     } catch (error: unknown) {
@@ -606,6 +611,10 @@ const PositionSetup: React.FC = () => {
                     Positions and permissions can be updated anytime in{' '}
                     <strong>Settings → Positions & Permissions</strong>. You can add new positions, modify permissions,
                     or remove positions as your organization's needs evolve.
+                  </p>
+                  <p className="text-theme-text-secondary mt-2 text-sm">
+                    Leave a position unselected if your department does not have it — it will not be created. Your own
+                    System Owner position and the baseline Member position are always kept.
                   </p>
                 </div>
               </div>

@@ -515,6 +515,7 @@ class SecureApiClient {
       message: string;
       created: string[];
       updated: string[];
+      removed: string[];
       total_positions: number;
     }>
   > {

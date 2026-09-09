@@ -34,6 +34,7 @@ from app.api.v1.email_test_helper import (
     test_microsoft_connection,
     test_smtp_connection,
 )
+from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.permissions import (
@@ -596,6 +597,7 @@ class RolesSetupResponse(BaseModel):
     message: str
     created: list[str] = Field(default_factory=list)
     updated: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
     total_roles: int
 
 
@@ -617,6 +619,7 @@ class PositionsSetupResponse(BaseModel):
     message: str
     created: list[str] = Field(default_factory=list)
     updated: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
     total_positions: int
 
 
@@ -2323,7 +2326,7 @@ async def save_session_roles(
     from sqlalchemy import delete
 
     from app.core.permissions import DEFAULT_ROLES
-    from app.models.user import Role
+    from app.models.user import Role, user_positions
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
     await db.execute(
@@ -2420,6 +2423,41 @@ async def save_session_roles(
             db.add(new_role)
             created_roles.append(role_data.name)
 
+    # A seeded position the wizard did not submit was unticked, and unticking
+    # has to mean something. It did not: only non-system rows were deleted
+    # above, so an unticked Lieutenant survived setup and went on appearing in
+    # every position picker — the wizard showed a checkbox that looked like it
+    # removed a position and quietly did not, which is the opposite of letting
+    # a department describe the structure it actually has.
+    #
+    # Three things are never removed this way:
+    #   - it_manager, which is the System Owner's own position;
+    #   - member, the baseline every account is given;
+    #   - any position somebody already holds. During setup that is only the
+    #     System Owner, whose positions are both protected, so this is a guard
+    #     against a resumed or unusual session rather than an expected case —
+    #     but silently stripping a member's access is not a thing to leave to
+    #     circumstance.
+    submitted_slugs = {role_data.id for role_data in data.roles}
+    unticked = [
+        role
+        for slug, role in existing_system_roles.items()
+        if slug not in submitted_slugs and slug not in {ROLE_IT_MANAGER, ROLE_MEMBER}
+    ]
+    removed_roles: list[str] = []
+    if unticked:
+        held = await db.execute(
+            select(user_positions.c.position_id).where(
+                user_positions.c.position_id.in_([role.id for role in unticked])
+            )
+        )
+        held_ids = set(held.scalars().all())
+        for role in unticked:
+            if role.id in held_ids:
+                continue
+            await db.delete(role)
+            removed_roles.append(role.name)
+
     # Update session data
     session.data = session.data or {}
     session.data["roles"] = {
@@ -2438,6 +2476,7 @@ async def save_session_roles(
         message="Roles configured successfully",
         created=created_roles,
         updated=updated_roles,
+        removed=removed_roles,
         total_roles=len(data.roles),
     )
 
@@ -2462,6 +2501,7 @@ async def save_session_positions(
         message=roles_response.message.replace("Roles", "Positions"),
         created=roles_response.created,
         updated=roles_response.updated,
+        removed=roles_response.removed,
         total_positions=roles_response.total_roles,
     )
 
