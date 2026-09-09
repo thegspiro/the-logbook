@@ -29,6 +29,18 @@ interface RanksSettingsSectionProps {
   deletingRankId: string | null;
   editingPositionsRankId: string | null;
   rankValidationIssues: RankValidationIssue[];
+  /**
+   * Whether the code field is shown.
+   *
+   * A rank code is the runtime key the backend resolves default permissions
+   * against. Settings shows it — a chief changing one is making a considered
+   * change, and the backend enforces a grant ceiling on it. The setup wizard
+   * withholds it: a department is describing a ladder it already uses, and a
+   * seeded rank that quietly stops conferring permissions is the accident the
+   * step exists to prevent. Defaults to shown, so the Settings screen reads
+   * unchanged.
+   */
+  allowCodeEdit?: boolean;
   onSetEditingRank: (rank: OperationalRankResponse | null) => void;
   onSetAddingRank: (adding: boolean) => void;
   onSetRankForm: React.Dispatch<React.SetStateAction<RankForm>>;
@@ -50,6 +62,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   deletingRankId,
   editingPositionsRankId,
   rankValidationIssues,
+  allowCodeEdit = true,
   onSetEditingRank,
   onSetAddingRank,
   onSetRankForm,
@@ -88,7 +101,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
       {(addingRank || editingRank) && (
         <div className="border-theme-surface-border bg-theme-surface-secondary/50 rounded-lg border p-4">
           <p className="text-theme-text-primary mb-3 text-sm font-medium">{editingRank ? 'Edit Rank' : 'New Rank'}</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-3 ${allowCodeEdit ? 'sm:grid-cols-2' : ''}`}>
             <div>
               <label className="text-theme-text-muted mb-1 block text-xs font-medium">Display Name</label>
               <input
@@ -114,24 +127,28 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                 autoFocus
               />
             </div>
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">Code (internal identifier)</label>
-              <input
-                type="text"
-                value={rankForm.rank_code}
-                onChange={(e) =>
-                  onSetRankForm((prev) => ({
-                    ...prev,
-                    rank_code: e.target.value
-                      .toLowerCase()
-                      .replace(/\s+/g, '_')
-                      .replace(/[^a-z0-9_]/g, ''),
-                  }))
-                }
-                placeholder="e.g. captain"
-                className="form-input"
-              />
-            </div>
+            {allowCodeEdit && (
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                  Code (internal identifier)
+                </label>
+                <input
+                  type="text"
+                  value={rankForm.rank_code}
+                  onChange={(e) =>
+                    onSetRankForm((prev) => ({
+                      ...prev,
+                      rank_code: e.target.value
+                        .toLowerCase()
+                        .replace(/\s+/g, '_')
+                        .replace(/[^a-z0-9_]/g, ''),
+                    }))
+                  }
+                  placeholder="e.g. captain"
+                  className="form-input"
+                />
+              </div>
+            )}
           </div>
           <div className="mt-3 flex justify-end gap-2">
             <button
@@ -148,7 +165,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
             <button
               type="button"
               onClick={editingRank ? onUpdateRank : onAddRank}
-              disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
+              disabled={rankSaving || !rankForm.display_name.trim() || (allowCodeEdit && !rankForm.rank_code.trim())}
               className="btn-info inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               {rankSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}

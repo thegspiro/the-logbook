@@ -46,15 +46,10 @@ import {
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
 import { HelpLink } from '../components/HelpLink';
-import { organizationService, ranksService } from '../services/api';
-import type {
-  ModuleSettingsData,
-  OperationalRankResponse,
-  OrganizationProfile,
-  RankValidationIssue,
-} from '../services/api';
+import { organizationService } from '../services/api';
+import type { ModuleSettingsData, OrganizationProfile } from '../services/api';
 import type { EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
-import { invalidateRanksCache } from '../hooks/useRanks';
+import { useRankEditor } from '../hooks/useRankEditor';
 import { useAuthStore } from '../stores/authStore';
 import EmailSettingsSection from '../components/settings/EmailSettingsSection';
 import StorageSettingsSection from '../components/settings/StorageSettingsSection';
@@ -447,18 +442,29 @@ export const SettingsPage: React.FC = () => {
   const [savingAuth, setSavingAuth] = useState(false);
   const [authSecretVisible, setAuthSecretVisible] = useState(false);
 
-  // Rank state
-  const [ranks, setRanks] = useState<OperationalRankResponse[]>([]);
-  const [ranksLoading, setRanksLoading] = useState(false);
-  const [editingRank, setEditingRank] = useState<OperationalRankResponse | null>(null);
-  const [addingRank, setAddingRank] = useState(false);
-  const [rankForm, setRankForm] = useState({ rank_code: '', display_name: '' });
-  const [rankSaving, setRankSaving] = useState(false);
-  const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
-  const [editingPositionsRankId, setEditingPositionsRankId] = useState<string | null>(null);
-
-  // Rank validation state
-  const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
+  // Rank state and handlers, shared with the setup wizard's rank step so the
+  // two screens cannot answer the same question differently.
+  const {
+    ranks,
+    ranksLoading,
+    editingRank,
+    setEditingRank,
+    addingRank,
+    setAddingRank,
+    rankForm,
+    setRankForm,
+    rankSaving,
+    deletingRankId,
+    editingPositionsRankId,
+    setEditingPositionsRankId,
+    rankValidationIssues,
+    fetchRanks,
+    handleAddRank,
+    handleUpdateRank,
+    handleDeleteRank,
+    handleMoveRank,
+    handleToggleEligiblePosition,
+  } = useRankEditor();
 
   // Both levels are mirrored to the URL with `replace`, so a settings screen
   // can be linked to and refreshed without stacking a history entry per click.
@@ -497,30 +503,6 @@ export const SettingsPage: React.FC = () => {
   );
 
   // ── Data loading ──
-
-  const fetchRankValidation = useCallback(async () => {
-    try {
-      const result = await ranksService.validateRanks();
-      setRankValidationIssues(result.issues);
-    } catch {
-      // Silently ignore – validation is non-blocking
-    }
-  }, []);
-
-  const fetchRanks = useCallback(async () => {
-    try {
-      setRanksLoading(true);
-      invalidateRanksCache();
-      const data = await ranksService.getRanks();
-      setRanks(data);
-    } catch {
-      /* empty state shown */
-    } finally {
-      setRanksLoading(false);
-    }
-    // Re-run validation whenever the rank list changes
-    await fetchRankValidation();
-  }, [fetchRankValidation]);
 
   useEffect(() => {
     const load = async () => {
@@ -703,91 +685,6 @@ export const SettingsPage: React.FC = () => {
       toast.error(status === 403 ? 'Permission denied.' : 'Failed to save authentication settings.');
     } finally {
       setSavingAuth(false);
-    }
-  };
-
-  // ── Rank handlers ──
-
-  const handleAddRank = async () => {
-    if (!rankForm.rank_code.trim() || !rankForm.display_name.trim()) return;
-    setRankSaving(true);
-    try {
-      await ranksService.createRank({
-        rank_code: rankForm.rank_code.trim().toLowerCase().replace(/\s+/g, '_'),
-        display_name: rankForm.display_name.trim(),
-        sort_order: ranks.length,
-      });
-      setRankForm({ rank_code: '', display_name: '' });
-      setAddingRank(false);
-      toast.success('Rank added');
-      await fetchRanks();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Failed to add rank');
-    } finally {
-      setRankSaving(false);
-    }
-  };
-
-  const handleUpdateRank = async () => {
-    if (!editingRank || !rankForm.display_name.trim()) return;
-    setRankSaving(true);
-    try {
-      await ranksService.updateRank(editingRank.id, {
-        rank_code: rankForm.rank_code.trim().toLowerCase().replace(/\s+/g, '_'),
-        display_name: rankForm.display_name.trim(),
-      });
-      setEditingRank(null);
-      setRankForm({ rank_code: '', display_name: '' });
-      toast.success('Rank updated');
-      await fetchRanks();
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Failed to update rank');
-    } finally {
-      setRankSaving(false);
-    }
-  };
-
-  const handleDeleteRank = async (rankId: string) => {
-    setDeletingRankId(rankId);
-    try {
-      await ranksService.deleteRank(rankId);
-      toast.success('Rank removed');
-      await fetchRanks();
-    } catch {
-      toast.error('Failed to remove rank');
-    } finally {
-      setDeletingRankId(null);
-    }
-  };
-
-  const handleMoveRank = async (index: number, direction: 'up' | 'down') => {
-    const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    if (swapIndex < 0 || swapIndex >= ranks.length) return;
-    const newRanks = [...ranks];
-    const a = newRanks[index];
-    const b = newRanks[swapIndex];
-    if (a === undefined || b === undefined) return;
-    [newRanks[index], newRanks[swapIndex]] = [b, a];
-    const reorderPayload = newRanks.map((r, i) => ({ id: r.id, sort_order: i }));
-    setRanks(newRanks);
-    try {
-      await ranksService.reorderRanks(reorderPayload);
-    } catch {
-      toast.error('Failed to reorder');
-      await fetchRanks();
-    }
-  };
-
-  const handleToggleEligiblePosition = async (rank: OperationalRankResponse, position: string) => {
-    const current = rank.eligible_positions ?? [];
-    const updated = current.includes(position) ? current.filter((p) => p !== position) : [...current, position];
-    try {
-      await ranksService.updateRank(rank.id, { eligible_positions: updated });
-      setRanks((prev) => prev.map((r) => (r.id === rank.id ? { ...r, eligible_positions: updated } : r)));
-    } catch {
-      toast.error('Failed to update eligible positions');
     }
   };
 
