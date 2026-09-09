@@ -169,9 +169,9 @@ exercise the mutate-then-autoflush shape): confirmed failing
 (`asyncio.TimeoutError`) via `git stash push -u` on the fix alone (the only
 diff in the file), passing with the fix restored, stable across 3 repeated
 runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass
-11, finding 7. Completion gate: flake8/black/isort clean; scoped keyword
-suite 1132 passed / 1 pre-existing skip; full backend suite run in
-progress, this note updated with the exact count once it completes.
+11, finding 7. Completion gate green: flake8/black/isort clean; scoped
+keyword suite 1132 passed / 1 pre-existing skip; full backend suite 11940
+passed / 21 pre-existing skips / 0 failed; no frontend files touched.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
