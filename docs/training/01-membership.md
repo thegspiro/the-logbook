@@ -1028,8 +1028,9 @@ their profile.
 
 > **Corrected 2026-08-10.** This section previously said the level was "tracked
 > on their profile" and "set via the member admin edit page". There is no EVOC
-> field on the profile or the Admin Edit page, and the three levels below are
-> your organization's, not the system's.
+> field on the profile or the Admin Edit page, and the levels below are
+> your organization's own row — seeded per-org rather than shared system-wide,
+> and editable once seeded.
 
 **Where to set it.** Open **Operations > Apparatus**, choose the apparatus, and
 go to its **Operators** tab. **Add Operator** picks a member and records their
@@ -1044,17 +1045,27 @@ holds:
 - **Has operating restrictions**, with notes
 - **Active operator** and free-text notes
 
-**The levels are yours to define.** EVOC levels are configured per organization
-with a level number, name and code — they are not a fixed Basic / Intermediate
-/ Advanced triple. The numbering follows the national 1–4 convention, and each
-level can be marked cumulative (holding level 3 also grants level 2's
-privileges) or not, for local exceptions. The demo data defines three:
+**The levels are yours to define, and they start seeded.** EVOC levels are
+configured per organization with a level number, name and code — not a global,
+shared list. The first time anyone opens the EVOC Levels screen (or otherwise
+reads the list) for an organization with none, the backend seeds the standard
+NFPA 1451 four-tier ladder below; from there every level, including those four,
+can be renamed, recoded or deleted. Each level can also be marked cumulative
+(holding level 3 also grants level 2's privileges) or not, for departments that
+run a non-cumulative ladder. Set them at **Members Administration > Settings >
+EVOC Levels**, gated on `apparatus.manage` rather than a members permission —
+the levels are served by the apparatus API, and completing a level's linked
+training program auto-creates operator records on every apparatus requiring
+that level or lower.
 
-| Level | Name         | Code   | Covers                                     |
-| ----: | ------------ | ------ | ------------------------------------------ |
-|     1 | Basic        | EVOC-1 | Emergency vehicle operation, non-transport |
-|     2 | Intermediate | EVOC-2 | Engine and rescue apparatus                |
-|     3 | Advanced     | EVOC-3 | Aerial and tiller-equipped apparatus       |
+![The EVOC Levels settings screen listing the seeded EVOC 1-4 ladder, each with its code and cumulative flag](./images/01-42-evoc-levels-settings.png)
+
+| Level | Name                     | Code  | Covers                                                     |
+| ----: | ------------------------ | ----- | ---------------------------------------------------------- |
+|     1 | EVOC 1 - Light Vehicle   | EVOC1 | Staff cars, utility vehicles, other light apparatus        |
+|     2 | EVOC 2 - Ambulance       | EVOC2 | Ambulances and medium-duty apparatus                       |
+|     3 | EVOC 3 - Engine / Pumper | EVOC3 | Engines, pumpers, tankers, and other heavy apparatus       |
+|     4 | EVOC 4 - Aerial          | EVOC4 | Aerials, ladders, tillers, and specialized heavy apparatus |
 
 **What it is used for.** An apparatus can name a **Required EVOC Level**. When
 scheduling puts a member in a driver/operator position, it takes the highest
