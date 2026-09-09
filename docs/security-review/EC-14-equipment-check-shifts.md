@@ -1,15 +1,444 @@
 # Security Review 14 — Equipment Check & Shift Completion
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
+2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-09 (pass 4) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
 (pass 1)
 
-**Backend:** `api/v1/endpoints/equipment_check.py` (47 routes),
-`api/v1/endpoints/shift_completion.py` (21 routes),
-`services/equipment_check_service.py` (~3,200 L),
-`services/shift_completion_service.py`
+**Backend:** `api/v1/endpoints/equipment_check.py` (50 routes — corrected
+this pass, see below), `api/v1/endpoints/shift_completion.py` (21 routes),
+`services/equipment_check_service.py` (5,368 L),
+`services/shift_completion_service.py` (1,845 L)
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 4 (2026-09-09) — 1 fixed (a pre-existing lint violation, found on re-reading the file this pass), 0 flagged; near-zero diff since pass 3; a stale route count corrected across three rounds of Codex review
+
+**This section went through three rounds of Codex review, each finding a
+real gap the previous round missed.** Round 1: the diff scope was too
+narrow in five separate ways — two omitted routes in the route-count
+correction itself, one omitted migration, and two categories of adjacent
+frontend/backend files the draft's diff commands simply didn't name (some
+at the wrong path, some genuinely not run at all). Round 2: the fix for one
+of those five (the migration/service review) had itself skipped the
+frontend half of the very commit it was reviewing, and underclaimed the
+`apiCache.ts` diff by two entries. Round 3: the completion gate's own
+"pre-existing, unrelated" dismissal of two ESLint warnings was wrong on
+both counts — they hadn't actually been inspected as part of this feature
+until round 2's frontend-half review, and CLAUDE.md's rule owns a
+discovered warning regardless of who introduced it. All eight gaps
+verified against real code and corrected below. The "no findings"
+conclusion for the feature itself holds throughout; the one warning turned
+out to be this pass's own to fix, once actually looked at.
+
+**Diff scope.** Pass 3 merged as `b267ee1ca`. `git diff --stat b267ee1ca..HEAD`
+for all six files pass 3 declared (`equipment_check.py`, `shift_completion.py`,
+`equipment_check_service.py`, `shift_completion_service.py`,
+`equipment_check_pdf.py`, `models/apparatus.py`) shows exactly **one** changed
+file: `shift_completion_service.py` (+50/-8). The other five are byte-identical
+to pass 3's baseline (`git diff` empty, line counts unchanged). Two new Alembic
+revisions touch `shift_completion_reports` since pass 3, not one — both
+reviewed below.
+
+### The one backend change, read directly rather than assumed clean
+
+`shift_completion_service.py`'s `update_report` (the only edit path an
+officer has for a filed report's `call_types`) gained a new private helper,
+`_edit_preserves_org_slugs` (commit `360306d42`, "fix(scheduling): edit a
+draft's call types in the vocabulary it stores" — a correctness fix already
+merged to `main` before this pass started, not written by this iteration).
+Read in full against the checklist rather than trusted because it was
+already merged:
+
+- **Tenant isolation (§3).** The helper takes no id from the client — it is
+  called with `report` (already resolved through this method's own
+  `report.organization_id != str(organization_id)` check, three lines above
+  the loop that applies `updates`) and reads
+  `ShiftEligibilityService(self.db).effective_call_type_slugs_for(str(report.organization_id))`,
+  which resolves the organization by that same already-validated id.
+  `effective_call_type_slugs_for` (`shift_eligibility_service.py:1004`) fails
+  closed — an org it cannot resolve returns the empty set, which the
+  helper's `all(v in in_force for v in values)` then rejects for any
+  non-empty `call_types` list, falling back to the pre-existing "clear the
+  marker" behavior rather than trusting a value that could not be confirmed.
+  No client-supplied id reaches a query anywhere in the new code.
+- **Schema & migration integrity (§7, Pitfall #20 — canonical JSON shape).**
+  The migration this helper's docstring cites
+  (`20260905_2200_d7c1b95e2a40_narrow_call_type_provenance_to_slugs.py`) is
+  the write-side settling pass for the same `data_sources["call_types"]`
+  marker: read in full. It scopes its per-row comparison to
+  `slugs_by_org.get(org_id, _DEFAULT_SLUGS)` — one organization's configured
+  types never validate another's report (the exact Pitfall #14 shape a data
+  migration can get wrong silently, since nothing routes a migration's own
+  queries through `require_permission`). Guards table existence with
+  `_has_table()` before querying (Pitfall #26 — this table is Alembic-created,
+  not `create_all`, so this guard is defensive rather than load-bearing, but
+  correct either way). Reads JSON defensively (`_load_json` degrades a
+  malformed value to `None` rather than raising, Pitfall #19's "don't fail
+  the whole upgrade over one org's hand-edited settings" rule). `downgrade()`
+  is a deliberate, documented no-op with the reasoning stated in the module
+  docstring — not an omission.
+- **A second migration also rewrites this table, and the draft missed it.**
+  `20260905_1900_c9f4a2b71d38_rename_reserved_call_type_slug.py` (the prior
+  revision in the same chain, one revision before `d7c1b95e2a40`) rewrites
+  `shift_completion_reports.call_types` too — a department that configured a
+  call type using the reserved `unclassified` slug gets that type renamed
+  everywhere it is persisted, including on `org_calls`-provenance reports.
+  Read in full: its `_org_call_reports` helper filters `WHERE organization_id
+= :org_id` and only ever writes back a report whose id came from that same
+  per-org query, so — the same shape as `d7c1b95e2a40` — one organization's
+  rename can never touch another's report. It replaces the reserved slug with
+  one derived from the entry's own label, checked against every slug already
+  in use (`_org_call_slugs`, also organization-id-scoped) so a rename cannot
+  collide with or merge into an existing type's history. Guards
+  `"organizations" not in ... get_table_names()` before querying (the same
+  Pitfall #26 shape); does not additionally guard `shift_completion_reports`
+  or `org_calls`, but both are core, migration-created tables present from
+  the base schema, not a `create_all`-only one, so this is not the gap
+  Pitfall #26 describes. `downgrade()` is the same deliberate,
+  documented no-op, for the same reason (the reserved slug is a value the
+  application refuses to accept and cannot display — restoring it would
+  reintroduce exactly what the migration exists to remove).
+- **No new route, no permission-string change.** `update_report`'s own gate
+  (officer-self-check three lines above the new call, unchanged) still
+  applies before any of this code runs.
+
+**The frontend half of this same commit was missed entirely on the first
+pass, and Codex caught it.** `git show --stat 360306d42` shows the commit
+also touches four frontend files — `CallTypeChips.tsx` (new component),
+`CallTypeChips.test.tsx` (new, 10 tests), `useCallTypeLabels.ts` (new
+`useOrgCallTypes` hook), `schedulingStore.ts` (a new `callTypes` field), and
+`ShiftReportsTab.tsx` (wires them in) — which the backend review above
+never looked at, even though they are what decides the values sent to
+`update_report`. Read all four:
+
+- `CallTypeChips.tsx`'s `orgCallTypeChoices` builds its choice list from two
+  sources only: the org's own configured types (`configured`, arriving via
+  `schedulingStore`'s already-reviewed `loadSettings()`, session-scoped) and
+  values already present on the report being edited (`stored`, i.e. this
+  same report's own `call_types` — not client-injectable beyond what a prior,
+  already-validated write put there). Neither source lets an officer put an
+  arbitrary or another organization's slug into the picker.
+- Even if a client bypassed this picker and sent an arbitrary string
+  directly to `update_report` anyway, the backend's own
+  `_edit_preserves_org_slugs` (reviewed above) is what actually enforces the
+  invariant, independent of anything the frontend offers — this UI is a
+  convenience for staying inside the rule, not the enforcement of it.
+- `useOrgCallTypes`/`schedulingStore`'s new `callTypes` field only read an
+  existing, already org-scoped settings response; no new endpoint, no new
+  client-supplied id.
+- Grepped all four files for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, raw `fetch(`, `.toLocale*` — zero hits.
+  `npx vitest run src/modules/scheduling/components/CallTypeChips.test.tsx`
+  — 10/10 passed.
+
+### EC-15 — LOW (code health, caught by the completion gate rather than the checklist) — two `eslint` warnings on `CallTypeChips.tsx` were dismissed as "pre-existing, unrelated" without being inspected — ✅ FIXED
+
+**What:** `npx eslint .` flags `CallTypeChips.tsx` twice for
+`react-refresh/only-export-components` — the file exported
+`orgCallTypeChoices`/`textCallTypeChoices`/`CallTypeChoice` alongside the
+`CallTypeChips` component, and fast refresh cannot distinguish a component
+export from a plain-value export in the same file, so an edit to either
+remounts the whole tree.
+**Where:** `frontend/src/modules/scheduling/components/CallTypeChips.tsx`.
+**How this pass's own record was wrong:** round 1's completion gate (and
+this section's own first draft) recorded the two warnings as
+"pre-existing, unrelated" and moved on — wrong on both counts. They hadn't
+actually been inspected as part of this feature at all until the round-2
+frontend-half review just above (this file didn't exist before commit
+`360306d42`, so "pre-existing" meant "pre-existing relative to this PR,"
+not "already looked at and dispositioned"). CLAUDE.md's rule is that a
+discovered warning is owned the moment it's discovered, in the same
+commit, regardless of who introduced it or whether it's this feature's own
+territory — "unrelated" is not one of the two sanctioned responses.
+**Fix:** moved the two builders and the shared `CallTypeChoice` type into
+a new sibling module, `callTypeChoices.ts` (no JSX, so fast refresh has
+nothing to lose by editing it), and updated `CallTypeChips.tsx`'s two
+consumers (`CallTypeChips.test.tsx`, `ShiftReportsTab.tsx`) to import the
+builders from there instead. `npx eslint .` now reports 0 warnings
+repository-wide;
+`npm run typecheck` still 0 errors;
+`vitest run CallTypeChips.test.tsx ShiftDetailPanel.test.tsx` 41/41 passed.
+
+**No finding beyond the lint fix**, on either half of `360306d42` now. This is exactly the
+shape pass 2's adjacent-file reviews established for this doc: a change
+inside this feature's own service class,
+already merged by a different (non-rotation) workflow, checked against the
+seven dimensions from this feature's lens rather than re-trusted because it
+shipped clean elsewhere.
+
+### Route count correction
+
+Pass 3's header and route-inventory prose stated `equipment_check.py` at
+**57** routes. Since the file is byte-identical to pass 3's own baseline
+commit (confirmed above — 0-line diff), this pass re-derived the count
+directly rather than carrying the figure forward: an AST walk for every
+`@router.<verb>`-decorated function (the same method pass 2/3 used) and an
+independent plain-regex `grep` both return **50**, not 57. Every route name
+pass 3's prose enumerates by name (all 18 `inventory.check_manage` writes,
+all 6 `check_view`-or-`check_submit` reads, the 3 submit-gated endpoints, the
+6 `check_view`-only reports, the router-level-gated changelog route, the 5
+bare-`get_current_user` routes, and all 9 supply/swap endpoints) accounts for
+only **48** of the 50 — the first draft of this correction repeated pass 3's
+own omission rather than fixing it. The other two, caught on Codex review,
+are `list_templates` and `get_template` (`equipment_check.py:130,175`), both
+gated `inventory.check_view OR inventory.check_submit OR
+inventory.check_manage` (the same EC-7 view-or-submit shape as
+`get_shift_checklists`/`get_check`, for the same reason: the member-facing
+"Start a Check" picker lists and opens templates, so gating either behind
+the officer-only view permission alone would leave the picker empty for the
+crew the feature is for). 48 + 2 = 50, and every route is now named. `shift_
+completion.py`'s count (21) is unchanged and re-confirmed by the same two
+methods. Corrected here rather than re-carried, in the manner of `SEC-00`'s
+"22 vs 20" `public/*` count correction.
+
+### Frontend diff since pass 3
+
+**The first draft of this section ran `git diff --stat` against the wrong
+path for two of the twelve pass-1/3-declared files, and so silently dropped
+the largest frontend diff in this pass.** Pass 1's own enumeration names
+`ShiftDetailPanel.tsx` and `ShiftCheckInPage.tsx` without a path; the draft
+assumed `frontend/src/modules/inventory/pages/`, where nine of the twelve
+files do live, and got a clean (empty) diff back for both because neither
+file is there — `find frontend/src -iname` (below) shows they are at
+`frontend/src/pages/scheduling/`. Codex review caught the omission; the diff
+against the corrected paths is not empty.
+
+`git diff --stat b267ee1ca..HEAD` on the twelve module files, at their
+correct locations: `EquipmentCheckForm.tsx` (+21/-4),
+`EquipmentCheckReportsPage.tsx` (+4/-2), `EquipmentCheckTemplateBuilder.tsx`
+(+124/-76), `EquipmentCheckTemplateBuilder.test.tsx` (+134, tests only),
+`EquipmentKitsPage.tsx` (+3), `EquipmentRequestsPage.tsx` (+128/-66),
+`MyEquipmentPage.tsx` (+3/-3), `ApparatusDetailPage.tsx` (+13/-9,
+`modules/inventory/pages/` — a different file from the same-named
+`modules/apparatus/pages/ApparatusDetailPage.tsx`, not this feature's),
+`FleetBoardPage.tsx` (+9/-5), `MyChecklistsPage.tsx` (+1/-1), plus 17 new
+`apiCache.ts` `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entries across
+three commits (corrected below — the first draft counted 15, missing two
+from separate commits) — and,
+at the corrected paths, `pages/scheduling/ShiftDetailPanel.tsx` (**+1806/
+-1553**) and `pages/scheduling/ShiftCheckInPage.tsx` (+1/-1). `CheckLogPage.
+tsx`, `ApparatusInventoryPage.tsx` and `EquipmentChecksTab.tsx` — the
+remaining three of the twelve — are confirmed byte-identical (empty diff).
+
+- **`ShiftDetailPanel.tsx`** — read the diff in full rather than the file
+  (3,633 diff lines against a 3,091-line file; largely a restructure, not a
+  line-by-line edit, so the file itself is more useful than the hunks once
+  the shape is understood). This panel is Scheduling's own component
+  (`pages/scheduling/`) that pass 1 tracked from EC-14's angle because it
+  surfaces equipment-check status and shift-completion actions inline. Two
+  new calls into `schedulingService` (`declineAssignment`,
+  `checkIn`/`checkOut` via a refreshed `getShift`) — traced both to their
+  backend methods below; neither is a new endpoint this diff introduces.
+  Grepped every added line for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, raw `fetch(`, `.toLocale*`, and any inline
+  permission-equivalent string — zero hits. The bulk of the diff is a
+  restructure around a single `closeButton` element rendered once instead of
+  duplicated (an accessibility/focus-management fix — a second "Close panel"
+  control is a screen-reader defect, not a security one) — read enough of it
+  to be confident the restructure doesn't change what data reaches whom, not
+  read line-by-line, which is this section's own explicit, stated scope
+  limit rather than a silent skip.
+- **`ShiftCheckInPage.tsx`** — one line, a contrast fix on the check-in
+  button (`bg-green-600` → `bg-green-700`). Cosmetic.
+- **`ApparatusDetailPage.tsx`/`FleetBoardPage.tsx`** (inventory module) — both
+  add a `canOpenSupply` check
+  (`checkPermission('inventory.check_view') || checkPermission('inventory.manage')`)
+  before rendering a link to the supply worklist, which the linked page's own
+  endpoint already gates on that same pair — a UI-honesty fix (don't offer a
+  control the destination will 403) that reads the real gate rather than
+  assuming, the same shape as this file's own pre-existing `canManage` check
+  a few lines above. Not a new exposure either direction: the backend gate
+  was already correct before this diff; only the frontend's decision to
+  render the link changed.
+- **`MyChecklistsPage.tsx`** — one class addition, a 44px touch-target
+  minimum on a button already gated correctly. Cosmetic.
+
+- **`EquipmentCheckForm.tsx`** — an unmount-race fix (a `cancelled` flag
+  guards the draft-save `.then()`/`.catch()` callbacks the same way four
+  existing effects in the file already do) and a dark-mode contrast fix on
+  the "not applicable" toggle. Neither touches auth, tenant scoping, or data
+  handling.
+- **`EquipmentCheckTemplateBuilder.tsx`/`.test.tsx`** — confirmed, per pass
+  3's own scope note, this file's autosave/subtree-delete concurrency is
+  `AP-13-apparatus-nfc.md`'s territory, not this feature's (tenant isolation
+  and auth are this feature's lens; none of the three previously-open Codex
+  threads pass 3 recorded were about either). Re-read the diff anyway rather
+  than skipping on the strength of that note: `git log --full-history
+b267ee1ca..HEAD -- .../EquipmentCheckTemplateBuilder.tsx` traces to AP-13's
+  own pass 10/11 commits (the `handleSave`-atomicity and lock-ordering
+  findings that doc's write-up already covers) plus incidental UI additions
+  (an "author's last-touched location" tracker for where a new item/
+  compartment is added). No `Depends`/permission-equivalent string appears
+  in a `.tsx` file — grepped the diff for `permission`/`require`/`auth`,
+  zero hits — so there is nothing in this diff this feature's lens would
+  catch that AP-13's own rotation entry (now ✅, pass 11 merged as `1005d5bac`)
+  has not already reviewed.
+- **`EquipmentRequestsPage.tsx`** — the fulfillment picker now calls a new
+  backend endpoint, `GET /inventory/requests/{request_id}/fulfillment-options`
+  (`inventory.py:4098`, `InventoryService.get_fulfillment_options`), instead
+  of filtering a client-side `getItems()` list. Traced the endpoint's
+  location rather than assuming: it lives in `inventory.py`/
+  `InventoryService`, **feature 11's (Inventory) principal code, not this
+  feature's** — `equipment_check.py`/`shift_completion.py` own the
+  checklist and shift-report surface; equipment _requests_ (a member asking
+  for gear, a quartermaster fulfilling it) is Inventory's own sub-feature.
+  Out of this pass's scope for the same reason pass 3 left
+  `EquipmentCheckTemplateBuilder.tsx`'s concurrency to AP-13: reviewing it
+  here would duplicate feature 11's own rotation entry rather than add
+  coverage. Grepped the diff for the same checklist red flags (`window.
+confirm`/`alert`/`prompt`, raw `fetch(`, `.toLocale*`) — zero hits.
+- **`EquipmentKitsPage.tsx`/`MyEquipmentPage.tsx`** — a `<Breadcrumbs />`
+  addition and two touch-target-size class additions (`max-md:min-h-[44px]
+max-md:min-w-[44px]`, CLAUDE.md's mobile-touch-target convention).
+  Cosmetic only.
+- **`apiCache.ts`** — **17 new entries, not 15** (the first draft counted
+  only `SEC4-3`'s own additions and missed the other two, from two different
+  commits — caught on Codex review). `git diff b267ee1ca..HEAD` on this file
+  is 36 added lines across three commits:
+  - 15 are `SEC4-3`'s pinned PII exclusions
+    (`docs/security-review/SEC-00-cross-cutting-baseline.md` pass 4, commit
+    `ae423afa`), already reviewed under feature 00's own lens; re-confirmed
+    present rather than re-derived.
+  - 1 is `/inventory/items/colors` (commit `9c3ff748`) — **not this
+    feature's finding either**: `git show --stat 9c3ff748` traces it to
+    `FE5-34-frontend-shared.md` (Feature 34, frontend-shared's own rotation
+    entry), which found `GET /inventory/items/colors` wrongly cleared as
+    "no free-text field" and left globally cacheable, when `color` is an
+    unconstrained `Optional[str]` up to 50 characters. Already fixed there,
+    with its own regression test; confirmed present at
+    `apiCache.ts:98`, not re-reviewed here to avoid duplicating that entry.
+  - 1 is `/fulfillment-options` (commit `c2b9818d`), explicitly documented
+    in-file as _not_ a PII exclusion (a freshness concern for a live stock
+    count, not member data) — read the comment and agree with the
+    reasoning: nothing in the new endpoint's response (traced above,
+    `get_fulfillment_options`) carries a name or other `PII_FIELDS`-shaped
+    value, only item/quantity/compatibility facts about catalog stock.
+
+**No findings** in the twelve declared frontend files, once the diff scope
+covers all twelve at their real locations rather than nine of them.
+
+### Adjacent backend surfaces (pass 2's own established scope, re-run)
+
+**Omitted from the first draft entirely — not even checked for "still
+adjacent, still clean."** Pass 2 established that `scheduled_tasks.py` and
+`scheduling_service.py` are reviewed from EC-14's lens whenever
+`ShiftCompletionService` (this feature's own class) reads something in them
+that changed. Both files changed since pass 3 (`scheduled_tasks.py` +31/-1,
+`scheduling_service.py` +330/-20) and the first draft never re-ran that
+check — caught on Codex review.
+
+- **`scheduled_tasks.py`.** The diff touches only `run_publish_scheduled_
+messages` and `run_recover_stranded_message_deliveries` (both add an
+  `Organization.active.isnot(False)` join/filter, a `DepartmentMessage`
+  fix — `CRON3-31-1`, feature 25/31's own territory, org-scoped correctly
+  and unrelated to equipment checks). Neither of the two functions pass 2
+  actually reviewed from this feature's angle —
+  `run_end_of_shift_checklist_reminders` and `run_post_shift_validation`, the
+  ones that read equipment-check templates and shift-completion state — is
+  in this diff at all (`grep` for both names against the diff: zero hits).
+  So the file changed, but not in the region this feature has a stake in;
+  correctly dispositioned as such rather than either re-reviewing the whole
+  file or silently skipping it because the file "didn't matter."
+- **`scheduling_service.py`.** Read every hunk rather than trusting the
+  byte-count. Two shapes:
+  1. **Already this rotation's own, already-reviewed territory.** The
+     hunks touching `get_shift_by_id`'s `populate_existing=True` addition,
+     `member_check_in`'s locking/`populate_existing` fix, and the
+     `finalize_shift`/`save_closeout_calls`/`save_closeout_attendance`
+     region are `AP-13-apparatus-nfc.md`'s findings 5 and 6–10 — confirmed
+     by `git log -- ...scheduling_service.py` since `b267ee1ca`: the
+     dominant commit is `1005d5bac`, this rotation's own PR #2428, merged
+     earlier in this same pass. Reviewing them again here would duplicate
+     that entry, not add coverage — already fully written up there, with
+     its own guard tests.
+  2. **Genuinely new, genuinely Scheduling-only.** `closeout_backlog_
+halves`/`closeout_backlog_criteria`/`closeout_effective_end` and the new
+     `get_closeout_backlog` method (an administration-hub "needs close-out"
+     metric and queue) are new since pass 3 and are not AP-13's. Checked
+     against this feature's own established bar for adjacency — does
+     `ShiftCompletionService` or either of this feature's own endpoint files
+     read any of it? — `grep` for `closeout_backlog`/`get_closeout_backlog`
+     against `shift_completion_service.py`, `shift_completion.py`, `equipment_
+check.py`, `equipment_check_service.py`: zero hits. Its one caller is
+     `api/v1/endpoints/scheduling.py:712`, Scheduling's own file. Unlike
+     `responding_members` (pass 2's example of genuine adjacency, because
+     `ShiftCompletionService._get_trainee_call_data_from_shift` reads it),
+     this is Scheduling's alone — correctly out of scope, not silently
+     skipped. (Read it anyway, briefly: both the count and the list query
+     filter through the same `closeout_backlog_criteria`, which scopes on
+     `Shift.organization_id == organization_id` throughout — org-scoped, no
+     finding, for the record.) The new `decline_assignment` method
+     (self-scoped on `id` + `user_id` + `organization_id`, the mirror of the
+     existing `confirm_assignment`) is the same shape — checked whether a
+     declined assignment could defeat `create_report`'s existing trainee-tie
+     check (EC-6's own fix, which matches on `ShiftAssignment.shift_id`/
+     `user_id` without filtering `assignment_status`): it doesn't newly
+     enable anything — `update_assignment` could already set a row to
+     `DECLINED` before this method existed, so this diff does not change
+     which rows satisfy EC-6's check. Not a tenant or auth finding either
+     way; noted rather than raised, since it predates this diff.
+
+**No findings** in either adjacent file, and the "no findings" is now
+against the actual diff rather than a diff that skipped the two functions
+this feature is supposed to be watching in each.
+
+### Re-verified: every prior fix and open item, read at its current location
+
+- **EC-1** (`_update_apparatus_deficiency`) — still org-scoped
+  (`equipment_check_service.py:1631`, unmoved since pass 3 — file unchanged).
+- **EC-2/EC2-3/EC2-4** (`_validate_item_fks`) — still present, still called
+  from `add_items_bulk`/`replace_compartments`.
+- **EC-4** (`clone_template` apparatus XC-3) — still org-scoped.
+- **EC-6** (`create_report`'s `shift_id`-absent branch) — still validates
+  `trainee_id` in-org.
+- **EC-9** (`get_report` org-scoping) — still filters `organization_id`; all
+  call sites (`get_shift_report`, `acknowledge_report`, `update_report`,
+  `review_report`) still resolve through it — read `update_report` in full
+  this pass anyway (above), since it's the one method that changed.
+- **EC-10** (auto-fail rule) — still applied consistently.
+- **EC-12** (`report_item_used` locking) — still locks the item then the
+  deployed lots before the read-modify-write.
+- **EC-13** (`update_deployed_lot` submitter-inflation guard) — still raises
+  `PermissionError` on a quantity increase from a submit-only caller.
+- **EC-14** (`apiCache.ts` `/equipment-checks` prefix) — still present.
+- **EC-11** (compliance metrics) — `get_compliance_report`
+  (`equipment_check_service.py:4901`) read in full this pass: still computes
+  real per-apparatus/per-check stats from `ShiftEquipmentCheck` rows, still
+  no expected-check-cadence model in the schema to grade compliance against
+  — confirmed still an unbuilt feature, not a regression, not a security
+  finding.
+- **`get_item_deployments` vs. `update_deployed_lot`-adjacent permission-gate
+  discrepancy** — still present, still the deliberately-unadjudicated call
+  `docs/KNOWN_LIMITATIONS.md` and `test_permission_gate_composition.py`
+  record; not re-flagged.
+- **LIKE escaping** — the module's one `.ilike()`
+  (`equipment_check_service.py:5069`) still passes `like_pattern(item_name)`
+  with `escape=LIKE_ESCAPE_CHAR`.
+- **CSV export** — `export_csv` (`equipment_check.py:1432-1437`) still uses
+  `SafeCsvWriter`.
+- **JSON mutation (Pitfall #12)** — every nested-JSON write in
+  `shift_completion_service.py` (`score_history`, `progress_notes`,
+  `data_sources`, `review_history`) still uses `copy.deepcopy()` before
+  reassignment; grepped for a bare `dict(<obj>.<attr>)` shallow-copy pattern
+  in both service files — zero hits.
+- **SMS allowlist (Pitfall #18)** — still zero hits for `SMSService`/
+  `SmsAlert`/`resolve_sms_recipients` in either service file.
+
+## Completion gate (pass 4)
+
+| Check                                                                                                                                                                                                                                                                              | Result                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                      | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                               | ✅ 1554 files unchanged                                                                 |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.1, CI's pin)                                                                                                                                                                                                                  | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                  | ✅ 440 revisions, single head `f1565c64b658`                                            |
+| `pytest tests/ -q -k "equipment_check or shift_completion"`                                                                                                                                                                                                                        | ✅ 397 passed, 1 skipped (pre-existing, `pywebpush` not installed)                      |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                               | ✅ 11945 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `npm run typecheck` (the repo's own script — the aliased TS7 compiler via `tsc-native.mjs`, per CLAUDE.md's "Two TypeScript installs"; the draft ran plain `npx tsc --noEmit` instead, which resolves TS 5.9 — the linter's compiler, not the build's — corrected on Codex review) | ✅ 0 errors                                                                             |
+| `npx eslint .` (round 1/2 wrongly recorded 2 "pre-existing, unrelated" warnings on `CallTypeChips.tsx` — fixed this round, see Findings)                                                                                                                                           | ✅ 0 errors, 0 warnings                                                                 |
+| `npx vitest run src/utils/apiCache.test.ts src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx src/modules/scheduling/components/CallTypeChips.test.tsx src/pages/scheduling/ShiftDetailPanel.test.tsx`                                                             | ✅ 226 passed                                                                           |
 
 ---
 

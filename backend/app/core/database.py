@@ -35,9 +35,8 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-@event.listens_for(Base, "load", propagate=True)
-def _on_load_stamp_utc(target, _context):
-    """After loading any ORM model, tag naive datetime attributes as UTC.
+def _stamp_utc(target) -> None:
+    """Tag naive datetime attributes on ``target`` as UTC, in place.
 
     MySQL DATETIME columns do not store timezone info, so aiomysql returns
     naive datetime objects even when SQLAlchemy ``DateTime(timezone=True)``
@@ -52,6 +51,28 @@ def _on_load_stamp_utc(target, _context):
             val = getattr(target, attr, None)
             if isinstance(val, datetime) and val.tzinfo is None:
                 set_committed_value(target, attr, val.replace(tzinfo=timezone.utc))
+
+
+@event.listens_for(Base, "load", propagate=True)
+def _on_load_stamp_utc(target, _context):
+    """Stamp UTC on every fresh load of an ORM model (see ``_stamp_utc``)."""
+    _stamp_utc(target)
+
+
+@event.listens_for(Base, "refresh", propagate=True)
+def _on_refresh_stamp_utc(target, _context, _attrs):
+    """Stamp UTC when an already-identity-mapped instance is repopulated.
+
+    ``session.refresh()`` and a locking read with
+    ``execution_options(populate_existing=True)`` (see
+    ``SchedulingService.get_shift_by_id``) both repopulate an object already
+    in the session's identity map. SQLAlchemy fires ``"refresh"``, not
+    ``"load"``, for that case -- a distinct event with a distinct listener
+    registration -- so without this listener the object's datetimes would
+    go naive again the moment such a re-read runs, even though the row was
+    already tagged UTC on its first load.
+    """
+    _stamp_utc(target)
 
 
 class DatabaseManager:

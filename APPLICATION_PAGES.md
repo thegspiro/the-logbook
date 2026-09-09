@@ -36,25 +36,26 @@ Complete reference of all pages in the application, organized by module.
 
 ## Onboarding
 
-| URL                               | Page                     | Description                                                                                    |
-| --------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `/onboarding`                     | Onboarding Check         | Entry point / status check                                                                     |
-| `/onboarding/start`               | Organization Setup       | Step 1 - create organization                                                                   |
-| `/onboarding/navigation-choice`   | Navigation Choice        | Choose navigation layout                                                                       |
-| `/onboarding/email-platform`      | Email Platform           | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)         |
-| `/onboarding/email-config`        | Email Configuration      | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials)       |
-| `/onboarding/file-storage`        | File Storage             | Choose file storage provider                                                                   |
-| `/onboarding/file-storage-config` | File Storage Config      | Configure file storage                                                                         |
-| `/onboarding/authentication`      | Authentication           | Choose auth method                                                                             |
-| `/onboarding/it-team`             | IT Team & Backup         | IT team & backup access setup                                                                  |
-| `/onboarding/positions`           | Position Setup           | Configure positions (formerly roles)                                                           |
-| `/onboarding/modules`             | Module Selection         | Choose which modules to enable                                                                 |
-| `/onboarding/module-selection`    | Module Selection (alias) | Renders the same page as `/onboarding/modules` — **not** a redirect, so the URL stays as typed |
-| `/onboarding/system-owner`        | System Owner Creation    | Create initial system owner account                                                            |
-| `/onboarding/security-check`      | Security Check           | Security verification                                                                          |
-| `/onboarding/stations`            | Station Setup            | Create the department's stations                                                               |
-| `/onboarding/apparatus`           | Apparatus Setup          | Create the department's apparatus                                                              |
-| `/onboarding/complete`            | Setup Complete           | Confirmation / hand-off into the app                                                           |
+| URL                                    | Page                     | Description                                                                                    |
+| -------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `/onboarding`                          | Onboarding Check         | Entry point / status check                                                                     |
+| `/onboarding/start`                    | Organization Setup       | Step 1 - create organization                                                                   |
+| `/onboarding/navigation-choice`        | Navigation Choice        | Choose navigation layout                                                                       |
+| `/onboarding/email-platform`           | Email Platform           | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip)         |
+| `/onboarding/email-config`             | Email Configuration      | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials)       |
+| `/onboarding/file-storage`             | File Storage             | Choose file storage provider                                                                   |
+| `/onboarding/file-storage-config`      | File Storage Config      | Configure file storage                                                                         |
+| `/onboarding/authentication`           | Authentication           | Choose auth method                                                                             |
+| `/onboarding/it-team`                  | IT Team & Backup         | IT team & backup access setup                                                                  |
+| `/onboarding/positions`                | Position Setup           | Configure positions (formerly roles)                                                           |
+| `/onboarding/modules`                  | Module Selection         | Choose which modules to enable                                                                 |
+| `/onboarding/module-selection`         | Module Selection (alias) | Renders the same page as `/onboarding/modules` — **not** a redirect, so the URL stays as typed |
+| `/onboarding/modules/:moduleId/config` | Module Config            | Configure individual module                                                                    |
+| `/onboarding/system-owner`             | System Owner Creation    | Create initial system owner account                                                            |
+| `/onboarding/security-check`           | Security Check           | Security verification                                                                          |
+| `/onboarding/stations`                 | Station Setup            | Create the department's stations                                                               |
+| `/onboarding/apparatus`                | Apparatus Setup          | Create the department's apparatus                                                              |
+| `/onboarding/complete`                 | Setup Complete           | Confirmation / hand-off into the app                                                           |
 
 > **Completed setup cannot be replayed** _(2026-08-08)_. Once onboarding is
 > finished, the station and apparatus setup endpoints refuse further writes, so a
@@ -156,23 +157,37 @@ Requires `members.manage` permission. Tab-based admin interface.
 
 ### Members Admin Pages
 
-| URL                                  | Page                                  | Permission         |
-| ------------------------------------ | ------------------------------------- | ------------------ |
-| `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`   |
-| `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`   |
-| `/members/admin/waivers`             | Waiver Management                     | `members.manage`   |
-| `/members/admin/settings`            | Members Settings                      | `members.manage`   |
-| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`   |
-| `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`   |
-| `/members/check-in-station`          | Check-In Station                      | `members.check_in` |
+| URL                                  | Page                                  | Permission                                                                                                                                       |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/members/admin/edit/:userId`        | Admin Member Edit                     | `members.manage`                                                                                                                                 |
+| `/members/admin/history/:userId`     | Member Audit History                  | `members.manage`                                                                                                                                 |
+| `/members/admin/waivers`             | Waiver Management                     | `members.manage`                                                                                                                                 |
+| `/members/admin/settings`            | Members Settings                      | `members.manage`, `settings.manage`, `settings.manage_contact_visibility`, `settings.edit`, `organization.update_settings` or `apparatus.manage` |
+| `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`, `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings`                                      |
+| `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
+| `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage` or `settings.manage`                                                                                                            |
+| `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage` or `apparatus.manage`                                                                                                           |
+| `/members/check-in-station`          | Check-In Station                      | `members.check_in`                                                                                                                               |
 
-> _(2026-09-06)_ **Members Settings** holds Contact Visibility and Membership
-> IDs, moved here from the global settings page — they are decisions about the
-> roster, not platform configuration. `/members/admin/settings` redirects to the
-> first section; `/settings?tab=members` redirects here, carrying the sub-page.
+> _(2026-09-06, extended 2026-09-08)_ **Members Settings** holds Contact
+> Visibility, Membership IDs, Operational Ranks and EVOC Levels, moved here from
+> the global settings page — they are decisions about the roster, not platform
+> configuration. `/members/admin/settings` redirects to the first section;
+> `/settings?tab=members` and `/settings?tab=ranks` redirect here, carrying the
+> sub-page. Bare `/settings?tab=evoc` — the address from before EVOC became a
+> sub-page of Ranks — is answered too, because those links are still in
+> bookmarks and the old screen had been remapping them ever since.
 >
-> **The route's permission is not the endpoint's, and this is the one page in
-> the app where that gap is load-bearing.** `members.manage` opens the screen;
+> **Each route admits its own section's grants as well as the hub's**
+> _(2026-09-08)_. Gating them on `members.manage` alone would have locked out
+> the officers the move took the page away from: someone holding
+> `settings.manage` and not `members.manage` ran all of these from `/settings`,
+> and the legacy redirect now lands them here. `members.manage` stays in every
+> gate so a roster officer reaches the screen and is told which sections their
+> grants open, rather than meeting Access Denied.
+>
+> **The route's permission is still not the endpoint's, and this is the one page
+> in the app where that gap is load-bearing.** `members.manage` opens the screen;
 > neither section's save accepts it. Contact Visibility writes through
 > `PATCH /organization/settings/contact-info` (`settings.manage`,
 > `settings.manage_contact_visibility` or `organization.update_settings`) and
@@ -821,7 +836,8 @@ Sections are defined in
 > **Eligibility here is not the same screen as rank eligibility.**
 > **Scheduling Administration → Eligibility Rules** governs which _membership types_ may
 > self-sign-up for a shift; per-rank shift-**position** eligibility is set on
-> **Settings → Ranks**.
+> **Members Administration → Settings → Operational Ranks** _(moved from
+> Settings → Ranks, 2026-09-08)_.
 
 > The **Shift Reports** section links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports. It is a section navigator of its own eight sections, not a page of three cards.
 

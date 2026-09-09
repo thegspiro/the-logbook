@@ -2,11 +2,14 @@
  * Settings Page
  *
  * Organization settings with a sidebar navigation and content panel.
- * Sections: General, Modules, Members, Ranks, Email, Storage, Authentication.
+ * Sections: General, Modules, Email, Storage, Label Printers, Authentication.
+ *
+ * Members settings and the rank ladder now live under Members Administration;
+ * `?tab=` links to either are redirected below rather than dropped.
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Navigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { membersSettingsPathFor } from './members/admin/settings/membersSettingsSections';
 import {
   Building2,
@@ -27,7 +30,6 @@ import {
   Mail,
   MapPin,
   Upload,
-  Shield,
   Truck,
   MessageSquare,
   Briefcase,
@@ -49,14 +51,10 @@ import { HelpLink } from '../components/HelpLink';
 import { organizationService } from '../services/api';
 import type { ModuleSettingsData, OrganizationProfile } from '../services/api';
 import type { EmailServiceSettings, FileStorageSettings, AuthSettings } from '../types/user';
-import { useRankEditor } from '../hooks/useRankEditor';
-import { useAuthStore } from '../stores/authStore';
 import EmailSettingsSection from '../components/settings/EmailSettingsSection';
 import StorageSettingsSection from '../components/settings/StorageSettingsSection';
 import AuthSettingsSection from '../components/settings/AuthSettingsSection';
 import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
-import RanksSettingsSection from '../components/settings/RanksSettingsSection';
-import EvocLevelsSettingsSection from '../components/settings/EvocLevelsSettingsSection';
 import LabelPrintersSection from '../components/settings/LabelPrintersSection';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 import SettingsPanelHead from '../components/settings/SettingsPanelHead';
@@ -70,7 +68,7 @@ import { useEmailConnectionTest } from '../hooks/useEmailConnectionTest';
 // than derived from `sections`, so removing the entry above does not remove the
 // key here — and a stale key makes the render switch non-exhaustive, which is
 // how a removed section becomes a blank panel instead of a compile error.
-type SectionKey = 'general' | 'modules' | 'ranks' | 'email' | 'storage' | 'labelPrinters' | 'authentication';
+type SectionKey = 'general' | 'modules' | 'email' | 'storage' | 'labelPrinters' | 'authentication';
 
 /**
  * Sub-pages across every section. One flat union rather than one per section:
@@ -78,17 +76,7 @@ type SectionKey = 'general' | 'modules' | 'ranks' | 'email' | 'storage' | 'label
  * validate against, and the shell keys the rail off the active section anyway.
  */
 type SubPageKey =
-  | 'profile'
-  | 'contact'
-  | 'addresses'
-  | 'standard'
-  | 'additional'
-  | 'visibility'
-  | 'ids'
-  | 'operational'
-  | 'evoc'
-  | 'signin'
-  | 'mfa';
+  'profile' | 'contact' | 'addresses' | 'standard' | 'additional' | 'visibility' | 'ids' | 'signin' | 'mfa';
 
 const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
   {
@@ -110,19 +98,6 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
     subPages: [
       { key: 'standard', label: 'Standard Modules', hint: 'On by default' },
       { key: 'additional', label: 'Additional Modules', hint: 'Opt-in' },
-    ],
-  },
-  {
-    key: 'ranks',
-    label: 'Ranks',
-    icon: Shield,
-    // EVOC was its own top-level section, which put a driver-certification
-    // ladder beside Email and Storage as though it were a department-wide
-    // platform choice. It is a second rank ladder, so it belongs under Ranks.
-    description: 'Operational rank ladder and driver certification',
-    subPages: [
-      { key: 'operational', label: 'Operational Ranks', hint: 'Order and eligibility' },
-      { key: 'evoc', label: 'EVOC Levels', hint: 'Driver certification ladder' },
     ],
   },
   { key: 'email', label: 'Email', icon: Mail, description: 'Email platform and notification settings' },
@@ -152,7 +127,7 @@ const SECTIONS: SettingsSection<SectionKey, SubPageKey>[] = [
  * a pill still reading "All changes saved" from an earlier section would be
  * describing a write that is not going to happen.
  */
-const AUTOSAVED_SECTIONS = new Set<SectionKey>(['general', 'modules', 'ranks']);
+const AUTOSAVED_SECTIONS = new Set<SectionKey>(['general', 'modules']);
 
 const DEFAULT_SUB_PAGE = new Map<SectionKey, SubPageKey | null>(
   SECTIONS.map((section) => [section.key, section.subPages?.[0]?.key ?? null])
@@ -333,36 +308,54 @@ const COMMON_TIMEZONES = [
 
 // ── Main component ──
 
+/**
+ * Where the roster settings went.
+ *
+ * The sections that left this screen are still gated on grants this screen's
+ * own holders have — the rank ladder accepts `settings.manage`, contact
+ * visibility and membership IDs want settings grants outright — but their new
+ * home is under `/members/admin`, whose hub and its links require
+ * `members.manage`. An officer holding the settings grants and not that one
+ * therefore kept the permission and lost every way of reaching it: the `?tab=`
+ * redirects rescue an old bookmark, and nothing rescues someone simply looking
+ * for the page.
+ *
+ * Rendered below the active section rather than as a section of its own, so it
+ * is a signpost on the way past rather than a stop.
+ */
+const MovedToMembersAdmin: React.FC = () => (
+  <div className="border-theme-surface-border mt-10 border-t pt-6">
+    <p className="text-theme-text-muted text-sm">
+      Contact visibility, membership IDs, operational ranks and EVOC levels moved to{' '}
+      <Link
+        to={membersSettingsPathFor('ranks')}
+        className="text-theme-accent-blue mobile-touch-target inline-flex font-medium hover:underline"
+      >
+        Members Administration &rarr; Settings
+      </Link>
+      . They are decisions about the roster rather than platform configuration.
+    </p>
+  </div>
+);
+
 export const SettingsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const checkPermission = useAuthStore((state) => state.checkPermission);
 
-  // EVOC levels are served by the apparatus API, which this page's own
-  // settings.manage grant does not cover — hide the section rather than show a
-  // tab that can only 403.
-  const canManageEvoc = checkPermission('apparatus.manage');
-  // EVOC is a sub-page of Ranks rather than a section of its own, so the gate
-  // drops that one page and leaves the rest of the rail — a section is only
-  // dropped outright when every page under it is gated, which is not the case
-  // here (Operational Ranks stays).
-  const sections = useMemo(
-    () =>
-      SECTIONS.map((section) => {
-        if (section.key !== 'ranks' || canManageEvoc) {
-          return section;
-        }
-        return { ...section, subPages: (section.subPages ?? []).filter((page) => page.key !== 'evoc') };
-      }),
-    [canManageEvoc]
-  );
+  // Every remaining section stands on this page's own settings.manage grant, so
+  // the rail is the static list. The per-section filtering that used to live
+  // here went with Ranks: EVOC needed `apparatus.manage`, which this page's
+  // grant does not cover, and that per-endpoint answer is now recorded beside
+  // the section in `membersSettingsSections.ts`.
+  const sections = SECTIONS;
   const sectionKeys = useMemo(() => new Set<string>(sections.map((s) => s.key)), [sections]);
 
   const requestedTab = searchParams.get('tab');
   const requestedPage = searchParams.get('page');
 
   /**
-   * Members settings moved to `/members/admin/settings` on 2026-09-06, and the
-   * old address is in bookmarks and in links already sent.
+   * Members settings moved to `/members/admin/settings` on 2026-09-06, and
+   * Ranks and EVOC followed on 2026-09-08. The old addresses are in bookmarks
+   * and in links already sent.
    *
    * Redirected rather than remapped — this is the one case on this screen that
    * leaves the page entirely. Without it `?tab=members` fails the section check
@@ -374,18 +367,27 @@ export const SettingsPage: React.FC = () => {
    * Membership IDs rather than at the first section of a screen the reader now
    * has to search.
    */
-  const movedToMembersAdmin =
-    requestedTab === 'members' ? membersSettingsPathFor(requestedPage === 'ids' ? 'ids' : 'visibility') : null;
+  const movedToMembersAdmin = ((): string | null => {
+    if (requestedTab === 'members') {
+      return membersSettingsPathFor(requestedPage === 'ids' ? 'ids' : 'visibility');
+    }
+    // Ranks followed on 2026-09-08, and it carries two legacy spellings rather
+    // than one. `?tab=ranks&page=evoc` is the current address; bare `?tab=evoc`
+    // is older still, from when EVOC was a top-level section, and this screen
+    // has been remapping it ever since. Both are in bookmarks, so both are
+    // answered here — dropping the older one now would strand exactly the links
+    // that remap was written to rescue.
+    if (requestedTab === 'evoc') {
+      return membersSettingsPathFor('evoc');
+    }
+    if (requestedTab === 'ranks') {
+      return membersSettingsPathFor(requestedPage === 'evoc' ? 'evoc' : 'ranks');
+    }
+    return null;
+  })();
 
-  /**
-   * EVOC was a top-level section until this screen gained sub-pages, and the
-   * old UI put `?tab=evoc` in the address bar itself — so those links are in
-   * members' bookmarks and in messages already sent. Without this they would
-   * fail the section check and land silently on General, which looks like the
-   * settings were moved out from under them rather than merely renamed.
-   */
-  const initialTab = requestedTab === 'evoc' ? 'ranks' : requestedTab;
-  const initialPage = requestedTab === 'evoc' ? 'evoc' : requestedPage;
+  const initialTab = requestedTab;
+  const initialPage = requestedPage;
 
   const [activeSection, setActiveSection] = useState<SectionKey>(
     initialTab && sectionKeys.has(initialTab) ? (initialTab as SectionKey) : 'general'
@@ -442,30 +444,6 @@ export const SettingsPage: React.FC = () => {
   const [savingAuth, setSavingAuth] = useState(false);
   const [authSecretVisible, setAuthSecretVisible] = useState(false);
 
-  // Rank state and handlers, shared with the setup wizard's rank step so the
-  // two screens cannot answer the same question differently.
-  const {
-    ranks,
-    ranksLoading,
-    editingRank,
-    setEditingRank,
-    addingRank,
-    setAddingRank,
-    rankForm,
-    setRankForm,
-    rankSaving,
-    deletingRankId,
-    editingPositionsRankId,
-    setEditingPositionsRankId,
-    rankValidationIssues,
-    fetchRanks,
-    handleAddRank,
-    handleUpdateRank,
-    handleDeleteRank,
-    handleMoveRank,
-    handleToggleEligiblePosition,
-  } = useRankEditor();
-
   // Both levels are mirrored to the URL with `replace`, so a settings screen
   // can be linked to and refreshed without stacking a history entry per click.
   const writeUrl = useCallback(
@@ -512,7 +490,6 @@ export const SettingsPage: React.FC = () => {
           organizationService.getSettings(),
           organizationService.getEnabledModules(),
           organizationService.getProfile(),
-          fetchRanks(),
         ]);
         if (settingsData.email_service) setEmailSettings(settingsData.email_service);
         if (settingsData.file_storage) setStorageSettings(settingsData.file_storage);
@@ -527,7 +504,7 @@ export const SettingsPage: React.FC = () => {
       }
     };
     void load();
-  }, [fetchRanks]);
+  }, []);
 
   // ── Profile handlers ──
 
@@ -1063,56 +1040,6 @@ export const SettingsPage: React.FC = () => {
       // MEMBERS
       // ════════════════════════════════════════════
       // ════════════════════════════════════════════
-      // RANKS
-      // ════════════════════════════════════════════
-      case 'ranks':
-        // EVOC is the same section's second page now, not a section of its own.
-        if (activeSubPage === 'evoc') {
-          return (
-            <div>
-              <SettingsPanelHead
-                title="EVOC Levels"
-                description="Driver certification ladder and certifying programs."
-              />
-              <EvocLevelsSettingsSection />
-            </div>
-          );
-        }
-
-        return (
-          <RanksSettingsSection
-            ranks={ranks}
-            ranksLoading={ranksLoading}
-            editingRank={editingRank}
-            addingRank={addingRank}
-            rankForm={rankForm}
-            rankSaving={rankSaving}
-            deletingRankId={deletingRankId}
-            editingPositionsRankId={editingPositionsRankId}
-            rankValidationIssues={rankValidationIssues}
-            onSetEditingRank={setEditingRank}
-            onSetAddingRank={setAddingRank}
-            onSetRankForm={setRankForm}
-            onSetEditingPositionsRankId={setEditingPositionsRankId}
-            onAddRank={() => {
-              void handleAddRank();
-            }}
-            onUpdateRank={() => {
-              void handleUpdateRank();
-            }}
-            onDeleteRank={(id) => {
-              void handleDeleteRank(id);
-            }}
-            onMoveRank={(index, direction) => {
-              void handleMoveRank(index, direction);
-            }}
-            onToggleEligiblePosition={(rank, pos) => {
-              void handleToggleEligiblePosition(rank, pos);
-            }}
-          />
-        );
-
-      // ════════════════════════════════════════════
       // EMAIL
       // ════════════════════════════════════════════
       case 'email':
@@ -1210,11 +1137,12 @@ export const SettingsPage: React.FC = () => {
         headerAside={
           <HelpLink
             topic="settings"
-            tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
+            tooltip="Configure your department's name, logo, timezone and modules from this page. Member settings and the rank ladder moved to Members Administration."
           />
         }
       >
         {renderContent()}
+        <MovedToMembersAdmin />
       </SettingsLayout>
     </div>
   );

@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../../../test/utils';
 
 const mockGetSettings = vi.fn();
@@ -22,6 +22,20 @@ vi.mock('../../../../services/userServices', () => ({
     updateMembershipIdSettings: vi.fn(),
   },
 }));
+
+const mockGetRanks = vi.fn();
+const mockValidateRanks = vi.fn();
+vi.mock('../../../../services/api', () => ({
+  ranksService: {
+    getRanks: (...args: unknown[]) => mockGetRanks(...args) as unknown,
+    validateRanks: (...args: unknown[]) => mockValidateRanks(...args) as unknown,
+    createRank: vi.fn(),
+    updateRank: vi.fn(),
+    deleteRank: vi.fn(),
+    reorderRanks: vi.fn(),
+  },
+}));
+vi.mock('../../../../hooks/useRanks', () => ({ invalidateRanksCache: vi.fn() }));
 
 const granted = { current: [] as string[] };
 vi.mock('../../../../stores/authStore', () => {
@@ -46,7 +60,13 @@ describe('MembersSettingsPage', () => {
       contact_info_visibility: { enabled: true, show_email: true, show_phone: false, show_mobile: false },
       membership_id: { enabled: true, auto_generate: true, prefix: 'FD-', next_number: 7 },
     });
+    mockGetRanks.mockResolvedValue([]);
+    mockValidateRanks.mockResolvedValue({ issues: [], total: 0 });
     granted.current = ['members.manage', 'settings.manage', 'settings.edit'];
+    // BrowserRouter drives the real history, and a redirect assertion below
+    // reads it — so each test starts from a known address rather than wherever
+    // the previous one navigated to.
+    window.history.replaceState({}, '', '/members/admin/settings');
   });
 
   it('shows the section an officer holds the endpoint’s grant for', async () => {
@@ -56,9 +76,40 @@ describe('MembersSettingsPage', () => {
   });
 
   // The whole reason the sections carry their own permissions. `members.manage`
-  // opens the route; it does not open either endpoint.
-  it('offers nothing to an officer who manages the roster but not the settings', async () => {
+  // opens the route; of the four sections it opens exactly one — the rank
+  // ladder, whose endpoints were widened to accept it when the ladder moved
+  // here. Contact visibility and membership IDs still want a settings grant,
+  // and EVOC wants the apparatus one.
+  it('sends a roster officer to the one section their grant opens', async () => {
     granted.current = ['members.manage'];
+
+    renderWithRouter(<MembersSettingsPage section="visibility" />);
+
+    // Redirected, not rendered in place: the address has to name what is shown,
+    // or the breadcrumb and the URL describe a section the officer is not
+    // looking at.
+    await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ranks'));
+    expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
+    expect(screen.queryByText(/does not hold that grant/)).not.toBeInTheDocument();
+  });
+
+  // EVOC is the one section gated on another module entirely: the levels are
+  // served by the apparatus API, and widening that was deliberately not part of
+  // moving the page.
+  it('withholds EVOC from an officer without the apparatus grant', async () => {
+    granted.current = ['members.manage'];
+
+    renderWithRouter(<MembersSettingsPage section="evoc" />);
+
+    // The hub links every section unconditionally, so this is the click a
+    // roster officer actually makes. Landing on Ranks while the URL still said
+    // evoc was the defect.
+    await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ranks'));
+    expect(screen.queryByText('Driver certification ladder and certifying programs.')).not.toBeInTheDocument();
+  });
+
+  it('offers nothing at all to an account holding none of the four grants', async () => {
+    granted.current = [];
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
@@ -74,7 +125,7 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByText('Membership ID Number')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ids'));
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
   });
 

@@ -80,6 +80,7 @@ from app.schemas.facilities import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many levels of room nesting are allowed (a top-level room is level 1).
@@ -2653,14 +2654,33 @@ class FacilitiesService:
         return list(result.scalars().all())
 
     async def get_emergency_contact(
-        self, contact_id: str, organization_id: str
+        self,
+        contact_id: str,
+        organization_id: str,
+        for_update: bool = False,
     ) -> Optional[FacilityEmergencyContact]:
-        """Get emergency contact by ID"""
-        result = await self.db.execute(
+        """Get emergency contact by ID.
+
+        ``for_update``: a locking read, for `update_emergency_contact`'s
+        merge-then-validate name check (FAC-51). Two concurrent PATCHes each
+        clearing a *different* name (company_name on one, contact_name on
+        the other) can each load the row before either commits, so each
+        sees the other field still set and passes the invariant check --
+        then both commits land, leaving both fields NULL (Pitfall #27: a
+        plain SELECT can still answer from a stale snapshot even under
+        REPEATABLE READ). Locking the row here serializes the two requests
+        so the second sees the first's committed write before it re-checks.
+        The read path (the GET endpoint) and `delete_emergency_contact`
+        never need this.
+        """
+        query = (
             select(FacilityEmergencyContact)
             .where(FacilityEmergencyContact.id == contact_id)
             .where(FacilityEmergencyContact.organization_id == organization_id)
         )
+        if for_update:
+            query = query.with_for_update(of=FacilityEmergencyContact)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def create_emergency_contact(
@@ -2669,7 +2689,12 @@ class FacilitiesService:
         organization_id: str,
         created_by: str,
     ) -> FacilityEmergencyContact:
-        """Create an emergency contact"""
+        """Create an emergency contact.
+
+        ``created_by`` is accepted to match the endpoint's call and every
+        sibling create method's signature, but is not stored:
+        FacilityEmergencyContact has no created_by column.
+        """
         # Verify facility exists
         facility = await self.get_facility(
             contact_data.facility_id, organization_id, include_relations=False
@@ -2679,7 +2704,6 @@ class FacilitiesService:
 
         contact = FacilityEmergencyContact(
             organization_id=organization_id,
-            created_by=created_by,
             **contact_data.model_dump(),
         )
 
@@ -2696,12 +2720,36 @@ class FacilitiesService:
         organization_id: str,
     ) -> Optional[FacilityEmergencyContact]:
         """Update emergency contact"""
-        contact = await self.get_emergency_contact(contact_id, organization_id)
+        # for_update=True (FAC-57): this method's own name-invariant check
+        # below is a merge-then-validate read of the row, and without the
+        # lock two concurrent PATCHes each clearing a *different* name can
+        # each pass it against a pre-commit snapshot of the other field
+        # (Pitfall #27). Locking here serializes them.
+        contact = await self.get_emergency_contact(
+            contact_id, organization_id, for_update=True
+        )
         if not contact:
             return None
 
         await self._assert_facility_in_org(contact_data.facility_id, organization_id)
-        await self._apply_updates(contact, contact_data)
+
+        update_data = contact_data.model_dump(exclude_unset=True)
+        apply_updates(contact, update_data)
+
+        # FAC-51: apply_updates sets attributes directly on the ORM object,
+        # bypassing FacilityEmergencyContactBase's "at least one name"
+        # validator entirely (that validator only runs when a
+        # FacilityEmergencyContact*schema* is constructed). Without this
+        # check, clearing the only remaining name (e.g. company_name: null
+        # on a company-only contact) would commit a row neither the create
+        # schema nor the shipped form allows, and then 500 on every
+        # subsequent read via FacilityEmergencyContactResponse's own
+        # inherited validator rejecting that same row.
+        if not (contact.company_name or contact.contact_name):
+            raise ValueError("company_name or contact_name is required")
+
+        await self.db.commit()
+        await self.db.refresh(contact)
 
         return contact
 
@@ -3249,7 +3297,15 @@ class FacilitiesService:
         query = (
             select(FacilityComplianceItem)
             .where(and_(*conditions))
-            .order_by(desc(FacilityComplianceItem.created_at))
+            # FAC-55: order by the caller's requested sort_order (stored as
+            # item_number) rather than solely by created_at, now that
+            # create/update actually store it (FAC-47/48). Items with no
+            # sort_order sort last; created_at (descending, matching the
+            # previous default) breaks ties among equal or missing values.
+            .order_by(
+                *nulls_last_asc(FacilityComplianceItem.item_number),
+                desc(FacilityComplianceItem.created_at),
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -3270,22 +3326,38 @@ class FacilitiesService:
 
     async def create_compliance_item(
         self,
+        checklist_id: str,
         item_data: FacilityComplianceItemCreate,
         organization_id: str,
         created_by: str,
     ) -> FacilityComplianceItem:
-        """Create a compliance item"""
+        """Create a compliance item under ``checklist_id`` (from the URL path).
+
+        The path segment is authoritative, matching list_compliance_items'
+        own explicit checklist_id parameter — any (now-unused) value on
+        item_data.checklist_id is discarded rather than trusted, so a caller
+        cannot attach an item to a different checklist than the one named in
+        the URL by mismatching the two.
+
+        ``created_by`` is accepted (and required) to match every sibling
+        create method's signature and the endpoint's existing call, but is
+        not stored: unlike its parent FacilityComplianceChecklist,
+        FacilityComplianceItem has no created_by column — only the checklist
+        as a whole tracks an author; individual checklist items don't.
+        """
         # Verify checklist exists and belongs to org
-        checklist = await self.get_compliance_checklist(
-            item_data.checklist_id, organization_id
-        )
+        checklist = await self.get_compliance_checklist(checklist_id, organization_id)
         if not checklist:
             raise ValueError("Invalid compliance checklist")
 
+        # sort_order is the schema's wire-level name (matching the frontend
+        # contract); the model's column is still item_number.
+        item_payload = item_data.model_dump(exclude={"checklist_id", "sort_order"})
         item = FacilityComplianceItem(
             organization_id=organization_id,
-            created_by=created_by,
-            **item_data.model_dump(),
+            checklist_id=checklist_id,
+            item_number=item_data.sort_order,
+            **item_payload,
         )
 
         self.db.add(item)
@@ -3311,7 +3383,16 @@ class FacilitiesService:
         ):
             raise ValueError("Invalid compliance checklist")
 
-        await self._apply_updates(item, item_data)
+        # sort_order is the schema's wire-level name for the model's
+        # item_number column (see create_compliance_item) -- apply_updates
+        # would otherwise reject it as an unknown field.
+        update_data = item_data.model_dump(exclude_unset=True)
+        if "sort_order" in update_data:
+            update_data["item_number"] = update_data.pop("sort_order")
+        apply_updates(item, update_data)
+
+        await self.db.commit()
+        await self.db.refresh(item)
 
         return item
 

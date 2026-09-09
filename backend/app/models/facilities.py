@@ -1300,7 +1300,11 @@ class FacilityEmergencyContact(Base):
         Enum(EmergencyContactType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    company_name = Column(String(200), nullable=False)
+    # Nullable: the shipped form allows a contact-name-only record (a named
+    # person with no company, e.g. a facility's own on-call staff) — see
+    # FacilityEmergencyContactBase's cross-field validator, which enforces
+    # that at least one of the two is present.
+    company_name = Column(String(200), nullable=True)
     contact_name = Column(String(200), nullable=True)
     phone = Column(String(50), nullable=True)
     alt_phone = Column(String(50), nullable=True)

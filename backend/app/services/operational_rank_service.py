@@ -100,7 +100,8 @@ def rank_not_configured_message(rank: str) -> str:
     """
     return (
         f"'{rank}' is not a rank this department has configured. "
-        "Add it under Settings → Ranks first, or pick an existing one."
+        "Add it under Members Administration → Settings → Operational Ranks "
+        "first, or pick an existing one."
     )
 
 

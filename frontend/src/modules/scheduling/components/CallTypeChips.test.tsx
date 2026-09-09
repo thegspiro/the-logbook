@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CallTypeChips, orgCallTypeChoices, textCallTypeChoices } from './CallTypeChips';
+import { CallTypeChips } from './CallTypeChips';
+import { orgCallTypeChoices, textCallTypeChoices } from './callTypeChoices';
 import type { CallTypeOption } from '../types';
 
 const type = (slug: string, label: string, active = true): CallTypeOption => ({ slug, label, active });

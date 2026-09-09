@@ -7,9 +7,23 @@
  * is the worst kind of broken link, because nothing looks wrong.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { render, screen } from '@testing-library/react';
+const granted = { current: [] as string[] };
+vi.mock('../../../../stores/authStore', () => {
+  const state = () => ({
+    user: { id: 'user-1' },
+    checkPermission: (permission: string) => granted.current.includes(permission),
+  });
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: ReturnType<typeof state>) => unknown) => (selector ? selector(state()) : state()),
+      { getState: state }
+    ),
+  };
+});
+
 import MembersSettingsRedirect from './MembersSettingsRedirect';
 
 const renderAt = (entry: string) =>
@@ -19,12 +33,27 @@ const renderAt = (entry: string) =>
         <Route path="/members/admin/settings" element={<MembersSettingsRedirect />} />
         <Route path="/members/admin/settings/visibility" element={<p>Contact Visibility landed</p>} />
         <Route path="/members/admin/settings/ids" element={<p>Membership IDs landed</p>} />
+        <Route path="/members/admin/settings/ranks" element={<p>Operational Ranks landed</p>} />
+        <Route path="/members/admin/settings/evoc" element={<p>EVOC Levels landed</p>} />
         <Route path="*" element={<p>fell through</p>} />
       </Routes>
     </MemoryRouter>
   );
 
 describe('MembersSettingsRedirect', () => {
+  beforeEach(() => {
+    // Everything, unless a test narrows it: the default destination is only
+    // interesting when the officer's grants make it so.
+    granted.current = [
+      'members.manage',
+      'settings.manage',
+      'settings.manage_contact_visibility',
+      'settings.edit',
+      'organization.update_settings',
+      'apparatus.manage',
+    ];
+  });
+
   it('forwards the bare path to the first section', () => {
     renderAt('/members/admin/settings');
 
@@ -36,6 +65,42 @@ describe('MembersSettingsRedirect', () => {
 
     // A link to Membership IDs has to arrive at Membership IDs. Dropping the
     // parameter would land the reader on a screen they then have to search.
+    expect(screen.getByText('Membership IDs landed')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['ranks', 'Operational Ranks landed'],
+    ['evoc', 'EVOC Levels landed'],
+  ])('carries the %s section across', (tab, landed) => {
+    // Both arrived on 2026-09-08 and both are reachable from the redirect the
+    // moment the manifest lists them — `isTab` reads the manifest rather than a
+    // second hand-written union, which is what stops a new section being
+    // routable but not redirectable.
+    renderAt(`/members/admin/settings?tab=${tab}`);
+
+    expect(screen.getByText(landed)).toBeInTheDocument();
+  });
+
+  it('defaults to a section the officer can actually open', () => {
+    // The bare path admits anyone who can open *any* section, so an officer
+    // holding only settings.edit reaches it — and Contact Visibility, the first
+    // section declared, wants a settings-manage grant. Sending them there
+    // answered a route that admitted them with Access Denied one navigation
+    // later.
+    granted.current = ['settings.edit'];
+
+    renderAt('/members/admin/settings');
+
+    expect(screen.getByText('Membership IDs landed')).toBeInTheDocument();
+  });
+
+  it('honours a named section even when this officer cannot open it', () => {
+    // The page redirects on to one they can, and it is the page that knows
+    // which. Rewriting a good link here would lose the reader's actual target.
+    granted.current = ['members.manage'];
+
+    renderAt('/members/admin/settings?tab=ids');
+
     expect(screen.getByText('Membership IDs landed')).toBeInTheDocument();
   });
 

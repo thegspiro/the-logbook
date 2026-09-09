@@ -3668,6 +3668,81 @@ limitations. The already-filed sub-case in item (3) above and the
 Blueprints & Permits classification question in item (2) remain open,
 unresolved by any of these rounds.
 
+## FAC-30 — A `facilities.delete`-Only Custom Role Cannot Delete a Facility Document/Folder Through the Generic Documents API (2026-08-25)
+
+`can_access_folder`'s `required_permissions` list on a sensitive facility
+folder is `[facilities.view_sensitive, facilities.edit, facilities.manage]`
+— it has never included `facilities.delete`, on either side of the FAC-24/26
+read-vs-write split. A department's own **custom** position granting
+`facilities.delete` alone (without `.edit`/`.manage`) passes the
+facility-specific `DELETE /facilities/documents/{id}`/`DELETE
+/facilities/photos/{id}` routes (which check the action-specific permission
+directly) but is refused by the _generic_ Documents API's folder/document
+mutation routes for the same file, since the read-admission check
+`permission_matches_any` never recognized `facilities.delete` either. No
+seeded role or rank is affected — `facilities.delete` appears in
+`core/permissions.py` only bundled with `.edit`/`.manage`, which already
+satisfy the check, on the three chief ranks. Not fixed because it is a
+permission-model design question, not a mechanical gap: teaching
+`required_permissions` a third, action-specific tier (distinguishing
+"delete-capable" from "edit-capable" within the write tier) is a real product
+decision about whether the generic Documents module should honor a
+facility-specific action grant at all. Found in
+`docs/security-review/FAC-12-facilities.md` (feature 12, pass 3, FAC-30).
+
+## FAC-41 / FAC-44 — Facility Document-Reference and Folder-Creation Locks Scan and Lock More Rows Than They Need To (2026-08-25, updated 2026-09-09)
+
+Three related liveness/scalability gaps in `documents_service.py`, all the
+same underlying shape: a `.with_for_update()` query whose `WHERE` clause
+includes a predicate InnoDB cannot satisfy from an index, so the locking read
+scans (and locks) every row it examines on the way to the one that matches,
+not only that one row.
+
+- **FAC-41 (P2):** `_match_facility_document_references` filters only on
+  `organization_id` (indexed, but not selective) and a `file_path LIKE
+'document:%'` predicate (`file_path` carries no index at all) — the actual
+  per-reference match happens in Python after the query returns. Reproduced
+  live: locking one document's facility reference blocked a concurrent,
+  completely unrelated insert of a reference to a _different_ document in
+  the _same organization_. Worsens as an org's facility-document count
+  grows: deleting one document momentarily serializes every concurrent
+  facility-reference create/update/delete in that organization behind it.
+- **FAC-44 (P3, lower blast radius):** `_lock_facilities_root` (`WHERE
+organization_id = :org AND slug = 'facilities' AND is_system = true`) and
+  `_lock_facility_folder` (`WHERE parent_id = :root_id AND slug =
+'facility-{id}'`) have the identical mechanism — `slug` carries no index on
+  `document_folders`, and `document_folders.id` is a random UUID, so
+  "ascending id order" (what `ORDER BY id LIMIT 1 FOR UPDATE` scans in) has
+  no relationship to which row is being searched for. Reproduced live for
+  the root lookup while building FAC-43's own regression test: locking the
+  shared root sometimes also locked an unrelated facility's own folder row.
+  Lower severity than FAC-41 because both call sites, after FAC-42/43/45,
+  only run on the already-rare first-creation slow path, not on routine
+  operation.
+
+Neither is fixed because the natural lighter fix (an unlocked broad scan to
+find matching row ids, then a narrow locking query by those exact ids) does
+**not** work: under REPEATABLE READ, the "unlocked scan" step is still bound
+by the transaction's original snapshot, so a reference committed by a
+concurrent transaction after that snapshot but before the scan runs is
+invisible to it — silently reopening the exact FAC-29 vulnerability (a
+creating transaction's reference missed by a deleting transaction's existence
+check) the locking read was built to close, just relocated into the first
+half of a two-query pair. A genuinely narrow, still-safe single-query lock
+needs the predicate itself to be index-satisfied, which needs a schema
+change: a normalized, indexed `document_id` column on
+`FacilityDocument`/`FacilityPhoto` (for FAC-41) and a covering index on
+`(organization_id, slug)`/`(parent_id, slug)` — or `(organization_id,
+is_system)`, the coarser predicate several other lookups in this file already
+share (for FAC-44). Both are schema-level changes with a backfill migration,
+more appropriately scoped as their own reviewed pass than folded into a
+liveness fix already in flight. Found in
+`docs/security-review/FAC-12-facilities.md` (feature 12, pass 3, FAC-41 and
+FAC-44); re-verified still present and unchanged in pass 4 (2026-09-09) —
+`FACILITY_SENSITIVE_PERMISSIONS`, `_match_facility_document_references`,
+`_lock_facilities_root`, and `_lock_facility_folder` are all unchanged since
+pass 3.
+
 ## FAC-16-adjacent — `TrainingCategory.subcategories` Likely Shares the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` / `CheckTemplateCompartment.children` (2026-09-03, updated 2026-09-03)
 
 While diagnosing why `DocumentFolder.delete_folder`'s cascade did not
@@ -3742,6 +3817,79 @@ change set.
 concurrent catalogue edit, the impact is one hidden row in a search the officer
 can re-run, and the search box narrows results directly. This does not affect
 what is delivered or recorded — only which matches a picker lists.
+
+## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08, narrowed and corrected 2026-09-09)
+
+`index.html` opens with `<a href="#main-content">`, and every page that owns its
+own shell provides that target — `skipLinkTarget.test.ts` checks all of them,
+in both directions. Two **transient** states have no target and cannot be given
+one statically:
+
+| State            | What renders                            | Why it cannot own the id                                                                                                                                                                                                                                                                        |
+| ---------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| First chunk load | `PageLoadingFallback` (`App.tsx`)       | React does not unmount the children a `<Suspense>` stands in for on an update — it hides them with `display: none` and leaves them in the DOM, so `getElementById('main-content')` answers with the hidden `AppLayout` main. Focusing a `display: none` element is worse than focusing nothing. |
+| Session check    | `ProtectedRoute`'s two loading branches | Module routes nest `<ProtectedRoute requiredModule=…>` **inside** the layout route, so the same branch can render within `AppLayout`'s `<main>` — a nested landmark and a duplicate id.                                                                                                         |
+
+The `PageLoadingFallback` case is reachable rather than theoretical: finance,
+grants-fundraising and training route to `lazyWithRetry` pages with no inner
+`<Suspense>`, so navigating to one suspends against the global boundary with
+`AppLayout` already mounted. Most other modules wrap their lazy pages in
+`<Suspense fallback={null}>`, which keeps the suspension local — but **not all
+of the reachable routes live in a module**: `App.tsx` mounts
+`LearningCenterPage` and `LearningPathPage` directly inside the layout route,
+both `lazyWithRetry` and neither wrapped. Any inventory of "which routes can
+suspend against the global boundary" has to include those two.
+
+**A third pre-layout state was found and fixed rather than accepted**, and the
+difference is the whole rule here. The top-level `ErrorBoundary` also renders
+outside the layout, but an error boundary **unmounts** the tree it caught —
+`AppLayout`'s main is gone, not hidden — so exactly one `#main-content` is ever
+present and its fallback can own the target. It now does. The two states above
+are the ones that cannot, not the only ones that lacked a target; a new
+full-screen state should be checked against that test (does it replace, or does
+it coexist?) rather than assumed to belong on this list.
+
+**What a fix would take.** Either give every unwrapped route the inner
+`<Suspense>` most modules already have — the three modules above **and** the two
+learning routes in `App.tsx`, since missing any one of them leaves the global
+fallback reachable and the condition for safely putting the id on it false — or
+resolve the skip target at click time against the visible main rather than by
+id. The first is 47 route entries and changes what a page
+swap looks like (a quiet in-layout replace instead of a whole-app spinner); the
+second changes a shared contract that `index.html`, `AppLayout` and three e2e
+specs all read. Both are their own change set.
+
+**What is actually on screen, and what the link actually does.** This paragraph
+has been wrong twice, in both directions, so it states the mechanics rather than
+a conclusion:
+
+- **Activating the link moves nothing.** Focus stays on it. The `role="status"`
+  text is a live region, not a focus target — a `<p>` with no `tabIndex`, so it
+  is not in the tab order and the user does not "land" on it. Nothing is thrown;
+  the link is simply inert.
+- **The screen is not always only a spinner.** `App.tsx` renders
+  `<UpdateNotification />` immediately before, and _outside_, the `<Suspense>`
+  whose fallback this is, so it stays mounted through the loading state. When an
+  update is pending it shows "Reload now" / "Force refresh" plus a dismiss
+  button. So an earlier claim here that these states have no interactive content
+  was false whenever that banner is up.
+
+**Why it is still accepted.** Not because there is nothing interactive, but
+because there is nothing to skip _to_: SC 2.4.1 exists so a keyboard user can
+get past a repeated block of navigation **into the content**, and in these two
+states the content does not exist yet. The banner is a single dismissible strip
+of at most three controls, reachable by one Tab, and it is followed by a spinner
+rather than by a page. A skip link that worked here would land the user on an
+empty region. Both states are also transient and the link is only revealed on
+focus.
+
+**What would void this.** Either state gaining real content or a persistent
+navigation block behind the banner — at which point there is something to skip
+to, and the fix above has to be done.
+
+`skipLinkTarget.test.ts` names both files and explains the constraint in its
+failure message, so the next person to try the obvious fix is told why it is not
+one rather than discovering the duplicate id in review.
 
 ## Process
 
