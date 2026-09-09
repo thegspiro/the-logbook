@@ -16,22 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**None.** PR #2430 (Feature 14, Equipment check & shifts, pass 4) merged
-at 10:45:53 — but the merge landed on head `db6af476f` (round 2's commit),
-**before** round 3's fix (`0b466619c`, EC-15 — the actual code fix for the
-two `eslint` warnings round 2's own completion gate had wrongly dismissed)
-was pushed at 10:52:37. Confirmed directly rather than assumed: `origin/
-main` after the merge still has `orgCallTypeChoices`/`textCallTypeChoices`
+**Feature 14 follow-up (EC-15 fix)** — PR
+[#2432](https://github.com/thegspiro/the-logbook/pull/2432), branch
+`security-review/equipment-check-shifts-ec15-fix-2026-09-09`. PR #2430
+(Feature 14, Equipment check & shifts, pass 4) merged at 10:45:53 — but
+the merge landed on head `db6af476f` (round 2's commit), **before**
+round 3's fix (`0b466619c`, EC-15 — the actual code fix for the two
+`eslint` warnings round 2's own completion gate had wrongly dismissed) was
+pushed at 10:52:37. Confirmed directly rather than assumed: `origin/main`
+after the merge still had `orgCallTypeChoices`/`textCallTypeChoices`
 inside `CallTypeChips.tsx` and no `callTypeChoices.ts` file — EC-15's fix
 never reached `main`. Not a reason to reopen #2430 (closed pull requests
 stay closed) or to push to its now-merged branch (CLAUDE.md Pitfall #24) —
-carried forward instead on a fresh branch,
-`security-review/equipment-check-shifts-ec15-fix-2026-09-09` (checked via
-`git ls-remote` against every equipment/EC-14 branch first; only the
-merged one existed), via `git cherry-pick` of the exact commit that never
-landed. Rotation row 14 → ✅ regardless — the feature's own review is
-complete and the "no findings" conclusion for the feature holds; EC-15 is
-a follow-up code-health fix, not a reason to hold the rotation open.
+carried forward instead on a fresh branch (checked via `git ls-remote`
+against every equipment/EC-14 branch first; only the merged one existed),
+via `git cherry-pick` of the exact commit that never landed. Rotation row
+14 → ✅ regardless — the feature's own review is complete and the "no
+findings" conclusion for the feature holds; EC-15 is a follow-up
+code-health fix, not a reason to hold the rotation open. Full completion
+gate re-run and confirmed green on the fresh branch before pushing.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged mid-review before round 3's fix landed), preserved for history</summary>
@@ -12290,11 +12293,10 @@ entry.** The repo owner merged #2430 at 10:45:53, on head `db6af476f`
 (round 2's commit) — before round 3's fix (`0b466619c`, EC-15) was pushed
 at 10:52:37. Confirmed directly: `origin/main` post-merge still has the two
 `eslint` warnings this entry says were fixed. EC-15 was carried forward on
-a fresh branch per CLAUDE.md Pitfall #24
-(`security-review/equipment-check-shifts-ec15-fix-2026-09-09`, the merged
-branch never reused) via `git cherry-pick` of the exact commit that missed
-the merge — see the Open PR section for that follow-up. Rotation row 14 →
-✅ regardless; the feature's own review is complete and this is a
+a fresh branch per CLAUDE.md Pitfall #24 via `git cherry-pick` of the exact
+commit that missed the merge — PR
+[#2432](https://github.com/thegspiro/the-logbook/pull/2432). Rotation row
+14 → ✅ regardless; the feature's own review is complete and this is a
 follow-up code-health fix, not grounds to hold the rotation open. Next:
 15 Scheduling.
 
