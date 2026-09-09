@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 15 follow-up, round 4 (SCH-13 deadlock fix)** — branch
-`claude/security-review-scheduling-sch13-round4`, no PR opened yet by this
-watchdog pass (opening it next). PR
+**Feature 15 follow-up, round 4 (SCH-13 deadlock fix)** — PR
+[#2441](https://github.com/thegspiro/the-logbook/pull/2441), branch
+`claude/security-review-scheduling-sch13-round4`. PR
 [#2437](https://github.com/thegspiro/the-logbook/pull/2437) (rounds 1-3 of
 the same SCH-13 follow-up) merged clean at 18:06:50 UTC — 17/17 CI checks
 green, `mergeable_state: clean`, merge commit `7044c0e`. **But #2437 left
