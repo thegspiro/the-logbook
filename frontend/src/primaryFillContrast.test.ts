@@ -57,12 +57,73 @@ import { hexToRgb, relativeLuminance, contrastRatio } from './utils/colorContras
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
 /**
- * An opaque `bg-red-600`. The `/`-suffixed tints are deliberately excluded —
- * except `/100`, which Tailwind emits as the same fully opaque colour as the
- * bare utility, so excluding it let the banned fill through with four
- * characters appended.
+ * An alpha channel that leaves the colour fully opaque, or is absent.
+ *
+ * CSS writes alpha as a number in 0-1 or a percentage, so both spellings are
+ * parsed rather than compared against a list of literals.
  */
-const OPAQUE_RED_600 = /\bbg-red-600(?:\/100)?\b(?!\/)/;
+const opaqueAlpha = (alpha: string | undefined): boolean => {
+  if (alpha === undefined) return true;
+  const text = alpha.trim();
+  if (text === '') return true;
+  return text.endsWith('%') ? Number(text.slice(0, -1)) === 100 : Number(text) === 1;
+};
+
+/**
+ * A Tailwind opacity modifier that leaves the colour fully opaque.
+ *
+ * The two syntaxes mean different things and that is the trap: a bare `/100` is
+ * a **percentage**, while a bracketed `/[…]` is the **alpha channel itself** —
+ * `/[100%]` and `/[1]` are opaque, `/[.06]` is 6%. Both are compiled to the
+ * same `background-color` as the bare utility when they resolve to 1, so a
+ * check that admitted only the literal `/100` let the banned fill through with
+ * six characters appended instead of four. Resolving the number is what stops
+ * this being fixed once per spelling, which is how `/100` itself got here.
+ */
+const opaqueModifier = (modifier: string | undefined): boolean => {
+  if (modifier === undefined || modifier === '') return true;
+  return modifier.startsWith('[')
+    ? opaqueAlpha(modifier.slice(1, modifier.endsWith(']') ? -1 : undefined))
+    : Number(modifier) === 100;
+};
+
+/**
+ * A class token split into its colour value and its opacity modifier.
+ *
+ * The modifier is whatever follows the closing bracket, not whatever follows
+ * the first slash: an arbitrary value can contain one of its own
+ * (`bg-[rgb(0_0_0/1)]`), and splitting on the first slash cut that colour in
+ * half and read `1)]` as the opacity.
+ */
+const splitModifier = (raw: string): { value: string; modifier: string | undefined } => {
+  const closing = raw.startsWith('[') ? raw.indexOf(']') : -1;
+  const slash = raw.indexOf('/', closing === -1 ? 0 : closing + 1);
+  return slash === -1
+    ? { value: raw, modifier: undefined }
+    : { value: raw.slice(0, slash), modifier: raw.slice(slash + 1) };
+};
+
+/**
+ * The optional opacity modifier, as a capturing regex fragment.
+ *
+ * Written once and shared by every fill pattern in this file. It used to be a
+ * literal `(?:\/100)?` repeated at four sites, and correcting it meant
+ * correcting it four times — which is exactly the drift this fragment exists
+ * to prevent. A match that captures a modifier is then filtered through
+ * `opaqueModifier`, so the regex no longer has to encode which spellings mean
+ * "fully opaque".
+ */
+const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|[\d.]+))?`;
+
+/**
+ * A `bg-red-600` with its opacity modifier, if it has one. The `/`-suffixed
+ * tints are a different pattern and pass; a modifier that resolves to fully
+ * opaque is the banned fill itself, and `opaqueModifier` decides which is
+ * which. Matching the modifier rather than one literal spelling of it is what
+ * closes `bg-red-600/[100%]`, which compiles to the identical
+ * `background-color` and used to pass.
+ */
+const RED_600_FILL = String.raw`\bbg-red-600` + OPACITY_MODIFIER + String.raw`(?![\w-])(?!/)`;
 
 /** sRGB channel from a linear-light one, per the sRGB transfer function. */
 const gammaEncode = (channel: number): number => {
@@ -229,9 +290,6 @@ const semanticFill = (name: string): Map<string, string> => {
   return resolved;
 };
 
-/** An alpha channel that leaves the colour fully opaque (or is absent). */
-const opaque = (alpha: string | undefined): boolean => alpha === undefined || alpha === '1' || alpha === '100%';
-
 /** HSL -> sRGB, per the CSS Color specification's conversion. */
 const hslToRgb = (hDegrees: number, s: number, l: number): { r: number; g: number; b: number } => {
   const h = ((hDegrees % 360) + 360) % 360;
@@ -270,22 +328,26 @@ const cssColour = (text: string): { r: number; g: number; b: number } | null => 
   if (hex) return hex;
 
   // Tailwind's own palette is authored with a percentage lightness; a
-  // hand-written arbitrary value may use the 0-1 form instead.
-  const oklch = /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)/.exec(value);
+  // hand-written arbitrary value may use the 0-1 form instead. The alpha is
+  // parsed rather than ignored: a prefix-only match read `oklch(0 0 0/0)` as
+  // opaque black, so a fully transparent fill measured 21:1 against white and
+  // passed, while what the text actually crosses is whatever is beneath it.
+  const oklch = /^oklch\(\s*([\d.]+)(%?)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/.exec(value);
   if (oklch) {
+    if (!opaqueAlpha(oklch[5])) return null;
     const lightness = Number(oklch[1]);
     return oklchToRgb(oklch[2] ? lightness / 100 : lightness, Number(oklch[3]), Number(oklch[4]));
   }
 
   const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
   if (rgb) {
-    if (!opaque(rgb[4])) return null;
+    if (!opaqueAlpha(rgb[4])) return null;
     return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
   }
 
   const hsl = /^hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
   if (hsl) {
-    if (!opaque(hsl[4])) return null;
+    if (!opaqueAlpha(hsl[4])) return null;
     return hslToRgb(Number(hsl[1]), Number(hsl[2]) / 100, Number(hsl[3]) / 100);
   }
 
@@ -325,10 +387,13 @@ const resolveFill = (key: string): FillColour => {
     }
     const rgb = cssColour(inner);
     if (rgb) return { kind: 'colour', rgb };
-    // An untyped bracket that did not parse. A colour function this sweep does
-    // not implement is still a colour and must be reported; a `url(...)` or a
-    // bare length is not a fill and must not be.
-    return /^(?:var\(|color-mix\(|lab\(|lch\(|oklab\(|color\()/i.test(inner.trim())
+    // An untyped bracket that did not parse. Anything colour-shaped is still a
+    // colour and must be reported — including the functions above, which reach
+    // here when their alpha makes them unmeasurable rather than because the
+    // syntax was unrecognised. Listing only the *unimplemented* functions put
+    // `oklch(0 0 0/0)` in the `not-a-colour` bucket and silently skipped it.
+    // A `url(...)` or a bare length is not a fill and must not be reported.
+    return /^(?:#|var\(|color-mix\(|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\()/i.test(inner.trim())
       ? { kind: 'unresolvable' }
       : { kind: 'not-a-colour' };
   }
@@ -371,12 +436,10 @@ const THEME_VARIANT: Record<string, string> = {
 
 /** Does a `dark:` sibling of this token actually set a colour? */
 const setsColour = (raw: string, word: string): boolean => {
-  const slash = raw.indexOf('/');
-  const opacity = slash === -1 ? null : raw.slice(slash + 1);
-  const value = slash === -1 ? raw : raw.slice(0, slash);
+  const { value, modifier } = splitModifier(raw);
   // A translucent replacement composites over what is beneath rather than
-  // replacing it; `/100` is the opaque colour itself.
-  if (opacity !== null && opacity !== '100') return false;
+  // replacing it; a modifier that resolves to fully opaque is the colour itself.
+  if (!opaqueModifier(modifier)) return false;
   if (value === 'none') return false;
   // `transparent` sets no colour on a flat background, but on a gradient stop
   // it does replace: what shows is whatever backs it.
@@ -428,13 +491,31 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
  * stops, numbered shades, the two keyword colours and arbitrary values alike.
  *
  * The trailing `(?![\w-])` replaces a `\b`, which could not follow the `]` of
- * an arbitrary value without demanding a word character after it. `/100` is
- * accepted because Tailwind emits it as the same fully opaque colour as the
- * bare utility, so rejecting every opacity modifier let the identical broken
- * pairing through with four characters appended; any other modifier is
- * translucent and has no single value to measure.
+ * an arbitrary value without demanding a word character after it. The opacity
+ * modifier is captured rather than matched literally: Tailwind emits a fully
+ * opaque one as the same colour as the bare utility, so rejecting every
+ * modifier let the identical broken pairing through with a few characters
+ * appended, and admitting only `/100` let it through with `/[100%]`. Callers
+ * pass the capture to `opaqueModifier`; anything translucent has no single
+ * value to measure and is skipped.
  */
-const FILL_PATTERN = String.raw`\b((?:[a-z-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|[a-z]+-\d{2,3}|white|black)(?:\/100)?(?![\w-])(?!/)`;
+const FILL_PATTERN =
+  String.raw`\b((?:[a-z-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|[a-z]+-\d{2,3}|white|black)` +
+  OPACITY_MODIFIER +
+  String.raw`(?![\w-])(?!/)`;
+
+/**
+ * A semantic fill or stop (`bg-theme-accent-blue`) with the same modifier
+ * handling. The trailing `(?![\w-])` rejects a class name built by
+ * interpolation: a surface utility with an interpolated suffix would otherwise
+ * capture with a dangling hyphen and report twenty "resolves to no theme value"
+ * findings for classes Tailwind never generates, since it needs whole class
+ * names at build time.
+ */
+const SEMANTIC_FILL_PATTERN =
+  String.raw`\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)` +
+  OPACITY_MODIFIER +
+  String.raw`(?![\w-])(?!/)`;
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];
@@ -463,7 +544,10 @@ const findOffenders = (): Offender[] => {
   for (const file of files) {
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, index) => {
-      if (!OPAQUE_RED_600.test(line)) return;
+      const opaqueRed = [...line.matchAll(new RegExp(RED_600_FILL, 'g'))].some(([, modifier]) =>
+        opaqueModifier(modifier)
+      );
+      if (!opaqueRed) return;
       offenders.push({ file: path.relative(SRC, file), line: index + 1, text: line.trim() });
     });
   }
@@ -524,11 +608,17 @@ describe('primary fill contrast', () => {
       if (seen.has(name)) return '';
       seen.add(name);
       const body = bodies.get(name) ?? '';
-      const composed = [...body.matchAll(/(?:^|\s)([a-z][\w-]*)/g)]
-        .map(([, token]) => token ?? '')
-        .filter((token) => bodies.has(token))
-        .map((token) => expand(token, seen));
-      return [body, ...composed].join(' ');
+      // Each dependency is inlined **at its own token position**, not appended.
+      // Tailwind emits an `@apply`ed utility's declarations where the token
+      // sits, so a composing utility that overrides an inherited foreground —
+      // `@apply review-inherited text-white` over a `review-inherited` that
+      // sets `text-black` — renders white and must be measured as white.
+      // Appending the dependency after the caller reversed that order, put
+      // `text-black` last, and let `coveringForeground` answer with the
+      // foreground the composition had just overridden.
+      return body.replace(/(^|\s)([a-z][\w-]*)/g, (whole: string, lead: string, token: string) =>
+        bodies.has(token) ? `${lead}${expand(token, seen)}` : whole
+      );
     };
 
     const failures = [...bodies.keys()].flatMap((name) => {
@@ -575,51 +665,55 @@ describe('primary fill contrast', () => {
       // over it does, so the pairing is still asked per theme: a body writing
       // `bg-slate-600 text-slate-100 dark:text-white` is white-on-slate-600
       // (4.40:1) in dark only, and resolving the foreground once missed it.
-      const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap(([, variant, prefix, key]) => {
-        const themes = themesFor(body, variant ?? '', prefix ?? '');
-        if (!themes.some((theme) => themeForeground(variant ?? '', theme) === 'white')) return [];
-        const fill = resolveFill(key ?? '');
-        // Not every token in the `bg-` namespace paints a colour;
-        // `bg-[length:200px_100px]` compiles to background-size.
-        if (fill.kind === 'not-a-colour') return [];
-        const ratio = whiteOn(key ?? '');
-        if (ratio === null) {
-          return [
-            `${name}: ${prefix}-${key} ${
-              (key ?? '').startsWith('[')
-                ? 'is an arbitrary value this sweep cannot resolve to a colour'
-                : 'is not in the installed Tailwind palette'
-            }`,
-          ];
+      const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap(
+        ([, variant, prefix, key, modifier]) => {
+          if (!opaqueModifier(modifier)) return [];
+          const themes = themesFor(body, variant ?? '', prefix ?? '');
+          if (!themes.some((theme) => themeForeground(variant ?? '', theme) === 'white')) return [];
+          const fill = resolveFill(key ?? '');
+          // Not every token in the `bg-` namespace paints a colour;
+          // `bg-[length:200px_100px]` compiles to background-size.
+          if (fill.kind === 'not-a-colour') return [];
+          const ratio = whiteOn(key ?? '');
+          if (ratio === null) {
+            return [
+              `${name}: ${prefix}-${key} ${
+                (key ?? '').startsWith('[')
+                  ? 'is an arbitrary value this sweep cannot resolve to a colour'
+                  : 'is not in the installed Tailwind palette'
+              }`,
+            ];
+          }
+          return ratio >= 7
+            ? []
+            : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
         }
-        return ratio >= 7
-          ? []
-          : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
-      });
+      );
 
       // Semantic fills and stops, resolved per theme exactly as the call-site
       // sweep does. `--text-muted` is `#ffffff` in dark, so a utility built on
       // it under `text-white` is invisible there — and invisible to every other
       // guard too, since the stops never reach a TSX file.
-      const semantic = [
-        ...body.matchAll(/\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?![/-])/g),
-      ].flatMap(([, variant, prefix, token]) => {
-        const themes = themesFor(body, variant ?? '', prefix ?? '');
-        return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
-          if (!themes.includes(theme)) return [];
-          if (themeForeground(variant ?? '', theme) !== 'white') return [];
-          const rgb = hexToRgb(value);
-          if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
-          const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
-          // The same 7:1 AAA floor the numeric branch above applies. This
-          // test's contract is that a *shared* utility clears AAA; 4.5:1 is
-          // the call-site floor, and using it here let a semantic shared
-          // fill regress to merely AA beside a numeric one that could not.
-          return ratio >= 7
-            ? []
-            : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`];
-        });
-      });
+      const semantic = [...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))].flatMap(
+        ([, variant, prefix, token, modifier]) => {
+          if (!opaqueModifier(modifier)) return [];
+          const themes = themesFor(body, variant ?? '', prefix ?? '');
+          return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
+            if (!themes.includes(theme)) return [];
+            if (themeForeground(variant ?? '', theme) !== 'white') return [];
+            const rgb = hexToRgb(value);
+            if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
+            const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+            // The same 7:1 AAA floor the numeric branch above applies. This
+            // test's contract is that a *shared* utility clears AAA; 4.5:1 is
+            // the call-site floor, and using it here let a semantic shared
+            // fill regress to merely AA beside a numeric one that could not.
+            return ratio >= 7
+              ? []
+              : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`];
+          });
+        }
+      );
 
       return [...palette, ...semantic];
     });
@@ -702,7 +796,8 @@ describe('primary fill contrast', () => {
       inheritedContext = ''
     ) => {
       const own = foregrounds(segment);
-      for (const [whole, variant, , key] of segment.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
+      for (const [whole, variant, , key, modifier] of segment.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
+        if (!opaqueModifier(modifier)) continue;
         const prefix = variant ?? '';
         // The foreground that covers this fill, most specific first. A
         // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
@@ -782,9 +877,8 @@ describe('primary fill contrast', () => {
       // over this segment plus the static text it is a branch of: a `dark:`
       // sibling out there overrides an unprefixed fill in every branch.
 
-      for (const [, variant, fill, token] of segment.matchAll(
-        /\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?![/-])/g
-      )) {
+      for (const [, variant, fill, token, modifier] of segment.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))) {
+        if (!opaqueModifier(modifier)) continue;
         const prefix = variant ?? '';
         const themes = themesFor(`${segment} ${inheritedContext}`, prefix, fill ?? '');
         const perTheme = semanticFill(token ?? '');
