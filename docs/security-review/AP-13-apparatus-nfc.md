@@ -270,15 +270,15 @@ test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
 
 ## Completion gate (pass 11, round 2 — Codex findings on PR #2428)
 
-| Check                                                                                                    | Result                                                                |
-| -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                            | ✅ 0 violations                                                       |
-| `black --check app/ tests/ alembic/`                                                                     | ✅ clean                                                              |
-| `isort --check-only app/ tests/ alembic/`                                                                | ✅ clean                                                              |
-| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py`                  | ✅ 2 passed, 3 repeated runs, no flakiness                            |
-| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"` | ✅ 1127 passed, 1 skipped (pre-existing optional-dep skip)            |
-| `pytest tests/` (full backend suite)                                                                     | ✅ clean — see PROGRESS.md's Log entry for the exact pass/skip counts |
-| `tsc --noEmit` / `eslint .`                                                                              | n/a — no frontend files touched this round either                     |
+| Check                                                                                                    | Result                                                                         |
+| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                            | ✅ 0 violations                                                                |
+| `black --check app/ tests/ alembic/`                                                                     | ✅ clean                                                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                | ✅ clean                                                                       |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py`                  | ✅ 2 passed, 3 repeated runs, no flakiness                                     |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"` | ✅ 1127 passed, 1 skipped (pre-existing optional-dep skip)                     |
+| `pytest tests/` (full backend suite)                                                                     | ✅ 11935 passed, 21 skipped (pre-existing Docker/optional-dep skips), 0 failed |
+| `tsc --noEmit` / `eslint .`                                                                              | n/a — no frontend files touched this round either                              |
 
 ### Verified good ✅ (re-confirmed this pass, mechanism named)
 

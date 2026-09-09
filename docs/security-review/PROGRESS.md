@@ -11932,8 +11932,9 @@ confirming the corrected test now fails (`AssertionError`) without it, then
 restoring the fix. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
 → Pass 11, finding 3. Completion gate green: `pytest -k "apparatus or nfc or
 evoc or equipment_check or compartment or shift_check_in or scheduling"` —
-1127 passed, 1 pre-existing skip; full backend suite clean; flake8/black/
-isort clean; no frontend files touched.
+1127 passed, 1 pre-existing skip; full backend suite 11935 passed / 21
+pre-existing skips / 0 failed; flake8/black/isort clean; no frontend files
+touched.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
 
