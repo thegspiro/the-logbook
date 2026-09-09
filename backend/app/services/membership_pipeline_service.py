@@ -591,7 +591,13 @@ class MembershipPipelineService:
         # earlier stage has been deleted (deletion left gaps). An explicit,
         # non-colliding value is still honoured, so the API is unchanged for
         # callers that pick their own order.
-        taken = {s.sort_order for s in pipeline.steps}
+        # Locked and current. The pipeline-row lock orders two adds against
+        # each other, but `pipeline.steps` still comes off this transaction's
+        # snapshot — so a stage committed by someone else after the snapshot
+        # opened was invisible here, and max+1 landed on a value it already
+        # held. That reached the unique index as an IntegrityError rather than
+        # the silent duplicate it used to be, which is better but still a 500.
+        taken = {s.sort_order for s in await self._load_steps_for_update(pipeline_id)}
         if (
             "sort_order" not in data
             or data["sort_order"] is None
@@ -708,11 +714,27 @@ class MembershipPipelineService:
         next step (or to the previous step if this is the last one)
         before the step is deleted.
         """
-        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        # Locked for the same reason ``add_step`` is, and then some: the
+        # gap-closing renumber at the end writes a value to every survivor,
+        # derived from a step list read here. Two coordinators deleting
+        # different stages at once would otherwise both read the same
+        # collection, and the second one's survivor list would still hold the
+        # stage the first one has since deleted — so the renumber's UPDATE
+        # names a row that is gone and SQLAlchemy raises StaleDataError,
+        # failing an otherwise valid deletion with a 500. This lock orders the
+        # two deletions; it is not on its own enough to make the step list
+        # current, which is what ``_load_steps_for_update`` below is for.
+        pipeline = await self.get_pipeline(
+            pipeline_id, organization_id, lock_for_update=True
+        )
         if not pipeline:
             return False
 
-        step = next((s for s in pipeline.steps if s.id == step_id), None)
+        # Locked and current; `pipeline.steps` is neither. See
+        # `_load_steps_for_update`.
+        locked_steps = await self._load_steps_for_update(pipeline_id)
+
+        step = next((s for s in locked_steps if str(s.id) == str(step_id)), None)
         if not step:
             return False
 
@@ -731,7 +753,7 @@ class MembershipPipelineService:
         stranded = list(stranded_result.scalars().all())
 
         if stranded:
-            sorted_steps = sorted(pipeline.steps, key=lambda s: s.sort_order)
+            sorted_steps = locked_steps
             step_idx = next(
                 (i for i, s in enumerate(sorted_steps) if s.id == step_id),
                 -1,
@@ -807,10 +829,7 @@ class MembershipPipelineService:
         # a value a survivor already holds — and a tie makes both the column
         # order and the destination of an advance arbitrary. Renumbering here
         # is what keeps that from ever arising; relative order is preserved.
-        survivors = sorted(
-            (s for s in pipeline.steps if str(s.id) != str(step_id)),
-            key=lambda s: s.sort_order,
-        )
+        survivors = [s for s in locked_steps if str(s.id) != str(step_id)]
         await self._renumber_steps_densely(survivors)
 
         await self.db.commit()
@@ -821,6 +840,38 @@ class MembershipPipelineService:
             await self._cleanup_orphaned_form_integration(form_id, organization_id)
 
         return True
+
+    async def _load_steps_for_update(
+        self, pipeline_id: str
+    ) -> List[MembershipPipelineStep]:
+        """A pipeline's stages as of latest committed state, locked, in order.
+
+        ``get_pipeline(..., lock_for_update=True)`` locks the pipeline row and
+        so orders writers against each other, but ``steps`` arrives on a
+        *separate* SELECT that takes no lock — and under InnoDB's default
+        REPEATABLE READ a plain SELECT answers from the snapshot the
+        transaction opened with. A coordinator whose transaction was already
+        open when another coordinator's deletion committed therefore still
+        finds the deleted stage in ``pipeline.steps``, hands it to
+        ``_renumber_steps_densely``, and the flush UPDATEs a row that is gone:
+        SQLAlchemy raises StaleDataError and a valid deletion 500s. That was
+        the whole failure, and the parent-row lock alone did not prevent it.
+
+        A locking read ignores the snapshot and returns latest committed rows,
+        and ``populate_existing`` refreshes any stale instance already in the
+        identity map rather than handing back the cached one. Rows a concurrent
+        writer holds block here until it commits, which is the serialization
+        the renumber needs. Always call this *after* the pipeline row lock, so
+        every writer takes the two in the same order and none can deadlock.
+        """
+        result = await self.db.execute(
+            select(MembershipPipelineStep)
+            .where(MembershipPipelineStep.pipeline_id == pipeline_id)
+            .order_by(MembershipPipelineStep.sort_order)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
 
     async def _renumber_steps_densely(
         self, ordered_steps: List[MembershipPipelineStep]
@@ -866,11 +917,23 @@ class MembershipPipelineService:
         returning 200. Validated here rather than trusted, the same way
         ``reorder_program_phases`` validates its own permutation.
         """
-        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        # Locked like ``add_step`` and ``delete_step``: this reads the step
+        # list and writes a position to every member of it, so a concurrent
+        # delete would leave a stale step in ``steps_by_id`` and the renumber
+        # would UPDATE a deleted row. Ordering the writers is this lock's job;
+        # making the list current is ``_load_steps_for_update``'s.
+        pipeline = await self.get_pipeline(
+            pipeline_id, organization_id, lock_for_update=True
+        )
         if not pipeline:
             return None
 
-        steps_by_id = {str(s.id): s for s in pipeline.steps}
+        # Locked and current; `pipeline.steps` is neither. The permutation
+        # check below therefore compares against the stages that actually
+        # exist, not the ones this transaction's snapshot remembers.
+        steps_by_id = {
+            str(s.id): s for s in await self._load_steps_for_update(pipeline_id)
+        }
         ordered_ids = [str(step_id) for step_id in step_ids]
         if set(ordered_ids) != set(steps_by_id) or len(ordered_ids) != len(steps_by_id):
             raise ValueError(

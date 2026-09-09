@@ -215,8 +215,15 @@ class MembershipPipelineStep(Base):
     # every path that allocates one; this is the backstop that makes that a
     # guarantee rather than a convention, and it is what a concurrent writer
     # racing past the row lock would hit.
+    #
+    # `pipeline_id` has no index of its own, so InnoDB uses this one — the only
+    # one with `pipeline_id` leftmost — to enforce the foreign key above. That
+    # is why migration c7e2a4b9d180 creates it before dropping the permissive
+    # `idx_pipeline_step_order` it replaced: MySQL 8.0 rejects the drop with
+    # error 1553 while the constraint has nothing else to lean on. Renaming or
+    # narrowing this index means checking that path again.
     __table_args__ = (
-        Index("idx_pipeline_step_order", "pipeline_id", "sort_order", unique=True),
+        Index("uq_pipeline_step_order", "pipeline_id", "sort_order", unique=True),
     )
 
     def __repr__(self):

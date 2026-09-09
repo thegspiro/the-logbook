@@ -17,12 +17,40 @@ Two steps, in this order and not the other:
    the stage created first. This repeats `a3f61c8d27b4` deliberately — that
    migration ran before the service was hardened, and any drift since would
    otherwise turn this upgrade into a failed deploy.
-2. Swap the index for a unique one. MySQL cannot alter an index's uniqueness in
-   place, so it is dropped and recreated under the same name.
+2. Create the unique index under its own name, *then* drop the old one.
 
-The renumber walks in ascending order and only ever compacts downward, so it
-cannot collide with itself — and it runs while the index is still permissive,
-which is why the DDL is last.
+Step 2's ordering is not stylistic. Reversing it back into the obvious
+drop-then-create breaks MySQL 8.0 outright:
+
+    (1553, "Cannot drop index 'idx_pipeline_step_order':
+            needed in a foreign key constraint")
+
+`membership_pipeline_steps.pipeline_id` is a foreign key to
+`membership_pipelines.id` and carries no index of its own, so InnoDB leans on
+`idx_pipeline_step_order` — the only index with `pipeline_id` leftmost — to
+enforce it. Dropping that index first leaves the constraint unsupported and
+MySQL refuses. MariaDB quietly substitutes another index and allows it, which
+is why the first draft passed on MariaDB, locally and in half of CI, while
+failing every MySQL 8.0 job. Creating `uq_pipeline_step_order` first gives the
+foreign key a replacement with `pipeline_id` leftmost, so the drop is then
+legal on both engines.
+
+The name changes along with the uniqueness because this repository spells
+unique indexes `uq_` and plain ones `idx_` (`uq_prospect_org_active_email` is
+in the same model file); an index called `idx_` that rejects duplicates is a
+trap for whoever reads the schema next.
+
+That ordering also decides what a *failed* upgrade leaves behind. `alembic
+upgrade head` runs before the backend restarts on the documented traditional
+deployment (`docs/DEPLOYMENT.md`), so the old code — the code that still emits
+colliding `sort_order` values — is live while this runs, and a write landing
+between the renumber and the DDL makes `CREATE UNIQUE INDEX` fail with error
+1062. Because DDL commits implicitly, no lock can span the renumber and the
+index swap: this migration cannot be made atomic against a live writer.
+Creating before dropping makes the failure *safe* instead — nothing has been
+dropped, the schema is exactly as it started, the revision has not moved, and
+the operator retries with the backend stopped. Drop-first left a database with
+no ordering index at all, still on the old revision.
 
 Revision ID: c7e2a4b9d180
 Revises: f1565c64b658
@@ -41,7 +69,8 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 _TABLE = "membership_pipeline_steps"
-_INDEX = "idx_pipeline_step_order"
+_OLD_INDEX = "idx_pipeline_step_order"
+_NEW_INDEX = "uq_pipeline_step_order"
 _COLUMNS = ["pipeline_id", "sort_order"]
 
 
@@ -83,13 +112,21 @@ def upgrade() -> None:
 
     _renumber_densely(connection)
 
-    if _index_exists(connection, _TABLE, _INDEX):
-        op.drop_index(_INDEX, table_name=_TABLE)
-    op.create_index(_INDEX, _TABLE, _COLUMNS, unique=True)
+    # Create before drop; see the module docstring. Both halves are guarded so
+    # that a retry after a failed upgrade — the exact case this ordering exists
+    # to make survivable — is a no-op rather than a second error.
+    if not _index_exists(connection, _TABLE, _NEW_INDEX):
+        op.create_index(_NEW_INDEX, _TABLE, _COLUMNS, unique=True)
+    if _index_exists(connection, _TABLE, _OLD_INDEX):
+        op.drop_index(_OLD_INDEX, table_name=_TABLE)
 
 
 def downgrade() -> None:
-    """Return the index to its permissive form.
+    """Return the ordering index to its permissive form.
+
+    Create before drop here too, and for the same reason: dropping
+    ``uq_pipeline_step_order`` while it is the only index supporting the
+    ``pipeline_id`` foreign key fails with error 1553 on MySQL 8.0.
 
     The data is left dense: the duplicates this replaced carried no
     information, and a dense ordering is readable by every prior version.
@@ -99,6 +136,7 @@ def downgrade() -> None:
     if not sa.inspect(connection).has_table(_TABLE):
         return
 
-    if _index_exists(connection, _TABLE, _INDEX):
-        op.drop_index(_INDEX, table_name=_TABLE)
-    op.create_index(_INDEX, _TABLE, _COLUMNS)
+    if not _index_exists(connection, _TABLE, _OLD_INDEX):
+        op.create_index(_OLD_INDEX, _TABLE, _COLUMNS)
+    if _index_exists(connection, _TABLE, _NEW_INDEX):
+        op.drop_index(_NEW_INDEX, table_name=_TABLE)

@@ -5934,8 +5934,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- UNIQUE `idx_pipeline_step_order` (`pipeline_id`, `sort_order`)
 - `ix_membership_pipeline_steps_email_template_id` (`email_template_id`)
+- UNIQUE `uq_pipeline_step_order` (`pipeline_id`, `sort_order`)
 
 ### `membership_pipelines`
 
