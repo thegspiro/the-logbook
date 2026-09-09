@@ -25,6 +25,7 @@ import {
   MEMBERS_SETTINGS_EVOC_GATE,
   MEMBERS_SETTINGS_IDS_GATE,
   MEMBERS_SETTINGS_RANKS_GATE,
+  MEMBERS_SETTINGS_TIERS_GATE,
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from '../membership/routes';
 
@@ -231,6 +232,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         path: '/members/admin/settings/ranks',
         label: 'Members settings — operational ranks',
         anyPermission: MEMBERS_SETTINGS_RANKS_GATE,
+      },
+      {
+        path: '/members/admin/settings/tiers',
+        label: 'Members settings — membership tiers',
+        anyPermission: MEMBERS_SETTINGS_TIERS_GATE,
       },
       {
         path: '/members/admin/settings/evoc',

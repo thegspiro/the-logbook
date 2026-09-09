@@ -72,6 +72,7 @@ export const MEMBERS_SETTINGS_VISIBILITY_GATE = [
 ];
 export const MEMBERS_SETTINGS_IDS_GATE = ['settings.edit', 'organization.update_settings', 'members.manage'];
 export const MEMBERS_SETTINGS_RANKS_GATE = ['settings.manage', 'members.manage'];
+export const MEMBERS_SETTINGS_TIERS_GATE = ['members.manage'];
 export const MEMBERS_SETTINGS_EVOC_GATE = ['apparatus.manage', 'members.manage'];
 
 /**
@@ -239,6 +240,16 @@ export const getMembershipRoutes = () => {
           <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_RANKS_GATE}>
             <Suspense fallback={null}>
               <MembersSettingsPage section="ranks" />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/members/admin/settings/tiers"
+        element={
+          <ProtectedRoute requiredAnyPermission={MEMBERS_SETTINGS_TIERS_GATE}>
+            <Suspense fallback={null}>
+              <MembersSettingsPage section="tiers" />
             </Suspense>
           </ProtectedRoute>
         }

@@ -123,7 +123,24 @@ and module steps all run against a signed-in session.
 
 #### Step 11: Ranks & Positions
 
-**Your rank ladder** comes first. The department starts from the ranks its
+**Your membership ladder** comes first — the stages a member progresses
+through, and what each one lets them do:
+
+- Rename the stages to your own (Probationary, Active, Senior, Life, or
+  whatever your bylaws call them), set the years each requires, reorder them,
+  add your own and remove any you do not have
+- Per stage: whether those members can vote in elections, whether they may hold
+  elected office, whether they must meet a meeting-attendance threshold to vote
+  (and what it is, over what period), and whether they are exempt from training
+- Turn off automatic advancement if your department promotes by vote, by
+  application, or on a date of its own choosing — it is on by default and a
+  nightly job acts on it
+
+> This is the one to check against your bylaws. It decides who is in the ballot
+> electorate, and a department that leaves the shipped arrangement in place
+> usually discovers it at its first election.
+
+**Your rank ladder** comes next. The department starts from the ranks its
 agency type usually has and changes them to match what it actually uses:
 
 - Rename a rank to your own vocabulary — an EMS service's Driver / Operator, a

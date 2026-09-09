@@ -35,6 +35,7 @@ import {
   BackButton,
   AutoSaveNotification,
   RankLadderSection,
+  MembershipLadderSection,
 } from '../components';
 import { useOnboardingStore } from '../store';
 import {
@@ -582,10 +583,13 @@ const PositionSetup: React.FC = () => {
               Describe the structure your department already uses
             </p>
             <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
-              First the rank ladder your members hold, then the positions that decide what they can view and manage.
-              Start from what we have suggested and change it to match your department — nothing here is fixed.
+              Your membership ladder first, then the ranks your members hold, then the positions that decide what they
+              can view and manage. Start from what we have suggested and change it to match your department — nothing
+              here is fixed.
             </p>
           </div>
+
+          <MembershipLadderSection />
 
           <RankLadderSection />
 

@@ -171,6 +171,45 @@ template.
 exist and every seeded position to having a template, so the next module whose
 settings key is not its permission prefix fails rather than shipping inert.
 
+## ONBOARD-4 — The Membership Ladder Had No Screen (resolved 2026-09-09)
+
+`organization.settings["membership_tiers"]` decides who is in the ballot
+electorate, who may stand for elected office, whether a member must meet a
+meeting-attendance threshold to vote, and who is graded for training.
+`election_service` reads it in six places, and `run_membership_tier_advance`
+promotes members along it nightly as `performed_by="system"`.
+
+It shipped with an answer — Probationary at 0 years, Active at 1, Senior at 10,
+Life at 20, voting switched on at Active behind a 50% attendance rule, training
+exemption at Life, `auto_advance: true` — and **nothing rendered it**. Not the
+setup wizard, not Members Administration, not Organization Settings. The API
+existed, `adminServices.ts` had `getTierConfig`, `updateTierConfig` and
+`advanceMembershipTiers`, and all three had zero callers; the endpoint's own
+docstring pointed at an Organization Settings screen that did not exist. A
+department whose bylaws differed found out at its first election.
+
+That is CLAUDE.md pitfall 19 inverted: not a switch with no reader, but a reader
+with no switch — and the worse direction, because the thing with no switch was
+already acting.
+
+**Resolved.** `useTierEditor` + `MembershipTiersSection` render at
+**Members → Settings → Membership Tiers** and on the setup wizard's Ranks &
+Positions step, where the ladder is cheap to state; afterwards a rung cannot be
+removed without moving the members on it first.
+
+The endpoint was hardened with it. It took a raw dict and checked two fields of
+nine, so a malformed rung was stored verbatim and every reader — defensive
+`.get()` calls — silently answered "no" on its behalf. It now validates through
+`MembershipTierSettings`, rejects duplicate tier ids, and refuses to drop or
+rename a tier that members hold, naming how many. `GET` reports `member_counts`
+so the editor shows them and greys out an occupied rung.
+
+Tier **ids** are not editable, for the reason rank codes are not: `id` is what
+`User.membership_type` stores, nothing cascades a change, and
+`split_membership_type` deliberately refuses to guess a class for an id it does
+not recognise — so a renamed id drops those members out of the operational body
+and the electorate at once.
+
 ## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
 
 Setup now lets a department curate its rank ladder, and removing a rank does

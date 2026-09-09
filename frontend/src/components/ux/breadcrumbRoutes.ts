@@ -63,6 +63,7 @@ import {
   MEMBERS_SETTINGS_EVOC_GATE,
   MEMBERS_SETTINGS_IDS_GATE,
   MEMBERS_SETTINGS_RANKS_GATE,
+  MEMBERS_SETTINGS_TIERS_GATE,
   MEMBERS_SETTINGS_VISIBILITY_GATE,
 } from '../../modules/membership/routes';
 
@@ -140,6 +141,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/members/admin/settings/visibility': { label: 'Contact Visibility', permissions: MEMBERS_SETTINGS_VISIBILITY_GATE },
   '/members/admin/settings/ids': { label: 'Membership IDs', permissions: MEMBERS_SETTINGS_IDS_GATE },
   '/members/admin/settings/ranks': { label: 'Operational Ranks', permissions: MEMBERS_SETTINGS_RANKS_GATE },
+  '/members/admin/settings/tiers': { label: 'Membership Tiers', permissions: MEMBERS_SETTINGS_TIERS_GATE },
   '/members/admin/settings/evoc': { label: 'EVOC Levels', permissions: MEMBERS_SETTINGS_EVOC_GATE },
   '/scheduling/admin/positions': { label: 'Who Can Fill What', permissions: ['scheduling.manage'] },
   '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },

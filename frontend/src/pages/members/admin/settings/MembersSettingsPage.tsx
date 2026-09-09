@@ -26,6 +26,7 @@ import { MEMBERS_SETTINGS_SECTIONS, type MembersSettingsTab, membersSettingsPath
 import ContactVisibilitySection from './ContactVisibilitySection';
 import MembershipIdSection from './MembershipIdSection';
 import RanksSection from './RanksSection';
+import TiersSection from './TiersSection';
 import EvocSection from './EvocSection';
 
 interface MembersSettingsPageProps {
@@ -106,6 +107,8 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
         return <MembershipIdSection save={saveVoid} saveDebounced={saveDebouncedVoid} />;
       case 'ranks':
         return <RanksSection />;
+      case 'tiers':
+        return <TiersSection />;
       case 'evoc':
         return <EvocSection />;
       case 'visibility':

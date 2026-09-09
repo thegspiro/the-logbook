@@ -92,6 +92,10 @@ number of screens a user sees depends on the services they select.
 
 #### Step 10: Ranks & Positions
 
+- Set the membership ladder — the stages a member progresses through, the years
+  each takes, and what each one confers: voting in elections, holding office,
+  any meeting-attendance threshold for voting, and training exemption. Turn off
+  automatic advancement if your department promotes by vote or by application
 - Edit the department's rank ladder: rename ranks to your own vocabulary,
   reorder them, remove ones you do not have, add your own, and set each rank's
   shift eligibility. Set your own rank as System Owner

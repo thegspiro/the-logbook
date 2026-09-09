@@ -27,10 +27,10 @@
  * part of the move.
  */
 
-import { Eye, Hash, Shield, Truck } from 'lucide-react';
+import { Eye, Hash, Layers, Shield, Truck } from 'lucide-react';
 import type { SettingsSection } from '../../../../components/settings/SettingsLayout';
 
-export type MembersSettingsTab = 'visibility' | 'ids' | 'ranks' | 'evoc';
+export type MembersSettingsTab = 'visibility' | 'ids' | 'ranks' | 'tiers' | 'evoc';
 
 export interface MembersSettingsSection extends SettingsSection<MembersSettingsTab> {
   /** The route this section is reached at. */
@@ -71,6 +71,17 @@ export const MEMBERS_SETTINGS_SECTIONS: MembersSettingsSection[] = [
     path: '/members/admin/settings/ranks',
     // POST/PATCH/DELETE /operational-ranks, POST /operational-ranks/reorder
     permissions: ['settings.manage', 'members.manage'],
+  },
+  {
+    key: 'tiers',
+    label: 'Membership Tiers',
+    icon: Layers,
+    description: 'The ladder, and what each tier confers',
+    path: '/members/admin/settings/tiers',
+    // GET/PUT /users/membership-tiers/config — both require members.manage, so
+    // unlike its neighbours this section's own grant and the hub's are the same
+    // one.
+    permissions: ['members.manage'],
   },
   {
     key: 'evoc',

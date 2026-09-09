@@ -587,7 +587,35 @@ Body: {
 
 ### 12. Positions (`/onboarding/positions`)
 
-**Purpose**: Describe the department's rank ladder, then its positions
+**Purpose**: Describe the department's membership ladder, rank ladder and positions
+
+**The membership ladder** (`MembershipLadderSection`, rendered first):
+
+`organization.settings["membership_tiers"]` decides who is in the ballot
+electorate, who may stand for office, whether a member must meet a
+meeting-attendance threshold to vote, and who is graded for training — and
+`run_membership_tier_advance` promotes members along it nightly as
+`performed_by="system"`. It shipped with a ladder (Probationary at 0 years,
+Active at 1, Senior at 10, Life at 20) and **no screen anywhere**: not in setup,
+not in Settings, though the API and three frontend service methods existed. A
+department whose bylaws differ found out at its first election.
+
+Setup asks it because the answer is cheap there and expensive afterwards: once
+the roster holds rungs, a rung cannot be removed without moving those members
+first. It renders `components/settings/MembershipTiersSection` through the
+`useTierEditor` hook, the same pair that serves
+**Members → Settings → Membership Tiers**.
+
+Tier **ids** are not editable, for the reason rank codes are not: `id` is what
+`User.membership_type` stores and nothing cascades a change to it, so a renamed
+id is a rung emptied — `split_membership_type` refuses to guess a class for an
+id it does not recognise, and those members leave the operational body and the
+electorate at once. The display name, the years threshold, the order and every
+benefit are all editable; the id is derived once when a tier is created.
+
+`PUT /users/membership-tiers/config` validates through `MembershipTierSettings`
+and refuses to drop a tier members hold, naming how many. `GET` reports
+`member_counts` so the editor can show them and grey out an occupied rung.
 
 **The rank ladder** (`RankLadderSection`, rendered above the positions):
 
