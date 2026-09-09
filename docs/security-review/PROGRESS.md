@@ -71,9 +71,9 @@ the codebase, so no third method needs the same fix. Verified with the same
 blocking-proof pattern as round 2 (`test_shift_closeout_calls_lock_order_race.py`):
 confirmed failing (`asyncio.TimeoutError`) via `git stash push -u` on the fix
 alone, passing with the fix restored, stable across 3 repeated runs. Full
-write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4. Completion gate green: full backend suite clean (see the Log entry
-below for the exact count); flake8/black/isort clean; no frontend files
-touched.
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4.
+Completion gate green: full backend suite 11936 passed / 21 pre-existing
+skips / 0 failed; flake8/black/isort clean; no frontend files touched.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
@@ -11993,9 +11993,9 @@ with the fix restored, stable across 3 repeated runs. Full write-up:
 `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4.
 Completion gate green: `pytest -k "apparatus or nfc or evoc or
 equipment_check or compartment or shift_check_in or scheduling"` — 1128
-passed, 1 pre-existing skip; full backend suite clean (see this entry's own
-next update, or the PR, for the exact count); flake8/black/isort clean; no
-frontend files touched.
+passed, 1 pre-existing skip; full backend suite 11936 passed / 21
+pre-existing skips / 0 failed; flake8/black/isort clean; no frontend files
+touched.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
 
