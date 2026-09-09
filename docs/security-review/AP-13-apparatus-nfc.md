@@ -249,6 +249,52 @@ without that half of the fix, and passes with it restored — proving the
 corrected test actually guards what it claims to, not merely that it reads
 correctly.
 
+### AP-13 finding 4 (pass 11, Codex round 3 on PR #2428) — P2 (reliability, lock-ordering deadlock) — `save_closeout_calls` and `finalize_shift` locked the shift and call-record rows in opposite orders — ✅ FIXED
+
+**What:** Codex's review of finding 3's own fix caught the same shape of
+deadlock in a second pair of methods: `save_closeout_calls` (the closeout
+wizard's "how many calls did the apparatus run" step) fetches its shift row
+with a plain, non-locking `get_shift_by_id` call, then — when a count is
+provided — calls `CallTrackingService.record_shift_calls`, which issues
+`DELETE`/`UPDATE` statements against `OrgCall`/`OrgCallResponse` rows (an
+implicit InnoDB lock the moment those statements execute), and only updates
+`shift.closeout_step` at commit, acquiring the shift-row lock last.
+`finalize_shift` (finding 3's own fix) does the opposite: it locks the shift
+row first, then reconciles those same call rows through the identical
+`record_shift_calls` call later in the method. An officer saving the
+closeout-calls step while another officer (or the same officer, a second
+tab) finalizes the same shift could have either transaction aborted with a
+deadlock error — the same failure mode finding 3 closed for `member_check_in`,
+now reopened by a different method reaching the same two tables in the
+opposite order.
+
+**Where:** `backend/app/services/scheduling_service.py`, `save_closeout_calls`
+(the initial `shift = await self.get_shift_by_id(shift_id, organization_id)`
+call, pre-fix with no `for_update`). Confirmed by grep that
+`record_shift_calls`/`attach_response` have exactly these two call sites in
+the whole codebase — no third method needs the same fix.
+
+**Fix:** `for_update=True` on that same initial fetch, so `save_closeout_calls`
+now queues on the shift lock before it ever touches `OrgCall`/`OrgCallResponse`,
+matching `finalize_shift`'s order. Lock-ordering consistency again, not a
+capacity fix of its own — `save_closeout_calls` has no read-then-write race
+to close on its own account, it just needed to agree with `finalize_shift`
+on which lock comes first.
+
+**Regression test:** same reasoning as finding 3 — proving the actual fix
+mechanism (blocks on the shift lock) rather than a fragile live cross-table
+deadlock reproduction. New test,
+`backend/tests/test_shift_closeout_calls_lock_order_race.py` — two real,
+independently-committing sessions: session A locks the shift exactly as
+`member_check_in`'s own first step does; session B runs the real,
+unmodified `save_closeout_calls`, instrumented the same way as finding 3's
+test. Confirmed still pending after the event fires plus a 200ms grace
+window, proving genuine DB-level blocking. Session A releases; session B
+unblocks and saves normally. Confirmed failing (`asyncio.TimeoutError` —
+`save_closeout_calls` never even attempts a locking read pre-fix) via
+`git stash push -u` on the fix alone, confirmed passing with the fix
+restored, stable across 3 consecutive re-runs.
+
 ## Guard test added (pass 11)
 
 - `backend/tests/test_shift_check_in_race.py` —
@@ -267,18 +313,23 @@ test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
   (finding 3, above). Confirmed failing (`asyncio.TimeoutError`) against the
   pre-fix method via `git stash push -u` on the fix alone, confirmed
   passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_closeout_calls_lock_order_race.py` —
+  `TestSaveCloseoutCallsLocksTheShiftRowFirst::test_save_closeout_calls_blocks_on_a_concurrent_check_ins_shift_lock`
+  (finding 4, above). Confirmed failing (`asyncio.TimeoutError`) against the
+  pre-fix method via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
 
-## Completion gate (pass 11, round 2 — Codex findings on PR #2428)
+## Completion gate (pass 11, round 3 — Codex findings on PR #2428)
 
-| Check                                                                                                    | Result                                                                         |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `flake8 app/ tests/ alembic/`                                                                            | ✅ 0 violations                                                                |
-| `black --check app/ tests/ alembic/`                                                                     | ✅ clean                                                                       |
-| `isort --check-only app/ tests/ alembic/`                                                                | ✅ clean                                                                       |
-| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py`                  | ✅ 2 passed, 3 repeated runs, no flakiness                                     |
-| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"` | ✅ 1127 passed, 1 skipped (pre-existing optional-dep skip)                     |
-| `pytest tests/` (full backend suite)                                                                     | ✅ 11935 passed, 21 skipped (pre-existing Docker/optional-dep skips), 0 failed |
-| `tsc --noEmit` / `eslint .`                                                                              | n/a — no frontend files touched this round either                              |
+| Check                                                                                                                                      | Result                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                              | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/`                                                                                                       | ✅ clean                                                      |
+| `isort --check-only app/ tests/ alembic/`                                                                                                  | ✅ clean                                                      |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py` | ✅ 3 passed, 3 repeated runs, no flakiness                    |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"`                                   | ✅ 1128 passed, 1 skipped (pre-existing optional-dep skip)    |
+| `pytest tests/` (full backend suite)                                                                                                       | ✅ see PROGRESS.md's Log entry for the exact pass/skip counts |
+| `tsc --noEmit` / `eslint .`                                                                                                                | n/a — no frontend files touched this round either             |
 
 ### Verified good ✅ (re-confirmed this pass, mechanism named)
 

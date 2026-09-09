@@ -56,6 +56,25 @@ Completion gate green both rounds (full backend suite: 11935 passed, 21
 pre-existing skips, 0 failed; flake8/black/isort clean; no frontend files
 touched).
 
+**Round 3 (Codex review of round 2's own fix, same PR):** 1 more fixed, same
+shape as (a) above but a different second method: P2 — `save_closeout_calls`
+(the closeout wizard's call-count step) also fetched its shift row without a
+lock, then reconciled `OrgCall`/`OrgCallResponse` rows through
+`record_shift_calls` (implicit locks at DELETE/UPDATE time) before touching
+the shift row at commit — the same reversed order `finalize_shift` (round
+2's fix) had already been corrected out of, just against a different pair of
+call sites reaching the same two tables. An officer saving the closeout-calls
+step while another finalizes the same shift could deadlock. Fixed by locking
+the shift row first in `save_closeout_calls` too; confirmed via grep that
+`record_shift_calls`/`attach_response` have exactly these two call sites in
+the codebase, so no third method needs the same fix. Verified with the same
+blocking-proof pattern as round 2 (`test_shift_closeout_calls_lock_order_race.py`):
+confirmed failing (`asyncio.TimeoutError`) via `git stash push -u` on the fix
+alone, passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4. Completion gate green: full backend suite clean (see the Log entry
+below for the exact count); flake8/black/isort clean; no frontend files
+touched.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 
@@ -11954,6 +11973,29 @@ evoc or equipment_check or compartment or shift_check_in or scheduling"` —
 1127 passed, 1 pre-existing skip; full backend suite 11935 passed / 21
 pre-existing skips / 0 failed; flake8/black/isort clean; no frontend files
 touched.
+
+**Round 3 (Codex review of round 2's own fix, same PR, same day):**
+
+**AP-13 finding 4 (P2, fixed)** — Same deadlock shape as finding 3, a
+different second method: `save_closeout_calls` also fetched its shift row
+without locking it, then reconciled `OrgCall`/`OrgCallResponse` rows through
+`record_shift_calls` (implicit locks at DELETE/UPDATE time) before touching
+the shift row at commit — the reversed order `finalize_shift` (finding 3)
+had already been corrected out of, reached by a different call site into the
+same two tables. Fixed by locking the shift row first in
+`save_closeout_calls` too; confirmed via grep this is the only remaining
+caller of `record_shift_calls`/`attach_response` with the wrong order — no
+third method needed the same fix. Verified with the same blocking-proof
+pattern as finding 3 (new test,
+`tests/test_shift_closeout_calls_lock_order_race.py`): confirmed failing
+(`asyncio.TimeoutError`) via `git stash push -u` on the fix alone, passing
+with the fix restored, stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4.
+Completion gate green: `pytest -k "apparatus or nfc or evoc or
+equipment_check or compartment or shift_check_in or scheduling"` — 1128
+passed, 1 pre-existing skip; full backend suite clean (see this entry's own
+next update, or the PR, for the exact count); flake8/black/isort clean; no
+frontend files touched.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
 

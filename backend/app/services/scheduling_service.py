@@ -7987,8 +7987,18 @@ class SchedulingService:
         consequence: an officer who saves this step and abandons the wizard has
         already moved the department's call-volume report, which carries no
         preliminary marker of its own.
+
+        Locks the shift row (``for_update=True``) before touching any
+        ``OrgCall``/``OrgCallResponse`` row, matching ``finalize_shift``'s own
+        order. ``finalize_shift`` also reconciles calls through
+        ``record_shift_calls`` after locking the shift first; this method
+        used to lock those same call rows (via the DELETE/UPDATE inside
+        ``record_shift_calls``) before ever touching the shift row, the
+        reverse order — a save-closeout-calls request racing a finalize on
+        the same shift could deadlock, aborting one of two otherwise
+        unrelated, ordinary requests.
         """
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
