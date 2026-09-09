@@ -5915,7 +5915,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `pipeline_id` | VARCHAR(36) | no | FK, IDX |  | → `membership_pipelines.id` ON DELETE CASCADE |
+| `pipeline_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `membership_pipelines.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `step_type` | ENUM(`action`, `checkbox`, `note`, `form_submission`, `document_upload`, `election_vote`, `manual_approval`, `meeting`, `status_page_toggle`, `automated_email`, `reference_check`, `checklist`, `interview_requirement`, `multi_approval`, `medical_screening`) | no |  | `checkbox` |  |
@@ -5934,7 +5934,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_pipeline_step_order` (`pipeline_id`, `sort_order`)
+- UNIQUE `idx_pipeline_step_order` (`pipeline_id`, `sort_order`)
 - `ix_membership_pipeline_steps_email_template_id` (`email_template_id`)
 
 ### `membership_pipelines`

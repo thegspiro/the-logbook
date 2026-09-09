@@ -207,7 +207,17 @@ class MembershipPipelineStep(Base):
         cascade="all, delete-orphan",
     )
 
-    __table_args__ = (Index("idx_pipeline_step_order", "pipeline_id", "sort_order"),)
+    # Unique, not merely indexed. sort_order is not decoration: "the next
+    # stage" is an index into the steps sorted by it, so two stages sharing a
+    # value make both the board's column order and the destination of an
+    # advance depend on how the sort happened to break the tie — differently
+    # from one page load to the next. The service already avoids collisions on
+    # every path that allocates one; this is the backstop that makes that a
+    # guarantee rather than a convention, and it is what a concurrent writer
+    # racing past the row lock would hit.
+    __table_args__ = (
+        Index("idx_pipeline_step_order", "pipeline_id", "sort_order", unique=True),
+    )
 
     def __repr__(self):
         return f"<MembershipPipelineStep(name={self.name}, type={self.step_type})>"

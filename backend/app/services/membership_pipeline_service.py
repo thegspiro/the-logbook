@@ -358,7 +358,21 @@ class MembershipPipelineService:
         await self.db.flush()
 
         if steps:
+            # Supplied positions are honoured only if they are usable as a set:
+            # every entry carrying one, and no two the same. That keeps a
+            # duplicated pipeline's exact numbering, gaps included. The moment
+            # they collide they are not an ordering at all, and under the
+            # unique index a single duplicate is an IntegrityError that loses
+            # the whole pipeline — so fall back to the list order, which is the
+            # real intent whether the steps came from a template or from
+            # duplicate_pipeline reading a source in sort_order.
+            requested_orders = [step_data.get("sort_order") for step_data in steps]
+            honour_requested = None not in requested_orders and len(
+                set(requested_orders)
+            ) == len(requested_orders)
+
             for i, step_data in enumerate(steps):
+                sort_order = requested_orders[i] if honour_requested else i
                 await self._assert_email_template_in_org(
                     step_data.get("email_template_id"), organization_id
                 )
@@ -372,7 +386,7 @@ class MembershipPipelineService:
                     action_type=step_data.get("action_type"),
                     is_first_step=step_data.get("is_first_step", i == 0),
                     is_final_step=step_data.get("is_final_step", False),
-                    sort_order=step_data.get("sort_order", i),
+                    sort_order=sort_order,
                     email_template_id=step_data.get("email_template_id"),
                     required=step_data.get("required", True),
                     config=step_data.get("config", {}),
@@ -552,11 +566,11 @@ class MembershipPipelineService:
         # Locked, because the sort_order allocation below reads the step list
         # and writes a value derived from it. Two coordinators adding a stage
         # at once — or one of them double-clicking, or two API clients — both
-        # read the same steps, compute the same max+1 and both insert it:
-        # (pipeline_id, sort_order) carries a plain index, not a unique
-        # constraint, so nothing downstream refuses the duplicate and the
-        # ambiguous ordering this method exists to prevent comes straight back.
-        # The lock is released by the commit at the end of this method.
+        # read the same steps and compute the same max+1. The lock is what
+        # makes the second one read the first one's committed row and pick the
+        # next slot; the unique index on (pipeline_id, sort_order) is only the
+        # backstop, and reaching it means somebody gets an error instead of a
+        # stage. The lock is released by the commit at the end of this method.
         pipeline = await self.get_pipeline(
             pipeline_id, organization_id, lock_for_update=True
         )
@@ -626,6 +640,16 @@ class MembershipPipelineService:
             "updated_at",
             "pipeline",
             "progress_records",
+            # Reordering is its own operation. The generic update accepted a
+            # sort_order and wrote it verbatim, so a PUT naming a value another
+            # stage already held created a duplicate — the ambiguous ordering
+            # every other path is careful to avoid, reachable in one request.
+            # Under the unique index it would be an IntegrityError instead,
+            # which is no better a way to find out. `reorder_steps` is the
+            # supported way to move a stage, and it is what the builder's
+            # drag already calls. Mirrors training_program_service, which
+            # strips phase_number from its own update for the same reason.
+            "sort_order",
         }
     )
 
@@ -787,9 +811,7 @@ class MembershipPipelineService:
             (s for s in pipeline.steps if str(s.id) != str(step_id)),
             key=lambda s: s.sort_order,
         )
-        for index, survivor in enumerate(survivors):
-            if survivor.sort_order != index:
-                survivor.sort_order = index
+        await self._renumber_steps_densely(survivors)
 
         await self.db.commit()
 
@@ -800,30 +822,67 @@ class MembershipPipelineService:
 
         return True
 
+    async def _renumber_steps_densely(
+        self, ordered_steps: List[MembershipPipelineStep]
+    ) -> None:
+        """Assign 0..n-1 to ``ordered_steps``, in the order given.
+
+        Two passes, because ``(pipeline_id, sort_order)`` is unique and MySQL
+        checks that per statement with no deferral: every final value a step
+        is about to take may still be held by another step in the same set, so
+        a single pass collides partway through and takes the whole transaction
+        with it. Parking on negatives first vacates the entire 0..n-1 range
+        before anything claims a slot in it.
+
+        Negatives are safe to park on — the column has no CHECK, and the
+        schema's ``ge=0`` lives on the request models rather than the row — but
+        they must never outlive this call, which is why the flush between the
+        passes is not optional and why callers commit immediately after.
+
+        Ordering the writes instead of parking would work for a pure downward
+        compaction and nothing else: a reorder moves values both ways. And the
+        emission order is not the loop's to choose anyway — the unit of work
+        sorts persistent instances by primary key, which here is a random
+        UUID, so a single pass fails or survives on a coin toss rather than
+        deterministically. This mirrors ``reorder_program_phases``, which
+        solved the same problem behind the same kind of unique constraint.
+        """
+        for offset, step in enumerate(ordered_steps):
+            step.sort_order = -(offset + 1)
+        await self.db.flush()
+        for index, step in enumerate(ordered_steps):
+            step.sort_order = index
+        await self.db.flush()
+
     async def reorder_steps(
         self, pipeline_id: str, organization_id: str, step_ids: List[str]
     ) -> Optional[List[MembershipPipelineStep]]:
-        """Reorder steps in a pipeline"""
+        """Reorder steps in a pipeline.
+
+        ``step_ids`` must name every step of the pipeline exactly once. It was
+        previously applied verbatim, so a short or repeated list renumbered a
+        subset and left the rest where they were — silently producing the
+        duplicate ordering the rest of this service works to prevent, and
+        returning 200. Validated here rather than trusted, the same way
+        ``reorder_program_phases`` validates its own permutation.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
 
-        # Use individual UPDATE statements instead of ORM attribute mutation
-        # to avoid stale session state issues with the double-commit pattern
-        # in get_session().
-        for i, step_id in enumerate(step_ids):
-            await self.db.execute(
-                update(MembershipPipelineStep)
-                .where(
-                    and_(
-                        MembershipPipelineStep.id == step_id,
-                        MembershipPipelineStep.pipeline_id == pipeline_id,
-                    )
-                )
-                .values(sort_order=i)
+        steps_by_id = {str(s.id): s for s in pipeline.steps}
+        ordered_ids = [str(step_id) for step_id in step_ids]
+        if set(ordered_ids) != set(steps_by_id) or len(ordered_ids) != len(steps_by_id):
+            raise ValueError(
+                "The stage list must include every stage of this pipeline "
+                "exactly once."
             )
 
-        await self.db.flush()
+        # ORM attribute mutation, not the Core UPDATEs this used to issue: the
+        # two-phase renumber needs a flush between the passes, and the objects
+        # are already loaded and are what the is_final_step normalization below
+        # reads back.
+        await self._renumber_steps_densely([steps_by_id[sid] for sid in ordered_ids])
 
         # is_final_step marks the approval stage whose completion may
         # auto-transfer the prospect to full membership. It is positional in
