@@ -42,8 +42,12 @@ const stage = (id: string, name: string, sortOrder: number): PipelineStage =>
 
 const stages = [stage('s1', 'Application', 0), stage('s2', 'Interview', 1), stage('s3', 'Vote', 2)];
 
+// pipeline_id matches the stages above, as the API always sends it. The board
+// uses it to tell its own applicants from another pipeline's, so a fixture
+// without it is not a realistic row.
 const applicant = {
   id: 'app-1',
+  pipeline_id: 'pipe-1',
   first_name: 'Riley',
   last_name: 'Bishop',
   email: 'riley@example.com',
@@ -174,5 +178,42 @@ describe('PipelineKanban applicants with no stage', () => {
     expect(mockAdvance).not.toHaveBeenCalled();
     expect(mockRegress).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('not on a stage of this pipeline'));
+  });
+});
+
+// The store assigns `applicants` only on a successful fetch and its catch
+// leaves the previous list alone, so switching pipeline shows the old one's
+// rows until the new fetch lands — and permanently if it fails. Those rows
+// match no stage on this board. Collecting them into Unassigned would put a
+// card for someone else's pipeline in front of a coordinator, and opening it
+// and pressing Advance moves that applicant along a workflow they are not
+// looking at. A stage mismatch is only "unassigned" for this pipeline's own.
+describe('PipelineKanban applicants from another pipeline', () => {
+  const unassignedColumn = () => screen.queryByRole('group', { name: 'Unassigned applicants' });
+
+  const stranger = {
+    ...applicant,
+    id: 'app-other',
+    pipeline_id: 'pipe-2',
+    first_name: 'Devon',
+    last_name: 'Marsh',
+    current_stage_id: 'other-pipeline-stage',
+  };
+
+  it('does not show an applicant belonging to a different pipeline', () => {
+    renderWithRouter(<PipelineKanban stages={stages} applicants={[stranger]} onApplicantClick={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /Devon Marsh/ })).toBeNull();
+    expect(unassignedColumn()).toBeNull();
+  });
+
+  it('keeps this pipeline’s own stray and drops the other pipeline’s', () => {
+    const ourStray = { ...applicant, current_stage_id: '' };
+    renderWithRouter(<PipelineKanban stages={stages} applicants={[ourStray, stranger]} onApplicantClick={vi.fn()} />);
+
+    const column = unassignedColumn();
+    expect(column).not.toBeNull();
+    expect(within(column as HTMLElement).getByRole('button', { name: /Riley Bishop/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Devon Marsh/ })).toBeNull();
   });
 });

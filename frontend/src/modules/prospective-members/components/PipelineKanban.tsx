@@ -52,6 +52,20 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   // has since gone matches nothing either. Either way they vanished from the
   // board with nothing on screen to say so — while the header count, which
   // comes from the server, still counted them.
+  // A stage mismatch alone is not enough to call someone unassigned, because
+  // the store hands this board other pipelines' applicants. `fetchApplicants`
+  // only ever assigns `applicants` on success and its catch leaves the previous
+  // list in place, so switching pipeline shows the old one's rows until the new
+  // fetch lands — and permanently if it fails. Those rows match no stage here,
+  // and collecting them would put a card for someone else's pipeline on this
+  // board: opening it and pressing Advance moves them along a workflow the
+  // coordinator is not even looking at. So the column is for this pipeline's
+  // own strays only; a row from elsewhere is dropped, as it always was.
+  //
+  // The board's pipeline comes from the stages it is drawing rather than a
+  // prop, so it cannot disagree with the columns actually on screen.
+  const boardPipelineId = stages[0]?.pipeline_id;
+
   const { applicantsByStage, unassignedApplicants } = useMemo(() => {
     const grouped: Record<string, ApplicantListItem[]> = {};
     for (const stage of stages) {
@@ -62,12 +76,12 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
       const stageGroup = grouped[applicant.current_stage_id];
       if (stageGroup) {
         stageGroup.push(applicant);
-      } else {
+      } else if (boardPipelineId !== undefined && applicant.pipeline_id === boardPipelineId) {
         unassigned.push(applicant);
       }
     }
     return { applicantsByStage: grouped, unassignedApplicants: unassigned };
-  }, [stages, applicants]);
+  }, [stages, applicants, boardPipelineId]);
 
   const withheldCount = Math.max(0, (totalApplicants ?? applicants.length) - applicants.length);
 
@@ -110,7 +124,11 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     // the guard above and do nothing at all — the card simply sprang back with
     // no explanation, which reads as a broken board rather than a refusal.
     if (currentStageIndex < 0) {
-      toast.error(`${draggedApplicant.first_name} is not on a stage of this pipeline — open them to set one.`);
+      // No instruction to follow it, deliberately: there is no control that
+      // assigns a stage. Advance, Back and Skip all need a current one, and
+      // current_step_id is protected from the generic update. Saying "open
+      // them to set one" sent coordinators to a dead end.
+      toast.error(`${draggedApplicant.first_name} is not on a stage of this pipeline, so they cannot be moved.`);
       setDraggedApplicant(null);
       return;
     }
@@ -261,7 +279,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                   <HelpCircle className="text-theme-text-muted h-4 w-4" />
                   <h3
                     className="text-theme-text-primary truncate text-sm font-medium"
-                    title="These applicants are not on any stage of this pipeline. Open one to place them."
+                    title="These applicants are not on any stage of this pipeline, so they cannot be advanced. They can still be put on hold, withdrawn or rejected."
                   >
                     Unassigned
                   </h3>
