@@ -358,7 +358,21 @@ class MembershipPipelineService:
         await self.db.flush()
 
         if steps:
+            # Supplied positions are honoured only if they are usable as a set:
+            # every entry carrying one, and no two the same. That keeps a
+            # duplicated pipeline's exact numbering, gaps included. The moment
+            # they collide they are not an ordering at all, and under the
+            # unique index a single duplicate is an IntegrityError that loses
+            # the whole pipeline — so fall back to the list order, which is the
+            # real intent whether the steps came from a template or from
+            # duplicate_pipeline reading a source in sort_order.
+            requested_orders = [step_data.get("sort_order") for step_data in steps]
+            honour_requested = None not in requested_orders and len(
+                set(requested_orders)
+            ) == len(requested_orders)
+
             for i, step_data in enumerate(steps):
+                sort_order = requested_orders[i] if honour_requested else i
                 await self._assert_email_template_in_org(
                     step_data.get("email_template_id"), organization_id
                 )
@@ -372,7 +386,7 @@ class MembershipPipelineService:
                     action_type=step_data.get("action_type"),
                     is_first_step=step_data.get("is_first_step", i == 0),
                     is_final_step=step_data.get("is_final_step", False),
-                    sort_order=step_data.get("sort_order", i),
+                    sort_order=sort_order,
                     email_template_id=step_data.get("email_template_id"),
                     required=step_data.get("required", True),
                     config=step_data.get("config", {}),
@@ -552,11 +566,11 @@ class MembershipPipelineService:
         # Locked, because the sort_order allocation below reads the step list
         # and writes a value derived from it. Two coordinators adding a stage
         # at once — or one of them double-clicking, or two API clients — both
-        # read the same steps, compute the same max+1 and both insert it:
-        # (pipeline_id, sort_order) carries a plain index, not a unique
-        # constraint, so nothing downstream refuses the duplicate and the
-        # ambiguous ordering this method exists to prevent comes straight back.
-        # The lock is released by the commit at the end of this method.
+        # read the same steps and compute the same max+1. The lock is what
+        # makes the second one read the first one's committed row and pick the
+        # next slot; the unique index on (pipeline_id, sort_order) is only the
+        # backstop, and reaching it means somebody gets an error instead of a
+        # stage. The lock is released by the commit at the end of this method.
         pipeline = await self.get_pipeline(
             pipeline_id, organization_id, lock_for_update=True
         )
@@ -577,7 +591,13 @@ class MembershipPipelineService:
         # earlier stage has been deleted (deletion left gaps). An explicit,
         # non-colliding value is still honoured, so the API is unchanged for
         # callers that pick their own order.
-        taken = {s.sort_order for s in pipeline.steps}
+        # Locked and current. The pipeline-row lock orders two adds against
+        # each other, but `pipeline.steps` still comes off this transaction's
+        # snapshot — so a stage committed by someone else after the snapshot
+        # opened was invisible here, and max+1 landed on a value it already
+        # held. That reached the unique index as an IntegrityError rather than
+        # the silent duplicate it used to be, which is better but still a 500.
+        taken = {s.sort_order for s in await self._load_steps_for_update(pipeline_id)}
         if (
             "sort_order" not in data
             or data["sort_order"] is None
@@ -626,6 +646,16 @@ class MembershipPipelineService:
             "updated_at",
             "pipeline",
             "progress_records",
+            # Reordering is its own operation. The generic update accepted a
+            # sort_order and wrote it verbatim, so a PUT naming a value another
+            # stage already held created a duplicate — the ambiguous ordering
+            # every other path is careful to avoid, reachable in one request.
+            # Under the unique index it would be an IntegrityError instead,
+            # which is no better a way to find out. `reorder_steps` is the
+            # supported way to move a stage, and it is what the builder's
+            # drag already calls. Mirrors training_program_service, which
+            # strips phase_number from its own update for the same reason.
+            "sort_order",
         }
     )
 
@@ -684,17 +714,53 @@ class MembershipPipelineService:
         next step (or to the previous step if this is the last one)
         before the step is deleted.
         """
-        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        # Locked for the same reason ``add_step`` is, and then some: the
+        # gap-closing renumber at the end writes a value to every survivor,
+        # derived from a step list read here. Two coordinators deleting
+        # different stages at once would otherwise both read the same
+        # collection, and the second one's survivor list would still hold the
+        # stage the first one has since deleted — so the renumber's UPDATE
+        # names a row that is gone and SQLAlchemy raises StaleDataError,
+        # failing an otherwise valid deletion with a 500. This lock orders the
+        # two deletions; it is not on its own enough to make the step list
+        # current, which is what ``_load_steps_for_update`` below is for.
+        pipeline = await self.get_pipeline(
+            pipeline_id, organization_id, lock_for_update=True
+        )
         if not pipeline:
             return False
 
-        step = next((s for s in pipeline.steps if s.id == step_id), None)
+        # Locked and current; `pipeline.steps` is neither. See
+        # `_load_steps_for_update`.
+        locked_steps = await self._load_steps_for_update(pipeline_id)
+
+        step = next((s for s in locked_steps if str(s.id) == str(step_id)), None)
         if not step:
             return False
 
         # Auto-advance any prospects sitting on this step.
+        #
+        # Locking, for the reason `_load_steps_for_update` exists: locking the
+        # steps did nothing for this read. A locking read does not advance the
+        # transaction's read view, so a plain SELECT here still answers from
+        # the snapshot the transaction opened with — set by the auth query,
+        # long before this method runs. Two coordinators deleting adjacent
+        # stages is the case that bites: the first moves a prospect off stage A
+        # onto stage B and commits, and the second, deleting B, cannot see them
+        # there. It finds nobody stranded, deletes B, and `current_step_id` is
+        # a FK with ON DELETE SET NULL — so the prospect is silently left on no
+        # stage at all, which is exactly how someone disappears off the board.
+        #
+        # Scoped by organization_id as well, and not only for the usual reason:
+        # `current_step_id` carries no index, so a bare FOR UPDATE on it scans
+        # the table and next-key-locks every row it touches — every prospect in
+        # every organization, for the length of a stage deletion. With the org
+        # and status columns in the predicate this uses idx_prospect_org_status
+        # and locks a narrow range instead.
         stranded_result = await self.db.execute(
-            select(ProspectiveMember).where(
+            select(ProspectiveMember)
+            .where(
+                ProspectiveMember.organization_id == organization_id,
                 ProspectiveMember.current_step_id == step_id,
                 ProspectiveMember.status.in_(
                     [
@@ -703,11 +769,13 @@ class MembershipPipelineService:
                     ]
                 ),
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         stranded = list(stranded_result.scalars().all())
 
         if stranded:
-            sorted_steps = sorted(pipeline.steps, key=lambda s: s.sort_order)
+            sorted_steps = locked_steps
             step_idx = next(
                 (i for i, s in enumerate(sorted_steps) if s.id == step_id),
                 -1,
@@ -724,6 +792,15 @@ class MembershipPipelineService:
             stranded_ids = [str(p.id) for p in stranded]
             progress_rows: List[ProspectStepProgress] = []
             if fallback_step is not None and stranded_ids:
+                # Deliberately not a locking read. (prospect_id, step_id) is
+                # unique here, so a stale miss on this lookup would take the
+                # `row is None` branch below and insert a duplicate — but once
+                # the stranded read above is locking, there is no interleaving
+                # that produces one. Whoever last moved this prospect wrote a
+                # progress row for the stage they landed on, and that stage is
+                # where the locking read now finds them, never the fallback
+                # this deletion is about to pick. Adding a lock here would be
+                # guarding a case that cannot arise.
                 progress_result = await self.db.execute(
                     select(ProspectStepProgress).where(
                         ProspectStepProgress.prospect_id.in_(stranded_ids),
@@ -783,13 +860,8 @@ class MembershipPipelineService:
         # a value a survivor already holds — and a tie makes both the column
         # order and the destination of an advance arbitrary. Renumbering here
         # is what keeps that from ever arising; relative order is preserved.
-        survivors = sorted(
-            (s for s in pipeline.steps if str(s.id) != str(step_id)),
-            key=lambda s: s.sort_order,
-        )
-        for index, survivor in enumerate(survivors):
-            if survivor.sort_order != index:
-                survivor.sort_order = index
+        survivors = [s for s in locked_steps if str(s.id) != str(step_id)]
+        await self._renumber_steps_densely(survivors)
 
         await self.db.commit()
 
@@ -800,30 +872,111 @@ class MembershipPipelineService:
 
         return True
 
+    async def _load_steps_for_update(
+        self, pipeline_id: str
+    ) -> List[MembershipPipelineStep]:
+        """A pipeline's stages as of latest committed state, locked, in order.
+
+        ``get_pipeline(..., lock_for_update=True)`` locks the pipeline row and
+        so orders writers against each other, but ``steps`` arrives on a
+        *separate* SELECT that takes no lock — and under InnoDB's default
+        REPEATABLE READ a plain SELECT answers from the snapshot the
+        transaction opened with. A coordinator whose transaction was already
+        open when another coordinator's deletion committed therefore still
+        finds the deleted stage in ``pipeline.steps``, hands it to
+        ``_renumber_steps_densely``, and the flush UPDATEs a row that is gone:
+        SQLAlchemy raises StaleDataError and a valid deletion 500s. That was
+        the whole failure, and the parent-row lock alone did not prevent it.
+
+        A locking read ignores the snapshot and returns latest committed rows,
+        and ``populate_existing`` refreshes any stale instance already in the
+        identity map rather than handing back the cached one. Rows a concurrent
+        writer holds block here until it commits, which is the serialization
+        the renumber needs. Always call this *after* the pipeline row lock, so
+        every writer takes the two in the same order and none can deadlock.
+        """
+        result = await self.db.execute(
+            select(MembershipPipelineStep)
+            .where(MembershipPipelineStep.pipeline_id == pipeline_id)
+            .order_by(MembershipPipelineStep.sort_order)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    async def _renumber_steps_densely(
+        self, ordered_steps: List[MembershipPipelineStep]
+    ) -> None:
+        """Assign 0..n-1 to ``ordered_steps``, in the order given.
+
+        Two passes, because ``(pipeline_id, sort_order)`` is unique and MySQL
+        checks that per statement with no deferral: every final value a step
+        is about to take may still be held by another step in the same set, so
+        a single pass collides partway through and takes the whole transaction
+        with it. Parking on negatives first vacates the entire 0..n-1 range
+        before anything claims a slot in it.
+
+        Negatives are safe to park on — the column has no CHECK, and the
+        schema's ``ge=0`` lives on the request models rather than the row — but
+        they must never outlive this call, which is why the flush between the
+        passes is not optional and why callers commit immediately after.
+
+        Ordering the writes instead of parking would work for a pure downward
+        compaction and nothing else: a reorder moves values both ways. And the
+        emission order is not the loop's to choose anyway — the unit of work
+        sorts persistent instances by primary key, which here is a random
+        UUID, so a single pass fails or survives on a coin toss rather than
+        deterministically. This mirrors ``reorder_program_phases``, which
+        solved the same problem behind the same kind of unique constraint.
+        """
+        for offset, step in enumerate(ordered_steps):
+            step.sort_order = -(offset + 1)
+        await self.db.flush()
+        for index, step in enumerate(ordered_steps):
+            step.sort_order = index
+        await self.db.flush()
+
     async def reorder_steps(
         self, pipeline_id: str, organization_id: str, step_ids: List[str]
     ) -> Optional[List[MembershipPipelineStep]]:
-        """Reorder steps in a pipeline"""
-        pipeline = await self.get_pipeline(pipeline_id, organization_id)
+        """Reorder steps in a pipeline.
+
+        ``step_ids`` must name every step of the pipeline exactly once. It was
+        previously applied verbatim, so a short or repeated list renumbered a
+        subset and left the rest where they were — silently producing the
+        duplicate ordering the rest of this service works to prevent, and
+        returning 200. Validated here rather than trusted, the same way
+        ``reorder_program_phases`` validates its own permutation.
+        """
+        # Locked like ``add_step`` and ``delete_step``: this reads the step
+        # list and writes a position to every member of it, so a concurrent
+        # delete would leave a stale step in ``steps_by_id`` and the renumber
+        # would UPDATE a deleted row. Ordering the writers is this lock's job;
+        # making the list current is ``_load_steps_for_update``'s.
+        pipeline = await self.get_pipeline(
+            pipeline_id, organization_id, lock_for_update=True
+        )
         if not pipeline:
             return None
 
-        # Use individual UPDATE statements instead of ORM attribute mutation
-        # to avoid stale session state issues with the double-commit pattern
-        # in get_session().
-        for i, step_id in enumerate(step_ids):
-            await self.db.execute(
-                update(MembershipPipelineStep)
-                .where(
-                    and_(
-                        MembershipPipelineStep.id == step_id,
-                        MembershipPipelineStep.pipeline_id == pipeline_id,
-                    )
-                )
-                .values(sort_order=i)
+        # Locked and current; `pipeline.steps` is neither. The permutation
+        # check below therefore compares against the stages that actually
+        # exist, not the ones this transaction's snapshot remembers.
+        steps_by_id = {
+            str(s.id): s for s in await self._load_steps_for_update(pipeline_id)
+        }
+        ordered_ids = [str(step_id) for step_id in step_ids]
+        if set(ordered_ids) != set(steps_by_id) or len(ordered_ids) != len(steps_by_id):
+            raise ValueError(
+                "The stage list must include every stage of this pipeline "
+                "exactly once."
             )
 
-        await self.db.flush()
+        # ORM attribute mutation, not the Core UPDATEs this used to issue: the
+        # two-phase renumber needs a flush between the passes, and the objects
+        # are already loaded and are what the is_final_step normalization below
+        # reads back.
+        await self._renumber_steps_densely([steps_by_id[sid] for sid in ordered_ids])
 
         # is_final_step marks the approval stage whose completion may
         # auto-transfer the prospect to full membership. It is positional in
