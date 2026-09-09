@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4)** — PR TBD, branch
+**Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4)** — PR
+[#2428](https://github.com/thegspiro/the-logbook/pull/2428), branch
 `security-review/apparatus-nfc-2026-09-09` (fresh name — `git ls-remote`
 checked against every apparatus/nfc/AP-13 branch in this repo's history
 before creating it, per CLAUDE.md Pitfall #24). Assigned directly out of
