@@ -21,9 +21,10 @@ checks green, `mergeable_state: clean`. Squash-merged as `d24934d67`. Feature
 12 is now fully closed for this pass — see the Log entries and
 `FAC-12-facilities.md` for the full correction history (the pass's own
 initial review plus seven subsequent Codex review rounds, each finding
-additional or fix-related bugs — some independent, pre-existing bugs a
-crash had been masking until an earlier round's fix made the path
-reachable; others genuine regressions in a prior round's own fix):
+additional or fix-related bugs — some independent, pre-existing bugs
+(one, FAC-47, a crash had been masking until an earlier round's fix made
+its path reachable; another, FAC-50, independently observable via a 422
+the whole time); others genuine regressions in a prior round's own fix):
 `FAC-46` through `FAC-57`, 12 findings total, all fixed; the 4 prior flags
 (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open, unchanged since
 pass 3. Next: 13 Apparatus & NFC.
@@ -11837,9 +11838,13 @@ review rounds, each finding additional or fix-related bugs — the longest
 single-PR correction chain this rotation has seen — through FAC-57 (a
 genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
 merge-then-validate fix). Not every round found a regression in the
-previous one's fix: FAC-47 and FAC-50, for instance, were independent,
-pre-existing bugs a crash had been masking until FAC-46's own fix made
-their paths reachable; FAC-48, FAC-52 and FAC-57 were genuine regressions
+previous one's fix, and not every independent bug was masked the same way:
+FAC-47 was a pre-existing field-name mismatch a crash had genuinely been
+masking, reachable only once FAC-46's fix let `create_compliance_item`
+actually run; FAC-50 was independently observable the whole time — a
+contact-name-only submission 422'd at the schema layer before ever
+reaching the method FAC-46 fixed, so FAC-46's crash never stood between a
+caller and this defect. FAC-48, FAC-52 and FAC-57 were genuine regressions
 in a prior round's fix. 12 findings total (FAC-46 through FAC-57), all
 fixed. 4 prior flags (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still
 open, unchanged since pass 3. 17/17 CI checks green on the final head,
