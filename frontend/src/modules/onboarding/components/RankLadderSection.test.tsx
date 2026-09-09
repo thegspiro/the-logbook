@@ -19,7 +19,12 @@ const deleteRank = vi.fn();
 const reorderRanks = vi.fn();
 const validateRanks = vi.fn();
 
+const updateUserProfile = vi.fn();
+
 vi.mock('../../../services/api', () => ({
+  userService: {
+    updateUserProfile: (...args: unknown[]) => updateUserProfile(...args) as unknown,
+  },
   ranksService: {
     getRanks: (...args: unknown[]) => getRanks(...args) as unknown,
     createRank: (...args: unknown[]) => createRank(...args) as unknown,
@@ -37,6 +42,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import RankLadderSection from './RankLadderSection';
+import { useAuthStore } from '../../../stores/authStore';
 
 const rank = (over: Record<string, unknown> = {}) => ({
   id: 'rank-1',
@@ -60,6 +66,9 @@ const installDefaults = () => {
   deleteRank.mockReset();
   reorderRanks.mockReset();
   validateRanks.mockReset();
+  updateUserProfile.mockReset();
+  updateUserProfile.mockResolvedValue({});
+  useAuthStore.setState({ user: null });
   getRanks.mockResolvedValue([rank(), rank({ id: 'rank-2', rank_code: 'firefighter', display_name: 'Firefighter' })]);
   createRank.mockResolvedValue(rank({ id: 'rank-3' }));
   updateRank.mockResolvedValue(rank());
@@ -129,5 +138,56 @@ describe('RankLadderSection', () => {
     await screen.findByText('Captain');
 
     expect(screen.getByText(/ranks describe standing, positions grant access/i)).toBeInTheDocument();
+  });
+
+  it('does not offer a rank for the System Owner before there is one signed in', async () => {
+    render(<RankLadderSection />);
+    await screen.findByText('Captain');
+
+    expect(screen.queryByLabelText('Your rank')).not.toBeInTheDocument();
+  });
+});
+
+describe('RankLadderSection with the System Owner signed in', () => {
+  beforeEach(() => {
+    installDefaults();
+    useAuthStore.setState({
+      user: { id: 'user-1', rank: null } as never,
+      loadUser: async () => undefined,
+    });
+  });
+
+  it("offers the ladder as the System Owner's own rank", async () => {
+    render(<RankLadderSection />);
+    await screen.findByRole('button', { name: 'Edit Captain' });
+
+    const picker = await screen.findByLabelText('Your rank');
+    expect(picker).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Firefighter' })).toBeInTheDocument();
+  });
+
+  it('writes the chosen rank through the profile endpoint', async () => {
+    // Not a wizard-only path: the ordinary endpoint validates the code against
+    // the department's own ladder and enforces the permission-grant ceiling,
+    // and setup has no business skipping either.
+    const user = userEvent.setup();
+    render(<RankLadderSection />);
+    await screen.findByRole('button', { name: 'Edit Captain' });
+
+    await user.selectOptions(await screen.findByLabelText('Your rank'), 'captain');
+
+    await waitFor(() => expect(updateUserProfile).toHaveBeenCalledWith('user-1', { rank: 'captain' }));
+  });
+
+  it('puts the previous choice back when the write is refused', async () => {
+    updateUserProfile.mockRejectedValueOnce(new Error('nope'));
+    const user = userEvent.setup();
+    render(<RankLadderSection />);
+    await screen.findByRole('button', { name: 'Edit Captain' });
+
+    const picker = await screen.findByLabelText('Your rank');
+    await user.selectOptions(picker, 'captain');
+
+    await waitFor(() => expect(picker).toHaveValue(''));
   });
 });

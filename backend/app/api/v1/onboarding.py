@@ -471,6 +471,12 @@ class ITTeamMemberRequest(BaseModel):
     email: str = Field("", max_length=255)
     phone: str = Field("", max_length=20)
     role: str = Field("", max_length=100)
+    # Optional, and validated at completion rather than here. The rank step
+    # runs after this one, so a department that picks a rank here and then
+    # removes it from its ladder must not be unable to finish setup over an
+    # optional field — create_it_team_users resolves it and drops what it
+    # cannot resolve, with a warning.
+    rank: str = Field("", max_length=100)
 
 
 class ITTeamRequest(BaseModel):

@@ -140,12 +140,16 @@ class TestSaveItTeamStoresPlainDicts:
             )
 
         members = session.data["it_team"]["members"]
+        # `rank` is defaulted rather than omitted: a contact submitted without
+        # one is stored with an empty rank, which create_it_team_users reads as
+        # "no rank" and leaves the account unranked.
         assert members == [
             {
                 "name": "Jane",
                 "email": "jane@x.com",
                 "phone": "555-1234",
                 "role": "Primary",
+                "rank": "",
             }
         ]
         assert all(isinstance(m, dict) for m in members)

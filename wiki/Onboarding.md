@@ -115,24 +115,39 @@ and module steps all run against a signed-in session.
 
 #### Step 10: IT Team & Backup Access
 
-- Add IT team contact information
+- Add IT team contact information, and optionally each contact's operational rank
 - Configure backup access email and phone
 - Set secondary admin email for emergencies
 - IT contacts become user accounts at completion, each required to change its
   password on first sign-in
 
-#### Step 11: Positions & Permissions
+#### Step 11: Ranks & Positions
 
-- Ready-made position templates with a two-tier permission model (View Access /
-  Manage Access) per module
-- The **Operational Ranks** group (Fire Chief, Deputy/Assistant Chief, Captain,
-  Lieutenant, Engineer, Firefighter, **EMT**) mirrors the ranks seeded for the
-  organization, narrowed and renamed to suit the agency type — an EMS-only
-  service has no fire line, and calls its Engineer a Driver / Operator. The
-  Leadership, Officer, Support and Member groups cover corporate and
-  administrative roles
+**Your rank ladder** comes first. The department starts from the ranks its
+agency type usually has and changes them to match what it actually uses:
+
+- Rename a rank to your own vocabulary — an EMS service's Driver / Operator, a
+  department whose Captain is a Company Officer
+- Reorder the ladder, remove ranks you do not have, and add your own
+  (Battalion Chief, Firefighter II)
+- Set which shift seats each rank can fill
+- Set your own rank as System Owner
+
+> A rank says where somebody sits and which seats they can fill; what they can
+> **do** comes from their position. A rank you add yourself is marked **No
+> default permissions** for that reason — those members need a position too.
+
+**Then positions**, with a two-tier permission model (View Access / Manage
+Access) per module:
+
+- Ready-made templates, narrowed and renamed to suit the agency type — an
+  EMS-only service has no Firefighter, and calls its Engineer a Driver /
+  Operator. The Leadership, Officer, Support and Member groups cover corporate
+  and administrative roles
 - Each position starts ticked to exactly what the backend seeds it with, so
   pressing Continue without editing anything changes no grants
+- Leave a position unselected and it is not created. Your own System Owner
+  position and the baseline Member position are always kept
 
 #### Step 12: Module Selection
 

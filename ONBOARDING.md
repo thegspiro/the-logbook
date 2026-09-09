@@ -87,11 +87,18 @@ number of screens a user sees depends on the services they select.
 #### Step 9: IT Team & Backup Access
 
 - Configure IT team contacts and backup access information
+- Each contact may be given an operational rank, applied when their account is
+  created at completion
 
-#### Step 10: Position Setup
+#### Step 10: Ranks & Positions
 
+- Edit the department's rank ladder: rename ranks to your own vocabulary,
+  reorder them, remove ones you do not have, add your own, and set each rank's
+  shift eligibility. Set your own rank as System Owner
 - Configure operational positions with two-tier permissions (View Access / Manage Access)
 - Use pre-configured position templates by category (Leadership, Officers, Administrative, etc.)
+- A position left unselected is not created — except the System Owner's own and
+  the baseline Member position, which are always kept
 
 #### Step 11: Module Selection
 

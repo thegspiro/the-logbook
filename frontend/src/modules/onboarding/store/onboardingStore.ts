@@ -90,6 +90,8 @@ export interface OnboardingState {
     email: string;
     phone: string;
     role: string;
+    /** Operational rank, optional. Applied when the account is created at completion. */
+    rank?: string;
   }>;
   backupEmail: string;
   backupPhone: string;
@@ -170,7 +172,9 @@ export interface OnboardingActions {
 
   // IT Team Actions
   setITTeamConfigured: (configured: boolean) => void;
-  setITTeamMembers: (members: Array<{ id: string; name: string; email: string; phone: string; role: string }>) => void;
+  setITTeamMembers: (
+    members: Array<{ id: string; name: string; email: string; phone: string; role: string; rank?: string }>
+  ) => void;
   setBackupEmail: (email: string) => void;
   setBackupPhone: (phone: string) => void;
   setSecondaryAdminEmail: (email: string) => void;

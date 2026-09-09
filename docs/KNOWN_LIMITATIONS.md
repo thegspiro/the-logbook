@@ -171,6 +171,32 @@ template.
 exist and every seeded position to having a template, so the next module whose
 settings key is not its permission prefix fails rather than shipping inert.
 
+## ONBOARD-3 — A Deleted Seed Rank Is Still Accepted on a Write (2026-09-09)
+
+Setup now lets a department curate its rank ladder, and removing a rank does
+remove the row: it disappears from the rank pickers, from the ladder editor and
+from shift eligibility, which is the whole of what a department sees.
+
+`OperationalRankService.resolve_rank_code` is broader than that. It resolves a
+code two ways — a stored `operational_ranks` row **or** one of the built-in
+`DEFAULT_RANK_CODES` — and it checks the built-ins first, unconditionally. So a
+department that deletes `firefighter` during setup will still have
+`rank="firefighter"` accepted by any path that goes through that resolver: the
+member API, a CSV import, the prospect-conversion flow.
+
+**It is deliberate and is not being changed here.** The fallback exists because
+`seed_defaults` only ever fires into an empty table, so an organization
+onboarded before a code joined `DEFAULT_RANKS` has no row for it while the
+eligibility fallback still honours it — rejecting those is the exact shape of
+the EMT bug in #1833, which the fallback was added to close. Narrowing it to
+"only when the organization has no stored rows at all" is probably right and is
+a change to a guard that several write paths depend on, so it wants its own
+piece of work rather than riding along with the setup editor.
+
+**What it means in practice:** removing a rank during setup is a statement
+about what the department uses, not a constraint the API enforces. Nothing in
+the UI offers a deleted seed rank, so reaching this needs a direct write.
+
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 
 A member can attach a certificate (PDF/JPG/PNG, 10 MB) to a self-reported

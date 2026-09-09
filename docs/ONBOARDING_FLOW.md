@@ -60,13 +60,18 @@ This document describes the complete onboarding flow for The Logbook application
 └─ v
 ┌─ 9. IT Team & Backup Access ─────────── /onboarding/it-team
 │  POST /onboarding/session/it-team
-│  IT contacts and backup access. Contacts become user accounts at
-│  completion, with must_change_password set.
+│  IT contacts and backup access, each with an optional operational rank.
+│  Contacts become user accounts at completion, with must_change_password
+│  set and the rank applied if it still resolves.
 └─ v
-┌─ 10. Positions ──────────────────────── /onboarding/positions
-│  POST /onboarding/session/roles
-│  Two-tier permission model (view / manage) across position templates:
-│  leadership, officers, administrative, specialized, member.
+┌─ 10. Ranks & Positions ──────────────── /onboarding/positions
+│  GET/POST/PATCH/DELETE /operational-ranks   (the rank ladder)
+│  PATCH /users/{id}/profile                  (the System Owner's own rank)
+│  POST /onboarding/session/roles             (the positions)
+│  The department's rank ladder first — rename, reorder, remove, add, and set
+│  each rank's shift eligibility — then the two-tier permission model
+│  (view / manage) across position templates: leadership, officers,
+│  administrative, specialized, member.
 └─ v
 ┌─ 11. Module Overview ────────────────── /onboarding/modules
 │  POST /onboarding/session/modules, then POST /onboarding/complete
@@ -582,7 +587,35 @@ Body: {
 
 ### 12. Positions (`/onboarding/positions`)
 
-**Purpose**: Configure roles and permissions using a two-tier model
+**Purpose**: Describe the department's rank ladder, then its positions
+
+**The rank ladder** (`RankLadderSection`, rendered above the positions):
+
+`operational_ranks` is per-organization, and `seed_defaults` only ever fires
+into an empty table — so whatever it wrote on day one used to be what the
+department lived with, discovered later in Settings and usually after members
+had been assigned to it. Loading this step seeds the agency-appropriate
+defaults and lets the department rename them, reorder them, remove the ones it
+does not have, add its own, and set which shift seats each rank can fill.
+
+It renders `components/settings/RanksSettingsSection` — the same editor as
+Settings — driven by the same `useRankEditor` hook, against the ordinary
+`/operational-ranks` endpoints. One thing differs: `allowCodeEdit={false}`.
+A rank code is the runtime key `get_rank_default_permissions()` resolves
+against, and setup is the worst place to change one, because there is no
+"before" against which to notice a rank has stopped conferring anything.
+Renaming here is display names only.
+
+A rank a department adds itself carries the editor's existing
+**No default permissions** badge: rank grants resolve from a code-level
+registry, so an invented code confers nothing on its own and those members
+need a position.
+
+**The System Owner's own rank** is set here too, through
+`PATCH /users/{id}/profile` — the ordinary endpoint, which validates the code
+against the department's ladder and enforces the permission-grant ceiling. It
+is here rather than on the account step because the ladder has to exist, and
+be the department's own, before there is a right answer.
 
 **Two-Tier Permission Model**:
 
@@ -647,6 +680,14 @@ Body: {
   }]
 }
 ```
+
+> **Unticking a position removes it** _(2026-09-09)_: `save_session_roles`
+> used to delete only `is_system=False` rows, so an unticked seeded position
+> survived setup and went on appearing in every picker. It is now deleted,
+> except for `it_manager` (the System Owner's own), `member` (the baseline),
+> and any position somebody already holds. The response names what it removed
+> and the wizard's toast lists them. Reticking one puts it back with the
+> registry's grants, through the create branch.
 
 **Navigation**:
 

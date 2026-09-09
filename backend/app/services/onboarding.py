@@ -26,6 +26,7 @@ from app.models.onboarding import OnboardingStatus
 from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.services.auth_service import AuthService
+from app.services.operational_rank_service import OperationalRankService
 from app.utils.positions import normalize_stored_positions
 
 # ── Modules the setup wizard offers ───────────────────────────────────────
@@ -1012,11 +1013,13 @@ class OnboardingService:
         Args:
             organization_id: Organization UUID
             it_team_members: List of dicts with keys: name, email, phone, role
+                and an optional rank
 
         Returns:
             List of created User objects
         """
         auth_service = AuthService(self.db)
+        rank_service = OperationalRankService(self.db)
         created_users: List[User] = []
 
         # Look up the member role once
@@ -1091,6 +1094,27 @@ class OnboardingService:
             # Force password change on first login
             user.must_change_password = True
             user.phone = phone
+
+            # The rank the wizard collected for this contact, if any.
+            #
+            # Resolved rather than stored verbatim, and dropped rather than
+            # refused when it does not resolve. The rank step runs after the IT
+            # team step, so a department that names a rank here and then removes
+            # it from its ladder would otherwise fail the whole of setup at the
+            # final Continue over an optional field. A contact with no rank is
+            # a member an officer sets a rank for later; a contact with an
+            # unresolvable one is a member with no seats and no permissions and
+            # nothing saying why.
+            resolved_rank = await rank_service.resolve_rank_code(
+                organization_id, member.get("rank") or ""
+            )
+            if member.get("rank") and resolved_rank is None:
+                logger.warning(
+                    "Dropping unknown rank %r for IT contact %s during onboarding",
+                    member.get("rank"),
+                    email,
+                )
+            user.rank = resolved_rank
 
             # Assign member role
             if member_role:

@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Info, Shield } from 'lucide-react';
+import toast from 'react-hot-toast';
 import RanksSettingsSection from '../../../components/settings/RanksSettingsSection';
 import { useRankEditor } from '../../../hooks/useRankEditor';
+import { userService } from '../../../services/api';
+import { useAuthStore } from '../../../stores/authStore';
+import { getErrorMessage } from '../../../utils/errorHandling';
 
 /**
  * The department's rank ladder, edited during setup.
@@ -25,6 +29,38 @@ import { useRankEditor } from '../../../hooks/useRankEditor';
  */
 const RankLadderSection: React.FC = () => {
   const editor = useRankEditor({ allowCodeEdit: false, autoLoad: true });
+
+  // The System Owner's own rank. They are a real signed-in account by this
+  // step — created two steps earlier — so this writes straight through the
+  // ordinary profile endpoint, which validates the code against the
+  // department's ladder and enforces the permission-grant ceiling. Doing it
+  // here rather than on the account step is deliberate: the ladder has to
+  // exist, and be the department's own, before there is a right answer.
+  const currentUser = useAuthStore((state) => state.user);
+  const loadUser = useAuthStore((state) => state.loadUser);
+  const [ownRank, setOwnRank] = useState('');
+  const [savingOwnRank, setSavingOwnRank] = useState(false);
+
+  useEffect(() => {
+    setOwnRank(currentUser?.rank ?? '');
+  }, [currentUser?.rank]);
+
+  const saveOwnRank = async (rank: string) => {
+    if (!currentUser) return;
+    const previous = ownRank;
+    setOwnRank(rank);
+    setSavingOwnRank(true);
+    try {
+      await userService.updateUserProfile(currentUser.id, { rank });
+      await loadUser();
+      toast.success(rank ? 'Your rank was set' : 'Your rank was cleared');
+    } catch (err: unknown) {
+      setOwnRank(previous);
+      toast.error(getErrorMessage(err, 'Failed to set your rank'));
+    } finally {
+      setSavingOwnRank(false);
+    }
+  };
 
   return (
     <div className="card mb-6 p-6">
@@ -89,6 +125,33 @@ const RankLadderSection: React.FC = () => {
           void editor.handleToggleEligiblePosition(rank, position);
         }}
       />
+
+      {currentUser && (
+        <div className="border-theme-surface-border mt-6 border-t pt-4">
+          <label htmlFor="system-owner-rank" className="text-theme-text-primary block text-sm font-medium">
+            Your rank
+          </label>
+          <p className="text-theme-text-muted mt-1 mb-2 text-xs">
+            Optional, and separate from your System Owner position — that keeps its full access either way.
+          </p>
+          <select
+            id="system-owner-rank"
+            value={ownRank}
+            disabled={savingOwnRank}
+            onChange={(e) => {
+              void saveOwnRank(e.target.value);
+            }}
+            className="form-input max-w-xs"
+          >
+            <option value="">No rank</option>
+            {editor.ranks.map((rank) => (
+              <option key={rank.id} value={rank.rank_code}>
+                {rank.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 };

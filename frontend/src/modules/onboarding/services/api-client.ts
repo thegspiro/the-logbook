@@ -478,6 +478,8 @@ class SecureApiClient {
       email: string;
       phone: string;
       role: string;
+      /** Operational rank code, or '' for none. Applied when the account is created. */
+      rank?: string;
     }>;
     backup_access: {
       email: string;
