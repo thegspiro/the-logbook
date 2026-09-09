@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2432 (Feature 14 follow-up, EC-15 fix) merged clean at
+11:33:04 — merge commit `ab73a97`, the cherry-picked round-3 fix landed as
+intended. Confirmed directly: `origin/main` now has
+`frontend/src/modules/scheduling/components/callTypeChoices.ts` and
+`CallTypeChips.tsx` no longer exports `orgCallTypeChoices`/
+`textCallTypeChoices`/`CallTypeChoice` — `npx eslint .` on the current
+head reports 0 warnings, matching the PR's own completion-gate numbers.
+Rotation row 14 was already ✅ before this merge (the feature's own
+review concluded "no findings"; EC-15 was a follow-up code-health fix, not
+grounds to hold the rotation open). No `security-review/scheduling-*` or
+`security-review/SCH-15*` branch exists yet (checked via `git
+ls-remote --heads`), so the rotation is clear to start **15 Scheduling**
+next — nothing is blocking it.
+
+30-minute rotation watchdog: checked GitHub state directly (open PRs, the
+head of `main`, this file's own "Open PR" note) rather than assuming the
+prior note was current; it was 2+ hours stale relative to PR #2432's
+actual merge. No open security-review PR exists to tend, no CI is red, no
+merge conflict to resolve — recording the merge is the only action this
+pass takes.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 follow-up, PR #2432, EC-15 fix, merged), preserved for history</summary>
+
 **Feature 14 follow-up (EC-15 fix)** — PR
 [#2432](https://github.com/thegspiro/the-logbook/pull/2432), branch
 `security-review/equipment-check-shifts-ec15-fix-2026-09-09`. PR #2430
@@ -12137,6 +12161,8 @@ Next: 00 cross-cutting baseline (second full pass), once this PR merges.
 Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
 Codex-round log entry above); the 14 original findings plus the 6 Codex
 findings are all resolved with no open items. Rotation row 33 -> done.
+
+</details>
 
 ---
 
