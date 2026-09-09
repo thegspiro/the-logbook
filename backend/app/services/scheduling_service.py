@@ -7922,8 +7922,18 @@ class SchedulingService:
         Writes the real attendance rows rather than staging a draft, so the
         hours are correct the moment they are saved even if the officer never
         reaches the last step.
+
+        Locks the shift row (``for_update=True``) before touching any
+        ``ShiftAttendance`` row, matching ``finalize_shift``'s and
+        ``save_closeout_calls``'s order. Without it, the ``_user_in_org``
+        lookup below triggers autoflush on an existing entry's mutated
+        ``checked_in_at``/``checked_out_at`` — an implicit attendance-row
+        lock — before ``shift.closeout_step`` is ever touched, the reverse of
+        ``finalize_shift``'s shift-then-attendance order. A closeout-attendance
+        save racing a finalize on the same shift could deadlock, aborting one
+        of two otherwise unrelated, ordinary requests.
         """
-        shift = await self.get_shift_by_id(shift_id, organization_id)
+        shift = await self.get_shift_by_id(shift_id, organization_id, for_update=True)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:

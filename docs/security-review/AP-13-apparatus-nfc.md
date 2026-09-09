@@ -431,6 +431,50 @@ equal. Updated both assertions to normalize with `.replace(tzinfo=
 timezone.utc)` before comparing, the same pattern the test's own `valid`
 branch already used two lines above for exactly this reason.
 
+### Finding 7 (P2, Codex round 6 — `save_closeout_attendance` had the same reversed lock order)
+
+**What:** Codex's review of finding 6's own fix found a third instance of
+findings 3/4's shape: `save_closeout_attendance` (closeout wizard step 1)
+also read the shift with a plain, non-locking `get_shift_by_id`, then looped
+over the submitted attendance entries. An entry for a member who already has
+a `ShiftAttendance` row mutates that row's `checked_in_at`/`checked_out_at`
+in place; an entry for a member with no row yet calls `_user_in_org` first
+(the XC-1 in-org check for a client-supplied user id), which issues a
+`SELECT` and therefore triggers SQLAlchemy's autoflush — flushing the
+already-mutated existing attendance row (an implicit UPDATE, and therefore
+an implicit row lock) before `shift.closeout_step` is ever assigned, let
+alone the shift row locked. `finalize_shift` (finding 3) now locks the shift
+row first and only reconciles attendance/call rows afterward — the reverse
+order. A closeout-attendance save that updates one existing member and adds
+one new member, racing a finalize on the same shift, could deadlock,
+aborting one of two otherwise unrelated, ordinary requests. Same bug class
+as findings 3 and 4, reached through a different implicit flush (autoflush
+via `_user_in_org`'s `SELECT`, rather than a DELETE/UPDATE inside
+`record_shift_calls`).
+
+**Where:** `backend/app/services/scheduling_service.py`,
+`save_closeout_attendance` — the initial `get_shift_by_id` call had no
+`for_update=True`.
+
+**Fix:** locks the shift row first (`get_shift_by_id(..., for_update=True)`),
+matching `finalize_shift` and `save_closeout_calls`. Grepped for other
+callers that mutate an existing `ShiftAttendance` row ahead of a
+`_user_in_org`/other `SELECT` in the same method; `save_closeout_attendance`
+is the only one — `member_check_in` (finding 2) and `save_closeout_calls`
+(finding 4) both already lock the shift first.
+
+**Regression test:**
+`backend/tests/test_shift_closeout_attendance_lock_order_race.py` — same
+blocking-proof pattern as findings 3/4: two real, independently-committing
+sessions; session A holds the shift lock exactly as `member_check_in` does;
+session B runs the real, unmodified `save_closeout_attendance` with two
+entries (one for a member with a pre-existing attendance row, one for a new
+member, to exercise the mutate-then-autoflush shape Codex named) and is
+proven to block on A's lock. Confirmed failing (`asyncio.TimeoutError` —
+`save_closeout_attendance` never even attempts a locking read pre-fix) via
+`git stash push -u` on the fix alone (the only diff in the file), passing
+with the fix restored, stable across 3 repeated runs.
+
 ## Guard test added (pass 11)
 
 - `backend/tests/test_shift_check_in_race.py` —
@@ -467,19 +511,24 @@ test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
 None` and `TypeError` surfaced as `error`) via `git stash push -u`
   isolating the new `"refresh"` listener registration alone, confirmed
   passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_closeout_attendance_lock_order_race.py` —
+  `TestSaveCloseoutAttendanceLocksTheShiftRowFirst::test_save_closeout_attendance_blocks_on_a_concurrent_check_ins_shift_lock`
+  (finding 7, above). Confirmed failing (`asyncio.TimeoutError`) against the
+  pre-fix method via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
 
-## Completion gate (pass 11, round 5 — Codex findings on PR #2428)
+## Completion gate (pass 11, round 6 — Codex findings on PR #2428)
 
-| Check                                                                                                                                                                                                                              | Result                                                                                |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                      | ✅ 0 violations                                                                       |
-| `black --check app/ tests/ alembic/`                                                                                                                                                                                               | ✅ clean                                                                              |
-| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                          | ✅ clean                                                                              |
-| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py tests/test_shift_refresh_utc_tagging.py` | ✅ 6 passed, 3 repeated runs, no flakiness                                            |
-| `pytest tests/test_scheduling.py::TestShiftCRUD::test_update_shift_validates_effective_time_range`                                                                                                                                 | ✅ 8 passed (all parametrize cases, after the tz-normalization fix)                   |
-| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or shift_finalize or shift_closeout or shift_lock or shift_refresh or scheduling"`                                                        | ✅ 1131 passed, 1 skipped (pre-existing optional-dep skip)                            |
-| `pytest tests/` (full backend suite)                                                                                                                                                                                               | ✅ 11939 passed, 21 skipped (pre-existing Docker/optional-dependency skips), 0 failed |
-| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                        | n/a — no frontend files touched this round either                                     |
+| Check                                                                                                                                                                                                                                                                                      | Result                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                              | ✅ 0 violations                                                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                       | ✅ clean                                                                        |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                  | ✅ clean                                                                        |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py tests/test_shift_refresh_utc_tagging.py tests/test_shift_closeout_attendance_lock_order_race.py` | ✅ 7 passed, 3 repeated runs, no flakiness                                      |
+| `pytest tests/test_scheduling.py::TestShiftCRUD::test_update_shift_validates_effective_time_range`                                                                                                                                                                                         | ✅ 8 passed (all parametrize cases, after the tz-normalization fix)             |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or shift_finalize or shift_closeout or shift_lock or shift_refresh or scheduling"`                                                                                                                | ✅ 1132 passed, 1 skipped (pre-existing optional-dep skip)                      |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                       | pending — running in background; updated with the exact count once it completes |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                                                                                | n/a — no frontend files touched this round either                               |
 
 ### Verified good ✅ (re-confirmed this pass, mechanism named)
 

@@ -145,6 +145,34 @@ Completion gate green: flake8/black/isort clean; scoped keyword suite 1131
 passed / 1 pre-existing skip; full backend suite 11939 passed / 21
 pre-existing skips / 0 failed; no frontend files touched.
 
+**Round 6 (Codex review of round 5's own fix, same PR):** 1 more fixed, a
+third instance of findings 3/4's shape — P2, `save_closeout_attendance`
+(closeout wizard step 1) also read the shift with a plain, non-locking
+`get_shift_by_id`, then mutated an existing member's `ShiftAttendance` row
+in place before a later entry's `_user_in_org` lookup (the XC-1 in-org check
+for a client-supplied user id) triggered SQLAlchemy autoflush — an implicit
+UPDATE, and therefore an implicit attendance-row lock — before
+`shift.closeout_step` was ever assigned or the shift row locked. The reverse
+of `finalize_shift`'s (finding 3) now-fixed shift-then-attendance order: a
+closeout-attendance save updating one existing member and adding one new
+member, racing a finalize on the same shift, could deadlock. Same bug class
+as findings 3/4, reached through a different implicit flush (autoflush via
+`_user_in_org`'s `SELECT`, rather than a DELETE/UPDATE inside
+`record_shift_calls`). Fixed by locking the shift row first in
+`save_closeout_attendance` too; grepped for other methods that mutate an
+existing `ShiftAttendance` row ahead of a later `SELECT` in the same
+method — confirmed no third instance beyond this one and findings 2/4,
+which are already fixed. Verified with the same blocking-proof pattern as
+findings 3/4 (`test_shift_closeout_attendance_lock_order_race.py`, using two
+entries — one for a member with a pre-existing attendance row, one new — to
+exercise the mutate-then-autoflush shape): confirmed failing
+(`asyncio.TimeoutError`) via `git stash push -u` on the fix alone (the only
+diff in the file), passing with the fix restored, stable across 3 repeated
+runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass
+11, finding 7. Completion gate: flake8/black/isort clean; scoped keyword
+suite 1132 passed / 1 pre-existing skip; full backend suite run in
+progress, this note updated with the exact count once it completes.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 
