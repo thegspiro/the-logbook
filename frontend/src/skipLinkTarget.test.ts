@@ -50,9 +50,15 @@ const read = (relative: string): string => fs.readFileSync(path.join(SRC, relati
  * second direction honest — `href="#main-content"` (the skip link itself) and a
  * `getElementById('main-content')` call are not landmarks and must not read as
  * ones.
+ *
+ * The leading `(?<![\w-])` is doing real work, not defensive padding: a `\b`
+ * there matches after the hyphen in `data-id=`, so `data-id="main-content"`
+ * read as the landmark while creating no such DOM id at all. That is this
+ * file's own failure mode in miniature — a check satisfied by something that
+ * merely looks like the thing it is checking for.
  */
 const carriesTarget = (markup: string): boolean =>
-  /\bid=(?:["']main-content["']|\{\s*(['"`])main-content\1\s*\})/.test(markup);
+  /(?<![\w-])id=(?:["']main-content["']|\{\s*(['"`])main-content\1\s*\})/.test(markup);
 
 /**
  * The page components a chunk of route JSX references.

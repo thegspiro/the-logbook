@@ -154,10 +154,28 @@ const fillOpacity = (modifier: string | undefined): 'opaque' | 'translucent' | '
  */
 type WhiteLabel = { kind: 'white'; alpha: number } | { kind: 'unresolvable' } | { kind: 'other' };
 
+/** Is this foreground token pure white, however it is spelled? */
+const isWhite = (value: string): boolean => {
+  const fill = resolveFill(value);
+  return fill.kind === 'colour' && fill.rgb.r === 255 && fill.rgb.g === 255 && fill.rgb.b === 255;
+};
+
 const whiteLabel = (foreground: string | undefined): WhiteLabel => {
   if (foreground === undefined) return { kind: 'other' };
   const { value, modifier } = splitModifier(foreground);
-  if (value !== 'white') return { kind: 'other' };
+  // Resolved, not compared by spelling. `text-[#fff]` is the same colour as
+  // `text-white` and used to read as a different foreground entirely — the
+  // arbitrary-value fix from two rounds ago had been applied to fills only,
+  // which is the asymmetry this review keeps finding.
+  if (!isWhite(value)) {
+    // An arbitrary foreground this sweep cannot resolve has already passed
+    // `namesColour`, so it is a colour of some kind; whether it is white is
+    // exactly what cannot be decided, and guessing "not white" skips the
+    // pairing.
+    return value.startsWith('[') && resolveFill(value).kind === 'unresolvable'
+      ? { kind: 'unresolvable' }
+      : { kind: 'other' };
+  }
   const opacity = modifierOpacity(modifier);
   return opacity.kind === 'unresolvable' ? { kind: 'unresolvable' } : { kind: 'white', alpha: opacity.alpha };
 };
@@ -195,6 +213,9 @@ const TEXT_PATTERN =
  * `background-color` and used to pass.
  */
 const RED_600_FILL = String.raw`\bbg-red-600` + OPACITY_MODIFIER + String.raw`(?![\w-])(?!/)`;
+
+/** A CSS colour channel, clamped to the sRGB gamut exactly as a browser does. */
+const clampChannel = (raw: string | undefined): number => Math.max(0, Math.min(255, Number(raw)));
 
 /** sRGB channel from a linear-light one, per the sRGB transfer function. */
 const gammaEncode = (channel: number): number => {
@@ -319,12 +340,29 @@ const expandUtility = (name: string, seen = new Set<string>()): string => {
  * finding into a report at every call site that uses the app's most common
  * container.
  */
-const utilityForegroundText = (text: string): string =>
+const utilityTokens = (text: string, pattern: string): string =>
   [...text.matchAll(/(?:^|\s)([a-z][\w-]*)/g)]
     .map(([, token]) => token ?? '')
     .filter((token) => UTILITY_BODIES.has(token))
-    .flatMap((token) => [...expandUtility(token).matchAll(new RegExp(TEXT_PATTERN, 'g'))].map(([whole]) => whole))
+    .flatMap((token) => [...expandUtility(token).matchAll(new RegExp(pattern, 'g'))].map(([whole]) => whole))
     .join(' ');
+
+const utilityForegroundText = (text: string): string => utilityTokens(text, TEXT_PATTERN);
+
+/**
+ * The fill tokens the shared utilities named in a class string contribute.
+ *
+ * Borrowed **only** when the call site supplies the white label itself, and
+ * that condition is the whole design. `card text-white` renders white on
+ * `bg-theme-surface`, which is very nearly white in the light theme — invisible
+ * — and neither pass could see it: the stylesheet pass skips `card` because its
+ * own body has no white text, and the call-site pass saw no fill. Borrowing
+ * fills unconditionally would instead report every `card` in the app against a
+ * translucent token, so the qualifying foreground is what makes this safe as
+ * well as what makes it necessary.
+ */
+const utilityFillText = (text: string): string =>
+  `${utilityTokens(text, FILL_PATTERN)} ${utilityTokens(text, SEMANTIC_FILL_PATTERN)}`;
 
 /**
  * The semantic theme tokens, resolved per theme.
@@ -476,7 +514,11 @@ const cssColour = (text: string): { r: number; g: number; b: number } | null => 
   const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
   if (rgb) {
     if (!opaqueAlpha(rgb[4])) return null;
-    return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
+    // CSS clamps an out-of-range channel to the sRGB gamut, so `rgb(999 999
+    // 999)` paints white. Passing 999 through to the luminance formula
+    // computed a colour no browser shows and measured white-on-white as
+    // passing.
+    return { r: clampChannel(rgb[1]), g: clampChannel(rgb[2]), b: clampChannel(rgb[3]) };
   }
 
   const hsl = /^hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
@@ -534,7 +576,17 @@ const resolveFill = (key: string): FillColour => {
     // for that is `bg-cover`, and a false report is something a reader can
     // correct while a silent skip is what let `bg-[white] text-white` through.
     const bare = /^[a-z]+$/i.test(inner.trim());
-    return bare || /^(?:#|var\(|color-mix\(|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\()/i.test(inner.trim())
+    // A gradient is not a colour, but it *is* what the label crosses, so it
+    // belongs with the unresolvable colours rather than with background-size.
+    // Tailwind's own `from-`/`to-` gradients are already swept stop by stop;
+    // an arbitrary one is the same thing spelled differently, and classifying
+    // it `not-a-colour` skipped `bg-[linear-gradient(white,white)] text-white`
+    // in silence. A `url(...)` image stays out: it is raster content no source
+    // sweep can measure, and the app uses those deliberately.
+    const gradient = /^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(inner.trim());
+    return bare ||
+      gradient ||
+      /^(?:#|var\(|color-mix\(|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\()/i.test(inner.trim())
       ? { kind: 'unresolvable' }
       : { kind: 'not-a-colour' };
   }
@@ -957,13 +1009,35 @@ describe('primary fill contrast', () => {
      * to neither this pass nor the stylesheet pass (the fill is not in the
      * stylesheet).
      */
-    const foregrounds = (text: string): Map<string, string> => {
+    const foregrounds = (text: string, sameList = true): Map<string, string> => {
       const found = new Map<string, string>();
       for (const [, variant, colour, modifier] of `${utilityForegroundText(text)} ${text}`.matchAll(
         new RegExp(TEXT_PATTERN, 'g')
       )) {
         if (!namesColour(colour ?? '')) continue;
-        found.set(canonicalPrefix(variant ?? ''), modifier ? `${colour}/${modifier}` : (colour ?? ''));
+        const key = canonicalPrefix(variant ?? '');
+        const token = modifier ? `${colour}/${modifier}` : (colour ?? '');
+        // Two different colours at the same variant: source order does NOT
+        // decide the winner. Tailwind emits its utilities in the stylesheet's
+        // own order, not the order they appear in a class string, so
+        // `text-white text-black` renders white — the map's last-write-wins
+        // read it as black and skipped an invisible pairing on `bg-white`.
+        // Rather than model Tailwind's sort, take the white one when either
+        // side is white: a class string with two conflicting same-variant
+        // foregrounds is defective however it resolves, and the reading that
+        // reports it is the one worth having.
+        //
+        // Only within ONE flat class list, though — `sameList`. A branch and
+        // the static text it sits inside are not co-active in this sense: the
+        // branch's `text-theme-text-primary` deliberately overrides a
+        // `text-white` in the shared part, which is a pattern the app uses and
+        // not a conflict at all. Applying the preference there reported
+        // `FloatingActionButton` and `EmailPlatformChoice`, both correct.
+        const existing = found.get(key);
+        if (sameList && existing !== undefined && existing !== token && isWhite(splitModifier(existing).value)) {
+          continue;
+        }
+        found.set(key, token);
       }
       return found;
     };
@@ -981,8 +1055,16 @@ describe('primary fill contrast', () => {
       // base fill in a theme the shared override always wins.
       inheritedContext = ''
     ) => {
-      const own = foregrounds(segment);
-      for (const [whole, variant, , key, modifier] of segment.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
+      const own = foregrounds(segment, inheritedContext === '');
+      // The fills a shared utility named here contributes, admitted only when
+      // a white label covers them. The reported class name is the utility's
+      // own (`bg-theme-surface`, not `card`); the file and line locate the call
+      // site, and the class string names the utility that brought it.
+      const borrowed = [...own.values()].some((value) => isWhite(splitModifier(value).value))
+        ? utilityFillText(segment)
+        : '';
+      const fillText = `${segment} ${borrowed}`;
+      for (const [whole, variant, , key, modifier] of fillText.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
         const opacity = fillOpacity(modifier);
         if (opacity === 'translucent') continue;
         if (opacity === 'unresolvable') {
@@ -1078,7 +1160,7 @@ describe('primary fill contrast', () => {
       // over this segment plus the static text it is a branch of: a `dark:`
       // sibling out there overrides an unprefixed fill in every branch.
 
-      for (const [whole, variant, fill, token, modifier] of segment.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))) {
+      for (const [whole, variant, fill, token, modifier] of fillText.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))) {
         const opacity = fillOpacity(modifier);
         if (opacity === 'translucent') continue;
         if (opacity === 'unresolvable') {
