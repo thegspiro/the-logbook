@@ -36,6 +36,25 @@ const SRC = path.dirname(fileURLToPath(import.meta.url));
 const read = (relative: string): string => fs.readFileSync(path.join(SRC, relative), 'utf8');
 
 /**
+ * Does this markup set the skip link's target id?
+ *
+ * JSX spells one attribute four ways — `id="main-content"`, `id='main-content'`,
+ * and either of those wrapped in braces as an expression — and every one of
+ * them renders the same DOM. An exact substring test recognises one, so
+ * `id={'main-content'}` reads to this file as no target at all, which is wrong
+ * in both directions at once: a page written that way is reported as missing a
+ * landmark it has, and a page *nested inside* AppLayout that writes it that way
+ * duplicates the id without the sweep below noticing.
+ *
+ * Matching on the attribute rather than the bare string is what keeps the
+ * second direction honest — `href="#main-content"` (the skip link itself) and a
+ * `getElementById('main-content')` call are not landmarks and must not read as
+ * ones.
+ */
+const carriesTarget = (markup: string): boolean =>
+  /\bid=(?:["']main-content["']|\{\s*(['"`])main-content\1\s*\})/.test(markup);
+
+/**
  * The page components a chunk of route JSX references.
  *
  * Opening tag names only. Two shapes defeat anything cleverer: a route's
@@ -247,17 +266,14 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
     // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
     // state, and OnboardingCheck has one.
     if (!/^\s*</.test(jsx)) return;
-    if (jsx.includes('id="main-content"')) return;
+    if (carriesTarget(jsx)) return;
 
     // A root that is a local component can carry the target itself —
     // `FinanceApprovalPage` renders every branch through one `<Shell>`.
     const root = /<([A-Z]\w+)/.exec(jsx);
     if (root?.[1]) {
       const rootDeclaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
-      if (
-        rootDeclaration &&
-        source.slice(rootDeclaration.index, rootDeclaration.index + 2000).includes('id="main-content"')
-      ) {
+      if (rootDeclaration && carriesTarget(source.slice(rootDeclaration.index, rootDeclaration.index + 2000))) {
         return;
       }
     }
@@ -471,7 +487,7 @@ describe('skip link target', () => {
     const offenders = globSync(path.join(SRC, '**/*.tsx'))
       .map((file) => path.relative(SRC, file))
       .filter((file) => !owners.has(file) && !file.endsWith('.test.tsx'))
-      .filter((file) => stripComments(read(file)).includes('id="main-content"'));
+      .filter((file) => carriesTarget(stripComments(read(file))));
 
     expect(
       offenders.map((file) => {

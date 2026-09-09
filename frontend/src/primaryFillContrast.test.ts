@@ -229,12 +229,212 @@ const semanticFill = (name: string): Map<string, string> => {
   return resolved;
 };
 
-/** The measured contrast of white on a palette entry, or null if unknown. */
-const whiteOn = (key: string): number | null => {
-  const rgb = PALETTE[key];
-  if (!rgb) return null;
-  return contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+/** An alpha channel that leaves the colour fully opaque (or is absent). */
+const opaque = (alpha: string | undefined): boolean => alpha === undefined || alpha === '1' || alpha === '100%';
+
+/** HSL -> sRGB, per the CSS Color specification's conversion. */
+const hslToRgb = (hDegrees: number, s: number, l: number): { r: number; g: number; b: number } => {
+  const h = ((hDegrees % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  const [r, g, b] = (
+    [
+      [c, x, 0],
+      [x, c, 0],
+      [0, c, x],
+      [0, x, c],
+      [x, 0, c],
+      [c, 0, x],
+    ] as const
+  )[Math.floor(h / 60) % 6] ?? [0, 0, 0];
+  return {
+    r: Math.round((r + m) * 255),
+    g: Math.round((g + m) * 255),
+    b: Math.round((b + m) * 255),
+  };
 };
+
+/**
+ * A CSS colour written by hand, resolved to RGB.
+ *
+ * Only the opaque forms resolve. A translucent one composites over whatever is
+ * beneath it and so has no single value to measure, which is the same reason
+ * `bg-red-600/20` is excluded everywhere else in this file. Tailwind writes
+ * spaces in an arbitrary value as underscores, so those are restored first.
+ */
+const cssColour = (text: string): { r: number; g: number; b: number } | null => {
+  const value = text.trim().replace(/_/g, ' ');
+
+  const hex = hexToRgb(value);
+  if (hex) return hex;
+
+  // Tailwind's own palette is authored with a percentage lightness; a
+  // hand-written arbitrary value may use the 0-1 form instead.
+  const oklch = /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)/.exec(value);
+  if (oklch) {
+    const lightness = Number(oklch[1]);
+    return oklchToRgb(oklch[2] ? lightness / 100 : lightness, Number(oklch[3]), Number(oklch[4]));
+  }
+
+  const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
+  if (rgb) {
+    if (!opaque(rgb[4])) return null;
+    return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]) };
+  }
+
+  const hsl = /^hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/.exec(value);
+  if (hsl) {
+    if (!opaque(hsl[4])) return null;
+    return hslToRgb(Number(hsl[1]), Number(hsl[2]) / 100, Number(hsl[3]) / 100);
+  }
+
+  return null;
+};
+
+/**
+ * What a fill token actually paints.
+ *
+ * Three outcomes, and keeping them apart is the whole point. `not-a-colour` is
+ * a token in the `bg-` namespace that sets something else entirely —
+ * `bg-[length:200px_100px]` compiles to background-size — and measuring it
+ * would report a failure against a colour that does not exist. `unresolvable`
+ * names a colour this sweep cannot compute (`bg-[var(--brand)]`, or a shade
+ * absent from the installed palette); those are reported rather than skipped,
+ * because silence on a fill nothing can clear reads as a pass.
+ *
+ * Arbitrary values are resolved here rather than being ignored: `bg-[#ffffff]
+ * text-white` is invisible text, and until this existed neither the call-site
+ * sweep, the standalone-literal prefilter nor the shared-utility pass matched
+ * an arbitrary fill at all — the one escape hatch from the whole file was
+ * spelling the colour out.
+ */
+type FillColour =
+  { kind: 'colour'; rgb: { r: number; g: number; b: number } } | { kind: 'unresolvable' } | { kind: 'not-a-colour' };
+
+const resolveFill = (key: string): FillColour => {
+  if (key.startsWith('[')) {
+    const inner = key.slice(1, key.endsWith(']') ? -1 : undefined);
+    const typed = /^([a-z-]+):([\s\S]*)$/i.exec(inner);
+    if (typed) {
+      // Tailwind's bracket syntax carries size, position, image and angle
+      // besides colour, and only the colour hint names one.
+      if ((typed[1] ?? '').toLowerCase() !== 'color') return { kind: 'not-a-colour' };
+      const rgb = cssColour(typed[2] ?? '');
+      return rgb ? { kind: 'colour', rgb } : { kind: 'unresolvable' };
+    }
+    const rgb = cssColour(inner);
+    if (rgb) return { kind: 'colour', rgb };
+    // An untyped bracket that did not parse. A colour function this sweep does
+    // not implement is still a colour and must be reported; a `url(...)` or a
+    // bare length is not a fill and must not be.
+    return /^(?:var\(|color-mix\(|lab\(|lch\(|oklab\(|color\()/i.test(inner.trim())
+      ? { kind: 'unresolvable' }
+      : { kind: 'not-a-colour' };
+  }
+  const rgb = PALETTE[key];
+  return rgb ? { kind: 'colour', rgb } : { kind: 'unresolvable' };
+};
+
+/** The measured contrast of white on a fill, or null when it does not resolve. */
+const whiteOn = (key: string): number | null => {
+  const fill = resolveFill(key);
+  if (fill.kind !== 'colour') return null;
+  return contrastRatio(relativeLuminance(fill.rgb.r, fill.rgb.g, fill.rgb.b), relativeLuminance(255, 255, 255));
+};
+
+/**
+ * A fill's variant prefix, then every less specific prefix it falls back to,
+ * longest first: `dark:hover:` -> `dark:hover:`, `dark:`, `hover:`, ``.
+ */
+const candidatePrefixes = (prefix: string): string[] => {
+  const variants = prefix.split(':').filter(Boolean);
+  const subsets: string[][] = [[]];
+  for (const variant of variants) {
+    for (const subset of [...subsets]) subsets.push([...subset, variant]);
+  }
+  return subsets.sort((a, b) => b.length - a.length).map((subset) => (subset.length ? `${subset.join(':')}:` : ''));
+};
+
+/**
+ * The variant prefix each theme paints its foreground through.
+ *
+ * `dark:` is the app's only theme variant (`@custom-variant dark (&:is(.dark
+ * *))`), and `ThemeContext` puts the `.dark` class on the high-contrast theme
+ * too, so a `dark:` foreground covers both of those and never light.
+ */
+const THEME_VARIANT: Record<string, string> = {
+  light: '',
+  dark: 'dark:',
+  'high-contrast': 'dark:',
+};
+
+/** Does a `dark:` sibling of this token actually set a colour? */
+const setsColour = (raw: string, word: string): boolean => {
+  const slash = raw.indexOf('/');
+  const opacity = slash === -1 ? null : raw.slice(slash + 1);
+  const value = slash === -1 ? raw : raw.slice(0, slash);
+  // A translucent replacement composites over what is beneath rather than
+  // replacing it; `/100` is the opaque colour itself.
+  if (opacity !== null && opacity !== '100') return false;
+  if (value === 'none') return false;
+  // `transparent` sets no colour on a flat background, but on a gradient stop
+  // it does replace: what shows is whatever backs it.
+  if (value === 'transparent') return word !== 'bg';
+  if (value.startsWith('[')) return resolveFill(value).kind !== 'not-a-colour';
+  if (value.startsWith('theme-')) return semanticFill(value).size > 0;
+  return PALETTE[value] !== undefined;
+};
+
+/**
+ * The themes a fill is actually painted in.
+ *
+ * A `dark:`-prefixed fill renders in dark and high-contrast and never in light,
+ * so measuring it against the light value reports a failure for a colour that
+ * theme never shows. The mirror case is an unprefixed fill that a `dark:`
+ * sibling overrides: it renders only in light.
+ *
+ * That second question is stated as an exclusion rather than a list of accepted
+ * shapes, and the inversion is the point. It was fixed three times by
+ * enumeration — first semantic tokens, then numeric shades, then keyword
+ * colours — and each round missed the next form and reported a *false* failure
+ * against a colour dark mode never paints. The question is not which spellings
+ * of a colour exist; it is whether the sibling establishes an opaque one, which
+ * `setsColour` answers by resolving the candidate rather than by its shape.
+ *
+ * Asked semantically for a second reason too: "looks opaque" was once too
+ * generous, accepting anything in the `bg-` namespace, and `bg-cover` sets
+ * background-size — so `bg-theme-text-muted dark:bg-cover text-white` was
+ * excused from dark entirely while still painting white on white.
+ *
+ * The capture class admits `:` so a typed arbitrary override
+ * (`dark:bg-[color:#000000]`) arrives whole; stopping at the colon handed
+ * `setsColour` the fragment `[color` and rejected a perfectly valid override.
+ */
+const themesFor = (haystack: string, matchPrefix: string, word: string): string[] => {
+  if (/(^|:)dark:/.test(matchPrefix)) return ['dark', 'high-contrast'];
+  const state = matchPrefix.replace(/(^|:)dark:/g, '$1');
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const overridden = [`dark:${state}${word}-`, `${state}dark:${word}-`].some((prefix) =>
+    [...haystack.matchAll(new RegExp(String.raw`\b${escape(prefix)}([A-Za-z0-9[\]#.,%():_/-]+)`, 'g'))].some(
+      ([, raw]) => setsColour(raw ?? '', word)
+    )
+  );
+  return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
+};
+
+/**
+ * Every fill token in a chunk of class text: `bg-` and the three gradient
+ * stops, numbered shades, the two keyword colours and arbitrary values alike.
+ *
+ * The trailing `(?![\w-])` replaces a `\b`, which could not follow the `]` of
+ * an arbitrary value without demanding a word character after it. `/100` is
+ * accepted because Tailwind emits it as the same fully opaque colour as the
+ * bare utility, so rejecting every opacity modifier let the identical broken
+ * pairing through with four characters appended; any other modifier is
+ * translucent and has no single value to measure.
+ */
+const FILL_PATTERN = String.raw`\b((?:[a-z-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|[a-z]+-\d{2,3}|white|black)(?:\/100)?(?![\w-])(?!/)`;
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];
@@ -345,35 +545,56 @@ describe('primary fill contrast', () => {
       for (const [, variant, hue, shade] of body.matchAll(/\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g)) {
         utilityForegrounds.set(variant ?? '', shade ? `${hue}-${shade}` : (hue ?? ''));
       }
-      const coveringForeground = (variant: string): string | undefined => {
-        const parts = variant.split(':').filter(Boolean);
-        for (let i = 0; i <= parts.length; i++) {
-          const candidate = parts.slice(i).length ? `${parts.slice(i).join(':')}:` : '';
-          const found = utilityForegrounds.get(candidate);
-          if (found !== undefined) return found;
+      const coveringForeground = (variant: string): string | undefined =>
+        candidatePrefixes(variant)
+          .map((candidate) => utilityForegrounds.get(candidate))
+          .find((found) => found !== undefined);
+
+      /**
+       * The foreground a given theme paints over a fill.
+       *
+       * Resolved per theme, exactly as the call-site sweep does, and that is
+       * the whole of it: `@apply bg-theme-text-muted text-black dark:text-white`
+       * paints white on `--text-muted`, which is `#ffffff` in dark — and asking
+       * only the unprefixed variant answered `text-black` and excused the
+       * utility. A body that adapts its foreground per theme is exactly the
+       * shape a shared utility is most likely to have, so resolving it once was
+       * wrong in the most likely case rather than an edge one.
+       */
+      const themeForeground = (variant: string, theme: string): string | undefined =>
+        coveringForeground(`${/(^|:)dark:/.test(variant) ? '' : (THEME_VARIANT[theme] ?? '')}${variant}`);
+
+      // All four fill prefixes, and arbitrary values and keyword colours
+      // alongside numbered shades. A gradient defined in a shared utility never
+      // writes its stops at the TSX call site, so the call-site sweep cannot
+      // see them and only this pass can — and the repository's own convention
+      // prefers these utilities over repeated inline classes, which makes it
+      // the more likely home for one, not the less.
+      //
+      // A palette colour does not change between themes, but the foreground
+      // over it does, so the pairing is still asked per theme: a body writing
+      // `bg-slate-600 text-slate-100 dark:text-white` is white-on-slate-600
+      // (4.40:1) in dark only, and resolving the foreground once missed it.
+      const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap(([, variant, prefix, key]) => {
+        const themes = themesFor(body, variant ?? '', prefix ?? '');
+        if (!themes.some((theme) => themeForeground(variant ?? '', theme) === 'white')) return [];
+        const fill = resolveFill(key ?? '');
+        // Not every token in the `bg-` namespace paints a colour;
+        // `bg-[length:200px_100px]` compiles to background-size.
+        if (fill.kind === 'not-a-colour') return [];
+        const ratio = whiteOn(key ?? '');
+        if (ratio === null) {
+          return [
+            `${name}: ${prefix}-${key} ${
+              (key ?? '').startsWith('[')
+                ? 'is an arbitrary value this sweep cannot resolve to a colour'
+                : 'is not in the installed Tailwind palette'
+            }`,
+          ];
         }
-        return undefined;
-      };
-      // All four fill prefixes, and keyword colours alongside numbered shades.
-      // A gradient defined in a shared utility never writes its stops at the
-      // TSX call site, so the call-site sweep cannot see them and only this
-      // pass can — and the repository's own convention prefers these utilities
-      // over repeated inline classes, which makes it the more likely home for
-      // one, not the less.
-      // `/100` is the opaque colour, as everywhere else in this file; a call
-      // site carries only the utility name, so a shade skipped here is skipped
-      // by every check.
-      const palette = [
-        ...body.matchAll(/\b((?:[a-z-]+:)*)(bg|from|via|to)-([a-z]+-\d{2,3}|white|black)(?:\/100)?\b(?!\/)/g),
-      ].flatMap(([, variant, prefix, key]) => {
-        if (coveringForeground(variant ?? '') !== 'white') return [];
-        return ((): string[] => {
-          const ratio = whiteOn(key ?? '');
-          if (ratio === null) return [`${name}: ${prefix}-${key} is not in the installed Tailwind palette`];
-          return ratio >= 7
-            ? []
-            : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
-        })();
+        return ratio >= 7
+          ? []
+          : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
       });
 
       // Semantic fills and stops, resolved per theme exactly as the call-site
@@ -381,25 +602,24 @@ describe('primary fill contrast', () => {
       // it under `text-white` is invisible there — and invisible to every other
       // guard too, since the stops never reach a TSX file.
       const semantic = [
-        ...body.matchAll(/\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?!\/)/g),
-      ].flatMap(([, variant, prefix, token]) =>
-        coveringForeground(variant ?? '') !== 'white'
-          ? []
-          : [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
-              const rgb = hexToRgb(value);
-              if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
-              const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
-              // The same 7:1 AAA floor the numeric branch above applies. This
-              // test's contract is that a *shared* utility clears AAA; 4.5:1 is
-              // the call-site floor, and using it here let a semantic shared
-              // fill regress to merely AA beside a numeric one that could not.
-              return ratio >= 7
-                ? []
-                : [
-                    `${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`,
-                  ];
-            })
-      );
+        ...body.matchAll(/\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?![/-])/g),
+      ].flatMap(([, variant, prefix, token]) => {
+        const themes = themesFor(body, variant ?? '', prefix ?? '');
+        return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
+          if (!themes.includes(theme)) return [];
+          if (themeForeground(variant ?? '', theme) !== 'white') return [];
+          const rgb = hexToRgb(value);
+          if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
+          const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+          // The same 7:1 AAA floor the numeric branch above applies. This
+          // test's contract is that a *shared* utility clears AAA; 4.5:1 is
+          // the call-site floor, and using it here let a semantic shared
+          // fill regress to merely AA beside a numeric one that could not.
+          return ratio >= 7
+            ? []
+            : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`];
+        });
+      });
 
       return [...palette, ...semantic];
     });
@@ -449,18 +669,14 @@ describe('primary fill contrast', () => {
     // unknown must fail loudly ("add its hex") rather than be skipped. Building
     // the alternation out of the palette made the sweep self-limiting — the one
     // shape it could never report was the one nobody had measured yet.
-    // `bg-` and the three gradient stops together. A gradient fill is still a
-    // fill — `from-red-600 to-orange-600` under `text-white` is a button, and
-    // orange-600 is 3.60:1 — but axe cannot measure one (it abstains with
-    // "background gradient") and the `bg-` sweep never looked at it, so this
-    // whole class of control was unmeasured on both sides. Every stop is
-    // checked, because the worst stop is what the label crosses.
     //
-    // `/100` is accepted here for the same reason as in the semantic loop
-    // below: Tailwind emits it as the fully opaque colour, so rejecting every
-    // opacity modifier let the identical broken pairing through with two
-    // characters appended. A translucent stop has no single value and stays out.
-    const fillPattern = String.raw`\b((?:[a-z-]+:)*)(?:bg|from|via|to)-([a-z]+-\d{2,3}|white|black)(?:\/100)?\b(?!/)`;
+    // `bg-` and the three gradient stops together, via the shared FILL_PATTERN.
+    // A gradient fill is still a fill — `from-red-600 to-orange-600` under
+    // `text-white` is a button, and orange-600 is 3.60:1 — but axe cannot
+    // measure one (it abstains with "background gradient") and the `bg-` sweep
+    // never looked at it, so this whole class of control was unmeasured on both
+    // sides. Every stop is checked, because the worst stop is what the label
+    // crosses.
     const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
 
     /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
@@ -470,19 +686,6 @@ describe('primary fill contrast', () => {
         found.set(variant ?? '', shade ? `${hue}-${shade}` : (hue ?? ''));
       }
       return found;
-    };
-
-    /**
-     * A fill's variant prefix, then every less specific prefix it falls back
-     * to, longest first: `dark:hover:` -> `dark:hover:`, `dark:`, `hover:`, ``.
-     */
-    const candidatePrefixes = (prefix: string): string[] => {
-      const variants = prefix.split(':').filter(Boolean);
-      const subsets: string[][] = [[]];
-      for (const variant of variants) {
-        for (const subset of [...subsets]) subsets.push([...subset, variant]);
-      }
-      return subsets.sort((a, b) => b.length - a.length).map((subset) => (subset.length ? `${subset.join(':')}:` : ''));
     };
 
     const offenders: string[] = [];
@@ -499,7 +702,7 @@ describe('primary fill contrast', () => {
       inheritedContext = ''
     ) => {
       const own = foregrounds(segment);
-      for (const [whole, variant, key] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
+      for (const [whole, variant, , key] of segment.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
         const prefix = variant ?? '';
         // The foreground that covers this fill, most specific first. A
         // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
@@ -509,9 +712,20 @@ describe('primary fill contrast', () => {
           .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
           .find((value) => value !== undefined);
         if (fg !== 'white') continue;
+        const fill = resolveFill(key ?? '');
+        // A token in the `bg-` namespace that paints no colour is not a fill:
+        // `bg-[length:200px_100px]` compiles to background-size, and reporting
+        // it would be a complaint about a colour that does not exist.
+        if (fill.kind === 'not-a-colour') continue;
         const ratio = whiteOn(key ?? '');
         if (ratio === null) {
-          offenders.push(`${path.relative(SRC, file)}:${line} — ${whole} is not in the installed Tailwind palette`);
+          offenders.push(
+            `${path.relative(SRC, file)}:${line} — ${whole} ${
+              (key ?? '').startsWith('[')
+                ? 'is an arbitrary value this sweep cannot resolve to a colour'
+                : 'is not in the installed Tailwind palette'
+            }`
+          );
           continue;
         }
         if (ratio < 4.5) {
@@ -540,12 +754,6 @@ describe('primary fill contrast', () => {
       // puts a muted fill and a white foreground from two different branches on
       // one line, and reading them as one pairing is how this sweep reported
       // nine surfaces that render nothing of the kind.
-      const THEME_VARIANT: Record<string, string> = {
-        light: '',
-        dark: 'dark:',
-        'high-contrast': 'dark:',
-      };
-
       // The trailing `(?!-)` rejects a class name built by interpolation. A
       // surface utility with a `${...}` suffix would otherwise capture with a
       // dangling hyphen and report twenty "resolves to no theme value" findings
@@ -570,91 +778,15 @@ describe('primary fill contrast', () => {
       // pairing with two characters appended. A genuinely translucent stop has
       // no single value to measure and stays out.
       //
-      // A stop's own variant decides which themes it renders in. `dark:` is the
-      // app's only theme variant (`@custom-variant dark (&:is(.dark *))`), and
-      // high-contrast carries the `.dark` class too, so a `dark:` fill is
-      // painted in those two and never in light. Measuring it against the light
-      // value reports a failure for a colour that theme never shows — which
-      // would block the adaptive gradients this sweep exists to encourage.
-      const themesFor = (matchPrefix: string, word: string): string[] => {
-        if (/(^|:)dark:/.test(matchPrefix)) return ['dark', 'high-contrast'];
-        // The mirror case: an unprefixed stop that a `dark:` sibling overrides
-        // renders only in light. The sibling can be in this segment or in the
-        // shared static text the segment is a branch of — branch splitting
-        // hands over the inherited *foregrounds*, and this is the fill half of
-        // the same context.
-        //
-        // Stated as an exclusion rather than a list of accepted shapes, and
-        // that inversion is the point.
-        //
-        // This matcher was fixed three times by enumeration — first semantic
-        // tokens, then numeric shades, then keyword colours — and each round
-        // missed the next form (`dark:bg-black`, `dark:bg-[#0a0a0a]`) and
-        // reported a *false* failure against a colour dark mode never paints.
-        // The question is not which spellings of a colour exist; it is whether
-        // the sibling establishes an opaque one. So anything opaque counts, and
-        // only what genuinely fails to override is excluded: `transparent` and
-        // `none` set no colour, and a translucent `/NN` composites over what is
-        // beneath rather than replacing it. `/100` is opaque, as everywhere
-        // else in this file.
-        //
-        // The two trailing lookaheads both matter. The first forces the value
-        // to be maximal, so `dark:bg-slate-950/50` cannot backtrack to
-        // `slate-95` and slip past the opacity check on the `0` that follows.
-        // Does the `dark:` sibling actually set a colour?
-        //
-        // Asked semantically rather than by shape, because "looks opaque" was
-        // too generous: it accepted anything in the `bg-` namespace, and
-        // `bg-cover` sets background-size. `bg-theme-text-muted
-        // dark:bg-cover text-white` was therefore excused from dark entirely
-        // while still painting white on white — an inversion I introduced to
-        // escape enumerating colour *spellings*, which then swept in utilities
-        // that are not colours at all. Resolving the candidate answers both
-        // questions at once and cannot drift as the palette changes.
-        const setsColour = (raw: string): boolean => {
-          const slash = raw.indexOf('/');
-          const opacity = slash === -1 ? null : raw.slice(slash + 1);
-          const value = slash === -1 ? raw : raw.slice(0, slash);
-          // A translucent replacement composites over what is beneath rather
-          // than replacing it; `/100` is the opaque colour itself.
-          if (opacity !== null && opacity !== '100') return false;
-          if (value === 'none') return false;
-          // `transparent` sets no colour on a flat background, but on a
-          // gradient stop it does replace: what shows is whatever backs it.
-          if (value === 'transparent') return word !== 'bg';
-          // An arbitrary value is only an override if it is a *colour*.
-          // Tailwind's bracket syntax also carries background-size, position
-          // and image — `dark:bg-[length:200px_100px]` compiles to
-          // background-size — so accepting every bracketed value re-made the
-          // `bg-cover` mistake one syntax over. Unrecognised shapes are
-          // rejected rather than assumed: excusing a fill that is not really
-          // overridden hides a defect, while measuring one that is produces a
-          // visible complaint someone can correct.
-          if (value.startsWith('[')) {
-            const inner = value.slice(1, value.endsWith(']') ? -1 : undefined);
-            if (/^(?:length|size|position|image|url|angle|percentage|number|integer):/i.test(inner)) return false;
-            return /^(?:color:|#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\(|var\()/i.test(inner);
-          }
-          if (value.startsWith('theme-')) return semanticFill(value).size > 0;
-          return PALETTE[value] !== undefined;
-        };
-
-        const state = matchPrefix.replace(/(^|:)dark:/g, '$1');
-        const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const haystack = `${segment} ${inheritedContext}`;
-        const overridden = [`dark:${state}${word}-`, `${state}dark:${word}-`].some((prefix) =>
-          [...haystack.matchAll(new RegExp(String.raw`\b${escape(prefix)}([A-Za-z0-9[\]#.,%()_/-]+)`, 'g'))].some(
-            ([, raw]) => setsColour(raw ?? '')
-          )
-        );
-        return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
-      };
+      // Which themes a stop renders in is decided by the shared `themesFor`,
+      // over this segment plus the static text it is a branch of: a `dark:`
+      // sibling out there overrides an unprefixed fill in every branch.
 
       for (const [, variant, fill, token] of segment.matchAll(
         /\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?![/-])/g
       )) {
         const prefix = variant ?? '';
-        const themes = themesFor(prefix, fill ?? '');
+        const themes = themesFor(`${segment} ${inheritedContext}`, prefix, fill ?? '');
         const perTheme = semanticFill(token ?? '');
         if (perTheme.size === 0) {
           // Only report a token nothing renders if something did pair a
@@ -787,9 +919,14 @@ describe('primary fill contrast', () => {
         // one discarded every standalone *gradient*, since its own `bg-` is
         // `bg-linear-to-r` and matches neither shape — so a hoisted
         // `'bg-linear-to-r from-red-600 to-orange-600 text-white'` was measured
-        // by nothing, numeric stops and all. Both gaps are the same mistake:
-        // the prefilter has to admit whatever the passes below can measure.
-        if (!/\b(?:bg|from|via|to)-(?:[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)\b/.test(value)) continue;
+        // by nothing, numeric stops and all. Arbitrary values were the third
+        // instance of it: once `inspect` learned to resolve them, a prefilter
+        // that still admitted only named shades kept every hoisted one out.
+        // All three gaps are the same mistake: the prefilter has to admit
+        // whatever the passes below can measure, so it is kept deliberately
+        // looser than they are rather than mirroring their patterns.
+        if (!/\b(?:bg|from|via|to)-(?:\[[^\]\s]*\]|[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)/.test(value))
+          continue;
         if (covered.some((range) => index >= range.start && index < range.end)) continue;
         found.push({ value, line: source.slice(0, index).split('\n').length });
       }
