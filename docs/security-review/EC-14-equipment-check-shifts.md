@@ -97,8 +97,38 @@ already merged:
   (officer-self-check three lines above the new call, unchanged) still
   applies before any of this code runs.
 
-**No finding.** This is exactly the shape pass 2's adjacent-file reviews
-established for this doc: a change inside this feature's own service class,
+**The frontend half of this same commit was missed entirely on the first
+pass, and Codex caught it.** `git show --stat 360306d42` shows the commit
+also touches four frontend files — `CallTypeChips.tsx` (new component),
+`CallTypeChips.test.tsx` (new, 10 tests), `useCallTypeLabels.ts` (new
+`useOrgCallTypes` hook), `schedulingStore.ts` (a new `callTypes` field), and
+`ShiftReportsTab.tsx` (wires them in) — which the backend review above
+never looked at, even though they are what decides the values sent to
+`update_report`. Read all four:
+
+- `CallTypeChips.tsx`'s `orgCallTypeChoices` builds its choice list from two
+  sources only: the org's own configured types (`configured`, arriving via
+  `schedulingStore`'s already-reviewed `loadSettings()`, session-scoped) and
+  values already present on the report being edited (`stored`, i.e. this
+  same report's own `call_types` — not client-injectable beyond what a prior,
+  already-validated write put there). Neither source lets an officer put an
+  arbitrary or another organization's slug into the picker.
+- Even if a client bypassed this picker and sent an arbitrary string
+  directly to `update_report` anyway, the backend's own
+  `_edit_preserves_org_slugs` (reviewed above) is what actually enforces the
+  invariant, independent of anything the frontend offers — this UI is a
+  convenience for staying inside the rule, not the enforcement of it.
+- `useOrgCallTypes`/`schedulingStore`'s new `callTypes` field only read an
+  existing, already org-scoped settings response; no new endpoint, no new
+  client-supplied id.
+- Grepped all four files for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, raw `fetch(`, `.toLocale*` — zero hits.
+  `npx vitest run src/modules/scheduling/components/CallTypeChips.test.tsx`
+  — 10/10 passed.
+
+**No finding**, on either half of `360306d42` now. This is exactly the
+shape pass 2's adjacent-file reviews established for this doc: a change
+inside this feature's own service class,
 already merged by a different (non-rotation) workflow, checked against the
 seven dimensions from this feature's lens rather than re-trusted because it
 shipped clean elsewhere.
@@ -148,8 +178,10 @@ correct locations: `EquipmentCheckForm.tsx` (+21/-4),
 `MyEquipmentPage.tsx` (+3/-3), `ApparatusDetailPage.tsx` (+13/-9,
 `modules/inventory/pages/` — a different file from the same-named
 `modules/apparatus/pages/ApparatusDetailPage.tsx`, not this feature's),
-`FleetBoardPage.tsx` (+9/-5), `MyChecklistsPage.tsx` (+1/-1), plus 15 new
-`apiCache.ts` `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entries — and,
+`FleetBoardPage.tsx` (+9/-5), `MyChecklistsPage.tsx` (+1/-1), plus 17 new
+`apiCache.ts` `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entries across
+three commits (corrected below — the first draft counted 15, missing two
+from separate commits) — and,
 at the corrected paths, `pages/scheduling/ShiftDetailPanel.tsx` (**+1806/
 -1553**) and `pages/scheduling/ShiftCheckInPage.tsx` (+1/-1). `CheckLogPage.
 tsx`, `ApparatusInventoryPage.tsx` and `EquipmentChecksTab.tsx` — the
@@ -226,15 +258,28 @@ confirm`/`alert`/`prompt`, raw `fetch(`, `.toLocale*`) — zero hits.
   addition and two touch-target-size class additions (`max-md:min-h-[44px]
 max-md:min-w-[44px]`, CLAUDE.md's mobile-touch-target convention).
   Cosmetic only.
-- **`apiCache.ts`** — the 15 new entries are `SEC4-3`'s pinned PII
-  exclusions (`docs/security-review/SEC-00-cross-cutting-baseline.md` pass
-  4), already reviewed under feature 00's own lens; re-confirmed present
-  rather than re-derived. One entry, `/fulfillment-options`, is explicitly
-  documented in-file as _not_ a PII exclusion (a freshness concern for a
-  live stock count, not member data) — read the comment and agree with the
-  reasoning: nothing in the new endpoint's response (traced above,
-  `get_fulfillment_options`) carries a name or other `PII_FIELDS`-shaped
-  value, only item/quantity/compatibility facts about catalog stock.
+- **`apiCache.ts`** — **17 new entries, not 15** (the first draft counted
+  only `SEC4-3`'s own additions and missed the other two, from two different
+  commits — caught on Codex review). `git diff b267ee1ca..HEAD` on this file
+  is 36 added lines across three commits:
+  - 15 are `SEC4-3`'s pinned PII exclusions
+    (`docs/security-review/SEC-00-cross-cutting-baseline.md` pass 4, commit
+    `ae423afa`), already reviewed under feature 00's own lens; re-confirmed
+    present rather than re-derived.
+  - 1 is `/inventory/items/colors` (commit `9c3ff748`) — **not this
+    feature's finding either**: `git show --stat 9c3ff748` traces it to
+    `FE5-34-frontend-shared.md` (Feature 34, frontend-shared's own rotation
+    entry), which found `GET /inventory/items/colors` wrongly cleared as
+    "no free-text field" and left globally cacheable, when `color` is an
+    unconstrained `Optional[str]` up to 50 characters. Already fixed there,
+    with its own regression test; confirmed present at
+    `apiCache.ts:98`, not re-reviewed here to avoid duplicating that entry.
+  - 1 is `/fulfillment-options` (commit `c2b9818d`), explicitly documented
+    in-file as _not_ a PII exclusion (a freshness concern for a live stock
+    count, not member data) — read the comment and agree with the
+    reasoning: nothing in the new endpoint's response (traced above,
+    `get_fulfillment_options`) carries a name or other `PII_FIELDS`-shaped
+    value, only item/quantity/compatibility facts about catalog stock.
 
 **No findings** in the twelve declared frontend files, once the diff scope
 covers all twelve at their real locations rather than nine of them.
@@ -358,7 +403,7 @@ this feature is supposed to be watching in each.
 | `pytest tests/` (full backend suite)                                                                                                                                                                                                                                               | ✅ 11945 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed  |
 | `npm run typecheck` (the repo's own script — the aliased TS7 compiler via `tsc-native.mjs`, per CLAUDE.md's "Two TypeScript installs"; the draft ran plain `npx tsc --noEmit` instead, which resolves TS 5.9 — the linter's compiler, not the build's — corrected on Codex review) | ✅ 0 errors                                                                              |
 | `npx eslint .`                                                                                                                                                                                                                                                                     | ✅ 0 errors, 2 pre-existing warnings (`CallTypeChips.tsx`, scheduling module, unrelated) |
-| `npx vitest run src/utils/apiCache.test.ts src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`                                                                                                                                                                     | ✅ 185 passed                                                                            |
+| `npx vitest run src/utils/apiCache.test.ts src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx src/modules/scheduling/components/CallTypeChips.test.tsx`                                                                                                            | ✅ 195 passed                                                                            |
 
 ---
 

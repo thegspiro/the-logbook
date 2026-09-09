@@ -21,9 +21,9 @@ feature. The rotation cannot outrun its own review queue.
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
 ls-remote` checked against every equipment/EC-14 branch in this repo's
 history before creating it, per CLAUDE.md Pitfall #24; none existed). 0
-fixed, 0 flagged, after a real correction round. The draft's diff scope was
-too narrow in five ways Codex review caught: two routes omitted from the
-57→50 route-count correction itself (`list_templates`/`get_template`, both
+fixed, 0 flagged, after **two** rounds of Codex-caught diff-scope
+corrections. Round 1 (5 gaps): two routes omitted from the 57→50
+route-count correction itself (`list_templates`/`get_template`, both
 `check_view`-or-`check_submit`-or-`check_manage`); a second migration
 touching `shift_completion_reports`
 (`20260905_1900_c9f4a2b71d38_rename_reserved_call_type_slug`) not reviewed
@@ -33,15 +33,28 @@ actually `pages/scheduling/` — silently returned an empty diff instead of
 `ShiftDetailPanel.tsx`'s real +1806/-1553); `ApparatusDetailPage.tsx`/
 `FleetBoardPage.tsx`/`MyChecklistsPage.tsx` not diffed at all; and
 `scheduled_tasks.py`/`scheduling_service.py` — pass 2's own established
-adjacent-surface rule — not re-checked at all. All five verified against
-real code; the "no findings" conclusion held once corrected (the
-`scheduling_service.py` diff turned out to be almost entirely this
-rotation's own already-merged AP-13 findings 5–10, one genuinely new and
-genuinely out-of-scope Scheduling-only feature, and nothing EC-14-shaped).
-Also corrected the completion gate: `npx tsc --noEmit` resolves the
-linter's TS 5.9, not the build's aliased TS7 — reran as `npm run typecheck`,
-still 0 errors. Full write-up:
-`docs/security-review/EC-14-equipment-check-shifts.md` → Pass 4.
+adjacent-surface rule — not re-checked at all (the `scheduling_service.py`
+diff turned out to be almost entirely this rotation's own already-merged
+AP-13 findings 5–10, one genuinely new and genuinely out-of-scope
+Scheduling-only feature, and nothing EC-14-shaped). Also corrected the
+completion gate: `npx tsc --noEmit` resolves the linter's TS 5.9, not the
+build's aliased TS7 — reran as `npm run typecheck`, still 0 errors.
+**Round 2 (2 more gaps, on the round-1 fix itself):** the backend fix
+reviewed in round 1 (`_edit_preserves_org_slugs`, commit `360306d42`) has a
+frontend half — `CallTypeChips.tsx`, `useCallTypeLabels.ts`,
+`schedulingStore.ts`, `ShiftReportsTab.tsx`, all from the same commit — that
+round 1 never looked at, even though those files decide the values sent to
+the backend method it did review; and the `apiCache.ts` count was 17 new
+entries across three commits, not 15 — the other two
+(`/inventory/items/colors`, already fixed under Feature 34's own
+`FE5-34-frontend-shared.md`; `/fulfillment-options`) went unmentioned. Both
+verified against real code: the frontend half only ever offers the org's
+own configured slugs or values already on the report being edited, and the
+backend's own validation is what actually enforces the invariant regardless
+of what the UI sends; the two additional cache entries are each already
+disposed of by their own owning rotation entries. No finding either way.
+Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
+Pass 4.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13 closed, merge recorded via PR #2429), preserved for history</summary>
@@ -12147,7 +12160,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, corrected after Codex found the draft's diff scope too narrow in five ways
+### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, corrected across two Codex review rounds
 
 Diffed against pass 3's baseline (`b267ee1ca`): of the six declared backend
 files, only `shift_completion_service.py` changed (+50/-8), and that change
@@ -12191,6 +12204,28 @@ resolves the linter's TS 5.9 rather than the build's aliased TS7 — reran as
 `npm run typecheck` per CLAUDE.md's "Two TypeScript installs" section, still
 0 errors.
 
+**Round 2 (Codex review of the round-1 fix, same PR): 2 more scope gaps.**
+(a) The round-1 backend review (`_edit_preserves_org_slugs`, commit
+`360306d42`) never looked at that same commit's frontend half —
+`CallTypeChips.tsx` (new component + 10-test file), `useCallTypeLabels.ts`
+(new `useOrgCallTypes` hook), `schedulingStore.ts` (new `callTypes` field),
+`ShiftReportsTab.tsx` (wires them in) — even though those files decide the
+values sent to the backend method round 1 did review. Read all four: the
+picker only ever offers the org's own configured slugs (via the
+already-reviewed `loadSettings()`) or values already on the report being
+edited, so it cannot inject a foreign value; and the backend's own
+`_edit_preserves_org_slugs` is what actually enforces the invariant
+regardless of what the frontend sends, independent of this UI. Grepped for
+the checklist's red flags — zero hits — and ran
+`CallTypeChips.test.tsx` (10/10). (b) The `apiCache.ts` diff is 17 new
+entries across three commits, not 15 — round 1 counted only `SEC4-3`'s
+additions. The other two: `/inventory/items/colors` is already fixed under
+Feature 34's own `FE5-34-frontend-shared.md` (a free-text, unconstrained
+column wrongly cleared as safe); `/fulfillment-options` was already
+dispositioned in round 1's write-up, just not counted in the running total.
+No finding either way — both gaps were about completeness of the record,
+not a live issue.
+
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
 
@@ -12198,9 +12233,9 @@ Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
 440 revisions, single head; scoped suite 397 passed / 1 pre-existing skip;
 full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `npm run
 typecheck` 0 errors; `eslint .` 0 errors (2 pre-existing, unrelated
-warnings); `vitest run apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx`
-185 passed. Rotation row 14 → ⏳ (awaiting PR merge). Next after merge: 15
-Scheduling.
+warnings); `vitest run apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx
+CallTypeChips.test.tsx` 195 passed. Rotation row 14 → ⏳ (awaiting PR
+merge). Next after merge: 15 Scheduling.
 
 ### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)
 
