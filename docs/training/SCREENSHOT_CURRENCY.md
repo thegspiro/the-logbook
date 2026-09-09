@@ -1,5 +1,36 @@
 # Screenshot currency
 
+## Disposition for September 8, 2026 — Operational Ranks and EVOC Levels moved into Members Administration
+
+Queue, not yet shot. Found rebasing this branch onto main through #2424 (merge
+base d24934d → 8077ad1): `03-15` on the settings-consolidation timeline this
+file already tracks, not a fresh redesign — same pattern as the earlier moves
+of Contact Visibility and Membership IDs off the global Settings page.
+
+`RanksSettingsSection` (rendered inline on the old global Settings page) was
+replaced by a standalone `RanksSection` at `/members/admin/settings/ranks`, and
+EVOC Levels — previously a sub-page of that same section — is now its own
+`EvocSection` at `/members/admin/settings/evoc`, gated on `apparatus.manage`
+rather than the ladder's `members.manage`/`settings.manage`.
+
+| Image area | Note |
+| --- | --- |
+| `03-33-settings-eligibility` | Manifest route is `/settings?tab=ranks`, which still **redirects** to `/members/admin/settings/ranks` rather than falling through to the dashboard — so the capture would not silently succeed against the wrong page, only against the wrong *chrome*: the old global-Settings shell instead of the Members Administration one the content now lives in. Repoint the manifest entry to the new route and recapture |
+| `/members/admin/settings/evoc` (EVOC Levels) | Never captured on its own — no prior manifest entry exists. The only existing EVOC shots are apparatus-form fields (`03-52`, `01-30`, `06-21`), not the settings ladder itself |
+| Any capture of the old global Settings page's section list | Loses the **Ranks** entry the sidebar used to show; two new rows (**Operational Ranks**, **EVOC Levels**) now live under Members Administration → Settings instead |
+
+`docs/training/03-scheduling.md` was already corrected in the same PR range (it
+now reads "Members Administration → Settings → Operational Ranks" throughout),
+so only the images lag, not the prose.
+
+Not investigated as part of this pass: whether the wider #2424/#2420/#2430
+range changed anything else worth a queue entry beyond this move — this entry
+covers only what the diff against the prior rebase point (d24934d) surfaced by
+inspection, not a full manual audit of the merged screens. `audit_images.py
+--baseline` and `status_report.py` both report clean (no new automated
+findings; 567/567 placeholders still filled), but neither check looks at
+navigation or component identity, which is what actually changed here.
+
 ## Disposition for September 7-8, 2026 - the items list gained pinning and grouping
 
 **Everything this change invalidated has been re-shot, so this section adds no
