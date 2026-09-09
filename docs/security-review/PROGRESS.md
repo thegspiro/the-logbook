@@ -37,7 +37,27 @@ code-health fix, not a reason to hold the rotation open. Full completion
 gate re-run and confirmed green on the fresh branch before pushing.
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged mid-review before round 3's fix landed), preserved for history</summary>
+<summary>Superseded — prior Open PR note ("None" after PR #2430's merge, recorded via docs-only PR #2431, before EC-15's merge-race was discovered), preserved for history</summary>
+
+**None.** PR #2430 (Feature 14, Equipment check & shifts, pass 4) merged
+clean — 17/17 CI checks green, `mergeable_state: clean`, final Codex review
+(commit `db6af47`) completed with no further findings. Merged via merge
+commit `89c399c` (this one landed as a regular merge rather than the usual
+squash, in a same-day auto-merge; content is identical either way and no
+history was rewritten). The pass's own conclusion was "0 fixed, 0 flagged"
+after two rounds of Codex-caught diff-scope corrections (five gaps in round
+1, two more in round 2 — see the Log entry and
+`EC-14-equipment-check-shifts.md` for the full correction history).
+Rotation row 14 → ✅. Next: 15 Scheduling.
+
+**Correction:** written before EC-15's merge-race was discovered — #2430
+actually merged one commit before round 3's EC-15 fix landed, so the
+pass's true conclusion is "1 fixed (EC-15), 0 flagged", not "0 fixed, 0
+flagged" as stated above. See the current Open PR note at the top of this
+section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged), preserved for history</summary>
 
 **Feature 14 (Equipment check & shifts, pass 4)** — PR
 [#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
@@ -89,6 +109,8 @@ components` has nothing left to flag; updated both consumers. `npx eslint
 226 vitest tests passed across the four files this pass touched or reviewed.
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
+
+</details>
 
 </details>
 
@@ -12197,6 +12219,22 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ## Log
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
+
+**Merge-race note (30-minute rotation watchdog):** PR #2430 was merged at
+10:45:53 as fully green (17/17 CI checks, `mergeable_state: clean`, Codex
+review of commit `db6af47` — round 2's fix — completed with no further
+findings), so it was merged directly rather than left waiting. That merge
+landed one commit behind round 3's own fix (`0b466619c`, EC-15, pushed at
+10:52:37) — the watchdog check that triggered the merge ran against round
+2's head and had no way to see the round-3 push that followed it. It
+landed as a regular merge commit (`89c399c`) rather than the rotation's
+usual squash — the four pass commits are preserved individually on `main`
+rather than collapsed into one; no content difference, no history
+rewritten. EC-15 was carried forward on a fresh branch via `git
+cherry-pick` — see the Addendum below and PR #2432. Rotation row 14 → ✅
+either way: the feature's own review is complete and the corrected
+conclusion (1 fixed, 0 flagged) holds regardless of which commit the merge
+landed on. Next: 15 Scheduling.
 
 Diffed against pass 3's baseline (`b267ee1ca`): of the six declared backend
 files, only `shift_completion_service.py` changed (+50/-8), and that change
