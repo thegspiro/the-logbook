@@ -176,15 +176,32 @@ class ShiftCompletionService:
         Never promotes. A marker that was not already ``org_calls`` is not one
         this can restore, and a list emptied outright describes no value at
         all.
+
+        Locks the organization row (``for_update=True``) before deciding,
+        joining the same protocol
+        ``scheduling.py``'s ``_reject_deleting_a_used_call_type`` uses
+        (Pitfall #27, Codex review of SCH-13's first draft). Without it, an
+        edit that keeps the ``org_calls`` marker and a concurrent deletion of
+        the very slug being written could each pass their own check against a
+        stale read of the other's in-flight change: the edit sees the slug
+        still configured and preserves the marker, the deletion sees no
+        report yet naming it and proceeds, and the report is left claiming a
+        slug that no longer exists in settings — the identical orphan
+        SCH-13 closed for a call recorded during close-out, reached here by a
+        report edit instead. Only taken once the two early returns above have
+        ruled out the cases with nothing to protect (no marker to preserve, or
+        an emptied list that could not orphan anything either way), so an
+        ordinary narrative-only edit that never touches ``call_types`` costs
+        no lock at all.
         """
         if (report.data_sources or {}).get("call_types") != CALL_TYPES_FROM_ORG_CALLS:
             return False
         values = list(call_types or [])
         if not values:
             return False
-        in_force = await ShiftEligibilityService(self.db).effective_call_type_slugs_for(
-            str(report.organization_id)
-        )
+        eligibility = ShiftEligibilityService(self.db)
+        org = await eligibility._get_org(str(report.organization_id), for_update=True)
+        in_force = eligibility.effective_call_type_slugs(org) if org else set()
         return all(isinstance(v, str) and v in in_force for v in values)
 
     async def _shift_has_incident_rows(self, shift_id: str) -> bool:

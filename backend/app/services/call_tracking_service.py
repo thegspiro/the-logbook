@@ -129,14 +129,20 @@ class CallTrackingService:
         can only ever contain configured slugs. The database does the matching
         and stops at the first hit per slug.
 
-        ``for_update=True`` makes the ``org_calls`` half of this check a
-        locking read (Pitfall #27) — see :func:`_reject_deleting_a_used_call_type`
-        in ``scheduling.py``, the one caller for whom a plain ``SELECT`` would
-        answer from this transaction's own snapshot and miss a call recorded
-        by a concurrently-committing close-out. The ``shift_completion_reports``
-        half is not locked: a report is filed well after its shift's calls are
-        recorded, not in the same race window, so the same staleness risk
-        does not apply there.
+        ``for_update=True`` makes **both** halves of this check a locking
+        read (Pitfall #27). The ``org_calls`` half serializes against
+        :func:`_reject_deleting_a_used_call_type` in ``scheduling.py`` and a
+        concurrently-committing close-out (SCH-13's original scenario). The
+        ``shift_completion_reports`` half serializes against
+        ``ShiftCompletionService.update_report``/``_edit_preserves_org_slugs``:
+        a report is filed after its shift's calls, true, but it can be
+        *edited* at any later time to name a different slug while keeping the
+        ``org_calls`` marker, and that edit is not bound by the calls'
+        timing at all — a plain read here would let a deletion miss a report
+        edit that committed after the deletion's own transaction took its
+        snapshot, the identical staleness shape the ``org_calls`` half
+        exists to close (Codex review of this fix's first draft: this
+        distinction was wrong, and the two must be treated the same way).
         """
         locked = set(
             await self.type_usage_counts(organization_id, for_update=for_update)
@@ -172,14 +178,13 @@ class CallTrackingService:
                 )
             )
 
-        rows = (
-            await self.db.execute(
-                select(
-                    ShiftCompletionReport.call_types,
-                    ShiftCompletionReport.data_sources,
-                ).where(*conditions)
-            )
-        ).all()
+        report_query = select(
+            ShiftCompletionReport.call_types,
+            ShiftCompletionReport.data_sources,
+        ).where(*conditions)
+        if for_update:
+            report_query = report_query.with_for_update()
+        rows = (await self.db.execute(report_query)).all()
         for call_types, data_sources in rows:
             if (data_sources or {}).get("call_types") != CALL_TYPES_FROM_ORG_CALLS:
                 continue

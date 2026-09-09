@@ -1069,8 +1069,12 @@ the tracker's own legend and established convention.
 **PR note.** The draft PR ([#2435](https://github.com/thegspiro/the-logbook/pull/2435))
 merged before these four fixes were pushed — a merge race, not a rejection;
 see `PROGRESS.md`'s Open PR section for the full account. All four items
-below are carried on a same-day follow-up PR, the same shape the EC-15
-follow-up (Feature 14) used for the identical situation.
+below are carried on a same-day follow-up PR
+([#2437](https://github.com/thegspiro/the-logbook/pull/2437)), the same
+shape the EC-15 follow-up (Feature 14) used for the identical situation. A
+Codex review of #2437 itself then caught two further gaps in SCH-13's own
+locking fix — see "Round 2" in the SCH-13 write-up below — both fixed on
+the same branch before merge.
 
 **Baseline:** `8b89f319d` (the merge commit of PR #2212, pass 3's actual landing
 point — found via `git merge-base --is-ancestor` against pass 3's own tip
@@ -1307,7 +1311,7 @@ history row (a call whose type resolves to a raw slug instead of a label,
 and which can never again lock that slug's name from being reused for a
 differently-meant type), not unauthorized access or data exposure.
 
-**Fix:** threaded `for_update: bool = False` through
+**Fix (round 1):** threaded `for_update: bool = False` through
 `ShiftEligibilityService._get_org` and, in `call_tracking_service.py`,
 `get_settings` / `_valid_type_slugs` / `type_usage_counts` /
 `slugs_locked_by_history` (each defaulting to the prior plain-read
@@ -1329,24 +1333,87 @@ sufficient — the same "the row is locked and the count is stale anyway"
 trap FORM-10 closed — so `type_usage_counts`'s `OrgCall` query is _itself_
 also a locking read when `for_update=True`, verified directly against this
 codebase's own test database that MySQL permits `SELECT ... GROUP BY ...
-FOR UPDATE` without error (not assumed). The `ShiftCompletionReport` half
-of `slugs_locked_by_history` is deliberately left a plain read: a report is
-filed well after its shift's calls are recorded, not in the same race
-window, so the same staleness risk does not apply there — locking it would
-add contention with no corresponding correctness gain. Both new locking
-call sites acquire the organization row first and (optionally) the
-`org_calls` rows second, in the same order, so no lock-order inversion is
-introduced (the FAC-45 deadlock lesson).
+FOR UPDATE` without error (not assumed).
 
-**Guard test:** `tests/test_call_type_deletion_race.py` — two real,
-independently-committing sessions (not the savepoint-based `db_session`
-fixture, which never truly commits) with both transactions' REPEATABLE READ
-snapshots pinned via a throwaway real read before either coroutine's actual
-work starts, run through `asyncio.gather`. Asserts the winner-agnostic
-invariant: it is never the case that "brush" is both absent from settings
-and present on a committed `OrgCall` row. Confirmed failing reliably (5/5
-runs) against the unpatched code and passing reliably (5/5 runs) against
-the fix.
+**Round 2 — Codex review of the round-1 fix caught two further real gaps,
+both verified by reading the code directly and reproducing each with a
+guard test before fixing (not taken on the review's prose alone):**
+
+1. **Identity-map staleness — `_get_org`'s locking read never refreshed an
+   already-loaded `Organization` object.** `for_update=True` locks the row
+   and reads the latest committed data _at the database level_, but
+   SQLAlchemy's identity map returns an already-loaded Python object
+   unchanged unless the query also carries
+   `execution_options(populate_existing=True)` — the exact gotcha
+   `get_shift_by_id` already documents and handles for the identical shape.
+   `finalize_shift` (`scheduling_service.py`) loads `Organization` with a
+   plain, non-locking `select()` of its own (for its equipment-check and
+   call-tracking-mode logic) well before it ever reaches
+   `record_shift_calls`'s locking call — so a finalize that races a
+   settings deletion would still validate against the `Organization` object
+   `finalize_shift` loaded _before_ the lock, silently defeating round 1's
+   entire fix for exactly the caller SCH-13 was written to protect.
+   **Fixed:** `_get_org` now adds `.execution_options(populate_existing=True)`
+   alongside `.with_for_update()`, matching `get_shift_by_id`'s existing
+   pattern exactly.
+2. **The `ShiftCompletionReport` half of the usage check was wrongly
+   reasoned to be outside the race window.** Round 1's fix left this half a
+   plain read, reasoning "a report is filed well after its shift's calls,
+   not in the same race window." That covers report _creation_ and misses
+   report _editing_: `ShiftCompletionService.update_report` /
+   `_edit_preserves_org_slugs` can change an **existing** `org_calls`-sourced
+   report to newly name a different slug at any later time, entirely
+   independent of when its calls were recorded — and that edit never took
+   the organization lock at all. An officer editing a report to reference
+   "brush" and an admin deleting "brush" could each pass validation against
+   a stale read of the other's in-flight change: the edit sees "brush" still
+   configured and keeps the `org_calls` marker, the deletion's (still-plain)
+   report scan doesn't see the edit yet and proceeds — the identical orphan,
+   reached through the report-edit path instead of the close-out path.
+   **Fixed two ways:** `slugs_locked_by_history`'s `ShiftCompletionReport`
+   query is now also a locking read (`.with_for_update()`) when
+   `for_update=True` — this query selects bare columns rather than mapped
+   entities, so `populate_existing` doesn't apply to it; only the identity
+   map (round-2 gap 1) needed that option. And
+   `_edit_preserves_org_slugs` (`shift_completion_service.py`) now takes its
+   own locking read of the organization row
+   (`ShiftEligibilityService._get_org(..., for_update=True)`) before
+   deciding whether to preserve the marker, joining the same protocol —
+   scoped to only run past the method's two early returns, so an ordinary
+   narrative-only edit that never touches `call_types` (or one on a report
+   that was never `org_calls`-sourced, or one that empties the list) costs
+   no lock at all. Both new/changed locking call sites still acquire the
+   organization row first and the `org_calls`/`shift_completion_reports`
+   rows second, matching round 1's ordering — no lock-order inversion, no
+   new deadlock class (the FAC-45 lesson).
+
+**Guard tests:** `tests/test_call_type_deletion_race.py`, three classes:
+
+- `TestCallTypeDeletionRace` (round 1) — two real, independently-committing
+  sessions (not the savepoint-based `db_session` fixture, which never truly
+  commits) with both transactions' REPEATABLE READ snapshots pinned via a
+  throwaway real read before either coroutine's actual work starts, run
+  through `asyncio.gather`. Asserts the winner-agnostic invariant: never
+  both "brush" absent from settings and present on a committed `OrgCall`
+  row.
+- `TestPopulateExistingRefreshesTheLock` (round 2, gap 1) — a single
+  session takes a plain read of `Organization` first (matching
+  `finalize_shift`'s own shape), a second independent session commits a
+  real settings change, then the first session's locking `_get_org` call is
+  asserted to return the identity-mapped object refreshed with the second
+  session's committed value, not its own stale first read.
+- `TestReportEditVsDeletionRace` (round 2, gap 2) — same two-session,
+  pinned-snapshot, `asyncio.gather` shape as the round-1 test, but racing
+  `ShiftCompletionService.update_report` (editing an existing report to
+  newly name "brush") against the deletion guard instead of a close-out.
+  Asserts the same winner-agnostic invariant against the report's own
+  `call_types`/`data_sources` rather than `org_calls`.
+
+All three confirmed failing reliably against the code each is meant to
+guard (round 1's test against the pre-round-1 code from its own commit
+history; both round-2 tests confirmed failing 3/3 runs against the
+round-1-only fix, i.e. with round 2's changes reverted) and passing
+reliably (5/5 runs, all three together) against the fully-fixed code.
 
 **`calcom_service.py`'s 30-line change** (`parse_webhook_event`, now also
 recognizing `MEETING_ENDED` and dropping Cal.com-flagged no-show attendees
@@ -1399,18 +1466,19 @@ reviewed above was confirmed present and passing rather than written fresh:
 `test_reserved_call_type_slug_migration.py`, plus decline/late-signup cases
 inside `test_scheduling.py`.
 
-## Completion gate (pass 4)
+## Completion gate (pass 4, after both SCH-13 rounds)
 
-| Check                                                                                                         | Result                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `flake8 app/ tests/ alembic/`                                                                                 | ✅ 0 violations                                                                                                          |
-| `black --check app/ tests/ alembic/`                                                                          | ✅ 1556 files unchanged                                                                                                  |
-| `isort --check-only app/ tests/ alembic/`                                                                     | ✅ clean (installed, not skipped)                                                                                        |
-| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 440 revisions                                                                                            |
-| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1248 passed, 1 skipped (pre-existing optional-dep skip) — +1, the new SCH-13 guard test                               |
-| `pytest tests/test_call_type_deletion_race.py` — 5 runs each direction                                        | ✅ fails 5/5 on unpatched code, passes 5/5 on the fix (confirmed by temporarily reverting)                               |
-| `pytest tests/` (full backend suite)                                                                          | ✅ 11968 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1 over pre-fix                                |
-| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                     | ✅ 0 errors                                                                                                              |
-| `npx eslint .`                                                                                                | ✅ 0 errors                                                                                                              |
-| `npm run build` (added this round — see the Revision note)                                                    | ✅ built in 5.26s, PWA precache generated (364 entries) — pre-existing chunk-size warning only                           |
-| `npx vitest run src/modules/scheduling src/pages/scheduling`                                                  | ✅ 672 passed (42 files) — not mandatory, run anyway per pass 3's precedent, unaffected by this round's backend-only fix |
+| Check                                                                                                         | Result                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                 | ✅ 0 violations                                                                                                                                                           |
+| `black --check app/ tests/ alembic/`                                                                          | ✅ 1556 files unchanged                                                                                                                                                   |
+| `isort --check-only app/ tests/ alembic/`                                                                     | ✅ clean (installed, not skipped)                                                                                                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 440 revisions                                                                                                                                             |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1250 passed, 1 skipped (pre-existing optional-dep skip) — +2 over round 1, the two new round-2 guard tests                                                             |
+| `pytest tests/test_call_type_deletion_race.py` — round-1 test, 5 runs each direction                          | ✅ fails 5/5 on the pre-round-1 code, passes 5/5 on the round-1 fix                                                                                                       |
+| `pytest tests/test_call_type_deletion_race.py` — all 3 classes, run repeatedly each direction                 | ✅ the two round-2 tests fail 3/3 against round-1-only code (identity-map staleness and the report-edit race both reproduce), all 3 pass 5/5 against the fully-fixed code |
+| `pytest tests/` (full backend suite)                                                                          | ✅ 11970 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +2 over round 1                                                                                 |
+| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                     | ✅ 0 errors                                                                                                                                                               |
+| `npx eslint .`                                                                                                | ✅ 0 errors                                                                                                                                                               |
+| `npm run build`                                                                                               | ✅ built in 3.63s, PWA precache generated (364 entries) — pre-existing chunk-size warning only                                                                            |
+| `npx vitest run src/modules/scheduling src/pages/scheduling`                                                  | ✅ 672 passed (42 files) — not mandatory, run anyway per pass 3's precedent, unaffected by this round's backend-only fix                                                  |

@@ -62,17 +62,38 @@ duplicate form submissions. Guard test
 committing sessions with pinned REPEATABLE READ snapshots; confirmed
 failing reliably (5/5 runs) against the unpatched code and passing reliably
 (5/5) against the fix. The other three Codex findings: `npm run build` now
-run and green (5.26s, pre-existing chunk-size warning only);
-`shift_eligibility_service.py` (+183/-3) and `shift_completion_service.py`
-(+95/-1), both changed since pass 3 but absent from the draft's churn
-inventory, now read in full against all seven checklist dimensions — no
-new finding in either beyond SCH-13 itself. Full write-up:
-`docs/security-review/SCH-15-scheduling.md` → Pass 4. Next once this
-follow-up merges: 16 Events & requests.
+run and green; `shift_eligibility_service.py` (+183/-3) and
+`shift_completion_service.py` (+95/-1), both changed since pass 3 but
+absent from the draft's churn inventory, now read in full against all
+seven checklist dimensions — no new finding in either beyond SCH-13 itself.
 
-Full completion gate green: `flake8`/`black`/`isort` clean, migrations
-single-head (440 revisions), scoped + full backend tests passed (including
-the new race guard test, run 5× each direction), full backend suite passed,
+**Round 2 (Codex review of PR #2437 itself): 2 more real gaps in SCH-13's
+own fix, both fixed on the same branch.** (a) `_get_org`'s locking read
+never refreshed an already-loaded `Organization` object — SQLAlchemy's
+identity map returns a cached Python object unrefreshed unless the query
+also carries `execution_options(populate_existing=True)`, the exact gotcha
+`get_shift_by_id` already documents and handles. `finalize_shift` loads
+`Organization` with a plain read of its own before ever reaching the
+locking call, so this silently defeated the fix for exactly the caller
+SCH-13 exists to protect. (b) The `shift_completion_reports` half of the
+usage check was wrongly reasoned to be outside the race window ("a report
+is filed well after its shift's calls") — true of report _creation_, false
+of report _editing_: `ShiftCompletionService.update_report` /
+`_edit_preserves_org_slugs` can change an existing report to newly name a
+type at any later time and never took the organization lock at all. Fixed:
+`_get_org` now adds `populate_existing=True`; the report-usage query in
+`slugs_locked_by_history` is now also a locking read; and
+`_edit_preserves_org_slugs` takes its own locking organization read before
+deciding whether to preserve the `org_calls` marker. Two new guard-test
+classes (`TestPopulateExistingRefreshesTheLock`,
+`TestReportEditVsDeletionRace`) confirmed failing against the round-1-only
+fix and passing against the complete one. Full write-up (both rounds):
+`docs/security-review/SCH-15-scheduling.md` → Pass 4, SCH-13. Next once
+this follow-up merges: 16 Events & requests.
+
+Full completion gate green (after both rounds): `flake8`/`black`/`isort`
+clean, migrations single-head (440 revisions), scoped + full backend tests
+passed (including all three race guard tests), full backend suite passed,
 `npm run typecheck`/`eslint .` both 0 errors, `npm run build` green,
 scheduling frontend vitest passed (unaffected by this backend-only round).
 
@@ -12490,8 +12511,26 @@ when the merge landed, so `git checkout -b <branch> origin/main` carried
 them over with no cherry-pick needed. Follow-up PR:
 [#2437](https://github.com/thegspiro/the-logbook/pull/2437) — see the Open
 PR section above. All four Codex review threads on #2435 replied to
-(linking to #2437) and marked resolved. Next once #2437 merges: 16 Events
-& requests.
+(linking to #2437) and marked resolved.
+
+**Round-2 addendum.** A Codex review of #2437 itself (the SCH-13 fix
+above, not the original draft) caught two further real gaps in the
+locking fix, both fixed on the same branch: (a) `_get_org`'s locking read
+never carried `execution_options(populate_existing=True)`, so an
+already-loaded `Organization` object (e.g. `finalize_shift`'s own earlier
+plain read) stayed stale in the caller's hands even though the row was
+correctly locked at the database level — the identical gotcha
+`get_shift_by_id` already documents and handles; (b) the
+`shift_completion_reports` half of the usage check was reasoned to be
+outside the race window ("a report is filed well after its shift's
+calls"), which is true of creation and false of _editing_ —
+`ShiftCompletionService.update_report`/`_edit_preserves_org_slugs` can
+rename an existing report onto the candidate slug at any time and never
+took the organization lock. Both fixed (see the Open PR section's SCH-13
+paragraph above and `SCH-15-scheduling.md`'s SCH-13 write-up for the
+mechanism); two new guard-test classes added, both confirmed failing
+against the round-1-only fix and passing against the complete one. Next
+once #2437 merges: 16 Events & requests.
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
 

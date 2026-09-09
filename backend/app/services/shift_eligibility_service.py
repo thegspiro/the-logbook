@@ -152,10 +152,24 @@ class ShiftEligibilityService:
         ``settings.scheduling.call_tracking`` that must serialize against a
         concurrent writer rather than each reading its own stale snapshot of
         the other's in-flight change.
+
+        ``for_update=True`` also asks SQLAlchemy to refresh an already-loaded
+        object's attributes from the freshly-locked row
+        (``populate_existing``) — the same reasoning ``get_shift_by_id``
+        documents for the identical gotcha. ``finalize_shift``
+        (``scheduling_service.py``) loads the ``Organization`` row with a
+        plain, non-locking query of its own earlier in the same transaction,
+        before ever calling into a locking ``_get_org`` here; without
+        ``populate_existing``, the identity map would hand back that earlier
+        Python object unchanged, so the `FOR UPDATE` query would correctly
+        block and read the latest committed row at the database level while
+        every caller reading ``org.settings`` off the returned object still
+        saw the stale pre-lock values — silently defeating the lock's entire
+        purpose for the one thing it exists to fix.
         """
         query = select(Organization).where(Organization.id == organization_id)
         if for_update:
-            query = query.with_for_update()
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
