@@ -201,8 +201,8 @@ class OnboardingService:
         {
             "id": 11,
             "name": "roles",
-            "title": "Role Setup",
-            "description": "Configure roles and permissions",
+            "title": "Ranks & Positions",
+            "description": "Configure the rank ladder, positions and permissions",
             "required": False,
         },
         {

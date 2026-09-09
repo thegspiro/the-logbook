@@ -29,7 +29,13 @@ import {
   HeartPulse,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import {
+  OnboardingHeader,
+  ProgressIndicator,
+  BackButton,
+  AutoSaveNotification,
+  RankLadderSection,
+} from '../components';
 import { useOnboardingStore } from '../store';
 import {
   MODULE_CHECKBOX_TIERS,
@@ -571,15 +577,17 @@ const PositionSetup: React.FC = () => {
             <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-800">
               <Users className="h-8 w-8 text-white" aria-hidden="true" />
             </div>
-            <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">
-              Set Up Positions & Permissions
-            </h1>
-            <p className="text-theme-text-secondary mb-2 text-xl">Choose which positions your organization needs</p>
+            <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Set Up Ranks & Positions</h1>
+            <p className="text-theme-text-secondary mb-2 text-xl">
+              Describe the structure your department already uses
+            </p>
             <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
-              Select from common fire department positions or create your own. Each position determines what members can
-              view and manage.
+              First the rank ladder your members hold, then the positions that decide what they can view and manage.
+              Start from what we have suggested and change it to match your department — nothing here is fixed.
             </p>
           </div>
+
+          <RankLadderSection />
 
           {/* Info Banners */}
           <div className="mb-6 space-y-4">
