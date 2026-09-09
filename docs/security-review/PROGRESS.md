@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 12 (Facilities, pass 4)** — PR TBD, branch
+**Feature 12 (Facilities, pass 4)** — PR
+[#2425](https://github.com/thegspiro/the-logbook/pull/2425), branch
 `claude/security-review-facilities-pass4` (fresh name; no facilities-review
 branch exists locally or on origin from passes 1–3, so CLAUDE.md Pitfall #24
 poses no collision here). 1 fixed (FAC-46, HIGH — two unconditional
