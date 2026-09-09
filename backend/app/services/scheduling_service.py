@@ -7526,7 +7526,20 @@ class SchedulingService:
         override). ``pass_down_notes`` records the crew handoff.
         """
         try:
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            # for_update=True for lock-ordering consistency with
+            # member_check_in, not because finalization itself has a
+            # capacity race: that method now locks the shift row before
+            # touching ShiftAttendance, and this method locks ShiftAttendance
+            # rows first (via the auto-close-open-attendance flush below)
+            # before updating the shift row itself at commit. Two methods
+            # taking the same two locks in opposite orders is a textbook
+            # InnoDB deadlock — a check-in landing while an officer finalizes
+            # the same shift could have either transaction aborted with a
+            # deadlock error. Locking the shift here first makes both
+            # methods agree on shift-then-attendance ordering.
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
             if not shift:
                 return None, "Shift not found"
 

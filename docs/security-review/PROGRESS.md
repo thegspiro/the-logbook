@@ -32,10 +32,28 @@ for that pair). Rest of the feature re-verified clean: 88/88 + 5/5 route auth
 coverage, all 36 `SET NULL` FKs still `nullable=True`, all 4 `.ilike()` sites
 still escaped, both target endpoints the frontend's new archive-modal fix
 calls (`change_apparatus_status`/`archive_apparatus`) org-scoped and
-correctly gated. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
-→ Pass 11. Completion gate green (full backend suite: 11934 passed, 21
-pre-existing skips, 0 failed; flake8/black/isort clean; no frontend files
-touched this pass).
+correctly gated.
+
+**Round 2 (Codex review of the pass-11 fix, same PR):** 2 more fixed. (a) P2
+— `finalize_shift` fetched its shift row without a lock while
+`member_check_in` (round 1's own fix) now locks the shift row first and the
+attendance row second; `finalize_shift` locks `ShiftAttendance` rows first
+(via its auto-close-open-attendance flush) and only touches the shift row at
+commit — the reverse order, a textbook InnoDB deadlock risk between an NFC
+tap and an officer finalizing the same shift. Fixed by locking the shift row
+first in `finalize_shift` too. (b) A related finding on round 1's own guard
+test: `test_shift_check_in_race.py`'s session B never established a
+consistent-read snapshot before session A's commit, because B's first
+statement was itself the (blocking, so necessarily post-commit) shift lock —
+meaning the test would have passed even without `.with_for_update()` on the
+attendance check, the exact "count/existence check itself must be a locking
+read" half of Pitfall #27 that FAC-57 also had to learn this rotation. Fixed
+by priming B's snapshot with an early plain read before A commits; verified
+by removing the attendance check's `.with_for_update()` in isolation and
+confirming the corrected test now fails without it. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, findings 2 and 3.
+Completion gate green both rounds (full backend suite clean, flake8/black/
+isort clean, no frontend files touched).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4, PR #2425), preserved for history</summary>
@@ -11879,6 +11897,43 @@ with the fix restored. Full write-up:
 green: full backend suite 11934 passed / 21 pre-existing skips / 0 failed;
 flake8/black/isort clean; no frontend files touched this pass so no
 `tsc`/`eslint` run.
+
+**Round 2 (Codex review of finding 2's own fix, same PR, same day):**
+
+**AP-13 finding 3 (P2, fixed)** — `finalize_shift` fetched its shift row
+without locking it, while `member_check_in` (finding 2's own fix) now locks
+the shift row first and `ShiftAttendance` second. `finalize_shift` takes the
+same two locks in the opposite order in practice — it auto-closes open
+`ShiftAttendance` rows (an implicit lock at flush time) before it ever
+updates the shift row (at commit) — a textbook InnoDB deadlock between an
+NFC tap and a concurrent officer finalization. Fixed by locking the shift
+row first in `finalize_shift` too, matching `member_check_in`'s order.
+Verified with a new test (`tests/test_shift_finalize_lock_order_race.py`)
+proving `finalize_shift` now blocks on the same shift lock a concurrent
+check-in holds — a live cross-table deadlock is fragile to reproduce
+reliably, but structurally eliminating the reversed order is what the fix
+actually needs demonstrated, and this is the same mechanism
+`test_shift_check_in_race.py` already proves for two concurrent check-ins.
+Confirmed failing (`asyncio.TimeoutError`, `finalize_shift` never attempts a
+locking read pre-fix) via `git stash push -u`, passing with the fix
+restored, stable across 3 repeated runs.
+
+Also caught: finding 2's own guard test (`test_shift_check_in_race.py`)
+never primed session B's snapshot before session A's commit — B's very
+first statement was itself the (necessarily post-commit, since it blocks)
+shift lock, so a later plain read would have seen A's row regardless of
+whether the attendance check was actually a locking read. The test would
+have passed even without `.with_for_update()` on that check — the exact
+"the count/existence check itself must be a locking read" half of Pitfall
+#27 FAC-57 also had to learn this rotation. Fixed by adding an early plain
+read via session B before A commits, pinning a stale snapshot; verified by
+removing the attendance check's `.with_for_update()` in isolation and
+confirming the corrected test now fails (`AssertionError`) without it, then
+restoring the fix. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
+→ Pass 11, finding 3. Completion gate green: `pytest -k "apparatus or nfc or
+evoc or equipment_check or compartment or shift_check_in or scheduling"` —
+1127 passed, 1 pre-existing skip; full backend suite clean; flake8/black/
+isort clean; no frontend files touched.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
 

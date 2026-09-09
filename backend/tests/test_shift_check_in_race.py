@@ -123,6 +123,28 @@ class TestMemberCheckInIsALockingReadThenWrite:
             )
             assert shift_a is not None
 
+            # Prime session B's REPEATABLE READ snapshot with a plain,
+            # non-locking read *before* A commits its attendance insert --
+            # otherwise B's very first statement would be member_check_in's
+            # own locking shift read, which blocks until A commits and so
+            # would only ever observe a snapshot taken *after* the row
+            # A inserts already exists. A subsequent plain SELECT would then
+            # see A's row too, by construction, regardless of whether the
+            # attendance check is actually a locking read -- silently
+            # failing to exercise the second half of the fix at all. Reading
+            # ShiftAttendance here first pins B's snapshot to "no attendance
+            # yet", so only a genuinely locking `.with_for_update()` on the
+            # real check can see A's row once B gets there.
+            pre_race_snapshot = (
+                await session_b.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == shift_id,
+                        ShiftAttendance.user_id == user_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            assert pre_race_snapshot is None
+
             # Session B: the second, bounced tap -- started while A's
             # transaction is still open. Post-fix, B's own locking read of
             # the shift must block on A's still-held row lock. Pre-fix,
