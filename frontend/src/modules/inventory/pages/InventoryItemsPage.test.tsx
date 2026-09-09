@@ -17,6 +17,7 @@ const mockGetItemColors = vi.fn();
 const mockPinItem = vi.fn();
 const mockUnpinItem = vi.fn();
 const mockReorderItemPins = vi.fn();
+const mockExportItemsCsv = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -31,7 +32,7 @@ vi.mock('../../../services/api', () => ({
     pinItem: (...a: unknown[]) => mockPinItem(...a) as unknown,
     unpinItem: (...a: unknown[]) => mockUnpinItem(...a) as unknown,
     reorderItemPins: (...a: unknown[]) => mockReorderItemPins(...a) as unknown,
-    exportItemsCsv: vi.fn(),
+    exportItemsCsv: (...a: unknown[]) => mockExportItemsCsv(...a) as unknown,
   },
   locationsService: {
     getLocations: (...a: unknown[]) => mockGetLocations(...a) as unknown,
@@ -1036,5 +1037,194 @@ describe('InventoryItemsPage — the grouped dimension leaves the row', () => {
     expect(header('Category').length).toBeGreaterThan(0);
     expect(header('Location').length).toBeGreaterThan(0);
     expect(header('Size').length).toBeGreaterThan(0);
+  });
+});
+
+describe('InventoryItemsPage — CSV export', () => {
+  // This block states every mock implementation it depends on rather than
+  // inheriting whatever ran before it, and resets each one before installing
+  // the default (CLAUDE.md pitfall #28). `vi.clearAllMocks()` is not enough on
+  // its own: it clears recorded calls but leaves implementations in place, and
+  // an unconsumed `...Once` queued by an earlier block is still handed out
+  // ahead of a `mockResolvedValue` set here. Resetting only the two mocks this
+  // block asserts on left the other seven able to serve a leaked one-shot, so
+  // these tests could pass or fail differently focused than in place.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const mock of [
+      mockGetItems,
+      mockGetSummary,
+      mockGetSummaryByLocation,
+      mockGetCategories,
+      mockGetStorageAreas,
+      mockGetLocations,
+      mockGetItemColors,
+      mockCheckPermission,
+      mockExportItemsCsv,
+    ]) {
+      mock.mockReset();
+    }
+
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetSummary.mockResolvedValue({
+      total_items: 0,
+      non_medical_items: 0,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([{ id: 'loc-1', name: 'Station 1' }]);
+    mockGetItemColors.mockResolvedValue(['Navy']);
+    mockCheckPermission.mockReturnValue(true);
+    mockExportItemsCsv.mockResolvedValue(new Blob(['Name\n'], { type: 'text/csv' }));
+
+    // jsdom implements neither, and the handler calls both around the download.
+    const url = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    url.createObjectURL = vi.fn(() => 'blob:export');
+    url.revokeObjectURL = vi.fn();
+  });
+
+  afterEach(() => {
+    const url = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    delete url.createObjectURL;
+    delete url.revokeObjectURL;
+  });
+
+  it('exports the list on screen, not a hand-picked three of its filters', async () => {
+    // The regression this suite exists for: the handler named category, status
+    // and search out of eleven filters, so narrowing to one colour and
+    // condition and hitting Export produced the whole department's uniforms —
+    // under a filename saying otherwise, which is what makes it dangerous.
+    //
+    // Asserted against the parameters the LIST was fetched with rather than a
+    // literal object, so a filter added to the page fails this test until it
+    // reaches the export too.
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    await user.type(screen.getByLabelText('Search items...'), 'helmet');
+    await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+    await user.selectOptions(screen.getByLabelText('Filter by condition'), 'fair');
+    await user.selectOptions(screen.getByLabelText('Filter by type'), 'uniform');
+    await user.selectOptions(await screen.findByLabelText('Filter by color'), 'Navy');
+    await user.selectOptions(screen.getByLabelText('Filter by location'), 'loc-1');
+
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'helmet', color: 'Navy', location_id: 'loc-1' })
+      )
+    );
+
+    await user.click(screen.getByRole('button', { name: /Export/ }));
+    await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
+
+    // `mock.calls` off an untyped `vi.fn()` is `any[][]`, so `.at()` on it is
+    // an unsafe call the type-aware lint rejects. Narrowed once, here.
+    const calls = mockGetItems.mock.calls as unknown as Record<string, unknown>[][];
+    const listCall = calls[calls.length - 1]?.[0] ?? {};
+    // Paging is the list's own concern; `group_by` orders rows on screen and a
+    // spreadsheet regroups for itself. Everything else must match.
+    const { skip: _skip, limit: _limit, group_by: _groupBy, ...expected } = listCall;
+    expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expected);
+  });
+
+  it('carries the sort the list is using', async () => {
+    // The sort controls only render with rows beneath them.
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: /Sort descending/i }));
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ sort_order: 'desc' })));
+
+    await user.click(screen.getByRole('button', { name: /Export/ }));
+    await waitFor(() =>
+      expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ sort_order: 'desc' }))
+    );
+  });
+
+  it('reports a failed export instead of claiming one', async () => {
+    mockExportItemsCsv.mockRejectedValue({ response: { data: { detail: 'Invalid status: bogus' } } });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findByText('No items found');
+
+    await user.click(screen.getByRole('button', { name: /Export/ }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(String(mockToastError.mock.calls[0]?.[0])).toContain('Invalid status: bogus');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  // Filter changes are debounced by FILTER_DEBOUNCE_MS (350ms), so between a
+  // click on a filter and the response landing, the controls and the rows
+  // disagree. Export has to follow the rows: a file named for today's
+  // inventory that describes a filter set the reader never saw is the same
+  // defect this whole suite exists for, one layer in.
+  describe('while a filter change is still in flight', () => {
+    it('exports the filters the visible rows were fetched with, not the pending ones', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('No items found');
+      await waitFor(() => expect(mockGetItems).toHaveBeenCalled());
+      const loadsBefore = mockGetItems.mock.calls.length;
+
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+      // Deliberately no wait: this is the window the finding is about. The
+      // select already reads "assigned"; the rows on screen do not.
+      await user.click(screen.getByRole('button', { name: /Export/ }));
+
+      await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
+      expect(mockGetItems.mock.calls.length).toBe(loadsBefore);
+      expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }));
+    });
+
+    it('picks up the new filters once their rows have actually arrived', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('No items found');
+
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+      await waitFor(() =>
+        expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' }))
+      );
+
+      await user.click(screen.getByRole('button', { name: /Export/ }));
+      await waitFor(() =>
+        expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' }))
+      );
+    });
+
+    it('holds the last successful filters when the refresh fails', async () => {
+      // The half that a "disable Export while a request is pending" fix would
+      // miss: a rejected load leaves the old rows on screen with nothing
+      // pending, so Export re-enables and would export filters those rows were
+      // never fetched with -- indefinitely.
+      const user = userEvent.setup();
+      renderWithRouter(<InventoryItemsPage />);
+      await screen.findByText('No items found');
+
+      mockGetItems.mockRejectedValue(new Error('boom'));
+      await user.selectOptions(screen.getByLabelText('Filter by status'), 'assigned');
+      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /Export/ }));
+      await waitFor(() => expect(mockExportItemsCsv).toHaveBeenCalledTimes(1));
+      expect(mockExportItemsCsv).toHaveBeenLastCalledWith(expect.objectContaining({ status: undefined }));
+    });
+
+    it('offers no Export until a list has actually loaded', async () => {
+      // A never-resolving load, so the page sits in the state before any
+      // response. Exporting here would send filters against no rows at all.
+      mockGetItems.mockImplementation(() => new Promise(() => {}));
+      renderWithRouter(<InventoryItemsPage />);
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Export/ })).toBeDisabled());
+    });
   });
 });

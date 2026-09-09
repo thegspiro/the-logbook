@@ -1,5 +1,40 @@
 # Screenshot currency
 
+## Disposition for September 7-8, 2026 - the items list gained pinning and grouping
+
+**Everything this change invalidated has been re-shot, so this section adds no
+queue.** It is here because three of those images were already listed further
+down as stale and their rows have now been deleted -- the file's own rule -- and
+a deletion with no explanation reads like someone quietly dropping the debt.
+
+`/inventory/items` and `/inventory/admin/items` render the same component, so
+guide 05's captures of that page were affected by all of it: a **Pinned**
+section, a **Group by** control, a **Size** column, and columns that hide when
+grouped.
+
+| Image                              | Re-shot | What had changed                                              |
+| ---------------------------------- | ------- | ------------------------------------------------------------- |
+| `05-01-inventory-items.png`        | 09-08   | Group by control above the table; a pin control on every row  |
+| `05-47-items-filter-bar.png`       | 09-08   | Group by sits directly under the filter card                  |
+| `05-53-items-grid-lot-stock.png`   | 09-08   | same, in the lot-stock framing                                |
+| `05-53-items-variant-capsules.png` | 09-08   | same, in the variant-capsule framing                          |
+| `10-05-mobile-inventory.png`       | 09-08   | the phone items list, same controls                           |
+
+**`05-70-inventory-table-mobile.png` was re-shot and came back byte-identical,
+so it was never stale.** Worth recording rather than quietly dropping: the
+prediction that it had changed was wrong, and the reason is specific. Neither
+new control reaches the stacked mobile card — the pin sits in a trailing cell
+with no `data-label`, which the `rwd-table` reflow hides, and the **Order** row
+exists only in the Pinned table, which that shot does not picture. A phone
+capture of the *Available* list is unaffected by either feature.
+
+Two captures were **added** rather than refreshed - `05-02-items-pinned` and
+`05-03-items-grouped` - because the guides had no coverage of either feature.
+
+The other eleven manifest entries routed at `/inventory/items` open a modal over
+the page and are cropped to it, so they were deliberately left alone: churning
+PNGs whose content did not change buries the six that did.
+
 ## Disposition for August 31 – September 6, 2026 — two modules changed address
 
 Audit: [`CHANGE_AUDIT_2026-08-31_TO_09-06.md`](../CHANGE_AUDIT_2026-08-31_TO_09-06.md).
@@ -4339,7 +4374,6 @@ includes the top bar now shows an outdated header:
 | Image                                                                               | Why it's in frame                                          |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `10-04-mobile-dashboard`                                                            | fullPage, header at top                                    |
-| `10-05-mobile-inventory`                                                            | header at top                                              |
 | `10-06-mobile-inventory-admin`                                                      | fullPage, header at top                                    |
 | `10-10-mobile-minimum-text`                                                         | header at top                                              |
 | `10-15-mobile-menu-notifications`                                                   | shot _of_ the open menu — the button itself is the subject |
@@ -4637,8 +4671,6 @@ Nothing in this group has ever been captured against the shipped code.
 | ----------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `03-22-equipment-check-builder.png` | 08-10 22:34 | The toolbar now carries a **linked / unlinked count**, and the quick-add bar is a **catalog search** with a "create in inventory" option rather than a plain name box |
 | `03-25-equipment-checks-tab.png`    | 08-10 22:34 | The **My Equipment Checklists** header now carries an **Apparatus Inventory** link beside "Start a Check"                                                             |
-| `05-01-inventory-items.png`         | 08-10 01:11 | The **Qty** column reads ready units across in-date lots for lot-stocked items and is labelled **"in-date lots"**                                                     |
-| `05-47-items-filter-bar.png`        | 08-10 01:11 | The Manage Items toolbar now carries **Receive Stock**, **Add Several** and **Import CSV** that was previously unreachable from this page                             |
 | `05-25-admin-hub.png`               | 08-08 00:45 | The hub now links out to **Scheduling → Supply** (Expiring on Apparatus)                                                                                              |
 
 ### B. Stale because of the email redesign
