@@ -11834,18 +11834,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 The pass's own initial review (FAC-46, HIGH — two unconditional
 `TypeError`s, one wired to real shipped UI) plus seven subsequent Codex
-review rounds, each finding additional or fix-related bugs — the longest
-single-PR correction chain this rotation has seen — through FAC-57 (a
-genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
-merge-then-validate fix). Not every round found a regression in the
-previous one's fix, and not every independent bug was masked the same way:
-FAC-47 was a pre-existing field-name mismatch a crash had genuinely been
-masking, reachable only once FAC-46's fix let `create_compliance_item`
-actually run; FAC-50 was independently observable the whole time — a
-contact-name-only submission 422'd at the schema layer before ever
-reaching the method FAC-46 fixed, so FAC-46's crash never stood between a
-caller and this defect. FAC-48, FAC-52 and FAC-57 were genuine regressions
-in a prior round's fix. 12 findings total (FAC-46 through FAC-57), all
+review rounds, each finding additional or fix-related bugs, through FAC-57
+(a genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
+merge-then-validate fix). Not the longest single-PR correction chain this
+rotation has seen — PR #2198 (pass 3, FAC-29 through FAC-45) ran at least
+16 review rounds — but a long one. Not every round found a regression in
+the previous one's fix, and not every independent bug was masked the same
+way: FAC-47 was a pre-existing field-name mismatch a crash had genuinely
+been masking, reachable only once FAC-46's fix let
+`create_compliance_item` actually run; FAC-50 was independently observable
+the whole time — a contact-name-only submission 422'd at the schema layer
+before ever reaching the method FAC-46 fixed, so FAC-46's crash never
+stood between a caller and this defect. FAC-48, FAC-51, FAC-52, FAC-54 and
+FAC-57 were genuine regressions in a prior round's fix. 12 findings total
+(FAC-46 through FAC-57), all
 fixed. 4 prior flags (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still
 open, unchanged since pass 3. 17/17 CI checks green on the final head,
 `mergeable_state: clean`, all 11 review threads resolved. Squash-merged as
@@ -11856,8 +11858,21 @@ tests, a first draft racing two full service calls via bare
 `asyncio.gather` with no explicit synchronization, turned out to pass on
 _both_ sides of its own pre-fix `git stash` check — a false negative caught
 before commit by actually running that check, not assumed from the test
-reading correctly. Rewritten with deterministic lock/block/release control
-before being trusted. See `FAC-12-facilities.md` → Pass 4 for the full
+reading correctly. Rewritten with explicit lock/block/release
+synchronization — an `asyncio.Event` fired when the second session reaches
+its own locking read, followed by a bounded wait asserting the task is
+still pending — the same pattern already used throughout
+`test_facility_document_reference_race.py`. That pattern is a heuristic,
+not a hard guarantee: on a sufficiently slow runner the bounded wait could
+still elapse before the second session's query reaches the database, so an
+implementation that accepts the lock parameter without truly acquiring a
+row lock could in principle pass by the two sessions coincidentally
+serializing in the right order anyway. Confirming genuine blocking beyond
+that heuristic would need lock-wait visibility from the database itself
+(e.g. polling `performance_schema.data_lock_waits`), which none of this
+suite's concurrency tests do today; treat this as a known limitation of an
+established, repository-wide test pattern, not a defect specific to
+FAC-57. See `FAC-12-facilities.md` → Pass 4 for the full
 round-by-round detail (FAC-47 through FAC-57): most carry their own
 before/after failure text from a `git stash`-isolated guard test. FAC-49,
 FAC-54 and FAC-56 are type-only corrections with no runtime behavior to
