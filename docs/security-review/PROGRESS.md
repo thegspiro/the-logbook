@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2425 (Feature 12, Facilities, pass 4) merged clean, 17/17 CI
+checks green, `mergeable_state: clean`. Squash-merged as `d24934d67`. Feature
+12 is now fully closed for this pass — see the Log entries and
+`FAC-12-facilities.md` for the full eight-round correction history:
+`FAC-46` through `FAC-57` (12 findings across the fix's own review rounds,
+plus FAC-46 itself), all fixed; the 4 prior flags (FAC-13, FAC-30, FAC-41,
+FAC-44) re-verified still open, unchanged since pass 3. Next: 13 Apparatus &
+NFC.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12 pass 4, PR #2425), preserved for history</summary>
+
 **Feature 12 (Facilities, pass 4)** — PR
 [#2425](https://github.com/thegspiro/the-logbook/pull/2425), branch
 `claude/security-review-facilities-pass4` (fresh name; no facilities-review
@@ -26,6 +38,8 @@ on every single call, one of them wired to real shipped UI), 4 prior flags
 (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open and unchanged since
 pass 3. Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4.
 Completion gate green. Awaiting CI and review.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422, merged), preserved for history</summary>
@@ -11781,7 +11795,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
@@ -11811,6 +11825,30 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
+
+Eight consecutive rounds of Codex review, each catching a real bug in the
+previous round's own fix — the longest single-PR correction chain this
+rotation has seen. FAC-46 (HIGH, the pass's own initial finding: two
+unconditional `TypeError`s, one wired to real shipped UI) through FAC-57 (a
+genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
+merge-then-validate fix), all fixed. 4 prior flags (FAC-13, FAC-30, FAC-41,
+FAC-44) re-verified still open, unchanged since pass 3. 17/17 CI checks
+green on the final head, `mergeable_state: clean`, all 11 review threads
+resolved. Squash-merged as `d24934d67`.
+
+Worth recording for the rotation's own discipline: one of FAC-57's guard
+tests, a first draft racing two full service calls via bare
+`asyncio.gather` with no explicit synchronization, turned out to pass on
+_both_ sides of its own pre-fix `git stash` check — a false negative caught
+before commit by actually running that check, not assumed from the test
+reading correctly. Rewritten with deterministic lock/block/release control
+before being trusted. See `FAC-12-facilities.md` → Pass 4 for the full
+round-by-round detail (FAC-47 through FAC-57), each with its own
+before/after failure text.
+
+Feature 12 is now fully closed for this pass. Next: 13 Apparatus & NFC.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
 
