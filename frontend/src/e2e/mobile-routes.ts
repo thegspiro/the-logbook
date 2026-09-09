@@ -66,6 +66,12 @@ export const ALL_ROUTES: RouteCheck[] = [
   // grant a real roster officer arrives with, and the one fixture that would
   // catch those two drifting apart again.
   { path: '/members/admin/settings/ranks', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // The membership ladder, the second measurable section of that screen. Listed
+  // separately rather than left to the ranks entry because its rows carry
+  // controls the rank ladder has no equivalent of — a reorder pair, a rights
+  // disclosure and a remove button, all of which the fixture's two rungs put on
+  // screen.
+  { path: '/members/admin/settings/tiers', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.check_in'] },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },

@@ -166,6 +166,7 @@ Requires `members.manage` permission. Tab-based admin interface.
 | `/members/admin/settings/visibility` | Members Settings — Contact Visibility | `members.manage`, `settings.manage`, `settings.manage_contact_visibility` or `organization.update_settings`                                      |
 | `/members/admin/settings/ids`        | Members Settings — Membership IDs     | `members.manage`, `settings.edit` or `organization.update_settings`                                                                              |
 | `/members/admin/settings/ranks`      | Members Settings — Operational Ranks  | `members.manage` or `settings.manage`                                                                                                            |
+| `/members/admin/settings/tiers`      | Members Settings — Membership Tiers   | `members.manage`                                                                                                                                 |
 | `/members/admin/settings/evoc`       | Members Settings — EVOC Levels        | `members.manage` or `apparatus.manage`                                                                                                           |
 | `/members/check-in-station`          | Check-In Station                      | `members.check_in`                                                                                                                               |
 

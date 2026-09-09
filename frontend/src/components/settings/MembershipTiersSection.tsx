@@ -104,13 +104,17 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
             return (
               <div key={tier.id} className="border-theme-surface-border rounded-lg border">
                 <div className="flex flex-wrap items-center gap-3 p-3">
-                  <div className="flex shrink-0 flex-col">
+                  {/* Side by side on a phone, stacked on a laptop. Both arrows
+                      carry the 44px phone minimum, and two stacked 44px buttons
+                      would make every rung 88px tall on the width where the list
+                      is longest. */}
+                  <div className="flex shrink-0 flex-row md:flex-col">
                     <button
                       type="button"
                       onClick={() => onMoveTier(index, 'up')}
                       disabled={index === 0}
                       aria-label={`Move ${tier.name} up`}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
                     >
                       <ChevronUp className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -119,7 +123,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                       onClick={() => onMoveTier(index, 'down')}
                       disabled={index === tiers.length - 1}
                       aria-label={`Move ${tier.name} down`}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      className="text-theme-text-muted hover:text-theme-text-primary touch-target-phone p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
                     >
                       <ChevronDown className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -167,7 +171,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                       type="button"
                       onClick={() => setExpanded(isOpen ? null : tier.id)}
                       aria-expanded={isOpen}
-                      className="text-theme-text-secondary hover:text-theme-text-primary rounded-md px-2 py-1 text-xs font-medium"
+                      className="text-theme-text-secondary hover:text-theme-text-primary touch-target-phone rounded-md px-2 py-1 text-xs font-medium"
                     >
                       {isOpen ? 'Hide' : 'Rights'}
                     </button>
@@ -177,7 +181,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                       disabled={held > 0}
                       aria-label={`Remove ${tier.name}`}
                       title={held > 0 ? 'Members hold this tier. Move them to another tier first.' : undefined}
-                      className="text-theme-accent-red p-1 hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="text-theme-accent-red touch-target-phone p-1 hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
