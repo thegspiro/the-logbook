@@ -248,6 +248,34 @@ Completion gate green: flake8/black/isort clean; scoped keyword suite 1136
 passed / 1 pre-existing skip; full backend suite 11944 passed / 21
 pre-existing skips / 0 failed; no frontend files touched.
 
+**Round 9 (Codex review of round 8's own fix, same PR):** 1 more fixed — the
+item finding 8's write-up explicitly deferred rather than fixed. Codex
+confirmed the gap in `CallTrackingService._partition_existing` is real:
+`record_shift_calls` (reached from both `finalize_shift` and
+`save_closeout_calls`, after each locks the shift) uses it to inventory a
+shift's existing `OrgCall`/`OrgCallResponse` rows, and its existence-check
+query was a plain read on the same stale transaction snapshot. Two
+closeout-calls saves racing on the same shift — the second queued behind
+the first's shift lock — would have the second's existence check still
+read "no calls recorded yet" even after the first committed a real one,
+doubling the shift's persisted call responses. Fixed by adding
+`.with_for_update()` to that query — a plain, non-aggregate `SELECT`, so
+the design concern that justified deferring it didn't actually apply to
+this half; the second, aggregate query (owned-vs-shared classification)
+stays deferred, unchanged, since it doesn't decide whether a new row gets
+created and so doesn't produce this doubling bug. Verified with a new test
+(`test_shift_closeout_calls_snapshot_staleness.py`): session B preloads
+the shift plainly, session A saves the closeout-calls step reporting one
+call and commits, session B runs the same real, unmodified save — asserted
+against the database that exactly one `OrgCall` row exists, not two.
+Confirmed failing pre-fix (2 distinct rows found) via `git stash push -u`
+on the fix alone (the only diff in the file), passing with the fix
+restored, stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 10.
+Completion gate: flake8/black/isort clean; scoped keyword suite 1274
+passed / 1 pre-existing skip; full backend suite run in progress, this
+note updated with the exact count once it completes.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 

@@ -618,6 +618,49 @@ returning `None` caches nothing in the identity map, so that shape cannot
 exercise the staleness bug at all; it passed even pre-fix and was corrected
 before being counted as a real regression test.)
 
+### Finding 10 (P1, Codex round 9 — the deferred `_partition_existing` gap, now fixed)
+
+**What:** Finding 8's write-up deferred (rather than fixed) the same
+snapshot-staleness shape in `CallTrackingService._partition_existing`,
+reasoning that its second query is a `COUNT`/`GROUP BY` aggregate that
+would need its own design pass to lock safely. Codex's round 9 review
+confirmed the gap is real and worth closing: `record_shift_calls`
+(reached from both `finalize_shift` and `save_closeout_calls`, after each
+locks the shift) uses `_partition_existing` to inventory this shift's
+existing `OrgCall`/`OrgCallResponse` rows before deciding how many new ones
+to create. The **existence-check** query — a plain `SELECT` of this
+shift's existing `OrgCallResponse.call_id` values — answers from the same
+stale transaction snapshot `_authorize_shift_management`'s earlier plain
+shift query fixes; the shift lock does not refresh it. Two closeout-calls
+saves racing on the same shift, the second queued behind the first's shift
+lock, would have the second's existence check still read "no calls
+recorded yet" even after the first committed a real one — doubling the
+shift's persisted call responses and the department's call-volume count,
+instead of reconciling to the same total.
+
+**Where:** `backend/app/services/call_tracking_service.py`,
+`_partition_existing`'s existence-check query.
+
+**Fix:** added `.with_for_update()` to that query — a plain, non-aggregate
+`SELECT`, so no special design was actually needed for it. The **second**
+query in the same method (the `COUNT`/`GROUP BY` aggregate that classifies
+a call as owned vs. shared) is left as documented in finding 8: it decides
+classification, not whether a new row gets created, so it does not produce
+the doubling bug this fix closes, and locking an aggregate query safely
+still warrants its own look if a future round finds a concrete scenario
+where its own staleness matters.
+
+**Regression test:**
+`backend/tests/test_shift_closeout_calls_snapshot_staleness.py` — same
+two-real-session shape as findings 8/9: session B preloads the shift
+plainly first, session A runs a real `save_closeout_calls` reporting one
+call and commits, then session B runs the same real, unmodified call and
+the test asserts the shift still has exactly one `OrgCall` row (verified
+against the database directly, not either service's identity map).
+Confirmed failing pre-fix (2 distinct `OrgCall` rows found instead of 1)
+via `git stash push -u` on the fix alone (the only diff in the file),
+passing with the fix restored, stable across 3 repeated runs.
+
 ## Guard test added (pass 11)
 
 - `backend/tests/test_shift_check_in_race.py` —
@@ -672,19 +715,23 @@ None` and `TypeError` surfaced as `error`) via `git stash push -u`
   error `None` instead of `"Already checked in"`) via `git stash push -u`
   on the fix alone, confirmed passing with the fix restored, stable across
   3 consecutive re-runs.
+- `backend/tests/test_shift_closeout_calls_snapshot_staleness.py` (finding
+  10, above). Confirmed failing pre-fix (2 distinct `OrgCall` rows found
+  instead of 1) via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
 
-## Completion gate (pass 11, round 8 — Codex findings on PR #2428)
+## Completion gate (pass 11, round 9 — Codex findings on PR #2428)
 
-| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Result                                                                                |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ✅ 0 violations                                                                       |
-| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | ✅ clean                                                                              |
-| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ✅ clean                                                                              |
-| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py tests/test_shift_refresh_utc_tagging.py tests/test_shift_closeout_attendance_lock_order_race.py tests/test_shift_finalize_attendance_snapshot_staleness.py tests/test_shift_closeout_attendance_snapshot_staleness.py tests/test_shift_finalize_snapshot_totals_staleness.py tests/test_shift_check_in_identity_map_staleness.py` | ✅ 11 passed, 3 repeated runs, no flakiness                                           |
-| `pytest tests/test_scheduling.py::TestShiftCRUD::test_update_shift_validates_effective_time_range`                                                                                                                                                                                                                                                                                                                                                                                                                          | ✅ 8 passed (all parametrize cases, after the tz-normalization fix)                   |
-| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or shift_finalize or shift_closeout or shift_lock or shift_refresh or scheduling"`                                                                                                                                                                                                                                                                                                                                                 | ✅ 1136 passed, 1 skipped (pre-existing optional-dep skip)                            |
-| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | ✅ 11944 passed, 21 skipped (pre-existing Docker/optional-dependency skips), 0 failed |
-| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | n/a — no frontend files touched this round either                                     |
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Result                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ 0 violations                                                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | ✅ clean                                                                        |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ clean                                                                        |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py tests/test_shift_refresh_utc_tagging.py tests/test_shift_closeout_attendance_lock_order_race.py tests/test_shift_finalize_attendance_snapshot_staleness.py tests/test_shift_closeout_attendance_snapshot_staleness.py tests/test_shift_finalize_snapshot_totals_staleness.py tests/test_shift_check_in_identity_map_staleness.py tests/test_shift_closeout_calls_snapshot_staleness.py` | ✅ 12 passed, 3 repeated runs, no flakiness                                     |
+| `pytest tests/test_scheduling.py::TestShiftCRUD::test_update_shift_validates_effective_time_range`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 8 passed (all parametrize cases, after the tz-normalization fix)             |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or shift_finalize or shift_closeout or shift_lock or shift_refresh or scheduling or call_tracking"`                                                                                                                                                                                                                                                                                                                                                                                      | ✅ 1274 passed, 1 skipped (pre-existing optional-dep skip)                      |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | pending — running in background; updated with the exact count once it completes |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | n/a — no frontend files touched this round either                               |
 
 ### Verified good ✅ (re-confirmed this pass, mechanism named)
 
