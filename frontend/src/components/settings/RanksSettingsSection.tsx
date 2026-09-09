@@ -59,6 +59,16 @@ interface RanksSettingsSectionProps {
   onUpdateRank: () => void;
   onDeleteRank: (rankId: string) => void;
   onMoveRank: (index: number, direction: 'up' | 'down') => void;
+  /**
+   * Whether the viewer may reorder the ladder — `settings.manage`, which is not
+   * what the rest of this screen needs.
+   *
+   * A rank's `sort_order` is read by the inventory rule as a predicate, so
+   * placing a rank decides who sees restricted stock. That kept the higher grant
+   * when the ladder's contents moved to `members.manage`, and the controls have
+   * to follow the endpoint or they are a promise it will refuse.
+   */
+  canReorder: boolean;
   onToggleEligiblePosition: (rank: OperationalRankResponse, position: string) => void;
 }
 
@@ -102,6 +112,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   onUpdateRank,
   onDeleteRank,
   onMoveRank,
+  canReorder,
   onToggleEligiblePosition,
 }) => {
   return (
@@ -221,31 +232,41 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
               key={rank.id}
               className="hover:bg-theme-surface-secondary/50 group flex items-center gap-2 rounded-lg px-3 py-2 transition-colors"
             >
-              <div className="flex shrink-0 flex-col">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onMoveRank(idx, 'up');
-                  }}
-                  disabled={idx === 0}
-                  className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
-                  aria-label="Move up"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onMoveRank(idx, 'down');
-                  }}
-                  disabled={idx === ranks.length - 1}
-                  className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
-                  aria-label="Move down"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <GripVertical className="text-theme-text-muted/40 h-4 w-4 shrink-0" />
+              {/* Absent, not disabled, when the officer cannot reorder. The
+                  endpoint refuses them outright, so every click optimistically
+                  moved the row, failed, and snapped back — and a disabled
+                  control still says "you could do this", which this officer
+                  never will. The grip goes with them: it advertises a drag that
+                  is not on offer either. */}
+              {canReorder && (
+                <>
+                  <div className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onMoveRank(idx, 'up');
+                      }}
+                      disabled={idx === 0}
+                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      aria-label="Move up"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onMoveRank(idx, 'down');
+                      }}
+                      disabled={idx === ranks.length - 1}
+                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      aria-label="Move down"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <GripVertical className="text-theme-text-muted/40 h-4 w-4 shrink-0" />
+                </>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-theme-text-primary text-sm font-medium">{rank.display_name}</p>

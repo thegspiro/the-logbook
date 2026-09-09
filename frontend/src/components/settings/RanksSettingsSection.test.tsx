@@ -29,10 +29,12 @@ const SEATS: PositionOption[] = [
 const renderSection = (
   ranks: OperationalRankResponse[],
   seatOptions: PositionOption[] = SEATS,
-  editingPositionsRankId: string | null = null
+  editingPositionsRankId: string | null = null,
+  canReorder = true
 ) =>
   render(
     <RanksSettingsSection
+      canReorder={canReorder}
       ranks={ranks}
       ranksLoading={false}
       editingRank={null}
@@ -56,6 +58,43 @@ const renderSection = (
   );
 
 const WARNING = /no default permissions/i;
+
+describe('RanksSettingsSection — who is offered the reorder controls', () => {
+  // Ordering did not move to `members.manage` with the rest of the ladder: a
+  // rank's sort_order is read by the inventory rule as a seniority predicate,
+  // so `reorder_ranks` refuses anyone without `settings.manage`. Offering the
+  // controls to an officer it refuses meant every click moved the row
+  // optimistically, failed, and snapped back.
+  it('offers them to an officer who may reorder', () => {
+    renderSection([rank({ id: 'a', display_name: 'EMT' }), rank({ id: 'b', display_name: 'Captain' })]);
+
+    expect(screen.getAllByLabelText('Move up')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Move down')).toHaveLength(2);
+  });
+
+  it('withholds them entirely from an officer who may not', () => {
+    renderSection(
+      [rank({ id: 'a', display_name: 'EMT' }), rank({ id: 'b', display_name: 'Captain' })],
+      SEATS,
+      null,
+      false
+    );
+
+    // Absent, not disabled: a disabled control still says "you could do this",
+    // and this officer never will.
+    expect(screen.queryByLabelText('Move up')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Move down')).not.toBeInTheDocument();
+  });
+
+  it('still shows the ladder itself when reordering is withheld', () => {
+    // The carve-out is about ordering alone — adding, renaming, retiring and
+    // re-scoping rungs all stayed with the page. A name no seat shares, so the
+    // assertion cannot be satisfied by the eligible-seat badge instead.
+    renderSection([rank({ id: 'a', display_name: 'Battalion Chief' })], SEATS, null, false);
+
+    expect(screen.getByText('Battalion Chief')).toBeInTheDocument();
+  });
+});
 
 describe('RanksSettingsSection — the grants-nothing warning', () => {
   it('marks a rank the department invented, which confers nothing', () => {

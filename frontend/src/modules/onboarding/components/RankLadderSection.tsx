@@ -38,6 +38,14 @@ const RankLadderSection: React.FC = () => {
   // exist, and be the department's own, before there is a right answer.
   const currentUser = useAuthStore((state) => state.user);
   const loadUser = useAuthStore((state) => state.loadUser);
+
+  // Checked rather than assumed, even here. Reordering needs `settings.manage`,
+  // because a rank's position is read by the inventory rule as a seniority
+  // predicate, and the endpoint refuses anyone else whatever screen they are on.
+  // Whoever runs onboarding normally holds it — but the copy above invites
+  // reordering, so on the occasion they do not, the controls belong absent
+  // rather than failing on the first click.
+  const canReorder = useAuthStore((state) => state.checkPermission)('settings.manage');
   const [ownRank, setOwnRank] = useState('');
   const [savingOwnRank, setSavingOwnRank] = useState(false);
 
@@ -140,6 +148,7 @@ const RankLadderSection: React.FC = () => {
           onMoveRank={(index, direction) => {
             void editor.handleMoveRank(index, direction);
           }}
+          canReorder={canReorder}
           onToggleEligiblePosition={(rank, position) => {
             void editor.handleToggleEligiblePosition(rank, position);
           }}
