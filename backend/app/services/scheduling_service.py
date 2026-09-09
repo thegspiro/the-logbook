@@ -2564,6 +2564,18 @@ class SchedulingService:
         # document) — without `with_for_update()` here, a check-in that
         # queued behind the shift lock would still count the pre-commit
         # snapshot and conclude there is no existing row.
+        #
+        # populate_existing=True too: NfcTagService._check_in_shift already
+        # preloaded this same row (plainly) via get_my_attendance before
+        # calling here, on this same session — so it's already in the
+        # identity map. Without populate_existing, a concurrent tap that
+        # queued behind the shift lock and then committed its own check-in
+        # would have this locking read genuinely block, unblock, and read
+        # the latest row from the database, but SQLAlchemy would still hand
+        # back the earlier cached object with its stale checked_in_at=None,
+        # letting `existing.checked_in_at` below pass the "Already checked
+        # in" guard and silently overwrite the first tap's timestamp instead
+        # of rejecting the second one.
         existing = (
             await self.db.execute(
                 select(ShiftAttendance)
@@ -2572,6 +2584,7 @@ class SchedulingService:
                     ShiftAttendance.user_id == user_id,
                 )
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
 
@@ -7700,11 +7713,15 @@ class SchedulingService:
                 )
                 shift.call_count = call_result.scalar() or 0
 
-            # Snapshot total hours from attendance duration
+            # Snapshot total hours from attendance duration. Locking read for
+            # the same reason as the open-attendance query above: this
+            # transaction's snapshot predates the shift lock, so a plain read
+            # here could still miss a row committed by a request that raced
+            # this one and lost.
             hours_result = await self.db.execute(
-                select(
-                    func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0)
-                ).where(ShiftAttendance.shift_id == str(shift_id))
+                select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0))
+                .where(ShiftAttendance.shift_id == str(shift_id))
+                .with_for_update()
             )
             total_min = hours_result.scalar() or 0
             # Not rounded: this is a stored snapshot, and the quarter-hour rule
@@ -7720,8 +7737,15 @@ class SchedulingService:
             # restated: a member who came on at 0300 was not on the 2200 call.
             # It is equally never summed back into a department total — with a
             # four-person crew that multiplies every call by four.
+            #
+            # Locking read, same reason as the two queries above: this is the
+            # final snapshot written onto each attendance row, so it must see
+            # every row actually on the shift, not this transaction's
+            # pre-lock snapshot.
             att_result = await self.db.execute(
-                select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift_id))
+                select(ShiftAttendance)
+                .where(ShiftAttendance.shift_id == str(shift_id))
+                .with_for_update()
             )
             attendance_rows = att_result.scalars().all()
 

@@ -213,6 +213,41 @@ Completion gate green: flake8/black/isort clean; scoped keyword suite 1134
 passed / 1 pre-existing skip; full backend suite 11942 passed / 21
 pre-existing skips / 0 failed; no frontend files touched.
 
+**Round 8 (Codex review of round 7's own fix, same PR):** 2 more fixed —
+one P1, one P2 — both the same snapshot-staleness shape as round 7, in two
+places round 7 didn't reach. (a) P1 — `finalize_shift`'s `total_hours`
+`SUM` and per-member `call_count` queries were still plain reads on the
+stale transaction snapshot; round 7 only fixed the open-attendance query,
+which by construction never matches an already-checked-out row (the shape
+`save_closeout_attendance` writes), so a member's completed attendance
+committed while finalize waited on the shift lock was silently excluded
+from both the shift total and their own call-count snapshot. (b) P2 — the
+identity-map sibling of finding 5, now on `ShiftAttendance`: `NfcTagService._check_in_shift`
+preloads the caller's attendance row plainly before `member_check_in` runs
+its own locking read on the same session; without `populate_existing=True`
+on that locking read, a second NFC tap targeting a pre-existing
+(not-yet-checked-in) attendance row already cached by that session would
+see the stale `checked_in_at=None` even after a first tap committed a real
+check-in, passing the "Already checked in" guard and silently overwriting
+it. Fixed by adding `.with_for_update()` to the two `finalize_shift`
+queries and `.execution_options(populate_existing=True)` to
+`member_check_in`'s locking read. Verified with two new tests
+(`test_shift_finalize_snapshot_totals_staleness.py`,
+`test_shift_check_in_identity_map_staleness.py`); the check-in test
+specifically required constructing a _pre-existing_ placeholder attendance
+row before either session touches it — an earlier version that preloaded a
+nonexistent row passed even without the fix, because `get_my_attendance`
+returning `None` caches nothing in the identity map and can't exercise a
+refresh-staleness bug at all. Confirmed all three assertions failing
+pre-fix (`total_hours` `0.0` instead of `1.0`; a `call_count` never set; a
+second tap's error `None` instead of `"Already checked in"`) via
+`git stash push -u` on the fix alone (the only diff in the file), passing
+with the fix restored, stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 9.
+Completion gate: flake8/black/isort clean; scoped keyword suite 1136
+passed / 1 pre-existing skip; full backend suite run in progress, this
+note updated with the exact count once it completes.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 
