@@ -4195,7 +4195,6 @@ class InventoryService:
             InventoryItem.active.is_(True),
         ]
         checkout_filters = [CheckOutRecord.organization_id == str(organization_id)]
-        excluded_category_ids: Set[str] = set()
         if exclude_item_types:
             item_filters.append(
                 self._outside_domains(organization_id, exclude_item_types)
@@ -4204,17 +4203,6 @@ class InventoryService:
                 CheckOutRecord.item_id.in_(
                     self._item_ids_outside_domains(organization_id, exclude_item_types)
                 )
-            )
-            excluded_category_ids = set(
-                (
-                    await self.db.execute(
-                        self._category_ids_of_type(
-                            organization_id, set(exclude_item_types)
-                        )
-                    )
-                )
-                .scalars()
-                .all()
             )
 
         # Total items (sum quantities so pool items with quantity > 1 are counted correctly)
@@ -4329,12 +4317,22 @@ class InventoryService:
         )
         overdue_checkouts = overdue_result.scalar()
 
-        # Maintenance due
-        maintenance_due = [
-            item
-            for item in await self.get_maintenance_due(organization_id, days_ahead=7)
-            if item.category_id not in excluded_category_ids
-        ]
+        # Maintenance due -- a COUNT, not a materialized `.all()` (the INV-22
+        # shape flagged separately on `get_maintenance_due` itself, which
+        # this summary doesn't need: only the count was ever read out of the
+        # list below). Mirrors `get_user_inventory_summary`'s own maintenance-
+        # due count a few hundred lines down, which was already written this
+        # way. Reuses `item_filters` (org, active, and exclude_item_types via
+        # `_outside_domains`) rather than re-deriving them, so this can't
+        # drift from what `total_items` etc. above already counted against.
+        maintenance_cutoff = date.today() + timedelta(days=7)
+        maintenance_due_result = await self.db.execute(
+            select(func.count(InventoryItem.id)).where(
+                *item_filters,
+                InventoryItem.next_inspection_due <= maintenance_cutoff,
+            )
+        )
+        maintenance_due_count = maintenance_due_result.scalar() or 0
 
         # Use the larger of checkout records vs items with checked_out status
         # to ensure the dashboard reflects reality regardless of sync state
@@ -4353,7 +4351,7 @@ class InventoryService:
             "total_value": float(total_value),
             "active_checkouts": effective_checkouts,
             "overdue_checkouts": overdue_checkouts or 0,
-            "maintenance_due_count": len(maintenance_due) + items_in_maintenance,
+            "maintenance_due_count": maintenance_due_count + items_in_maintenance,
         }
 
     async def get_user_inventory_summary(
@@ -9753,6 +9751,13 @@ class InventoryService:
     ) -> Tuple[Optional[MemberSizePreferences], Optional[str]]:
         """Create or update a member's size preferences."""
         try:
+            # user_id is a client-supplied path param (Pitfall #14c) — validate
+            # it before any read or write. Without this, a caller could create
+            # a preferences row for another org's user under their own
+            # organization_id, and since MemberSizePreferences.user_id is
+            # globally unique, that poisoned row would then block the real
+            # user's own organization from ever creating theirs.
+            await assert_in_org(self.db, User, user_id, organization_id, label="User")
             prefs = await self.get_member_size_preferences(user_id, organization_id)
             if prefs:
                 for key, value in data.items():

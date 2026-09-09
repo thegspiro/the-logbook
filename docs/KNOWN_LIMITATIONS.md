@@ -2226,6 +2226,12 @@ design decision (what should happen once one category or one free-text
 match legitimately exceeds a cap), not a safe drive-by `LIMIT`. (Security
 review INV-22, `docs/security-review/INV-11-inventory.md`.)
 
+**Not the same shape as `get_inventory_summary`'s own (unrelated)
+maintenance-due count**, which looked identical on the surface — also an
+unbounded `.all()` — but only ever read `len()` off the result, so it was
+cheaply fixable and was fixed (a `COUNT(*)` query, no correctness tradeoff)
+rather than added here. See INV-28 in the same security-review doc.
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.

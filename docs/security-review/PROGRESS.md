@@ -21,20 +21,28 @@ feature. The rotation cannot outrun its own review queue.
 `claude/security-review-inventory-pass1` (fresh name for this rotation pass;
 `claude/security-review-inventory-lockorder` and the pass-1/pass-2 branch
 names were each used and merged by earlier passes, so CLAUDE.md Pitfall #24
-rules them out). **Corrected after Codex review**: the first draft's claim
-of "0 fixes, 0 new findings" was wrong on two axes — a declared-but-unread
-frontend scope (eleven files) and an entirely unreviewed MCP tool surface
-(`app/mcp/tools/inventory.py`, `writes.py::create_reorder_request`) sat
-behind the "complete" claim, and three real Pitfall #27/#1-shaped defects
-were inside the ground the pass _did_ claim to cover. This round: the
-frontend files and MCP tools are now reviewed in full (found clean); 3
-fixed (INV-23 pin-cap race, INV-24 first-time variant-group race, INV-25
-`SizePreferencesModal` dropped-null); 1 flagged, not fixed (INV-22,
-unbounded catalog scans, DOC-9 shape); the 4 prior flags (INV-8, INV-9,
-INV-16, INV-17) re-verified still open. Full completion gate green
-(backend + frontend, both run for the first time this pass now that there
-is a real code diff). Awaiting CI. See the Log entry above and
-`INV-11-inventory.md` for detail.
+rules them out). **Corrected after Codex review, twice.** Round 1: the
+first draft's claim of "0 fixes, 0 new findings" was wrong on two axes — a
+declared-but-unread frontend scope (eleven files) and an entirely unreviewed
+MCP tool surface (`app/mcp/tools/inventory.py`,
+`writes.py::create_reorder_request`) sat behind the "complete" claim, and
+three real Pitfall #27/#1-shaped defects were inside the ground the pass
+_did_ claim to cover; the frontend files and MCP tools were reviewed in
+full (found clean), 3 fixed (INV-23 pin-cap race, INV-24 first-time
+variant-group race, INV-25 `SizePreferencesModal` dropped-null), 1 flagged
+(INV-22, unbounded catalog scans, DOC-9 shape). **Round 2** (Codex
+reviewing the commit that closed round 1 out): 3 more, all fixed — INV-26
+(**P1**, a genuine cross-tenant write on `PUT
+/members/{user_id}/size-preferences`, compounded by a global uniqueness
+constraint that would have blocked the real user's org from ever creating
+its own row), INV-27 (P2, INV-25's own null-everywhere fix reopened a
+save-after-failed-load path that could clear preferences a transient load
+error never got to see), INV-28 (P2, `get_inventory_summary`'s
+maintenance-due count materialized every due item — looked like INV-22's
+shape but was cheaply fixable, since only a count was ever read off the
+result). The 4 prior flags (INV-8, INV-9, INV-16, INV-17) re-verified still
+open both rounds. Full completion gate green both rounds. Awaiting CI. See
+the Log entries above and `INV-11-inventory.md` for detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10 pass 4, PR #2411), preserved for history</summary>
@@ -11780,6 +11788,94 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 11 (Inventory, pass 4, round 2) — corrected after a third Codex review round: 3 fixed (1 P1), 4 prior flags still open
+
+**Round 2 on PR #2422**, following the round-1 correction below (which fixed
+INV-23/24/25 and flagged INV-22). Codex reviewed the commit that closed
+round 1 out (`608a7a433`) and found three more problems, one a genuine P1.
+Each investigated against the real code before acting, matching this
+rotation's own discipline that a bot finding is a bug report, not a finding
+on its own word:
+
+**INV-26 (P1) — cross-tenant FK write on `PUT
+/members/{user_id}/size-preferences`.** `upsert_member_size_preferences`
+inserted a `MemberSizePreferences` row for the client-supplied path
+`user_id` under the caller's own `organization_id`, with no check the
+referenced `User` is even in that org — CLAUDE.md Pitfall #14c exactly, and
+worse than an ordinary cross-tenant write because `user_id` is `unique=True`
+at the model level: a poisoned row would have permanently blocked the real
+user's own organization from ever creating its own row, a 400/404-shaped bug
+turning into an unbounded availability defect. Fixed with
+`assert_in_org(self.db, User, user_id, organization_id, label="User")` at
+the top of the method, the same helper and call shape
+`attendance_dashboard_service.py::grant_waiver` already uses for an
+identical client-supplied-user-id case — no endpoint-layer change needed,
+since the existing `except Exception` / `if error: raise HTTPException(400,
+...)` contract already carries a raised `ValueError` through correctly.
+Guard test (new file, real database, two organizations —
+`tests/test_inventory_size_preferences_org_scoping.py`) confirmed to
+**fail** against the pre-fix service method (it created the poisoned row
+and returned it) and **pass** after.
+
+**INV-27 (P2) — INV-25's own fix reopened a save-after-failed-load path.**
+INV-25 (round 1) correctly switched `SizePreferencesModal`'s save payload
+from `|| undefined` to an explicit `null` for every blank field — right for
+the bug it fixed, but it meant the modal's undifferentiated catch (which
+showed the same blank, save-ready form for a 404 as for a timeout/500) now
+let a member "save" over a load that never actually returned anything,
+clearing every preference the failed load never got to see. Fixed by
+branching the catch on `toAppError(err).status`: a 404 behaves as before
+(the genuinely safe "nothing stored yet" case), anything else disables Save
+and shows a retry banner instead, matching the 404-vs-everything-else
+distinction `InventoryMaintenancePage.tsx` already draws and the
+`loadError` boolean shape `useMaintenanceForm.ts` already uses. Three
+test changes in `SizePreferencesModal.test.tsx` (one corrected — the
+existing "load rejects" test used a bare `Error('404')`, which carries no
+status `toAppError` can read, so it was silently exercising the generic-
+failure path instead of the 404 path it claimed to — plus two new) all
+confirmed to **fail** against the pre-fix component and **pass** after.
+
+**`get_inventory_summary`'s MCP tool has the same shape flagged as INV-22,
+but investigation showed it differs — fixed, not flagged, recorded as
+INV-28.** `get_inventory_summary` called `get_maintenance_due`, which loads
+every due `InventoryItem` in the org via `.all()` — but unlike INV-22's two
+methods, this caller only ever read `len()` off the result; no per-row
+decision needed Python. `get_user_inventory_summary`, a few hundred lines
+down in the same file, already computes its own maintenance-due figure as a
+plain `COUNT(*)`, so this was cheaply fixable and was fixed the same way —
+reusing the method's own existing `item_filters` (org/active/domain-
+exclusion) rather than re-deriving them, which also let a now-dead
+`excluded_category_ids` query be deleted. A source-inspection regression
+guard plus three real-database correctness tests
+(`tests/test_inventory_summary_maintenance_due_bounded.py`) confirm the
+guard fails pre-fix while the correctness tests pass identically both
+sides — the fix changes how the number is computed, not what it computes.
+`docs/KNOWN_LIMITATIONS.md`'s INV-22 entry now has a one-paragraph note
+distinguishing this case so a future pass doesn't fold the two together.
+
+The four still-open flagged findings from pass 2/3 (INV-8, INV-9, INV-16,
+INV-17) were not re-touched this round (already re-verified in round 1,
+same day the correction commit landed) and remain open, mirrored in
+`KNOWN_LIMITATIONS.md`.
+
+Full completion gate green: `flake8`/`black --check`/`isort --check-only`
+on `app/`, `tests/`, `alembic/` clean (one file needed `black`'s reformat,
+applied); `validate_migrations.py --strict` unchanged — single head
+(`a3f61c8d27b4`), 439 revisions, no migration in this round's fix set;
+`pytest tests/ -k "inventory or label"` — 993 passed (987 + 6 new), 1
+pre-existing skip; full backend suite `pytest tests/` — 11903 passed
+(11897 + 6 new), 21 pre-existing skips, 0 failed; frontend `node
+scripts/tsc-native.mjs --noEmit` clean; `npm run lint` 0 errors (2
+pre-existing warnings, unrelated file); `npx vitest run
+src/modules/inventory` — 1205 passed (73 files). See
+`INV-11-inventory.md`'s "Correction (round 2, Codex review of commit
+`608a7a433`)" section and INV-26/27/28 for the complete write-up.
+
+Replied to and resolved each of the three review threads Codex opened on
+this round (P1 fixed, both P2s fixed — one with the note explaining why it
+diverges from INV-22's flagged disposition rather than folding into it).
+Awaiting CI on the round-2 push; next after merge: 12 Facilities.
 
 ### 2026-09-08 — Feature 11 (Inventory, pass 4) — corrected after Codex review: 3 fixed, 1 flagged, 4 prior flags re-verified still open
 

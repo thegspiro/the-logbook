@@ -88,6 +88,44 @@ clean and leaving the row open. The fix in this PR is procedural as much as
 it is the five findings below: nothing is marked done while the pass's own
 scope note lists unread files or an unenumerated tool surface.
 
+### Correction (round 2, Codex review of commit `608a7a433`)
+
+A third Codex review round, on the commit that closed out the round above,
+found three more problems — one a genuine P1. All three investigated against
+the real code before acting, not taken on the bot's word:
+
+1. **INV-26 (P1) — the round-above's own INV-8/INV-9 note ("no established
+   sibling precedent") turned out not to matter: `upsert_member_size_preferences`
+   itself had a cross-tenant write, independent of which permission gates the
+   route.** `PUT /members/{user_id}/size-preferences` forwards the
+   client-supplied path `user_id` straight into the service method, which
+   inserted a `MemberSizePreferences` row for that id under the caller's own
+   `organization_id` with no check that the referenced `User` is even in that
+   org. Fixed by validating with `assert_in_org` before any read or write —
+   see INV-26 below.
+2. **INV-27 (P2) — this round's own INV-25 fix (switching every blank field
+   to an explicit `null`) reopened a failure mode INV-25 itself did not
+   create: a non-404 load failure now had a save-ready blank form behind it.**
+   `SizePreferencesModal`'s catch block did not distinguish "no preferences
+   yet" (404, genuinely safe to show a blank form) from a timeout/500 (not
+   safe — the form is blank because the load never returned anything, not
+   because there is nothing stored). Fixed by checking `toAppError(err).status`
+   and blocking Save until a retry succeeds — see INV-27 below.
+3. **The `get_inventory_summary` MCP tool has the same shape Codex itself
+   flagged as INV-22, but wasn't caught when the MCP tools got their
+   first review above — investigated, and it is a different case.**
+   `get_inventory_summary` calls `InventoryService.get_maintenance_due`,
+   which materializes every due item with `.all()`. Unlike INV-22's two
+   methods, though, `get_inventory_summary` never reads anything off those
+   rows except `len()` — no per-item decision needs Python, and
+   `get_user_inventory_summary` (a few hundred lines down in the same file)
+   already computes its own maintenance-due figure as a plain `COUNT(*)`.
+   This one **is** cheaply fixable and was fixed, not flagged — recorded as
+   INV-28 below, distinct from INV-22 rather than folded into it, because the
+   two are opposite outcomes of the same question (is the full set
+   load-bearing for correctness?) and collapsing a fixed one into a flagged
+   one would misstate which methods still carry the limitation.
+
 ### Scope
 
 Re-verified all four still-open flagged findings from pass 2/3 (INV-8, INV-9,
@@ -379,11 +417,14 @@ spot-checked — see [Scope](#scope-1) above; "Scope" is disambiguated with a
 
 ### Findings
 
-Four findings this pass, all caught by Codex reviewing the first ("no new
-findings") draft of this PR, not found independently — see the
-[correction](#correction-codex-review-of-pr-2422) above. Three fixed
-(INV-23, INV-24, INV-25); one flagged, not fixed (INV-22). The rest of the
-new feature surface (requestable catalog, list grouping,
+Seven findings this pass in total, across two Codex review rounds on this
+PR, none found independently — see the two "Correction" sections above.
+Round 1: three fixed (INV-23, INV-24, INV-25); one flagged, not fixed
+(INV-22). Round 2 (on the commit that closed round 1 out): three more, all
+fixed (INV-26, a genuine P1 cross-tenant write; INV-27, a save-after-failed-
+load regression INV-25's own fix introduced; INV-28, a cheaply-fixable
+unbounded scan distinct from INV-22's flagged pair). The rest of the new
+feature surface (requestable catalog, list grouping,
 garment-style-attributes, self-scoped size preferences) and the MSUP-driven
 retire-path hardening were reviewed against the seven checklist dimensions
 and found correct — see [Verified good](#verified-good--new-this-pass).
@@ -537,6 +578,168 @@ alongside it) plus a new regression test,
 `'clearing a stored fit back to "No preference" sends an explicit null, not
 a dropped key'`. Both confirmed to **fail** against the pre-fix component
 (`git stash`) and **pass** after.
+
+#### INV-26 — P1 — `PUT /members/{user_id}/size-preferences` never validated the target user is in the caller's organization — ✅ FIXED
+
+**What:** `upsert_member_size_preferences`'s create branch inserted a new
+`MemberSizePreferences` row keyed on the client-supplied path `user_id`,
+stamped with the caller's `organization_id` — with no check that the `User`
+referenced by that id actually belongs to that organization. CLAUDE.md
+Pitfall #14c exactly: a client-supplied FK id persisted without validating it
+is in-org.
+
+**Where:** `backend/app/api/v1/endpoints/inventory.py::upsert_member_size_preferences`
+(the endpoint forwards the path param unchanged);
+`backend/app/services/inventory_service.py::upsert_member_size_preferences`
+(the actual gap — no read or write in the method touched `organization_id`
+against the `User` table at all).
+
+**Failure scenario:** an inventory manager in org A calls `PUT
+/members/{user_id}/size-preferences` with a `user_id` UUID belonging to org
+B (guessed, enumerated, or known from a prior cross-org interaction
+elsewhere). The endpoint's own permission gate (`inventory.manage`) only
+proves the caller holds that permission _in their own org_ — CLAUDE.md
+Pitfall #14b, `require_permission` does not scope the object — so the
+service method proceeds, finds no existing row for that `user_id` +
+org A's `organization_id`, and creates one: a `MemberSizePreferences` row
+naming org B's user but stamped with org A's `organization_id`.
+
+**Impact, and why this is worse than an ordinary cross-tenant write:**
+`MemberSizePreferences.user_id` is `unique=True` at the model level
+(`backend/app/models/inventory.py`). Once the poisoned row exists, org B's
+own admin — or the member themself, via `PUT /my/size-preferences` — can
+never create their own legitimate row for that user again: any attempt hits
+the same unique constraint the poisoned row already occupies, an
+availability bug stacked on top of the cross-tenant write, and one that
+persists indefinitely until someone notices and manually deletes the wrong
+row.
+
+**Fix:** `assert_in_org(self.db, User, user_id, organization_id, label="User")`
+at the top of `upsert_member_size_preferences`, before the existing-row
+lookup — the same helper and call shape `attendance_dashboard_service.py`'s
+`grant_waiver` already uses for an identical "client-supplied user id on a
+create/update path" case. `assert_in_org` raises `ValueError("Invalid
+User")`, which the existing `except Exception` in this method already turns
+into `(None, str(e))`, and the endpoint's existing `if error: raise
+HTTPException(400, ...)` already turns into a 400 — no endpoint-layer change
+needed, the validation slots into the contract that was already there.
+
+**Verified:** new file `tests/test_inventory_size_preferences_org_scoping.py`
+(real database, two organizations, not source inspection) —
+`test_upsert_rejects_a_user_from_another_organization` creates org A and org
+B with a user in org B, calls the service method with org B's user id under
+org A's `organization_id`, and asserts both that the call is rejected
+(`error` is set, `prefs` is `None`) and that no `MemberSizePreferences` row
+was created at all — not under org A and not misattributed to org B either.
+`test_upsert_still_succeeds_for_a_same_org_user` pins the ordinary, intended
+case is untouched. Confirmed the rejection test **fails** against the
+pre-fix service method (temporarily restored from `HEAD`) — it creates the
+row and returns it rather than rejecting — and **passes** after.
+
+#### INV-27 — P2 — `SizePreferencesModal` could clear every preference after a transient load failure, a regression INV-25's own fix introduced — ✅ FIXED
+
+**What:** the initial `GET`'s catch block treated every failure alike: a 404
+("no preferences yet," genuinely safe to show a blank form) and a timeout,
+500, or offline state (not safe — the form is blank because the load never
+returned anything, not because there is nothing stored) both fell through to
+`setForm(EMPTY)` with Save left enabled. Before INV-25's fix this only meant
+the member would see stale-looking blanks after a retry; INV-25 changed
+`handleSave` to send every blank field as an explicit `null` instead of
+omitting the key (correctly, for the bug it fixed — see INV-25 above), which
+means the same code path that used to be merely uninformative now actively
+clears every preference the failed load never got a chance to see.
+
+**Where:** `frontend/src/modules/inventory/components/SizePreferencesModal.tsx::load`
+(the undifferentiated catch) and `handleSave` (which had no way to know the
+form it was about to submit was never actually loaded).
+
+**Failure scenario:** a member with several stored sizes opens the modal on
+a flaky connection; the initial `GET` times out or 500s. The modal shows a
+blank, apparently-ready form. The member — or, in admin mode, a
+quartermaster editing someone else's sizes — fills in nothing (there is
+nothing to fill in without knowing the old values) and clicks Save anyway,
+or simply clicks Save to dismiss what looks like an empty form. Every field
+now serializes as an explicit `null` (INV-25's fix), and the upsert clears
+every preference that member had, silently, behind a "Sizes saved" toast.
+
+**Fix:** `load`'s catch now branches on `toAppError(err).status`. A 404
+behaves exactly as before (blank form, Save enabled — the genuinely safe
+case). Anything else sets a new `loadError` state instead: Save is disabled,
+an inline error banner explains why and offers a "Try again" button that
+re-runs `load()`, and `handleSave` itself also bails out if `loadError` is
+still true (belt-and-suspenders against a stray call site). This is the same
+distinction `InventoryMaintenancePage.tsx` already draws on its own load
+failure (404 silent, anything else surfaced) and the same `loadError` boolean
+shape `useMaintenanceForm.ts` already uses to gate a form on a failed load.
+
+**Verified:** `SizePreferencesModal.test.tsx` — the existing "load rejects"
+test was corrected to reject with a realistic 404-shaped error (it had used
+a bare `Error('404')`, which `toAppError` does not read a status off of, so
+it was accidentally exercising the same code path as any other failure) and
+now also asserts Save stays enabled and a save actually fires. Two new
+tests: one rejects with a 500-shaped error and asserts Save is disabled, the
+error banner is shown, and a direct click does not fire the clearing
+payload; the other confirms "Try again" recovers the form and re-enables
+Save once the retried load succeeds. All confirmed to **fail** against the
+pre-fix component (temporarily restored from `HEAD`) — the 500 case shows no
+alert and no disabled Save, the retry case has no "Try again" button to
+click — and **pass** after.
+
+#### INV-28 — P2 — `get_inventory_summary`'s maintenance-due figure materialized every due item to compute a count — ✅ FIXED
+
+**What:** `get_inventory_summary` called `self.get_maintenance_due(...)`,
+which runs `select(InventoryItem)...` with no limit and returns the full
+ORM row set via `.all()`, then discarded everything from that list except
+its length (after filtering out excluded-domain rows in Python). Reachable
+from `GET /inventory/summary` (the admin-hub dashboard widget) and,
+ungated by any extra check, the `get_inventory_summary` MCP tool — so an
+org-wide `InventoryItem` materialization ran on every summary read, purely
+to produce one integer.
+
+**Where:** `backend/app/services/inventory_service.py::get_inventory_summary`
+(the caller); `::get_maintenance_due` (the `.all()` itself, unchanged and
+still correct for its one remaining caller, the `GET /maintenance-due`
+listing endpoint, which genuinely needs the rows).
+
+**Why this is not the same disposition as INV-22:** INV-22's two methods
+each need the full pre-decision set in Python because per-row eligibility
+(a normalized size/colour/style match, a rank/position check) is not
+expressible as a SQL `WHERE`. Nothing about `get_inventory_summary`'s use of
+the list is like that — it only ever called `len()` on the (already
+Python-filtered) result. `get_user_inventory_summary`, a few hundred lines
+down in the same file, already computes its own per-user maintenance-due
+figure this way (`select(func.count(InventoryItem.id))...`), so a COUNT-based
+answer here is not a new pattern in this file, just one this method had not
+been written to use.
+
+**Impact:** memory/time cost scaling with the organization's total item
+count on every dashboard load and every MCP `get_inventory_summary` call —
+an abuse-resistance/DoS-shaped concern (CHECKLIST.md's unbounded-scan
+dimension), not a tenant-isolation or data-exposure defect: the query was
+already org-scoped and returned only a count to the client either way.
+
+**Fix:** replaced the `get_maintenance_due()` call and the Python `len()` +
+category-exclusion filter with a direct `select(func.count(InventoryItem.id))`
+reusing the same `item_filters` list (`organization_id`, `active`, and — when
+present — the `_outside_domains(...)` predicate for `exclude_item_types`)
+already built earlier in the method for `total_items`/`items_by_status`/etc,
+plus the `next_inspection_due <= cutoff` condition. Reusing `item_filters`
+rather than re-deriving the org/active/domain filters means this can't drift
+from what the rest of the summary already counted against, and it let the
+now-unused `excluded_category_ids` query (previously computed solely to
+filter the materialized list) be deleted outright rather than left dead.
+
+**Verified:** new file
+`tests/test_inventory_summary_maintenance_due_bounded.py` — a
+source-inspection regression guard
+(`test_get_inventory_summary_does_not_materialize_every_due_item`, asserting
+`get_maintenance_due(` does not appear in `get_inventory_summary`'s source,
+confirmed to **fail** against the pre-fix method and **pass** after) plus
+three real-database correctness tests (due-window filtering, inactive-item
+exclusion, and `exclude_item_types` carving out the medical domain the way
+`item_filters` already does for every other figure in this response) — all
+four pass identically before and after the refactor, which is the point:
+the fix changes how the number is computed, not what it computes.
 
 ### Verified good ✅ (new this pass)
 
@@ -692,6 +895,23 @@ migrations in the repository, not just this module's five.
   new regression test for the exact scenario Codex named (clearing a stored
   `garment_fit` back to "No preference"). Both confirmed to **fail** against
   the pre-fix component (`git stash`) and **pass** after (INV-25).
+- **Round 2 (Codex review of `608a7a433`):**
+  `tests/test_inventory_size_preferences_org_scoping.py` (new file, 2 tests,
+  real database) — `test_upsert_rejects_a_user_from_another_organization`
+  confirmed to **fail** against the pre-fix service method and **pass**
+  after (INV-26); `test_upsert_still_succeeds_for_a_same_org_user` pins the
+  ordinary case stays working. `SizePreferencesModal.test.tsx` — the
+  existing "load rejects" test corrected to a realistic 404-shaped rejection
+  (it had used a bare `Error('404')`, which carries no `status` `toAppError`
+  can read), plus two new tests for the non-404 case (Save disabled, error
+  banner shown, no clearing payload fires) and its recovery via "Try again."
+  All three new/changed assertions confirmed to **fail** against the pre-fix
+  component and **pass** after (INV-27).
+  `tests/test_inventory_summary_maintenance_due_bounded.py` (new file, 4
+  tests) — one source-inspection regression guard (confirmed to **fail**
+  against the pre-fix method, **pass** after) plus three real-database
+  correctness tests that pass identically before and after, since the fix is
+  a computation-strategy change, not a behavior change (INV-28).
 
 ### Completion gate
 
@@ -726,6 +946,20 @@ str(organization_id)` to the lock query costs nothing, is trivially correct
 given `organization_id` is already in scope, and satisfies the ratchet
 without a `tests/org_scoping_baseline.txt` exception — the better of the two
 outcomes the ratchet's own failure message offers.
+
+**Round 2 completion gate (Codex review of `608a7a433`, INV-26/27/28):**
+`flake8`/`black --check`/`isort --check-only` on `app/`, `tests/`,
+`alembic/` — clean (one file needed `black`'s own reformat, applied);
+`validate_migrations.py --strict` — unchanged, single head (`a3f61c8d27b4`),
+439 revisions (no migration in this round's fix set); `pytest tests/ -k
+"inventory or label"` — 993 passed (987 + 6 new), 1 pre-existing skip; full
+backend suite `pytest tests/` — 11903 passed (11897 + 6 new), 21
+pre-existing skips, 0 failed; frontend `node scripts/tsc-native.mjs
+--noEmit` — clean; `npm run lint` — 0 errors, the same 2 pre-existing
+warnings in an unrelated file (under the `--max-warnings 10` gate); `npx
+vitest run src/modules/inventory` — 1205 passed (73 files, +2 net over the
+round-1 figure: one existing test corrected, two new added, matching the 15
+total in `SizePreferencesModal.test.tsx` this round left behind).
 
 ---
 
