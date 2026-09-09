@@ -739,8 +739,28 @@ class MembershipPipelineService:
             return False
 
         # Auto-advance any prospects sitting on this step.
+        #
+        # Locking, for the reason `_load_steps_for_update` exists: locking the
+        # steps did nothing for this read. A locking read does not advance the
+        # transaction's read view, so a plain SELECT here still answers from
+        # the snapshot the transaction opened with — set by the auth query,
+        # long before this method runs. Two coordinators deleting adjacent
+        # stages is the case that bites: the first moves a prospect off stage A
+        # onto stage B and commits, and the second, deleting B, cannot see them
+        # there. It finds nobody stranded, deletes B, and `current_step_id` is
+        # a FK with ON DELETE SET NULL — so the prospect is silently left on no
+        # stage at all, which is exactly how someone disappears off the board.
+        #
+        # Scoped by organization_id as well, and not only for the usual reason:
+        # `current_step_id` carries no index, so a bare FOR UPDATE on it scans
+        # the table and next-key-locks every row it touches — every prospect in
+        # every organization, for the length of a stage deletion. With the org
+        # and status columns in the predicate this uses idx_prospect_org_status
+        # and locks a narrow range instead.
         stranded_result = await self.db.execute(
-            select(ProspectiveMember).where(
+            select(ProspectiveMember)
+            .where(
+                ProspectiveMember.organization_id == organization_id,
                 ProspectiveMember.current_step_id == step_id,
                 ProspectiveMember.status.in_(
                     [
@@ -749,6 +769,8 @@ class MembershipPipelineService:
                     ]
                 ),
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         stranded = list(stranded_result.scalars().all())
 
@@ -770,6 +792,15 @@ class MembershipPipelineService:
             stranded_ids = [str(p.id) for p in stranded]
             progress_rows: List[ProspectStepProgress] = []
             if fallback_step is not None and stranded_ids:
+                # Deliberately not a locking read. (prospect_id, step_id) is
+                # unique here, so a stale miss on this lookup would take the
+                # `row is None` branch below and insert a duplicate — but once
+                # the stranded read above is locking, there is no interleaving
+                # that produces one. Whoever last moved this prospect wrote a
+                # progress row for the stage they landed on, and that stage is
+                # where the locking read now finds them, never the fallback
+                # this deletion is about to pick. Adding a lock here would be
+                # guarding a case that cannot arise.
                 progress_result = await self.db.execute(
                     select(ProspectStepProgress).where(
                         ProspectStepProgress.prospect_id.in_(stranded_ids),

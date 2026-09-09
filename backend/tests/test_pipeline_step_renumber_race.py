@@ -38,6 +38,10 @@ from app.core.database import database_manager
 from app.models.membership_pipeline import (
     MembershipPipeline,
     MembershipPipelineStep,
+    ProspectiveMember,
+    ProspectStatus,
+    ProspectStepProgress,
+    StepProgressStatus,
 )
 from app.models.user import Organization
 from app.services.membership_pipeline_service import MembershipPipelineService
@@ -97,10 +101,98 @@ async def _seed_pipeline(org_id: str, step_count: int):
         await setup.close()
 
 
+async def _seed_prospect(org_id: str, pipeline_id: str, step_id: str) -> str:
+    """A prospect parked on ``step_id``, committed."""
+    factory = database_manager.session_factory
+    setup = factory()
+    try:
+        prospect = ProspectiveMember(
+            organization_id=org_id,
+            pipeline_id=pipeline_id,
+            current_step_id=step_id,
+            first_name="Race",
+            last_name="Prospect",
+            email=f"race-{uuid.uuid4().hex[:10]}@example.com",
+            status=ProspectStatus.ACTIVE,
+        )
+        setup.add(prospect)
+        await setup.flush()
+        setup.add(
+            ProspectStepProgress(
+                prospect_id=prospect.id,
+                step_id=step_id,
+                status=StepProgressStatus.IN_PROGRESS,
+            )
+        )
+        await setup.commit()
+        return str(prospect.id)
+    finally:
+        await setup.close()
+
+
+async def _prospect_stage(prospect_id: str):
+    """The prospect's current ``current_step_id``, freshly read."""
+    factory = database_manager.session_factory
+    reader = factory()
+    try:
+        return (
+            await reader.execute(
+                select(ProspectiveMember.current_step_id).where(
+                    ProspectiveMember.id == prospect_id
+                )
+            )
+        ).scalar_one()
+    finally:
+        await reader.close()
+
+
+async def _progress_row_count(prospect_id: str, step_id: str) -> int:
+    factory = database_manager.session_factory
+    reader = factory()
+    try:
+        rows = (
+            (
+                await reader.execute(
+                    select(ProspectStepProgress.id).where(
+                        ProspectStepProgress.prospect_id == prospect_id,
+                        ProspectStepProgress.step_id == step_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return len(rows)
+    finally:
+        await reader.close()
+
+
 async def _teardown(org_id: str):
     factory = database_manager.session_factory
     cleanup = factory()
     try:
+        prospect_ids = (
+            (
+                await cleanup.execute(
+                    select(ProspectiveMember.id).where(
+                        ProspectiveMember.organization_id == org_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if prospect_ids:
+            await cleanup.execute(
+                ProspectStepProgress.__table__.delete().where(
+                    ProspectStepProgress.prospect_id.in_(prospect_ids)
+                )
+            )
+            await cleanup.execute(
+                ProspectiveMember.__table__.delete().where(
+                    ProspectiveMember.id.in_(prospect_ids)
+                )
+            )
         pipeline_ids = (
             (
                 await cleanup.execute(
@@ -242,6 +334,115 @@ class TestConcurrentStageDeletesRenumberAgainstCommittedState:
 
             surviving = await _positions(pipeline_id)
             assert surviving == [("Stage 3", 0), ("Stage 2", 1)]
+        finally:
+            await first.rollback()
+            await second.rollback()
+            await _teardown(org_id)
+
+
+class TestConcurrentStageDeletesCarryProspectsForward:
+    """A prospect must never be left on no stage by a concurrent deletion.
+
+    Locking the *steps* does nothing for the reads that follow: a locking read
+    does not advance the transaction's read view, so the plain SELECTs below it
+    still answer from the snapshot the transaction opened with. These cover the
+    two ways that bit.
+    """
+
+    async def test_a_prospect_moved_by_the_first_delete_is_not_stranded(
+        self, two_sessions
+    ):
+        """Delete adjacent stages at once, with a prospect between them.
+
+        The first deletion moves the prospect from stage 1 onto stage 2. The
+        second deletes stage 2. Read from a stale snapshot, that second call
+        finds nobody on stage 2, deletes it anyway, and ON DELETE SET NULL
+        clears current_step_id -- leaving the applicant on no stage and off
+        every board that groups by one.
+        """
+        first, second = two_sessions
+        slug = f"stranded-race-{uuid.uuid4().hex[:12]}"
+        org_id, pipeline_id = await _seed_pipeline(slug, 3)
+
+        try:
+            step_rows = (
+                (
+                    await second.execute(
+                        select(MembershipPipelineStep)
+                        .where(MembershipPipelineStep.pipeline_id == pipeline_id)
+                        .order_by(MembershipPipelineStep.sort_order)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            ids = [str(row.id) for row in step_rows]
+            prospect_id = await _seed_prospect(org_id, pipeline_id, ids[0])
+
+            # Pin the second coordinator's snapshot before anything commits.
+            await second.execute(
+                select(ProspectiveMember.id).where(
+                    ProspectiveMember.organization_id == org_id
+                )
+            )
+
+            # First coordinator deletes stage 1; the prospect moves to stage 2.
+            first_svc = MembershipPipelineService(first)
+            assert await first_svc.delete_step(ids[0], pipeline_id, org_id) is True
+            assert await _prospect_stage(prospect_id) == ids[1]
+
+            # Second coordinator deletes stage 2 and must carry them forward.
+            second_svc = MembershipPipelineService(second)
+            assert await second_svc.delete_step(ids[1], pipeline_id, org_id) is True
+
+            assert await _prospect_stage(prospect_id) == ids[2]
+        finally:
+            await first.rollback()
+            await second.rollback()
+            await _teardown(org_id)
+
+    async def test_the_progress_row_follows_them_to_the_new_stage(self, two_sessions):
+        """Moving the pointer is only half of carrying a prospect forward.
+
+        The stage they land on has to read as the one they are working, which
+        means a ``prospect_step_progress`` row on it -- exactly one, since
+        ``(prospect_id, step_id)`` is unique. A second deletion working from a
+        stale snapshot strands the prospect instead, so no row is written at
+        all and the progress track disagrees with the stage pointer.
+        """
+        first, second = two_sessions
+        slug = f"progress-race-{uuid.uuid4().hex[:12]}"
+        org_id, pipeline_id = await _seed_pipeline(slug, 3)
+
+        try:
+            step_rows = (
+                (
+                    await second.execute(
+                        select(MembershipPipelineStep)
+                        .where(MembershipPipelineStep.pipeline_id == pipeline_id)
+                        .order_by(MembershipPipelineStep.sort_order)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            ids = [str(row.id) for row in step_rows]
+            prospect_id = await _seed_prospect(org_id, pipeline_id, ids[0])
+
+            await second.execute(
+                select(ProspectStepProgress.id).where(
+                    ProspectStepProgress.prospect_id == prospect_id
+                )
+            )
+
+            first_svc = MembershipPipelineService(first)
+            assert await first_svc.delete_step(ids[0], pipeline_id, org_id) is True
+            assert await _progress_row_count(prospect_id, ids[1]) == 1
+
+            second_svc = MembershipPipelineService(second)
+            assert await second_svc.delete_step(ids[1], pipeline_id, org_id) is True
+
+            assert await _progress_row_count(prospect_id, ids[2]) == 1
         finally:
             await first.rollback()
             await second.rollback()
