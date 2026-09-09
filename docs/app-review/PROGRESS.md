@@ -21,7 +21,7 @@ been through a review pass.
 | A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
-| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
+| A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
 | A7  | Dashboard & action items       | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`                                                                                                                | DASH   | ⬜     |
@@ -2247,3 +2247,60 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   flake8 0 · black 1102 unchanged · eslint 0 errors / 2 pre-existing warnings ·
   scheduled-task suites 122 passed, 1 skipped · docs link check 352 files, 0
   broken. See scheduled-tasks.md → Pass 5. Next: A4 email templates & delivery.
+- **A4 email templates & delivery ✅ (pass 5) — MAIL-20: a decommissioned
+  department kept mailing its members.** Unlike A3, this feature had genuinely
+  new ground: ~970 lines since pass 2 (endpoints 671 → 904 L and 11 → 13 routes,
+  template service 2,739 → 3,247 L, `email_service` 1,633 → 1,862 L), including
+  the footer library and the layout/colourway fields. **2 fixed (1 MED, 1 LOW),
+  1 flagged (LOW).** **MAIL-20 (MED, fixed):**
+  `_run_scheduled_emails_inner` selected every due `PENDING` `ScheduledEmail`
+  across all organizations with **no `Organization.active` filter** — its only
+  org check (`if not org`) catches a _deleted_ row, not a deactivated one — so an
+  organization switched off keeps sending everything still queued against it, to
+  its former members. This is the CRON2-31-11/CRON-31-5 shape, and it had
+  already been closed **next door**: the sibling `run_publish_scheduled_messages`
+  was fixed as CRON3-31-1 two days earlier, with a comment naming the shape.
+  Scheduled _email_ lives in a different function and that pass was scoped to its
+  own diff, so this one was never in view — a good argument for the rotation
+  running features rather than diffs. Fixed with the canonical join +
+  `active.isnot(False)`; filtered rather than retired, so a reactivated
+  department keeps its queue instead of this task destroying it in passing.
+  **Reproduced:** `tests/test_scheduled_email_active_org.py` fails against the
+  unfixed code with the row moved to `failed` and `total_processed: 1` — it _was_
+  put through the send path. Worth knowing which assertion carries the weight:
+  `result["sent"] == 0` holds either way in a test env with email disabled, so
+  the real check is that the row is untouched; a second test asserts an **active**
+  org's email is still processed, so the fix cannot degenerate into filtering
+  everything out. **MAIL-21 (LOW, fixed):** `delete_attachment` did blocking
+  `os.path.isfile`/`os.remove` on the event loop 60 lines below an upload path
+  that correctly uses `asyncio.to_thread`, **and** removed the file before
+  committing the row delete — so a failed commit left a row pointing at a missing
+  file, and that row is loaded by the send path, breaking the next email that
+  uses the template. Now commits first and unlinks in a thread tolerating
+  `OSError`: the failure mode inverts from a broken send to an orphaned file.
+  **MAIL-22 (LOW, flagged):** `upload_attachment` sniffs the real MIME, uses it
+  to accept/reject, then persists the **client's claimed** `content_type` — the
+  expensive correct answer is computed and discarded, and extension and content
+  are checked against two independent allowlists but never against each other.
+  Not fixed because the obvious fix is wrong: `.docx`/`.xlsx`/`.pptx` are ZIP
+  containers that libmagic commonly reports as `application/zip` (which is why
+  the allowlist carries both), so storing the detected value would mail Word
+  documents as zips. The right change is an extension↔MIME consistency table plus
+  a decision on what to do on mismatch. Mirrored to KNOWN_LIMITATIONS.
+  **Verified good:** all 13 endpoints gated (AST-enumerated — pass 2's note that
+  the multi-line dependency defeats a line grep still holds); the new footer
+  library deep-copies `Organization.settings` before a nested write (pitfall #12)
+  and escapes both admin line text and substituted values; XC-1 closed on **both**
+  scheduled-email write paths, with `update_scheduled_email` offering no way to
+  swap `template_id` after the fact — the place this class of gap usually
+  survives; and the scheduled-email send path does **not** carry the "marked sent,
+  nothing delivered" bug its cron neighbours still have (CRON-31-7), branching on
+  `success_count > 0`. **Re-verified still open:** MAIL-4 (arbitrary recipients,
+  the standing CS-9 policy call) and a silent no-op where a PATCH with an
+  unrecognised `status` returns 200 having written nothing. Ids start at MAIL-20
+  because `MAIL-1…5` are used by both this file and MSG-25, and FORM-26 cites a
+  `MAIL-4` of its own. Gate: tsc 0 · flake8 0 · black 1103 unchanged · eslint 0
+  errors / 2 pre-existing warnings · **full backend suite 11,924 passed, 21
+  skipped, 0 failed** (run whole rather than the 1,490-test email slice, since
+  the MAIL-20 fix lands in `scheduled_tasks.py`). See email-templates.md → Pass 5.
+  Next: A5 course cohorts & syllabus.

@@ -704,15 +704,39 @@ async def delete_attachment(
             status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
         )
 
-    # Remove file from disk
-    if os.path.isfile(attachment.storage_path):
-        os.remove(attachment.storage_path)
+    # Captured before the delete: reading them back off a deleted instance
+    # after the commit is a refresh waiting to happen, and the removal below
+    # needs both.
+    storage_path = attachment.storage_path
+    filename = attachment.filename
 
+    # Row first, file second. The other order — which this did — leaves a row
+    # pointing at a file that is already gone whenever the commit fails, and
+    # that row is loaded by the send path, so the next email using this
+    # template fails on a missing attachment. Committing first means a failed
+    # unlink leaves an orphaned file on disk instead: wasted bytes rather than
+    # a broken send.
     await db.delete(attachment)
     await db.commit()
-    logger.info(
-        "Attachment deleted: {} from template {}", attachment.filename, template_id
-    )
+
+    # `to_thread`, matching the upload path 60 lines above: these are blocking
+    # syscalls and everything else in this module already keeps them off the
+    # event loop.
+    def _remove_file(path: str) -> None:
+        if os.path.isfile(path):
+            os.remove(path)
+
+    try:
+        await asyncio.to_thread(_remove_file, storage_path)
+    except OSError:
+        # The attachment is already gone as far as the application is
+        # concerned; a file that outlives it is a cleanup problem, not a
+        # reason to fail the request the admin just made.
+        logger.warning(
+            "Attachment row deleted but file could not be removed: {}", storage_path
+        )
+
+    logger.info("Attachment deleted: {} from template {}", filename, template_id)
 
 
 # ---------------------------------------------------------------------------
