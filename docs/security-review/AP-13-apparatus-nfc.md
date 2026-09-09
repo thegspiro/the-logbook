@@ -347,6 +347,90 @@ from findings 2–4 stayed in place, since they are already committed —
 isolating just this fix required nothing further), confirmed passing with
 the fix restored, stable across 3 consecutive re-runs.
 
+### Finding 6 (P1, Codex round 5 — `populate_existing` breaks UTC tagging on refresh)
+
+**What:** Codex's review of finding 5's own fix caught that the
+`populate_existing=True` addition, while correctly refreshing a stale
+identity-map object, silently undoes a different, unrelated invariant:
+`core/database.py` tags every naive `DATETIME` value as UTC-aware the
+moment SQLAlchemy loads it (`_on_load_stamp_utc`, registered only on the
+`"load"` event) — this exists because MySQL's `DATETIME` columns carry no
+tzinfo of their own, so aiomysql always hands back naive `datetime`
+objects even under `DateTime(timezone=True)`. `_authorize_shift_management`
+loads the shift with a plain `get_shift_by_id` first, on the same session
+the service method then uses for its own `for_update=True` call — that
+first, plain load is a genuine SQLAlchemy `"load"` event, and is what
+stamps `shift.end_time` as UTC-aware in the first place. But repopulating
+an object _already_ in the identity map (exactly what `populate_existing`
+does, and exactly what `session.refresh()` has always done elsewhere in
+this codebase) fires a _different_ event, `"refresh"` — a distinct
+registration with a distinct callback signature
+(`refresh(target, context, attrs)` vs. `load`'s `(target, context)`) — and
+nothing was listening for it. So the locking re-read's own tzinfo stamping
+never ran, and the object came back with `end_time` naive again, as if it
+had never been tagged.
+
+This is not confined to the race Codex's own finding 5 report described.
+It hits _every ordinary_ `finalize_shift` call with a real `end_time`,
+because the authorize-then-lock double read happens unconditionally on
+the REST path, race or no race. `finalize_shift` immediately evaluates
+`shift.end_time > datetime.now(timezone.utc)` — comparing the now-naive
+`end_time` against an aware `datetime.now(timezone.utc)` raises
+`TypeError`, which `finalize_shift`'s own `except Exception` catches and
+returns as `error`, surfacing to the caller as a 400/500 instead of a
+normal finalize. Reproduced directly: a single ordinary
+`_authorize_shift_management`-then-`finalize_shift` sequence, no
+concurrency at all, raised
+`"can't compare offset-naive and offset-aware datetimes"` pre-fix.
+
+**Where:** `backend/app/core/database.py` — the UTC-tagging listener was
+registered only on SQLAlchemy's `"load"` event.
+
+**Fix:** factored the column-walking/stamping logic into a shared
+`_stamp_utc(target)` helper, and registered it on **both** `"load"`
+(`_on_load_stamp_utc`) and `"refresh"` (`_on_refresh_stamp_utc`) — the two
+events have different callback signatures (`refresh` also receives the set
+of attribute names being refreshed, which this fix does not need and
+ignores), so they need two separate `@event.listens_for` registrations
+even though they now share one implementation. This covers `refresh()`
+calls anywhere in the codebase, not just the `populate_existing` path —
+`apparatus_service.py`, `training_session_service.py`,
+`member_leave_service.py`, `admin_hub_service.py`, `template_service.py`
+and `external_training_service.py` all call `session.refresh()` explicitly
+elsewhere, and every one of those was exposed to the identical gap the
+moment any of their refreshed models carried a `DateTime(timezone=True)`
+column — this fix closes it for all of them at the same root cause,
+consistent with Pitfall #29's rule against re-deriving what one already-
+correct mechanism should be defining.
+
+**Regression test:** `backend/tests/test_shift_refresh_utc_tagging.py` —
+two tests on a single session (no concurrency needed, since the bug fires
+on one ordinary request): the first mimics
+`_authorize_shift_management`'s plain load followed by the service
+method's own `for_update=True` re-read, and asserts `end_time` is still
+tz-aware (and that the re-read genuinely returns the _same_ Python object,
+not a fresh instance — confirming it exercises the refresh path, not a
+cache-miss reload); the second drives the real `finalize_shift` after an
+authorize-shaped preload and asserts it completes without raising.
+Confirmed both fail pre-fix (`TypeError`/`assert "can't compare
+offset-naive and offset-aware datetimes" is None`) via `git stash push -u`
+isolating just the new `"refresh"` listener (the `"load"` listener and
+`_stamp_utc` helper's shared logic stayed in the stash together, since the
+helper itself is inert without a second registration — reverting the
+smallest self-consistent unit), confirmed passing with the fix restored,
+stable across 3 consecutive re-runs.
+
+**Also required:** `backend/tests/test_scheduling.py`'s
+`test_update_shift_validates_effective_time_range` (the `invalid-*` cases)
+asserted `shift.start_time == at_hour(7)` after an explicit
+`db_session.refresh(shift)` — an equality against a naive `datetime`. That
+assertion was only ever true because `refresh()` previously left
+`start_time` naive (the very bug this finding fixes); once `refresh()`
+correctly UTC-tags it, the comparison is aware-vs-naive and no longer
+equal. Updated both assertions to normalize with `.replace(tzinfo=
+timezone.utc)` before comparing, the same pattern the test's own `valid`
+branch already used two lines above for exactly this reason.
+
 ## Guard test added (pass 11)
 
 - `backend/tests/test_shift_check_in_race.py` —
@@ -376,18 +460,26 @@ test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
   identity-map object, not a blocking failure) via `git stash push -u`
   isolating the `populate_existing` addition alone, confirmed passing with
   the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_refresh_utc_tagging.py` —
+  `TestLockingRefreshPreservesUtcTagging::test_locking_reread_keeps_end_time_tz_aware`
+  and `::test_finalize_shift_does_not_raise_after_authorize_preload`
+  (finding 6, above). Confirmed both failing (`assert ... tzinfo is not
+None` and `TypeError` surfaced as `error`) via `git stash push -u`
+  isolating the new `"refresh"` listener registration alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
 
-## Completion gate (pass 11, round 4 — Codex findings on PR #2428)
+## Completion gate (pass 11, round 5 — Codex findings on PR #2428)
 
-| Check                                                                                                                                                                                      | Result                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `flake8 app/ tests/ alembic/`                                                                                                                                                              | ✅ 0 violations                                                                |
-| `black --check app/ tests/ alembic/`                                                                                                                                                       | ✅ clean                                                                       |
-| `isort --check-only app/ tests/ alembic/`                                                                                                                                                  | ✅ clean                                                                       |
-| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py` | ✅ 4 passed, 3 repeated runs, no flakiness                                     |
-| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or scheduling"`                                                                                   | ✅ 1129 passed, 1 skipped (pre-existing optional-dep skip)                     |
-| `pytest tests/` (full backend suite)                                                                                                                                                       | ✅ 11937 passed, 21 skipped (pre-existing Docker/optional-dep skips), 0 failed |
-| `tsc --noEmit` / `eslint .`                                                                                                                                                                | n/a — no frontend files touched this round either                              |
+| Check                                                                                                                                                                                                                              | Result                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                      | ✅ 0 violations                                                                                |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                               | ✅ clean                                                                                       |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                          | ✅ clean                                                                                       |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py tests/test_shift_refresh_utc_tagging.py` | ✅ 6 passed, 3 repeated runs, no flakiness                                                     |
+| `pytest tests/test_scheduling.py::TestShiftCRUD::test_update_shift_validates_effective_time_range`                                                                                                                                 | ✅ 8 passed (all parametrize cases, after the tz-normalization fix)                            |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or shift_finalize or shift_closeout or shift_lock or shift_refresh or scheduling"`                                                        | ✅ 1131 passed, 1 skipped (pre-existing optional-dep skip)                                     |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                               | ✅ pending — running in background; this row is updated with the exact count once it completes |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                        | n/a — no frontend files touched this round either                                              |
 
 ### Verified good ✅ (re-confirmed this pass, mechanism named)
 

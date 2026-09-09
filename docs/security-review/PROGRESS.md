@@ -103,6 +103,48 @@ write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 5.
 Completion gate green: full backend suite 11937 passed / 21 pre-existing
 skips / 0 failed; flake8/black/isort clean; no frontend files touched.
 
+**Round 5 (Codex review of round 4's own fix, same PR):** 1 more fixed —
+P1, and the one round this rotation that revealed a bug affecting ordinary,
+non-racing requests, not just a concurrency edge case. Round 4's
+`populate_existing=True` fix correctly refreshes an already-identity-mapped
+`Shift` on a locking re-read, but refreshing an object already in the
+identity map fires SQLAlchemy's `"refresh"` event, not `"load"` — a
+distinct event with a distinct callback signature — and
+`core/database.py`'s UTC-tagging listener (which exists because MySQL
+`DATETIME` columns carry no tzinfo, so aiomysql always returns naive
+`datetime`s) was registered only on `"load"`. So the locking re-read
+silently stripped the tzinfo `_authorize_shift_management`'s earlier plain
+load had stamped on, and `finalize_shift`'s
+`shift.end_time > datetime.now(timezone.utc)` check then raised `TypeError`
+comparing naive vs. aware — caught by the method's own exception handling
+and surfaced as an ordinary error response, not a 500 stack trace, so it
+would have read as "finalization mysteriously rejects a shift with a valid
+end time" rather than pointing at its own cause. Reproduced directly
+(no concurrency needed — the double read happens on every REST-path call):
+a single authorize-then-finalize sequence on one session raised exactly
+that comparison `TypeError`. Fixed at the root in `core/database.py`:
+factored the shared column-walking/stamping logic into `_stamp_utc()` and
+registered it on both `"load"` and `"refresh"` — closes the gap for every
+other `session.refresh()` call site in the codebase too
+(`apparatus_service.py`, `training_session_service.py`,
+`member_leave_service.py`, `admin_hub_service.py`, `template_service.py`,
+`external_training_service.py`), not just the two `for_update` methods this
+PR touches. One pre-existing test
+(`test_scheduling.py::test_update_shift_validates_effective_time_range`,
+`invalid-*` cases) asserted a naive-datetime equality after an explicit
+`db_session.refresh(shift)` that was only ever true because of this same
+bug; updated to compare both sides UTC-normalized, matching the pattern the
+test's own `valid` branch already used. Verified with a new test
+(`test_shift_refresh_utc_tagging.py`, two cases: the narrow tzinfo-survival
+check and the end-to-end `finalize_shift` reproduction): confirmed both
+failing (`assert ... tzinfo is not None`; `TypeError` surfaced as `error`)
+via `git stash push -u` isolating the new `"refresh"` listener registration
+alone, passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 6.
+Completion gate: flake8/black/isort clean; scoped keyword suite 1131
+passed / 1 pre-existing skip; full backend suite run in progress, this note
+updated with the exact count once it completes.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 
