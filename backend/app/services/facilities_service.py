@@ -2705,7 +2705,24 @@ class FacilitiesService:
             return None
 
         await self._assert_facility_in_org(contact_data.facility_id, organization_id)
-        await self._apply_updates(contact, contact_data)
+
+        update_data = contact_data.model_dump(exclude_unset=True)
+        apply_updates(contact, update_data)
+
+        # FAC-51: apply_updates sets attributes directly on the ORM object,
+        # bypassing FacilityEmergencyContactBase's "at least one name"
+        # validator entirely (that validator only runs when a
+        # FacilityEmergencyContact*schema* is constructed). Without this
+        # check, clearing the only remaining name (e.g. company_name: null
+        # on a company-only contact) would commit a row neither the create
+        # schema nor the shipped form allows, and then 500 on every
+        # subsequent read via FacilityEmergencyContactResponse's own
+        # inherited validator rejecting that same row.
+        if not (contact.company_name or contact.contact_name):
+            raise ValueError("company_name or contact_name is required")
+
+        await self.db.commit()
+        await self.db.refresh(contact)
 
         return contact
 

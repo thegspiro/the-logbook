@@ -20,7 +20,12 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.dialects import mysql
 
-from app.models.facilities import Facility, FacilityComplianceItem, FacilityPhoto
+from app.models.facilities import (
+    Facility,
+    FacilityComplianceItem,
+    FacilityEmergencyContact,
+    FacilityPhoto,
+)
 from app.schemas.facilities import (
     EmergencyContactTypeEnum,
     FacilityAccessKeyUpdate,
@@ -30,6 +35,7 @@ from app.schemas.facilities import (
     FacilityComplianceItemUpdate,
     FacilityDocumentResponse,
     FacilityEmergencyContactCreate,
+    FacilityEmergencyContactUpdate,
     FacilityOccupantUpdate,
     FacilityPhotoResponse,
     FacilityRoomUpdate,
@@ -553,6 +559,65 @@ class TestCreateEmergencyContact:
                 facility_id=str(uuid4()),
                 contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
             )
+
+
+class TestUpdateEmergencyContact:
+    """FAC-51: Codex review of the FAC-50 fix (PR #2425). FAC-50 made
+    `company_name`/`contact_name` individually nullable and added an "at
+    least one" validator -- but only on `FacilityEmergencyContactBase`
+    (`Create`/`Response` inherit it; `Update` does not, and `apply_updates`
+    sets attributes directly on the ORM object, never constructing a
+    validated schema for the merged result). A PATCH clearing the only
+    remaining name (`company_name: null` on a company-only contact) passed
+    request validation, persisted a row with both names null, and then
+    `FacilityEmergencyContactResponse.model_validate(contact)` -- which
+    inherits the same validator -- raised on that very row, turning a
+    single bad PATCH into a 500 on the request itself and every subsequent
+    read of that contact.
+    """
+
+    async def test_clearing_the_only_remaining_name_is_rejected(
+        self, service, mock_db, org_id
+    ):
+        contact = FacilityEmergencyContact(
+            id=str(uuid4()),
+            organization_id=org_id,
+            facility_id=str(uuid4()),
+            contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            company_name="Acme Alarm Co.",
+            contact_name=None,
+        )
+        with patch.object(service, "get_emergency_contact", return_value=contact):
+            with pytest.raises(ValueError, match="company_name or contact_name"):
+                await service.update_emergency_contact(
+                    contact_id=contact.id,
+                    contact_data=FacilityEmergencyContactUpdate(company_name=None),
+                    organization_id=org_id,
+                )
+        # Rejected before commit -- the invalid state is never persisted,
+        # even though apply_updates already mutated the in-memory object
+        # (which a real session would roll back on this exception).
+        mock_db.commit.assert_not_awaited()
+
+    async def test_clearing_one_name_while_the_other_remains_is_permitted(
+        self, service, org_id
+    ):
+        contact = FacilityEmergencyContact(
+            id=str(uuid4()),
+            organization_id=org_id,
+            facility_id=str(uuid4()),
+            contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            company_name="Acme Alarm Co.",
+            contact_name="Jane Doe",
+        )
+        with patch.object(service, "get_emergency_contact", return_value=contact):
+            updated = await service.update_emergency_contact(
+                contact_id=contact.id,
+                contact_data=FacilityEmergencyContactUpdate(company_name=None),
+                organization_id=org_id,
+            )
+        assert updated.company_name is None
+        assert updated.contact_name == "Jane Doe"
 
 
 class TestModelConstructorsMatchTheirColumns:

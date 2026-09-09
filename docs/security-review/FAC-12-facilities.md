@@ -499,6 +499,110 @@ only `contact_name` failed for the wrong reason). `git stash apply` restored
 the fix and all 35 tests in the file passed. FAC-49 (the frontend type-only
 fix) has no runtime behavior to regression-test — see its own write-up.
 
+### FAC-51 — MED (correctness), Codex review of `7e16d23e75`, FAC-50's own fix — the "at least one name" invariant was enforced on create but not on update, and the response schema's own copy of it turned the resulting bad row into a 500 on every later read — ✅ FIXED
+
+**What:** Codex's review of FAC-50's fix (itself already a fix for a Codex
+finding two rounds earlier — this is the fourth consecutive round to find a
+real bug in the previous round's own fix) caught that
+`require_company_or_contact_name` lives on `FacilityEmergencyContactBase`,
+which `Create` and `Response` both inherit — but `FacilityEmergencyContactUpdate`
+does **not** inherit from `Base` (it is its own independent `BaseModel`,
+matching the codebase's usual Create/Update/Response split), so a PATCH
+carries no such check. Worse, `update_emergency_contact` never constructed
+a validated schema from the merged result at all: it called the shared
+`_apply_updates` helper, which does `apply_updates(instance, update_data)` —
+a direct `setattr` loop on the ORM object, not a Pydantic model. A client
+sending `{"company_name": null}` against a contact whose only name was its
+`company_name` therefore sailed straight through: request validation passed
+(`Update` has no cross-field rule), `apply_updates` wrote `NULL` directly to
+the column skipping any schema construction, and the transaction committed a
+row with both `company_name` and `contact_name` NULL — exactly the state
+FAC-50 introduced the validator to prevent, just reached through the one
+schema that doesn't carry it. The endpoint then returned that same row
+through `FacilityEmergencyContactResponse.model_validate(contact)` to build
+the response — and because `Response` **does** inherit the validator, that
+call itself raised `pydantic.ValidationError`, which nothing in the endpoint
+catches, so FastAPI's response serialization turned it into an unhandled 500. The PATCH thus corrupted the row _and_ failed with a 500 on its own
+response, and every subsequent `GET` of that contact would 500 identically
+from then on — the exact "a screen 500s because a database row no longer
+matches the shape the reader assumes" failure mode, except here the writer
+that broke the invariant and the reader that enforces it are the same
+request.
+
+**Where:** `backend/app/services/facilities_service.py`
+(`update_emergency_contact`).
+
+**Fix:** `update_emergency_contact` no longer routes through the shared
+`_apply_updates` helper. It applies the update the same way (`apply_updates`
+on the `model_dump(exclude_unset=True)` payload) but, before committing,
+re-checks the merged in-memory object against the identical invariant
+`FacilityEmergencyContactBase.require_company_or_contact_name` enforces —
+`if not (contact.company_name or contact.contact_name): raise ValueError(...)`
+— which the endpoint's existing `except ValueError` handler already maps to
+a clean `400`. This mirrors the pattern the codebase already uses for a
+merge-then-validate check that a schema-level validator can't see (compare
+`_assert_facility_in_org`, called just above this same check for the
+identical reason: a partial-update payload's cross-field consequence is only
+knowable after merging it with the row already in the database). No schema
+change was needed — `Update`'s fields were already individually optional and
+correct; only the merged _result_ needed a check, and that check has to run
+against the object the fields were actually applied to, not the payload in
+isolation (a payload with a single `company_name: null` key tells you
+nothing about whether `contact_name` is set — only the merged row does).
+
+**Regression tests:** `tests/test_facilities_service.py`, new
+`TestUpdateEmergencyContact` class —
+`test_clearing_the_only_remaining_name_is_rejected` (a company-only contact,
+patched with `company_name: null`, raises `ValueError` and — checked via
+`mock_db.commit.assert_not_awaited()` rather than re-reading the mutated
+in-memory object, since `apply_updates`' direct `setattr` still runs before
+the check and a real session would roll that back on the raised exception,
+not silently revert the Python attribute — never reaches the database) and
+`test_clearing_one_name_while_the_other_remains_is_permitted` (the same
+payload against a contact that also has a `contact_name` succeeds, proving
+the fix doesn't over-tighten a legitimate partial update). Confirmed to fail
+against the pre-fix source (`git stash push -u` isolating
+`app/services/facilities_service.py` only, test file kept): the rejection
+test failed with `Failed: DID NOT RAISE ValueError`. `git stash apply`
+restored the fix; both tests passed, and the full file (37 tests) and the
+9-file `-k "facilit"` sweep (179 tests) were re-run clean afterward.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a correctness fix with no
+remaining product decision.
+
+## Completion gate (pass 4, round 18 — Codex review of `7e16d23e75`, FAC-50's own fix; FAC-51)
+
+| Check                                                                        | Result                                                                      |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/services/facilities_service.py tests/test_facilities_service.py` | ✅ 0 violations                                                             |
+| `black --check` (same files)                                                 | ✅ clean                                                                    |
+| `isort --check-only` (same files)                                            | ✅ clean                                                                    |
+| `pytest tests/test_facilities_service.py`                                    | ✅ 37 passed (35 baseline after FAC-48/49/50, +2 new this round for FAC-51) |
+| `pytest tests/ -k "facilit"` (9 facility-specific test files)                | ✅ 179 passed, 1 skipped (pre-existing, optional dependency)                |
+| CI (`Backend Unit Tests`)                                                    | ✅ green after a separate, unrelated fix — see below                        |
+
+**A genuine CI failure, unrelated to FAC-51, was found and fixed in the same
+push cycle:** FAC-50's `company_name` nullable=True model change (commit
+`5731fdfa7`) altered the schema without regenerating `docs/DATABASE_SCHEMA.md`,
+which the `Backend Unit Tests` CI job regenerates from the live models and
+diffs against the committed copy, failing the job if they differ. Fixed by
+running `python scripts/generate_schema_docs.py` from `backend/` and
+committing the one-line diff (`company_name` now reads `yes` under
+Nullable) — a separate commit (`7e16d23e75`) from FAC-51's own fix, pushed
+in the same cycle once the CI log actually named the real cause (the initial
+notification just said the job failed; the job log's tail was needed to find
+the schema-doc diff step, several steps after the pytest run that had
+already passed).
+
+**FAC-51's regression tests independently confirmed against pre-fix code:**
+`git stash push -u -m "fac51-guard-check-<ts>"` isolating
+`app/services/facilities_service.py` only (test file kept, per this
+worktree's shared-stash-stack protocol). Both new tests were run in
+isolation first (`-k "TestUpdateEmergencyContact"`); the rejection test
+failed with `DID NOT RAISE ValueError` against the pre-fix source, and the
+permitted-partial-update test passed either way (it never depended on the
+new check firing). `git stash apply` restored the fix.
+
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 
 **Not routine rotation work.** Codex posted this P1 finding on PR #2191's
