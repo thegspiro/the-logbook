@@ -389,7 +389,15 @@ describe('primary fill contrast', () => {
               const rgb = hexToRgb(value);
               if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
               const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
-              return ratio >= 4.5 ? [] : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}`];
+              // The same 7:1 AAA floor the numeric branch above applies. This
+              // test's contract is that a *shared* utility clears AAA; 4.5:1 is
+              // the call-site floor, and using it here let a semantic shared
+              // fill regress to merely AA beside a numeric one that could not.
+              return ratio >= 7
+                ? []
+                : [
+                    `${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`,
+                  ];
             })
       );
 
