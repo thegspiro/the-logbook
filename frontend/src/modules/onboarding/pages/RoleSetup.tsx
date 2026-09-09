@@ -581,6 +581,18 @@ const PositionSetup: React.FC = () => {
         `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}` +
           (removed.length > 0 ? `. Removed: ${removed.join(', ')}` : '')
       );
+      // Separately, and as an error rather than folded into the success line:
+      // the save succeeded, but one of the removals the administrator asked for
+      // did not happen. Left unsaid they would finish setup believing the
+      // position was gone and meet it again in every picker.
+      const retained = response.data?.retained ?? [];
+      if (retained.length > 0) {
+        toast.error(
+          `Still in use, so not removed: ${retained.join(', ')}. Move the members holding ` +
+            'these to another position first, then remove them under Members → Settings.',
+          { duration: 8000 }
+        );
+      }
       void navigate('/onboarding/modules');
     } catch (error: unknown) {
       // Show specific error message from backend

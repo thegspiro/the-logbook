@@ -178,6 +178,59 @@ class TestUntickedPositionsAreRemoved:
         assert "captain" in after
         assert positions["captain"].name not in response.removed
 
+    async def test_a_position_that_could_not_be_removed_is_reported(
+        self, db_session: AsyncSession
+    ):
+        """The save still succeeds, so silence here is a false report.
+
+        An administrator unticks Captain, sees "Positions configured
+        successfully", and goes looking for it in a picker where it is still
+        listed. Naming it is the difference between a guard and a surprise.
+        """
+        org = await _org_with_seeded_positions(db_session)
+        positions = {
+            p.slug: p
+            for p in (
+                await db_session.execute(
+                    select(Position).where(Position.organization_id == org.id)
+                )
+            ).scalars()
+        }
+        holder = User(
+            organization_id=org.id,
+            username=f"holder-{str(uuid.uuid4())[:8]}",
+            email=f"holder-{str(uuid.uuid4())[:8]}@example.com",
+            password_hash="x",
+            first_name="Held",
+            last_name="Position",
+        )
+        holder.positions.append(positions["captain"])
+        db_session.add(holder)
+        await db_session.flush()
+
+        response = await _save(db_session, org.id, _submit(["firefighter"], positions))
+
+        assert positions["captain"].name in response.retained
+        assert positions["captain"].name not in response.removed
+
+    async def test_nothing_is_reported_retained_when_everything_could_go(
+        self, db_session: AsyncSession
+    ):
+        org = await _org_with_seeded_positions(db_session)
+        positions = {
+            p.slug: p
+            for p in (
+                await db_session.execute(
+                    select(Position).where(Position.organization_id == org.id)
+                )
+            ).scalars()
+        }
+
+        response = await _save(db_session, org.id, _submit(["firefighter"], positions))
+
+        assert response.retained == []
+        assert response.removed
+
     async def test_reticking_a_removed_position_puts_it_back_with_its_grants(
         self, db_session: AsyncSession
     ):

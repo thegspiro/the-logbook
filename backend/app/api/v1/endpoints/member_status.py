@@ -7,6 +7,7 @@ report is automatically generated, saved to documents, and optionally emailed.
 """
 
 import copy
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -954,7 +955,22 @@ async def get_membership_tier_config(
     )
     organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 
-    tier_config = (organization.settings or {}).get("membership_tiers", {})
+    settings = organization.settings or {}
+    # An organization onboarded before the ladder was seeded at creation has no
+    # `membership_tiers` key at all, and spreading that returned nothing but the
+    # counts -- so the editor showed "No tiers configured" under its own copy
+    # about the arrangement we ship, and a department could finish setup with no
+    # ladder while every reader quietly answered "no" to whatever it was asked.
+    #
+    # Keyed on the section being absent, not on it being empty: a department
+    # that deliberately saved a ladder with no rungs made a decision, and
+    # resurrecting the defaults over it would be the same overreach in the other
+    # direction.
+    tier_config = (
+        settings["membership_tiers"]
+        if "membership_tiers" in settings
+        else MembershipTierSettings().model_dump()
+    )
     return {
         **tier_config,
         # How many members currently sit on each tier, so the editor can say so
@@ -1037,14 +1053,47 @@ async def update_membership_tier_config(
 
     tiers = [tier.model_dump() for tier in validated.tiers]
 
-    duplicate_ids = {
-        t["id"] for t in tiers if [x["id"] for x in tiers].count(t["id"]) > 1
-    }
+    # One pass, not a rescan of the whole list per tier: this endpoint is
+    # reachable directly and `tiers` is only bounded by the schema's max_length.
+    duplicate_ids = sorted(
+        tier_id
+        for tier_id, count in Counter(t["id"] for t in tiers).items()
+        if count > 1
+    )
     if duplicate_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Duplicate tier ids: {', '.join(sorted(duplicate_ids))}",
+            detail=f"Duplicate tier ids: {', '.join(duplicate_ids)}",
         )
+
+    # `sort_order` and `years_required` have to climb together, because two
+    # different readers use one each and they must not disagree.
+    # `resolve_tier` returns the qualifying rung with the greatest `sort_order`,
+    # while qualification itself is by `years_required` -- so a ladder where a
+    # lower threshold sits above a higher one makes the nightly `advance_all`
+    # *demote*: reorder Life above Senior and a 25-year Life member qualifies
+    # for both, resolves to Senior because its sort_order is now greater, and
+    # is rewritten overnight. Nothing raises, and the member finds out at the
+    # next election.
+    #
+    # Refused here rather than silently rewriting either field: which one the
+    # department meant is not something to guess -- moving the rung and moving
+    # the threshold are different intentions.
+    by_order = sorted(tiers, key=lambda t: t.get("sort_order", 0))
+    for higher, lower in zip(by_order, by_order[1:]):
+        if lower.get("years_required", 0) < higher.get("years_required", 0):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"'{lower.get('name') or lower.get('id')}' is above "
+                    f"'{higher.get('name') or higher.get('id')}' in the ladder but "
+                    f"needs fewer years of service "
+                    f"({lower.get('years_required', 0)} vs "
+                    f"{higher.get('years_required', 0)}). Members are advanced by "
+                    "years of service, so this order would move a long-serving "
+                    "member down. Reorder the tiers or change their years."
+                ),
+            )
 
     # A tier id is what `User.membership_type` stores, and nothing cascades a
     # rename or backfills a removal. Dropping a rung members are standing on

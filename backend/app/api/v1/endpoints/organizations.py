@@ -867,20 +867,24 @@ async def get_setup_checklist(
         )
     ).scalar() or 0
 
+    # Non-medical only. Medical stock shares this catalog, separated by item
+    # type, and the ordinary inventory API excludes MEDICAL_ITEM_TYPES from
+    # every list it serves — so counting them here reported a department "done"
+    # on the gear item on the strength of categories the gear page never shows,
+    # which is the opposite of what a checklist is for.
     inventory_category_count = (
         await db.execute(
             select(func.count())
             .select_from(InventoryCategory)
             .where(
                 InventoryCategory.organization_id == org_id,
-                InventoryCategory.active == True,
-            )  # noqa: E712
+                InventoryCategory.active == True,  # noqa: E712
+                InventoryCategory.item_type.notin_(MEDICAL_ITEM_TYPES),
+            )
         )
     ).scalar() or 0
 
-    # Medical stock lives on the same catalog as gear, separated by item type,
-    # so the gear item's count would report a department "done" on the strength
-    # of categories the medical page never shows.
+    # The other half of that split.
     medical_category_count = (
         await db.execute(
             select(func.count())

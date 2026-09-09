@@ -518,6 +518,12 @@ class SecureApiClient {
       created: string[];
       updated: string[];
       removed: string[];
+      /**
+       * Unticked positions that could not be removed, because a member holds
+       * one. The save still succeeds, so without surfacing these an
+       * administrator finishes setup believing the position is gone.
+       */
+      retained: string[];
       total_positions: number;
     }>
   > {

@@ -26,6 +26,7 @@ from app.models.location import Location
 from app.models.onboarding import OnboardingStatus
 from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
+from app.schemas.organization import MembershipTierSettings
 from app.services.auth_service import AuthService
 from app.services.operational_rank_service import OperationalRankService
 from app.services.organization_service import OrganizationService
@@ -555,6 +556,21 @@ class OnboardingService:
         elif identifier_type == "state_id":
             id_type_enum = IdentifierType.STATE_ID
 
+        # The membership ladder is seeded here rather than left to whoever
+        # opens the screen first. It decides the ballot electorate, who may
+        # hold office and who is graded for training, and `advance_all` does
+        # nothing at all while `settings["membership_tiers"]` is absent — so an
+        # organization created without it had no ladder, no advancement, and a
+        # setup screen reading "No tiers configured" beneath its own copy about
+        # the arrangement we ship. Stored state and the screen now agree from
+        # the first request.
+        #
+        # A caller that supplied its own block keeps it verbatim.
+        org_settings: Dict[str, Any] = dict(settings_dict or {})
+        org_settings.setdefault(
+            "membership_tiers", MembershipTierSettings().model_dump()
+        )
+
         # Create organization with all fields
         org = Organization(
             name=name,
@@ -562,7 +578,7 @@ class OnboardingService:
             organization_type=org_type_enum,
             type=organization_type,  # Keep legacy field for compatibility
             description=description,
-            settings=settings_dict or {},
+            settings=org_settings,
             active=True,
             # Timezone
             timezone=timezone,
@@ -1000,6 +1016,52 @@ class OnboardingService:
         )
         return result.scalar_one_or_none()
 
+    async def _deferred_rank(
+        self,
+        organization_id: str,
+        chosen: Optional[str],
+        email: str,
+    ) -> Optional[str]:
+        """The rank to store for an IT contact, or ``None``.
+
+        A *deferred* write: the rank is chosen at step 10 and the account is
+        created at completion, with the ladder edited at step 11 in between.
+        Two things follow from that gap.
+
+        It must not resurrect a deleted rank. ``resolve_rank_code`` answers from
+        the built-in seed codes before it consults the organization's rows —
+        right for the rest of the system, wrong here, because a department that
+        removes Captain on the ladder step would otherwise still get an account
+        holding ``captain`` and the static Captain grants that come with it.
+        ``resolve_configured_rank_code`` requires a row, which onboarding always
+        has: the ladder is seeded on arrival at that step.
+
+        And it must not fail the whole of setup. The rank is optional, and a
+        department that names one here and then removes it from its own ladder
+        has made a coherent choice, twice. So an unresolvable value is dropped
+        with a warning rather than raised: a contact with no rank is a member an
+        officer sets one for later, which is recoverable, while a failed
+        completion is not.
+        """
+        chosen = (chosen or "").strip()
+        if not chosen:
+            return None
+        rank_service = OperationalRankService(self.db)
+        resolved = await rank_service.resolve_configured_rank_code(
+            organization_id, chosen
+        )
+        if resolved is None:
+            # Loguru formats with str.format, not %-style: the printf
+            # placeholders logged literally and recorded neither the rank nor
+            # the contact, which is the whole content of the warning.
+            logger.warning(
+                "Dropping rank {rank!r} for IT contact {email} during "
+                "onboarding: the organization has no such rank",
+                rank=chosen,
+                email=email,
+            )
+        return resolved
+
     async def create_it_team_users(
         self,
         organization_id: str,
@@ -1021,7 +1083,6 @@ class OnboardingService:
             List of created User objects
         """
         auth_service = AuthService(self.db)
-        rank_service = OperationalRankService(self.db)
         org_service = OrganizationService(self.db)
         created_users: List[User] = []
 
@@ -1059,7 +1120,25 @@ class OnboardingService:
                     User.organization_id == organization_id,
                 )
             )
-            if existing.scalar_one_or_none():
+            existing_user = existing.scalar_one_or_none()
+            if existing_user:
+                # The primary IT contact row is auto-populated with the System
+                # Owner, so this is the *ordinary* case, not an edge one — and
+                # returning here discarded the rank chosen for that row without
+                # a word.
+                #
+                # Only when the account has no rank yet. The rank step runs
+                # after this one and offers the System Owner its own picker, so
+                # a rank already set there is the later and more deliberate
+                # choice; overwriting it from a row filled in two screens
+                # earlier would be the same silent loss in the other direction.
+                if existing_user.rank is None:
+                    deferred = await self._deferred_rank(
+                        organization_id, member.get("rank"), email
+                    )
+                    if deferred is not None:
+                        existing_user.rank = deferred
+                        await self.db.flush()
                 continue
 
             # Check for username conflict and append a suffix if needed
@@ -1115,20 +1194,9 @@ class OnboardingService:
             # a member an officer sets a rank for later; a contact with an
             # unresolvable one is a member with no seats and no permissions and
             # nothing saying why.
-            resolved_rank = await rank_service.resolve_rank_code(
-                organization_id, member.get("rank") or ""
+            user.rank = await self._deferred_rank(
+                organization_id, member.get("rank"), email
             )
-            if member.get("rank") and resolved_rank is None:
-                # Loguru formats with str.format, not %-style: the printf
-                # placeholders logged literally and recorded neither the rank
-                # nor the contact, which is the whole content of the warning.
-                logger.warning(
-                    "Dropping unknown rank {rank!r} for IT contact {email} "
-                    "during onboarding",
-                    rank=member.get("rank"),
-                    email=email,
-                )
-            user.rank = resolved_rank
 
             # Assign member role
             if member_role:

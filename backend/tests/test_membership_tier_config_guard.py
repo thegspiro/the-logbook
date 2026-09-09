@@ -29,6 +29,8 @@ from app.api.v1.endpoints.member_status import (
     update_membership_tier_config,
 )
 from app.models.user import Organization, User
+from app.schemas.organization import MembershipTierSettings
+from app.services.onboarding import OnboardingService
 
 pytestmark = [pytest.mark.integration]
 
@@ -265,3 +267,235 @@ class TestTheEditorIsToldWhoIsOnEachRung:
         await update_membership_tier_config(config, db_session, _caller(org))
 
         assert "member_counts" not in org.settings["membership_tiers"]
+
+
+class TestTheLadderAFreshDepartmentGets:
+    """A department must not finish setup with no ladder at all.
+
+    `advance_all` returns "No membership tiers configured" while
+    `settings["membership_tiers"]` is absent, and every benefit reader is a
+    defensive `.get()` that answers "no" — so an organization created with
+    `settings = {}` had no advancement, no electorate rule, and a setup screen
+    reading "No tiers configured" directly beneath its own copy about the
+    arrangement we ship.
+    """
+
+    async def test_a_new_organization_is_created_with_the_shipped_ladder(
+        self, db_session: AsyncSession
+    ):
+        service = OnboardingService(db_session)
+        unique = str(uuid.uuid4())[:8]
+        org = await service.create_organization(
+            name=f"Ladder Test VFD {unique}",
+            slug=f"ladder-test-{unique}",
+            organization_type="fire_department",
+            timezone="America/New_York",
+        )
+
+        stored = org.settings["membership_tiers"]
+        assert [t["id"] for t in stored["tiers"]] == [
+            t.id for t in MembershipTierSettings().tiers
+        ]
+        assert stored["auto_advance"] is True
+
+    async def test_a_caller_supplying_its_own_ladder_keeps_it(
+        self, db_session: AsyncSession
+    ):
+        service = OnboardingService(db_session)
+        unique = str(uuid.uuid4())[:8]
+        org = await service.create_organization(
+            name=f"Own Ladder VFD {unique}",
+            slug=f"own-ladder-{unique}",
+            organization_type="fire_department",
+            timezone="America/New_York",
+            settings_dict={
+                "membership_tiers": {"auto_advance": False, "tiers": []},
+            },
+        )
+
+        assert org.settings["membership_tiers"] == {
+            "auto_advance": False,
+            "tiers": [],
+        }
+
+
+class TestAnOrderThatWouldDemote:
+    """`sort_order` and `years_required` have to climb together.
+
+    `resolve_tier` returns the qualifying rung with the greatest `sort_order`,
+    while qualification is by `years_required`. Reorder Life above Senior and a
+    25-year Life member qualifies for both, resolves to Senior because its
+    sort_order is now the greater, and the nightly `advance_all` rewrites them
+    overnight. Nothing raises; the member finds out at the next election.
+    """
+
+    async def test_a_lower_threshold_above_a_higher_one_is_refused(
+        self, db_session: AsyncSession
+    ):
+        org = await _org(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(
+                    _tier("life", "Life", years=20, order=0),
+                    _tier("senior", "Senior", years=10, order=1),
+                ),
+                db_session,
+                _caller(org),
+            )
+
+        assert exc.value.status_code == 400
+        assert "move a long-serving member down" in exc.value.detail
+
+    async def test_the_message_names_both_rungs_and_their_years(
+        self, db_session: AsyncSession
+    ):
+        org = await _org(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(
+                    _tier("life", "Life", years=20, order=0),
+                    _tier("senior", "Senior", years=10, order=1),
+                ),
+                db_session,
+                _caller(org),
+            )
+
+        assert "'Senior'" in exc.value.detail
+        assert "'Life'" in exc.value.detail
+        assert "10 vs 20" in exc.value.detail
+
+    async def test_equal_thresholds_are_allowed(self, db_session: AsyncSession):
+        # Two rungs a department separates by something other than tenure —
+        # Active and Administrative, both at one year — is a real ladder, and
+        # neither can demote the other.
+        org = await _org(db_session)
+
+        result = await update_membership_tier_config(
+            _config(
+                _tier("active", "Active", years=1, order=0),
+                _tier("admin_member", "Administrative", years=1, order=1),
+            ),
+            db_session,
+            _caller(org),
+        )
+
+        assert [t["id"] for t in result["tiers"]] == ["active", "admin_member"]
+
+    async def test_the_shipped_ladder_passes(self, db_session: AsyncSession):
+        # It has to, or every department is blocked from saving the defaults
+        # the screen shows them.
+        org = await _org(db_session)
+
+        result = await update_membership_tier_config(
+            MembershipTierSettings().model_dump(),
+            db_session,
+            _caller(org),
+        )
+
+        assert len(result["tiers"]) == len(MembershipTierSettings().tiers)
+
+
+class TestBenefitKeysThisModelNeverNamed:
+    """Validation must not become a data-loss path.
+
+    Before the endpoint validated, it stored the submitted dict verbatim, so a
+    department could hold benefit keys the model never named — the frontend type
+    declares `discount_percentage`, `voting_rights` and an open index signature.
+    Validating with Pydantic's default `extra="ignore"` and dumping the result
+    back would drop them on the first save of an unrelated field, irreversibly,
+    and report success.
+    """
+
+    async def test_an_unknown_benefit_key_survives_a_save(
+        self, db_session: AsyncSession
+    ):
+        org = await _org(db_session)
+
+        result = await update_membership_tier_config(
+            _config(
+                _tier(
+                    "active",
+                    "Active",
+                    voting_eligible=True,
+                    discount_percentage=15,
+                )
+            ),
+            db_session,
+            _caller(org),
+        )
+
+        assert result["tiers"][0]["benefits"]["discount_percentage"] == 15
+
+    async def test_the_named_fields_are_still_validated(self, db_session: AsyncSession):
+        # Allowing extras must not turn off the checks that made this endpoint
+        # worth hardening.
+        org = await _org(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(_tier("active", "Active", voting_attendance_period_months=0)),
+                db_session,
+                _caller(org),
+            )
+
+        assert exc.value.status_code == 400
+
+
+class TestDuplicateDetectionIsBounded:
+    async def test_a_ladder_beyond_the_bound_is_refused(self, db_session: AsyncSession):
+        # Reachable directly from the API, and the per-tier checks below it are
+        # linear in the list, so the list itself has to be bounded.
+        org = await _org(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(
+                    *[_tier(f"t{i}", f"Tier {i}", years=i, order=i) for i in range(60)]
+                ),
+                db_session,
+                _caller(org),
+            )
+
+        assert exc.value.status_code == 400
+
+    async def test_duplicates_are_still_named(self, db_session: AsyncSession):
+        org = await _org(db_session)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_membership_tier_config(
+                _config(
+                    _tier("active", "Active", years=1, order=0),
+                    _tier("active", "Active Again", years=1, order=1),
+                ),
+                db_session,
+                _caller(org),
+            )
+
+        assert "active" in exc.value.detail
+
+
+class TestWhatTheScreenIsShownWhenNothingWasConfigured:
+    async def test_an_organization_with_no_section_is_shown_the_shipped_ladder(
+        self, db_session: AsyncSession
+    ):
+        org = await _org(db_session)  # settings == {}
+
+        result = await get_membership_tier_config(db_session, _caller(org))
+
+        assert [t["id"] for t in result["tiers"]] == [
+            t.id for t in MembershipTierSettings().tiers
+        ]
+
+    async def test_a_deliberately_empty_ladder_is_left_empty(
+        self, db_session: AsyncSession
+    ):
+        # Saving a ladder with no rungs is a decision. Resurrecting the defaults
+        # over it is the same overreach as showing nothing to a department that
+        # never configured one.
+        org = await _org(db_session, tiers=[])
+
+        result = await get_membership_tier_config(db_session, _caller(org))
+
+        assert result["tiers"] == []

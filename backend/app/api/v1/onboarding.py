@@ -604,6 +604,11 @@ class RolesSetupResponse(BaseModel):
     created: list[str] = Field(default_factory=list)
     updated: list[str] = Field(default_factory=list)
     removed: list[str] = Field(default_factory=list)
+    #: Unticked positions that could not be removed because a member holds one.
+    #: Reported rather than left out: the save succeeds either way, so without
+    #: this an administrator finishes setup believing a position was removed and
+    #: then finds it still listed in every picker.
+    retained: list[str] = Field(default_factory=list)
     total_roles: int
 
 
@@ -626,6 +631,11 @@ class PositionsSetupResponse(BaseModel):
     created: list[str] = Field(default_factory=list)
     updated: list[str] = Field(default_factory=list)
     removed: list[str] = Field(default_factory=list)
+    #: Unticked positions that could not be removed because a member holds one.
+    #: Reported rather than left out: the save succeeds either way, so without
+    #: this an administrator finishes setup believing a position was removed and
+    #: then finds it still listed in every picker.
+    retained: list[str] = Field(default_factory=list)
     total_positions: int
 
 
@@ -2483,6 +2493,7 @@ async def save_session_roles(
         if slug not in submitted_slugs and slug not in {ROLE_IT_MANAGER, ROLE_MEMBER}
     ]
     removed_roles: list[str] = []
+    retained_roles: list[str] = []
     if unticked:
         held = await db.execute(
             select(user_positions.c.position_id).where(
@@ -2492,6 +2503,12 @@ async def save_session_roles(
         held_ids = set(held.scalars().all())
         for role in unticked:
             if role.id in held_ids:
+                # Reported, not skipped in silence. The endpoint still returns
+                # success and the toast still says the configuration was saved,
+                # so an administrator who unticked this would otherwise finish
+                # setup believing the position was gone -- and go looking for it
+                # in a picker where it is still listed.
+                retained_roles.append(role.name)
                 continue
             await db.delete(role)
             removed_roles.append(role.name)
@@ -2515,6 +2532,7 @@ async def save_session_roles(
         created=created_roles,
         updated=updated_roles,
         removed=removed_roles,
+        retained=retained_roles,
         total_roles=len(data.roles),
     )
 
@@ -2540,6 +2558,7 @@ async def save_session_positions(
         created=roles_response.created,
         updated=roles_response.updated,
         removed=roles_response.removed,
+        retained=roles_response.retained,
         total_positions=roles_response.total_roles,
     )
 

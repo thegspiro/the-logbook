@@ -82,13 +82,15 @@ const RankLadderSection: React.FC = () => {
           <Info className="text-theme-alert-info-icon mt-0.5 mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-theme-alert-info-title mb-1 font-semibold">
-              Ranks describe standing, positions grant access
+              Most access comes from a position &mdash; but the built-in ranks carry some too
             </p>
             <p className="text-theme-text-secondary text-sm">
-              A rank says where somebody sits in the department and which shift seats they can fill. What they can{' '}
-              <em>do</em> in the app comes from their position, which you choose below. A rank you add yourself is
-              marked <strong>No default permissions</strong> for exactly that reason — give those members a position
-              too.
+              A rank says where somebody sits in the department and which shift seats they can fill, and the positions
+              you choose below are where the bulk of what a member can <em>do</em> comes from. The built-in ranks are
+              the exception: each carries a set of default permissions of its own, which a member holding that rank
+              keeps whatever position they have. So restricting a position does not restrict a chief. A rank you add
+              yourself carries none, and is marked <strong>No default permissions</strong> to say so &mdash; give those
+              members a position too.
             </p>
           </div>
         </div>

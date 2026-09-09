@@ -137,11 +137,24 @@ describe('RankLadderSection', () => {
     await waitFor(() => expect(updateRank).toHaveBeenCalledWith('rank-1', { display_name: 'Company Officer' }));
   });
 
-  it('says that a rank the department adds grants nothing by itself', async () => {
+  it('does not claim that only positions grant access', async () => {
+    // It used to. `_collect_user_permissions` unions
+    // `get_rank_default_permissions(user.rank)` into a member's effective
+    // grants, so the built-in ranks confer on their own — and an administrator
+    // told otherwise could restrict a position believing the rank was inert,
+    // while anyone holding it kept the chief-level defaults.
     render(<RankLadderSection />);
     await screen.findByText('Captain');
 
-    expect(screen.getByText(/ranks describe standing, positions grant access/i)).toBeInTheDocument();
+    expect(screen.getByText(/the built-in ranks carry some too/i)).toBeInTheDocument();
+    expect(screen.queryByText(/positions grant access/i)).not.toBeInTheDocument();
+  });
+
+  it('still says a rank the department adds itself grants nothing', async () => {
+    render(<RankLadderSection />);
+    await screen.findByText('Captain');
+
+    expect(screen.getByText(/a rank you add yourself carries none/i)).toBeInTheDocument();
   });
 
   it('does not offer a rank for the System Owner before there is one signed in', async () => {
