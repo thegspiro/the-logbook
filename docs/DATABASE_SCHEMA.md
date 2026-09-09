@@ -2972,7 +2972,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `facility_id` | VARCHAR(36) | no | FK, IDX |  | → `facilities.id` ON DELETE CASCADE |
 | `contact_type` | ENUM(`utility_provider`, `alarm_company`, `elevator_service`, `plumber`, `electrician`, `hvac_service`, `locksmith`, `general_contractor`, `fire_protection`, `pest_control`, `roofing`, `janitorial`, `other`) | no | IDX |  |  |
-| `company_name` | VARCHAR(200) | no |  |  |  |
+| `company_name` | VARCHAR(200) | yes |  |  |  |
 | `contact_name` | VARCHAR(200) | yes |  |  |  |
 | `phone` | VARCHAR(50) | yes |  |  |  |
 | `alt_phone` | VARCHAR(50) | yes |  |  |  |

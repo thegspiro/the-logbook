@@ -68,19 +68,63 @@ describe('SizePreferencesModal', () => {
     expect(mockGetMy).not.toHaveBeenCalled();
   });
 
-  it('starts from a blank form when no preferences exist (load rejects)', async () => {
-    mockGetMy.mockRejectedValue(new Error('404'));
+  it('starts from a blank, save-ready form when no preferences exist yet (404)', async () => {
+    mockGetMy.mockRejectedValue({ response: { status: 404, data: { detail: 'Not found' } } });
+    const user = userEvent.setup();
     render(<SizePreferencesModal isOpen onClose={onClose} />);
 
     expect(await pantWaist()).toHaveValue('');
+    // A 404 is the expected "nothing stored yet" case — Save must stay
+    // enabled so a member can create their first row.
+    expect(screen.getByRole('button', { name: 'Save Sizes' })).not.toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Save Sizes' }));
+    await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
   });
 
-  it('saves: trims values and omits empty fields as undefined', async () => {
+  it('blocks saving after a non-404 load failure, instead of clearing unseen preferences', async () => {
+    // Regression test for the bug Codex found on the pass-4 correction round
+    // (PR #2422): before this fix, ANY load failure — not just the expected
+    // 404 — fell through to the same blank, save-ready form. Once INV-25
+    // made every blank field serialize as an explicit `null` (rather than an
+    // omitted key), saving that blank form after a transient failure (a
+    // timeout, a 500) actively cleared every preference the failed load
+    // never got a chance to see.
+    mockGetMy.mockRejectedValue({ response: { status: 500, data: { detail: 'boom' } } });
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+
+    expect(await pantWaist()).toHaveValue('');
+    const saveButton = await screen.findByRole('button', { name: 'Save Sizes' });
+    expect(saveButton).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load current sizes/i);
+
+    // Even a direct click must not fire the clearing payload while disabled.
+    await userEvent.setup().click(saveButton);
+    expect(mockUpsertMy).not.toHaveBeenCalled();
+  });
+
+  it('recovers from a blocked save once "Try again" succeeds', async () => {
+    mockGetMy.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'boom' } } });
+    mockGetMy.mockResolvedValueOnce({ pant_waist: '34' });
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Sizes' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(pantWaist()).resolves.toHaveValue('34'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Sizes' })).not.toBeDisabled();
+  });
+
+  it('saves: trims values and sends explicit null for empty fields (update payload, not create)', async () => {
     mockGetMy.mockResolvedValue({
       shirt_size: 'l',
       pant_waist: ' 34 ', // should be trimmed
-      boot_width: '   ', // whitespace-only -> undefined
-      jacket_size: null, // null -> undefined
+      boot_width: '   ', // whitespace-only -> null
+      jacket_size: null, // null -> null
     });
     const user = userEvent.setup();
     render(<SizePreferencesModal isOpen onClose={onClose} />);
@@ -92,11 +136,39 @@ describe('SizePreferencesModal', () => {
     const payload = mockUpsertMy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.shirt_size).toBe('l');
     expect(payload.pant_waist).toBe('34'); // trimmed
-    expect(payload.boot_width).toBeUndefined(); // whitespace coerced away
-    expect(payload.jacket_size).toBeUndefined(); // null coerced away
-    expect(payload.hat_size).toBeUndefined(); // never set
+    // Every blank field is an explicit `null`, never an omitted/`undefined`
+    // key -- this is an upsert of an existing row, and the backend's
+    // `exclude_unset=True` dump would otherwise leave the old value in place
+    // behind a success toast (CLAUDE.md pitfall #1's update-path shape).
+    expect(payload.boot_width).toBeNull(); // whitespace coerced to null
+    expect(payload.jacket_size).toBeNull(); // null stays null
+    expect(payload.hat_size).toBeNull(); // never set -> still sent as null
     expect(mockToastSuccess).toHaveBeenCalledWith('Sizes saved');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearing a stored fit back to "No preference" sends an explicit null, not a dropped key', async () => {
+    // Regression test for the bug Codex found on PR #2422: a member with a
+    // stored garment_fit selecting "No preference" must actually clear the
+    // stored value, not silently leave it in place because the key never
+    // left the browser.
+    mockGetMy.mockResolvedValue({ shirt_size: 'l', garment_fit: 'mens' });
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await pantWaist();
+
+    // The Fit field is prefilled, so the "Additional sizes" disclosure opens
+    // automatically -- no need to expand it by hand.
+    const fitSelect = await screen.findByLabelText('Fit');
+    expect(fitSelect).toHaveValue('mens');
+    await user.selectOptions(fitSelect, 'No preference');
+
+    await user.click(screen.getByRole('button', { name: 'Save Sizes' }));
+
+    await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
+    const payload = mockUpsertMy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.garment_fit).toBeNull();
+    expect('garment_fit' in payload).toBe(true);
   });
 
   it('saves typed input in the payload', async () => {

@@ -2197,6 +2197,41 @@ than one), which needs new data-fetching in the modal and a decision about
 the multiple-open-records case. (Security review INV-17,
 `docs/security-review/INV-11-inventory.md`.)
 
+## Inventory — Fulfillment-Options and Requestable-Categories Catalog Reads Are Unbounded (2026-09-08)
+
+`get_fulfillment_options` (the quartermaster's request-fulfilment picker)
+materializes its narrowed candidate set with a bare `.all()`, and when
+browsing for a substitution (`include_incompatible=true`) additionally
+loads the organization's entire catalog the same way before applying the
+caller's `limit` in Python, only after sorting the whole set.
+`get_requestable_categories` (the member-facing request form's category
+chips) loads one row per active item across every category just to
+deduplicate chips in Python. Neither is a tenant-isolation or data-exposure
+defect — both are already org-scoped, and neither returns more rows to the
+client than its `limit` allows — but the _internal_ working set both build
+before answering scales with catalog size with no cap, which
+`docs/security-review/CHECKLIST.md`'s abuse-resistance dimension rejects.
+
+Not fixed because it is the same shape as this rotation's own DOC-9
+(`documents_service.py`'s `accessible_folder_ids`): both queries' own
+docstrings explain that the full set has to be materialized in Python
+before a correct answer can be given (a normalized size/colour/style
+identity comparison for the fulfilment picker, a per-item rank/position
+eligibility check for the category chips), so a SQL-level cap on either
+query would silently produce a wrong "cannot fulfill"/"category has
+nothing" answer for a department whose free-text request or single-category
+stock exceeds the cap, rather than merely reading fewer rows to reach the
+same correct answer. Bounding it without breaking that correctness is a
+design decision (what should happen once one category or one free-text
+match legitimately exceeds a cap), not a safe drive-by `LIMIT`. (Security
+review INV-22, `docs/security-review/INV-11-inventory.md`.)
+
+**Not the same shape as `get_inventory_summary`'s own (unrelated)
+maintenance-due count**, which looked identical on the surface — also an
+unbounded `.all()` — but only ever read `len()` off the result, so it was
+cheaply fixable and was fixed (a `COUNT(*)` query, no correctness tradeoff)
+rather than added here. See INV-28 in the same security-review doc.
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
@@ -3576,6 +3611,81 @@ through FAC-23 are listed here because they are resolved, not open
 limitations. The already-filed sub-case in item (3) above and the
 Blueprints & Permits classification question in item (2) remain open,
 unresolved by any of these rounds.
+
+## FAC-30 — A `facilities.delete`-Only Custom Role Cannot Delete a Facility Document/Folder Through the Generic Documents API (2026-08-25)
+
+`can_access_folder`'s `required_permissions` list on a sensitive facility
+folder is `[facilities.view_sensitive, facilities.edit, facilities.manage]`
+— it has never included `facilities.delete`, on either side of the FAC-24/26
+read-vs-write split. A department's own **custom** position granting
+`facilities.delete` alone (without `.edit`/`.manage`) passes the
+facility-specific `DELETE /facilities/documents/{id}`/`DELETE
+/facilities/photos/{id}` routes (which check the action-specific permission
+directly) but is refused by the _generic_ Documents API's folder/document
+mutation routes for the same file, since the read-admission check
+`permission_matches_any` never recognized `facilities.delete` either. No
+seeded role or rank is affected — `facilities.delete` appears in
+`core/permissions.py` only bundled with `.edit`/`.manage`, which already
+satisfy the check, on the three chief ranks. Not fixed because it is a
+permission-model design question, not a mechanical gap: teaching
+`required_permissions` a third, action-specific tier (distinguishing
+"delete-capable" from "edit-capable" within the write tier) is a real product
+decision about whether the generic Documents module should honor a
+facility-specific action grant at all. Found in
+`docs/security-review/FAC-12-facilities.md` (feature 12, pass 3, FAC-30).
+
+## FAC-41 / FAC-44 — Facility Document-Reference and Folder-Creation Locks Scan and Lock More Rows Than They Need To (2026-08-25, updated 2026-09-09)
+
+Three related liveness/scalability gaps in `documents_service.py`, all the
+same underlying shape: a `.with_for_update()` query whose `WHERE` clause
+includes a predicate InnoDB cannot satisfy from an index, so the locking read
+scans (and locks) every row it examines on the way to the one that matches,
+not only that one row.
+
+- **FAC-41 (P2):** `_match_facility_document_references` filters only on
+  `organization_id` (indexed, but not selective) and a `file_path LIKE
+'document:%'` predicate (`file_path` carries no index at all) — the actual
+  per-reference match happens in Python after the query returns. Reproduced
+  live: locking one document's facility reference blocked a concurrent,
+  completely unrelated insert of a reference to a _different_ document in
+  the _same organization_. Worsens as an org's facility-document count
+  grows: deleting one document momentarily serializes every concurrent
+  facility-reference create/update/delete in that organization behind it.
+- **FAC-44 (P3, lower blast radius):** `_lock_facilities_root` (`WHERE
+organization_id = :org AND slug = 'facilities' AND is_system = true`) and
+  `_lock_facility_folder` (`WHERE parent_id = :root_id AND slug =
+'facility-{id}'`) have the identical mechanism — `slug` carries no index on
+  `document_folders`, and `document_folders.id` is a random UUID, so
+  "ascending id order" (what `ORDER BY id LIMIT 1 FOR UPDATE` scans in) has
+  no relationship to which row is being searched for. Reproduced live for
+  the root lookup while building FAC-43's own regression test: locking the
+  shared root sometimes also locked an unrelated facility's own folder row.
+  Lower severity than FAC-41 because both call sites, after FAC-42/43/45,
+  only run on the already-rare first-creation slow path, not on routine
+  operation.
+
+Neither is fixed because the natural lighter fix (an unlocked broad scan to
+find matching row ids, then a narrow locking query by those exact ids) does
+**not** work: under REPEATABLE READ, the "unlocked scan" step is still bound
+by the transaction's original snapshot, so a reference committed by a
+concurrent transaction after that snapshot but before the scan runs is
+invisible to it — silently reopening the exact FAC-29 vulnerability (a
+creating transaction's reference missed by a deleting transaction's existence
+check) the locking read was built to close, just relocated into the first
+half of a two-query pair. A genuinely narrow, still-safe single-query lock
+needs the predicate itself to be index-satisfied, which needs a schema
+change: a normalized, indexed `document_id` column on
+`FacilityDocument`/`FacilityPhoto` (for FAC-41) and a covering index on
+`(organization_id, slug)`/`(parent_id, slug)` — or `(organization_id,
+is_system)`, the coarser predicate several other lookups in this file already
+share (for FAC-44). Both are schema-level changes with a backfill migration,
+more appropriately scoped as their own reviewed pass than folded into a
+liveness fix already in flight. Found in
+`docs/security-review/FAC-12-facilities.md` (feature 12, pass 3, FAC-41 and
+FAC-44); re-verified still present and unchanged in pass 4 (2026-09-09) —
+`FACILITY_SENSITIVE_PERMISSIONS`, `_match_facility_document_references`,
+`_lock_facilities_root`, and `_lock_facility_folder` are all unchanged since
+pass 3.
 
 ## FAC-16-adjacent — `TrainingCategory.subcategories` Likely Shares the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` / `CheckTemplateCompartment.children` (2026-09-03, updated 2026-09-03)
 

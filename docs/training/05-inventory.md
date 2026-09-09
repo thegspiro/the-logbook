@@ -67,6 +67,38 @@ Key pages in the inventory module:
 
 ![Inventory Items list with search, category filter, and status pills](./images/05-01-inventory-items.png)
 
+### Putting your own items first
+
+The list is alphabetical, which is a poor match for how a quartermaster
+actually works: the Class B polos and the duty boots carry nearly all the
+traffic and sit scattered between things touched once a year.
+
+**Pin** an item — the pin at the right of its row — and it moves to a
+**Pinned** section above Available and Unavailable. Pins are yours alone: two
+quartermasters running different supply lines each front their own gear, and
+curating your list never reorders anybody else's page. Drag a pinned row, or
+use the arrows beside it, to set the order; the arrows are the ones that work
+on a phone, where dragging does not. You can pin up to 25 items.
+
+![The items list with a Pinned section above Available, each pinned row carrying a drag handle and up/down arrows](./images/05-02-items-pinned.png)
+
+### Grouping the list
+
+**Group by** — beside the filters — reorganises the list by Category, Item
+type, Colour, Size, Condition, Style, Location or Vendor. Class A in one group,
+Class B in another, each with a heading you can collapse.
+
+Two things worth knowing:
+
+- **The count on a heading is the real total**, not what has loaded. The list
+  pages 50 rows at a time, so a group can hold more than you can see; a
+  collapsed group still states how many are in it.
+- **Whatever you group by drops out of the rows.** Group by Category and the
+  Category column disappears — the heading already says it — and a **Size**
+  column takes its place, since size is what you are usually scanning for.
+
+![The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column](./images/05-03-items-grouped.png)
+
 ---
 
 ## First-Run Setup

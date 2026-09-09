@@ -6,9 +6,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Users, Plus, Trash2, Loader2, Pencil, Save, Phone, Mail, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
-import type { EmergencyContact, EmergencyContactCreate } from '../../../services/facilitiesServices';
+import type {
+  EmergencyContact,
+  EmergencyContactCreate,
+  EmergencyContactUpdate,
+} from '../../../services/facilitiesServices';
 import { enumLabel } from '../types';
 import { inputCls, labelCls, CONTACT_TYPE_OPTIONS } from '../constants';
+import { blankToNull } from '../../../utils/formValues';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 interface Props {
@@ -89,23 +94,36 @@ export default function ContactsSection({ facilityId, canCreate, canEdit, canDel
     }
     setIsSaving(true);
     try {
-      const payload: EmergencyContactCreate = {
-        facility_id: facilityId,
-        contact_type: formData.contact_type,
-      };
-      if (formData.company_name.trim()) payload.company_name = formData.company_name.trim();
-      if (formData.contact_name.trim()) payload.contact_name = formData.contact_name.trim();
-      if (formData.phone.trim()) payload.phone = formData.phone.trim();
-      if (formData.alt_phone.trim()) payload.alt_phone = formData.alt_phone.trim();
-      if (formData.email.trim()) payload.email = formData.email.trim();
-      if (formData.service_contract_number.trim())
-        payload.service_contract_number = formData.service_contract_number.trim();
-      if (formData.priority) payload.priority = Number(formData.priority);
-
       if (editingContact) {
+        // Update: send every field the form owns, with an explicit null for
+        // the blank ones, or clearing a field silently does nothing (the
+        // backend applies update payloads with exclude_unset).
+        const payload: EmergencyContactUpdate = {
+          contact_type: formData.contact_type,
+          company_name: blankToNull(formData.company_name),
+          contact_name: blankToNull(formData.contact_name),
+          phone: blankToNull(formData.phone),
+          alt_phone: blankToNull(formData.alt_phone),
+          email: blankToNull(formData.email),
+          service_contract_number: blankToNull(formData.service_contract_number),
+        };
+        if (formData.priority) payload.priority = Number(formData.priority);
         await facilitiesService.updateEmergencyContact(editingContact.id, payload);
         toast.success('Contact updated');
       } else {
+        // Create: omit the blanks so "" never reaches a Pydantic validator.
+        const payload: EmergencyContactCreate = {
+          facility_id: facilityId,
+          contact_type: formData.contact_type,
+        };
+        if (formData.company_name.trim()) payload.company_name = formData.company_name.trim();
+        if (formData.contact_name.trim()) payload.contact_name = formData.contact_name.trim();
+        if (formData.phone.trim()) payload.phone = formData.phone.trim();
+        if (formData.alt_phone.trim()) payload.alt_phone = formData.alt_phone.trim();
+        if (formData.email.trim()) payload.email = formData.email.trim();
+        if (formData.service_contract_number.trim())
+          payload.service_contract_number = formData.service_contract_number.trim();
+        if (formData.priority) payload.priority = Number(formData.priority);
         await facilitiesService.createEmergencyContact(payload);
         toast.success('Contact added');
       }

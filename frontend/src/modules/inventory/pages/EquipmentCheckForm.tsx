@@ -945,6 +945,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const durableResults = Object.fromEntries(
       Object.entries(results).map(([id, { photoFiles: _photoFiles, photoUrls: _photoUrls, ...result }]) => [id, result])
     );
+    // The same `cancelled` guard the four effects above use, and for the same
+    // reason: this write outlives the render that started it. Without it the
+    // settle handlers set state on an unmounted form — wasted in the browser,
+    // but in jsdom the environment is already torn down by then and React's
+    // own scheduler reaches for `window`, so the rejection surfaces as an
+    // unhandled error attributed to whichever test file happened to be
+    // running. It also stopped the toast being right: "keep this page open"
+    // is not advice you can act on once the page is gone.
+    let cancelled = false;
     setDraftWriteState('saving');
     void saveEquipmentCheckDraft(draftIdentity, {
       results: durableResults,
@@ -954,14 +963,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       itemDefinitions: activeItemDefinitions,
       sealDefinitions: activeSealDefinitions,
     })
-      .then(() => setDraftWriteState('saved'))
+      .then(() => {
+        if (!cancelled) setDraftWriteState('saved');
+      })
       .catch(() => {
+        if (cancelled) return;
         setDraftWriteState('failed');
         if (!draftSaveWarningShown.current) {
           draftSaveWarningShown.current = true;
           toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
         }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeItemDefinitions,
     activeSealDefinitions,

@@ -1,12 +1,790 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10), 2026-09-09 (pass 11) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10, merged), [#2428](https://github.com/thegspiro/the-logbook/pull/2428) (pass 11 — rotation pass 4)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
-`evoc_level_service.py`, `services/driver_exception_service.py` (new),
-`api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
+`evoc_level_service.py`, `services/driver_exception_service.py`,
+`api/v1/endpoints/nfc_tags.py` (5 routes), `services/nfc_tag_service.py`
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 11 (2026-09-09, rotation pass 4) — one P2 fixed: `member_check_in` is the one check-in path in this feature's reach with no capacity/race lock at all
+
+**Scope for this pass.** Rotation pass 4 assigned Feature 13 directly (out of
+the normal ⬜-first order) rather than after Facilities; row 13 was still ⬜
+going in. `git diff` from pass 10's merge (`05372cb91`) to this pass's start
+touched only `schemas/apparatus.py` (+6 lines — `ApparatusStatusChange`/
+`ApparatusArchive` gained `alias_generator=to_camel` so the frontend's
+camelCase archive payload validates; behavior-neutral, `populate_by_name`
+keeps snake_case callers working) and six frontend files fixing a dead
+`Archive` button (it navigated to `/apparatus/{id}/archive`, which matches no
+route, and dropped the user on the dashboard with the apparatus still in
+service — now a proper `ArchiveApparatusModal` posting the same endpoint
+`archive_apparatus` already gated on `apparatus.manage`). `apparatus_service.py`,
+`nfc_tag_service.py`, `evoc_level_service.py`, `driver_exception_service.py`,
+and both model files are byte-identical to pass 10. Given that, this pass
+re-ran the mechanical checks fresh (route-auth AST walk, `.ilike()` escape
+grep, `SET NULL`/`nullable=True` pairing) rather than re-deriving them, spot-
+read `change_apparatus_status`/`archive_apparatus` (the two routes the
+frontend diff touches) end to end, and — per this pass's explicit brief —
+traced every check-in code path this feature owns or dispatches into for the
+CLAUDE.md Pitfall #27 shape (a capacity/uniqueness read-then-write with no
+row lock).
+
+**What "check-in" means in this feature, corrected from the brief's framing.**
+There is no apparatus/equipment check-in concept anywhere in
+`apparatus_service.py` (confirmed by grep — no `check_in`/`checkout`/
+`active_session` in that file at all). The check-in surface this feature
+actually owns is `nfc_tags.py`'s station endpoint: a member ID card tapped at
+a kiosk, dispatched by `NfcTagService.check_in` to one of three targets —
+shift, event, or admin-hours — each resolved through an org-scoped getter and
+then handed to that target module's own existing service method
+(`SchedulingService.member_check_in`, `EventService.self_check_in`,
+`AdminHoursService.clock_in`), exactly as pass 2 documented and by design
+(`nfc_tag_service.py:8-13`'s own docstring). Auditing "the check-in path this
+feature drives" therefore means following the dispatch into whichever of
+those three methods actually mutates the row, not stopping at the dispatch
+itself.
+
+### AP-13 finding 2 (pass 11) — P2 (data integrity + reachable crash) — `SchedulingService.member_check_in` is a read-then-write on `ShiftAttendance`, which carries no unique constraint, and unlike its two NFC-dispatch siblings took no lock at all — ✅ FIXED
+
+**What:** `member_check_in` reads for an existing `ShiftAttendance` row
+(`shift_id`, `user_id`) with a plain `SELECT`, then either updates that row
+or inserts a new one. Two check-ins landing at once — the textbook case is a
+bounced NFC tap (a card held a beat too long, or a member who tapped, didn't
+see the kiosk update, and tapped again; `nfc_tag_service.py`'s own
+`MIN_TOGGLE_SECONDS` comment names this exact bounce scenario for the
+direction-resolution logic one call up), or the kiosk racing the member's own
+phone — can both read "no attendance yet" and both insert a row.
+`shift_attendance` has no unique index on `(shift_id, user_id)` (confirmed by
+reading the full model, `app/models/training.py:3041-3067` — only
+single-column indexes on `shift_id` and `user_id` separately), so nothing at
+the database layer stops the second insert either.
+
+The two siblings this method sits beside in the same dispatch — the ones the
+NFC feature actually delegates to — do not have this gap:
+`AdminHoursService.clock_in` locks the caller's `User` row and takes its
+active-session check as a locking read specifically to serialize concurrent
+clock-ins (`app/services/admin_hours_service.py:219-234`, with a comment
+naming Pitfall #27 by number); `EventService.self_check_in` locks the parent
+`Event` row before touching `EventRSVP`, and `EventRSVP` additionally carries
+a DB-level unique index on `(event_id, user_id)`
+(`app/models/event.py:406-411`) as a second line of defense. `member_check_in`
+had neither: no row lock, and `ShiftAttendance` has no unique constraint to
+fall back on. `get_shift_by_id` — the very method `member_check_in` calls to
+load its parent row — already has a `for_update` parameter for exactly this
+purpose, with a docstring pointing at the seat-capacity checks in
+`request_to_join_shift` as the pattern to follow
+(`app/services/scheduling_service.py:1417-1437`); `member_check_in` simply
+did not pass it.
+
+**Where:** `backend/app/services/scheduling_service.py`, `member_check_in`
+(pre-fix: shift fetched without `for_update`, existing-attendance check a
+plain `SELECT`).
+
+**Impact, and why this is P2 not P1:** not a cross-tenant or authorization
+issue — both racing requests are the same member checking in to the same
+shift, so there is no IDOR shape here. Two consequences, one silent and one
+loud:
+
+- **Data integrity.** A duplicate `ShiftAttendance` row for one member on one
+  shift misrepresents attendance — reporting, hours-history and any
+  finalization math that assumes one row per member per shift now has two,
+  one of which never gets a `checked_out_at`.
+- **Reachable crash.** `member_check_out` and `get_my_attendance` both read
+  the attendance row with `scalar_one_or_none()`, which raises
+  `MultipleResultsFound` the instant more than one row matches. Once the
+  race has fired once for a shift+member pair, every subsequent check-out or
+  attendance-read for that pair throws an unhandled exception (a 500, not
+  the caught `ValueError` → 400 the rest of this method uses for domain
+  refusals) until someone manually deletes the duplicate row. A kiosk bounce
+  — a genuinely ordinary, not-attacker-driven event — can put a member's
+  attendance record into a state where checking out crashes.
+
+**Fix:** two changes, mirroring the pattern `get_shift_by_id`'s own docstring
+already points at and `request_to_join_shift`'s seat-capacity checks already
+use elsewhere in this same file:
+
+1. `shift = await self.get_shift_by_id(shift_id, organization_id)` →
+   `..., for_update=True)` — locks the shift row, serializing concurrent
+   check-ins for that shift the way a seat claim is serialized.
+2. The `existing` `ShiftAttendance` lookup gained `.with_for_update()`. This
+   is the part CLAUDE.md Pitfall #27 calls out as the one everybody misses:
+   under InnoDB's default REPEATABLE READ a plain `SELECT` answers from the
+   snapshot taken at the transaction's _first_ read (in a real request,
+   that's whatever `get_current_user`'s own lookup read before this method
+   was ever called), and taking the shift lock does not by itself refresh
+   that snapshot for a different table. A second check-in that blocked on
+   the shift lock and then ran a plain `SELECT` for `existing` could still
+   see the pre-commit "no row yet" snapshot and insert anyway. Only a
+   locking read on the count/existence check itself always returns the
+   latest committed version.
+
+Both changes are additive locking, not a behavior change for the
+non-concurrent case: a single check-in still reads, still decides, still
+writes, just now inside a lock instead of outside one.
+
+**Failure scenario, reproduced live** (two real, independently-committing
+sessions — the savepoint-based `db_session` fixture never truly commits and
+so cannot demonstrate cross-transaction visibility): session A locks the
+shift row exactly as `member_check_in`'s first line now does; session B — the
+real, unmodified `member_check_in`, instrumented only to signal an
+`asyncio.Event` the moment it reaches its own locking shift-fetch — is
+started concurrently and confirmed still blocked (`assert not b_task.done()`)
+after the event fires plus a 200ms grace window, proving genuine DB-level
+blocking rather than incidental scheduler ordering. Session A then inserts
+the attendance row a first tap would have written and commits, releasing the
+lock. Session B unblocks, and — because its own `existing` read is now a
+locking read — correctly resolves to `(None, "Already checked in")` instead
+of inserting a second row. A fresh third session confirms exactly one
+`ShiftAttendance` row exists for the pair afterward.
+
+Pre-fix, the same test times out waiting for the tracking `Event` — session
+B's `get_shift_by_id` is never called with `for_update=True`, so it never
+blocks on session A's lock at all, which is itself the failure signature for
+a test whose entire premise is that parameter being passed (mirroring
+`test_emergency_contact_name_race.py`'s own note about the same technique).
+Confirmed via `git stash push -u` on the fix alone (test kept, fix stashed):
+`TimeoutError` pre-fix, passes post-fix, stash re-applied and dropped only
+after both were verified.
+
+**Scope note — why this is fixed here rather than flagged for Scheduling's
+own rotation slot (Feature 15).** `member_check_in`/`member_check_out` live in
+`scheduling_service.py`, not one of this feature's declared files, which is
+the same shape as pass 3's AP-8 (fixed, `apparatus.py`'s own model) versus its
+sibling `TrainingCategory.subcategories` (flagged, not fixed, because it lives
+in Training's own model file with no reachable trigger from this feature's
+routes). This one reads differently: the trigger _is_ this feature's own
+primary interaction — a tap at the NFC check-in station this rotation slot
+owns end to end (`nfc_tags.py` → `nfc_tag_service.py::_check_in_shift` →
+`member_check_in`) — not merely a structurally-similar bug living in a
+same-shaped column elsewhere. CLAUDE.md's own root-cause rule ("fix it at its
+root cause, in the same commit... the age or origin of an error never
+downgrades your obligation to address it") and the Hard Stop clause's
+"exceeds scope" bar (hundreds of violations across unrelated files) both
+point the same direction for a single, well-contained, two-line lock in one
+method with an existing, already-proven-safe pattern in the same file to
+follow. `member_check_out` was read and left alone: it mutates a single
+already-existing row (no insert), so a race there is a last-writer-wins on
+`duration_minutes` between two commits seconds apart, not a duplicate-row or
+crash risk, and locking it would not be closing a comparable gap.
+
+### AP-13 finding 3 (pass 11, Codex round 2 on PR #2428) — P2 (reliability, lock-ordering deadlock) — `finalize_shift` and `member_check_in` locked the shift and attendance rows in opposite orders — ✅ FIXED
+
+**What:** Codex's review of finding 2's own fix caught that `finalize_shift`
+fetches its shift row with a plain, non-locking `get_shift_by_id` call, while
+`member_check_in` (this pass's own fix, above) now locks the shift row
+_first_ and only locks `ShiftAttendance` _second_. `finalize_shift` does the
+opposite in practice, even though it never calls `.with_for_update()`
+explicitly: it auto-closes any open `ShiftAttendance` rows for the shift (an
+UPDATE, which takes an implicit InnoDB row lock the moment SQLAlchemy flushes
+it) well before it ever mutates the `Shift` row itself
+(`shift.is_finalized = True`, flushed at commit, right at the end of the
+method). Two transactions taking the same two locks in opposite orders is a
+textbook InnoDB deadlock: a member's NFC tap landing while an officer
+finalizes the same shift could have either transaction aborted with a
+deadlock error, an intermittent failure on an otherwise ordinary check-in or
+close-out.
+
+**Where:** `backend/app/services/scheduling_service.py`, `finalize_shift`
+(the initial `shift = await self.get_shift_by_id(shift_id, organization_id)`
+call, pre-fix with no `for_update`).
+
+**Fix:** `for_update=True` on that same initial fetch, so `finalize_shift`
+now queues on the shift lock before it ever touches `ShiftAttendance`,
+matching `member_check_in`'s order. This is lock-ordering consistency, not a
+capacity fix in its own right — `finalize_shift` has no read-then-write race
+of its own to close, it just needed to stop taking its two locks in the
+reverse order of the method it now runs alongside.
+
+**Regression test, and why it isn't a live deadlock reproduction:**
+reproducing an actual cross-table InnoDB deadlock reliably depends on precise
+timing on both sides and on gap-lock specifics tied to the exact indexes
+involved — fragile compared to what this fix actually needs demonstrated.
+What matters is that `finalize_shift` now blocks on the same shift-row lock
+`member_check_in` takes, the same way a second concurrent `member_check_in`
+call already does (finding 2's own test). If both methods always queue on
+the shift lock first, neither can be holding an attendance lock while
+waiting on a shift lock the other already holds — the reversed order is
+structurally eliminated, not merely made less likely. New test,
+`backend/tests/test_shift_finalize_lock_order_race.py` — two real,
+independently-committing sessions: session A locks the shift exactly as
+`member_check_in`'s own first step does; session B runs the real,
+unmodified `finalize_shift`, instrumented only to signal an `asyncio.Event`
+the moment it reaches its own locking shift-fetch. Confirmed still pending
+(`assert not b_task.done()`) after the event fires plus a 200ms grace
+window, proving genuine DB-level blocking. Session A then releases (a plain
+rollback — this test only exercises lock _order_, not a specific outcome);
+session B unblocks and finalizes normally. Confirmed failing
+(`asyncio.TimeoutError` waiting on the tracking `Event` — `finalize_shift`
+never even attempts a locking read pre-fix) via `git stash push -u` on the
+fix alone, confirmed passing with the fix restored, stable across 3
+consecutive re-runs before being trusted.
+
+**A second, related Codex finding on finding 2's own guard test — the
+attendance-lock half wasn't actually exercised:** Codex separately caught
+that `test_shift_check_in_race.py`'s session B never establishes a
+consistent-read snapshot before A commits: B's very first statement is
+`member_check_in`'s own locking shift-fetch, which by construction blocks
+until _after_ A's commit releases the shift lock. Because a locking read
+always returns the latest committed data regardless of any snapshot, and
+because it is also B's first read in its own transaction, any _later_ read
+in that same transaction — locking or not — would see A's already-committed
+row anyway, simply because nothing in B's transaction had run early enough
+to pin a stale view. That means the test's final assertions would have
+passed even if `.with_for_update()` were removed from `member_check_in`'s
+own `ShiftAttendance` check, silently failing to exercise the second half of
+finding 2's own fix (the same "the count/existence check itself must be a
+locking read" half of CLAUDE.md Pitfall #27 that FAC-57 also had to learn
+this rotation). Fixed by adding a plain, non-locking read of `ShiftAttendance`
+via session B _before_ A commits (and before B's own `member_check_in` task
+is even started), pinning B's snapshot to "no attendance row yet." Verified
+by removing `.with_for_update()` from `member_check_in`'s attendance check
+in isolation (source edited directly, reverted after) with the corrected
+test in place: the test now fails (`AssertionError`, B incorrectly resolves
+to "already checked in" with a record it should not have been able to see)
+without that half of the fix, and passes with it restored — proving the
+corrected test actually guards what it claims to, not merely that it reads
+correctly.
+
+### AP-13 finding 4 (pass 11, Codex round 3 on PR #2428) — P2 (reliability, lock-ordering deadlock) — `save_closeout_calls` and `finalize_shift` locked the shift and call-record rows in opposite orders — ✅ FIXED
+
+**What:** Codex's review of finding 3's own fix caught the same shape of
+deadlock in a second pair of methods: `save_closeout_calls` (the closeout
+wizard's "how many calls did the apparatus run" step) fetches its shift row
+with a plain, non-locking `get_shift_by_id` call, then — when a count is
+provided — calls `CallTrackingService.record_shift_calls`, which issues
+`DELETE`/`UPDATE` statements against `OrgCall`/`OrgCallResponse` rows (an
+implicit InnoDB lock the moment those statements execute), and only updates
+`shift.closeout_step` at commit, acquiring the shift-row lock last.
+`finalize_shift` (finding 3's own fix) does the opposite: it locks the shift
+row first, then reconciles those same call rows through the identical
+`record_shift_calls` call later in the method. An officer saving the
+closeout-calls step while another officer (or the same officer, a second
+tab) finalizes the same shift could have either transaction aborted with a
+deadlock error — the same failure mode finding 3 closed for `member_check_in`,
+now reopened by a different method reaching the same two tables in the
+opposite order.
+
+**Where:** `backend/app/services/scheduling_service.py`, `save_closeout_calls`
+(the initial `shift = await self.get_shift_by_id(shift_id, organization_id)`
+call, pre-fix with no `for_update`). Confirmed by grep that
+`record_shift_calls`/`attach_response` have exactly these two call sites in
+the whole codebase — no third method needs the same fix.
+
+**Fix:** `for_update=True` on that same initial fetch, so `save_closeout_calls`
+now queues on the shift lock before it ever touches `OrgCall`/`OrgCallResponse`,
+matching `finalize_shift`'s order. Lock-ordering consistency again, not a
+capacity fix of its own — `save_closeout_calls` has no read-then-write race
+to close on its own account, it just needed to agree with `finalize_shift`
+on which lock comes first.
+
+**Regression test:** same reasoning as finding 3 — proving the actual fix
+mechanism (blocks on the shift lock) rather than a fragile live cross-table
+deadlock reproduction. New test,
+`backend/tests/test_shift_closeout_calls_lock_order_race.py` — two real,
+independently-committing sessions: session A locks the shift exactly as
+`member_check_in`'s own first step does; session B runs the real,
+unmodified `save_closeout_calls`, instrumented the same way as finding 3's
+test. Confirmed still pending after the event fires plus a 200ms grace
+window, proving genuine DB-level blocking. Session A releases; session B
+unblocks and saves normally. Confirmed failing (`asyncio.TimeoutError` —
+`save_closeout_calls` never even attempts a locking read pre-fix) via
+`git stash push -u` on the fix alone, confirmed passing with the fix
+restored, stable across 3 consecutive re-runs.
+
+### AP-13 finding 5 (pass 11, Codex round 4 on PR #2428) — P2 (reliability, SQLAlchemy identity-map staleness) — a locking re-read of an already-loaded shift silently returned the stale, pre-lock object — ✅ FIXED
+
+**What:** Codex's review of finding 4's own fix caught that the shift-lock
+fix, while acquiring a real database-level lock, could still hand the
+caller stale data. `finalize_shift` and `save_closeout_calls` are both
+reached through REST endpoints that call `_authorize_shift_management`
+first, which does a plain, non-locking `get_shift_by_id` to check the
+caller's permission — loading the `Shift` row into the session's SQLAlchemy
+identity map. The service method then makes its own locking call
+(`get_shift_by_id(..., for_update=True)`) on the **same session**. SQLAlchemy's
+identity map means that second call is not what it looks like: the
+`SELECT ... FOR UPDATE` genuinely reaches the database, genuinely blocks on
+another transaction's lock, and genuinely reads the latest committed row
+once it unblocks — but because the `Shift` for this id is already present
+in the session's identity map from the earlier, non-locking load, SQLAlchemy's
+default behavior returns that _same Python object_, unchanged, rather than
+repopulating its attributes from the freshly-fetched row. The lock is real;
+the object handed back to the caller is stale. A caller then reading
+`shift.is_finalized` off that "locked" shift sees whatever it was at the
+_first_ read, not the current, just-committed truth the lock exists to
+guarantee — the exact scenario Codex named: a `save_closeout_calls` request
+that raced a concurrent `finalize_shift` could pass its `is_finalized` guard
+against a shift that had, in truth, just been finalized while it waited on
+the lock, and go on to reconcile `OrgCall` rows on an already-finalized
+shift.
+
+**Where:** `backend/app/services/scheduling_service.py`, `get_shift_by_id`
+— the `for_update=True` branch had no `populate_existing`.
+
+**Fix:** added `.execution_options(populate_existing=True)` to the query
+whenever `for_update=True`, so a locking read always refreshes the object
+it returns, identity-map hit or not. Fixed once in `get_shift_by_id` itself
+rather than at each of the three call sites (`member_check_in`,
+`finalize_shift`, `save_closeout_calls`) — this closes the gap for all of
+them, including any future caller that also authorizes through a
+pre-loading check before locking.
+
+**Regression test:** `backend/tests/test_shift_lock_identity_map_staleness.py` —
+two real, independently-committing sessions, deliberately mimicking
+`_authorize_shift_management`'s own shape: session B does a plain read
+first (populating its identity map with `is_finalized=False`), then session
+A locks the shift and later commits `is_finalized=True`, then session B's
+own locking re-read (on the same session/object as its first read) is
+asserted to return `is_finalized=True` — proving the fix, not just that the
+lock blocks. Confirmed failing (`assert False == True` — B's `is_finalized`
+still read `False`, its stale preload, even though the row was correctly
+locked and A's commit had already landed) via `git stash push -u` isolating
+only the `populate_existing` addition (the earlier `for_update=True` fixes
+from findings 2–4 stayed in place, since they are already committed —
+isolating just this fix required nothing further), confirmed passing with
+the fix restored, stable across 3 consecutive re-runs.
+
+### Finding 6 (P1, Codex round 5 — `populate_existing` breaks UTC tagging on refresh)
+
+**What:** Codex's review of finding 5's own fix caught that the
+`populate_existing=True` addition, while correctly refreshing a stale
+identity-map object, silently undoes a different, unrelated invariant:
+`core/database.py` tags every naive `DATETIME` value as UTC-aware the
+moment SQLAlchemy loads it (`_on_load_stamp_utc`, registered only on the
+`"load"` event) — this exists because MySQL's `DATETIME` columns carry no
+tzinfo of their own, so aiomysql always hands back naive `datetime`
+objects even under `DateTime(timezone=True)`. `_authorize_shift_management`
+loads the shift with a plain `get_shift_by_id` first, on the same session
+the service method then uses for its own `for_update=True` call — that
+first, plain load is a genuine SQLAlchemy `"load"` event, and is what
+stamps `shift.end_time` as UTC-aware in the first place. But repopulating
+an object _already_ in the identity map (exactly what `populate_existing`
+does, and exactly what `session.refresh()` has always done elsewhere in
+this codebase) fires a _different_ event, `"refresh"` — a distinct
+registration with a distinct callback signature
+(`refresh(target, context, attrs)` vs. `load`'s `(target, context)`) — and
+nothing was listening for it. So the locking re-read's own tzinfo stamping
+never ran, and the object came back with `end_time` naive again, as if it
+had never been tagged.
+
+This is not confined to the race Codex's own finding 5 report described.
+It hits _every ordinary_ `finalize_shift` call with a real `end_time`,
+because the authorize-then-lock double read happens unconditionally on
+the REST path, race or no race. `finalize_shift` immediately evaluates
+`shift.end_time > datetime.now(timezone.utc)` — comparing the now-naive
+`end_time` against an aware `datetime.now(timezone.utc)` raises
+`TypeError`, which `finalize_shift`'s own `except Exception` catches and
+returns as `error`, surfacing to the caller as a 400/500 instead of a
+normal finalize. Reproduced directly: a single ordinary
+`_authorize_shift_management`-then-`finalize_shift` sequence, no
+concurrency at all, raised
+`"can't compare offset-naive and offset-aware datetimes"` pre-fix.
+
+**Where:** `backend/app/core/database.py` — the UTC-tagging listener was
+registered only on SQLAlchemy's `"load"` event.
+
+**Fix:** factored the column-walking/stamping logic into a shared
+`_stamp_utc(target)` helper, and registered it on **both** `"load"`
+(`_on_load_stamp_utc`) and `"refresh"` (`_on_refresh_stamp_utc`) — the two
+events have different callback signatures (`refresh` also receives the set
+of attribute names being refreshed, which this fix does not need and
+ignores), so they need two separate `@event.listens_for` registrations
+even though they now share one implementation. This covers `refresh()`
+calls anywhere in the codebase, not just the `populate_existing` path —
+`apparatus_service.py`, `training_session_service.py`,
+`member_leave_service.py`, `admin_hub_service.py`, `template_service.py`
+and `external_training_service.py` all call `session.refresh()` explicitly
+elsewhere, and every one of those was exposed to the identical gap the
+moment any of their refreshed models carried a `DateTime(timezone=True)`
+column — this fix closes it for all of them at the same root cause,
+consistent with Pitfall #29's rule against re-deriving what one already-
+correct mechanism should be defining.
+
+**Regression test:** `backend/tests/test_shift_refresh_utc_tagging.py` —
+two tests on a single session (no concurrency needed, since the bug fires
+on one ordinary request): the first mimics
+`_authorize_shift_management`'s plain load followed by the service
+method's own `for_update=True` re-read, and asserts `end_time` is still
+tz-aware (and that the re-read genuinely returns the _same_ Python object,
+not a fresh instance — confirming it exercises the refresh path, not a
+cache-miss reload); the second drives the real `finalize_shift` after an
+authorize-shaped preload and asserts it completes without raising.
+Confirmed both fail pre-fix (`TypeError`/`assert "can't compare
+offset-naive and offset-aware datetimes" is None`) via `git stash push -u`
+isolating just the new `"refresh"` listener (the `"load"` listener and
+`_stamp_utc` helper's shared logic stayed in the stash together, since the
+helper itself is inert without a second registration — reverting the
+smallest self-consistent unit), confirmed passing with the fix restored,
+stable across 3 consecutive re-runs.
+
+**Also required:** `backend/tests/test_scheduling.py`'s
+`test_update_shift_validates_effective_time_range` (the `invalid-*` cases)
+asserted `shift.start_time == at_hour(7)` after an explicit
+`db_session.refresh(shift)` — an equality against a naive `datetime`. That
+assertion was only ever true because `refresh()` previously left
+`start_time` naive (the very bug this finding fixes); once `refresh()`
+correctly UTC-tags it, the comparison is aware-vs-naive and no longer
+equal. Updated both assertions to normalize with `.replace(tzinfo=
+timezone.utc)` before comparing, the same pattern the test's own `valid`
+branch already used two lines above for exactly this reason.
+
+### Finding 7 (P2, Codex round 6 — `save_closeout_attendance` had the same reversed lock order)
+
+**What:** Codex's review of finding 6's own fix found a third instance of
+findings 3/4's shape: `save_closeout_attendance` (closeout wizard step 1)
+also read the shift with a plain, non-locking `get_shift_by_id`, then looped
+over the submitted attendance entries. An entry for a member who already has
+a `ShiftAttendance` row mutates that row's `checked_in_at`/`checked_out_at`
+in place; an entry for a member with no row yet calls `_user_in_org` first
+(the XC-1 in-org check for a client-supplied user id), which issues a
+`SELECT` and therefore triggers SQLAlchemy's autoflush — flushing the
+already-mutated existing attendance row (an implicit UPDATE, and therefore
+an implicit row lock) before `shift.closeout_step` is ever assigned, let
+alone the shift row locked. `finalize_shift` (finding 3) now locks the shift
+row first and only reconciles attendance/call rows afterward — the reverse
+order. A closeout-attendance save that updates one existing member and adds
+one new member, racing a finalize on the same shift, could deadlock,
+aborting one of two otherwise unrelated, ordinary requests. Same bug class
+as findings 3 and 4, reached through a different implicit flush (autoflush
+via `_user_in_org`'s `SELECT`, rather than a DELETE/UPDATE inside
+`record_shift_calls`).
+
+**Where:** `backend/app/services/scheduling_service.py`,
+`save_closeout_attendance` — the initial `get_shift_by_id` call had no
+`for_update=True`.
+
+**Fix:** locks the shift row first (`get_shift_by_id(..., for_update=True)`),
+matching `finalize_shift` and `save_closeout_calls`. Grepped for other
+callers that mutate an existing `ShiftAttendance` row ahead of a
+`_user_in_org`/other `SELECT` in the same method; `save_closeout_attendance`
+is the only one — `member_check_in` (finding 2) and `save_closeout_calls`
+(finding 4) both already lock the shift first.
+
+**Regression test:**
+`backend/tests/test_shift_closeout_attendance_lock_order_race.py` — same
+blocking-proof pattern as findings 3/4: two real, independently-committing
+sessions; session A holds the shift lock exactly as `member_check_in` does;
+session B runs the real, unmodified `save_closeout_attendance` with two
+entries (one for a member with a pre-existing attendance row, one for a new
+member, to exercise the mutate-then-autoflush shape Codex named) and is
+proven to block on A's lock. Confirmed failing (`asyncio.TimeoutError` —
+`save_closeout_attendance` never even attempts a locking read pre-fix) via
+`git stash push -u` on the fix alone (the only diff in the file), passing
+with the fix restored, stable across 3 repeated runs.
+
+### Finding 8 (P1/P2, Codex round 7 — locking the shift row doesn't refresh the attendance snapshot)
+
+**What:** Codex's review of finding 7's own fix caught that locking the
+`Shift` row (findings 3/5/7) closes the lock-_ordering_ deadlock and the
+identity-map staleness on the shift object itself, but does not by itself
+refresh this transaction's REPEATABLE READ **snapshot** for a different
+table. `_authorize_shift_management` runs a plain, non-locking shift query
+first — the earliest read in the REST transaction — and under InnoDB's
+default REPEATABLE READ, that first consistent (non-locking) read is what
+fixes the transaction's snapshot for every later plain read, regardless of
+what locking reads happen afterward on other rows. A locking read
+(`SELECT ... FOR UPDATE`) always sees the latest committed data and ignores
+the snapshot; a plain `SELECT` does not — this is Pitfall #27's second half
+("the count itself must be a locking read"), applied here to attendance
+reconciliation rather than a capacity check, and to two call sites at once:
+
+- **`finalize_shift`** (P1) — the `manual_hours` existing-user check and the
+  auto-close-open-attendance query were both plain `SELECT`s. A member who
+  checks in while an officer's finalize request is waiting on the shift
+  lock a concurrent check-in briefly held: finalize's attendance reads
+  still answer from the pre-check-in snapshot, missing the newly committed
+  row entirely. The auto-close step never sees it, so it is left open
+  (`checked_out_at IS NULL`) even though the shift it belongs to is now
+  finalized — an attendance record permanently out of sync with a
+  finalized shift, silently.
+- **`save_closeout_attendance`** (P2, finding 7's own new fix) — the
+  `existing` dict of this shift's attendance rows was also built via a
+  plain `SELECT`. If a member checks in while a closeout-attendance save is
+  waiting on the shift lock, and that same member is also in the closeout
+  payload, `existing.get(uid)` returns `None` for their now-stale-invisible
+  row and the save inserts a **second** `ShiftAttendance` row —
+  reintroducing the exact duplicate-row failure AP-13 finding 2 fixed, just
+  reached through a stale read instead of a missing lock (`shift_attendance`
+  still carries no unique constraint on `(shift_id, user_id)`).
+
+**Where:** `backend/app/services/scheduling_service.py` —
+`finalize_shift`'s two `ShiftAttendance` queries after the shift lock, and
+`save_closeout_attendance`'s `existing` query.
+
+**Fix:** added `.with_for_update()` to all three queries, so they bypass
+the stale snapshot and see the latest committed attendance rows once the
+shift lock resolves. This mirrors the fixes already applied to the shift
+row itself (finding 5's `populate_existing=True`) — the same underlying
+principle (a lock alone does not refresh a _different_ already-fixed
+snapshot) now applied one level down, to the rows the locked shift's own
+methods go on to read.
+
+**Regression tests:**
+`backend/tests/test_shift_finalize_attendance_snapshot_staleness.py` and
+`backend/tests/test_shift_closeout_attendance_snapshot_staleness.py` — same
+two-real-session shape: session B establishes its snapshot with a plain,
+non-locking shift preload (mimicking `_authorize_shift_management`)
+_before_ session A commits a fresh attendance row; session B then runs the
+real, unmodified method and the test asserts the row was seen (closed by
+`finalize_shift`, or merged rather than duplicated by
+`save_closeout_attendance`) by reading the table fresh from a third
+session, not off either service's identity map. Confirmed both fail
+pre-fix — `finalize_shift`'s row stays open
+(`refreshed.checked_out_at is not None` fails), `save_closeout_attendance`
+creates a literal second row (`len(rows) == 1` fails with 2 found) — via
+`git stash push -u` on the fix alone (the only diff in the file), passing
+with the fix restored, stable across 3 repeated runs.
+
+**Deferred, not fixed this round:** `CallTrackingService._partition_existing`
+(called from `record_shift_calls`, which both `finalize_shift` and
+`save_closeout_calls` reconcile calls through after locking the shift) has
+the same snapshot-staleness shape — its `OrgCallResponse` read is a plain
+`SELECT` on the same stale transaction snapshot. Unlike the two fixes
+above, its second query is an aggregate (`COUNT` + `GROUP BY` across every
+responder on a call, not just this shift's own rows) — locking that safely
+needs its own design pass (which rows to lock, whether MySQL's `FOR UPDATE`
+support for the aggregate shape is even the right tool), not a one-line
+`.with_for_update()` bolt-on under this finding. Flagged here rather than
+rushed, per CLAUDE.md's "fix or explicitly escalate" rule — a natural
+target for next round's Codex review or a dedicated follow-up pass.
+
+### Finding 9 (P1/P2, Codex round 8 — the same snapshot gap in two more places)
+
+**What:** Codex's review of finding 8's own fix found the same
+snapshot-staleness shape in two more places finding 8 didn't reach:
+
+- **`finalize_shift`'s totals** (P1) — finding 8 fixed the
+  auto-close-open-attendance query, but two later `ShiftAttendance` reads
+  in the same method — the `total_hours` `SUM` snapshot and the
+  "every attendance row on this shift" query that stamps per-member
+  `call_count` — were still plain `SELECT`s on the same stale transaction
+  snapshot. The open-attendance fix doesn't cover this by construction: an
+  already-**checked-out** row (the shape `save_closeout_attendance`
+  writes, or any completed attendance write) never matches the
+  open-attendance predicate (`checked_out_at IS NULL`) in the first place,
+  so it needed its own fix. A member whose completed attendance row
+  committed while finalize waited on the shift lock would be silently
+  excluded from both the shift's `total_hours` and their own `call_count`
+  snapshot.
+- **`member_check_in`'s identity-map staleness** (P2) — the identity-map
+  sibling of finding 5, on `ShiftAttendance` rather than `Shift`.
+  `NfcTagService._check_in_shift` preloads the caller's attendance row via
+  a plain `get_my_attendance` before delegating to `member_check_in` on the
+  same session — the same `_authorize_shift_management` shape findings
+  5/6/8 already had to fix for the `Shift` row. `member_check_in`'s own
+  locking read of that same row (`.with_for_update()`, finding 2) genuinely
+  blocks and genuinely reads the latest committed row at the database
+  level, but without `populate_existing=True` SQLAlchemy hands back the
+  earlier, already-loaded object unchanged. A second NFC tap that queued
+  behind a first tap's shift lock, targeting a **pre-existing** attendance
+  row (a roster placeholder, `checked_in_at` still null) already preloaded
+  by that session, would see the stale `checked_in_at=None` even after the
+  first tap committed a real check-in — passing the "Already checked in"
+  guard and silently overwriting the first tap's timestamp.
+
+**Where:** `backend/app/services/scheduling_service.py` —
+`finalize_shift`'s `total_hours` and per-member `call_count` queries;
+`member_check_in`'s locking attendance read.
+
+**Fix:** added `.with_for_update()` to the two `finalize_shift` queries
+(same pattern as finding 8), and `.execution_options(populate_existing=True)`
+to `member_check_in`'s locking read (same pattern as finding 5, now applied
+to `ShiftAttendance` as well as `Shift`).
+
+**Regression tests:**
+`backend/tests/test_shift_finalize_snapshot_totals_staleness.py` — same
+two-real-session shape as finding 8's tests, but the concurrently-committed
+row is already checked out (not open), specifically to prove the
+open-attendance fix doesn't cover this case; asserts `total_hours` and the
+row's `call_count` against a third session, not either service's identity
+map.
+`backend/tests/test_shift_check_in_identity_map_staleness.py` — creates the
+pre-existing placeholder attendance row first (the shape the bug requires:
+without an already-identity-mapped row, a locking read is a first _load_,
+not a _refresh_, and the staleness cannot occur), preloads it plainly
+(mimicking `_check_in_shift`), then a first real `member_check_in` updates
+and commits it, then a second real `member_check_in` on the session that
+preloaded it is asserted to be rejected (`"Already checked in"`) rather
+than silently succeeding. Confirmed all three fail pre-fix — `total_hours`
+came back `0.0` instead of `1.0`; the second tap's error came back `None`
+instead of `"Already checked in"` — via `git stash push -u` on the fix
+alone (the only diff in the file), confirmed passing with the fix
+restored, stable across 3 repeated runs. (An earlier version of the
+check-in test preloaded a _non-existent_ attendance row — `get_my_attendance`
+returning `None` caches nothing in the identity map, so that shape cannot
+exercise the staleness bug at all; it passed even pre-fix and was corrected
+before being counted as a real regression test.)
+
+### Finding 10 (P1, Codex round 9 — the deferred `_partition_existing` gap, now fixed)
+
+**What:** Finding 8's write-up deferred (rather than fixed) the same
+snapshot-staleness shape in `CallTrackingService._partition_existing`,
+reasoning that its second query is a `COUNT`/`GROUP BY` aggregate that
+would need its own design pass to lock safely. Codex's round 9 review
+confirmed the gap is real and worth closing: `record_shift_calls`
+(reached from both `finalize_shift` and `save_closeout_calls`, after each
+locks the shift) uses `_partition_existing` to inventory this shift's
+existing `OrgCall`/`OrgCallResponse` rows before deciding how many new ones
+to create. The **existence-check** query — a plain `SELECT` of this
+shift's existing `OrgCallResponse.call_id` values — answers from the same
+stale transaction snapshot `_authorize_shift_management`'s earlier plain
+shift query fixes; the shift lock does not refresh it. Two closeout-calls
+saves racing on the same shift, the second queued behind the first's shift
+lock, would have the second's existence check still read "no calls
+recorded yet" even after the first committed a real one — doubling the
+shift's persisted call responses and the department's call-volume count,
+instead of reconciling to the same total.
+
+**Where:** `backend/app/services/call_tracking_service.py`,
+`_partition_existing`'s existence-check query.
+
+**Fix:** added `.with_for_update()` to that query — a plain, non-aggregate
+`SELECT`, so no special design was actually needed for it. The **second**
+query in the same method (the `COUNT`/`GROUP BY` aggregate that classifies
+a call as owned vs. shared) is left as documented in finding 8: it decides
+classification, not whether a new row gets created, so it does not produce
+the doubling bug this fix closes, and locking an aggregate query safely
+still warrants its own look if a future round finds a concrete scenario
+where its own staleness matters.
+
+**Regression test:**
+`backend/tests/test_shift_closeout_calls_snapshot_staleness.py` — same
+two-real-session shape as findings 8/9: session B preloads the shift
+plainly first, session A runs a real `save_closeout_calls` reporting one
+call and commits, then session B runs the same real, unmodified call and
+the test asserts the shift still has exactly one `OrgCall` row (verified
+against the database directly, not either service's identity map).
+Confirmed failing pre-fix (2 distinct `OrgCall` rows found instead of 1)
+via `git stash push -u` on the fix alone (the only diff in the file),
+passing with the fix restored, stable across 3 repeated runs.
+
+## Guard test added (pass 11)
+
+- `backend/tests/test_shift_check_in_race.py` —
+  `TestMemberCheckInIsALockingReadThenWrite::
+test_concurrent_check_ins_cannot_create_a_duplicate_attendance_row`. Two
+  real, independently-committing sessions per the pattern in
+  `test_emergency_contact_name_race.py`/`test_apparatus_check_template_compartment_race.py`.
+  Confirmed failing (`TimeoutError`) against the pre-fix method via
+  `git stash push -u` on the fix alone, confirmed passing with the fix
+  restored. Corrected in a second Codex round (finding 3's write-up above)
+  to prime session B's snapshot before session A commits, closing a gap
+  where the test would have passed even without the attendance check's own
+  `.with_for_update()`.
+- `backend/tests/test_shift_finalize_lock_order_race.py` —
+  `TestFinalizeShiftLocksTheShiftRowFirst::test_finalize_shift_blocks_on_a_concurrent_check_ins_shift_lock`
+  (finding 3, above). Confirmed failing (`asyncio.TimeoutError`) against the
+  pre-fix method via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_closeout_calls_lock_order_race.py` —
+  `TestSaveCloseoutCallsLocksTheShiftRowFirst::test_save_closeout_calls_blocks_on_a_concurrent_check_ins_shift_lock`
+  (finding 4, above). Confirmed failing (`asyncio.TimeoutError`) against the
+  pre-fix method via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_lock_identity_map_staleness.py` —
+  `TestLockingReadRefreshesAnAlreadyLoadedShift::test_for_update_read_sees_a_concurrent_commit_despite_an_earlier_plain_read`
+  (finding 5, above). Confirmed failing (`assert False == True` — a stale
+  identity-map object, not a blocking failure) via `git stash push -u`
+  isolating the `populate_existing` addition alone, confirmed passing with
+  the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_refresh_utc_tagging.py` —
+  `TestLockingRefreshPreservesUtcTagging::test_locking_reread_keeps_end_time_tz_aware`
+  and `::test_finalize_shift_does_not_raise_after_authorize_preload`
+  (finding 6, above). Confirmed both failing (`assert ... tzinfo is not
+None` and `TypeError` surfaced as `error`) via `git stash push -u`
+  isolating the new `"refresh"` listener registration alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_closeout_attendance_lock_order_race.py` —
+  `TestSaveCloseoutAttendanceLocksTheShiftRowFirst::test_save_closeout_attendance_blocks_on_a_concurrent_check_ins_shift_lock`
+  (finding 7, above). Confirmed failing (`asyncio.TimeoutError`) against the
+  pre-fix method via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_finalize_attendance_snapshot_staleness.py` and
+  `backend/tests/test_shift_closeout_attendance_snapshot_staleness.py`
+  (finding 8, above). Confirmed both failing (an attendance row left open
+  after finalize; a literal duplicate row from closeout-attendance) via
+  `git stash push -u` on the fix alone, confirmed passing with the fix
+  restored, stable across 3 consecutive re-runs.
+- `backend/tests/test_shift_finalize_snapshot_totals_staleness.py` and
+  `backend/tests/test_shift_check_in_identity_map_staleness.py` (finding 9,
+  above). Confirmed all three assertions failing pre-fix (`total_hours`
+  `0.0` instead of `1.0`; a `call_count` never set; a second NFC tap's
+  error `None` instead of `"Already checked in"`) via `git stash push -u`
+  on the fix alone, confirmed passing with the fix restored, stable across
+  3 consecutive re-runs.
+- `backend/tests/test_shift_closeout_calls_snapshot_staleness.py` (finding
+  10, above). Confirmed failing pre-fix (2 distinct `OrgCall` rows found
+  instead of 1) via `git stash push -u` on the fix alone, confirmed
+  passing with the fix restored, stable across 3 consecutive re-runs.
+
+## Completion gate (pass 11, round 9 — Codex findings on PR #2428)
+
+| Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Result                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ 0 violations                                                                       |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | ✅ clean                                                                              |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ clean                                                                              |
+| `pytest tests/test_shift_check_in_race.py tests/test_shift_finalize_lock_order_race.py tests/test_shift_closeout_calls_lock_order_race.py tests/test_shift_lock_identity_map_staleness.py tests/test_shift_refresh_utc_tagging.py tests/test_shift_closeout_attendance_lock_order_race.py tests/test_shift_finalize_attendance_snapshot_staleness.py tests/test_shift_closeout_attendance_snapshot_staleness.py tests/test_shift_finalize_snapshot_totals_staleness.py tests/test_shift_check_in_identity_map_staleness.py tests/test_shift_closeout_calls_snapshot_staleness.py` | ✅ 12 passed, 3 repeated runs, no flakiness                                           |
+| `pytest tests/test_scheduling.py::TestShiftCRUD::test_update_shift_validates_effective_time_range`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ✅ 8 passed (all parametrize cases, after the tz-normalization fix)                   |
+| `pytest -k "apparatus or nfc or evoc or equipment_check or compartment or shift_check_in or shift_finalize or shift_closeout or shift_lock or shift_refresh or scheduling or call_tracking"`                                                                                                                                                                                                                                                                                                                                                                                      | ✅ 1274 passed, 1 skipped (pre-existing optional-dep skip)                            |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | ✅ 11945 passed, 21 skipped (pre-existing Docker/optional-dependency skips), 0 failed |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | n/a — no frontend files touched this round either                                     |
+
+### Verified good ✅ (re-confirmed this pass, mechanism named)
+
+- **Route auth coverage 88/88 (`apparatus.py`) + 5/5 (`nfc_tags.py`)** —
+  fresh AST walk this pass, same result as passes 2/3. Every route function's
+  signature also carries a `current_user` parameter (checked separately by
+  regex, since the AST walk only confirms _a_ `Depends(...)` is present, not
+  which one).
+- **`change_apparatus_status`/`archive_apparatus`** (the two routes the
+  frontend's new `ArchiveApparatusModal` actually calls) — both resolve their
+  target through `get_apparatus(apparatus_id, organization_id, ...)` before
+  mutating (XC-3), gated on `apparatus.edit`/`.manage` and `apparatus.manage`
+  respectively (matches sensitivity), and `ApparatusArchive`/
+  `ApparatusStatusChange` carry no client-supplied FK ids (XC-1 does not
+  apply — every field is a scalar disposal/status detail).
+- **LIKE escaping** — all 4 `.ilike()` sites in `apparatus_service.py`
+  (`list_apparatus`'s `make`/`unit_number`/`name`/`vin` filters) still pass
+  `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`.
+- **`SET NULL` nullability** — all 36 `ondelete="SET NULL"` FKs across
+  `models/apparatus.py`/`models/nfc_tag.py` still pair with `nullable=True`
+  (every multi-line declaration read individually, not just grepped).
+- **`NfcTag` uid uniqueness is DB-enforced** — `uq_nfc_tag_org_uid` (a real
+  unique index on `(organization_id, uid_hash)`,
+  `app/models/nfc_tag.py:135`) means a concurrent double-registration of the
+  same physical card cannot silently succeed twice even without an
+  application-level lock — the second `INSERT` fails at the database. Named
+  explicitly because it's the same _shape_ of gap `ShiftAttendance` had, just
+  already closed by a constraint that table has and `shift_attendance` does
+  not.
+- **`EventService.self_check_in`'s locking already matches Pitfall #27
+  correctly** — locks the parent `Event` row before any `EventRSVP` read or
+  write, and `EventRSVP` additionally carries `uq`-style unique index
+  `ix_event_rsvps_event_user` on `(event_id, user_id)` as a second, DB-level
+  backstop. Traced directly (not re-cited) since it's one of the three NFC
+  dispatch targets.
+- **`AdminHoursService.clock_in`'s locking already matches Pitfall #27
+  correctly** — locks the caller's `User` row, then takes its own
+  active-session check as a locking read, with an explicit Pitfall #27
+  comment at the call site. Traced directly for the same reason.
+- **Archive/status-change frontend wiring** — the new `ArchiveApparatusModal`
+  builds its create payload with `|| `/conditional-spread (never `??`),
+  correctly re-fetches the full apparatus record after archiving
+  (`onArchived` → `fetchApparatus(id)`, Pitfall #11), and the `Archive`
+  button stays gated on `canManage` (`apparatus.manage`) client-side,
+  matching the endpoint's own gate. Uses the shared `createApiClient()`
+  factory (Pitfall #7 — auth/CSRF wired). No `window.confirm`; the modal's
+  own named buttons ("Keep in service" / "Archive apparatus") are the
+  confirmation.
+- **`require_nfc_id_cards`** — fails closed on a missing integration row
+  (Pitfall #19: reader before UI), org-scoped, checked server-side on every
+  route rather than trusted from the nav.
+- **`docs/app-review/apparatus.md` / `docs/module-audit/apparatus.md`** — no
+  open (🚩) findings in either as of this pass.
 
 ---
 
