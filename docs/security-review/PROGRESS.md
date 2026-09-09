@@ -99,9 +99,9 @@ locking re-read on the same session/object): confirmed failing
 the lock resolving correctly and the concurrent commit landing) via
 `git stash push -u` isolating just the `populate_existing` addition,
 passing with the fix restored, stable across 3 repeated runs. Full
-write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 5. Completion gate green (see this entry's own next update for the full
-backend suite's exact count); flake8/black/isort clean; no frontend files
-touched.
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 5.
+Completion gate green: full backend suite 11937 passed / 21 pre-existing
+skips / 0 failed; flake8/black/isort clean; no frontend files touched.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
@@ -12048,8 +12048,8 @@ just the two Codex named. Verified with a new test
 3 repeated runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
 → Pass 11, finding 5. Completion gate green: `pytest -k "apparatus or nfc
 or evoc or equipment_check or compartment or shift_check_in or
-scheduling"` — 1129 passed, 1 pre-existing skip; full backend suite clean
-(exact count in this entry's next update); flake8/black/isort clean; no
+scheduling"` — 1129 passed, 1 pre-existing skip; full backend suite 11937
+passed / 21 pre-existing skips / 0 failed; flake8/black/isort clean; no
 frontend files touched.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
