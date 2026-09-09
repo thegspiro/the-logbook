@@ -20,8 +20,9 @@ feature. The rotation cannot outrun its own review queue.
 checks green, mergeable_state clean. Squash-merged as `92a4917e7`. Feature
 11 is now fully closed for this pass — see the Log entries and
 `INV-11-inventory.md` for the full two-round correction history: 6 fixed
-across the two rounds (one, INV-26, a P1 genuine cross-tenant write), 2
-flagged (INV-22, INV-8/9/16/17 re-verified). Next: 12 Facilities.
+across the two rounds (one, INV-26, a P1 genuine cross-tenant write), 5
+still open (INV-22 newly flagged this pass; INV-8, INV-9, INV-16, INV-17
+re-verified). Next: 12 Facilities.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422), preserved for history</summary>
