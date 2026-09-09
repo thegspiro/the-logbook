@@ -471,13 +471,25 @@ describe('primary fill contrast', () => {
         // hands over the inherited *foregrounds*, and this is the fill half of
         // the same context.
         //
-        // The replacement can be either shape. Matching only `dark:…-theme-*`
-        // missed `bg-theme-text-muted dark:bg-slate-950`, where a numeric fill
-        // is what dark actually paints — so the overridden semantic value was
-        // measured in a theme that never shows it. Opaque replacements only: a
-        // translucent one composites over what is beneath rather than replacing
-        // it, so it cannot be treated as an override.
-        const replacement = String.raw`(?:theme-[a-z]+(?:-[a-z]+)*|[a-z]+-\d{2,3})(?:\/100)?\b(?!\/)`;
+        // Stated as an exclusion rather than a list of accepted shapes, and
+        // that inversion is the point.
+        //
+        // This matcher was fixed three times by enumeration — first semantic
+        // tokens, then numeric shades, then keyword colours — and each round
+        // missed the next form (`dark:bg-black`, `dark:bg-[#0a0a0a]`) and
+        // reported a *false* failure against a colour dark mode never paints.
+        // The question is not which spellings of a colour exist; it is whether
+        // the sibling establishes an opaque one. So anything opaque counts, and
+        // only what genuinely fails to override is excluded: `transparent` and
+        // `none` set no colour, and a translucent `/NN` composites over what is
+        // beneath rather than replacing it. `/100` is opaque, as everywhere
+        // else in this file.
+        //
+        // The two trailing lookaheads both matter. The first forces the value
+        // to be maximal, so `dark:bg-slate-950/50` cannot backtrack to
+        // `slate-95` and slip past the opacity check on the `0` that follows.
+        const value = String.raw`[A-Za-z0-9[\]#.,%()_-]`;
+        const replacement = String.raw`(?!transparent(?![\w-])|none(?![\w-]))${value}+(?!${value})(?!\/(?!100\b))`;
         const overridden = new RegExp(String.raw`\bdark:${word}-${replacement}`).test(`${segment} ${inheritedContext}`);
         return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
       };
