@@ -11837,8 +11837,13 @@ The pass's own initial review (FAC-46, HIGH — two unconditional
 review rounds, each finding additional or fix-related bugs, through FAC-57
 (a genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
 merge-then-validate fix). Not the longest single-PR correction chain this
-rotation has seen — PR #2198 (pass 3, FAC-29 through FAC-45) ran at least
-16 review rounds — but a long one. Not every round found a regression in
+rotation has seen: pass 3's "round N" numbering is a pass-wide ordinal
+spanning three PRs (#2191, #2195, #2198), not a per-PR count, but PR #2198
+(FAC-29 through FAC-45) alone still carried 8 of those numbered rounds on
+top of its own initial review (pass-3 rounds 8 through 14, plus round 16;
+round 15 was not its own completion-gate round) — comparable to, and
+arguably longer than, this PR's initial review plus seven. Not every round
+found a regression in
 the previous one's fix, and not every independent bug was masked the same
 way: FAC-47 was a pre-existing field-name mismatch a crash had genuinely
 been masking, reachable only once FAC-46's fix let
