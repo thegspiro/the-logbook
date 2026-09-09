@@ -21,7 +21,7 @@ const ONBOARDING_STEPS = [
   { key: 'authentication', name: 'Authentication', shortName: 'Auth' },
   { key: 'system_owner', name: 'System Owner', shortName: 'Owner' },
   { key: 'it_team', name: 'IT Team Backup', shortName: 'IT Backup' },
-  { key: 'positions', name: 'Positions', shortName: 'Positions' },
+  { key: 'positions', name: 'Ranks & Positions', shortName: 'Positions' },
   { key: 'modules', name: 'Module Selection', shortName: 'Modules' },
 ] as const;
 

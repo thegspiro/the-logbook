@@ -31,6 +31,8 @@ import {
   UserCheck,
   KeyRound,
   FileText,
+  Stethoscope,
+  Store,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService } from '../services/api';
@@ -44,6 +46,7 @@ const CATEGORY_STYLES: Record<string, { bgClass: string; textClass: string }> = 
   notifications: { bgClass: 'bg-amber-500/10', textClass: 'text-amber-500' },
   prospective_members: { bgClass: 'bg-purple-500/10', textClass: 'text-purple-500' },
   inventory: { bgClass: 'bg-orange-500/10', textClass: 'text-orange-500' },
+  storefront: { bgClass: 'bg-teal-500/10', textClass: 'text-teal-500' },
   integrations: { bgClass: 'bg-cyan-500/10', textClass: 'text-cyan-500' },
 };
 
@@ -62,6 +65,8 @@ const ITEM_ICONS: Record<string, React.ReactNode> = {
   training: <GraduationCap className="h-5 w-5" />,
   training_requirements: <ListChecks className="h-5 w-5" />,
   inventory: <Package className="h-5 w-5" />,
+  medical_supplies: <Stethoscope className="h-5 w-5" />,
+  storefront: <Store className="h-5 w-5" />,
   forms: <ClipboardList className="h-5 w-5" />,
   email: <Mail className="h-5 w-5" />,
   pipeline: <UserPlus className="h-5 w-5" />,

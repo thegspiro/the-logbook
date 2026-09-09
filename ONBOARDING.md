@@ -49,6 +49,9 @@ number of screens a user sees depends on the services they select.
 - Configure timezone, contact info, mailing/physical addresses
 - Upload organization logo (optional)
 - Set department identifiers (FDID, State ID, or Department ID)
+- Say whether members carry numbers, with a prefix and a starting number. Asked
+  here because the counter only numbers members created after it is on — the
+  System Owner and IT team are created later in this same wizard.
 - **Commits to database immediately**
 
 #### Step 2: Stations
@@ -87,23 +90,43 @@ number of screens a user sees depends on the services they select.
 #### Step 9: IT Team & Backup Access
 
 - Configure IT team contacts and backup access information
+- Each contact may be given an operational rank, applied when their account is
+  created at completion
 
-#### Step 10: Position Setup
+#### Step 10: Ranks & Positions
 
+- Set the membership ladder — the stages a member progresses through, the years
+  each takes, and what each one confers: voting in elections, holding office,
+  any meeting-attendance threshold for voting, and training exemption. Turn off
+  automatic advancement if your department promotes by vote or by application
+- Edit the department's rank ladder: rename ranks to your own vocabulary,
+  reorder them, remove ones you do not have, add your own, and set each rank's
+  shift eligibility. Set your own rank as System Owner
 - Configure operational positions with two-tier permissions (View Access / Manage Access)
 - Use pre-configured position templates by category (Leadership, Officers, Administrative, etc.)
+- A position left unselected is not created — except the System Owner's own and
+  the baseline Member position, which are always kept
 
 #### Step 11: Module Selection
 
 - Choose which modules to enable:
-  - **Essential**: Member Management, Events & RSVP, Documents & Files
-  - **Recommended**: Training & Certifications, Equipment & Inventory, Scheduling, Elections, Compliance
-  - **Optional**: Notifications, Mobile App, Forms & Surveys, Integrations
+  - **Core** (always on): Member Management, Events & RSVP, Documents & Files, Custom Forms
+  - **Operations**: Training & Certifications, Inventory, Medical Supplies, Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
+  - **Governance**: Elections & Voting, Meeting Minutes, Reports & Analytics
+  - **Communication**: Email Notifications, Mobile App Access
+  - **Advanced**: External Integrations
+  - **Membership**: Prospective Members Pipeline
+- Modules the wizard does not ask about — Communications, Finance, Grants &
+  Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information and
+  the Testing Checklist — are turned on later under **Settings → Modules**
 
 #### Step 12: Complete
 
-- Finalizes onboarding and redirects to dashboard
-- Generate post-onboarding checklist
+- Finalizes onboarding and hands off to the Department Setup checklist at `/setup`
+- The checklist derives each step from live entity counts rather than a stored list
+- Module-specific steps appear only for the modules that were enabled — a
+  department that turned on the Department Store is told it needs a catalog
+  before anyone can order
 
 ### 3. Post-Onboarding Checklist
 

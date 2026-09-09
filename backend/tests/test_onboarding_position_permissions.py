@@ -12,7 +12,11 @@ the carry-over rules of ``_merge_default_permissions``.
 import pytest
 
 from app.api.v1.onboarding import RolePermission, _merge_default_permissions
-from app.core.permissions import DEFAULT_POSITIONS, permission_matches
+from app.core.permissions import (
+    DEFAULT_POSITIONS,
+    module_checkbox_is_held,
+    permission_matches,
+)
 
 
 def _merged(submitted: dict[str, RolePermission], defaults: list[str]) -> list[str]:
@@ -193,12 +197,15 @@ def _wizard_checkboxes(slug: str) -> dict[str, RolePermission]:
 
     granted = set(DEFAULT_POSITIONS[slug]["permissions"])
 
-    def held(module_id: str, action: str) -> bool:
-        return f"{module_id}.*" in granted or f"{module_id}.{action}" in granted
-
+    # Read through the shared checkbox model rather than by prefix. A registry
+    # id is a module *settings* key: Medical Supplies' grants live under
+    # ``inventory.*_medical``, so deriving its boxes from its own name showed
+    # them clear on a position that holds them — which reads as an
+    # administrator having cleared them, and revokes them on the first save.
     return {
         module_id: RolePermission(
-            view=held(module_id, "view"), manage=held(module_id, "manage")
+            view=module_checkbox_is_held(module_id, "view", granted),
+            manage=module_checkbox_is_held(module_id, "manage", granted),
         )
         for module_id in registry_module_ids()
     }

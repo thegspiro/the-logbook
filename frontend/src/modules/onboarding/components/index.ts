@@ -7,3 +7,5 @@ export { ResetProgressButton } from './ResetProgressButton';
 export { AutoSaveNotification } from './AutoSaveNotification';
 export { ErrorAlert } from './ErrorAlert';
 export { LoadingOverlay } from './LoadingOverlay';
+export { default as RankLadderSection } from './RankLadderSection';
+export { default as MembershipLadderSection } from './MembershipLadderSection';

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 
 import RanksSettingsSection from './RanksSettingsSection';
 import type { OperationalRankResponse } from '../../services/api';
+import type { PositionOption } from '../../modules/scheduling/types/shiftSettings';
 
 const rank = (overrides: Partial<OperationalRankResponse> = {}): OperationalRankResponse => ({
   id: 'rank-1',
@@ -19,7 +20,17 @@ const rank = (overrides: Partial<OperationalRankResponse> = {}): OperationalRank
   ...overrides,
 });
 
-const renderSection = (ranks: OperationalRankResponse[]) =>
+const SEATS: PositionOption[] = [
+  { value: 'officer', label: 'Officer' },
+  { value: 'ems', label: 'EMT' },
+  { value: 'rescue_tech', label: 'Rescue Technician' },
+];
+
+const renderSection = (
+  ranks: OperationalRankResponse[],
+  seatOptions: PositionOption[] = SEATS,
+  editingPositionsRankId: string | null = null
+) =>
   render(
     <RanksSettingsSection
       ranks={ranks}
@@ -29,8 +40,9 @@ const renderSection = (ranks: OperationalRankResponse[]) =>
       rankForm={{ rank_code: '', display_name: '' }}
       rankSaving={false}
       deletingRankId={null}
-      editingPositionsRankId={null}
+      editingPositionsRankId={editingPositionsRankId}
       rankValidationIssues={[]}
+      seatOptions={seatOptions}
       onSetEditingRank={vi.fn()}
       onSetAddingRank={vi.fn()}
       onSetRankForm={vi.fn()}
@@ -88,5 +100,37 @@ describe('RanksSettingsSection — the grants-nothing warning', () => {
     renderSection([stale]);
 
     expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+  });
+});
+
+describe('RanksSettingsSection — the eligible-seat picker', () => {
+  it('offers a seat the department defined itself', () => {
+    // The picker used to be a fixed list of nine tokens, so a department that
+    // added Rescue Technician in Position Names could staff that seat on a
+    // template and never make a rank eligible for it.
+    renderSection([rank()], SEATS, 'rank-1');
+
+    expect(screen.getByRole('button', { name: 'Rescue Technician' })).toBeInTheDocument();
+  });
+
+  it('names each seat the way the department named it, not by its token', () => {
+    renderSection([rank()], SEATS, 'rank-1');
+
+    expect(screen.getByRole('button', { name: 'EMT' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ems' })).not.toBeInTheDocument();
+  });
+
+  it('still offers a seat this rank holds after the department retired it', () => {
+    // Otherwise the badge shows in display mode with no button to clear it, and
+    // the rank keeps conferring a seat nobody can see how to take back.
+    renderSection([rank({ eligible_positions: ['ems', 'paramedic'] })], SEATS, 'rank-1');
+
+    expect(screen.getByRole('button', { name: 'Paramedic' })).toBeInTheDocument();
+  });
+
+  it('does not invent a button for a seat no rank holds and no department offers', () => {
+    renderSection([rank({ eligible_positions: ['ems'] })], SEATS, 'rank-1');
+
+    expect(screen.queryByRole('button', { name: 'Paramedic' })).not.toBeInTheDocument();
   });
 });

@@ -53,16 +53,12 @@ const ModuleOverview: React.FC = () => {
     const module = modules.find((m) => m.id === moduleId);
 
     if (action === 'start') {
-      // Enable first, navigate second. A module with no config route used to
-      // fall through every branch here, so its Enable button did nothing at
-      // all: no status, no toast, and onboarding saved the module disabled
-      // while the administrator believed they had turned it on.
+      // Enabling is the whole action. Most modules used to navigate on to a
+      // per-module permission step instead, which reported success and
+      // submitted nothing; who may manage a module is settled on the Positions
+      // step before this one.
       setModuleStatus(moduleId, 'enabled');
-      if (module?.configRoute) {
-        void navigate(module.configRoute);
-      } else {
-        toast.success(`${module?.name} enabled`);
-      }
+      toast.success(`${module?.name} enabled`);
     } else if (action === 'skip') {
       setModuleStatus(moduleId, 'skipped');
       toast.success(`${module?.name} marked as "Configure Later"`);
@@ -247,10 +243,10 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        aria-label={`Configure Now ${module.name}`}
+                        aria-label={`Enable ${module.name}`}
                         className="btn-primary w-full font-medium"
                       >
-                        Configure Now
+                        Enable
                       </button>
                       <div className="flex space-x-2">
                         <button
@@ -309,10 +305,10 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        aria-label={`Configure Now ${module.name}`}
+                        aria-label={`Enable ${module.name}`}
                         className="btn-info w-full font-medium"
                       >
-                        Configure Now
+                        Enable
                       </button>
                       <div className="flex space-x-2">
                         <button

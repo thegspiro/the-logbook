@@ -11,6 +11,7 @@ import {
   X,
   Eye,
   Edit3,
+  Lock,
   Crown,
   Star,
   UserCog,
@@ -29,9 +30,24 @@ import {
   HeartPulse,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
+import {
+  OnboardingHeader,
+  ProgressIndicator,
+  BackButton,
+  AutoSaveNotification,
+  RankLadderSection,
+  MembershipLadderSection,
+} from '../components';
 import { useOnboardingStore } from '../store';
-import { MODULE_REGISTRY, isAgencyFilteredOut, type ModuleDefinition } from '../config';
+import {
+  MODULE_CHECKBOX_CONFERRED_BY,
+  MODULE_CHECKBOX_TIERS,
+  MODULE_REGISTRY,
+  isAgencyFilteredOut,
+  type ModuleCheckboxConferredBy,
+  type ModuleCheckboxTiers,
+  type ModuleDefinition,
+} from '../config';
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildPositionTemplates } from './positionTemplates';
@@ -39,6 +55,21 @@ import { buildPositionTemplates } from './positionTemplates';
 /**
  * Build permission categories dynamically from the module registry.
  * This ensures new modules automatically appear in position configuration.
+ */
+/**
+ * The rows of the permission matrix, and which of each row's two checkboxes
+ * the app can actually grant.
+ *
+ * A module whose View and Manage tiers are both unbacked is not a row at all.
+ * Mobile App Access is that module: it is a PWA with no permission gate, so
+ * both boxes wrote `mobile.view` / `mobile.manage` / `mobile.*` into every
+ * position that ticked them and no endpoint has ever read one. Integrations
+ * keeps its row but loses View, because there is no read-only console —
+ * every route behind it requires `integrations.manage`.
+ *
+ * `MODULE_CHECKBOX_TIERS` is generated from the backend's own map, so a new
+ * module whose settings key is not its permission prefix is answered there
+ * once rather than here as well.
  */
 const buildPermissionCategories = (modules: ModuleDefinition[]) => {
   const categories: Record<
@@ -48,15 +79,21 @@ const buildPermissionCategories = (modules: ModuleDefinition[]) => {
       icon: React.ElementType;
       view: string[];
       manage: string[];
+      tiers: ModuleCheckboxTiers;
+      conferredBy: ModuleCheckboxConferredBy;
     }
   > = {};
 
   modules.forEach((module) => {
+    const tiers = MODULE_CHECKBOX_TIERS[module.id] ?? { view: true, manage: true };
+    if (!tiers.view && !tiers.manage) return;
     categories[module.id] = {
       name: module.name,
       icon: module.icon,
       view: module.permissions.view,
       manage: module.permissions.manage,
+      tiers,
+      conferredBy: MODULE_CHECKBOX_CONFERRED_BY[module.id] ?? {},
     };
   });
 
@@ -322,14 +359,30 @@ const PositionSetup: React.FC = () => {
     // many rather than silently hiding one.
     const templates = buildPositionTemplates(MODULE_REGISTRY, organizationType);
 
-    // Pre-select essential positions
+    // Everything this agency has is selected, and that is load-bearing rather
+    // than a convenience.
+    //
+    // Unticking a position now removes it, so the set left ticked *is* the
+    // department's structure — and the overwhelmingly common path through this
+    // step is an administrator pressing Continue having edited nothing. That
+    // click has to be a no-op, which is the same invariant
+    // `test_continuing_without_editing_changes_nothing` holds for the grants
+    // inside each position.
+    //
+    // Six positions used to be preselected, from when leaving one unticked
+    // meant "do not submit it" and the row survived regardless. Carrying that
+    // list forward past the deletion change would have made the default
+    // Continue delete the twenty-three it does not name — Captain, Lieutenant,
+    // Firefighter, Engineer, EMT, Treasurer, Quartermaster and the rest — for
+    // every department that did not think to look.
+    //
+    // The templates are already narrowed to this agency type, and are built
+    // from what the backend seeded, so submitting all of them writes back
+    // exactly what is there.
     const initial: Record<string, RoleConfig> = {};
-    ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'member'].forEach((posId) => {
-      Object.values(templates).forEach((category) => {
-        const position = category.positions.find((p) => p.id === posId);
-        if (position) {
-          initial[posId] = { ...position };
-        }
+    Object.values(templates).forEach((category) => {
+      category.positions.forEach((position) => {
+        initial[position.id] = { ...position };
       });
     });
     return initial;
@@ -365,6 +418,11 @@ const PositionSetup: React.FC = () => {
 
   // Custom position modal
   const [showCustomModal, setShowCustomModal] = useState(false);
+
+  // The membership ladder batches its edits behind its own Save, so this step
+  // has to refuse to leave with them pending rather than navigate away and
+  // report success for the half of the step that did save.
+  const [ladderDirty, setLadderDirty] = useState(false);
   const [customPositionName, setCustomPositionName] = useState('');
   const [customPositionDescription, setCustomPositionDescription] = useState('');
 
@@ -482,6 +540,11 @@ const PositionSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    if (ladderDirty) {
+      toast.error('Save or discard your membership tier changes before continuing');
+      return;
+    }
+
     // Verify organization was created first
     if (!departmentName) {
       toast.error('Please complete organization setup first');
@@ -510,9 +573,26 @@ const PositionSetup: React.FC = () => {
         return;
       }
 
+      // Name the removals rather than counting them. Unticking a position now
+      // deletes it, and "Removed: 2" gives an administrator no way to notice
+      // they unticked the wrong row.
+      const removed = response.data?.removed ?? [];
       toast.success(
-        `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
+        `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}` +
+          (removed.length > 0 ? `. Removed: ${removed.join(', ')}` : '')
       );
+      // Separately, and as an error rather than folded into the success line:
+      // the save succeeded, but one of the removals the administrator asked for
+      // did not happen. Left unsaid they would finish setup believing the
+      // position was gone and meet it again in every picker.
+      const retained = response.data?.retained ?? [];
+      if (retained.length > 0) {
+        toast.error(
+          `Still in use, so not removed: ${retained.join(', ')}. Move the members holding ` +
+            'these to another position first, then remove them under Members → Settings.',
+          { duration: 8000 }
+        );
+      }
       void navigate('/onboarding/modules');
     } catch (error: unknown) {
       // Show specific error message from backend
@@ -541,15 +621,20 @@ const PositionSetup: React.FC = () => {
             <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-800">
               <Users className="h-8 w-8 text-white" aria-hidden="true" />
             </div>
-            <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">
-              Set Up Positions & Permissions
-            </h1>
-            <p className="text-theme-text-secondary mb-2 text-xl">Choose which positions your organization needs</p>
+            <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Set Up Ranks & Positions</h1>
+            <p className="text-theme-text-secondary mb-2 text-xl">
+              Describe the structure your department already uses
+            </p>
             <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
-              Select from common fire department positions or create your own. Each position determines what members can
-              view and manage.
+              Your membership ladder first, then the ranks your members hold, then the positions that decide what they
+              can view and manage. Start from what we have suggested and change it to match your department — nothing
+              here is fixed.
             </p>
           </div>
+
+          <MembershipLadderSection onDirtyChange={setLadderDirty} />
+
+          <RankLadderSection />
 
           {/* Info Banners */}
           <div className="mb-6 space-y-4">
@@ -581,6 +666,10 @@ const PositionSetup: React.FC = () => {
                     Positions and permissions can be updated anytime in{' '}
                     <strong>Settings → Positions & Permissions</strong>. You can add new positions, modify permissions,
                     or remove positions as your organization's needs evolve.
+                  </p>
+                  <p className="text-theme-text-secondary mt-2 text-sm">
+                    Every position your department could have starts selected. Untick the ones you do not use and they
+                    will be removed — your own System Owner position and the baseline Member position are always kept.
                   </p>
                 </div>
               </div>
@@ -786,6 +875,30 @@ const PositionSetup: React.FC = () => {
                             <div className="grid grid-cols-1 gap-2">
                               {Object.entries(permissionCategories).map(([catId, cat]) => {
                                 const perms = position.permissions[catId] || { view: false, manage: false };
+                                // A tier another module's checkbox also opens
+                                // is read off the grid being edited, not off a
+                                // stored answer: unticking Inventory releases
+                                // Medical Supplies in the same breath. See
+                                // MODULE_CHECKBOX_CONFERRED_BY.
+                                const conferrer = (tier: 'view' | 'manage') => {
+                                  const pair = cat.conferredBy[tier];
+                                  if (!pair) return null;
+                                  const [moduleId, action] = pair;
+                                  if (!position.permissions[moduleId]?.[action]) return null;
+                                  return permissionCategories[moduleId]?.name ?? moduleId;
+                                };
+                                const viaView = conferrer('view');
+                                const viaManage = conferrer('manage');
+                                // Shown on, and not editable: unticking cannot
+                                // revoke what the other grant confers, and a
+                                // control that silently does nothing is worse
+                                // than one that says why it is fixed.
+                                const viewNote = viaView
+                                  ? `${cat.name} view comes with ${viaView} view and cannot be turned off separately`
+                                  : undefined;
+                                const manageNote = viaManage
+                                  ? `${cat.name} management comes with ${viaManage} manage and cannot be turned off separately`
+                                  : undefined;
 
                                 return (
                                   <div
@@ -794,36 +907,56 @@ const PositionSetup: React.FC = () => {
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() =>
-                                          updatePositionPermission(position.id, catId, 'view', !perms.view)
-                                        }
-                                        disabled={isITManager}
-                                        aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
-                                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                          perms.view
-                                            ? 'bg-theme-accent-green-muted text-theme-accent-green'
-                                            : 'bg-theme-surface text-theme-text-muted'
-                                        } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
-                                      >
-                                        <Eye className="h-3 w-3" aria-hidden="true" />
-                                        View
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          updatePositionPermission(position.id, catId, 'manage', !perms.manage)
-                                        }
-                                        disabled={isITManager}
-                                        aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
-                                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                          perms.manage
-                                            ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
-                                            : 'bg-theme-surface text-theme-text-muted'
-                                        } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
-                                      >
-                                        <Edit3 className="h-3 w-3" aria-hidden="true" />
-                                        Manage
-                                      </button>
+                                      {cat.tiers.view && (
+                                        <button
+                                          onClick={() =>
+                                            updatePositionPermission(position.id, catId, 'view', !perms.view)
+                                          }
+                                          disabled={isITManager || !!viaView}
+                                          title={viewNote}
+                                          aria-label={
+                                            viewNote ??
+                                            `${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`
+                                          }
+                                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                            perms.view || viaView
+                                              ? 'bg-theme-accent-green-muted text-theme-accent-green'
+                                              : 'bg-theme-surface text-theme-text-muted'
+                                          } ${isITManager || viaView ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                        >
+                                          {viaView ? (
+                                            <Lock className="h-3 w-3" aria-hidden="true" />
+                                          ) : (
+                                            <Eye className="h-3 w-3" aria-hidden="true" />
+                                          )}
+                                          View
+                                        </button>
+                                      )}
+                                      {cat.tiers.manage && (
+                                        <button
+                                          onClick={() =>
+                                            updatePositionPermission(position.id, catId, 'manage', !perms.manage)
+                                          }
+                                          disabled={isITManager || !!viaManage}
+                                          title={manageNote}
+                                          aria-label={
+                                            manageNote ??
+                                            `${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`
+                                          }
+                                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                            perms.manage || viaManage
+                                              ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
+                                              : 'bg-theme-surface text-theme-text-muted'
+                                          } ${isITManager || viaManage ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                        >
+                                          {viaManage ? (
+                                            <Lock className="h-3 w-3" aria-hidden="true" />
+                                          ) : (
+                                            <Edit3 className="h-3 w-3" aria-hidden="true" />
+                                          )}
+                                          Manage
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 );

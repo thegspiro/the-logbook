@@ -26,6 +26,7 @@ import { HelpLink } from '../../../components/HelpLink';
 // position step reads it back to offer the list the backend seeds, so the two
 // have to be one union.
 import { useOnboardingStore, type OrganizationType } from '../store';
+import { membershipIdPayload } from './memberNumbering';
 
 // Types
 type IdentifierType = 'fdid' | 'state_id' | 'department_id';
@@ -58,6 +59,18 @@ interface OrganizationFormData {
   fdid: string;
   stateId: string;
   departmentId: string;
+  /**
+   * Whether members carry a number, and where the sequence starts.
+   *
+   * Asked in step 1 and not on a members screen because the counter only
+   * numbers members created after it is switched on. The System Owner arrives
+   * in step 9 and the IT team in step 10, so a department that answered this
+   * later ended up with its first accounts holding no number and the roster
+   * import starting at the number they should have had.
+   */
+  memberNumbersEnabled: boolean;
+  memberNumberPrefix: string;
+  memberNumberStart: string;
   // Additional Info
   county: string;
   foundedYear: string;
@@ -154,6 +167,9 @@ const initialFormData: OrganizationFormData = {
   fdid: '',
   stateId: '',
   departmentId: '',
+  memberNumbersEnabled: false,
+  memberNumberPrefix: '',
+  memberNumberStart: '1',
   county: '',
   foundedYear: '',
   logo: null,
@@ -682,6 +698,11 @@ const OrganizationSetup: React.FC = () => {
         county: formData.county?.trim() || undefined,
         founded_year: formData.foundedYear ? parseInt(formData.foundedYear, 10) : undefined,
         logo: formData.logo || undefined,
+        membership_id: membershipIdPayload({
+          enabled: formData.memberNumbersEnabled,
+          prefix: formData.memberNumberPrefix,
+          start: formData.memberNumberStart,
+        }),
       };
 
       // Save to API
@@ -1044,6 +1065,55 @@ const OrganizationSetup: React.FC = () => {
                       helpText="Your internal department ID (if applicable)"
                     />
                   )}
+
+                  {/* Member numbers.
+                      Asked here rather than on a members screen because the
+                      counter only numbers members created after it is switched
+                      on: your account is created a few steps from now, and the
+                      IT team's after that. */}
+                  <div className="border-theme-surface-border space-y-3 border-t pt-4">
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox mt-0.5"
+                        checked={formData.memberNumbersEnabled}
+                        onChange={(e) => updateFormData('memberNumbersEnabled', e.target.checked)}
+                      />
+                      <span>
+                        <span className="text-theme-text-primary block text-sm font-medium">
+                          Our members have member numbers
+                        </span>
+                        <span className="text-theme-text-muted block text-sm">
+                          A badge or roster number printed on a member&apos;s profile. Leave this off if your department
+                          identifies members by name — you can turn it on later under Members → Settings → Membership
+                          IDs, but members added before then will not have one.
+                        </span>
+                      </span>
+                    </label>
+
+                    {formData.memberNumbersEnabled && (
+                      <div className="grid grid-cols-1 gap-4 pl-7 sm:grid-cols-2">
+                        <InputField
+                          label="Prefix"
+                          id="member-number-prefix"
+                          value={formData.memberNumberPrefix}
+                          onChange={(v) => updateFormData('memberNumberPrefix', v)}
+                          placeholder="e.g., FD-"
+                          maxLength={10}
+                          helpText="Printed before the number. Leave blank for digits only."
+                        />
+                        <InputField
+                          label="Start numbering at"
+                          id="member-number-start"
+                          type="number"
+                          value={formData.memberNumberStart}
+                          onChange={(v) => updateFormData('memberNumberStart', v)}
+                          placeholder="1"
+                          helpText="The number your account will be given. Numbers are padded to four digits."
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

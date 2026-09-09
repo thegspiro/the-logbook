@@ -13,7 +13,6 @@ export { default as ITTeamBackupAccess } from './ITTeamBackupAccess';
 // PositionSetup is the canonical name (source file is still RoleSetup.tsx)
 export { default as PositionSetup } from './RoleSetup';
 export { default as ModuleOverview } from './ModuleOverview';
-export { default as ModuleConfigTemplate } from './ModuleConfigTemplate';
 // SystemOwnerCreation is the canonical name (source file is still AdminUserCreation.tsx)
 export { default as SystemOwnerCreation } from './AdminUserCreation';
 export { default as SetupComplete } from './SetupComplete';

@@ -268,6 +268,17 @@ export interface MembershipTier {
 export interface MembershipTierConfig {
   auto_advance: boolean;
   tiers: MembershipTier[];
+  /**
+   * How many members hold each stored `membership_type`, reported by the GET.
+   *
+   * Read-only: it is a count of the roster, not configuration, and the endpoint
+   * strips it back off on save rather than storing a snapshot that is wrong the
+   * moment anybody joins. Keyed by tier id, and it also carries the legacy
+   * non-tier values (`administrative`, `honorary`, ...) — deliberately, because
+   * an editor that hid them would offer to delete a rung it could not see was
+   * occupied.
+   */
+  member_counts?: Record<string, number>;
 }
 
 export interface PropertyReturnReport {

@@ -7,13 +7,14 @@ report is automatically generated, saved to documents, and optionally emailed.
 """
 
 import copy
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, Field
-from sqlalchemy import select
+from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +24,7 @@ from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import database_manager, get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Organization, User, UserStatus
+from app.schemas.organization import MembershipTierSettings
 from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
@@ -953,8 +955,55 @@ async def get_membership_tier_config(
     )
     organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 
-    tier_config = (organization.settings or {}).get("membership_tiers", {})
-    return tier_config
+    settings = organization.settings or {}
+    # An organization onboarded before the ladder was seeded at creation has no
+    # `membership_tiers` key at all, and spreading that returned nothing but the
+    # counts -- so the editor showed "No tiers configured" under its own copy
+    # about the arrangement we ship, and a department could finish setup with no
+    # ladder while every reader quietly answered "no" to whatever it was asked.
+    #
+    # Keyed on the section being absent, not on it being empty: a department
+    # that deliberately saved a ladder with no rungs made a decision, and
+    # resurrecting the defaults over it would be the same overreach in the other
+    # direction.
+    tier_config = (
+        settings["membership_tiers"]
+        if "membership_tiers" in settings
+        else MembershipTierSettings().model_dump()
+    )
+    return {
+        **tier_config,
+        # How many members currently sit on each tier, so the editor can say so
+        # beside the rung and refuse to remove one that is occupied. Reported
+        # rather than left to the client to work out: `membership_type` also
+        # holds the legacy non-tier values, and counting them as tiers is how
+        # you get an editor that offers to delete "administrative".
+        "member_counts": await _tier_member_counts(
+            db, str(current_user.organization_id)
+        ),
+    }
+
+
+async def _tier_member_counts(db: AsyncSession, organization_id: str) -> dict[str, int]:
+    """Members per stored ``membership_type``, for the whole roster.
+
+    Deleted members are excluded; every other status is counted. A retired or
+    archived member still holds a tier, and removing the rung out from under
+    them rewrites a historical record — ``split_membership_type`` returns
+    ``(None, None)`` for a value it does not recognise rather than guessing, so
+    they would fall out of the operational body and the electorate with nothing
+    reporting it.
+    """
+    result = await db.execute(
+        select(User.membership_type, func.count(User.id))
+        .where(
+            User.organization_id == organization_id,
+            User.deleted_at.is_(None),
+            User.membership_type.is_not(None),
+        )
+        .group_by(User.membership_type)
+    )
+    return {str(tier_id): int(count) for tier_id, count in result.all()}
 
 
 @router.put("/membership-tiers/config")
@@ -983,32 +1032,106 @@ async def update_membership_tier_config(
     )
     organization = ensure_found(org_result.scalar_one_or_none(), "Organization")
 
-    # Validate config structure
-    tiers = config.get("tiers", [])
-    if not isinstance(tiers, list):
-        raise HTTPException(status_code=400, detail="'tiers' must be a list")
+    # Validated by the model that defines the shape, not by hand. The ad-hoc
+    # checks this replaces covered two fields of nine and let everything else
+    # through verbatim: a `years_required` of -1, a `voting_attendance_period_months`
+    # of 0, an unknown benefit key. Every reader is defensive `.get()` calls, so
+    # a malformed rung does not raise — it silently answers "no" to whatever it
+    # was asked, and the member is quietly out of the electorate.
+    #
+    # `member_counts` is reported by the GET and is not part of the stored
+    # config; accepting it back would persist a snapshot that is wrong the
+    # moment anyone joins.
+    submitted = {k: v for k, v in config.items() if k != "member_counts"}
+    try:
+        validated = MembershipTierSettings.model_validate(submitted)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid membership tier configuration: {exc.errors()[0]['msg']}",
+        )
 
-    for tier in tiers:
-        if not tier.get("id") or not tier.get("name"):
+    tiers = [tier.model_dump() for tier in validated.tiers]
+
+    # One pass, not a rescan of the whole list per tier: this endpoint is
+    # reachable directly and `tiers` is only bounded by the schema's max_length.
+    duplicate_ids = sorted(
+        tier_id
+        for tier_id, count in Counter(t["id"] for t in tiers).items()
+        if count > 1
+    )
+    if duplicate_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Duplicate tier ids: {', '.join(duplicate_ids)}",
+        )
+
+    # `sort_order` and `years_required` have to climb together, because two
+    # different readers use one each and they must not disagree.
+    # `resolve_tier` returns the qualifying rung with the greatest `sort_order`,
+    # while qualification itself is by `years_required` -- so a ladder where a
+    # lower threshold sits above a higher one makes the monthly `advance_all`
+    # *demote*: reorder Life above Senior and a 25-year Life member qualifies
+    # for both, resolves to Senior because its sort_order is now greater, and
+    # is rewritten overnight. Nothing raises, and the member finds out at the
+    # next election.
+    #
+    # Refused here rather than silently rewriting either field: which one the
+    # department meant is not something to guess -- moving the rung and moving
+    # the threshold are different intentions.
+    by_order = sorted(tiers, key=lambda t: t.get("sort_order", 0))
+    for higher, lower in zip(by_order, by_order[1:]):
+        if lower.get("years_required", 0) < higher.get("years_required", 0):
             raise HTTPException(
-                status_code=400, detail="Each tier must have 'id' and 'name'"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"'{lower.get('name') or lower.get('id')}' is above "
+                    f"'{higher.get('name') or higher.get('id')}' in the ladder but "
+                    f"needs fewer years of service "
+                    f"({lower.get('years_required', 0)} vs "
+                    f"{higher.get('years_required', 0)}). Members are advanced by "
+                    "years of service, so this order would move a long-serving "
+                    "member down. Reorder the tiers or change their years."
+                ),
             )
-        benefits = tier.get("benefits", {})
-        if not isinstance(benefits, dict):
-            raise HTTPException(
-                status_code=400, detail=f"Tier '{tier['id']}' benefits must be a dict"
-            )
-        # Validate attendance percentage range
-        min_pct = benefits.get("voting_min_attendance_pct", 0.0)
-        if not (0 <= min_pct <= 100):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Tier '{tier['id']}' voting_min_attendance_pct must be 0-100",
-            )
+
+    # A tier id is what `User.membership_type` stores, and nothing cascades a
+    # rename or backfills a removal. Dropping a rung members are standing on
+    # does not move them down it — `split_membership_type` refuses to guess a
+    # class for an id it does not recognise, so they leave the operational body
+    # and the ballot electorate at once, with nothing saying so. Refused here,
+    # naming who, the way delete_rank does.
+    existing_ids = {
+        tier.get("id")
+        for tier in (organization.settings or {})
+        .get("membership_tiers", {})
+        .get("tiers", [])
+        if tier.get("id")
+    }
+    counts = await _tier_member_counts(db, str(current_user.organization_id))
+    submitted_ids = {t["id"] for t in tiers}
+    occupied_and_gone = sorted(
+        tier_id
+        for tier_id in existing_ids - submitted_ids
+        if counts.get(tier_id, 0) > 0
+    )
+    if occupied_and_gone:
+        detail = "; ".join(
+            f"'{tier_id}' is held by {counts[tier_id]} "
+            f"{'member' if counts[tier_id] == 1 else 'members'}"
+            for tier_id in occupied_and_gone
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Cannot remove or rename a tier that members hold: {detail}. "
+                "Move those members to another tier first."
+            ),
+        )
 
     # Update org settings
     settings = copy.deepcopy(organization.settings or {})
-    settings["membership_tiers"] = config
+    settings["membership_tiers"] = validated.model_dump()
     organization.settings = settings
     await db.commit()
 

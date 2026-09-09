@@ -478,6 +478,8 @@ class SecureApiClient {
       email: string;
       phone: string;
       role: string;
+      /** Operational rank code, or '' for none. Applied when the account is created. */
+      rank?: string;
     }>;
     backup_access: {
       email: string;
@@ -515,6 +517,13 @@ class SecureApiClient {
       message: string;
       created: string[];
       updated: string[];
+      removed: string[];
+      /**
+       * Unticked positions that could not be removed, because a member holds
+       * one. The save still succeeds, so without surfacing these an
+       * administrator finishes setup believing the position is gone.
+       */
+      retained: string[];
       total_positions: number;
     }>
   > {
@@ -584,6 +593,22 @@ class SecureApiClient {
     founded_year?: number | undefined;
     tax_id?: string | undefined;
     logo?: string | undefined;
+    /**
+     * How member numbers are assigned, if the department uses them.
+     *
+     * Omitted rather than sent as an explicit "off" when the question was
+     * skipped: the backend leaves the shipped default alone for an absent
+     * block, so a department that never saw the question and one that answered
+     * "no" are not stored the same way.
+     */
+    membership_id?:
+      | {
+          enabled: boolean;
+          auto_generate: boolean;
+          prefix: string;
+          next_number: number;
+        }
+      | undefined;
   }): Promise<
     ApiResponse<{
       id: string;

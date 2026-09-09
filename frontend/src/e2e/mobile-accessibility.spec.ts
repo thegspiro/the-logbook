@@ -131,6 +131,14 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/notifications?tab=inbox': 3,
   '/inventory/admin/checklists': 6,
   '/elections': 3,
+  // One node: the `alert-warning` heading that tells an officer this ladder
+  // decides who votes. `--alert-warning-title` is amber-800 on amber-50 and
+  // measures 6.83:1 — AA-clean, AAA short by a hair, and the same shortfall the
+  // audit log's severity badges carry two entries above. It is a shared token at
+  // 65 call sites, so clearing it is a palette decision taken app-wide (see the
+  // 2026-08-23 and 2026-09-07 notes in CLAUDE.md), not one this screen makes on
+  // its own. Call sites are held to AA by policy.
+  '/members/admin/settings/tiers': 1,
   '/admin/analytics': 1,
   '/grants': 12,
   '/reports': 8,

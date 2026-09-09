@@ -8,6 +8,7 @@ This module guides users through initial setup and can be disabled once complete
 import copy
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
@@ -25,7 +26,10 @@ from app.models.location import Location
 from app.models.onboarding import OnboardingStatus
 from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
+from app.schemas.organization import MembershipTierSettings
 from app.services.auth_service import AuthService
+from app.services.operational_rank_service import OperationalRankService
+from app.services.organization_service import OrganizationService
 from app.utils.positions import normalize_stored_positions
 
 # ── Modules the setup wizard offers ───────────────────────────────────────
@@ -201,8 +205,8 @@ class OnboardingService:
         {
             "id": 11,
             "name": "roles",
-            "title": "Role Setup",
-            "description": "Configure roles and permissions",
+            "title": "Ranks & Positions",
+            "description": "Configure the rank ladder, positions and permissions",
             "required": False,
         },
         {
@@ -552,6 +556,21 @@ class OnboardingService:
         elif identifier_type == "state_id":
             id_type_enum = IdentifierType.STATE_ID
 
+        # The membership ladder is seeded here rather than left to whoever
+        # opens the screen first. It decides the ballot electorate, who may
+        # hold office and who is graded for training, and `advance_all` does
+        # nothing at all while `settings["membership_tiers"]` is absent — so an
+        # organization created without it had no ladder, no advancement, and a
+        # setup screen reading "No tiers configured" beneath its own copy about
+        # the arrangement we ship. Stored state and the screen now agree from
+        # the first request.
+        #
+        # A caller that supplied its own block keeps it verbatim.
+        org_settings: Dict[str, Any] = dict(settings_dict or {})
+        org_settings.setdefault(
+            "membership_tiers", MembershipTierSettings().model_dump()
+        )
+
         # Create organization with all fields
         org = Organization(
             name=name,
@@ -559,7 +578,7 @@ class OnboardingService:
             organization_type=org_type_enum,
             type=organization_type,  # Keep legacy field for compatibility
             description=description,
-            settings=settings_dict or {},
+            settings=org_settings,
             active=True,
             # Timezone
             timezone=timezone,
@@ -613,7 +632,7 @@ class OnboardingService:
             # recognise, and a status record that disagrees with the
             # organization row is a second answer to the same question.
             status.organization_type = org_type_enum.value
-            await self._mark_step_completed(status, 1, "organization")  # Now Step 1
+            await self._mark_step_completed(status, "organization")
 
         return org
 
@@ -997,6 +1016,52 @@ class OnboardingService:
         )
         return result.scalar_one_or_none()
 
+    async def _deferred_rank(
+        self,
+        organization_id: str,
+        chosen: Optional[str],
+        email: str,
+    ) -> Optional[str]:
+        """The rank to store for an IT contact, or ``None``.
+
+        A *deferred* write: the rank is chosen at step 10 and the account is
+        created at completion, with the ladder edited at step 11 in between.
+        Two things follow from that gap.
+
+        It must not resurrect a deleted rank. ``resolve_rank_code`` answers from
+        the built-in seed codes before it consults the organization's rows —
+        right for the rest of the system, wrong here, because a department that
+        removes Captain on the ladder step would otherwise still get an account
+        holding ``captain`` and the static Captain grants that come with it.
+        ``resolve_configured_rank_code`` requires a row, which onboarding always
+        has: the ladder is seeded on arrival at that step.
+
+        And it must not fail the whole of setup. The rank is optional, and a
+        department that names one here and then removes it from its own ladder
+        has made a coherent choice, twice. So an unresolvable value is dropped
+        with a warning rather than raised: a contact with no rank is a member an
+        officer sets one for later, which is recoverable, while a failed
+        completion is not.
+        """
+        chosen = (chosen or "").strip()
+        if not chosen:
+            return None
+        rank_service = OperationalRankService(self.db)
+        resolved = await rank_service.resolve_configured_rank_code(
+            organization_id, chosen
+        )
+        if resolved is None:
+            # Loguru formats with str.format, not %-style: the printf
+            # placeholders logged literally and recorded neither the rank nor
+            # the contact, which is the whole content of the warning.
+            logger.warning(
+                "Dropping rank {rank!r} for IT contact {email} during "
+                "onboarding: the organization has no such rank",
+                rank=chosen,
+                email=email,
+            )
+        return resolved
+
     async def create_it_team_users(
         self,
         organization_id: str,
@@ -1012,11 +1077,13 @@ class OnboardingService:
         Args:
             organization_id: Organization UUID
             it_team_members: List of dicts with keys: name, email, phone, role
+                and an optional rank
 
         Returns:
             List of created User objects
         """
         auth_service = AuthService(self.db)
+        org_service = OrganizationService(self.db)
         created_users: List[User] = []
 
         # Look up the member role once
@@ -1053,7 +1120,25 @@ class OnboardingService:
                     User.organization_id == organization_id,
                 )
             )
-            if existing.scalar_one_or_none():
+            existing_user = existing.scalar_one_or_none()
+            if existing_user:
+                # The primary IT contact row is auto-populated with the System
+                # Owner, so this is the *ordinary* case, not an edge one — and
+                # returning here discarded the rank chosen for that row without
+                # a word.
+                #
+                # Only when the account has no rank yet. The rank step runs
+                # after this one and offers the System Owner its own picker, so
+                # a rank already set there is the later and more deliberate
+                # choice; overwriting it from a row filled in two screens
+                # earlier would be the same silent loss in the other direction.
+                if existing_user.rank is None:
+                    deferred = await self._deferred_rank(
+                        organization_id, member.get("rank"), email
+                    )
+                    if deferred is not None:
+                        existing_user.rank = deferred
+                        await self.db.flush()
                 continue
 
             # Check for username conflict and append a suffix if needed
@@ -1076,6 +1161,10 @@ class OnboardingService:
 
             temp_password = generate_temporary_password()
 
+            # Numbered in the order the wizard collected them, continuing the
+            # sequence the System Owner started. Nothing here to type a number
+            # into, so this is the only chance these accounts get one without an
+            # officer editing each profile after setup.
             user, error = await auth_service.register_user(
                 organization_id=organization_id,
                 username=username,
@@ -1083,6 +1172,9 @@ class OnboardingService:
                 password=temp_password,
                 first_name=first_name,
                 last_name=last_name,
+                membership_number=await org_service.generate_next_membership_id(
+                    UUID(organization_id)
+                ),
             )
 
             if error or not user:
@@ -1091,6 +1183,20 @@ class OnboardingService:
             # Force password change on first login
             user.must_change_password = True
             user.phone = phone
+
+            # The rank the wizard collected for this contact, if any.
+            #
+            # Resolved rather than stored verbatim, and dropped rather than
+            # refused when it does not resolve. The rank step runs after the IT
+            # team step, so a department that names a rank here and then removes
+            # it from its ladder would otherwise fail the whole of setup at the
+            # final Continue over an optional field. A contact with no rank is
+            # a member an officer sets a rank for later; a contact with an
+            # unresolvable one is a member with no seats and no permissions and
+            # nothing saying why.
+            user.rank = await self._deferred_rank(
+                organization_id, member.get("rank"), email
+            )
 
             # Assign member role
             if member_role:
@@ -1148,6 +1254,17 @@ class OnboardingService:
         # Use AuthService to create user with proper password hashing
         auth_service = AuthService(self.db)
 
+        # The System Owner is member number one, when the department numbers its
+        # members at all. Assigned here rather than left for later because the
+        # counter only advances for members created after numbering is switched
+        # on: a department that turned it on afterwards had its first accounts
+        # holding no number and the roster import starting at the number they
+        # should have had. A typed number wins -- an officer transcribing an
+        # existing badge is not asking for the next one in the sequence.
+        assigned_number = membership_number or await OrganizationService(
+            self.db
+        ).generate_next_membership_id(UUID(organization_id))
+
         user, error = await auth_service.register_user(
             organization_id=organization_id,
             username=username,
@@ -1155,7 +1272,7 @@ class OnboardingService:
             password=password,
             first_name=first_name,
             last_name=last_name,
-            membership_number=membership_number,
+            membership_number=assigned_number,
             # The System Owner chooses their own password in the onboarding
             # form, so there is no temporary password to force-change. Leaving
             # this True would 403 every request outside the auth allow-list via
@@ -1198,9 +1315,7 @@ class OnboardingService:
         if status:
             status.admin_email = email
             status.admin_username = username
-            await self._mark_step_completed(
-                status, 7, "admin_user"
-            )  # Step 7: System Owner creation
+            await self._mark_step_completed(status, "admin_user")
 
         # Log event
         await log_audit_event(
@@ -1248,9 +1363,7 @@ class OnboardingService:
         status = await self.get_onboarding_status()
         if status:
             status.enabled_modules = final_modules
-            await self._mark_step_completed(
-                status, 10, "modules"
-            )  # Step 10: final step
+            await self._mark_step_completed(status, "modules")
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
         from app.schemas.organization import ModuleSettings
@@ -1377,10 +1490,26 @@ class OnboardingService:
         await self.db.refresh(status, attribute_names=["updated_at"])
         return status
 
-    async def _mark_step_completed(
-        self, status: OnboardingStatus, step_number: int, step_name: str
-    ):
+    @classmethod
+    def step_number(cls, step_name: str) -> int:
+        """The 1-based position of a step in the wizard.
+
+        Derived rather than passed in. Every caller used to hand over a
+        literal alongside the name, and three of them were left behind by
+        steps inserted since: the System Owner was recorded as step 7 and the
+        module step as 10, against a list where they are 9 and 12, and the
+        notifications endpoint recorded a "notifications" step that has never
+        existed. ``GET /onboarding/status`` reports ``current_step`` from
+        these, so a resumed setup was told it was further back than it was.
+        """
+        for step in cls.STEPS:
+            if step["name"] == step_name:
+                return int(step["id"])
+        raise ValueError(f"Unknown onboarding step: {step_name}")
+
+    async def _mark_step_completed(self, status: OnboardingStatus, step_name: str):
         """Mark a step as completed in onboarding status"""
+        step_number = self.step_number(step_name)
         # Copy the dict so SQLAlchemy detects the JSON column mutation.
         # Assigning the same dict object back won't trigger change detection.
         steps = dict(status.steps_completed or {})
@@ -1390,7 +1519,9 @@ class OnboardingService:
             "step_number": step_number,
         }
         status.steps_completed = steps
-        status.current_step = step_number + 1
+        # The last step has no successor, so completing it leaves the wizard
+        # on its final step rather than one past the end.
+        status.current_step = min(step_number + 1, len(self.STEPS))
         await self.db.flush()
 
     async def _mark_legacy_completed(self):
