@@ -36,6 +36,11 @@ from app.api.v1.email_test_helper import (
 )
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.permissions import (
+    module_checkbox_grants,
+    module_checkbox_is_held,
+    module_for_permission,
+)
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.onboarding import (
@@ -2144,17 +2149,21 @@ _VIEW_IMPLIED_PERMISSIONS: dict[str, tuple[str, ...]] = {
 
 
 def expand_module_checkboxes(submitted: dict[str, RolePermission]) -> list[str]:
-    """Turn the editor's per-module view/manage checkboxes into permissions."""
+    """Turn the editor's per-module view/manage checkboxes into permissions.
+
+    What a checkbox grants comes from ``module_checkbox_grants``, because a
+    registry module id is a *settings* key and is only usually the permission
+    prefix as well. Four are not, and expanding those by prefix wrote grants no
+    endpoint reads — see ``_MODULE_CHECKBOX_GRANTS`` in ``core/permissions``.
+    """
     permission_list: list[str] = []
     for module_id, perms in submitted.items():
         if perms.view:
-            permission_list.append(f"{module_id}.view")
+            permission_list.extend(module_checkbox_grants(module_id, "view"))
             if not perms.manage:
                 permission_list.extend(_VIEW_IMPLIED_PERMISSIONS.get(module_id, ()))
         if perms.manage:
-            permission_list.append(f"{module_id}.manage")
-            # Full access if manage
-            permission_list.append(f"{module_id}.*")
+            permission_list.extend(module_checkbox_grants(module_id, "manage"))
     return permission_list
 
 
@@ -2196,11 +2205,11 @@ def _merge_default_permissions(
     for perm in default_perms:
         if "." not in perm:
             continue
-        module_prefix = perm.partition(".")[0]
-        if module_prefix not in submitted or module_prefix in untouched:
+        owning_module = module_for_permission(perm)
+        if owning_module not in submitted or owning_module in untouched:
             merged.append(perm)
         elif perm in _CARRYOVER_SUBPERMISSIONS:
-            module_perms = submitted[module_prefix]
+            module_perms = submitted[owning_module]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)
     seen: set[str] = set()
@@ -2217,12 +2226,14 @@ def registry_checkboxes(default_perms: Iterable[str], module_id: str) -> tuple:
     lets the backend tell "the admin left this module alone" from "the admin
     set it to look like the default", without the wizard having to send a
     baseline it could get wrong.
+
+    A tier the wizard does not offer reads as unticked, so a submission that
+    ticks it can only have come from a client the registry no longer matches.
     """
     granted = set(default_perms)
-    wildcard = f"{module_id}.*" in granted
     return (
-        wildcard or f"{module_id}.view" in granted,
-        wildcard or f"{module_id}.manage" in granted,
+        module_checkbox_is_held(module_id, "view", granted),
+        module_checkbox_is_held(module_id, "manage", granted),
     )
 
 

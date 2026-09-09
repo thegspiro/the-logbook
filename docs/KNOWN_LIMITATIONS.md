@@ -134,28 +134,42 @@ reason: parity with a screen that changes nothing is a liability, not a feature.
 (`medical_supplies`, `mobile`, `integrations`) granted permissions that did not
 exist. See **ONBOARD-2** below.
 
-## ONBOARD-2 — Module Checkboxes That Grant Nothing (2026-09-09)
+## ONBOARD-2 — Module Checkboxes That Grant Nothing (resolved 2026-09-09)
 
 The wizard's Positions step renders one row per module from the frontend
-registry, and expands each row's two checkboxes into `{module}.view` /
-`{module}.manage` / `{module}.*`. The registry's ids are _module settings_ keys,
-and for four modules that key is not the permission prefix:
+registry, and expanded each row's two checkboxes into `{module}.view` /
+`{module}.manage` / `{module}.*`. The registry's ids are _module settings_
+keys, and for four modules that key is not the permission prefix:
 
-| Row                | Emits                | Actually gated by                                     |
+| Row                | Emitted              | Actually gated by                                     |
 | ------------------ | -------------------- | ----------------------------------------------------- |
 | `medical_supplies` | `medical_supplies.*` | `inventory.view_medical` / `inventory.manage_medical` |
 | `mobile`           | `mobile.*`           | nothing — the PWA has no permission gate              |
 | `integrations`     | `integrations.view`  | nothing — the console requires `integrations.manage`  |
 | `positions`        | `positions.manage`   | covered by the `positions.*` wildcard beside it       |
 
-Medical Supplies is the one that costs a department something. A position given
-"Medical Supplies → Manage" during setup holds a permission no endpoint checks,
-and the navigation entry — gated on `inventory.view_medical` — never appears, so
-the EMS supply officer cannot reach the module the department just enabled.
-Only positions the backend seeds carry the real grants, and the wizard has no
-template for `ems_supply_officer` at all.
+Medical Supplies was the one that cost a department something. A position
+given "Medical Supplies → Manage" during setup held a permission no endpoint
+checks, and the navigation entry — gated on `inventory.view_medical` — never
+appeared, so the EMS supply officer could not reach the module the department
+had just enabled. The wizard also had no template for `ems_supply_officer` at
+all, though the backend seeds it and the registry names it as the module's
+default manager.
 
-**Being fixed in the same change set as ONBOARD-1.**
+**Resolved.** `_MODULE_CHECKBOX_GRANTS` in `app/core/permissions.py` is now the
+one place that says what a module checkbox grants, and what proves it is
+already ticked — two questions that are not the same, since Manage writes both
+`{module}.manage` and the `{module}.*` wildcard while a seeded position may
+hold either alone. A tier with no permission behind it is declared as such and
+the wizard does not render that checkbox: Mobile App Access loses its row,
+Integrations loses View. `inventory.*_medical` now belongs to the Medical
+Supplies row rather than the Inventory one, so editing Inventory no longer
+rebuilds the medical grants away with it. The EMS Supply Officer has a
+template.
+
+`tests/test_module_checkbox_grants.py` holds every row to permissions that
+exist and every seeded position to having a template, so the next module whose
+settings key is not its permission prefix fails rather than shipping inert.
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 

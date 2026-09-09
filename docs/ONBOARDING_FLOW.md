@@ -604,6 +604,27 @@ Body: {
 - Custom role creation support
 - Priority-based role ordering (0-100)
 
+> **What a checkbox grants.** A row's two boxes usually mean `{module}.view`
+> and `{module}.manage` (plus the `{module}.*` wildcard, which is what carries
+> a module's action grants) — but a registry id is a _module settings_ key and
+> is only usually the permission prefix as well. `_MODULE_CHECKBOX_GRANTS` in
+> `app/core/permissions.py` is the one place that says otherwise, and the
+> wizard reads it through the generated `MODULE_CHECKBOX_TIERS`:
+>
+> - **Medical Supplies** grants `inventory.view_medical` /
+>   `inventory.manage_medical`. Manage grants view as well, because the route
+>   and the navigation entry both gate on `view_medical` and there is no
+>   manage-implies-view rule.
+> - **Mobile App Access** has no permission gate at all, so it is not a row.
+> - **Integrations** has no read-only console, so it has no View box.
+> - **Position Management**'s manage tier is the `positions.*` wildcard;
+>   `positions.manage` does not exist.
+>
+> A tier with no permission behind it is not rendered — a box that cannot grant
+> anything is a promise the app will not keep.
+> `tests/test_module_checkbox_grants.py` holds every row to permissions that
+> exist.
+
 > **Operational Ranks group (EMT added 2026-06-25):** The position templates
 > include an **Operational Ranks** group — Fire Chief, Deputy Chief, Assistant
 > Chief, Captain, Lieutenant, Engineer/Driver Operator, Firefighter, and **EMT** —

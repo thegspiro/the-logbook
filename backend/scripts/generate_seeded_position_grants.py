@@ -22,7 +22,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.permissions import DEFAULT_POSITIONS  # noqa: E402
+from app.core.permissions import (  # noqa: E402
+    DEFAULT_POSITIONS,
+    module_checkbox_is_held,
+    module_checkbox_offered,
+)
 
 _ROOT = Path(__file__).resolve().parents[2]
 _REGISTRY = (
@@ -65,7 +69,24 @@ _HEADER = """/**
  * defaults, and saving one creates the position rather than updating a
  * seeded row.
  */
-export interface SeededPositionGrant {
+/**
+ * Which of a module's two checkboxes the app has a permission for.
+ *
+ * A tier the app cannot grant is not rendered. Three rows had one, and each
+ * wrote a permission no endpoint reads: Mobile App Access has no gate at all
+ * (it is a PWA), Integrations has no read-only console, and Medical Supplies
+ * is gated by `inventory.view_medical` / `inventory.manage_medical` rather
+ * than by its own name — that last one is why an EMS supply officer given
+ * "Manage" during setup could not open the module.
+ */
+export interface ModuleCheckboxTiers {
+  view: boolean;
+  manage: boolean;
+}
+
+export const MODULE_CHECKBOX_TIERS: Readonly<Record<string, ModuleCheckboxTiers>> = {"""
+
+_GRANTS_HEADER = """export interface SeededPositionGrant {
   view: readonly string[];
   manage: readonly string[];
 }
@@ -85,19 +106,22 @@ def registry_module_ids() -> list:
 def render() -> str:
     modules = registry_module_ids()
     lines = [_HEADER]
+    for module_id in modules:
+        view = "true" if module_checkbox_offered(module_id, "view") else "false"
+        manage = "true" if module_checkbox_offered(module_id, "manage") else "false"
+        lines.append(f"  {module_id}: {{ view: {view}, manage: {manage} }},")
+    lines.append("};")
+    lines.append("")
+    lines.append(_GRANTS_HEADER)
     for slug in sorted(DEFAULT_POSITIONS):
         granted = set(DEFAULT_POSITIONS[slug].get("permissions", []))
-        everything = "*" in granted
 
-        def held(module_id: str, action: str) -> bool:
-            return (
-                everything
-                or f"{module_id}.*" in granted
-                or f"{module_id}.{action}" in granted
-            )
-
-        view = [m for m in modules if held(m, "view")]
-        manage = [m for m in modules if held(m, "manage")]
+        # Read through the checkbox model rather than by prefix: a registry id
+        # is a module *settings* key, and for Medical Supplies the grants live
+        # under ``inventory.*_medical``. A tier the app has no permission for
+        # is never ticked, because the wizard does not render it.
+        view = [m for m in modules if module_checkbox_is_held(m, "view", granted)]
+        manage = [m for m in modules if module_checkbox_is_held(m, "manage", granted)]
         lines.append(f"  {slug}: {{")
         lines.append(f"    view: [{', '.join(repr(m) for m in view)}],")
         lines.append(f"    manage: [{', '.join(repr(m) for m in manage)}],")

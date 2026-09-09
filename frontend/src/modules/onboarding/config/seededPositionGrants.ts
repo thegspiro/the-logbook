@@ -19,6 +19,44 @@
  * defaults, and saving one creates the position rather than updating a
  * seeded row.
  */
+/**
+ * Which of a module's two checkboxes the app has a permission for.
+ *
+ * A tier the app cannot grant is not rendered. Three rows had one, and each
+ * wrote a permission no endpoint reads: Mobile App Access has no gate at all
+ * (it is a PWA), Integrations has no read-only console, and Medical Supplies
+ * is gated by `inventory.view_medical` / `inventory.manage_medical` rather
+ * than by its own name — that last one is why an EMS supply officer given
+ * "Manage" during setup could not open the module.
+ */
+export interface ModuleCheckboxTiers {
+  view: boolean;
+  manage: boolean;
+}
+
+export const MODULE_CHECKBOX_TIERS: Readonly<Record<string, ModuleCheckboxTiers>> = {
+  members: { view: true, manage: true },
+  events: { view: true, manage: true },
+  documents: { view: true, manage: true },
+  forms: { view: true, manage: true },
+  training: { view: true, manage: true },
+  inventory: { view: true, manage: true },
+  medical_supplies: { view: true, manage: true },
+  scheduling: { view: true, manage: true },
+  apparatus: { view: true, manage: true },
+  facilities: { view: true, manage: true },
+  storefront: { view: true, manage: true },
+  elections: { view: true, manage: true },
+  minutes: { view: true, manage: true },
+  reports: { view: true, manage: true },
+  notifications: { view: true, manage: true },
+  mobile: { view: false, manage: false },
+  integrations: { view: false, manage: true },
+  prospective_members: { view: true, manage: true },
+  positions: { view: true, manage: true },
+  settings: { view: true, manage: true },
+};
+
 export interface SeededPositionGrant {
   view: readonly string[];
   manage: readonly string[];
@@ -26,8 +64,8 @@ export interface SeededPositionGrant {
 
 export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant>> = {
   apparatus_officer: {
-    view: ['members', 'inventory', 'apparatus', 'storefront', 'positions'],
-    manage: ['inventory', 'storefront'],
+    view: ['members', 'inventory', 'medical_supplies', 'apparatus', 'storefront', 'positions'],
+    manage: ['inventory', 'medical_supplies', 'storefront'],
   },
   assistant_chief: {
     view: [
@@ -37,6 +75,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'storefront',
@@ -55,6 +94,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'facilities',
@@ -115,6 +155,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'storefront',
@@ -133,6 +174,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'facilities',
@@ -145,8 +187,8 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
     ],
   },
   ems_supply_officer: {
-    view: ['members', 'apparatus', 'storefront', 'positions'],
-    manage: [],
+    view: ['members', 'medical_supplies', 'apparatus', 'storefront', 'positions'],
+    manage: ['medical_supplies'],
   },
   emt: {
     view: [
@@ -191,6 +233,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'storefront',
@@ -209,6 +252,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'facilities',
@@ -261,8 +305,6 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'minutes',
       'reports',
       'notifications',
-      'mobile',
-      'integrations',
       'prospective_members',
       'positions',
       'settings',
@@ -283,7 +325,6 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'minutes',
       'reports',
       'notifications',
-      'mobile',
       'integrations',
       'prospective_members',
       'positions',
@@ -342,6 +383,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'facilities',
@@ -360,6 +402,7 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'forms',
       'training',
       'inventory',
+      'medical_supplies',
       'scheduling',
       'apparatus',
       'facilities',
@@ -378,8 +421,17 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
     manage: ['events'],
   },
   quartermaster: {
-    view: ['members', 'inventory', 'apparatus', 'facilities', 'storefront', 'positions', 'settings'],
-    manage: ['inventory', 'storefront'],
+    view: [
+      'members',
+      'inventory',
+      'medical_supplies',
+      'apparatus',
+      'facilities',
+      'storefront',
+      'positions',
+      'settings',
+    ],
+    manage: ['inventory', 'medical_supplies', 'storefront'],
   },
   safety_officer: {
     view: [

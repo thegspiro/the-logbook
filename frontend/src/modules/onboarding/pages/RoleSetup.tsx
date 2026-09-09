@@ -31,7 +31,13 @@ import {
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
-import { MODULE_REGISTRY, isAgencyFilteredOut, type ModuleDefinition } from '../config';
+import {
+  MODULE_CHECKBOX_TIERS,
+  MODULE_REGISTRY,
+  isAgencyFilteredOut,
+  type ModuleCheckboxTiers,
+  type ModuleDefinition,
+} from '../config';
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildPositionTemplates } from './positionTemplates';
@@ -39,6 +45,21 @@ import { buildPositionTemplates } from './positionTemplates';
 /**
  * Build permission categories dynamically from the module registry.
  * This ensures new modules automatically appear in position configuration.
+ */
+/**
+ * The rows of the permission matrix, and which of each row's two checkboxes
+ * the app can actually grant.
+ *
+ * A module whose View and Manage tiers are both unbacked is not a row at all.
+ * Mobile App Access is that module: it is a PWA with no permission gate, so
+ * both boxes wrote `mobile.view` / `mobile.manage` / `mobile.*` into every
+ * position that ticked them and no endpoint has ever read one. Integrations
+ * keeps its row but loses View, because there is no read-only console —
+ * every route behind it requires `integrations.manage`.
+ *
+ * `MODULE_CHECKBOX_TIERS` is generated from the backend's own map, so a new
+ * module whose settings key is not its permission prefix is answered there
+ * once rather than here as well.
  */
 const buildPermissionCategories = (modules: ModuleDefinition[]) => {
   const categories: Record<
@@ -48,15 +69,19 @@ const buildPermissionCategories = (modules: ModuleDefinition[]) => {
       icon: React.ElementType;
       view: string[];
       manage: string[];
+      tiers: ModuleCheckboxTiers;
     }
   > = {};
 
   modules.forEach((module) => {
+    const tiers = MODULE_CHECKBOX_TIERS[module.id] ?? { view: true, manage: true };
+    if (!tiers.view && !tiers.manage) return;
     categories[module.id] = {
       name: module.name,
       icon: module.icon,
       view: module.permissions.view,
       manage: module.permissions.manage,
+      tiers,
     };
   });
 
@@ -794,36 +819,40 @@ const PositionSetup: React.FC = () => {
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() =>
-                                          updatePositionPermission(position.id, catId, 'view', !perms.view)
-                                        }
-                                        disabled={isITManager}
-                                        aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
-                                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                          perms.view
-                                            ? 'bg-theme-accent-green-muted text-theme-accent-green'
-                                            : 'bg-theme-surface text-theme-text-muted'
-                                        } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
-                                      >
-                                        <Eye className="h-3 w-3" aria-hidden="true" />
-                                        View
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          updatePositionPermission(position.id, catId, 'manage', !perms.manage)
-                                        }
-                                        disabled={isITManager}
-                                        aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
-                                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                          perms.manage
-                                            ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
-                                            : 'bg-theme-surface text-theme-text-muted'
-                                        } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
-                                      >
-                                        <Edit3 className="h-3 w-3" aria-hidden="true" />
-                                        Manage
-                                      </button>
+                                      {cat.tiers.view && (
+                                        <button
+                                          onClick={() =>
+                                            updatePositionPermission(position.id, catId, 'view', !perms.view)
+                                          }
+                                          disabled={isITManager}
+                                          aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
+                                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                            perms.view
+                                              ? 'bg-theme-accent-green-muted text-theme-accent-green'
+                                              : 'bg-theme-surface text-theme-text-muted'
+                                          } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                        >
+                                          <Eye className="h-3 w-3" aria-hidden="true" />
+                                          View
+                                        </button>
+                                      )}
+                                      {cat.tiers.manage && (
+                                        <button
+                                          onClick={() =>
+                                            updatePositionPermission(position.id, catId, 'manage', !perms.manage)
+                                          }
+                                          disabled={isITManager}
+                                          aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
+                                          className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                            perms.manage
+                                              ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
+                                              : 'bg-theme-surface text-theme-text-muted'
+                                          } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
+                                        >
+                                          <Edit3 className="h-3 w-3" aria-hidden="true" />
+                                          Manage
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 );
