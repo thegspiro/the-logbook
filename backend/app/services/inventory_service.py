@@ -2343,6 +2343,13 @@ class InventoryService:
         organization -- an unvalidated client-supplied foreign key would
         otherwise persist a cross-tenant reference (CLAUDE.md pitfall #14c) --
         or when the shortlist is already full.
+
+        The pin cap is a read-then-write (CLAUDE.md pitfall #27): two
+        concurrent pins of different items by the same member must not both
+        read the same count, both pass the cap, and both insert. There is no
+        pin row to lock until after that decision is made, so the lock has to
+        be on something that already exists -- the member's own ``User`` row,
+        mirroring ``push_service.py``'s push-subscription cap.
         """
         item = await self.get_item_by_id(item_id, organization_id)
         if item is None:
@@ -2359,8 +2366,29 @@ class InventoryService:
         if pin is not None:
             return pin
 
-        pins = await self.list_pins(organization_id, user_id)
-        if len(pins) >= self.MAX_PINS:
+        await self.db.execute(
+            select(User.id)
+            .where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        # A locking read, not a plain one: under REPEATABLE READ, holding the
+        # User lock does not by itself refresh a snapshot taken before it was
+        # acquired -- only a locking read is defined to return the latest
+        # committed rows (CLAUDE.md pitfall #27).
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(InventoryItemPin)
+            .where(
+                InventoryItemPin.organization_id == str(organization_id),
+                InventoryItemPin.user_id == str(user_id),
+            )
+            .with_for_update()
+        )
+        pin_count = count_result.scalar_one()
+        if pin_count >= self.MAX_PINS:
             raise ValueError(
                 f"You can pin at most {self.MAX_PINS} items. " "Unpin something first."
             )
@@ -2369,7 +2397,7 @@ class InventoryService:
             organization_id=str(organization_id),
             user_id=str(user_id),
             item_id=str(item_id),
-            position=len(pins),
+            position=pin_count,
         )
         self.db.add(pin)
         await self.db.commit()
@@ -4167,7 +4195,6 @@ class InventoryService:
             InventoryItem.active.is_(True),
         ]
         checkout_filters = [CheckOutRecord.organization_id == str(organization_id)]
-        excluded_category_ids: Set[str] = set()
         if exclude_item_types:
             item_filters.append(
                 self._outside_domains(organization_id, exclude_item_types)
@@ -4176,17 +4203,6 @@ class InventoryService:
                 CheckOutRecord.item_id.in_(
                     self._item_ids_outside_domains(organization_id, exclude_item_types)
                 )
-            )
-            excluded_category_ids = set(
-                (
-                    await self.db.execute(
-                        self._category_ids_of_type(
-                            organization_id, set(exclude_item_types)
-                        )
-                    )
-                )
-                .scalars()
-                .all()
             )
 
         # Total items (sum quantities so pool items with quantity > 1 are counted correctly)
@@ -4301,12 +4317,22 @@ class InventoryService:
         )
         overdue_checkouts = overdue_result.scalar()
 
-        # Maintenance due
-        maintenance_due = [
-            item
-            for item in await self.get_maintenance_due(organization_id, days_ahead=7)
-            if item.category_id not in excluded_category_ids
-        ]
+        # Maintenance due -- a COUNT, not a materialized `.all()` (the INV-22
+        # shape flagged separately on `get_maintenance_due` itself, which
+        # this summary doesn't need: only the count was ever read out of the
+        # list below). Mirrors `get_user_inventory_summary`'s own maintenance-
+        # due count a few hundred lines down, which was already written this
+        # way. Reuses `item_filters` (org, active, and exclude_item_types via
+        # `_outside_domains`) rather than re-deriving them, so this can't
+        # drift from what `total_items` etc. above already counted against.
+        maintenance_cutoff = date.today() + timedelta(days=7)
+        maintenance_due_result = await self.db.execute(
+            select(func.count(InventoryItem.id)).where(
+                *item_filters,
+                InventoryItem.next_inspection_due <= maintenance_cutoff,
+            )
+        )
+        maintenance_due_count = maintenance_due_result.scalar() or 0
 
         # Use the larger of checkout records vs items with checked_out status
         # to ensure the dashboard reflects reality regardless of sync state
@@ -4325,7 +4351,7 @@ class InventoryService:
             "total_value": float(total_value),
             "active_checkouts": effective_checkouts,
             "overdue_checkouts": overdue_checkouts or 0,
-            "maintenance_due_count": len(maintenance_due) + items_in_maintenance,
+            "maintenance_due_count": maintenance_due_count + items_in_maintenance,
         }
 
     async def get_user_inventory_summary(
@@ -6352,11 +6378,12 @@ class InventoryService:
         Locked for update: deciding whether to create is a read-then-write, and
         two admins generating at once would otherwise both read "no group" and
         both create one (CLAUDE.md pitfall #27). The lock closes that for every
-        run after the first. It cannot close the case where the group does not
-        exist yet — there is no row to lock — so two simultaneous first runs can
-        still produce two groups; a unique index on
-        (organization_id, name, category_id) would close it, and needs a dedupe
-        migration against installations that already have duplicates.
+        run after the first. On its own it cannot close the case where the
+        group does not exist yet — there is no row to lock — so the caller
+        (``create_size_variants``) locks the organization row, which always
+        exists, before calling this: two simultaneous first runs for the same
+        product now serialize on that lock instead of both observing "no
+        group" here.
         """
         query = (
             select(ItemVariantGroup)
@@ -6515,6 +6542,20 @@ class InventoryService:
         variant_group_id: Optional[str] = None
         existing_group: Optional[ItemVariantGroup] = None
         if create_variant_group:
+            # Serializes the "does this product already have a group"
+            # decision on the organization row, which always exists --
+            # closing the gap _find_variant_group_for_reuse's own FOR UPDATE
+            # cannot close on its own: a group that does not exist yet has no
+            # row to lock, so two simultaneous first runs for the same
+            # product could otherwise both see "no group" and both create one
+            # (CLAUDE.md pitfall #27). Mirrors ensure_member_folder's/
+            # ensure_facility_folder's organization-row lock taken before
+            # their own get-or-create existence check.
+            await self.db.execute(
+                select(Organization.id)
+                .where(Organization.id == str(organization_id))
+                .with_for_update()
+            )
             existing_group = await self._find_variant_group_for_reuse(
                 organization_id, base_name, category_id
             )
@@ -9710,6 +9751,13 @@ class InventoryService:
     ) -> Tuple[Optional[MemberSizePreferences], Optional[str]]:
         """Create or update a member's size preferences."""
         try:
+            # user_id is a client-supplied path param (Pitfall #14c) — validate
+            # it before any read or write. Without this, a caller could create
+            # a preferences row for another org's user under their own
+            # organization_id, and since MemberSizePreferences.user_id is
+            # globally unique, that poisoned row would then block the real
+            # user's own organization from ever creating theirs.
+            await assert_in_org(self.db, User, user_id, organization_id, label="User")
             prefs = await self.get_member_size_preferences(user_id, organization_id)
             if prefs:
                 for key, value in data.items():

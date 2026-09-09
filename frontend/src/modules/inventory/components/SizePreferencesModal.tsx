@@ -25,7 +25,8 @@ import { Loader2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { MemberSizePreferencesCreate } from '../types';
 import { STANDARD_SIZES, SHOE_SIZES, GARMENT_FIT_OPTIONS } from '../types';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
+import { blankToNull } from '../../../utils/formValues';
 import { Modal } from '../../../components/Modal';
 import { Collapsible } from '../../../components/ux';
 import toast from 'react-hot-toast';
@@ -77,11 +78,18 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
   // Captured at load time, not derived from `form`: deriving it live would
   // re-key the disclosure mid-edit and throw away what is being typed.
   const [detailsPrefilled, setDetailsPrefilled] = useState(false);
+  // True only for a load failure that is NOT "no preferences exist yet" (a
+  // 404). Blocks Save: every blank field now serializes as an explicit
+  // `null` (see handleSave below), so saving a blank form recovered from a
+  // timeout/500 would actively clear preferences the failed load never saw,
+  // rather than merely failing to show them.
+  const [loadError, setLoadError] = useState(false);
 
   const set = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const prefs = userId
         ? await inventoryService.getMemberSizePreferences(userId)
@@ -99,10 +107,19 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
       };
       setForm(loaded);
       setDetailsPrefilled(hasDetailValues(loaded));
-    } catch {
-      // No preferences yet (404) is expected — start from a blank form.
-      setForm(EMPTY);
-      setDetailsPrefilled(false);
+    } catch (err: unknown) {
+      if (toAppError(err).status === 404) {
+        // No preferences yet — genuinely expected, safe to show a blank
+        // form ready to create.
+        setForm(EMPTY);
+        setDetailsPrefilled(false);
+      } else {
+        // A timeout, a 500, offline — NOT "no preferences exist yet". Leave
+        // the form as-is and block Save (see `loadError` above) rather than
+        // presenting a save-ready blank form that would clear whatever the
+        // failed load never got to see.
+        setLoadError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -113,18 +130,28 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
   }, [isOpen, load]);
 
   const handleSave = async () => {
+    // Belt-and-suspenders: the Save button is already disabled while
+    // `loadError` is true, but this keeps a stray call site (or a future
+    // one) from being able to fire the clearing payload described above.
+    if (loadError) return;
     setSaving(true);
-    // Coerce empty strings to undefined so unset fields are omitted, not stored as "".
+    // This is always an update (PUT .../size-preferences upserts an existing
+    // row), never a create -- so a blank field must send an explicit `null`,
+    // not be coerced to `undefined`. `undefined` drops the key from the JSON
+    // body, and the backend's `exclude_unset=True` dump then leaves an
+    // already-stored value untouched: a member who clears "Fit" back to "No
+    // preference" would see a success toast while the old fit silently
+    // survived (CLAUDE.md pitfall #1's update-path shape).
     const payload: MemberSizePreferencesCreate = {
-      shirt_size: form.shirt_size || undefined,
-      garment_fit: form.garment_fit || undefined,
-      pant_waist: form.pant_waist.trim() || undefined,
-      pant_inseam: form.pant_inseam.trim() || undefined,
-      jacket_size: form.jacket_size || undefined,
-      boot_size: form.boot_size || undefined,
-      boot_width: form.boot_width.trim() || undefined,
-      glove_size: form.glove_size || undefined,
-      hat_size: form.hat_size.trim() || undefined,
+      shirt_size: blankToNull(form.shirt_size),
+      garment_fit: blankToNull(form.garment_fit),
+      pant_waist: blankToNull(form.pant_waist),
+      pant_inseam: blankToNull(form.pant_inseam),
+      jacket_size: blankToNull(form.jacket_size),
+      boot_size: blankToNull(form.boot_size),
+      boot_width: blankToNull(form.boot_width),
+      glove_size: blankToNull(form.glove_size),
+      hat_size: blankToNull(form.hat_size),
     };
     try {
       if (userId) {
@@ -160,6 +187,23 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
         </div>
       ) : (
         <div className="space-y-4">
+          {loadError ? (
+            <div className="alert-danger" role="alert">
+              <p>
+                Couldn&apos;t load current sizes. Saving is disabled until this succeeds — saving over an unloaded
+                record would clear it.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void load();
+                }}
+                className="btn-secondary btn-sm mt-2"
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
           <p className="text-theme-text-secondary text-sm">
             Fill in what you know — every field is optional, and you can update them any time.
           </p>
@@ -295,7 +339,7 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               onClick={() => {
                 void handleSave();
               }}
-              disabled={saving}
+              disabled={saving || loadError}
               className="btn-info btn-md inline-flex items-center justify-center gap-1"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}

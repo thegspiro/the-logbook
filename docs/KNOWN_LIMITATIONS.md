@@ -2197,6 +2197,41 @@ than one), which needs new data-fetching in the modal and a decision about
 the multiple-open-records case. (Security review INV-17,
 `docs/security-review/INV-11-inventory.md`.)
 
+## Inventory — Fulfillment-Options and Requestable-Categories Catalog Reads Are Unbounded (2026-09-08)
+
+`get_fulfillment_options` (the quartermaster's request-fulfilment picker)
+materializes its narrowed candidate set with a bare `.all()`, and when
+browsing for a substitution (`include_incompatible=true`) additionally
+loads the organization's entire catalog the same way before applying the
+caller's `limit` in Python, only after sorting the whole set.
+`get_requestable_categories` (the member-facing request form's category
+chips) loads one row per active item across every category just to
+deduplicate chips in Python. Neither is a tenant-isolation or data-exposure
+defect — both are already org-scoped, and neither returns more rows to the
+client than its `limit` allows — but the _internal_ working set both build
+before answering scales with catalog size with no cap, which
+`docs/security-review/CHECKLIST.md`'s abuse-resistance dimension rejects.
+
+Not fixed because it is the same shape as this rotation's own DOC-9
+(`documents_service.py`'s `accessible_folder_ids`): both queries' own
+docstrings explain that the full set has to be materialized in Python
+before a correct answer can be given (a normalized size/colour/style
+identity comparison for the fulfilment picker, a per-item rank/position
+eligibility check for the category chips), so a SQL-level cap on either
+query would silently produce a wrong "cannot fulfill"/"category has
+nothing" answer for a department whose free-text request or single-category
+stock exceeds the cap, rather than merely reading fewer rows to reach the
+same correct answer. Bounding it without breaking that correctness is a
+design decision (what should happen once one category or one free-text
+match legitimately exceeds a cap), not a safe drive-by `LIMIT`. (Security
+review INV-22, `docs/security-review/INV-11-inventory.md`.)
+
+**Not the same shape as `get_inventory_summary`'s own (unrelated)
+maintenance-due count**, which looked identical on the surface — also an
+unbounded `.all()` — but only ever read `len()` off the result, so it was
+cheaply fixable and was fixed (a `COUNT(*)` query, no correctness tradeoff)
+rather than added here. See INV-28 in the same security-review doc.
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
