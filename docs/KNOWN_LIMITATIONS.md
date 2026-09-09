@@ -107,39 +107,55 @@ Two smaller ones, both deliberate:
 - **Tool results are point-in-time.** The server exposes no resources or
   subscriptions; a client re-asks to refresh.
 
-## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step Is Inert (2026-08-24)
+## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step (resolved 2026-09-09)
 
-Fifteen of the setup wizard's module cards point at a per-module
-"configure permissions" step. **That step reports success and discards the
-answer.** `modulePermissionConfigs` is written to the Zustand store and read
-back by nothing: no API client method submits it and no backend field
-corresponds to it. `handleSave` sets it, toasts "permissions configured!", and
-navigates on.
+**Resolved by removing the step.** Fifteen of the wizard's module cards pointed
+at a per-module "configure permissions" screen that reported success and
+discarded the answer: `modulePermissionConfigs` was written to the Zustand store
+and read back by nothing — no API client method submitted it and no backend
+field corresponded to it. `handleSave` set it, toasted "permissions
+configured!", and navigated on. An administrator who used that step to restrict
+a module during setup believed the restriction was in place.
 
-This is CLAUDE.md **Pitfall #19** — a config switch with a UI and no reader —
-in its worst form, because the toast actively asserts that something was saved.
-An administrator who uses that step to restrict a module during setup will
-believe the restriction is in place.
+The open question was whether to wire it to the positions saved on the previous
+step or to submit it separately. Neither: **the Positions step already answers
+it**, one step earlier and against the backend
+(`POST /onboarding/session/roles`, which expands two checkboxes per module into
+real grants). A second editor would be a second answer to a question that has
+one, so the routes, the page and the store field are gone, and the module step's
+buttons say "Enable" rather than "Configure Now" — which is what they now do.
+`/onboarding/modules/{id}/config` redirects to the module step for a session
+restored from an older client.
 
-**The Department Store's route was removed rather than repaired**, and that was
-the deliberate call: the previous change had _added_ a `configRoute` for
-storefront "for parity with its peers", and parity with a screen that changes
-nothing is a liability, not a feature. The store now enables directly.
+The Department Store had already taken this route on 2026-08-24, for the same
+reason: parity with a screen that changes nothing is a liability, not a feature.
 
-**Why the rest were not removed with it.** Wiring the step up means deciding
-whether it edits the positions saved on the previous step or submits
-separately — that is its own change, with its own data model question, and
-doing it under a storefront bug fix would have been the wrong place. Removing
-all fifteen routes without deciding that question would delete the only place
-the intent is expressed.
+**Related, and resolved with it:** three module ids offered by checkbox
+(`medical_supplies`, `mobile`, `integrations`) granted permissions that did not
+exist. See **ONBOARD-2** below.
 
-**Whichever way it is resolved, the toast must go first.** A step that silently
-does nothing is recoverable; a step that says it succeeded is not.
+## ONBOARD-2 — Module Checkboxes That Grant Nothing (2026-09-09)
 
-**Related, and also open:** three module ids offered by checkbox
-(`medical_supplies`, `mobile`, `integrations`) grant permissions that **do not
-exist**. That predates this window and is not caused by the module-list
-reconciliation above.
+The wizard's Positions step renders one row per module from the frontend
+registry, and expands each row's two checkboxes into `{module}.view` /
+`{module}.manage` / `{module}.*`. The registry's ids are _module settings_ keys,
+and for four modules that key is not the permission prefix:
+
+| Row                | Emits                | Actually gated by                                     |
+| ------------------ | -------------------- | ----------------------------------------------------- |
+| `medical_supplies` | `medical_supplies.*` | `inventory.view_medical` / `inventory.manage_medical` |
+| `mobile`           | `mobile.*`           | nothing — the PWA has no permission gate              |
+| `integrations`     | `integrations.view`  | nothing — the console requires `integrations.manage`  |
+| `positions`        | `positions.manage`   | covered by the `positions.*` wildcard beside it       |
+
+Medical Supplies is the one that costs a department something. A position given
+"Medical Supplies → Manage" during setup holds a permission no endpoint checks,
+and the navigation entry — gated on `inventory.view_medical` — never appears, so
+the EMS supply officer cannot reach the module the department just enabled.
+Only positions the backend seeds carry the real grants, and the wizard has no
+template for `ems_supply_officer` at all.
+
+**Being fixed in the same change set as ONBOARD-1.**
 
 ## Self-Report Attachments — What Happens to the File (2026-08-23)
 

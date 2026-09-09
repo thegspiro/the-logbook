@@ -165,12 +165,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/onboarding/apparatus', label: 'Apparatus setup', isPublic: true },
       { path: '/onboarding/modules', label: 'Module selection', isPublic: true },
       {
+        path: '/onboarding/modules/:moduleId/config',
+        label: 'Module configuration (removed)',
+        note: 'The per-module permission step was removed; positions own that decision',
+        redirectsTo: '/onboarding/modules',
+        isPublic: true,
+      },
+      {
         path: '/onboarding/module-selection',
         label: 'Module selection (alias URL)',
         note: 'Same page, URL stays as typed',
         isPublic: true,
       },
-      { path: '/onboarding/modules/:moduleId/config', label: 'Module configuration', isPublic: true },
       { path: '/onboarding/system-owner', label: 'System owner creation', isPublic: true },
       {
         path: '/onboarding/admin-user',

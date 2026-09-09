@@ -7,6 +7,11 @@
  * and onboarding saved the module disabled while the administrator believed
  * they had turned it on. That is how the Department Store, and Medical
  * Supplies before it, could not be enabled during setup.
+ *
+ * The config routes are gone now: the step behind them collected manage
+ * positions into the wizard's store, said "permissions configured!" and
+ * submitted nothing. So enabling must never navigate — a module step that
+ * leaves this page has lost the administrator's answer somewhere.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -59,13 +64,13 @@ describe('ModuleOverview enabling', () => {
     });
   });
 
-  // Medical Supplies carries no configRoute, so it is the module the old
-  // branch dropped on the floor entirely.
-  it('enables a module that has no config route, and stays on the page', async () => {
+  // Medical Supplies is the module the old branch dropped on the floor
+  // entirely, having no configRoute back when that decided the branch.
+  it('enables a recommended module, and stays on the page', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('button', { name: 'Configure Now Medical Supplies' }));
+    await user.click(screen.getByRole('button', { name: 'Enable Medical Supplies' }));
 
     expect(useOnboardingStore.getState().moduleStatuses.medical_supplies).toBe('enabled');
     expect(useOnboardingStore.getState().selectedModules).toContain('medical_supplies');
@@ -83,14 +88,15 @@ describe('ModuleOverview enabling', () => {
     expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('/config'));
   });
 
-  it('still enables and navigates for a module that has a config route', async () => {
+  it('enables a module that used to carry a config route, without navigating', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole('button', { name: 'Configure Now Shift Scheduling' }));
+    await user.click(screen.getByRole('button', { name: 'Enable Shift Scheduling' }));
 
     expect(useOnboardingStore.getState().moduleStatuses.scheduling).toBe('enabled');
-    expect(mockNavigate).toHaveBeenCalledWith('/onboarding/modules/scheduling/config');
+    expect(useOnboardingStore.getState().selectedModules).toContain('scheduling');
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('leaves the negative action meaning not-enabled', async () => {

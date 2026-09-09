@@ -15,10 +15,11 @@
  *
  * The mobile ratchet cannot cover this. It measures `/onboarding/start` as the
  * representative onboarding step, on the assumption that the rest render the
- * same shell — and `ModuleConfigTemplate` did not, which is how it shipped
- * without the landmark while the rest of onboarding was being fixed. Reaching
- * that step in a browser needs a seeded onboarding store, or it redirects to
- * step 1 and the pass measures step 1 twice under a second name.
+ * same shell — and the per-module configuration step (since removed) did not,
+ * which is how it shipped without the landmark while the rest of onboarding was
+ * being fixed. Reaching a later step in a browser needs a seeded onboarding
+ * store, or it redirects to step 1 and the pass measures step 1 twice under a
+ * second name.
  *
  * So the assumption is checked where it is cheap and exact: in the source. Every
  * page component reachable outside `AppLayout` must render `id="main-content"`.

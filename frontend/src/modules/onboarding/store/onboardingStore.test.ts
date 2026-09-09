@@ -27,7 +27,6 @@ const initialState = {
   reconciledSeededSlugs: [],
   selectedModules: [],
   moduleStatuses: {},
-  modulePermissionConfigs: {},
   sessionId: null,
   csrfToken: null,
   currentStep: 1,
@@ -218,19 +217,6 @@ describe('onboardingStore', () => {
       });
       expect(getState().selectedModules).toEqual(expect.arrayContaining(['training', 'scheduling']));
       expect(getState().selectedModules).not.toContain('reports');
-    });
-
-    it('setModulePermissionConfig sets positions for a module', () => {
-      getState().setModulePermissionConfig('training', ['chief', 'captain']);
-      expect(getState().modulePermissionConfigs['training']).toEqual(['chief', 'captain']);
-    });
-
-    it('setModulePermissionConfig updates independently per module', () => {
-      getState().setModulePermissionConfig('training', ['chief']);
-      getState().setModulePermissionConfig('scheduling', ['captain', 'lieutenant']);
-
-      expect(getState().modulePermissionConfigs['training']).toEqual(['chief']);
-      expect(getState().modulePermissionConfigs['scheduling']).toEqual(['captain', 'lieutenant']);
     });
   });
 
@@ -442,7 +428,6 @@ describe('onboardingStore', () => {
       expect(state.errors).toEqual([]);
       expect(state.lastError).toBeNull();
       expect(state.moduleStatuses).toEqual({});
-      expect(state.modulePermissionConfigs).toEqual({});
     });
 
     it('clearSensitiveData removes session and CSRF token', () => {

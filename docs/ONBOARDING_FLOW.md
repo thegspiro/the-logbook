@@ -716,21 +716,19 @@ team, email, file storage, auth, and module settings into
 
 ---
 
-### 13a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
+### 13a. Module Configuration Template — removed
 
-**Purpose**: Configure individual module settings with two-tier permissions
+`/onboarding/modules/{moduleId}/config` collected "who may manage this module"
+into the wizard's Zustand store, reported **"permissions configured!"** and
+submitted nothing: no API client method carried the answer and no backend field
+held it. An administrator who used it to restrict a module during setup was told
+the restriction was in place when it was not.
 
-**Features**:
-
-- View Access configuration (typically all members)
-- Manage Access role selection
-- Module-specific permission descriptions
-- Auto-populated from module registry
-
-**Navigation**:
-
-- Button: "Save Configuration" → `/onboarding/modules`
-- Button: "Skip Configuration" → `/onboarding/modules`
+Who may manage a module is decided one step earlier, on the Positions step,
+which does save to the backend (`POST /onboarding/session/roles`). A second
+editor for the same decision would be a second answer to a question that already
+has one, so the step was removed rather than wired up. The route remains as a
+redirect to `/onboarding/modules` for a session restored from an older client.
 
 ---
 
@@ -1046,12 +1044,6 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
       }
     },
 
-    // Module Permission Configs (persisted across navigation)
-    "modulePermissionConfigs": {
-      "training": ["chief-id", "training_officer-id"],   // Role IDs that can manage each module
-      "inventory": ["chief-id", "quartermaster-id"]
-    },
-
     // Modules
     "selectedModules": ["members", "events"],
     "moduleStatuses": { "members": "enabled", "training": "skipped" },
@@ -1071,15 +1063,6 @@ The `rolesConfig` field stores all role configurations (system and custom) so th
 - **Icon Serialization**: React icon components (e.g., `Shield`, `UserCog`) cannot be stored in localStorage. An `ICON_MAP` maps string names to components, and `getIconName()` serializes components back to strings.
 - **Auto-save**: Every change calls `triggerAutoSave()` which updates the `lastSaved` timestamp and syncs to localStorage.
 - **Restore**: On remount, `RoleSetup.tsx` reads from `rolesConfig` in the store and deserializes icons back to components.
-
-#### Module Permission Config Persistence
-
-The `modulePermissionConfigs` field stores which roles can manage each module. When a user navigates to a module config page (`/onboarding/modules/{moduleId}/config`):
-
-1. Available roles are dynamically read from `rolesConfig` (not hardcoded)
-2. Previously saved manage roles for the module are restored from `modulePermissionConfigs`
-3. On save, `setModulePermissionConfig(moduleId, manageRoles)` persists to the store
-4. **Orphaned role filtering**: When restoring, role IDs are validated against current `availableRoles` — if a role was removed in the Role Setup step, its ID is filtered out to prevent "undefined" display
 
 **Not persisted** (excluded from localStorage for security):
 
@@ -1324,7 +1307,7 @@ Before deploying to production:
 ### Onboarding State Persistence
 
 - **Role Permissions Persistence**: `rolesConfig` added to Zustand store with localStorage persistence; icon serialization via `ICON_MAP` enables storing React components
-- **Module Permission Config Persistence**: `modulePermissionConfigs` replaces hardcoded role lists and fake save handlers with real store persistence
+- **Module Permission Config Persistence**: `modulePermissionConfigs` replaces hardcoded role lists and fake save handlers with real store persistence _(the step it persisted for has since been removed — see 13a; the store field went with it)_
 - **Orphaned Role ID Filtering**: Role IDs validated against `availableRoles` on restore to prevent undefined entries when roles are removed
 - **Unified Role Initialization**: `DEFAULT_ROLES` in `permissions.py` is the single source of truth for all 16 system roles
 

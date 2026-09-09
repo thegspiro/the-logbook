@@ -174,12 +174,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   //: Step 1 is the representative: the remaining steps render the same shell,
   //: the same progress strip and the same form utilities.
   //:
-  //: "Render the same shell" is an assumption, and it was wrong once:
-  //: `ModuleConfigTemplate` builds its own root, so it had no `#main-content`
-  //: and the skip link pointed at nothing. Reaching it here is not the fix —
-  //: it redirects to step 1 unless the onboarding store is seeded, so the pass
-  //: would measure step 1 twice and report it as coverage. `skipLinkTarget.test.ts`
-  //: checks the assumption directly instead, on every page that owns its shell.
+  //: "Render the same shell" is an assumption, and it was wrong once: the
+  //: per-module configuration step (since removed) built its own root, so it
+  //: had no `#main-content` and the skip link pointed at nothing. Reaching a
+  //: step here is not the fix — one redirects to step 1 unless the onboarding
+  //: store is seeded, so the pass would measure step 1 twice and report it as
+  //: coverage. `skipLinkTarget.test.ts` checks the assumption directly instead,
+  //: on every page that owns its shell.
   { path: '/onboarding/start', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 

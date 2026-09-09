@@ -939,7 +939,7 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/onboarding/routes.tsx',
     coverage: 'exempt',
     detail:
-      'parameterized setup route; reachable only with a seeded onboarding store, so it redirects to step 1 under test. Its landmark, the one thing the shared shell does not give it, is asserted by skipLinkTarget.test.ts',
+      'legacy redirect to the module step; the per-module configuration screen it addressed has been removed, so there is nothing here to measure',
   },
   {
     path: '/onboarding/module-selection',
