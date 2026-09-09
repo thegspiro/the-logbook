@@ -16,6 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2435 (Feature 15, Scheduling, pass 4) merged clean —
+17/17 CI checks green, `mergeable_state: clean`, Codex review completed
+with no findings. The one non-terminal signal on the PR (a red `CI
+Success` run) was against a superseded head SHA (`4aaa116`, cancelled
+mid-flight by a follow-up push, not a real failure) — confirmed and noted
+on the PR before merging, and the fresh run on the final head (`13c7605`)
+was fully green. Merged via squash, merge commit `aae45c0`. Rotation row
+15 was already ✅ in the PR's own docs update (0 fixed, 0 flagged, 0 new
+findings — SCH-10 re-verified unchanged). No `security-review/events-*` or
+`security-review/EV-16*` branch exists yet (checked via `git ls-remote
+--heads`), so the rotation is clear to start **16 Events & requests**
+next — nothing is blocking it.
+
+30-minute rotation watchdog: checked GitHub state directly (open PRs, the
+head of `main`, this file's own "Open PR" note) rather than assuming the
+prior note was current. No open security-review PR exists to tend, no CI
+is red, no merge conflict to resolve — merging the ready PR and recording
+it is the only action this pass takes.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 4, PR #2435, merged), preserved for history</summary>
+
 **Feature 15 (Scheduling, pass 4)** — PR
 [#2435](https://github.com/thegspiro/the-logbook/pull/2435), branch
 `claude/security-review-scheduling`. **0 fixed, 0 flagged, 0 new
