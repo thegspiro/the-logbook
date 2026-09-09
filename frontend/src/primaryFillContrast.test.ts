@@ -304,8 +304,56 @@ describe('primary fill contrast', () => {
   it('gives every shared white-on-fill utility a AAA background', () => {
     const css = INDEX_CSS;
 
-    const failures = [...css.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].flatMap(([, name, body]) => {
-      if (!body?.includes('text-white')) return [];
+    // Every utility's body, so an `@apply` of another custom utility can be
+    // expanded before the white-foreground gate runs.
+    const bodies = new Map<string, string>(
+      [...css.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].map(([, name, body]) => [name ?? '', body ?? ''])
+    );
+
+    /**
+     * A utility body with any composed custom utilities inlined.
+     *
+     * `@utility card-hover { @apply card; … }` is an established pattern here,
+     * and a composed utility inherits the foreground of what it applies — so
+     * `@apply btn-primary bg-orange-600` renders white on orange while its own
+     * body contains no literal `text-white`. Reading the body alone let that
+     * through, and a call site carries only the composed name, so nothing
+     * downstream could recover it.
+     */
+    const expand = (name: string, seen = new Set<string>()): string => {
+      if (seen.has(name)) return '';
+      seen.add(name);
+      const body = bodies.get(name) ?? '';
+      const composed = [...body.matchAll(/(?:^|\s)([a-z][\w-]*)/g)]
+        .map(([, token]) => token ?? '')
+        .filter((token) => bodies.has(token))
+        .map((token) => expand(token, seen));
+      return [body, ...composed].join(' ');
+    };
+
+    const failures = [...bodies.keys()].flatMap((name) => {
+      const body = expand(name);
+      if (!body.includes('text-white')) return [];
+
+      // Which foreground covers a fill, by variant — the same question the
+      // call-site sweep asks. A body-wide `text-white` test paired white with
+      // every fill regardless of variant, so an adaptive utility
+      // (`bg-orange-600 text-orange-950 dark:bg-black dark:text-white`) was
+      // reported at 3.60:1 for a pairing that never renders. Both halves of
+      // such a utility are correct; only the cross-pairing is not.
+      const utilityForegrounds = new Map<string, string>();
+      for (const [, variant, hue, shade] of body.matchAll(/\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g)) {
+        utilityForegrounds.set(variant ?? '', shade ? `${hue}-${shade}` : (hue ?? ''));
+      }
+      const coveringForeground = (variant: string): string | undefined => {
+        const parts = variant.split(':').filter(Boolean);
+        for (let i = 0; i <= parts.length; i++) {
+          const candidate = parts.slice(i).length ? `${parts.slice(i).join(':')}:` : '';
+          const found = utilityForegrounds.get(candidate);
+          if (found !== undefined) return found;
+        }
+        return undefined;
+      };
       // All four fill prefixes, and keyword colours alongside numbered shades.
       // A gradient defined in a shared utility never writes its stops at the
       // TSX call site, so the call-site sweep cannot see them and only this
@@ -315,28 +363,34 @@ describe('primary fill contrast', () => {
       // `/100` is the opaque colour, as everywhere else in this file; a call
       // site carries only the utility name, so a shade skipped here is skipped
       // by every check.
-      const palette = [...body.matchAll(/\b(bg|from|via|to)-([a-z]+-\d{2,3}|white|black)(?:\/100)?\b(?!\/)/g)].flatMap(
-        ([, prefix, key]) => {
+      const palette = [
+        ...body.matchAll(/\b((?:[a-z-]+:)*)(bg|from|via|to)-([a-z]+-\d{2,3}|white|black)(?:\/100)?\b(?!\/)/g),
+      ].flatMap(([, variant, prefix, key]) => {
+        if (coveringForeground(variant ?? '') !== 'white') return [];
+        return ((): string[] => {
           const ratio = whiteOn(key ?? '');
           if (ratio === null) return [`${name}: ${prefix}-${key} is not in the installed Tailwind palette`];
           return ratio >= 7
             ? []
             : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
-        }
-      );
+        })();
+      });
 
       // Semantic fills and stops, resolved per theme exactly as the call-site
       // sweep does. `--text-muted` is `#ffffff` in dark, so a utility built on
       // it under `text-white` is invisible there — and invisible to every other
       // guard too, since the stops never reach a TSX file.
-      const semantic = [...body.matchAll(/\b(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?!\/)/g)].flatMap(
-        ([, prefix, token]) =>
-          [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
-            const rgb = hexToRgb(value);
-            if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
-            const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
-            return ratio >= 4.5 ? [] : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}`];
-          })
+      const semantic = [
+        ...body.matchAll(/\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?!\/)/g),
+      ].flatMap(([, variant, prefix, token]) =>
+        coveringForeground(variant ?? '') !== 'white'
+          ? []
+          : [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
+              const rgb = hexToRgb(value);
+              if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
+              const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+              return ratio >= 4.5 ? [] : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}`];
+            })
       );
 
       return [...palette, ...semantic];
@@ -560,7 +614,19 @@ describe('primary fill contrast', () => {
           // `transparent` sets no colour on a flat background, but on a
           // gradient stop it does replace: what shows is whatever backs it.
           if (value === 'transparent') return word !== 'bg';
-          if (value.startsWith('[')) return true;
+          // An arbitrary value is only an override if it is a *colour*.
+          // Tailwind's bracket syntax also carries background-size, position
+          // and image — `dark:bg-[length:200px_100px]` compiles to
+          // background-size — so accepting every bracketed value re-made the
+          // `bg-cover` mistake one syntax over. Unrecognised shapes are
+          // rejected rather than assumed: excusing a fill that is not really
+          // overridden hides a defect, while measuring one that is produces a
+          // visible complaint someone can correct.
+          if (value.startsWith('[')) {
+            const inner = value.slice(1, value.endsWith(']') ? -1 : undefined);
+            if (/^(?:length|size|position|image|url|angle|percentage|number|integer):/i.test(inner)) return false;
+            return /^(?:color:|#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\(|var\()/i.test(inner);
+          }
           if (value.startsWith('theme-')) return semanticFill(value).size > 0;
           return PALETTE[value] !== undefined;
         };
