@@ -20,9 +20,9 @@ feature. The rotation cannot outrun its own review queue.
 [#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
 ls-remote` checked against every equipment/EC-14 branch in this repo's
-history before creating it, per CLAUDE.md Pitfall #24; none existed). 0
-fixed, 0 flagged, after **two** rounds of Codex-caught diff-scope
-corrections. Round 1 (5 gaps): two routes omitted from the 57→50
+history before creating it, per CLAUDE.md Pitfall #24; none existed). 1
+fixed (EC-15, LOW — a code-health lint fix, see round 3), 0 flagged, after
+**three** rounds of Codex-caught gaps. Round 1 (5 gaps): two routes omitted from the 57→50
 route-count correction itself (`list_templates`/`get_template`, both
 `check_view`-or-`check_submit`-or-`check_manage`); a second migration
 touching `shift_completion_reports`
@@ -53,6 +53,17 @@ own configured slugs or values already on the report being edited, and the
 backend's own validation is what actually enforces the invariant regardless
 of what the UI sends; the two additional cache entries are each already
 disposed of by their own owning rotation entries. No finding either way.
+**Round 3 (1 gap, on round 2's own review): the completion gate's "2
+pre-existing, unrelated" ESLint warnings on `CallTypeChips.tsx` were wrong
+on both counts** — never actually inspected as part of this feature until
+round 2's frontend-half review, and CLAUDE.md owns a discovered warning
+the moment it's found, "unrelated" not being a sanctioned response.
+**Fixed as EC-15 (LOW):** split the file's two non-component exports
+(`orgCallTypeChoices`/`textCallTypeChoices`/`CallTypeChoice`) into a new
+sibling module, `callTypeChoices.ts`, so `react-refresh/only-export-
+components` has nothing left to flag; updated both consumers. `npx eslint
+.` now 0 warnings repository-wide; `npm run typecheck` still 0 errors;
+226 vitest tests passed across the four files this pass touched or reviewed.
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
 
@@ -12160,7 +12171,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, corrected across two Codex review rounds
+### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
 
 Diffed against pass 3's baseline (`b267ee1ca`): of the six declared backend
 files, only `shift_completion_service.py` changed (+50/-8), and that change
@@ -12226,15 +12237,31 @@ dispositioned in round 1's write-up, just not counted in the running total.
 No finding either way — both gaps were about completeness of the record,
 not a live issue.
 
+**Round 3 (Codex review of round 2's own fix): 1 more gap, and this one was
+a real fix, not just a record correction.** Round 2's completion gate
+recorded `eslint`'s two warnings on `CallTypeChips.tsx`
+(`react-refresh/only-export-components`) as "pre-existing, unrelated" —
+wrong on both counts. The file didn't exist before this pass's own
+subject commit (`360306d42`), so it had never actually been inspected as
+part of this feature until round 2's frontend-half review; and CLAUDE.md's
+"fix or escalate, never dismiss" rule owns a discovered warning the moment
+it's found, regardless of whose commit introduced it. **Fixed as EC-15
+(LOW):** the file exported two non-component builders
+(`orgCallTypeChoices`/`textCallTypeChoices`) and their shared type
+alongside the `CallTypeChips` component; moved them into a new sibling
+module, `callTypeChoices.ts`, and updated its two consumers
+(`CallTypeChips.test.tsx`, `ShiftReportsTab.tsx`). `npx eslint .` now 0
+warnings repository-wide; `npm run typecheck` still 0 errors.
+
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
 
 Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
 440 revisions, single head; scoped suite 397 passed / 1 pre-existing skip;
 full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `npm run
-typecheck` 0 errors; `eslint .` 0 errors (2 pre-existing, unrelated
-warnings); `vitest run apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx
-CallTypeChips.test.tsx` 195 passed. Rotation row 14 → ⏳ (awaiting PR
+typecheck` 0 errors; `eslint .` 0 errors, 0 warnings; `vitest run
+apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx CallTypeChips.test.tsx
+ShiftDetailPanel.test.tsx` 226 passed. Rotation row 14 → ⏳ (awaiting PR
 merge). Next after merge: 15 Scheduling.
 
 ### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)

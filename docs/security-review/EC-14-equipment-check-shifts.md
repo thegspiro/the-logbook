@@ -13,17 +13,24 @@ this pass, see below), `api/v1/endpoints/shift_completion.py` (21 routes),
 
 ---
 
-## Pass 4 (2026-09-09) — near-zero diff since pass 3; one already-merged, already-clean service fix re-verified from this feature's own lens; a stale route count corrected
+## Pass 4 (2026-09-09) — 1 fixed (a pre-existing lint violation, found on re-reading the file this pass), 0 flagged; near-zero diff since pass 3; a stale route count corrected across three rounds of Codex review
 
-**This section was revised after Codex review of the draft PR found the
-diff scope too narrow in five separate ways** — two omitted routes in the
-route-count correction itself, one omitted migration, and two categories of
-adjacent frontend/backend files the draft's diff commands simply didn't
-name (some at the wrong path, some genuinely not run at all). All five
-verified against real code and corrected below; the draft's "no findings"
-conclusion holds after the correction, but it was reached on an incomplete
-diff the first time, which is worth saying plainly rather than smoothing
-over.
+**This section went through three rounds of Codex review, each finding a
+real gap the previous round missed.** Round 1: the diff scope was too
+narrow in five separate ways — two omitted routes in the route-count
+correction itself, one omitted migration, and two categories of adjacent
+frontend/backend files the draft's diff commands simply didn't name (some
+at the wrong path, some genuinely not run at all). Round 2: the fix for one
+of those five (the migration/service review) had itself skipped the
+frontend half of the very commit it was reviewing, and underclaimed the
+`apiCache.ts` diff by two entries. Round 3: the completion gate's own
+"pre-existing, unrelated" dismissal of two ESLint warnings was wrong on
+both counts — they hadn't actually been inspected as part of this feature
+until round 2's frontend-half review, and CLAUDE.md's rule owns a
+discovered warning regardless of who introduced it. All eight gaps
+verified against real code and corrected below. The "no findings"
+conclusion for the feature itself holds throughout; the one warning turned
+out to be this pass's own to fix, once actually looked at.
 
 **Diff scope.** Pass 3 merged as `b267ee1ca`. `git diff --stat b267ee1ca..HEAD`
 for all six files pass 3 declared (`equipment_check.py`, `shift_completion.py`,
@@ -126,7 +133,35 @@ never looked at, even though they are what decides the values sent to
   `npx vitest run src/modules/scheduling/components/CallTypeChips.test.tsx`
   — 10/10 passed.
 
-**No finding**, on either half of `360306d42` now. This is exactly the
+### EC-15 — LOW (code health, caught by the completion gate rather than the checklist) — two `eslint` warnings on `CallTypeChips.tsx` were dismissed as "pre-existing, unrelated" without being inspected — ✅ FIXED
+
+**What:** `npx eslint .` flags `CallTypeChips.tsx` twice for
+`react-refresh/only-export-components` — the file exported
+`orgCallTypeChoices`/`textCallTypeChoices`/`CallTypeChoice` alongside the
+`CallTypeChips` component, and fast refresh cannot distinguish a component
+export from a plain-value export in the same file, so an edit to either
+remounts the whole tree.
+**Where:** `frontend/src/modules/scheduling/components/CallTypeChips.tsx`.
+**How this pass's own record was wrong:** round 1's completion gate (and
+this section's own first draft) recorded the two warnings as
+"pre-existing, unrelated" and moved on — wrong on both counts. They hadn't
+actually been inspected as part of this feature at all until the round-2
+frontend-half review just above (this file didn't exist before commit
+`360306d42`, so "pre-existing" meant "pre-existing relative to this PR,"
+not "already looked at and dispositioned"). CLAUDE.md's rule is that a
+discovered warning is owned the moment it's discovered, in the same
+commit, regardless of who introduced it or whether it's this feature's own
+territory — "unrelated" is not one of the two sanctioned responses.
+**Fix:** moved the two builders and the shared `CallTypeChoice` type into
+a new sibling module, `callTypeChoices.ts` (no JSX, so fast refresh has
+nothing to lose by editing it), and updated `CallTypeChips.tsx`'s two
+consumers (`CallTypeChips.test.tsx`, `ShiftReportsTab.tsx`) to import the
+builders from there instead. `npx eslint .` now reports 0 warnings
+repository-wide;
+`npm run typecheck` still 0 errors;
+`vitest run CallTypeChips.test.tsx ShiftDetailPanel.test.tsx` 41/41 passed.
+
+**No finding beyond the lint fix**, on either half of `360306d42` now. This is exactly the
 shape pass 2's adjacent-file reviews established for this doc: a change
 inside this feature's own service class,
 already merged by a different (non-rotation) workflow, checked against the
@@ -393,17 +428,17 @@ this feature is supposed to be watching in each.
 
 ## Completion gate (pass 4)
 
-| Check                                                                                                                                                                                                                                                                              | Result                                                                                   |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                      | ✅ 0 violations                                                                          |
-| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                               | ✅ 1554 files unchanged                                                                  |
-| `isort --check-only app/ tests/ alembic/` (isort 9.0.1, CI's pin)                                                                                                                                                                                                                  | ✅ clean                                                                                 |
-| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                  | ✅ 440 revisions, single head `f1565c64b658`                                             |
-| `pytest tests/ -q -k "equipment_check or shift_completion"`                                                                                                                                                                                                                        | ✅ 397 passed, 1 skipped (pre-existing, `pywebpush` not installed)                       |
-| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                               | ✅ 11945 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed  |
-| `npm run typecheck` (the repo's own script — the aliased TS7 compiler via `tsc-native.mjs`, per CLAUDE.md's "Two TypeScript installs"; the draft ran plain `npx tsc --noEmit` instead, which resolves TS 5.9 — the linter's compiler, not the build's — corrected on Codex review) | ✅ 0 errors                                                                              |
-| `npx eslint .`                                                                                                                                                                                                                                                                     | ✅ 0 errors, 2 pre-existing warnings (`CallTypeChips.tsx`, scheduling module, unrelated) |
-| `npx vitest run src/utils/apiCache.test.ts src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx src/modules/scheduling/components/CallTypeChips.test.tsx`                                                                                                            | ✅ 195 passed                                                                            |
+| Check                                                                                                                                                                                                                                                                              | Result                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                                                                                                      | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                                                                                                                                                                                                                                               | ✅ 1554 files unchanged                                                                 |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.1, CI's pin)                                                                                                                                                                                                                  | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                  | ✅ 440 revisions, single head `f1565c64b658`                                            |
+| `pytest tests/ -q -k "equipment_check or shift_completion"`                                                                                                                                                                                                                        | ✅ 397 passed, 1 skipped (pre-existing, `pywebpush` not installed)                      |
+| `pytest tests/` (full backend suite)                                                                                                                                                                                                                                               | ✅ 11945 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `npm run typecheck` (the repo's own script — the aliased TS7 compiler via `tsc-native.mjs`, per CLAUDE.md's "Two TypeScript installs"; the draft ran plain `npx tsc --noEmit` instead, which resolves TS 5.9 — the linter's compiler, not the build's — corrected on Codex review) | ✅ 0 errors                                                                             |
+| `npx eslint .` (round 1/2 wrongly recorded 2 "pre-existing, unrelated" warnings on `CallTypeChips.tsx` — fixed this round, see Findings)                                                                                                                                           | ✅ 0 errors, 0 warnings                                                                 |
+| `npx vitest run src/utils/apiCache.test.ts src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx src/modules/scheduling/components/CallTypeChips.test.tsx src/pages/scheduling/ShiftDetailPanel.test.tsx`                                                             | ✅ 226 passed                                                                           |
 
 ---
 
