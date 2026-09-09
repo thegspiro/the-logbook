@@ -16,11 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 14 (Equipment check & shifts, pass 4)** — branch
+**Feature 14 (Equipment check & shifts, pass 4)** — PR
+[#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
 ls-remote` checked against every equipment/EC-14 branch in this repo's
-history before creating it, per CLAUDE.md Pitfall #24; none existed). PR
-being opened; this row will be updated with the number once created. 0
+history before creating it, per CLAUDE.md Pitfall #24; none existed). 0
 fixed, 0 flagged — near-zero diff since pass 3 (only
 `shift_completion_service.py` changed, +50/-8, and that change was an
 already-merged correctness fix from a non-rotation commit, re-verified
