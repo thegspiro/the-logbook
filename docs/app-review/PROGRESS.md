@@ -20,7 +20,7 @@ been through a review pass.
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
 | A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
 | A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
-| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
+| A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ✅     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ⬜     |
@@ -2188,3 +2188,62 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   failed** (run whole rather than the 433-test auth slice, since
   `authenticate_user` is reached by most of the suite). See auth-session.md →
   Pass 5. Next: A3 scheduled tasks & cron.
+- **A3 scheduled tasks & cron ✅ (pass 5) — CRON-40, the scheduler's own claim.**
+  **0 fixed, 1 flagged (HIGH).** Five prior passes (two here, three in the
+  security-review track, the last on 2026-09-07 — two days before this one) have
+  read the 44 runners closely, and `git log --since` on both target files
+  returns **no commits**, so re-reading the runner bodies would have re-derived
+  pass 3's conclusions rather than adding to them. This pass looked at the layer
+  _above_ the runners — `main.py`'s in-process scheduler, which decides which
+  worker runs them — and found the one defect that makes every runner's own
+  correctness moot. **CRON-40 (HIGH, flagged):** `_scheduled_task_loop` claims
+  the scheduler role with a Redis SETNX (`main.py:1739`) and then renews it at
+  the bottom of each iteration (`:1789-1798`) with a **plain `set`** — no `nx`,
+  no `xx`, no comparison against the PID in the key — and no code path ever
+  exits the loop. Three verified facts combine: the TTL is 180s and is refreshed
+  only _after_ the whole batch; the first iteration runs **all 43** scheduled
+  runners back to back (`last_run` seeds to `0.0` and `time.monotonic()` is
+  seconds since boot, so on any host up longer than the longest interval every
+  task is due at once); and the losing workers retry every 60s. A first batch
+  that overruns 180s therefore lets a second worker claim and enter its own run
+  loop, after which the original unconditionally re-sets the key to its own PID —
+  taking the claim back without ever learning it lost it. Both then run all 43
+  runners every 60s, permanently and silently (each logs "started" once, minutes
+  apart, in separate worker logs), and a later overrun adds a third. Production
+  runs **four** workers (`backend/Dockerfile:104`), so the effect is members
+  receiving event reminders, shift reminders, cert-expiry alerts and inactivity
+  warnings two or more times, with every "stamp as sent" write becoming a
+  cross-worker race. **There is no backstop:** exactly one of the 44 runners
+  (`run_scheduled_emails`) takes its own distributed lock, and it is also the one
+  task deliberately excluded from this loop — the codebase already has the
+  pattern that would contain this, applied to the task that does not need it
+  here. Explicitly **not reproduced** (needs a multi-worker deployment and an
+  overrunning batch; the three constituent facts are each verified in source) and
+  the write-up says so. Not fixed: this is background-worker coordination in
+  production startup code and every remedy changes how workers agree on who
+  schedules. Recommended shape recorded — compare-and-swap the renewal via Lua
+  and `break` out of the loop when the CAS fails, plus a guard test whose fake
+  Redis changes the value underneath the loop; two weaker options (renew during
+  the batch, raise the TTL) written up as mitigations rather than fixes.
+  Mirrored to KNOWN_LIMITATIONS. **Verified good:** the three-way task registry
+  is consistent _and enforced_ — `SCHEDULE` 44 = `TASK_RUNNERS` 44,
+  `TASK_INTERVALS_SECONDS` 43, the difference being `scheduled_emails` which is
+  in `_MANUAL_ONLY_TASKS` because its own loop drives it every minute. This pass
+  checked the **runner/interval** pair specifically: pass 3 verified
+  SCHEDULE/TASK_RUNNERS, but the loop is built from `TASK_INTERVALS_SECONDS`, so
+  that is the pair whose drift would silently stop a task firing.
+  `tests/test_scheduled_task_coverage.py` fails the build in both directions —
+  CLAUDE.md #19 done correctly. Both endpoints gated (`run-task` correctly
+  stricter at wildcard `system.run_tasks`, since every runner spans all orgs).
+  Pass-2's naive-datetime flag is **closed** — it was deferred pending a
+  database to verify against, and `run_rolling_recurrence_extend` now uses
+  `datetime.now(utc).replace(tzinfo=None)` with the reasoning in the code.
+  **Re-verified still open:** CRON-31-7 (`newly_sent` appended after a send
+  failure, now `:2972`), CRON-31-8 (due interval stamped sent with zero
+  recipients), the Redis-down fail-open (same blast radius as CRON-40 by another
+  route), and the `cert_alert_service` per-record N+1. Ids start at CRON-40
+  because the `CRON-` prefix is shared **four** ways and `CRON-2` alone currently
+  means three different things. Gate (tree as found; no code changed): tsc 0 ·
+  flake8 0 · black 1102 unchanged · eslint 0 errors / 2 pre-existing warnings ·
+  scheduled-task suites 122 passed, 1 skipped · docs link check 352 files, 0
+  broken. See scheduled-tasks.md → Pass 5. Next: A4 email templates & delivery.
