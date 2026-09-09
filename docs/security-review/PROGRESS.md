@@ -19,9 +19,10 @@ feature. The rotation cannot outrun its own review queue.
 **None.** PR #2425 (Feature 12, Facilities, pass 4) merged clean, 17/17 CI
 checks green, `mergeable_state: clean`. Squash-merged as `d24934d67`. Feature
 12 is now fully closed for this pass — see the Log entries and
-`FAC-12-facilities.md` for the full eight-round correction history:
-`FAC-46` through `FAC-57` (12 findings across the fix's own review rounds,
-plus FAC-46 itself), all fixed; the 4 prior flags (FAC-13, FAC-30, FAC-41,
+`FAC-12-facilities.md` for the full correction history (the pass's own
+initial review plus seven subsequent Codex review rounds, each catching a
+real bug in the previous round's own fix): `FAC-46` through `FAC-57`, 12
+findings total, all fixed; the 4 prior flags (FAC-13, FAC-30, FAC-41,
 FAC-44) re-verified still open, unchanged since pass 3. Next: 13 Apparatus &
 NFC.
 
@@ -11828,15 +11829,16 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
 
-Eight consecutive rounds of Codex review, each catching a real bug in the
-previous round's own fix — the longest single-PR correction chain this
-rotation has seen. FAC-46 (HIGH, the pass's own initial finding: two
-unconditional `TypeError`s, one wired to real shipped UI) through FAC-57 (a
-genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
-merge-then-validate fix), all fixed. 4 prior flags (FAC-13, FAC-30, FAC-41,
-FAC-44) re-verified still open, unchanged since pass 3. 17/17 CI checks
-green on the final head, `mergeable_state: clean`, all 11 review threads
-resolved. Squash-merged as `d24934d67`.
+The pass's own initial review (FAC-46, HIGH — two unconditional
+`TypeError`s, one wired to real shipped UI) plus seven subsequent Codex
+review rounds, each catching a real bug in the previous round's own fix —
+the longest single-PR correction chain this rotation has seen — through
+FAC-57 (a genuine concurrency race, CLAUDE.md Pitfall #27's shape, in
+FAC-51's own merge-then-validate fix). 12 findings total (FAC-46 through
+FAC-57), all fixed. 4 prior flags (FAC-13, FAC-30, FAC-41, FAC-44)
+re-verified still open, unchanged since pass 3. 17/17 CI checks green on
+the final head, `mergeable_state: clean`, all 11 review threads resolved.
+Squash-merged as `d24934d67`.
 
 Worth recording for the rotation's own discipline: one of FAC-57's guard
 tests, a first draft racing two full service calls via bare
@@ -11845,8 +11847,12 @@ _both_ sides of its own pre-fix `git stash` check — a false negative caught
 before commit by actually running that check, not assumed from the test
 reading correctly. Rewritten with deterministic lock/block/release control
 before being trusted. See `FAC-12-facilities.md` → Pass 4 for the full
-round-by-round detail (FAC-47 through FAC-57), each with its own
-before/after failure text.
+round-by-round detail (FAC-47 through FAC-57): most carry their own
+before/after failure text from a `git stash`-isolated guard test; FAC-49,
+FAC-53, FAC-54 and FAC-56 had no runtime seam to test against (type-only
+corrections and a frontend payload-construction fix) and were instead
+verified by inspection and `tsc --noEmit`/`eslint` passing clean, per each
+finding's own write-up.
 
 Feature 12 is now fully closed for this pass. Next: 13 Apparatus & NFC.
 
