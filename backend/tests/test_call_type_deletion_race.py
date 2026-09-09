@@ -356,13 +356,22 @@ class TestReportEditVsDeletionRace:
             await session_b.execute(pin, {"o": org_id})
 
             async def edit_the_report():
-                try:
-                    await ShiftCompletionService(session_a).update_report(
-                        report_id, org_id, officer_id, {"call_types": ["brush"]}
-                    )
-                except Exception as e:  # noqa: BLE001 - surfaced via gather
-                    await session_a.rollback()
-                    return str(e)
+                # No broad try/except here on purpose (Codex review): this
+                # edit has no legitimate domain-level rejection path in this
+                # scenario (no review-status change, ownership already
+                # matches), so any exception here — a database deadlock
+                # included — is a bug, not an expected outcome. Swallowing
+                # it into a string would make the assertion below pass on
+                # the exact failure this test exists to catch: an
+                # implementation where the edit and the deletion deadlock
+                # each other, aborting the edit, still "orphan-free" by the
+                # letter of the final check because the edit never
+                # committed. `asyncio.gather(..., return_exceptions=True)`
+                # captures it as a real exception object instead, and the
+                # loop below fails loudly on it.
+                await ShiftCompletionService(session_a).update_report(
+                    report_id, org_id, officer_id, {"call_types": ["brush"]}
+                )
                 return None
 
             async def delete_the_type():

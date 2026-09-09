@@ -87,13 +87,49 @@ type at any later time and never took the organization lock at all. Fixed:
 deciding whether to preserve the `org_calls` marker. Two new guard-test
 classes (`TestPopulateExistingRefreshesTheLock`,
 `TestReportEditVsDeletionRace`) confirmed failing against the round-1-only
-fix and passing against the complete one. Full write-up (both rounds):
-`docs/security-review/SCH-15-scheduling.md` → Pass 4, SCH-13. Next once
-this follow-up merges: 16 Events & requests.
+fix and passing against the complete one.
 
-Full completion gate green (after both rounds): `flake8`/`black`/`isort`
+**Round 3 (Codex review of round 2's push): 2 more real gaps, one a
+genuine deadlock, plus a test-robustness gap that hid it — all fixed on
+the same branch.** (a) The bulk call-type-list save
+(`_reject_deleting_a_used_call_type`) derived `in_force`/`persisted`/the
+cap-ratchet comparison from a _pre-lock_ read — `populate_existing`
+refreshes the ORM object on a locking read, it cannot retroactively
+refresh values a caller already computed from an earlier read of it. Two
+admins saving different call-type lists concurrently could each satisfy
+the cap ratchet against a stale ceiling and between them grow the stored
+list past what either save alone would allow. Fixed: the lock is now
+taken first, before any settings-dependent value is derived. (b)
+`update_report` assigns `report.call_types` via `setattr` _before_ calling
+`_edit_preserves_org_slugs` — SQLAlchemy's autoflush then flushes (and
+row-locks) the dirtied report on `_edit_preserves_org_slugs`'s own next
+query, before it can lock the organization: a report-then-organization
+order, the reverse of the deletion guard's organization-then-report order.
+This is a real InnoDB deadlock (error 1213) between an ordinary report
+edit and a concurrent deletion, not merely a race — reproduced reliably
+(15/15 runs) once the test was fixed to stop hiding it (see (c)). Fixed:
+`_edit_preserves_org_slugs` is now called _before_ the `setattr` loop
+(it needs nothing the loop produces — it only reads `report.data_sources`,
+never mutated by the loop, and the new `call_types` value already in
+hand), so its lock is the transaction's first write-intent operation,
+matching the deletion guard's order. (c) `TestReportEditVsDeletionRace`'s
+`edit_the_report()` caught bare `Exception` and converted it to a string,
+so a deadlock was indistinguishable from an ordinary non-commit and the
+orphan assertion passed either way — round 2's own claim that this test
+"confirmed" the fix was therefore not fully earned. Fixed: the broad
+`except` is removed; re-running the strengthened test against round-2-only
+code reproduced the (a)/(b) deadlock directly, 15/15 runs, corroborating
+the finding rather than trusting the review's prose — the same test then
+passes 5/5 (a further 15/15 focused on it alone) against the complete fix.
+No new test for (a); verified by inspection and by the unchanged 141-test
+`test_call_tracking.py` suite still passing. Full write-up (all three
+rounds): `docs/security-review/SCH-15-scheduling.md` → Pass 4, SCH-13.
+Next once this follow-up merges: 16 Events & requests.
+
+Full completion gate green (after all three rounds): `flake8`/`black`/`isort`
 clean, migrations single-head (440 revisions), scoped + full backend tests
-passed (including all three race guard tests), full backend suite passed,
+passed (including all three race guard tests, with the deadlock class
+specifically re-run 15× each direction), full backend suite passed,
 `npm run typecheck`/`eslint .` both 0 errors, `npm run build` green,
 scheduling frontend vitest passed (unaffected by this backend-only round).
 
@@ -12529,8 +12565,27 @@ rename an existing report onto the candidate slug at any time and never
 took the organization lock. Both fixed (see the Open PR section's SCH-13
 paragraph above and `SCH-15-scheduling.md`'s SCH-13 write-up for the
 mechanism); two new guard-test classes added, both confirmed failing
-against the round-1-only fix and passing against the complete one. Next
-once #2437 merges: 16 Events & requests.
+against the round-1-only fix and passing against the complete one.
+
+**Round-3 addendum.** A further Codex review, of round 2's own push, found
+two more real gaps — (a) the bulk call-type-list save still derived its
+settings-dependent values from a pre-lock read, missing that
+`populate_existing` refreshes the ORM object but not values already
+computed from an earlier read of it; (b) the round-2 report-edit fix
+locked report-then-organization via SQLAlchemy autoflush, the reverse of
+the deletion guard's organization-then-report order — a genuine InnoDB
+deadlock (error 1213) between an ordinary report edit and a concurrent
+deletion, reproduced reliably once the test stopped swallowing it — plus
+(c) the round-2 guard test itself caught bare `Exception` and converted it
+to a string, which is exactly what let the deadlock in (b) pass unnoticed.
+All three fixed on the same branch: the lock moved earlier in the
+list-save guard, `_edit_preserves_org_slugs` now called before the report
+object is mutated (establishing the same lock order both paths need), and
+the test's broad `except` removed so an unexpected exception fails the
+test instead of being absorbed. CLAUDE.md's rule applied directly here: no
+round limit on legitimate findings against a pushed fix. See the Open PR
+section above for the full mechanism and gate results. Next once #2437
+merges: 16 Events & requests.
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
 
