@@ -28,7 +28,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
  * against.
  */
 const RankLadderSection: React.FC = () => {
-  const editor = useRankEditor({ allowCodeEdit: false, autoLoad: true });
+  const editor = useRankEditor({ allowCodeEdit: false });
 
   // The System Owner's own rank. They are a real signed-in account by this
   // step — created two steps earlier — so this writes straight through the
@@ -94,37 +94,54 @@ const RankLadderSection: React.FC = () => {
         </div>
       </div>
 
-      <RanksSettingsSection
-        ranks={editor.ranks}
-        ranksLoading={editor.ranksLoading}
-        editingRank={editor.editingRank}
-        addingRank={editor.addingRank}
-        rankForm={editor.rankForm}
-        rankSaving={editor.rankSaving}
-        deletingRankId={editor.deletingRankId}
-        editingPositionsRankId={editor.editingPositionsRankId}
-        rankValidationIssues={editor.rankValidationIssues}
-        allowCodeEdit={false}
-        onSetEditingRank={editor.setEditingRank}
-        onSetAddingRank={editor.setAddingRank}
-        onSetRankForm={editor.setRankForm}
-        onSetEditingPositionsRankId={editor.setEditingPositionsRankId}
-        onAddRank={() => {
-          void editor.handleAddRank();
-        }}
-        onUpdateRank={() => {
-          void editor.handleUpdateRank();
-        }}
-        onDeleteRank={(rankId) => {
-          void editor.handleDeleteRank(rankId);
-        }}
-        onMoveRank={(index, direction) => {
-          void editor.handleMoveRank(index, direction);
-        }}
-        onToggleEligiblePosition={(rank, position) => {
-          void editor.handleToggleEligiblePosition(rank, position);
-        }}
-      />
+      {editor.failed && !editor.ranksLoading ? (
+        <div className="alert-danger" role="alert">
+          <p className="text-theme-text-primary text-sm font-medium">The rank ladder could not be loaded.</p>
+          <p className="text-theme-text-muted mt-1 text-sm">
+            Nothing has changed — your ranks are not shown, not missing. You can carry on and set the ladder up later
+            under Members → Settings → Operational Ranks.
+          </p>
+          <button
+            type="button"
+            className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
+            onClick={editor.retry}
+          >
+            Try again
+          </button>
+        </div>
+      ) : (
+        <RanksSettingsSection
+          ranks={editor.ranks}
+          ranksLoading={editor.ranksLoading}
+          editingRank={editor.editingRank}
+          addingRank={editor.addingRank}
+          rankForm={editor.rankForm}
+          rankSaving={editor.rankSaving}
+          deletingRankId={editor.deletingRankId}
+          editingPositionsRankId={editor.editingPositionsRankId}
+          rankValidationIssues={editor.rankValidationIssues}
+          allowCodeEdit={false}
+          onSetEditingRank={editor.setEditingRank}
+          onSetAddingRank={editor.setAddingRank}
+          onSetRankForm={editor.setRankForm}
+          onSetEditingPositionsRankId={editor.setEditingPositionsRankId}
+          onAddRank={() => {
+            void editor.handleAddRank();
+          }}
+          onUpdateRank={() => {
+            void editor.handleUpdateRank();
+          }}
+          onDeleteRank={(rankId) => {
+            void editor.handleDeleteRank(rankId);
+          }}
+          onMoveRank={(index, direction) => {
+            void editor.handleMoveRank(index, direction);
+          }}
+          onToggleEligiblePosition={(rank, position) => {
+            void editor.handleToggleEligiblePosition(rank, position);
+          }}
+        />
+      )}
 
       {currentUser && (
         <div className="border-theme-surface-border mt-6 border-t pt-4">

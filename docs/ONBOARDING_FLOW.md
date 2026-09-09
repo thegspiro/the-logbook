@@ -599,8 +599,10 @@ defaults and lets the department rename them, reorder them, remove the ones it
 does not have, add its own, and set which shift seats each rank can fill.
 
 It renders `components/settings/RanksSettingsSection` — the same editor as
-Settings — driven by the same `useRankEditor` hook, against the ordinary
-`/operational-ranks` endpoints. One thing differs: `allowCodeEdit={false}`.
+**Members → Settings → Operational Ranks** — driven by the same `useRankEditor`
+hook, against the ordinary `/operational-ranks` endpoints. The ladder a
+department gets on day one and the one it maintains afterwards are therefore
+the same code. One thing differs: `allowCodeEdit={false}`.
 A rank code is the runtime key `get_rank_default_permissions()` resolves
 against, and setup is the worst place to change one, because there is no
 "before" against which to notice a rank has stopped conferring anything.

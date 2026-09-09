@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-const getRanks = vi.fn();
+const getRankLadder = vi.fn();
 const createRank = vi.fn();
 const updateRank = vi.fn();
 const deleteRank = vi.fn();
@@ -23,7 +23,8 @@ const validateRanks = vi.fn();
 
 vi.mock('../services/api', () => ({
   ranksService: {
-    getRanks: (...args: unknown[]) => getRanks(...args) as unknown,
+    getRanks: vi.fn(),
+    getRankLadder: (...args: unknown[]) => getRankLadder(...args) as unknown,
     createRank: (...args: unknown[]) => createRank(...args) as unknown,
     updateRank: (...args: unknown[]) => updateRank(...args) as unknown,
     deleteRank: (...args: unknown[]) => deleteRank(...args) as unknown,
@@ -62,7 +63,7 @@ const rank = (over: Partial<Record<string, unknown>> = {}) => ({
 
 /** Each block installs the defaults it depends on; see CLAUDE.md pitfall 28. */
 const installDefaults = () => {
-  getRanks.mockReset();
+  getRankLadder.mockReset();
   createRank.mockReset();
   updateRank.mockReset();
   deleteRank.mockReset();
@@ -70,7 +71,7 @@ const installDefaults = () => {
   validateRanks.mockReset();
   toastSuccess.mockReset();
   toastError.mockReset();
-  getRanks.mockResolvedValue([rank()]);
+  getRankLadder.mockResolvedValue([rank()]);
   createRank.mockResolvedValue(rank({ id: 'rank-2' }));
   updateRank.mockResolvedValue(rank());
   deleteRank.mockResolvedValue(undefined);
@@ -154,15 +155,38 @@ describe('useRankEditor with code editing withheld', () => {
 describe('useRankEditor loading and failures', () => {
   beforeEach(installDefaults);
 
-  it('does not load on mount unless asked', async () => {
-    renderHook(() => useRankEditor());
-    expect(getRanks).not.toHaveBeenCalled();
+  it('loads the ladder on mount', async () => {
+    const { result } = renderHook(() => useRankEditor());
+    await waitFor(() => expect(result.current.ranks).toHaveLength(1));
+    expect(getRankLadder).toHaveBeenCalled();
   });
 
-  it('loads on mount when autoLoad is set', async () => {
-    const { result } = renderHook(() => useRankEditor({ autoLoad: true }));
-    await waitFor(() => expect(result.current.ranks).toHaveLength(1));
-    expect(getRanks).toHaveBeenCalled();
+  it('reports a failed load rather than an empty ladder', async () => {
+    // A department told "no ranks configured" by a failed request would edit a
+    // ladder that is not theirs. getRankLadder is what makes this reachable:
+    // getRanks routes a non-array body through asArray and hands back [], so
+    // the failure never arrives.
+    getRankLadder.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useRankEditor());
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.ranks).toEqual([]);
+  });
+
+  it('keeps the last validation answer when the check itself fails', async () => {
+    // The check re-runs after every edit, so clearing on failure would make a
+    // warning vanish the moment somebody touched anything — reading as "you
+    // fixed it" at exactly the moment they would believe it.
+    validateRanks.mockResolvedValueOnce({ issues: [{ member_id: 'm1', member_name: 'A', rank_code: 'gone' }] });
+    const { result } = renderHook(() => useRankEditor());
+    await waitFor(() => expect(result.current.rankValidationIssues).toHaveLength(1));
+
+    validateRanks.mockRejectedValue(new Error('down'));
+    await act(async () => {
+      await result.current.fetchRanks();
+    });
+
+    expect(result.current.rankValidationIssues).toHaveLength(1);
   });
 
   it("relays the backend's reason for refusing a delete", async () => {

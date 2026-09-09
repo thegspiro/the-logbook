@@ -9,76 +9,99 @@ export interface RankForm {
   display_name: string;
 }
 
+const EMPTY_FORM: RankForm = { rank_code: '', display_name: '' };
+
 export interface UseRankEditorOptions {
   /**
    * Whether the department may edit a rank's code, or only its display name.
    *
    * A rank code is the runtime key `get_rank_default_permissions()` resolves
    * against, so changing it on a seeded rank silently stops that rank
-   * conferring anything. Settings allows it — a chief renaming `fire_chief` is
-   * making a considered change, and the backend enforces a grant ceiling on it.
-   * The setup wizard does not: a department is describing the ladder it already
-   * uses, and a rank that quietly stops granting permissions on day one is
-   * exactly the kind of accident setup should not be able to cause.
+   * conferring anything. Members Administration allows it — an officer
+   * renaming `fire_chief` is making a considered change, and the backend
+   * enforces a grant ceiling on it. The setup wizard does not: a department
+   * there is describing the ladder it already uses, and there is no "before"
+   * against which to notice a rank has quietly stopped granting permissions.
    *
-   * When false, adding a rank derives its code from the display name.
+   * When false, adding a rank derives its code from the display name, and an
+   * update omits the code rather than resending an unchanged one — the backend
+   * treats any code it is handed as a rename to cascade, so those are not the
+   * same request.
    */
   allowCodeEdit?: boolean;
-  /** Load the rank list on mount. Off for hosts that load it themselves. */
-  autoLoad?: boolean;
 }
 
 /**
  * The state and handlers behind the operational rank editor.
  *
  * `RanksSettingsSection` is fully controlled — every value and every callback
- * arrives as a prop — so the same editor renders in Settings and in the setup
- * wizard. This hook is the half that talks to the API, and lives here rather
- * than in either screen so the two cannot answer the same question differently:
- * a reorder that persists on one screen and not the other, or a delete that
- * refreshes one list and leaves the other stale, is the kind of divergence
- * two copies of these six handlers would eventually produce.
+ * arrives as a prop — and two screens now render it: Members Administration,
+ * where an officer maintains the ladder, and the setup wizard, where a
+ * department describes the one it already uses. This hook is the half that
+ * talks to the API, and lives here rather than in either screen so the two
+ * cannot answer the same question differently: a reorder that persists on one
+ * and not the other, or a delete that refreshes one list and leaves the other
+ * stale, is what two copies of these six handlers would eventually produce.
  */
 export function useRankEditor(options: UseRankEditorOptions = {}) {
-  const { allowCodeEdit = true, autoLoad = false } = options;
+  const { allowCodeEdit = true } = options;
 
   const [ranks, setRanks] = useState<OperationalRankResponse[]>([]);
-  const [ranksLoading, setRanksLoading] = useState(false);
+  const [ranksLoading, setRanksLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
   const [editingRank, setEditingRank] = useState<OperationalRankResponse | null>(null);
   const [addingRank, setAddingRank] = useState(false);
-  const [rankForm, setRankForm] = useState<RankForm>({ rank_code: '', display_name: '' });
+  const [rankForm, setRankForm] = useState<RankForm>(EMPTY_FORM);
   const [rankSaving, setRankSaving] = useState(false);
   const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
   const [editingPositionsRankId, setEditingPositionsRankId] = useState<string | null>(null);
   const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
 
+  // Non-blocking on purpose: the validation call reports members whose rank
+  // matches no configured rung. Its failure must not take the ladder down with
+  // it, and an absent warning is not a claim that nothing is wrong.
+  //
+  // Which is why a failure leaves the last known issues on screen rather than
+  // clearing them. This re-runs after every add, rename and delete, so clearing
+  // would make the warning vanish the moment an officer touched anything —
+  // reading as "you fixed it" when nothing had confirmed that, and at exactly
+  // the moment they would believe it.
   const fetchRankValidation = useCallback(async () => {
     try {
       const result = await ranksService.validateRanks();
-      setRankValidationIssues(result.issues);
+      setRankValidationIssues(Array.isArray(result?.issues) ? result.issues : []);
     } catch {
-      // Silently ignore – validation is non-blocking
+      /* keep the last answer; an unanswered check is not a clean one */
     }
   }, []);
 
   const fetchRanks = useCallback(async () => {
+    setRanksLoading(true);
     try {
-      setRanksLoading(true);
       invalidateRanksCache();
-      const data = await ranksService.getRanks();
+      // getRankLadder, not getRanks: the latter routes through `asArray`, which
+      // turns a non-array body into `[]` — so a gateway or proxy error page
+      // resolved successfully and rendered "no ranks configured", the exact
+      // false-empty the failure state exists to prevent. Checking here instead
+      // would have been dead code, because the swallow happens one layer down.
+      const data = await ranksService.getRankLadder();
       setRanks(data);
+      setFailed(false);
     } catch {
-      /* empty state shown */
+      setFailed(true);
     } finally {
       setRanksLoading(false);
     }
-    // Re-run validation whenever the rank list changes
     await fetchRankValidation();
   }, [fetchRankValidation]);
 
   useEffect(() => {
-    if (autoLoad) void fetchRanks();
-  }, [autoLoad, fetchRanks]);
+    void fetchRanks();
+  }, [fetchRanks, attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   const codeFor = useCallback(
     (form: RankForm) => (allowCodeEdit ? form.rank_code : form.display_name).trim().toLowerCase().replace(/\s+/g, '_'),
@@ -95,7 +118,7 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
         display_name: rankForm.display_name.trim(),
         sort_order: ranks.length,
       });
-      setRankForm({ rank_code: '', display_name: '' });
+      setRankForm(EMPTY_FORM);
       setAddingRank(false);
       toast.success('Rank added');
       await fetchRanks();
@@ -111,16 +134,12 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
     if (!editingRank || !rankForm.display_name.trim()) return;
     setRankSaving(true);
     try {
-      // Only send the code when the host allows editing it. Sending the
-      // unchanged one is not harmless: the backend enforces its grant ceiling
-      // on any code it is given, and a rename cascades to every member holding
-      // the old code.
       await ranksService.updateRank(editingRank.id, {
         display_name: rankForm.display_name.trim(),
         ...(allowCodeEdit ? { rank_code: codeFor(rankForm) } : {}),
       });
       setEditingRank(null);
-      setRankForm({ rank_code: '', display_name: '' });
+      setRankForm(EMPTY_FORM);
       toast.success('Rank updated');
       await fetchRanks();
     } catch (err: unknown) {
@@ -140,8 +159,8 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
         await fetchRanks();
       } catch (err: unknown) {
         // The backend refuses to delete a rank members still hold, and names
-        // how many. A bare "Failed to remove rank" leaves the administrator
-        // with no idea that reassigning those members is the way through.
+        // how many. A bare "Failed to remove rank" leaves the officer with no
+        // idea that reassigning those members is the way through.
         const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
         toast.error(detail || 'Failed to remove rank');
       } finally {
@@ -185,8 +204,9 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
 
   return {
     ranks,
-    setRanks,
     ranksLoading,
+    failed,
+    retry,
     editingRank,
     setEditingRank,
     addingRank,

@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const getRanks = vi.fn();
+const getRankLadder = vi.fn();
 const createRank = vi.fn();
 const updateRank = vi.fn();
 const deleteRank = vi.fn();
@@ -26,7 +26,8 @@ vi.mock('../../../services/api', () => ({
     updateUserProfile: (...args: unknown[]) => updateUserProfile(...args) as unknown,
   },
   ranksService: {
-    getRanks: (...args: unknown[]) => getRanks(...args) as unknown,
+    getRanks: vi.fn(),
+    getRankLadder: (...args: unknown[]) => getRankLadder(...args) as unknown,
     createRank: (...args: unknown[]) => createRank(...args) as unknown,
     updateRank: (...args: unknown[]) => updateRank(...args) as unknown,
     deleteRank: (...args: unknown[]) => deleteRank(...args) as unknown,
@@ -60,7 +61,7 @@ const rank = (over: Record<string, unknown> = {}) => ({
 });
 
 const installDefaults = () => {
-  getRanks.mockReset();
+  getRankLadder.mockReset();
   createRank.mockReset();
   updateRank.mockReset();
   deleteRank.mockReset();
@@ -69,7 +70,7 @@ const installDefaults = () => {
   updateUserProfile.mockReset();
   updateUserProfile.mockResolvedValue({});
   useAuthStore.setState({ user: null });
-  getRanks.mockResolvedValue([rank(), rank({ id: 'rank-2', rank_code: 'firefighter', display_name: 'Firefighter' })]);
+  getRankLadder.mockResolvedValue([rank(), rank({ id: 'rank-2', rank_code: 'firefighter', display_name: 'Firefighter' })]);
   createRank.mockResolvedValue(rank({ id: 'rank-3' }));
   updateRank.mockResolvedValue(rank());
   deleteRank.mockResolvedValue(undefined);
