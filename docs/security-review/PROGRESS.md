@@ -16,9 +16,11 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 15 follow-up (SCH-13 fix)** — branch
-`security-review/scheduling-codex-followup-2026-09-09`, PR pending (opened
-this pass). PR [#2435](https://github.com/thegspiro/the-logbook/pull/2435)
+**Feature 15 follow-up (SCH-13 fix)** — PR
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437), branch
+`security-review/scheduling-codex-followup-2026-09-09`. The four review
+threads on the superseded #2435 have each been replied to (linking here)
+and marked resolved. PR [#2435](https://github.com/thegspiro/the-logbook/pull/2435)
 (Feature 15, Scheduling, pass 4) merged at 15:48:08 UTC as `aae45c040` — but
 the merge landed on the draft's original two commits only
 (`4aaa1165b`/`13c760567`), **before** the four fixes a Codex review of the
@@ -12485,9 +12487,11 @@ same shape as the EC-15 follow-up above) — carried forward on a fresh
 branch, `security-review/scheduling-codex-followup-2026-09-09`, off current
 `origin/main`; the four fixes were already uncommitted in the working tree
 when the merge landed, so `git checkout -b <branch> origin/main` carried
-them over with no cherry-pick needed. See the Open PR section above for
-the follow-up PR link once opened. Next once that follow-up merges: 16
-Events & requests.
+them over with no cherry-pick needed. Follow-up PR:
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437) — see the Open
+PR section above. All four Codex review threads on #2435 replied to
+(linking to #2437) and marked resolved. Next once #2437 merges: 16 Events
+& requests.
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
 
