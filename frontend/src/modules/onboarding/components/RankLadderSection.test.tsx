@@ -70,7 +70,10 @@ const installDefaults = () => {
   updateUserProfile.mockReset();
   updateUserProfile.mockResolvedValue({});
   useAuthStore.setState({ user: null });
-  getRankLadder.mockResolvedValue([rank(), rank({ id: 'rank-2', rank_code: 'firefighter', display_name: 'Firefighter' })]);
+  getRankLadder.mockResolvedValue([
+    rank(),
+    rank({ id: 'rank-2', rank_code: 'firefighter', display_name: 'Firefighter' }),
+  ]);
   createRank.mockResolvedValue(rank({ id: 'rank-3' }));
   updateRank.mockResolvedValue(rank());
   deleteRank.mockResolvedValue(undefined);
