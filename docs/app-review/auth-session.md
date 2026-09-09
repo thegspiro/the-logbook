@@ -1,7 +1,167 @@
 # Application Review — Auth & Session Lifecycle
 
 **Prefix:** `AUTH` · **Iteration:** A2 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2)
+2026-08-08 (pass 2), 2026-09-09 (pass 5)
+
+## Pass 5 (2026-09-09) — the lockout counter, one layer up from AUTH-9/AUTH-13
+
+**1 fixed (MED), 1 flagged (LOW).** The concurrency lens that produced AUTH-9
+and AUTH-13 was applied to the two auth paths those findings did _not_ cover:
+the password step and the refresh rotation. Both carry the same unlocked
+read-then-write shape. The password one is fixed and its race reproduced; the
+refresh one is flagged.
+
+> **Finding ids here start at AUTH-20 because the `AUTH-` prefix is shared with
+> the security-review track**, which allocated AUTH-1 … AUTH-19 in
+> `docs/security-review/AUTH-01-auth-session.md`. The two have **already
+> collided**: this file's AUTH-2, AUTH-3, AUTH-14 and AUTH-15 are not the
+> security review's AUTH-2/3/14/15. An `AUTH-n` reference is therefore only
+> unambiguous with the file that owns it. Numbering above the shared
+> high-water mark avoids adding to the mess; **giving one track a distinct
+> prefix is the actual fix and is an owner call** — the same structural problem
+> was recorded for `SF-` in `storefront.md` on the same day, so it is not
+> specific to this feature.
+
+### AUTH-20 — MED — Concurrent wrong passwords are counted once, diluting the account lockout — ✅ FIXED
+
+**What:** `AuthService.authenticate_user` counted a failed sign-in by reading
+`failed_login_attempts` off the `user` object that the **unlocked** `candidates`
+query loaded (`auth_service.py:128`), adding one, and committing
+(`:218`, `:230`). A read-modify-write on the very field the lockout threshold is
+measured against, with no row lock.
+
+**Where:** `backend/app/services/auth_service.py:218` (the increment), against
+the unlocked load at `:128`.
+
+**Impact:** N simultaneous wrong-password requests all read the same committed
+counter, all write `value + 1`, and the account absorbs N guesses for the price
+of one increment. **Per-IP rate limiting does not cover this.** Account lockout
+is the layer that exists for the _distributed_ case — many sources, one account
+— where each source stays under its own per-IP limit and the per-account tally
+is the only thing that can see the total. Diluting that tally by the attacker's
+concurrency factor is a direct weakening of the control CLAUDE.md's
+attack-protection table names as the second of four layers, on a system holding
+PHI.
+
+Calibrated honestly: this is a **weakening, not a bypass**. The account still
+locks eventually — just after roughly N× more guesses. That is why it is MED and
+not the P1 that AUTH-9 and AUTH-13 (single-use-code replay → independent
+session) carried.
+
+**Reproduced, not argued.** `tests/test_auth_lockout_race.py` drives two real,
+independently-committing `AsyncSession`s through `authenticate_user` with the
+wrong password and asserts the stored counter is 2. Against the unfixed code it
+fails with `recorded 1 failure(s), not 2`. The race is deterministic rather than
+lucky because Argon2 is deliberately slow: both requests resolve the account and
+read the counter, then both spend ~100–300 ms hashing before either writes, so
+the overlap is the whole verify rather than a narrow window.
+
+**Fix:** a `.with_for_update().execution_options(populate_existing=True)` re-read
+inside the failure branch, then increment the locked row — the identical remedy
+`_verify_and_consume_totp` (AUTH-9) and `_verify_and_consume_recovery_code`
+(AUTH-13) already carry one layer up, including the `populate_existing`
+requirement that `expire_on_commit=False` forces.
+
+**The lock's placement is load-bearing and is asserted separately.** It sits
+_inside_ the failure branch, after the verify. Taking it before would hold a user
+row for the ~100–300 ms of every Argon2 hash, serializing that account's logins
+and handing an attacker a cheaper denial of service than the counter defends
+against. `test_the_lock_is_not_taken_around_the_password_verify` fails if the
+lock ever moves above the verify.
+
+**Related, deliberately not changed:** `mfa_login` reaches the same counter at
+`auth.py:946` and _is_ covered, because both `_verify_and_consume_totp` and
+`_verify_and_consume_recovery_code` take the lock before returning False. The
+one path that reaches the increment unlocked is a request supplying **neither**
+`code` nor `recovery_code` — `MFALogin` (`schemas/auth.py:195`) marks both
+`Optional` with no cross-field validator. That path is not a guess, so diluting
+its count gains an attacker nothing, and the obvious tightening (a validator
+requiring one of the two) changes a public auth endpoint's response from 401 to
+422 for existing clients. Recorded rather than changed.
+
+### AUTH-21 — LOW — A double-fired refresh can revoke every session the member has — 🚩 FLAGGED
+
+**What:** `refresh_access_token` looks the session up by refresh token with a
+plain `SELECT` (`auth_service.py:382`) and then rotates `session.refresh_token`
+in place (`:441`). Two concurrent refreshes presenting the **same** valid token
+both find the row and both write; last writer wins.
+
+**Where:** `backend/app/services/auth_service.py:382` → `:441`.
+
+**Impact:** the loser's client holds a refresh token that is no longer in the
+database. Its next refresh matches no session, which `:387` correctly treats as
+replay — and the response to replay is `_revoke_all_user_sessions`. So a benign
+double-fire logs the member out of **every** device, with the audit trail saying
+token theft. Fails closed, which is why this is LOW rather than higher, but the
+failure is user-visible and misattributed.
+
+The frontend's shared `refreshPromise` (CLAUDE.md, auth patterns) prevents this
+within one tab. It is per-tab state, so two tabs sharing one cookie jar are the
+realistic trigger.
+
+**Not reproduced** — unlike AUTH-20 this is reasoned from the code path, not
+demonstrated with two sessions. Stated plainly so the next reader does not
+inherit it as verified.
+
+**Fix — not applied.** A locking read on the session row closes it, but this is
+the hottest path in the auth surface and every request that outlives an access
+token passes through it; adding a row lock there is a performance decision on an
+authentication path, not a mechanical fix. Options: **(a)** lock the session row
+for the rotation; **(b)** make the rotation a conditional `UPDATE … WHERE
+refresh_token = :presented` and treat zero affected rows as "already rotated by
+a concurrent request", which needs no lock and distinguishes a benign double-fire
+from a genuine replay; **(c)** accept it and narrow the blast radius by revoking
+only the one session rather than all of them. (b) is the most promising and the
+most invasive. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+### Re-verified this pass, all still open
+
+- **AUTH-15** (security review) — the HIPAA maximum password age is still
+  browser-only. `auth_service.py:286` logs a warning and lets the login proceed;
+  `auth.py:1403` hands the number to the client to enforce. Unchanged.
+- **AUTH-17** (security review) — session rows are still never reaped. The only
+  `delete(UserSession)` is `_revoke_all_user_sessions`, scoped to one user
+  (`auth_service.py:475`); nothing deletes on expiry, so expired rows keep a
+  member's IP and user-agent indefinitely.
+- **`previous_refresh_token` / `previous_refresh_expires_at` are still dead.**
+  Written to `None` at `auth_service.py:438`, read by nothing, columns still
+  present (`models/user.py:860`). Still the LOW cleanup item
+  `KNOWN_LIMITATIONS.md` records; dropping the columns needs a migration, which
+  is out of this iteration's remit.
+- **`/check` still has no production caller.** `authService.checkAuth`
+  (`frontend/src/services/authService.ts:159`) is referenced only by its own
+  test. Left in place, matching pass 4's decision: the frontend wrapper and the
+  backend route are a pair, and removing only the wrapper reduces nothing while
+  removing the route is an API-surface decision.
+
+### Pass 5 scope
+
+Read this pass: `authenticate_user` and the whole failed/locked/dummy-verify
+branch set, the session-creation and refresh-rotation paths, `mfa_login` with
+both of its consume helpers, and the `MFALogin` schema. Re-verified by grep
+rather than full re-read: the four open items above.
+
+**Not re-read**, and carrying no pass-5 verdict: OAuth initiate/callback,
+`consent_service`, `register`, password reset, and the frontend auth store —
+all covered by passes 1–4 and by the security-review track's 19 findings, none
+of which this pass had reason to disturb.
+
+### Pass 5 completion gate
+
+| Check          | Result                                                |
+| -------------- | ----------------------------------------------------- |
+| tsc --noEmit   | ✅ 0 errors                                           |
+| flake8         | ✅ 0 violations (`app/ tests/`)                       |
+| black --check  | ✅ clean                                              |
+| eslint         | ✅ 0 errors, 2 pre-existing warnings (limit 10)       |
+| frontend tests | n/a — no frontend file changed this pass              |
+| backend tests  | ✅ **full suite** 11,922 passed, 21 skipped, 0 failed |
+
+`authenticate_user` is reached by most of the backend suite, so this pass ran
+the whole thing rather than the auth slice (433 passed on its own). The 21 skips
+are the Docker-integration tests (no daemon here) and `test_push_service.py`
+(optional `pywebpush`). ESLint is carried from earlier in this working tree —
+no frontend file changed this pass.
 
 ## Pass 4 (2026-09-08) — security-review AUTH pass 4 — see AUTH-01
 

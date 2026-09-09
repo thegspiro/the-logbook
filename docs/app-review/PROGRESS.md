@@ -19,7 +19,7 @@ been through a review pass.
 | #   | Feature                        | Code                                                                                                                                                                                                                                                                      | Prefix | Status |
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------ |
 | A1  | Storefront & payments          | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF     | ✅     |
-| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ⬜     |
+| A2  | Auth & session lifecycle       | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py`                                                                                                                                              | AUTH   | ✅     |
 | A3  | Scheduled tasks & cron         | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py`                                                                                                                                   | CRON   | ⬜     |
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ⬜     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ⬜     |
@@ -2134,3 +2134,57 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   passed, 1 skipped · frontend storefront 185 passed (15 files). DB-backed tests
   **did** run this pass — the session-start hook provides MariaDB and Redis. See
   storefront.md → Pass 5. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅ (pass 5) — AUTH-20, the lockout counter, one
+  layer up from AUTH-9/AUTH-13.** The most heavily reviewed surface in the
+  repository — four app-review passes plus the security-review track's 19
+  findings, last touched 2026-09-08 — so this pass took the one lens that had
+  produced results here before (concurrency) to the two auth paths AUTH-9 and
+  AUTH-13 did **not** cover: the password step and the refresh rotation. Both
+  carry the same unlocked read-then-write shape. **1 fixed (MED), 1 flagged
+  (LOW).** **AUTH-20 (MED, fixed):** `authenticate_user` counted a failed
+  sign-in by reading `failed_login_attempts` off the object the unlocked
+  `candidates` query loaded, adding one, and committing — a read-modify-write on
+  the exact field the lockout threshold is measured against. N simultaneous
+  wrong passwords all read the same value, all write value+1, and the account
+  absorbs N guesses per increment. Per-IP rate limiting does not cover this:
+  account lockout is the layer that exists for the **distributed** case, where
+  every source stays under its own per-IP limit and only the per-account tally
+  sees the total. Calibrated honestly as a weakening rather than a bypass — the
+  account still locks, just after ~N× more guesses — which is why MED and not
+  the P1 that AUTH-9/AUTH-13 carried. **Reproduced, not argued:**
+  `tests/test_auth_lockout_race.py` drives two real, independently-committing
+  AsyncSessions through `authenticate_user` and asserts the stored counter is 2;
+  against the unfixed code it fails with `recorded 1 failure(s), not 2`. The
+  race is deterministic rather than lucky because Argon2 is slow — both requests
+  read the counter, then both spend ~100-300ms hashing before either writes, so
+  the overlap is the whole verify. Fixed with the `with_for_update()` +
+  `populate_existing=True` re-read AUTH-9/AUTH-13 established, placed **inside
+  the failure branch, after the verify**: taking it earlier would hold a user row
+  across every Argon2 hash and hand an attacker a cheaper denial of service than
+  the counter defends against, so a second test fails if the lock ever moves
+  above the verify. `mfa_login`'s copy of the counter is already covered (both
+  consume helpers lock before returning False); the one unlocked path there is a
+  request supplying neither code, which is not a guess — recorded, not changed,
+  since the tightening would turn a 401 into a 422 for existing clients.
+  **AUTH-21 (LOW, flagged):** `refresh_access_token` rotates
+  `session.refresh_token` after a plain SELECT, so two concurrent refreshes of
+  the same token both write and the loser's client then presents a token that
+  matches no session — which the replay branch answers by revoking **every**
+  session the member has. Fails closed, but a benign double-fire logs someone out
+  everywhere with an audit trail saying token theft. Explicitly **not
+  reproduced**, and said so in the write-up; not fixed because a row lock on the
+  hottest path in the auth surface is a performance decision, not a mechanical
+  one. Three options recorded, including a conditional UPDATE that needs no lock;
+  mirrored to KNOWN_LIMITATIONS. **Re-verified still open:** AUTH-15
+  (max password age browser-only), AUTH-17 (sessions never reaped),
+  `previous_refresh_token`/`_expires_at` still dead (dropping the columns needs a
+  migration), and `/check` still has no production caller (left as pass 4 left
+  it — wrapper and route are a pair). Finding ids start at AUTH-20 because the
+  `AUTH-` prefix is shared with the security-review track and the two have
+  **already collided** on AUTH-2/3/14/15; same structural problem recorded for
+  `SF-` the same day, and giving one track its own prefix is an owner call.
+  Gate: tsc 0 · flake8 0 · black 1102 unchanged · eslint 0 errors / 2
+  pre-existing warnings · **full backend suite 11,922 passed, 21 skipped, 0
+  failed** (run whole rather than the 433-test auth slice, since
+  `authenticate_user` is reached by most of the suite). See auth-session.md →
+  Pass 5. Next: A3 scheduled tasks & cron.
