@@ -141,9 +141,9 @@ failing (`assert ... tzinfo is not None`; `TypeError` surfaced as `error`)
 via `git stash push -u` isolating the new `"refresh"` listener registration
 alone, passing with the fix restored, stable across 3 repeated runs. Full
 write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 6.
-Completion gate: flake8/black/isort clean; scoped keyword suite 1131
-passed / 1 pre-existing skip; full backend suite run in progress, this note
-updated with the exact count once it completes.
+Completion gate green: flake8/black/isort clean; scoped keyword suite 1131
+passed / 1 pre-existing skip; full backend suite 11939 passed / 21
+pre-existing skips / 0 failed; no frontend files touched.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
