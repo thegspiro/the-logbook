@@ -682,10 +682,25 @@ export const inventoryService = {
     return response.data;
   },
 
+  // The full filter and sort surface of `getItems`, minus the paging and the
+  // display-only groupings, so the file can be exactly the list it was
+  // exported from.
   async exportItemsCsv(params?: {
     category_id?: string | undefined;
     status?: string | undefined;
+    condition?: string | undefined;
+    item_type?: string | undefined;
+    location_id?: string | undefined;
+    unassigned_location?: boolean | undefined;
+    storage_area_id?: string | undefined;
+    vendor_id?: string | undefined;
     search?: string | undefined;
+    size?: string | undefined;
+    color?: string | undefined;
+    style?: string | undefined;
+    active_only?: boolean | undefined;
+    sort_by?: string | undefined;
+    sort_order?: string | undefined;
   }): Promise<Blob> {
     const response = await api.get<Blob>('/inventory/items/export', { params, responseType: 'blob' });
     return response.data;

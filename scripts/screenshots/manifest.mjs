@@ -25,6 +25,10 @@
  *            that cannot contain real credentials in the demo database
  *   prepare  optional async (page) => void that drives the UI into the pictured
  *            state (open a modal, switch a tab, expand a panel)
+ *   cleanup  optional async (page) => void run after the shot, success or
+ *            failure. Needed only when a prepare step PERSISTS something —
+ *            pins, a saved preference — since `--only <id>` may mean the later
+ *            shot that would have tidied up never runs
  *   selector optional CSS/locator to clip to instead of the full viewport
  *   fullPage capture the whole scroll height rather than the viewport
  *   viewport 'mobile' to shoot at phone width instead of desktop
@@ -1835,6 +1839,61 @@ export function openCallVolumeReport(mode) {
     await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
     await page.waitForTimeout(500);
   };
+}
+
+/**
+ * Clear every pin the signed-in member holds on the items list.
+ *
+ * Pins are per-member rows in the database and survive between runs, so a shot
+ * that pins has to both start from a known state and hand one back: without the
+ * first, a second run pins three MORE items and the section grows every time;
+ * without the second, `--only 05-02` leaves them for whatever is captured next.
+ *
+ * Bounded, and it insists the count actually drops. `togglePin` catches an API
+ * error and re-renders the same Unpin button, so a loop that only asked "is one
+ * still there?" would click a failing control every 600ms forever — hanging the
+ * entire capture command on a transient backend blip rather than failing the one
+ * shot. Both limits throw instead of returning quietly: this runs as cleanup for
+ * a shot that persisted state, and giving up in silence leaves exactly the pins
+ * the caller is relying on it to have removed.
+ */
+const UNPIN_LIMIT = 25;
+
+async function unpinEverything(page) {
+  const unpinButtons = page.getByRole("button", { name: /^Unpin / });
+
+  for (let cleared = 0; cleared < UNPIN_LIMIT; cleared += 1) {
+    const before = await unpinButtons.count();
+    if (!before) return;
+
+    await unpinButtons.first().click();
+
+    // Poll for the count to fall rather than sleeping a fixed 600ms: a click
+    // that silently failed leaves `before` unchanged, and this is what turns
+    // that into a timeout instead of another lap.
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      if ((await unpinButtons.count()) < before) break;
+      if (Date.now() > deadline) {
+        throw new Error(
+          `unpin did not take effect: still ${before} pinned after 10s`,
+        );
+      }
+      await page.waitForTimeout(250);
+    }
+  }
+
+  // Conditional, because reaching the bound is not itself a failure. A member
+  // holding exactly UNPIN_LIMIT pins -- the maximum InventoryService.MAX_PINS
+  // allows, so a real account, not a hypothetical one -- clears all of them on
+  // the last lap and exits the loop having succeeded. Throwing unconditionally
+  // here failed both new shots' preparation for that member with nothing
+  // wrong.
+  if (await unpinButtons.count()) {
+    throw new Error(
+      `unpin cleanup gave up after ${UNPIN_LIMIT} pins — the list is not draining`,
+    );
+  }
 }
 
 export const SHOTS = [
@@ -5418,6 +5477,80 @@ export const SHOTS = [
     route: "/inventory/items",
   },
   {
+    id: "05-02-items-pinned",
+    doc: "05-inventory.md",
+    line: 83,
+    anchor: "The items list with three items pinned",
+    alt: "The items list with a Pinned section above Available, each pinned row carrying a drag handle and up/down arrows",
+    route: "/inventory/items",
+    // Pinned through the UI rather than the API: the picture should show what
+    // a quartermaster does, and pinning by hand also proves the control is
+    // reachable at this viewport.
+    prepare: async (page) => {
+      await unpinEverything(page);
+      for (let i = 0; i < 3; i += 1) {
+        const pin = page.getByRole("button", { name: /^Pin / }).first();
+        await pin.click();
+        // Each click reloads the list, so the next unpinned row is only
+        // addressable once the Pinned section has absorbed the last one.
+        //
+        // Counted rather than waiting for the Pinned TABLE, which only proves
+        // anything on the first pin: after that the table already exists and
+        // the wait returns instantly, leaving a bare timeout to cover the
+        // reload. And deliberately not caught -- a swallowed timeout here
+        // publishes a picture of one pin, or none, under a caption that says
+        // three, and the empty-state check cannot see that: the list is fully
+        // populated either way.
+        await page
+          .getByRole("table", { name: "Pinned" })
+          .getByRole("button", { name: /^Unpin / })
+          .nth(i)
+          .waitFor({ timeout: 10_000 });
+        await page.waitForTimeout(600);
+      }
+    },
+    // Pins persist per member, so this shot tidies up after itself rather than
+    // leaning on 05-03 to do it: `--only 05-02` would otherwise leave three
+    // behind for whatever /inventory/items shot is captured next.
+    cleanup: unpinEverything,
+  },
+  {
+    id: "05-03-items-grouped",
+    doc: "05-inventory.md",
+    line: 103,
+    anchor: "The items list grouped by Category",
+    alt: "The items list grouped by category, with collapsible group headings carrying whole-set counts and a Size column in place of the Category column",
+    route: "/inventory/items",
+    prepare: async (page) => {
+      // Unpin first. 05-02 now cleans up after itself, so this is defence in
+      // depth rather than the thing that makes 05-02 safe -- but a stray pin
+      // from a hand-driven session would still push the group headings this
+      // shot exists to picture below the fold.
+      await unpinEverything(page);
+      await page.getByLabel("Group by:").selectOption("category");
+      // The grouping is applied only once rows fetched FOR that dimension
+      // arrive, so wait for a heading rather than for the select to settle.
+      //
+      // Not caught. If the grouping never lands, this shot photographs an
+      // ordinary ungrouped list and files it under "grouped by Category" --
+      // and nothing downstream can tell: the empty-state detector sees a full
+      // list, and the guide ends up with a picture contradicting its own text.
+      // Letting the wait reject makes the capture loop report it failed.
+      await page
+        .getByRole("button", { name: /\(\d+\)/ })
+        .first()
+        .waitFor({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+      // Bring the Group by control to the top of the frame so the control and
+      // the headings it produces are in the same picture.
+      await page
+        .locator("#group-by")
+        .evaluate((el) => el.scrollIntoView({ block: "start" }))
+        .catch(() => {});
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     id: "05-03-inventory-categories",
     doc: "05-inventory.md",
     line: 95,
@@ -7905,8 +8038,7 @@ export const SHOTS = [
     id: "03-25-equipment-checks-tab",
     doc: "03-scheduling.md",
     line: 1329,
-    anchor:
-      "Screenshot of Fleet Readiness showing a list of apparatus with",
+    anchor: "Screenshot of Fleet Readiness showing a list of apparatus with",
     alt: "Fleet Readiness listing each apparatus with its check status",
     route: "/inventory/checklists",
     fullPage: true,

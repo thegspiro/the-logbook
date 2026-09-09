@@ -232,6 +232,48 @@ const EMPTY_STATE_MAX_LINE = 80;
  * the failure this whole check exists to prevent.
  */
 
+/**
+ * Option labels that name a control's neutral default rather than an absence
+ * of data.
+ *
+ * Named one by one, and it has to stay that way. The first version of this
+ * excluded EVERY `<option>` on the page, which is wrong in the dangerous
+ * direction: a select is exactly where several screens put their real empty
+ * state — `FacilityRoomPicker` renders "No rooms available" as its only
+ * option, `SchedulingPage` renders "No templates match …" as a disabled one —
+ * so a blanket exclusion made an empty screenshot of either publishable. Only
+ * a label that means "no filter applied" belongs here.
+ */
+const NEUTRAL_OPTION_LABELS = new Set(["No grouping"]);
+
+/**
+ * The neutral option labels present on the page.
+ *
+ * A `<select>`'s option labels come back inside `innerText`, and a control's
+ * label is not content: the items list's "Group by" control offers
+ * **No grouping**, which the whole-short-line arm of EMPTY_STATE reads as an
+ * empty state and which held back four perfectly good captures of a fully
+ * populated page. Excluded by exact line match rather than by stripping the
+ * elements — a cloned, detached subtree has no layout, so `innerText` on it
+ * degrades to `textContent`, collapsing the line breaks the scan below depends
+ * on and disabling the check outright.
+ *
+ * `allTextContents` rather than `allInnerTexts`: the options of a closed select
+ * are not rendered, and `innerText` on an unrendered element is unreliable.
+ *
+ * Deliberately NOT caught. A rejection here — a navigation mid-scan, an
+ * execution context torn down — used to degrade to an empty set, which reads
+ * as "no neutral labels" and so reports a fully populated page as empty while
+ * the command still exits 0. Letting it reject records the shot as failed,
+ * which is what a Playwright failure is.
+ */
+async function optionLabels(page) {
+  const texts = await page.locator("option").allTextContents();
+  return new Set(
+    texts.map((t) => t.trim()).filter((t) => NEUTRAL_OPTION_LABELS.has(t)),
+  );
+}
+
 async function detectEmptyState(page, selector) {
   // Scan what the image will actually contain. A clipped shot pictures one
   // section, and scanning the whole page around it flags copy that is nowhere
@@ -251,9 +293,11 @@ async function detectEmptyState(page, selector) {
   // the Privacy Choices section. Scoping to `selector` was the previous
   // mitigation, but a fullPage shot has no selector to scope to, so the guard
   // has to hold on the text itself.
+  const options = await optionLabels(page);
   for (const line of text.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length > EMPTY_STATE_MAX_LINE) continue;
+    if (options.has(trimmed)) continue;
     const match = trimmed.match(EMPTY_STATE);
     if (match) return match[0].trim();
   }
@@ -596,6 +640,39 @@ async function main() {
         error: String(error).split("\n")[0],
       });
       console.log(`  ! ${shot.id}: ${String(error).split("\n")[0]}`);
+    } finally {
+      if (shot.cleanup) {
+        // Undo state a prepare step PERSISTED, so a shot that has to write to
+        // the database is self-contained. Manifest order is not a safe place
+        // to put that undo: `--only <id>` is a documented workflow, so the
+        // later shot that would have tidied up may never run, and the leftover
+        // then shows up in whatever is captured next.
+        //
+        // In a `finally` because a shot that fails half-way has still done
+        // whatever its prepare step managed before failing.
+        try {
+          await shot.cleanup(page);
+        } catch (error) {
+          const detail = String(error).split("\n")[0];
+          console.log(`      cleanup after ${shot.id} failed: ${detail}`);
+
+          // A cleanup that threw means the persisted state is probably still
+          // there — the pins this shot created are still on the account. Only
+          // logging it left the result `ok` and the exit code 0, so the report
+          // claimed a stateful shot had tidied up when it had not, and the
+          // leftovers turned up in whatever ran next with nothing to explain
+          // them. Demote the result instead.
+          //
+          // An existing failure is preserved rather than overwritten: the
+          // capture error is what a reader needs, and the cleanup very likely
+          // failed for the same reason.
+          const result = results.find((r) => r.id === shot.id);
+          if (result && result.status === "ok") {
+            result.status = "failed";
+            result.error = `cleanup failed: ${detail}`;
+          }
+        }
+      }
     }
   }
 
