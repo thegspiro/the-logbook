@@ -57,6 +57,15 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // The rank ladder, and the only one of this settings screen's four sections
+  // the pass can measure: it renders no SettingsToggle, so the 44x24
+  // toggle-track debt that holds the other three off does not reach it.
+  //
+  // `members.manage` alone on purpose — it is what the route stands on *and*
+  // what the rank endpoints accept since the ladder moved here, so it is the
+  // grant a real roster officer arrives with, and the one fixture that would
+  // catch those two drifting apart again.
+  { path: '/members/admin/settings/ranks', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.check_in'] },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
@@ -134,16 +143,18 @@ export const ALL_ROUTES: RouteCheck[] = [
   // The second of the seven SettingsLayout screens, and the only other one that
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
+  // /members/admin/settings/ranks above is the third, and reaches the same shell
+  // through a section that carries no toggle.
   //
-  // The remaining six are not listed, and each has a reason:
-  // /scheduling/admin/settings/*, /members/admin/settings/*,
-  // /elections/settings and /communications/email-templates carry non-shell debt
-  // of their own (17, 1, 2 and 4 controls under 44px — mostly `toggle-track`,
-  // which is 44x24 at every one of its call sites app-wide), and the events and
-  // department-setup panels render inside a hub route rather than at a path of
-  // their own. Adding any of them means fixing that debt first, not raising a
-  // budget. /members/admin/settings/visibility is the cheapest of them: one
-  // control, and the only thing between it and a budget of 0.
+  // The remaining five are not listed, and each has a reason:
+  // /scheduling/admin/settings/*, /elections/settings and
+  // /communications/email-templates carry non-shell debt of their own (17, 2 and
+  // 4 controls under 44px — mostly `toggle-track`, which is 44x24 at every one
+  // of its call sites app-wide), and the events and department-setup panels
+  // render inside a hub route rather than at a path of their own. Adding any of
+  // them means fixing that debt first, not raising a budget. The three
+  // toggle-bearing sections of /members/admin/settings are the cheapest: one
+  // control each, and the only thing between them and a budget of 0.
   { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
 

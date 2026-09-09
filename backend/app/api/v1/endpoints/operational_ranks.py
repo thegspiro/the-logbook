@@ -6,12 +6,20 @@ CRUD endpoints for per-organization operational rank management.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.api.v1.endpoints.users import _enforce_rank_grant_ceiling
 from app.core.database import get_db
+from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.security_middleware import get_client_ip
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
 from app.schemas.operational_rank import (
@@ -24,6 +32,41 @@ from app.schemas.operational_rank import (
 from app.services.operational_rank_service import OperationalRankService
 
 router = APIRouter()
+
+
+#: Ordering the ladder is an access-control operation, not a cosmetic one.
+#:
+#: ``OperationalRank.sort_order`` is read by the inventory authorization rule as
+#: a predicate -- ``_passes_restrictions`` admits a member when their rank's
+#: order is at or above an item's ``min_rank_order`` -- so whoever chooses where
+#: a rank sits chooses who can see restricted stock. A members.manage officer
+#: could otherwise create a rank at order 0, assign it to themselves through the
+#: profile endpoint that grant already opens (the rank ceiling permits it: a
+#: custom code carries no default permissions), and clear every restriction in
+#: the catalogue without ever touching a permission.
+#:
+#: So the ladder's *contents* moved to members.manage with the page, and its
+#: *order* did not. A roster officer adds, renames, retires and re-scopes rungs;
+#: a new rung lands at the end of the ladder rather than wherever the request
+#: asked for, and moving one keeps settings.manage.
+ORDERING_PERMISSION = "settings.manage"
+
+
+def _may_order_ladder(user: User) -> bool:
+    return _has_permission(ORDERING_PERMISSION, _collect_user_permissions(user))
+
+
+def _refuse_ordering(user: User) -> None:
+    if not _may_order_ladder(user):
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Reordering the rank ladder requires the "
+                f"'{ORDERING_PERMISSION}' permission, because a rank's position "
+                "decides which restricted inventory its holders may see."
+            ),
+            error_code=ErrorCode.PERM_INSUFFICIENT,
+        )
 
 
 def _rank_to_response(rank) -> RankResponse:
@@ -69,17 +112,39 @@ async def list_ranks(
 
 @router.post("", response_model=RankResponse, status_code=status.HTTP_201_CREATED)
 async def create_rank(
+    request: Request,
     data: RankCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "members.manage")
+    ),
 ):
     """
     Create a new operational rank.
 
     **Authentication required**
-    **Permissions required:** settings.manage
+    **Permissions required:** settings.manage or members.manage
     """
     service = OperationalRankService(db)
+
+    # The same ceiling update_rank applies to a rank_code change, for the same
+    # reason: rank_code is the runtime key get_rank_default_permissions()
+    # resolves against, so the code -- not the row -- decides what holding this
+    # rank grants. Creating one was unguarded while only settings.manage could
+    # reach it, which meant the ladder could gain a chief-coded rung authored by
+    # someone who could not have renamed an existing rung into it. members.manage
+    # now reaches this handler, so the two paths must agree.
+    await _enforce_rank_grant_ceiling(
+        current_user, data.rank_code, db, get_client_ip(request)
+    )
+
+    # Appended rather than refused: the UI already asks for the end of the
+    # ladder, so a roster officer adding a rung sees no difference, and a
+    # request that asked for the top is answered with a rung at the bottom
+    # instead of a 403 for a field the officer never chose.
+    if not _may_order_ladder(current_user):
+        existing = await service.list_ranks(current_user.organization_id)
+        data = data.model_copy(update={"sort_order": len(existing)})
 
     async with handle_service_errors("Failed to create rank"):
         rank = await service.create_rank(
@@ -93,7 +158,9 @@ async def create_rank(
 @router.get("/validate", response_model=RankValidationResponse)
 async def validate_ranks(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "members.manage")
+    ),
 ):
     """
     Check for active members whose rank does not match any configured rank.
@@ -102,7 +169,7 @@ async def validate_ranks(
     who are still actively interacting with the platform are checked.
 
     **Authentication required**
-    **Permissions required:** settings.manage
+    **Permissions required:** settings.manage or members.manage
     """
     service = OperationalRankService(db)
     issues = await service.validate_ranks(current_user.organization_id)
@@ -131,16 +198,19 @@ async def get_rank(
 
 @router.patch("/{rank_id}", response_model=RankResponse)
 async def update_rank(
+    request: Request,
     rank_id: UUID,
     data: RankUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "members.manage")
+    ),
 ):
     """
     Update an operational rank.
 
     **Authentication required**
-    **Permissions required:** settings.manage
+    **Permissions required:** settings.manage or members.manage
     """
     service = OperationalRankService(db)
 
@@ -152,14 +222,30 @@ async def update_rank(
     # same failure mode: a rank's grants reach the database by a side door).
     # Enforced only on an actual change, matching _enforce_rank_grant_ceiling's
     # other call sites.
+    #
+    # BOTH codes, not just the destination. Checking only where the rename goes
+    # catches escalation and misses its mirror image: renaming `fire_chief` to
+    # an unrecognized code passes trivially, because an unknown code grants
+    # nothing and nothing is a subset of everything -- and then the cascade
+    # rewrites `rank` on every member who held it, so each of them silently
+    # loses the chief's permissions and shift eligibility. That is stripping
+    # rather than granting, and it needs the same authority: a caller may only
+    # disturb a rank whose grants they already hold. It went unnoticed while
+    # only settings.manage could reach this handler, since such a caller
+    # typically covered every rank anyway; members.manage does not.
     update_data = data.model_dump(exclude_unset=True)
+    if "sort_order" in update_data:
+        _refuse_ordering(current_user)
     if "rank_code" in update_data:
         existing = ensure_found(
             await service.get_rank(rank_id, current_user.organization_id), "Rank"
         )
         if update_data["rank_code"] != existing.rank_code:
             await _enforce_rank_grant_ceiling(
-                current_user, update_data["rank_code"], db, None
+                current_user, existing.rank_code, db, get_client_ip(request)
+            )
+            await _enforce_rank_grant_ceiling(
+                current_user, update_data["rank_code"], db, get_client_ip(request)
             )
 
     async with handle_service_errors("Failed to update rank"):
@@ -178,13 +264,15 @@ async def update_rank(
 async def delete_rank(
     rank_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "members.manage")
+    ),
 ):
     """
     Delete an operational rank.
 
     **Authentication required**
-    **Permissions required:** settings.manage
+    **Permissions required:** settings.manage or members.manage
     """
     service = OperationalRankService(db)
     async with handle_service_errors("Failed to delete rank"):
@@ -196,14 +284,20 @@ async def delete_rank(
 async def reorder_ranks(
     data: RankReorderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("settings.manage")),
+    current_user: User = Depends(
+        require_permission("settings.manage", "members.manage")
+    ),
 ):
     """
     Batch-update sort order for multiple ranks.
 
     **Authentication required**
-    **Permissions required:** settings.manage
+    **Permissions required:** settings.manage (ordering decides which
+    restricted inventory a rank's holders may see, so it is not part of the
+    members.manage widening)
     """
+    _refuse_ordering(current_user)
+
     service = OperationalRankService(db)
     ranks = await service.reorder_ranks(
         organization_id=current_user.organization_id,

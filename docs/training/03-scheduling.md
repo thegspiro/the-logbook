@@ -968,7 +968,8 @@ came from. It previously read the address on load but never wrote it.
 
 > **Eligibility here is not the same screen as rank eligibility.** This section
 > governs which **membership types** may sign themselves up for a shift. Which
-> **positions** a given **rank** may fill is set on **Settings → Ranks**, on the
+> **positions** a given **rank** may fill is set on **Members Administration →
+> Settings → Operational Ranks**, on the
 > other side of the app. The two are easy to confuse and neither one is the other.
 
 > **A section for a feature your department has switched off** — Platoons, most
@@ -1059,7 +1060,7 @@ Operational ranks define which shift positions each rank is eligible for. When m
 
 **Setting up eligible positions:**
 
-1. Navigate to **Settings > Ranks** (listed as _Operational rank configuration_).
+1. Navigate to **Members Administration > Settings > Operational Ranks**.
 2. Edit a rank and click **Configure eligible positions**, then click the
    position chips to toggle them on and off. It is a per-rank list rather than
    a single grid of every rank against every position — you set one rank at a
@@ -2142,7 +2143,7 @@ The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now
 | "Too many attempts" on shift signup                                                       | Rate limiting may be active. Wait a few seconds and try again.                                                                                                                                                         |
 | Cannot edit shift times after creation                                                    | Officers with `scheduling.manage` can now edit shift start/end times, apparatus, color, notes, and custom creation times from the shift detail panel.                                                                  |
 | Position change requires opening a modal                                                  | Use the new inline position change UI directly on the shift card to change a member's assigned position without navigating away.                                                                                       |
-| Shift signup shows no positions                                                           | Your rank may not have eligible positions configured, or your membership type may be excluded from self-signup. Check both Settings > Ranks and Scheduling > Settings > Eligibility.                                   |
+| Shift signup shows no positions                                                           | Your rank may not have eligible positions configured, or your membership type may be excluded from self-signup. Check both Members Administration > Settings > Operational Ranks and Scheduling > Settings > Eligibility.                                   |
 | Dashboard still shows cancelled shifts                                                    | Fixed 2026-03-19 — declined and cancelled assignments are now filtered from "My Upcoming Shifts". Pull latest.                                                                                                         |
 | Sign Up button not appearing for open shifts                                              | Your rank may not be eligible for the remaining open positions. Check with your administrator.                                                                                                                         |
 | Can see assignment controls but get 403 error                                             | The shift detail panel now uses separate permissions: `scheduling.manage` for shift editing and `scheduling.assign` for member assignments. Ask your administrator to grant the appropriate permission.                |

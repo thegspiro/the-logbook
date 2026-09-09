@@ -306,11 +306,21 @@ class TestCrud:
             updated_at=now,
         )
         db = _db([_one(rank), _one(rank), _one(None), MagicMock()])
-        user = SimpleNamespace(organization_id=str(org_id), rank=None, positions=[])
+        # A rename now clears the grant ceiling at both ends -- the rank being
+        # renamed as well as the code it becomes -- so this caller needs the
+        # authority for it. The wildcard short-circuits before any query, which
+        # is why the `db` script above is unchanged. What is under test here is
+        # the member migration, not the ceiling.
+        user = SimpleNamespace(
+            organization_id=str(org_id),
+            rank=None,
+            positions=[SimpleNamespace(permissions=["*"])],
+        )
 
         response = await ranks_ep.update_rank(
-            rank_id,
-            RankUpdate(rank_code="company_captain"),
+            request=MagicMock(client=None, headers={}),
+            rank_id=rank_id,
+            data=RankUpdate(rank_code="company_captain"),
             db=db,
             current_user=user,
         )

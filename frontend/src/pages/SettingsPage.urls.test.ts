@@ -4,7 +4,7 @@
  *
  * Asserted against the source rather than a render, matching
  * `EmailTemplatesPage.tab.test.tsx`: reaching this page's chrome needs its
- * whole organization-service, ranks-service and permission surface mocked, and
+ * whole organization-service and permission surface mocked, and
  * what these pin is two small expressions. A render test would pass against a
  * mock that happened to produce the right section.
  */
@@ -16,19 +16,27 @@ import { join } from 'node:path';
 const source = readFileSync(join(__dirname, 'SettingsPage.tsx'), 'utf8');
 
 describe('SettingsPage URL compatibility', () => {
-  // EVOC was a top-level section until this screen gained sub-pages, and the
-  // old UI put ?tab=evoc in the address bar itself — so those links are in
-  // members' bookmarks already. Without the translation they fail the section
-  // check and land on General, which reads as the settings having vanished.
-  it('translates a legacy ?tab=evoc link to the page EVOC moved to', () => {
-    expect(source).toContain("requestedTab === 'evoc' ? 'ranks' : requestedTab");
-    expect(source).toContain("requestedTab === 'evoc' ? 'evoc' : requestedPage");
+  // Three legacy spellings reach this page and none of them names a section on
+  // it any more. `?tab=ranks` is the address the ladder had until 2026-09-08;
+  // `?tab=ranks&page=evoc` named EVOC under it; and bare `?tab=evoc` is older
+  // still, from before EVOC became a sub-page — this screen had been remapping
+  // that one internally ever since, and dropping it now would strand exactly
+  // the links the remap existed to rescue.
+  it('redirects every legacy ranks address to where the ladder moved', () => {
+    const redirect = source.slice(source.indexOf('const movedToMembersAdmin'), source.indexOf('const initialTab'));
+    expect(redirect).toContain("requestedTab === 'evoc'");
+    expect(redirect).toContain("requestedTab === 'ranks'");
+    expect(redirect).toContain("membersSettingsPathFor(requestedPage === 'evoc' ? 'evoc' : 'ranks')");
   });
 
-  it('still declares evoc as a sub-page of ranks for that link to land on', () => {
+  it('no longer declares a ranks section for those links to land on', () => {
+    // The counterpart to the redirect: a section left behind here would make
+    // `?tab=ranks` pass the section check and render an empty panel instead of
+    // redirecting, which is the failure the redirect exists to prevent.
     const sections = source.slice(source.indexOf('const SECTIONS'), source.indexOf('const DEFAULT_SUB_PAGE'));
-    expect(sections).toContain("key: 'ranks'");
-    expect(sections).toContain("key: 'evoc'");
+    expect(sections).not.toContain("key: 'ranks'");
+    expect(sections).not.toContain("key: 'evoc'");
+    expect(sections).not.toContain("key: 'operational'");
   });
 });
 
@@ -44,7 +52,10 @@ describe('SettingsPage autosave reporting', () => {
     // that no longer exists is invisible — the `has()` simply never matches —
     // and this is the assertion that would notice it coming back by accident.
     expect(declared).not.toContain("'members'");
-    for (const section of ['general', 'modules', 'ranks']) {
+    // `ranks` left on 2026-09-08 for the same reason and is asserted absent for
+    // the same one.
+    expect(declared).not.toContain("'ranks'");
+    for (const section of ['general', 'modules']) {
       expect(declared).toContain(`'${section}'`);
     }
     for (const explicit of ['email', 'storage', 'labelPrinters', 'authentication']) {
