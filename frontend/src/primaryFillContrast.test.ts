@@ -114,6 +114,39 @@ const splitModifier = (raw: string): { value: string; modifier: string | undefin
  * which compiles to a `color-mix` around `var(--opacity)`. All three are
  * captured; `modifierOpacity` decides what each means.
  */
+/**
+ * A Tailwind variant prefix, as a regex fragment.
+ *
+ * A variant segment is not always `[a-z0-9-]+`: `min-[1700px]:`,
+ * `supports-[display:grid]:` and a bare arbitrary variant like `[&>*]:` are all
+ * legal, and the colon inside a bracket is not a separator. Written once
+ * because five different matchers parse a prefix, and the previous grammar
+ * silently matched the *empty* prefix in front of a bracketed one — dropping
+ * the variant rather than failing, so `min-[1700px]:bg-orange-600
+ * min-[1700px]:text-orange-950 text-white` collapsed into the base bucket and
+ * reported a correct call site at 3.60:1.
+ */
+const VARIANT_PREFIX = String.raw`(?:(?:\[[^\]\s]*\]|[a-z0-9-]+(?:\[[^\]\s]*\])?):)*`;
+
+/** A prefix's variants, splitting only on the colons outside brackets. */
+const splitVariants = (prefix: string): string[] => {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const character of prefix) {
+    if (character === '[') depth += 1;
+    else if (character === ']') depth -= 1;
+    if (character === ':' && depth === 0) {
+      if (current) parts.push(current);
+      current = '';
+      continue;
+    }
+    current += character;
+  }
+  if (current) parts.push(current);
+  return parts;
+};
+
 const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|\([^)\s]*\)|[\d.]+))?`;
 
 /**
@@ -212,7 +245,9 @@ const whiteRatioOn = (rgb: { r: number; g: number; b: number }, alpha: number): 
  * foreground can be resolved for the variant that actually paints it.
  */
 const TEXT_PATTERN =
-  String.raw`\b((?:[a-z0-9-]+:)*)text-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z0-9]+)*)` +
+  String.raw`\b(` +
+  VARIANT_PREFIX +
+  String.raw`)text-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z0-9]+)*)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])`;
 
@@ -330,13 +365,20 @@ const UTILITY_BODIES = new Map<string, string>(
  * override; appending reversed that order and answered with the foreground the
  * composition had just replaced.
  */
-const expandUtility = (name: string, seen = new Set<string>()): string => {
-  if (seen.has(name)) return '';
-  seen.add(name);
+const expandUtility = (name: string, stack = new Set<string>()): string => {
+  // A recursion *stack*, removed on unwind — not a set of everything ever
+  // visited. A global visited set treats the second, legitimate reference to a
+  // dependency as a cycle and drops it: `@apply review-white review-reset`
+  // where `review-reset` itself applies `review-white` ends white in Tailwind,
+  // and omitting the repeat left black as the apparent foreground.
+  if (stack.has(name)) return '';
+  stack.add(name);
   const body = UTILITY_BODIES.get(name) ?? '';
-  return body.replace(/(^|\s)([a-z][\w-]*)/g, (whole: string, lead: string, token: string) =>
-    UTILITY_BODIES.has(token) ? `${lead}${expandUtility(token, seen)}` : whole
+  const expanded = body.replace(/(^|\s)([a-z][\w-]*)/g, (whole: string, lead: string, token: string) =>
+    UTILITY_BODIES.has(token) ? `${lead}${expandUtility(token, stack)}` : whole
   );
+  stack.delete(name);
+  return expanded;
 };
 
 /**
@@ -356,7 +398,7 @@ const expandUtility = (name: string, seen = new Set<string>()): string => {
  * container.
  */
 const utilityTokens = (text: string, pattern: string): string =>
-  [...text.matchAll(/(?:^|\s)((?:[a-z0-9-]+:)*)([a-z][\w-]*)/g)]
+  [...text.matchAll(new RegExp(String.raw`(?:^|\s)(${VARIANT_PREFIX})([a-z][\w-]*)`, 'g'))]
     .flatMap(([, variant, token]) => {
       if (!UTILITY_BODIES.has(token ?? '')) return [];
       // The reference's own variant scopes everything the utility brings:
@@ -673,12 +715,12 @@ const whiteOn = (key: string, alpha = 1): number | null => {
  * both-orders check at every site that grows one.
  */
 const canonicalPrefix = (prefix: string): string => {
-  const variants = prefix.split(':').filter(Boolean).sort();
+  const variants = splitVariants(prefix).sort();
   return variants.length ? `${variants.join(':')}:` : '';
 };
 
 const candidatePrefixes = (prefix: string): string[] => {
-  const variants = prefix.split(':').filter(Boolean);
+  const variants = splitVariants(prefix);
   const subsets: string[][] = [[]];
   for (const variant of variants) {
     for (const subset of [...subsets]) subsets.push([...subset, variant]);
@@ -752,7 +794,7 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
   // sets here is that fix finally reaching its second copy.
   const wanted = canonicalPrefix(`dark:${matchPrefix}`);
   const overridden = [
-    ...haystack.matchAll(new RegExp(String.raw`\b((?:[a-z0-9-]+:)*)${word}-([A-Za-z0-9[\]#.,%():_/-]+)`, 'g')),
+    ...haystack.matchAll(new RegExp(String.raw`\b(${VARIANT_PREFIX})${word}-([A-Za-z0-9[\]#.,%():_/-]+)`, 'g')),
   ].some(([, variant, raw]) => canonicalPrefix(variant ?? '') === wanted && setsColour(raw ?? '', word));
   return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
 };
@@ -771,7 +813,9 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
  * value to measure and is skipped.
  */
 const FILL_PATTERN =
-  String.raw`\b((?:[a-z0-9-]+:)*)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+-\d{2,3}|white|black)` +
+  String.raw`\b(` +
+  VARIANT_PREFIX +
+  String.raw`)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+-\d{2,3}|white|black)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -784,7 +828,9 @@ const FILL_PATTERN =
  * names at build time.
  */
 const SEMANTIC_FILL_PATTERN =
-  String.raw`\b((?:[a-z0-9-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)` +
+  String.raw`\b(` +
+  VARIANT_PREFIX +
+  String.raw`)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -869,10 +915,19 @@ describe('primary fill contrast', () => {
       // (`bg-orange-600 text-orange-950 dark:bg-black dark:text-white`) was
       // reported at 3.60:1 for a pairing that never renders. Both halves of
       // such a utility are correct; only the cross-pairing is not.
-      const utilityForegrounds = new Map<string, string>();
-      for (const [, variant, colour, modifier] of body.matchAll(new RegExp(TEXT_PATTERN, 'g'))) {
+      // Applied tokens and raw declarations, interleaved **in source order**.
+      // Two separate loops lost that order and always let the raw declaration
+      // win, so `color: black; @apply bg-white text-white;` — which compiles to
+      // white on white — was recorded as black and skipped.
+      const declarations: Array<{ index: number; variant: string; token: string }> = [];
+      for (const match of body.matchAll(new RegExp(TEXT_PATTERN, 'g'))) {
+        const [, variant, colour, modifier] = match;
         if (!namesColour(colour ?? '')) continue;
-        utilityForegrounds.set(canonicalPrefix(variant ?? ''), modifier ? `${colour}/${modifier}` : (colour ?? ''));
+        declarations.push({
+          index: match.index ?? 0,
+          variant: variant ?? '',
+          token: modifier ? `${colour}/${modifier}` : (colour ?? ''),
+        });
       }
       // A raw `color:` declaration is a foreground too. `@utility` bodies mix
       // `@apply` with plain CSS — `scrollbar-thin` and `shimmer-skeleton`
@@ -880,8 +935,16 @@ describe('primary fill contrast', () => {
       // set its colour the ordinary way had no foreground at all. Wrapped in
       // brackets so it resolves through the same path as an arbitrary value,
       // and set last because a raw declaration written after an `@apply` wins.
-      for (const [, declared] of body.matchAll(/(?:^|[\s;{])color\s*:\s*([^;]+);/g)) {
-        utilityForegrounds.set('', `[${(declared ?? '').trim().replace(/\s+/g, '_')}]`);
+      for (const match of body.matchAll(/(?:^|[\s;{])color\s*:\s*([^;]+);/g)) {
+        declarations.push({
+          index: match.index ?? 0,
+          variant: '',
+          token: `[${(match[1] ?? '').trim().replace(/\s+/g, '_')}]`,
+        });
+      }
+      const utilityForegrounds = new Map<string, string>();
+      for (const { variant, token } of declarations.sort((a, b) => a.index - b.index)) {
+        utilityForegrounds.set(canonicalPrefix(variant), token);
       }
 
       // Nothing white anywhere: this utility is not what the sweep measures.
@@ -1089,34 +1152,51 @@ describe('primary fill contrast', () => {
      */
     const foregrounds = (text: string, sameList = true): Map<string, string> => {
       const found = new Map<string, string>();
-      for (const [, variant, colour, modifier] of `${utilityForegroundText(text)} ${text}`.matchAll(
-        new RegExp(TEXT_PATTERN, 'g')
-      )) {
-        if (!namesColour(colour ?? '')) continue;
-        const key = canonicalPrefix(variant ?? '');
-        const token = modifier ? `${colour}/${modifier}` : (colour ?? '');
-        // Two different colours at the same variant: source order does NOT
-        // decide the winner. Tailwind emits its utilities in the stylesheet's
-        // own order, not the order they appear in a class string, so
-        // `text-white text-black` renders white — the map's last-write-wins
-        // read it as black and skipped an invisible pairing on `bg-white`.
-        // Rather than model Tailwind's sort, take the white one when either
-        // side is white: a class string with two conflicting same-variant
-        // foregrounds is defective however it resolves, and the reading that
-        // reports it is the one worth having.
-        //
-        // Only within ONE flat class list, though — `sameList`. A branch and
-        // the static text it sits inside are not co-active in this sense: the
-        // branch's `text-theme-text-primary` deliberately overrides a
-        // `text-white` in the shared part, which is a pattern the app uses and
-        // not a conflict at all. Applying the preference there reported
-        // `FloatingActionButton` and `EmailPlatformChoice`, both correct.
-        const existing = found.get(key);
-        if (sameList && existing !== undefined && existing !== token && isWhite(splitModifier(existing).value)) {
-          continue;
+      // Which keys a *literal* token has claimed. A foreground borrowed from a
+      // shared utility is not a peer of one written at the call site: the call
+      // site is explicitly replacing it, so `btn-primary bg-white text-black`
+      // renders black on white and is correct. Treating the two as one flat
+      // list let the white-preference rule keep the borrowed white and reject
+      // a valid call site — two of my own rules colliding, each right alone.
+      const literal = new Set<string>();
+      const record = (source: string, isLiteral: boolean) => {
+        for (const [, variant, colour, modifier] of source.matchAll(new RegExp(TEXT_PATTERN, 'g'))) {
+          if (!namesColour(colour ?? '')) continue;
+          const key = canonicalPrefix(variant ?? '');
+          const token = modifier ? `${colour}/${modifier}` : (colour ?? '');
+          // Two different colours at the same variant: source order does NOT
+          // decide the winner. Tailwind emits its utilities in the stylesheet's
+          // own order, not the order they appear in a class string, so
+          // `text-white text-black` renders white — the map's last-write-wins
+          // read it as black and skipped an invisible pairing on `bg-white`.
+          // Rather than model Tailwind's sort, take the white one when either
+          // side is white: a class string with two conflicting same-variant
+          // foregrounds is defective however it resolves, and the reading that
+          // reports it is the one worth having.
+          //
+          // Only within ONE flat class list, though — `sameList`. A branch and
+          // the static text it sits inside are not co-active in this sense: the
+          // branch's `text-theme-text-primary` deliberately overrides a
+          // `text-white` in the shared part, which is a pattern the app uses and
+          // not a conflict at all. Applying the preference there reported
+          // `FloatingActionButton` and `EmailPlatformChoice`, both correct.
+          const existing = found.get(key);
+          if (
+            sameList &&
+            isLiteral &&
+            literal.has(key) &&
+            existing !== undefined &&
+            existing !== token &&
+            isWhite(splitModifier(existing).value)
+          ) {
+            continue;
+          }
+          if (isLiteral) literal.add(key);
+          found.set(key, token);
         }
-        found.set(key, token);
-      }
+      };
+      record(utilityForegroundText(text), false);
+      record(text, true);
       return found;
     };
 
