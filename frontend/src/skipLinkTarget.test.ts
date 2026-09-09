@@ -246,11 +246,26 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
     // would silently skip a one-line loading branch in a replacement shell.
     const parenthesised = /^(\s*)return \($/.exec(line);
     const direct = /^(\s*)return (<.*)$/.exec(line);
-    const opener = parenthesised ?? direct;
+    // A concise arrow body has no `return` at all: `const Page = () => <div/>`
+    // and `= () => (` are both render branches, and this repository writes
+    // them — every placeholder page in `PlaceholderPages.tsx` is one. Keying
+    // solely on the `return` keyword skipped such a component silently, which
+    // is the same defect as the unparenthesised-return gap one step further
+    // along: a formatting choice deciding what the guard looks at.
+    // …but only the component under test. An inner helper is written this way
+    // far more often than a page root is — every icon in `FileStorageChoice`
+    // and `AuthenticationChoice` is a `const Icon = () => (<svg …>)` inside the
+    // page body — and those render *inside* the page, so their roots must not
+    // carry the landmark. Indentation cannot separate the two (a helper sits at
+    // the same depth as the component's own return), but the declared name can.
+    const conciseHead = String.raw`^(\s*)(?:export\s+)?const\s+${component}\b[^=]*=\s*(?:\([^)]*\)|\w+)\s*=>\s*`;
+    const conciseParen = new RegExp(`${conciseHead}\\($`).exec(line);
+    const conciseDirect = new RegExp(`${conciseHead}(<.*)$`).exec(line);
+    const opener = parenthesised ?? direct ?? conciseParen ?? conciseDirect;
     if (!opener || (opener[1] ?? '').length > maxIndent) return;
 
     const body: string[] = [];
-    if (parenthesised) {
+    if (parenthesised ?? conciseParen) {
       // Balance the parens to take the whole returned expression.
       let depth = 0;
       for (let k = index; k < lines.length; k++) {
@@ -266,7 +281,13 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
         if ((lines[k] ?? '').trimEnd().endsWith(';')) break;
       }
     }
-    const jsx = parenthesised ? body.slice(1).join('\n') : body.join('\n').replace(/^\s*return\s+/, '');
+    // The markup comes from the opener's own capture group rather than by
+    // stripping a prefix off the joined text: `export const X: React.FC = () =>
+    // <div/>` has an `=` before the arrow, so a prefix strip either misses the
+    // arrow or eats into the JSX depending on how greedy it is. The group
+    // already knows exactly where the markup starts.
+    const jsx =
+      (parenthesised ?? conciseParen) ? body.slice(1).join('\n') : [opener[2] ?? '', ...body.slice(1)].join('\n');
 
     // Only a branch that returns markup directly. A helper returning an object
     // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
@@ -373,8 +394,14 @@ const REPLACING_SHELLS: Record<string, string> = {
 };
 
 describe('skip link target', () => {
+  // Deduplicated by file AND component, not by file alone. This repository
+  // colocates page components — `PlaceholderPages.tsx` declares several — so
+  // collapsing on the file dropped every component after the first, and a
+  // colocated page missing the landmark was never looked at. Only a component
+  // routed twice should collapse.
   const entries = publicPages().filter(
-    (entry, index, all) => all.findIndex((other) => other.file === entry.file) === index
+    (entry, index, all) =>
+      all.findIndex((other) => other.file === entry.file && other.component === entry.component) === index
   );
   const pages = entries.map((entry) => entry.file);
 

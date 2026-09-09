@@ -332,7 +332,7 @@ const readPalette = (): Record<string, { r: number; g: number; b: number }> => {
     // `white` and `black` have no shade number, and a gradient stop can name
     // either — `to-white` under `text-white` is invisible text, which is the
     // failure this file exists to catch.
-    for (const [, name, value] of css.matchAll(/--color-([a-z]+-\d{2,3}|white|black)\s*:\s*([^;]+);/g)) {
+    for (const [, name, value] of css.matchAll(/--color-([a-z]+(?:-[a-z]+)*-\d{2,3}|white|black)\s*:\s*([^;]+);/g)) {
       const raw = (value ?? '').trim();
       const oklch = /^oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)/.exec(raw);
       if (oklch) {
@@ -358,8 +358,27 @@ const PALETTE = readPalette();
  * composed utility before measuring it; the call-site pass needs the same
  * bodies to know what foreground a utility named in a `className` supplies.
  */
+/**
+ * A stylesheet with its comments blanked out, offset for offset.
+ *
+ * A comment is not a declaration: `@apply bg-white text-white; /* prefer
+ * text-black *\/` renders white on white, and reading the commented token as a
+ * later foreground let it replace the real one. Replaced with spaces rather
+ * than removed so every `match.index` still points at the same character —
+ * cascade ordering is computed from those offsets.
+ *
+ * This is the CSS half of the JSX-comment finding one round earlier. Both are
+ * the same mistake: a scanner that reads text near the right shape instead of
+ * the declarations a browser sees.
+ */
+const withoutCssComments = (css: string): string =>
+  css.replace(/\/\*[\s\S]*?\*\//g, (comment) => ' '.repeat(comment.length));
+
 const UTILITY_BODIES = new Map<string, string>(
-  [...INDEX_CSS.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].map(([, name, body]) => [name ?? '', body ?? ''])
+  [...withoutCssComments(INDEX_CSS).matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].map(([, name, body]) => [
+    name ?? '',
+    body ?? '',
+  ])
 );
 
 /**
@@ -387,20 +406,20 @@ const UTILITY_BODIES = new Map<string, string>(
  * kept out of the base bucket rather than silently replacing it.
  */
 const rawVariant = (body: string, index: number): string => {
-  let depth = 0;
-  let selector = '';
+  // A stack, not a single selector: `&:hover { … &:focus { … } }` scopes the
+  // inner declaration to *both*, and recording only the outermost filed a
+  // focus-only value under `hover:` where it replaced the hover foreground.
+  const open: string[] = [];
   for (let i = 0; i < index; i += 1) {
-    if (body[i] === '{') {
-      depth += 1;
-      if (depth === 1) selector = body.slice(0, i).split(/[;}]/).pop()?.trim() ?? '';
-    } else if (body[i] === '}') {
-      depth -= 1;
-      if (depth === 0) selector = '';
-    }
+    if (body[i] === '{') open.push(body.slice(0, i).split(/[;}{]/).pop()?.trim() ?? '');
+    else if (body[i] === '}') open.pop();
   }
-  if (depth === 0) return '';
-  const state = /^&:([a-z-]+)$/.exec(selector);
-  return state?.[1] ? `${state[1]}:` : 'nested:';
+  return open
+    .map((selector) => {
+      const state = /^&:([a-z-]+)$/.exec(selector);
+      return state?.[1] ? `${state[1]}:` : 'nested:';
+    })
+    .join('');
 };
 
 const expandUtility = (name: string, stack = new Set<string>()): string => {
@@ -906,7 +925,7 @@ const themesFor = (haystack: string, matchPrefix: string, word: string): string[
 const FILL_PATTERN =
   String.raw`\b(` +
   VARIANT_PREFIX +
-  String.raw`)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+-\d{2,3}|white|black)` +
+  String.raw`)(bg|from|via|to)-(\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z]+)*-\d{2,3}|white|black)` +
   OPACITY_MODIFIER +
   String.raw`(?![\w-])(?!/)`;
 
@@ -1010,11 +1029,17 @@ describe('primary fill contrast', () => {
       // Two separate loops lost that order and always let the raw declaration
       // win, so `color: black; @apply bg-white text-white;` — which compiles to
       // white on white — was recorded as black and skipped.
-      const declarations: Array<{ index: number; variant: string; token: string }> = [];
+      // Importance ranks above position for a FOREGROUND exactly as it does
+      // for a fill — `color: white !important` survives a later
+      // `@apply text-black`. The fill path was given this one round earlier and
+      // the foreground path was not: the first axis of the checklist, missed
+      // again, in the round that added the rule.
+      const declarations: Array<{ index: number; variant: string; token: string; important: boolean }> = [];
       for (const match of body.matchAll(new RegExp(TEXT_PATTERN, 'g'))) {
         const [, variant, colour, modifier] = match;
         if (!namesColour(colour ?? '')) continue;
         declarations.push({
+          important: false,
           // The enclosing selector scopes an applied token exactly as it scopes
           // a raw declaration — `&:hover { @apply text-black; }` is a hover
           // foreground, and filing it at the base variant overwrote the base
@@ -1036,12 +1061,20 @@ describe('primary fill contrast', () => {
         declarations.push({
           index: match.index ?? 0,
           variant: rawVariant(body, match.index ?? 0),
-          token: `[${(match[1] ?? '').trim().replace(/\s+/g, '_')}]`,
+          important: /!\s*important\s*$/.test(match[1] ?? ''),
+          token: `[${(match[1] ?? '')
+            .replace(/!\s*important\s*$/, '')
+            .trim()
+            .replace(/\s+/g, '_')}]`,
         });
       }
       const utilityForegrounds = new Map<string, string>();
-      for (const { variant, token } of declarations.sort((a, b) => a.index - b.index)) {
-        utilityForegrounds.set(canonicalPrefix(variant), token);
+      const foregroundImportant = new Set<string>();
+      for (const { variant, token, important } of declarations.sort((a, b) => a.index - b.index)) {
+        const key = canonicalPrefix(variant);
+        if (foregroundImportant.has(key) && !important) continue;
+        if (important) foregroundImportant.add(key);
+        utilityForegrounds.set(key, token);
       }
 
       // Nothing white anywhere: this utility is not what the sweep measures.
@@ -1077,7 +1110,7 @@ describe('primary fill contrast', () => {
       // compete. Same ordering rule the foreground path got one round earlier,
       // arriving on the fill side a round late.
       const fillSlot = (variant: string, prefix: string) =>
-        `${canonicalPrefix(variant)}|${prefix === 'background' || prefix === 'background-color' ? 'bg' : prefix}`;
+        `${canonicalPrefix(variant)}|${prefix.startsWith('background') ? 'bg' : prefix}`;
       // The winning declaration per slot, by importance first and position
       // second. `!important` is used 38 times in this stylesheet, so position
       // alone is not the rule: `background-color: white !important` survives a
@@ -1100,14 +1133,16 @@ describe('primary fill contrast', () => {
       ]) {
         claim(fillSlot(scopedVariant(match.index ?? 0, match[1] ?? ''), match[2] ?? ''), match.index ?? 0, false);
       }
-      for (const match of body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g)) {
+      for (const match of body.matchAll(/(?:^|[\s;{])(background-color|background-image|background)\s*:\s*([^;]+);/g)) {
         const scope = rawVariant(body, match.index ?? 0);
         const important = /!\s*important\s*$/.test(match[2] ?? '');
         claim(fillSlot(scope, 'bg'), match.index ?? 0, important);
         // `background` is a shorthand: it resets `background-image` too, so it
         // supersedes any gradient stops declared before it. `background-color`
         // does not, which is why the two cannot share one rule.
-        if (match[1] === 'background') {
+        // `background` and `background-image` both replace the image layer,
+        // so both supersede earlier gradient stops; `background-color` does not.
+        if (match[1] === 'background' || match[1] === 'background-image') {
           for (const stop of ['from', 'via', 'to']) claim(fillSlot(scope, stop), match.index ?? 0, important);
         }
       }
@@ -1200,34 +1235,32 @@ describe('primary fill contrast', () => {
       // The same for a raw `background` / `background-color`: it paints the
       // fill this label crosses, and the token scan above cannot see it.
 
-      const rawFills = [...body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g)].flatMap(
-        (match) => {
-          const [, property, declared] = match;
-          const scope = rawVariant(body, match.index ?? 0);
-          if (!winsAt(fillSlot(scope, 'bg'), match.index ?? 0)) return [];
-          const value = (declared ?? '')
-            .replace(/!\s*important\s*$/, '')
-            .trim()
-            .replace(/\s+/g, '_');
-          return THEME_TOKENS.flatMap(({ theme }) => {
-            const label = whiteLabel(themeForeground(scope, theme));
-            if (label.kind === 'other') return [];
-            if (label.kind === 'unresolvable') {
-              return [`${name}: the white label over ${property} has an opacity this sweep cannot resolve`];
-            }
-            const fill = resolveFill(`[${value}]`);
-            if (fill.kind !== 'colour') {
-              return [`${name}: ${property}: ${declared?.trim()} is a background this sweep cannot resolve`];
-            }
-            const ratio = whiteRatioOn(fill.rgb, label.alpha);
-            return ratio >= 7
-              ? []
-              : [
-                  `${name}: white on ${property}: ${declared?.trim()} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`,
-                ];
-          });
-        }
-      );
+      const rawFills = [
+        ...body.matchAll(/(?:^|[\s;{])(background-color|background-image|background)\s*:\s*([^;]+);/g),
+      ].flatMap((match) => {
+        const [, property, declared] = match;
+        const scope = rawVariant(body, match.index ?? 0);
+        if (!winsAt(fillSlot(scope, 'bg'), match.index ?? 0)) return [];
+        const value = (declared ?? '')
+          .replace(/!\s*important\s*$/, '')
+          .trim()
+          .replace(/\s+/g, '_');
+        return THEME_TOKENS.flatMap(({ theme }) => {
+          const label = whiteLabel(themeForeground(scope, theme));
+          if (label.kind === 'other') return [];
+          if (label.kind === 'unresolvable') {
+            return [`${name}: the white label over ${property} has an opacity this sweep cannot resolve`];
+          }
+          const fill = resolveFill(`[${value}]`);
+          if (fill.kind !== 'colour') {
+            return [`${name}: ${property}: ${declared?.trim()} is a background this sweep cannot resolve`];
+          }
+          const ratio = whiteRatioOn(fill.rgb, label.alpha);
+          return ratio >= 7
+            ? []
+            : [`${name}: white on ${property}: ${declared?.trim()} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
+        });
+      });
 
       return [...palette, ...semantic, ...rawFills];
     });
@@ -1636,7 +1669,7 @@ describe('primary fill contrast', () => {
         // whatever the passes below can measure, so it is kept deliberately
         // looser than they are rather than mirroring their patterns.
         if (
-          !/\b(?:bg|from|via|to)-(?:\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)/.test(
+          !/\b(?:bg|from|via|to)-(?:\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+(?:-[a-z]+)*-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)/.test(
             value
           )
         )
