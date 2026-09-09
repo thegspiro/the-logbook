@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderWithRouter } from '../../../../test/utils';
 
 const mockGetSettings = vi.fn();
@@ -63,6 +63,10 @@ describe('MembersSettingsPage', () => {
     mockGetRanks.mockResolvedValue([]);
     mockValidateRanks.mockResolvedValue({ issues: [], total: 0 });
     granted.current = ['members.manage', 'settings.manage', 'settings.edit'];
+    // BrowserRouter drives the real history, and a redirect assertion below
+    // reads it — so each test starts from a known address rather than wherever
+    // the previous one navigated to.
+    window.history.replaceState({}, '', '/members/admin/settings');
   });
 
   it('shows the section an officer holds the endpoint’s grant for', async () => {
@@ -76,14 +80,16 @@ describe('MembersSettingsPage', () => {
   // ladder, whose endpoints were widened to accept it when the ladder moved
   // here. Contact visibility and membership IDs still want a settings grant,
   // and EVOC wants the apparatus one.
-  it('gives a roster officer the ladder and none of the settings sections', async () => {
+  it('sends a roster officer to the one section their grant opens', async () => {
     granted.current = ['members.manage'];
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByText(/Customize rank\/position choices/)).toBeInTheDocument();
+    // Redirected, not rendered in place: the address has to name what is shown,
+    // or the breadcrumb and the URL describe a section the officer is not
+    // looking at.
+    await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ranks'));
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
-    expect(screen.queryByText('Membership ID Number')).not.toBeInTheDocument();
     expect(screen.queryByText(/does not hold that grant/)).not.toBeInTheDocument();
   });
 
@@ -95,7 +101,10 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="evoc" />);
 
-    expect(await screen.findByText(/Customize rank\/position choices/)).toBeInTheDocument();
+    // The hub links every section unconditionally, so this is the click a
+    // roster officer actually makes. Landing on Ranks while the URL still said
+    // evoc was the defect.
+    await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ranks'));
     expect(screen.queryByText('Driver certification ladder and certifying programs.')).not.toBeInTheDocument();
   });
 
@@ -116,7 +125,7 @@ describe('MembersSettingsPage', () => {
 
     renderWithRouter(<MembersSettingsPage section="visibility" />);
 
-    expect(await screen.findByText('Membership ID Number')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe('/members/admin/settings/ids'));
     expect(screen.queryByText('Contact Information Visibility')).not.toBeInTheDocument();
   });
 

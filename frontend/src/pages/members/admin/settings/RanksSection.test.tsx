@@ -7,18 +7,25 @@
  * still held one. Same family as the five other absent-answers-shown-as-
  * confident-ones fixed across this work, and the reason it is tested here
  * rather than assumed from the shape of the code.
+ *
+ * The malformed-response half of that bug is asserted in `ranksService.test.ts`
+ * instead, and has to be: it is `asArray` inside the service that turns a
+ * proxy error page into an empty ladder, so a check in this component would sit
+ * above the swallow and never fire. Mocking the service here mocks out the very
+ * layer that carries the fault.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const getRanks = vi.fn();
+const getRankLadder = vi.fn();
 const validateRanks = vi.fn();
 
 vi.mock('../../../../services/api', () => ({
   ranksService: {
-    getRanks: (...args: unknown[]) => getRanks(...args) as unknown,
+    getRanks: vi.fn(),
+    getRankLadder: (...args: unknown[]) => getRankLadder(...args) as unknown,
     validateRanks: (...args: unknown[]) => validateRanks(...args) as unknown,
     createRank: vi.fn(),
     updateRank: vi.fn(),
@@ -38,7 +45,7 @@ describe('RanksSection', () => {
   });
 
   it('says the ladder could not be loaded rather than showing an empty one', async () => {
-    getRanks.mockRejectedValue(new Error('network'));
+    getRankLadder.mockRejectedValue(new Error('network'));
 
     render(<RanksSection />);
 
@@ -52,7 +59,7 @@ describe('RanksSection', () => {
     // before Retry is ever clicked, so that form of the test passes against the
     // reverted fix. This one fails against it.
     let reachable = false;
-    getRanks.mockImplementation(() =>
+    getRankLadder.mockImplementation(() =>
       reachable
         ? Promise.resolve([
             {
@@ -77,21 +84,8 @@ describe('RanksSection', () => {
     expect(await screen.findByText('Probationary')).toBeInTheDocument();
   });
 
-  it('reports a failure rather than crashing when the response is not a list', async () => {
-    // Found by the mobile ratchet the moment this route was measured: the e2e
-    // catch-all fulfils an unmocked path with `{}`, the section mapped over it,
-    // and the ErrorBoundary took the whole page. A gateway page or a changed
-    // response shape does the same thing in production — and resolves rather
-    // than throws, so the catch below it never saw them.
-    getRanks.mockResolvedValue({ detail: 'Not Found' });
-
-    render(<RanksSection />);
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('The rank ladder could not be loaded.');
-  });
-
   it('renders the ladder without an alert when the load succeeds', async () => {
-    getRanks.mockResolvedValue([
+    getRankLadder.mockResolvedValue([
       {
         id: 'r1',
         rank_code: 'captain',
@@ -112,7 +106,7 @@ describe('RanksSection', () => {
     // Validation reports members whose rank matches no rung. Its failure must
     // not take the ladder down with it — and an absent warning is not a claim
     // that nothing is wrong.
-    getRanks.mockResolvedValue([
+    getRankLadder.mockResolvedValue([
       {
         id: 'r1',
         rank_code: 'captain',

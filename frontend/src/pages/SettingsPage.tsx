@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Navigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { membersSettingsPathFor } from './members/admin/settings/membersSettingsSections';
 import {
   Building2,
@@ -307,6 +307,36 @@ const COMMON_TIMEZONES = [
 ];
 
 // ── Main component ──
+
+/**
+ * Where the roster settings went.
+ *
+ * The sections that left this screen are still gated on grants this screen's
+ * own holders have — the rank ladder accepts `settings.manage`, contact
+ * visibility and membership IDs want settings grants outright — but their new
+ * home is under `/members/admin`, whose hub and its links require
+ * `members.manage`. An officer holding the settings grants and not that one
+ * therefore kept the permission and lost every way of reaching it: the `?tab=`
+ * redirects rescue an old bookmark, and nothing rescues someone simply looking
+ * for the page.
+ *
+ * Rendered below the active section rather than as a section of its own, so it
+ * is a signpost on the way past rather than a stop.
+ */
+const MovedToMembersAdmin: React.FC = () => (
+  <div className="border-theme-surface-border mt-10 border-t pt-6">
+    <p className="text-theme-text-muted text-sm">
+      Contact visibility, membership IDs, operational ranks and EVOC levels moved to{' '}
+      <Link
+        to={membersSettingsPathFor('ranks')}
+        className="text-theme-accent-blue mobile-touch-target inline-flex font-medium hover:underline"
+      >
+        Members Administration &rarr; Settings
+      </Link>
+      . They are decisions about the roster rather than platform configuration.
+    </p>
+  </div>
+);
 
 export const SettingsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1107,11 +1137,12 @@ export const SettingsPage: React.FC = () => {
         headerAside={
           <HelpLink
             topic="settings"
-            tooltip="Configure your department's name, logo, timezone, modules, member settings, and rank structure from this page."
+            tooltip="Configure your department's name, logo, timezone and modules from this page. Member settings and the rank ladder moved to Members Administration."
           />
         }
       >
         {renderContent()}
+        <MovedToMembersAdmin />
       </SettingsLayout>
     </div>
   );

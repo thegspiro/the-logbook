@@ -62,13 +62,12 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Operational Ranks</h3>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Customize rank/position choices for your department. Higher ranks should appear first.
-          </p>
-        </div>
+      {/* Title and description come from the page's SettingsPanelHead, which
+          renders them as the <h2> every settings section uses. This carried its
+          own <h3> while the global settings page mounted it bare; keeping both
+          showed the heading twice, and keeping only the <h3> left it with no
+          <h2> above it — a heading-order jump the accessibility pass counts. */}
+      <div className="flex items-center justify-end">
         {!addingRank && !editingRank && (
           <button
             type="button"

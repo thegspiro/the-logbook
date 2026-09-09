@@ -18,7 +18,7 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router';
+import { Navigate, useNavigate } from 'react-router';
 import { SettingsLayout } from '../../../../components/settings/SettingsLayout';
 import { useAuthStore } from '../../../../stores/authStore';
 import { useSettingsAutosave } from '../../../../hooks/useSettingsAutosave';
@@ -60,7 +60,18 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
   // the honest destination, and when they can open none the layout below says so
   // rather than showing an empty nav.
   const openable = sections.some((entry) => entry.key === section);
-  const visibleSection = openable ? section : sections[0]?.key;
+  const fallback = sections[0]?.key;
+
+  // Redirected rather than rendered in place. Falling back silently left the
+  // address bar and the breadcrumb naming EVOC while Operational Ranks was on
+  // screen — and the hub lists every section unconditionally, so clicking "EVOC
+  // Levels" without the apparatus grant landed exactly there. The URL has to
+  // name what is being shown.
+  if (openable === false && fallback) {
+    return <Navigate to={membersSettingsPathFor(fallback)} replace />;
+  }
+
+  const visibleSection = openable ? section : fallback;
 
   if (!visibleSection) {
     return (

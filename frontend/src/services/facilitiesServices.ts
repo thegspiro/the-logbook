@@ -1131,6 +1131,29 @@ export const ranksService = {
     return asArray(response.data);
   },
 
+  /**
+   * The ladder as the screen that *edits* it must see it: a malformed response
+   * throws rather than becoming an empty list.
+   *
+   * `getRanks` above routes through `asArray` on purpose — a captive portal or
+   * proxy error page answers 200 with an HTML body, and every surface that only
+   * *displays* ranks (a dropdown, a filter, the elections roster) is better off
+   * rendering nothing than dying through the ErrorBoundary.
+   *
+   * The administration screen is the one place that inverts. There, an empty
+   * list is not a degraded view — it is a claim about the database, rendered as
+   * "no ranks configured", to an officer who can act on it. `asArray` erases
+   * exactly the distinction that screen exists to show, so it reads the
+   * response itself and lets the failure stay a failure.
+   */
+  async getRankLadder(): Promise<OperationalRankResponse[]> {
+    const response = await api.get<OperationalRankResponse[]>('/operational-ranks');
+    if (!Array.isArray(response.data)) {
+      throw new TypeError('The rank list response was not an array');
+    }
+    return response.data;
+  },
+
   async getRank(rankId: string): Promise<OperationalRankResponse> {
     const response = await api.get<OperationalRankResponse>(`/operational-ranks/${rankId}`);
     return response.data;

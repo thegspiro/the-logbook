@@ -85,6 +85,145 @@ class TestLadderGates:
                 _gate_permissions(handler)
 
 
+class TestLadderOrdering:
+    """Ordering is an access-control axis, so it did not move with the page.
+
+    ``OperationalRank.sort_order`` is read by the inventory rule as a predicate:
+    a member whose rank sits at or above an item's ``min_rank_order`` may see it.
+    Left writable by members.manage, a roster officer could create a rung at
+    order 0, assign it to themselves through the profile endpoint that grant
+    already opens -- the rank ceiling permits it, because a custom code carries
+    no default permissions -- and clear every restriction in the catalogue
+    without touching a single permission.
+    """
+
+    async def test_reorder_is_refused_without_the_ordering_grant(self):
+        with pytest.raises(HTTPException) as exc:
+            await operational_ranks.reorder_ranks(
+                data=SimpleNamespace(ranks=[]),
+                db=MagicMock(),
+                current_user=_caller(["members.manage"]),
+            )
+
+        assert exc.value.status_code == 403
+        assert "restricted inventory" in exc.value.detail
+
+    async def test_reorder_is_allowed_with_it(self):
+        with patch.object(
+            operational_ranks.OperationalRankService,
+            "reorder_ranks",
+            new=AsyncMock(return_value=[]),
+        ) as reordered:
+            result = await operational_ranks.reorder_ranks(
+                data=SimpleNamespace(ranks=[]),
+                db=MagicMock(),
+                current_user=_caller(["settings.manage"]),
+            )
+
+        assert result == []
+        reordered.assert_awaited_once()
+
+    async def test_moving_an_existing_rank_is_refused_without_it(self):
+        with pytest.raises(HTTPException) as exc:
+            await operational_ranks.update_rank(
+                request=MagicMock(client=None, headers={}),
+                rank_id=uuid4(),
+                data=SimpleNamespace(model_dump=lambda **_: {"sort_order": 0}),
+                db=MagicMock(),
+                current_user=_caller(["members.manage"]),
+            )
+
+        assert exc.value.status_code == 403
+
+    async def test_a_new_rung_lands_at_the_end_rather_than_where_it_asked(self):
+        # Appended rather than refused: the UI already asks for the end, so a
+        # roster officer sees no difference, and a request that asked for the
+        # top is answered with a rung at the bottom instead of a 403 for a field
+        # they never chose.
+        caller = _caller(["members.manage"])
+        created = AsyncMock(
+            return_value=SimpleNamespace(
+                id="00000000-0000-0000-0000-000000000001",
+                organization_id="00000000-0000-0000-0000-000000000002",
+                rank_code="probationary",
+                display_name="Probationary",
+                description=None,
+                sort_order=3,
+                is_active=True,
+                eligible_positions=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        payload = SimpleNamespace(
+            rank_code="probationary",
+            sort_order=0,
+            model_copy=lambda update: SimpleNamespace(
+                rank_code="probationary", **update
+            ),
+        )
+
+        with patch.object(
+            operational_ranks.OperationalRankService,
+            "list_ranks",
+            new=AsyncMock(return_value=[object(), object(), object()]),
+        ):
+            with patch.object(
+                operational_ranks.OperationalRankService, "create_rank", new=created
+            ):
+                with patch(
+                    "app.api.v1.endpoints.users.report_privilege_escalation_attempt",
+                    new=AsyncMock(),
+                ):
+                    await operational_ranks.create_rank(
+                        request=MagicMock(client=None, headers={}),
+                        data=payload,
+                        db=MagicMock(),
+                        current_user=caller,
+                    )
+
+        # Three ranks already exist, so the new one is the fourth -- not the 0
+        # the request asked for.
+        assert created.await_args.kwargs["data"].sort_order == 3
+
+    async def test_the_requested_order_is_honoured_with_the_grant(self):
+        # Wildcard so the rank ceiling is not what this measures: `captain`
+        # carries default permissions a bare settings.manage holder lacks, and
+        # the subject here is the ordering carve-out.
+        caller = _caller(["*"])
+        created = AsyncMock(
+            return_value=SimpleNamespace(
+                id="00000000-0000-0000-0000-000000000001",
+                organization_id="00000000-0000-0000-0000-000000000002",
+                rank_code="captain",
+                display_name="Captain",
+                description=None,
+                sort_order=0,
+                is_active=True,
+                eligible_positions=[],
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        payload = SimpleNamespace(rank_code="captain", sort_order=0)
+
+        with patch.object(
+            operational_ranks.OperationalRankService, "create_rank", new=created
+        ):
+            with patch(
+                "app.api.v1.endpoints.users.report_privilege_escalation_attempt",
+                new=AsyncMock(),
+            ):
+                await operational_ranks.create_rank(
+                    request=MagicMock(client=None, headers={}),
+                    data=payload,
+                    db=MagicMock(),
+                    current_user=caller,
+                )
+
+        assert created.await_args.kwargs["data"] is payload
+
+
 class TestRenameCeiling:
     """A rename is checked at both ends, because it can strip as well as grant."""
 

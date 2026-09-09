@@ -12,6 +12,7 @@
 
 import React from 'react';
 import { Navigate, useSearchParams } from 'react-router';
+import { useAuthStore } from '../../../../stores/authStore';
 import { MEMBERS_SETTINGS_SECTIONS, membersSettingsPathFor, type MembersSettingsTab } from './membersSettingsSections';
 
 const isTab = (value: string | null): value is MembersSettingsTab =>
@@ -19,12 +20,24 @@ const isTab = (value: string | null): value is MembersSettingsTab =>
 
 const MembersSettingsRedirect: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const checkPermission = useAuthStore((state) => state.checkPermission);
   const tab = searchParams.get('tab');
 
-  // An unknown or absent section lands on Contact Visibility rather than
-  // nowhere, so a link written against a section that no longer exists still
-  // arrives at the settings screen.
-  return <Navigate to={membersSettingsPathFor(isTab(tab) ? tab : 'visibility')} replace />;
+  // The default has to be a section this officer can actually open, not simply
+  // the first one declared. The bare path admits anyone who can open *any*
+  // section, so sending an officer holding only `settings.edit` to Contact
+  // Visibility — which wants a settings-manage grant — answered a route that
+  // admitted them with an Access Denied one navigation later.
+  const firstOpenable = MEMBERS_SETTINGS_SECTIONS.find((section) =>
+    section.permissions.some((permission) => checkPermission(permission))
+  )?.key;
+
+  // A named section is honoured even when this officer cannot open it: the page
+  // itself redirects on to one they can, and it is the page that knows. Falling
+  // back here as well would silently rewrite a good link.
+  const destination = isTab(tab) ? tab : (firstOpenable ?? 'visibility');
+
+  return <Navigate to={membersSettingsPathFor(destination)} replace />;
 };
 
 export default MembersSettingsRedirect;
