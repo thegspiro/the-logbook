@@ -16,6 +16,30 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 15 (Scheduling, pass 4)** — PR
+[#2435](https://github.com/thegspiro/the-logbook/pull/2435), branch
+`claude/security-review-scheduling`. **0 fixed, 0 flagged, 0 new
+findings** — SCH-10 (the DNS-rebinding TOCTOU, cross-cutting) re-verified
+unchanged and still correctly tracked in `docs/KNOWN_LIMITATIONS.md`. Six
+days of `main` since pass 3's actual landing point (`8b89f319d`, PR #2212's
+merge commit — found via `git merge-base`, not assumed from the doc's prose)
+brought a large new department-editable call-types feature, a close-out
+backlog queue, a member's own hours-history screen, a late-signup escape
+hatch, and a self-scoped decline-assignment endpoint — 101/101 routes
+(97+3+1, up from 96 pre-pass) re-enumerated with a recognized auth
+dependency, every new by-id/FK surface org-scoped, every new JSON/SQL surface
+clean against the checklist. Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 4. Rotation row 15 → ✅.
+Next: 16 Events & requests.
+
+Full completion gate green: `flake8`/`black`/`isort` clean, migrations
+single-head (440 revisions), 1247 scoped + 11967 full backend tests passed,
+`npm run typecheck`/`eslint .` both 0 errors, 672 scheduling frontend tests
+passed.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2432's merge, confirming the rotation clear for Feature 15), preserved for history</summary>
+
 **None.** PR #2432 (Feature 14 follow-up, EC-15 fix) merged clean at
 11:33:04 — merge commit `ab73a97`, the cherry-picked round-3 fix landed as
 intended. Confirmed directly: `origin/main` now has
@@ -12216,7 +12240,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -12243,6 +12267,90 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 15 (Scheduling, pass 4) — 0 fixed, 0 flagged, 0 new findings
+
+**Step 0:** checked GitHub directly (`list_pull_requests`, state=open) —
+zero open PRs against the repo — and cross-checked `git ls-remote --heads`
+for any `security-review/*`/`claude/security-review-*` branch naming
+scheduling: none. Matches this file's own "Open PR: None" note recorded by
+the prior pass, so no PR to tend; proceeded straight to Feature 15.
+
+**Baseline:** pass 3's actual landing commit is `8b89f319d` (the merge of PR
+#2212), found via `git merge-base --is-ancestor` against pass 3's own tip
+commit rather than assumed from the doc's `299a163a^` reference (that was
+pass 3's own diff-scope starting point, one further step back). Six days and
+substantial feature work sit between it and this pass's HEAD (`fda025c8`):
+a large department-editable call-types feature (three new migrations, its
+own multi-round internal Codex review per commit messages), a close-out
+backlog queue, a member's own hours-history screen, a per-shift late-signup
+escape hatch (server-clock-bounded, capped at 720 minutes), and a
+self-scoped decline-assignment endpoint.
+
+**Diff-scoped against that baseline**, not re-read whole (pass 3's own
+precedent once a baseline is reachable — the shallow clone needed
+deepening to reach it, as in every prior pass that hit this). Real churn:
+`scheduling.py` (+503/-20, 5 new routes: `GET /shifts/needing-closeout`,
+`POST`/`DELETE /shifts/{id}/late-signup`, `POST
+/assignments/{id}/decline`, `GET /my-hours-history`), `scheduling_service.py`
+(+1083/-47), `schemas/scheduling.py` (+152/-4), `models/training.py`
+(+10, one nullable column), `calcom_service.py` (+30/-9, webhook-payload
+parsing only, no outbound-request change). Route/permission table
+re-enumerated from scratch: 101/101 routes (97+3+1) carry a recognized auth
+dependency. Nine existing `.view`-only reads were widened to `.view` OR
+`.manage` (each with an in-code comment naming why: `.manage` does not
+imply `.view`, and every Scheduling Administration page is gated on
+`.manage` alone) — strictly widening, verified not an XC-2 regression since
+`.manage` already gated every corresponding write. One OR-gate was narrowed
+(`get_position_roster` dropped `training.view_all`/`training.manage`,
+correctly, per its own comment) — the safe direction, re-verified rather
+than flagged.
+
+**New attack surface checked individually, all clean:** `open_late_signup`/
+`close_late_signup` resolve their shift through the same org-scoped,
+row-locked `get_shift_by_id` helper every other mutation uses, with the
+reopening window both schema-bounded (≤720 min) and clamped against the
+shift's own roster deadline server-side; `decline_assignment` resolves its
+row by id **and** user_id **and** organization_id in one WHERE, matching
+`confirm_assignment`'s existing shape; `get_my_hours_history` is
+self-scoped on both the caller's own id and their org. Also read in full,
+reached from `scheduling.py`'s settings endpoints but not previously in
+this doc's scope: `models/call_tracking.py` + `services/
+call_tracking_service.py` (the new call-types feature) — every query
+org-scoped, the one `.like()` call uses `like_pattern()`/
+`LIKE_ESCAPE_CHAR` (Pitfall #25), a client-supplied `call_id` is
+org-validated before an attach (XC-1), a `with_for_update()` lock guards a
+count-then-write race citing AP-13's precedent (Pitfall #27), and all three
+new migrations guard `create_all`-only-adjacent tables, use parameterized
+SQL throughout, and correctly declare themselves irreversible where
+warranted. One migration (`add_shift_late_signup_until`) touches `shifts`
+with no explicit existence guard — looked at first read like a Pitfall #26
+gap, but verified (by running the repo's own
+`test_migration_create_all_tables.py` detection logic directly against the
+source, not by trusting pass 3's prose) that `shifts` is unconditionally
+created by an early migration and is not actually create_all-only; no fix
+needed. 79 frontend files grep-swept for the checklist's red flags
+(`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, raw `fetch()`) — zero hits, partial-scope
+disclosed rather than assumed clean.
+
+**SCH-10** (the DNS-rebinding TOCTOU, cross-cutting, previously flagged) —
+re-verified unchanged: neither `assert_outbound_url_safe` call site in
+`calcom_service.py` was touched this pass, and `docs/KNOWN_LIMITATIONS.md`'s
+entry already correctly lists it among the six remaining sites. Not
+re-fixed here, same reasoning as every prior pass: closing it is a
+cross-cutting change spanning every `create_integration_client()`-based
+transport, not a scheduling-scoped one.
+
+Full completion gate green: `flake8`/`black`/`isort` on `app/ tests/
+alembic/` all clean; `validate_migrations.py --strict` single head (440
+revisions); scoped pytest (`-k "scheduling or shift or swap or calcom or
+position_slots or call_tracking or call_type"`) 1247 passed; full backend
+suite 11967 passed, 21 pre-existing skips; `npm run typecheck` (aliased TS7
+compiler per CLAUDE.md) 0 errors; `npx eslint .` 0 errors; scheduling
+frontend vitest 672 passed (42 files, not mandatory, run anyway per pass
+3's precedent). Full write-up: `docs/security-review/SCH-15-scheduling.md`
+→ Pass 4. Rotation row 15 → ✅. Next: 16 Events & requests.
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
 
