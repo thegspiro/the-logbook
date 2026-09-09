@@ -16,13 +16,56 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 14 follow-up (EC-15 fix)** — PR
+[#2432](https://github.com/thegspiro/the-logbook/pull/2432), branch
+`security-review/equipment-check-shifts-ec15-fix-2026-09-09`. PR #2430
+(Feature 14, Equipment check & shifts, pass 4) merged at 10:45:53 — but
+the merge landed on head `db6af476f` (round 2's commit), **before**
+round 3's fix (`0b466619c`, EC-15 — the actual code fix for the two
+`eslint` warnings round 2's own completion gate had wrongly dismissed) was
+pushed at 10:52:37. Confirmed directly rather than assumed: `origin/main`
+after the merge still had `orgCallTypeChoices`/`textCallTypeChoices`
+inside `CallTypeChips.tsx` and no `callTypeChoices.ts` file — EC-15's fix
+never reached `main`. Not a reason to reopen #2430 (closed pull requests
+stay closed) or to push to its now-merged branch (CLAUDE.md Pitfall #24) —
+carried forward instead on a fresh branch (checked via `git ls-remote`
+against every equipment/EC-14 branch first; only the merged one existed),
+via `git cherry-pick` of the exact commit that never landed. Rotation row
+14 → ✅ regardless — the feature's own review is complete and the "no
+findings" conclusion for the feature holds; EC-15 is a follow-up
+code-health fix, not a reason to hold the rotation open. Full completion
+gate re-run and confirmed green on the fresh branch before pushing.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2430's merge, recorded via docs-only PR #2431, before EC-15's merge-race was discovered), preserved for history</summary>
+
+**None.** PR #2430 (Feature 14, Equipment check & shifts, pass 4) merged
+clean — 17/17 CI checks green, `mergeable_state: clean`, final Codex review
+(commit `db6af47`) completed with no further findings. Merged via merge
+commit `89c399c` (this one landed as a regular merge rather than the usual
+squash, in a same-day auto-merge; content is identical either way and no
+history was rewritten). The pass's own conclusion was "0 fixed, 0 flagged"
+after two rounds of Codex-caught diff-scope corrections (five gaps in round
+1, two more in round 2 — see the Log entry and
+`EC-14-equipment-check-shifts.md` for the full correction history).
+Rotation row 14 → ✅. Next: 15 Scheduling.
+
+**Correction:** written before EC-15's merge-race was discovered — #2430
+actually merged one commit before round 3's EC-15 fix landed, so the
+pass's true conclusion is "1 fixed (EC-15), 0 flagged", not "0 fixed, 0
+flagged" as stated above. See the current Open PR note at the top of this
+section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged), preserved for history</summary>
+
 **Feature 14 (Equipment check & shifts, pass 4)** — PR
 [#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
 ls-remote` checked against every equipment/EC-14 branch in this repo's
-history before creating it, per CLAUDE.md Pitfall #24; none existed). 0
-fixed, 0 flagged, after **two** rounds of Codex-caught diff-scope
-corrections. Round 1 (5 gaps): two routes omitted from the 57→50
+history before creating it, per CLAUDE.md Pitfall #24; none existed). 1
+fixed (EC-15, LOW — a code-health lint fix, see round 3), 0 flagged, after
+**three** rounds of Codex-caught gaps. Round 1 (5 gaps): two routes omitted from the 57→50
 route-count correction itself (`list_templates`/`get_template`, both
 `check_view`-or-`check_submit`-or-`check_manage`); a second migration
 touching `shift_completion_reports`
@@ -53,8 +96,23 @@ own configured slugs or values already on the report being edited, and the
 backend's own validation is what actually enforces the invariant regardless
 of what the UI sends; the two additional cache entries are each already
 disposed of by their own owning rotation entries. No finding either way.
+**Round 3 (1 gap, on round 2's own review): the completion gate's "2
+pre-existing, unrelated" ESLint warnings on `CallTypeChips.tsx` were wrong
+on both counts** — never actually inspected as part of this feature until
+round 2's frontend-half review, and CLAUDE.md owns a discovered warning
+the moment it's found, "unrelated" not being a sanctioned response.
+**Fixed as EC-15 (LOW):** split the file's two non-component exports
+(`orgCallTypeChoices`/`textCallTypeChoices`/`CallTypeChoice`) into a new
+sibling module, `callTypeChoices.ts`, so `react-refresh/only-export-
+components` has nothing left to flag; updated both consumers. `npx eslint
+.` now 0 warnings repository-wide; `npm run typecheck` still 0 errors;
+226 vitest tests passed across the four files this pass touched or reviewed.
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
+
+</details>
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13 closed, merge recorded via PR #2429), preserved for history</summary>
@@ -12131,7 +12189,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -12160,7 +12218,23 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, corrected across two Codex review rounds
+### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
+
+**Merge-race note (30-minute rotation watchdog):** PR #2430 was merged at
+10:45:53 as fully green (17/17 CI checks, `mergeable_state: clean`, Codex
+review of commit `db6af47` — round 2's fix — completed with no further
+findings), so it was merged directly rather than left waiting. That merge
+landed one commit behind round 3's own fix (`0b466619c`, EC-15, pushed at
+10:52:37) — the watchdog check that triggered the merge ran against round
+2's head and had no way to see the round-3 push that followed it. It
+landed as a regular merge commit (`89c399c`) rather than the rotation's
+usual squash — the four pass commits are preserved individually on `main`
+rather than collapsed into one; no content difference, no history
+rewritten. EC-15 was carried forward on a fresh branch via `git
+cherry-pick` — see the Addendum below and PR #2432. Rotation row 14 → ✅
+either way: the feature's own review is complete and the corrected
+conclusion (1 fixed, 0 flagged) holds regardless of which commit the merge
+landed on. Next: 15 Scheduling.
 
 Diffed against pass 3's baseline (`b267ee1ca`): of the six declared backend
 files, only `shift_completion_service.py` changed (+50/-8), and that change
@@ -12226,16 +12300,43 @@ dispositioned in round 1's write-up, just not counted in the running total.
 No finding either way — both gaps were about completeness of the record,
 not a live issue.
 
+**Round 3 (Codex review of round 2's own fix): 1 more gap, and this one was
+a real fix, not just a record correction.** Round 2's completion gate
+recorded `eslint`'s two warnings on `CallTypeChips.tsx`
+(`react-refresh/only-export-components`) as "pre-existing, unrelated" —
+wrong on both counts. The file didn't exist before this pass's own
+subject commit (`360306d42`), so it had never actually been inspected as
+part of this feature until round 2's frontend-half review; and CLAUDE.md's
+"fix or escalate, never dismiss" rule owns a discovered warning the moment
+it's found, regardless of whose commit introduced it. **Fixed as EC-15
+(LOW):** the file exported two non-component builders
+(`orgCallTypeChoices`/`textCallTypeChoices`) and their shared type
+alongside the `CallTypeChips` component; moved them into a new sibling
+module, `callTypeChoices.ts`, and updated its two consumers
+(`CallTypeChips.test.tsx`, `ShiftReportsTab.tsx`). `npx eslint .` now 0
+warnings repository-wide; `npm run typecheck` still 0 errors.
+
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
 
 Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
 440 revisions, single head; scoped suite 397 passed / 1 pre-existing skip;
 full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `npm run
-typecheck` 0 errors; `eslint .` 0 errors (2 pre-existing, unrelated
-warnings); `vitest run apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx
-CallTypeChips.test.tsx` 195 passed. Rotation row 14 → ⏳ (awaiting PR
-merge). Next after merge: 15 Scheduling.
+typecheck` 0 errors; `eslint .` 0 errors, 0 warnings; `vitest run
+apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx CallTypeChips.test.tsx
+ShiftDetailPanel.test.tsx` 226 passed.
+
+**Addendum: PR #2430 merged mid-review, on a head one commit behind this
+entry.** The repo owner merged #2430 at 10:45:53, on head `db6af476f`
+(round 2's commit) — before round 3's fix (`0b466619c`, EC-15) was pushed
+at 10:52:37. Confirmed directly: `origin/main` post-merge still has the two
+`eslint` warnings this entry says were fixed. EC-15 was carried forward on
+a fresh branch per CLAUDE.md Pitfall #24 via `git cherry-pick` of the exact
+commit that missed the merge — PR
+[#2432](https://github.com/thegspiro/the-logbook/pull/2432). Rotation row
+14 → ✅ regardless; the feature's own review is complete and this is a
+follow-up code-health fix, not grounds to hold the rotation open. Next:
+15 Scheduling.
 
 ### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)
 
