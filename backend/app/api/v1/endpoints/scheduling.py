@@ -3626,7 +3626,20 @@ async def _reject_deleting_a_used_call_type(
     would drop it without this guard ever seeing it go.
     """
     eligibility = ShiftEligibilityService(db)
-    org = await eligibility._get_org(organization_id)
+    # Locked before anything below is derived from it — not merely before
+    # the usage check. Every value this guard decides with (`in_force`,
+    # `persisted`, `removed`, and the cap comparison) reads `org.settings`,
+    # so a lock taken only later (as an earlier revision of this guard did)
+    # protects the usage check but not these: two admins saving different
+    # call-type lists concurrently could each derive `persisted` from a
+    # pre-lock read of the *other* count, satisfy the cap ratchet against a
+    # stale ceiling, and between them grow the department's stored list past
+    # what either save alone would have allowed (Codex review). Refreshing
+    # `org` alone (`populate_existing`, see `_get_org`) cannot fix this by
+    # itself — it refreshes the ORM object, not values already computed from
+    # an earlier, unrefreshed read of it — so the lock has to come before
+    # those values are computed, not merely before the row is next read.
+    org = await eligibility._get_org(organization_id, for_update=True)
     if org is None:
         return
     in_force = eligibility.effective_call_type_slugs(org)
@@ -3658,7 +3671,21 @@ async def _reject_deleting_a_used_call_type(
 
     service = CallTrackingService(db)
 
-    locked = await service.slugs_locked_by_history(organization_id, removed)
+    # The organization row is already locked (above); this is the
+    # locking-read half of the same protocol (Pitfall #27) applied to
+    # `org_calls`/`shift_completion_reports` usage. The corresponding write
+    # path (`CallTrackingService.record_shift_calls`, when a close-out names
+    # a type) takes the same organization lock before validating against
+    # settings, so the two requests serialize on it instead of each
+    # deciding from a stale read of the other's in-flight change. A plain
+    # read here would let a concurrently-committing close-out's new call go
+    # unseen even after the organization lock is held, under this
+    # transaction's own REPEATABLE READ snapshot — the same "the row is
+    # locked and the count is stale anyway" trap FORM-10 closed for
+    # form-submission de-duplication.
+    locked = await service.slugs_locked_by_history(
+        organization_id, removed, for_update=True
+    )
     blocked = sorted(removed & locked)
     if blocked:
         raise ValueError(
