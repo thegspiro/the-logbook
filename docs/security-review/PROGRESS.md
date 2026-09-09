@@ -16,6 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2430 (Feature 14, Equipment check & shifts, pass 4) merged
+clean — 17/17 CI checks green, `mergeable_state: clean`, final Codex review
+(commit `db6af47`) completed with no further findings. Merged via merge
+commit `89c399c` (this one landed as a regular merge rather than the usual
+squash, in a same-day auto-merge; content is identical either way and no
+history was rewritten). The pass's own conclusion was "0 fixed, 0 flagged"
+after two rounds of Codex-caught diff-scope corrections (five gaps in round
+1, two more in round 2 — see the Log entry and
+`EC-14-equipment-check-shifts.md` for the full correction history).
+Rotation row 14 → ✅. Next: 15 Scheduling.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged), preserved for history</summary>
+
 **Feature 14 (Equipment check & shifts, pass 4)** — PR
 [#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
@@ -55,6 +69,8 @@ of what the UI sends; the two additional cache entries are each already
 disposed of by their own owning rotation entries. No finding either way.
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13 closed, merge recorded via PR #2429), preserved for history</summary>
@@ -12131,7 +12147,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -12159,6 +12175,22 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4)'s PR #2430 merged
+
+30-minute rotation watchdog check: PR #2430 was fully green (17/17 CI
+checks), `mergeable_state: clean`, and the final Codex review (of commit
+`db6af47`, the round-2 fix) had completed with no further findings and no
+open review threads — idle and ready, so merged directly rather than left
+waiting. It landed as a regular merge commit (`89c399c`) rather than the
+rotation's usual squash — the four pass commits (draft, round-1 fix,
+round-2 fix, and the docs-record commit opening the PR) are preserved
+individually on `main` instead of collapsed into one; no content
+difference, no history rewritten. Feature 14's own conclusion stands as
+recorded in the pass's Log entry directly below: 0 fixed, 0 flagged, after
+Codex caught five diff-scope gaps in round 1 and two more in round 2 — all
+verified and corrected, the "no findings" conclusion held once the diff
+was actually complete. Rotation row 14 → ✅. Next: 15 Scheduling.
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 0 fixed, 0 flagged, corrected across two Codex review rounds
 
