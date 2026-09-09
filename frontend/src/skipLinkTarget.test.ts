@@ -165,6 +165,22 @@ const publicPages = (): Array<{ file: string; component: string }> => {
   });
 };
 
+/**
+ * Shells outside the public page set that provide the target themselves.
+ *
+ * What they have in common is that each *replaces* whatever else would hold the
+ * landmark, so exactly one `#main-content` is ever in the DOM while they render
+ * — which is precisely what the two wrappers in `PRE_LAYOUT_WRAPPERS` below
+ * cannot promise. Membership here is a requirement, not a permission: the test
+ * that follows asserts each of these really does carry the target, so a file
+ * cannot be parked in this list to silence the inverse sweep.
+ */
+const REPLACING_SHELLS: Record<string, string> = {
+  'components/layout/AppLayout.tsx': 'the shell every route behind sign-in renders through',
+  'components/ErrorBoundary.tsx':
+    'the top-level fallback — an error boundary unmounts the tree it caught, AppLayout included',
+};
+
 describe('skip link target', () => {
   const entries = publicPages().filter(
     (entry, index, all) => all.findIndex((other) => other.file === entry.file) === index
@@ -292,7 +308,7 @@ describe('skip link target', () => {
      * public page is missing the target — never whether a protected one has
      * acquired it.
      */
-    const owners = new Set([...pages, 'components/layout/AppLayout.tsx']);
+    const owners = new Set([...pages, ...Object.keys(REPLACING_SHELLS)]);
 
     /**
      * Wrappers that render *before* `AppLayout` — and sometimes inside it.
@@ -350,6 +366,31 @@ describe('skip link target', () => {
       'these files render inside AppLayout, which already provides ' +
         '<main id="main-content">; a second one duplicates the id and makes the skip ' +
         'link target ambiguous'
+    ).toEqual([]);
+  });
+
+  it('is provided by every shell that replaces the tree holding it', () => {
+    /**
+     * The other half of `REPLACING_SHELLS`: being listed there exempts a file
+     * from the inverse sweep, so the list has to cost something. Without this,
+     * the way to silence a duplicate-id failure would be to add the file to the
+     * exemption — which is the failure mode this whole series has been about,
+     * a check that can be satisfied without the thing it checks for being true.
+     *
+     * `ErrorBoundary` is here because its fallback is a full-screen page of
+     * reload and navigation controls that the skip link should reach. It can
+     * hold the landmark where a Suspense fallback cannot: an error boundary
+     * unmounts the subtree it caught, so `AppLayout`'s main is gone rather than
+     * hidden.
+     */
+    const missing = Object.entries(REPLACING_SHELLS)
+      .filter(([file]) => !read(file).includes('id="main-content"'))
+      .map(([file, why]) => `${file} (${why})`);
+
+    expect(
+      missing,
+      'these shells replace whatever else would hold the landmark, so each must ' +
+        'render <main id="main-content"> itself'
     ).toEqual([]);
   });
 });

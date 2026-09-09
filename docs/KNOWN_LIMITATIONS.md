@@ -3687,7 +3687,7 @@ concurrent catalogue edit, the impact is one hidden row in a search the officer
 can re-run, and the search box narrows results directly. This does not affect
 what is delivered or recorded — only which matches a picker lists.
 
-## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08)
+## The Skip Link Dangles in Two Pre-Layout Loading States (2026-09-08, narrowed 2026-09-09)
 
 `index.html` opens with `<a href="#main-content">`, and every page that owns its
 own shell provides that target — `skipLinkTarget.test.ts` checks all of them,
@@ -3705,6 +3705,15 @@ grants-fundraising and training route to `lazyWithRetry` pages with no inner
 `AppLayout` already mounted. Every other module wraps its lazy pages in
 `<Suspense fallback={null}>`, which keeps the suspension local.
 
+**A third pre-layout state was found and fixed rather than accepted**, and the
+difference is the whole rule here. The top-level `ErrorBoundary` also renders
+outside the layout, but an error boundary **unmounts** the tree it caught —
+`AppLayout`'s main is gone, not hidden — so exactly one `#main-content` is ever
+present and its fallback can own the target. It now does. The two states above
+are the ones that cannot, not the only ones that lacked a target; a new
+full-screen state should be checked against that test (does it replace, or does
+it coexist?) rather than assumed to belong on this list.
+
 **What a fix would take.** Either give those three modules the inner
 `<Suspense>` the other twenty-seven already have — which would make the global
 fallback unreachable while `AppLayout` is mounted, and only then is putting the
@@ -3714,13 +3723,24 @@ swap looks like (a quiet in-layout replace instead of a whole-app spinner); the
 second changes a shared contract that `index.html`, `AppLayout` and three e2e
 specs all read. Both are their own change set.
 
-**Why it is accepted for now.** Both states are transient and unfocusable in
-practice — the link is only revealed on focus, and a user tabbing during a
-sub-second chunk load lands on the fallback's own `role="status"` text either
-way. Neither state has interactive content to skip past, which is what SC 2.4.1
-exists to protect. `skipLinkTarget.test.ts` names both files and explains the
-constraint in its failure message, so the next person to try the obvious fix is
-told why it is not one rather than discovering the duplicate id in review.
+**Why it is accepted for now.** Neither state has interactive content to skip
+past, which is what SC 2.4.1 exists to protect: both render a spinner and a
+status line and nothing else, so there is no block of navigation between the
+user and the content. Both are also transient, and the link is only revealed on
+focus.
+
+Be precise about what happens if someone does activate it, because an earlier
+draft of this entry was not: **focus stays on the skip link.** The `role="status"`
+text is a live region, not a focus target — it is a `<p>` with no `tabIndex`, so
+it is not in the tab order and the user does not "land" on it. Nothing is thrown
+and nothing moves; the link is inert. That is the cost being accepted, and it is
+smaller than the alternative only because these two screens have nowhere to skip
+_to_. If either ever grows real controls, this stops being acceptable and the
+fix below has to be done.
+
+`skipLinkTarget.test.ts` names both files and explains the constraint in its
+failure message, so the next person to try the obvious fix is told why it is not
+one rather than discovering the duplicate id in review.
 
 ## Process
 

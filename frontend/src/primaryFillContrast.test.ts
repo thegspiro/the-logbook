@@ -34,8 +34,13 @@ import { hexToRgb, relativeLuminance, contrastRatio } from './utils/colorContras
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
-/** An opaque `bg-red-600`. The `/`-suffixed tints are deliberately excluded. */
-const OPAQUE_RED_600 = /\bbg-red-600\b(?!\/)/;
+/**
+ * An opaque `bg-red-600`. The `/`-suffixed tints are deliberately excluded —
+ * except `/100`, which Tailwind emits as the same fully opaque colour as the
+ * bare utility, so excluding it let the banned fill through with four
+ * characters appended.
+ */
+const OPAQUE_RED_600 = /\bbg-red-600(?:\/100)?\b(?!\/)/;
 
 /** sRGB channel from a linear-light one, per the sRGB transfer function. */
 const gammaEncode = (channel: number): number => {
@@ -336,7 +341,12 @@ describe('primary fill contrast', () => {
     // "background gradient") and the `bg-` sweep never looked at it, so this
     // whole class of control was unmeasured on both sides. Every stop is
     // checked, because the worst stop is what the label crosses.
-    const fillPattern = String.raw`\b((?:[a-z-]+:)*)(?:bg|from|via|to)-([a-z]+)-(\d{2,3})\b(?!/)`;
+    //
+    // `/100` is accepted here for the same reason as in the semantic loop
+    // below: Tailwind emits it as the fully opaque colour, so rejecting every
+    // opacity modifier let the identical broken pairing through with two
+    // characters appended. A translucent stop has no single value and stays out.
+    const fillPattern = String.raw`\b((?:[a-z-]+:)*)(?:bg|from|via|to)-([a-z]+)-(\d{2,3})(?:\/100)?\b(?!/)`;
     const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
 
     /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
@@ -430,10 +440,32 @@ describe('primary fill contrast', () => {
       // left it measured by nothing at all — the same gap that hid the flat
       // semantic fills, reopened one prefix over. The app already writes 57 of
       // these stops.
+      //
+      // `/100` is accepted, every other opacity modifier still rejected.
+      // Tailwind emits `from-…/100` as the same fully opaque colour as the
+      // bare utility, so excluding it let an author write the identical broken
+      // pairing with two characters appended. A genuinely translucent stop has
+      // no single value to measure and stays out.
+      //
+      // A stop's own variant decides which themes it renders in. `dark:` is the
+      // app's only theme variant (`@custom-variant dark (&:is(.dark *))`), and
+      // high-contrast carries the `.dark` class too, so a `dark:` fill is
+      // painted in those two and never in light. Measuring it against the light
+      // value reports a failure for a colour that theme never shows — which
+      // would block the adaptive gradients this sweep exists to encourage.
+      const themesFor = (matchPrefix: string, word: string): string[] => {
+        if (/(^|:)dark:/.test(matchPrefix)) return ['dark', 'high-contrast'];
+        // The mirror case: an unprefixed stop that a `dark:` sibling overrides
+        // in the same segment renders only in light.
+        const overridden = new RegExp(String.raw`\bdark:${word}-theme-`).test(segment);
+        return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
+      };
+
       for (const [, variant, fill, token] of segment.matchAll(
-        /\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)\b(?![/-])/g
+        /\b((?:[a-z-]+:)*)(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?![/-])/g
       )) {
         const prefix = variant ?? '';
+        const themes = themesFor(prefix, fill ?? '');
         const perTheme = semanticFill(token ?? '');
         if (perTheme.size === 0) {
           // Only report a token nothing renders if something did pair a
@@ -449,6 +481,7 @@ describe('primary fill contrast', () => {
         }
 
         for (const [theme, value] of perTheme) {
+          if (!themes.includes(theme)) continue;
           // The foreground this theme actually paints: the `dark:`-prefixed one
           // where the theme has that class, falling back to the unprefixed.
           const themePrefix = THEME_VARIANT[theme] ?? '';
@@ -579,7 +612,23 @@ describe('primary fill contrast', () => {
       const values = classNameValues(source);
       const covered = values.map(({ value, end }) => ({ start: end - value.length, end }));
       for (const { value, line } of standaloneLiterals(source, covered)) {
-        inspect(file, line, value, new Map());
+        // Split a template's conditional branches, exactly as the className
+        // path below does. A hoisted `${cond ? 'fill-a text-white' : 'fill-b
+        // text-dark'}` is one literal to the scanner, and reading it whole lets
+        // the *second* branch's foreground answer for the first — the same
+        // ternary false-positive this file already guards against inside
+        // `className`, arriving through the door that was opened when the
+        // prefilter started admitting hoisted gradients.
+        const staticText = value.replace(/'[^']*'|"[^"]*"/g, ' ').replace(/\$\{[^}]*\}/gs, ' ');
+        const context = foregrounds(staticText);
+        inspect(file, line, staticText, new Map());
+        let branches = 0;
+        for (const [, single, double] of value.matchAll(/'([^']*)'|"([^"]*)"/g)) {
+          branches++;
+          inspect(file, line, single ?? double ?? '', context);
+        }
+        // A plain literal has no branches; it *is* its own segment.
+        if (branches === 0) inspect(file, line, value, new Map());
       }
       for (const { value, line } of values) {
         // Static text outside any quoted branch is the shared context: a

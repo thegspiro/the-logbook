@@ -133,8 +133,19 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override render(): ReactNode {
     if (this.state.hasError) {
+      // This fallback owns `#main-content`, unlike the app's other pre-layout
+      // states. An error boundary *replaces* the tree it caught — `AppLayout`
+      // and its landmark are unmounted, not hidden — so there is exactly one
+      // main here, and the skip link would otherwise point at nothing on a
+      // screen whose entire purpose is the reload and navigation controls
+      // below. (A Suspense fallback cannot do this: React keeps the children
+      // it stands in for in the DOM at `display: none`, so the id would
+      // resolve to a hidden element. See docs/KNOWN_LIMITATIONS.md.)
       return (
-        <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+        <main
+          id="main-content"
+          className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
+        >
           <div className="card w-full max-w-2xl p-8">
             <div className="text-center">
               {/* Error Icon */}
@@ -223,7 +234,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
           </div>
-        </div>
+        </main>
       );
     }
 
