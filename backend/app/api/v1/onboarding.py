@@ -849,6 +849,22 @@ async def _persist_session_data_to_org(
             except Exception as e:
                 logger.warning(f"Could not create IT team user accounts: {e}")
 
+        # `create_it_team_users` numbers each contact through
+        # `generate_next_membership_id`, which advances the counter on the live
+        # organization row -- while `org_settings` above is a snapshot taken
+        # before it ran. Reassigning that snapshot at the end of this function
+        # would roll the counter back to the value from before those contacts
+        # were numbered, so the Membership ID screen would report a number
+        # already on a badge and the next generator call would have to
+        # rediscover the occupied ones.
+        #
+        # Read back unconditionally and after the try/except: the counter
+        # advances per contact, so a failure part-way through still leaves it
+        # ahead of the snapshot.
+        live_membership_id = (organization.settings or {}).get("membership_id")
+        if live_membership_id is not None:
+            org_settings["membership_id"] = copy.deepcopy(live_membership_id)
+
     # Persist email configuration
     email_data = session_data.get("email")
     if email_data and email_data.get("config_encrypted"):

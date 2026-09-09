@@ -14,6 +14,7 @@ creates are numbered from it.
 """
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -236,3 +237,55 @@ class TestSetupsOwnAccountsAreNumbered:
             await OrganizationService(db_session).generate_next_membership_id(org.id)
             == "FD-0003"
         )
+
+
+class TestCompletionKeepsTheCounter:
+    """Completion must not roll the counter back over its own IT contacts.
+
+    ``_persist_session_data_to_org`` deep-copies ``organization.settings``,
+    edits the copy, and assigns it back at the end. ``create_it_team_users``
+    runs in between and advances ``membership_id.next_number`` on the live row,
+    so the final assignment reinstated the value from before those contacts
+    were numbered: the Membership ID screen reported a number already on a
+    badge, and the next generator call had to rediscover the occupied ones.
+    """
+
+    async def test_the_counter_survives_completion(self, db_session: AsyncSession):
+        from app.api.v1 import onboarding as onboarding_api
+
+        service, org = await _org(
+            db_session,
+            {
+                "enabled": True,
+                "auto_generate": True,
+                "prefix": "FD-",
+                "next_number": 1,
+            },
+        )
+        await _owner(service, str(org.id))
+
+        session = SimpleNamespace(
+            data={"it_team": {"members": [_contact(), _contact()], "backup_access": {}}}
+        )
+        await onboarding_api._persist_session_data_to_org(session, db_session)
+
+        await db_session.refresh(org)
+        assert org.settings["membership_id"]["next_number"] == 4
+        assert org.settings["it_team"]["members"]
+
+    async def test_completion_leaves_an_unnumbered_department_alone(
+        self, db_session: AsyncSession
+    ):
+        # No membership_id block at all: reading one back must not invent one.
+        from app.api.v1 import onboarding as onboarding_api
+
+        service, org = await _org(db_session)
+        await _owner(service, str(org.id))
+
+        session = SimpleNamespace(
+            data={"it_team": {"members": [_contact()], "backup_access": {}}}
+        )
+        await onboarding_api._persist_session_data_to_org(session, db_session)
+
+        await db_session.refresh(org)
+        assert "membership_id" not in org.settings
