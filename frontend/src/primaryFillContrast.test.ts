@@ -365,6 +365,33 @@ const UTILITY_BODIES = new Map<string, string>(
  * override; appending reversed that order and answered with the foreground the
  * composition had just replaced.
  */
+/**
+ * The variant a raw declaration sits under, from the nested selector around it.
+ *
+ * `@utility x { @apply text-white; &:hover { color: black; } }` is white before
+ * hover, and filing that `color: black` at the base variant let it overwrite
+ * the `text-white` — so the utility appeared to have no white foreground at all
+ * and was skipped whole. A nested block gets its own scope: `&:hover` becomes
+ * `hover:`, and a selector this cannot name becomes `nested:` so it is at least
+ * kept out of the base bucket rather than silently replacing it.
+ */
+const rawVariant = (body: string, index: number): string => {
+  let depth = 0;
+  let selector = '';
+  for (let i = 0; i < index; i += 1) {
+    if (body[i] === '{') {
+      depth += 1;
+      if (depth === 1) selector = body.slice(0, i).split(/[;}]/).pop()?.trim() ?? '';
+    } else if (body[i] === '}') {
+      depth -= 1;
+      if (depth === 0) selector = '';
+    }
+  }
+  if (depth === 0) return '';
+  const state = /^&:([a-z-]+)$/.exec(selector);
+  return state?.[1] ? `${state[1]}:` : 'nested:';
+};
+
 const expandUtility = (name: string, stack = new Set<string>()): string => {
   // A recursion *stack*, removed on unwind — not a set of everything ever
   // visited. A global visited set treats the second, legitimate reference to a
@@ -374,8 +401,21 @@ const expandUtility = (name: string, stack = new Set<string>()): string => {
   if (stack.has(name)) return '';
   stack.add(name);
   const body = UTILITY_BODIES.get(name) ?? '';
-  const expanded = body.replace(/(^|\s)([a-z][\w-]*)/g, (whole: string, lead: string, token: string) =>
-    UTILITY_BODIES.has(token) ? `${lead}${expandUtility(token, stack)}` : whole
+  // The same variant-aware reference the call-site matcher reads: one utility
+  // can compose another behind a variant (`@apply hover:btn-primary`), and the
+  // prefix scopes everything the dependency brings, exactly as it does at a
+  // call site. Matching only an unprefixed name left `hover:btn-primary`
+  // untouched, so the sweep saw no white label at all.
+  const expanded = body.replace(
+    new RegExp(String.raw`(^|\s)(${VARIANT_PREFIX})([a-z][\w-]*)`, 'g'),
+    (whole: string, lead: string, variant: string, token: string) =>
+      UTILITY_BODIES.has(token)
+        ? `${lead}${expandUtility(token, stack)
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((part) => `${variant}${part}`)
+            .join(' ')}`
+        : whole
   );
   stack.delete(name);
   return expanded;
@@ -556,7 +596,11 @@ const cssColour = (text: string): { r: number; g: number; b: number } | null => 
   const value = text.trim().replace(/_/g, ' ');
 
   const hex = hexToRgb(value);
-  if (hex) return hex;
+  // `hexToRgb('#ggg')` returns an object of NaN channels rather than null, and
+  // NaN propagates all the way to a NaN ratio — which fails `< 4.5` and passed
+  // silently. A parser that returns a shape rather than a value has to be
+  // checked for the value.
+  if (hex && Number.isFinite(hex.r) && Number.isFinite(hex.g) && Number.isFinite(hex.b)) return hex;
 
   // A CSS colour keyword. Tailwind's own theme defines `white` and `black`, so
   // they are read from the installed palette rather than hard-coded; any other
@@ -938,7 +982,7 @@ describe('primary fill contrast', () => {
       for (const match of body.matchAll(/(?:^|[\s;{])color\s*:\s*([^;]+);/g)) {
         declarations.push({
           index: match.index ?? 0,
-          variant: '',
+          variant: rawVariant(body, match.index ?? 0),
           token: `[${(match[1] ?? '').trim().replace(/\s+/g, '_')}]`,
         });
       }
@@ -974,6 +1018,30 @@ describe('primary fill contrast', () => {
       const themeForeground = (variant: string, theme: string): string | undefined =>
         coveringForeground(`${/(^|:)dark:/.test(variant) ? '' : (THEME_VARIANT[theme] ?? '')}${variant}`);
 
+      // Which fill declarations actually survive, per slot. A raw `background`
+      // and an applied `bg-*` set the same property, so the later one wins —
+      // `background-color: white; @apply bg-black;` paints black, and measuring
+      // both reported the superseded white three times against valid code. The
+      // gradient stops are separate slots because they coexist rather than
+      // compete. Same ordering rule the foreground path got one round earlier,
+      // arriving on the fill side a round late.
+      const fillSlot = (variant: string, prefix: string) =>
+        `${canonicalPrefix(variant)}|${prefix === 'background' || prefix === 'background-color' ? 'bg' : prefix}`;
+      const lastFillAt = new Map<string, number>();
+      for (const match of [
+        ...body.matchAll(new RegExp(FILL_PATTERN, 'g')),
+        ...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g')),
+        ...body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g),
+      ]) {
+        const isRaw = match[1] === 'background' || match[1] === 'background-color';
+        const slot = isRaw
+          ? fillSlot(rawVariant(body, match.index ?? 0), 'bg')
+          : fillSlot(match[1] ?? '', match[2] ?? '');
+        const at = match.index ?? 0;
+        if ((lastFillAt.get(slot) ?? -1) < at) lastFillAt.set(slot, at);
+      }
+      const winsAt = (slot: string, index: number) => lastFillAt.get(slot) === index;
+
       // All four fill prefixes, and arbitrary values and keyword colours
       // alongside numbered shades. A gradient defined in a shared utility never
       // writes its stops at the TSX call site, so the call-site sweep cannot
@@ -985,84 +1053,88 @@ describe('primary fill contrast', () => {
       // over it does, so the pairing is still asked per theme: a body writing
       // `bg-slate-600 text-slate-100 dark:text-white` is white-on-slate-600
       // (4.40:1) in dark only, and resolving the foreground once missed it.
-      const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap(
-        ([, variant, prefix, key, modifier]) => {
-          const opacity = fillOpacity(modifier);
-          if (opacity === 'translucent') return [];
-          if (opacity === 'unresolvable') {
-            return [`${name}: ${prefix}-${key} has an opacity this sweep cannot resolve`];
-          }
-          const themes = themesFor(body, variant ?? '', prefix ?? '');
-          // The lowest white alpha any theme paints over this fill: a
-          // translucent label is composited over it rather than assumed solid.
-          const labels = themes.map((theme) => whiteLabel(themeForeground(variant ?? '', theme)));
-          if (labels.some((label) => label.kind === 'unresolvable')) {
-            return [`${name}: the white label over ${prefix}-${key} has an opacity this sweep cannot resolve`];
-          }
-          const alphas = labels.flatMap((label) => (label.kind === 'white' ? [label.alpha] : []));
-          if (alphas.length === 0) return [];
-          const alpha = Math.min(...alphas);
-          const fill = resolveFill(key ?? '');
-          // Not every token in the `bg-` namespace paints a colour;
-          // `bg-[length:200px_100px]` compiles to background-size.
-          if (fill.kind === 'not-a-colour') return [];
-          const ratio = whiteOn(key ?? '', alpha);
-          if (ratio === null) {
-            return [
-              `${name}: ${prefix}-${key} ${
-                (key ?? '').startsWith('[') || (key ?? '').startsWith('(')
-                  ? 'is an arbitrary value this sweep cannot resolve to a colour'
-                  : 'is not in the installed Tailwind palette'
-              }`,
-            ];
-          }
-          return ratio >= 7
-            ? []
-            : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
+      const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap((match) => {
+        const [, variant, prefix, key, modifier] = match;
+        if (!winsAt(fillSlot(variant ?? '', prefix ?? ''), match.index ?? 0)) return [];
+        const opacity = fillOpacity(modifier);
+        if (opacity === 'translucent') return [];
+        if (opacity === 'unresolvable') {
+          return [`${name}: ${prefix}-${key} has an opacity this sweep cannot resolve`];
         }
-      );
+        const themes = themesFor(body, variant ?? '', prefix ?? '');
+        // The lowest white alpha any theme paints over this fill: a
+        // translucent label is composited over it rather than assumed solid.
+        const labels = themes.map((theme) => whiteLabel(themeForeground(variant ?? '', theme)));
+        if (labels.some((label) => label.kind === 'unresolvable')) {
+          return [`${name}: the white label over ${prefix}-${key} has an opacity this sweep cannot resolve`];
+        }
+        const alphas = labels.flatMap((label) => (label.kind === 'white' ? [label.alpha] : []));
+        if (alphas.length === 0) return [];
+        const alpha = Math.min(...alphas);
+        const fill = resolveFill(key ?? '');
+        // Not every token in the `bg-` namespace paints a colour;
+        // `bg-[length:200px_100px]` compiles to background-size.
+        if (fill.kind === 'not-a-colour') return [];
+        const ratio = whiteOn(key ?? '', alpha);
+        if (ratio === null) {
+          return [
+            `${name}: ${prefix}-${key} ${
+              (key ?? '').startsWith('[') || (key ?? '').startsWith('(')
+                ? 'is an arbitrary value this sweep cannot resolve to a colour'
+                : 'is not in the installed Tailwind palette'
+            }`,
+          ];
+        }
+        return ratio >= 7
+          ? []
+          : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
+      });
 
       // Semantic fills and stops, resolved per theme exactly as the call-site
       // sweep does. `--text-muted` is `#ffffff` in dark, so a utility built on
       // it under `text-white` is invisible there — and invisible to every other
       // guard too, since the stops never reach a TSX file.
-      const semantic = [...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))].flatMap(
-        ([, variant, prefix, token, modifier]) => {
-          const opacity = fillOpacity(modifier);
-          if (opacity === 'translucent') return [];
-          if (opacity === 'unresolvable') {
-            return [`${name}: ${prefix}-${token} has an opacity this sweep cannot resolve`];
-          }
-          const themes = themesFor(body, variant ?? '', prefix ?? '');
-          return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
-            if (!themes.includes(theme)) return [];
-            const label = whiteLabel(themeForeground(variant ?? '', theme));
-            if (label.kind === 'other') return [];
-            if (label.kind === 'unresolvable') {
-              return [`${name}: the white label over ${prefix}-${token} has an opacity this sweep cannot resolve`];
-            }
-            const alpha = label.alpha;
-            const rgb = hexToRgb(value);
-            if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
-            const ratio = whiteRatioOn(rgb, alpha);
-            // The same 7:1 AAA floor the numeric branch above applies. This
-            // test's contract is that a *shared* utility clears AAA; 4.5:1 is
-            // the call-site floor, and using it here let a semantic shared
-            // fill regress to merely AA beside a numeric one that could not.
-            return ratio >= 7
-              ? []
-              : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`];
-          });
+      const semantic = [...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))].flatMap((match) => {
+        const [, variant, prefix, token, modifier] = match;
+        if (!winsAt(fillSlot(variant ?? '', prefix ?? ''), match.index ?? 0)) return [];
+        const opacity = fillOpacity(modifier);
+        if (opacity === 'translucent') return [];
+        if (opacity === 'unresolvable') {
+          return [`${name}: ${prefix}-${token} has an opacity this sweep cannot resolve`];
         }
-      );
+        const themes = themesFor(body, variant ?? '', prefix ?? '');
+        return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
+          if (!themes.includes(theme)) return [];
+          const label = whiteLabel(themeForeground(variant ?? '', theme));
+          if (label.kind === 'other') return [];
+          if (label.kind === 'unresolvable') {
+            return [`${name}: the white label over ${prefix}-${token} has an opacity this sweep cannot resolve`];
+          }
+          const alpha = label.alpha;
+          const rgb = hexToRgb(value);
+          if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
+          const ratio = whiteRatioOn(rgb, alpha);
+          // The same 7:1 AAA floor the numeric branch above applies. This
+          // test's contract is that a *shared* utility clears AAA; 4.5:1 is
+          // the call-site floor, and using it here let a semantic shared
+          // fill regress to merely AA beside a numeric one that could not.
+          return ratio >= 7
+            ? []
+            : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}, below the 7:1 AAA floor`];
+        });
+      });
 
       // The same for a raw `background` / `background-color`: it paints the
       // fill this label crosses, and the token scan above cannot see it.
+
       const rawFills = [...body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g)].flatMap(
-        ([, property, declared]) => {
+        (match) => {
+          const [, property, declared] = match;
+          const scope = rawVariant(body, match.index ?? 0);
+          if (!winsAt(fillSlot(scope, 'bg'), match.index ?? 0)) return [];
           const value = (declared ?? '').trim().replace(/\s+/g, '_');
           return THEME_TOKENS.flatMap(({ theme }) => {
-            const label = whiteLabel(themeForeground('', theme));
+            const label = whiteLabel(themeForeground(scope, theme));
             if (label.kind === 'other') return [];
             if (label.kind === 'unresolvable') {
               return [`${name}: the white label over ${property} has an opacity this sweep cannot resolve`];
@@ -1218,8 +1290,30 @@ describe('primary fill contrast', () => {
       // a white label covers them. The reported class name is the utility's
       // own (`bg-theme-surface`, not `card`); the file and line locate the call
       // site, and the class string names the utility that brought it.
+      // A borrowed fill is discarded where the call site writes its own at the
+      // same variant: `card bg-black text-white` replaces `card`'s background
+      // and renders white on black, which is correct. This is the exact mirror
+      // of the literal-beats-borrowed rule the *foreground* path got one round
+      // earlier — I applied it to one half of the pair and not the other, for
+      // the fourth time in this review.
+      const literalFillVariants = new Set(
+        [
+          ...segment.matchAll(new RegExp(FILL_PATTERN, 'g')),
+          ...segment.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g')),
+        ].map(([, variant, prefix]) => `${canonicalPrefix(variant ?? '')}|${prefix === 'bg' ? 'bg' : prefix}`)
+      );
       const borrowed = [...own.values()].some((value) => isWhite(splitModifier(value).value))
         ? utilityFillText(segment)
+            .split(/\s+/)
+            .filter(Boolean)
+            .filter((token) => {
+              const match =
+                new RegExp(`^${FILL_PATTERN}$`).exec(token) ?? new RegExp(`^${SEMANTIC_FILL_PATTERN}$`).exec(token);
+              if (!match) return false;
+              const slot = `${canonicalPrefix(match[1] ?? '')}|${match[2] === 'bg' ? 'bg' : match[2]}`;
+              return !literalFillVariants.has(slot);
+            })
+            .join(' ')
         : '';
       const fillText = `${segment} ${borrowed}`;
       for (const [whole, variant, , key, modifier] of fillText.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
@@ -1469,7 +1563,11 @@ describe('primary fill contrast', () => {
         // All three gaps are the same mistake: the prefilter has to admit
         // whatever the passes below can measure, so it is kept deliberately
         // looser than they are rather than mirroring their patterns.
-        if (!/\b(?:bg|from|via|to)-(?:\[[^\]\s]*\]|[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)/.test(value))
+        if (
+          !/\b(?:bg|from|via|to)-(?:\[[^\]\s]*\]|\([^)\s]*\)|[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)/.test(
+            value
+          )
+        )
           continue;
         if (covered.some((range) => index >= range.start && index < range.end)) continue;
         found.push({ value, line: source.slice(0, index).split('\n').length });
