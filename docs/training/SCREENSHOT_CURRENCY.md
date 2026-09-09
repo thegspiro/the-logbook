@@ -2,10 +2,13 @@
 
 ## Disposition for September 8, 2026 — Operational Ranks and EVOC Levels moved into Members Administration
 
-Queue, not yet shot. Found rebasing this branch onto main through #2424 (merge
-base d24934d → 8077ad1): `03-15` on the settings-consolidation timeline this
-file already tracks, not a fresh redesign — same pattern as the earlier moves
-of Contact Visibility and Membership IDs off the global Settings page.
+**Resolved 2026-09-09.** All three items below are recaptured; nothing from
+this entry is still queued.
+
+Found rebasing this branch onto main through #2424 (merge base d24934d →
+8077ad1): `03-15` on the settings-consolidation timeline this file already
+tracks, not a fresh redesign — same pattern as the earlier moves of Contact
+Visibility and Membership IDs off the global Settings page.
 
 `RanksSettingsSection` (rendered inline on the old global Settings page) was
 replaced by a standalone `RanksSection` at `/members/admin/settings/ranks`, and
@@ -13,23 +16,33 @@ EVOC Levels — previously a sub-page of that same section — is now its own
 `EvocSection` at `/members/admin/settings/evoc`, gated on `apparatus.manage`
 rather than the ladder's `members.manage`/`settings.manage`.
 
-| Image area | Note |
-| --- | --- |
-| `03-33-settings-eligibility` | Manifest route is `/settings?tab=ranks`, which still **redirects** to `/members/admin/settings/ranks` rather than falling through to the dashboard — so the capture would not silently succeed against the wrong page, only against the wrong *chrome*: the old global-Settings shell instead of the Members Administration one the content now lives in. Repoint the manifest entry to the new route and recapture |
-| `/members/admin/settings/evoc` (EVOC Levels) | Never captured on its own — no prior manifest entry exists. The only existing EVOC shots are apparatus-form fields (`03-52`, `01-30`, `06-21`), not the settings ladder itself |
-| Any capture of the old global Settings page's section list | Loses the **Ranks** entry the sidebar used to show; two new rows (**Operational Ranks**, **EVOC Levels**) now live under Members Administration → Settings instead |
+| Image                              | Fixed                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03-33-settings-eligibility.png`    | Manifest route repointed from `/settings?tab=ranks` to `/members/admin/settings/ranks` directly, and recaptured — the Operational Ranks list now sits inside the Members Administration shell it actually lives in, not the old global-Settings chrome                                                                                                    |
+| `01-42-evoc-levels-settings.png`    | Added — no manifest entry existed for the EVOC Levels settings screen itself (the prior EVOC shots, `03-52`/`01-30`/`06-21`, are all apparatus-form fields). Captured at `/members/admin/settings/evoc` and filled a new placeholder in `01-membership.md`'s EVOC Certification section, right after "The levels are yours to define"                     |
+| `08-02-organization-settings.png`   | Recaptured. The committed image predated the move (last shot 2026-09-06) and still showed a **Ranks** tab in the General-settings tab bar; the current page has already lost it and gained the redirect notice pointing to Members Administration → Settings. No manifest change — the route is still bare `/settings`, only the page's own content moved |
+
+**A second, unrelated drift surfaced while shooting the new EVOC capture,
+fixed in the same pass because it sat next to the new screenshot:** the demo
+data an org actually starts with is `EvocLevelService.DEFAULT_EVOC_LEVELS` —
+the NFPA 1451 EVOC 1-4 ladder, lazily seeded the first time anyone reads the
+list for an org with none — not the Basic/Intermediate/Advanced triple
+`seed_demo_data.py`'s `seed_evoc_levels()` intends. That blueprint can never
+land: the lazy default always fires first, seeding levels 1-3 before the
+seeder's own step runs, and "safe to re-run, skips what exists" then skips it.
+`01-membership.md`'s table described the seeder's dead intent rather than what
+the screen shows; it now describes the real seeded ladder. `seed_evoc_levels()`
+itself is unchanged — retiring its unreachable blueprint is a seeder-code
+change, not a screenshot one, and out of scope for this pass.
 
 `docs/training/03-scheduling.md` was already corrected in the same PR range (it
 now reads "Members Administration → Settings → Operational Ranks" throughout),
-so only the images lag, not the prose.
+so only the images lagged there, not the prose.
 
 Not investigated as part of this pass: whether the wider #2424/#2420/#2430
 range changed anything else worth a queue entry beyond this move — this entry
 covers only what the diff against the prior rebase point (d24934d) surfaced by
-inspection, not a full manual audit of the merged screens. `audit_images.py
---baseline` and `status_report.py` both report clean (no new automated
-findings; 567/567 placeholders still filled), but neither check looks at
-navigation or component identity, which is what actually changed here.
+inspection, not a full manual audit of the merged screens.
 
 ## Disposition for September 7-8, 2026 - the items list gained pinning and grouping
 

@@ -7822,6 +7822,12 @@ export const SHOTS = [
     // else entirely: which *membership types* may self-sign-up, and which
     // positions are open to everyone. Per-rank position eligibility is set on
     // the ranks themselves, in the main settings area.
+    //
+    // Repointed 2026-09-09: Operational Ranks moved off the old global Settings
+    // page into its own route under Members Administration (see
+    // membersSettingsSections.ts). `/settings?tab=ranks` still redirects here,
+    // but capturing the redirect target directly avoids photographing an extra
+    // hop and keeps the shot tied to the route that actually owns the section.
     route: "/members/admin/settings/ranks",
     fullPage: true,
   },
@@ -13153,6 +13159,30 @@ export const SHOTS = [
     prepare: async (page) => {
       await page.waitForSelector("text=Visible to members", { timeout: 20_000 });
     },
+    fullPage: true,
+  },
+  {
+    id: "01-42-evoc-levels-settings",
+    doc: "01-membership.md",
+    line: 1057,
+    anchor: "the EVOC Levels settings screen at Members Administration",
+    alt: "The EVOC Levels settings screen listing the seeded EVOC 1-4 ladder, each with its code and cumulative flag",
+    // Added 2026-09-09, queued in SCREENSHOT_CURRENCY.md's September 8 entry:
+    // EVOC Levels became its own EvocSection at this route (gated on
+    // apparatus.manage, not members.manage -- see membersSettingsSections.ts)
+    // and had no manifest entry of its own before now. The only prior EVOC
+    // shots are apparatus-form fields, not the settings ladder itself.
+    //
+    // The placeholder this filled was applied by hand rather than through
+    // apply_placeholders.py: capturing it surfaced that the actual seeded
+    // default is EvocLevelService.DEFAULT_EVOC_LEVELS (the NFPA 1451 EVOC 1-4
+    // ladder, lazily seeded per org on first read), not the Basic/
+    // Intermediate/Advanced triple seed_demo_data.py's seed_evoc_levels()
+    // intends -- that blueprint never lands because the lazy default always
+    // fires first. The doc's table and this alt text describe what the
+    // screen actually shows; seed_demo_data.py's dead blueprint is unrelated
+    // to the Ranks/EVOC settings move and out of scope for this pass.
+    route: "/members/admin/settings/evoc",
     fullPage: true,
   },
   {
