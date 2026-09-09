@@ -141,9 +141,17 @@ export class ErrorBoundary extends Component<Props, State> {
       // below. (A Suspense fallback cannot do this: React keeps the children
       // it stands in for in the DOM at `display: none`, so the id would
       // resolve to a hidden element. See docs/KNOWN_LIMITATIONS.md.)
+      //
+      // `tabIndex={-1}` for the same reason AppLayout's main carries it:
+      // following the hash only scrolls, so a target that cannot receive focus
+      // leaves focus on the link. That matters more here than anywhere else —
+      // AppLayout is unmounted, so its skip link and the click handler that
+      // moves focus are gone, and `index.html`'s static anchor is all that is
+      // left to reach the reload and navigation controls below.
       return (
         <main
           id="main-content"
+          tabIndex={-1}
           className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
         >
           <div className="card w-full max-w-2xl p-8">

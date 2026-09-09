@@ -373,7 +373,17 @@ describe('primary fill contrast', () => {
 
     const offenders: string[] = [];
 
-    const inspect = (file: string, line: number, segment: string, inherited: Map<string, string>) => {
+    const inspect = (
+      file: string,
+      line: number,
+      segment: string,
+      inherited: Map<string, string>,
+      // The shared static text a branch sits inside, when there is one. A
+      // `dark:` fill out here overrides an unprefixed fill in every branch, so
+      // theme selection has to see it — reading `segment` alone measures the
+      // base fill in a theme the shared override always wins.
+      inheritedContext = ''
+    ) => {
       const own = foregrounds(segment);
       for (const [whole, variant, hue, shade] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
         const prefix = variant ?? '';
@@ -456,8 +466,11 @@ describe('primary fill contrast', () => {
       const themesFor = (matchPrefix: string, word: string): string[] => {
         if (/(^|:)dark:/.test(matchPrefix)) return ['dark', 'high-contrast'];
         // The mirror case: an unprefixed stop that a `dark:` sibling overrides
-        // in the same segment renders only in light.
-        const overridden = new RegExp(String.raw`\bdark:${word}-theme-`).test(segment);
+        // renders only in light. The sibling can be in this segment or in the
+        // shared static text the segment is a branch of — branch splitting
+        // hands over the inherited *foregrounds*, and this is the fill half of
+        // the same context.
+        const overridden = new RegExp(String.raw`\bdark:${word}-theme-`).test(`${segment} ${inheritedContext}`);
         return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
       };
 
@@ -625,7 +638,7 @@ describe('primary fill contrast', () => {
         let branches = 0;
         for (const [, single, double] of value.matchAll(/'([^']*)'|"([^"]*)"/g)) {
           branches++;
-          inspect(file, line, single ?? double ?? '', context);
+          inspect(file, line, single ?? double ?? '', context, staticText);
         }
         // A plain literal has no branches; it *is* its own segment.
         if (branches === 0) inspect(file, line, value, new Map());
@@ -637,7 +650,7 @@ describe('primary fill contrast', () => {
         const context = foregrounds(staticText);
         inspect(file, line, staticText, new Map());
         for (const [, single, double] of value.matchAll(/'([^']*)'|"([^"]*)"/g)) {
-          inspect(file, line, single ?? double ?? '', context);
+          inspect(file, line, single ?? double ?? '', context, staticText);
         }
       }
     }
