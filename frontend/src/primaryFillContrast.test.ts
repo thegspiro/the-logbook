@@ -470,7 +470,15 @@ describe('primary fill contrast', () => {
         // shared static text the segment is a branch of — branch splitting
         // hands over the inherited *foregrounds*, and this is the fill half of
         // the same context.
-        const overridden = new RegExp(String.raw`\bdark:${word}-theme-`).test(`${segment} ${inheritedContext}`);
+        //
+        // The replacement can be either shape. Matching only `dark:…-theme-*`
+        // missed `bg-theme-text-muted dark:bg-slate-950`, where a numeric fill
+        // is what dark actually paints — so the overridden semantic value was
+        // measured in a theme that never shows it. Opaque replacements only: a
+        // translucent one composites over what is beneath rather than replacing
+        // it, so it cannot be treated as an override.
+        const replacement = String.raw`(?:theme-[a-z]+(?:-[a-z]+)*|[a-z]+-\d{2,3})(?:\/100)?\b(?!\/)`;
+        const overridden = new RegExp(String.raw`\bdark:${word}-${replacement}`).test(`${segment} ${inheritedContext}`);
         return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
       };
 
