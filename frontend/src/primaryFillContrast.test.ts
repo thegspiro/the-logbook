@@ -80,12 +80,7 @@ const opaqueAlpha = (alpha: string | undefined): boolean => {
  * six characters appended instead of four. Resolving the number is what stops
  * this being fixed once per spelling, which is how `/100` itself got here.
  */
-const opaqueModifier = (modifier: string | undefined): boolean => {
-  if (modifier === undefined || modifier === '') return true;
-  return modifier.startsWith('[')
-    ? opaqueAlpha(modifier.slice(1, modifier.endsWith(']') ? -1 : undefined))
-    : Number(modifier) === 100;
-};
+const opaqueModifier = (modifier: string | undefined): boolean => fillOpacity(modifier) === 'opaque';
 
 /**
  * A class token split into its colour value and its opacity modifier.
@@ -121,15 +116,29 @@ const OPACITY_MODIFIER = String.raw`(?:\/(\[[^\]\s]*\]|[\d.]+))?`;
  * Same two syntaxes `opaqueModifier` distinguishes: a bare `/80` is a
  * percentage, a bracketed one is the alpha channel itself.
  */
-const modifierAlpha = (modifier: string | undefined): number => {
-  if (modifier === undefined || modifier === '') return 1;
-  if (modifier.startsWith('[')) {
-    const inner = modifier.slice(1, modifier.endsWith(']') ? -1 : undefined).trim();
-    const alpha = inner.endsWith('%') ? Number(inner.slice(0, -1)) / 100 : Number(inner);
-    return Number.isFinite(alpha) ? alpha : 1;
-  }
-  const percent = Number(modifier) / 100;
-  return Number.isFinite(percent) ? percent : 1;
+const modifierOpacity = (modifier: string | undefined): { kind: 'alpha'; alpha: number } | { kind: 'unresolvable' } => {
+  if (modifier === undefined || modifier === '') return { kind: 'alpha', alpha: 1 };
+  const raw = modifier.startsWith('[') ? modifier.slice(1, modifier.endsWith(']') ? -1 : undefined).trim() : modifier;
+  // A bracketed modifier is the alpha channel itself; a bare one is a
+  // percentage. `[13%]` is 13% either way, `[.06]` is 6%, `/50` is 50%.
+  const alpha = modifier.startsWith('[')
+    ? raw.endsWith('%')
+      ? Number(raw.slice(0, -1)) / 100
+      : Number(raw)
+    : Number(raw) / 100;
+  // A modifier this sweep cannot evaluate — `/[var(--opacity)]`, or anything
+  // else nonnumeric — is reported, never substituted. Falling back to 1
+  // measured a variable-controlled label as fully opaque, so
+  // `text-white/[var(--opacity)]` on black passed at 21:1 while the value it
+  // resolves to can make the label invisible.
+  return Number.isFinite(alpha) ? { kind: 'alpha', alpha } : { kind: 'unresolvable' };
+};
+
+/** A fill's opacity modifier, as the three outcomes a sweep must tell apart. */
+const fillOpacity = (modifier: string | undefined): 'opaque' | 'translucent' | 'unresolvable' => {
+  const opacity = modifierOpacity(modifier);
+  if (opacity.kind === 'unresolvable') return 'unresolvable';
+  return opacity.alpha === 1 ? 'opaque' : 'translucent';
 };
 
 /**
@@ -143,11 +152,14 @@ const modifierAlpha = (modifier: string | undefined): number => {
  * foreground being rejected outright, because it can be composited exactly:
  * the backdrop is the fill being measured, so there is nothing left to guess.
  */
-const whiteForegroundAlpha = (foreground: string | undefined): number | null => {
-  if (foreground === undefined) return null;
+type WhiteLabel = { kind: 'white'; alpha: number } | { kind: 'unresolvable' } | { kind: 'other' };
+
+const whiteLabel = (foreground: string | undefined): WhiteLabel => {
+  if (foreground === undefined) return { kind: 'other' };
   const { value, modifier } = splitModifier(foreground);
-  if (value !== 'white') return null;
-  return modifierAlpha(modifier);
+  if (value !== 'white') return { kind: 'other' };
+  const opacity = modifierOpacity(modifier);
+  return opacity.kind === 'unresolvable' ? { kind: 'unresolvable' } : { kind: 'white', alpha: opacity.alpha };
 };
 
 /** A translucent foreground composited over the fill it sits on. */
@@ -564,13 +576,32 @@ const whiteOn = (key: string, alpha = 1): number | null => {
  * A fill's variant prefix, then every less specific prefix it falls back to,
  * longest first: `dark:hover:` -> `dark:hover:`, `dark:`, `hover:`, ``.
  */
+/**
+ * A variant prefix with its variants in a canonical order, so `dark:hover:` and
+ * `hover:dark:` are one key rather than two.
+ *
+ * Tailwind accepts either spelling and compiles them to the same rule, and
+ * `themesFor` already searched both orders when looking for a *fill* override —
+ * but the foreground lookup did not, so `hover:bg-theme-text-muted
+ * hover:text-black hover:dark:text-white` asked for `dark:hover:`, missed it,
+ * fell back to `hover:text-black`, and skipped a pairing that renders white on
+ * the token's white dark-mode value. Sorting is what stops this needing a
+ * both-orders check at every site that grows one.
+ */
+const canonicalPrefix = (prefix: string): string => {
+  const variants = prefix.split(':').filter(Boolean).sort();
+  return variants.length ? `${variants.join(':')}:` : '';
+};
+
 const candidatePrefixes = (prefix: string): string[] => {
   const variants = prefix.split(':').filter(Boolean);
   const subsets: string[][] = [[]];
   for (const variant of variants) {
     for (const subset of [...subsets]) subsets.push([...subset, variant]);
   }
-  return subsets.sort((a, b) => b.length - a.length).map((subset) => (subset.length ? `${subset.join(':')}:` : ''));
+  return subsets
+    .sort((a, b) => b.length - a.length)
+    .map((subset) => canonicalPrefix(subset.length ? `${subset.join(':')}:` : ''));
 };
 
 /**
@@ -696,10 +727,13 @@ const findOffenders = (): Offender[] => {
   for (const file of files) {
     const lines = fs.readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, index) => {
-      const opaqueRed = [...line.matchAll(new RegExp(RED_600_FILL, 'g'))].some(([, modifier]) =>
-        opaqueModifier(modifier)
+      // An unresolvable modifier counts: `bg-red-600/[var(--o)]` is a red-600
+      // fill whose opacity this sweep cannot evaluate, and treating it as a
+      // tint would be the ban's own escape hatch.
+      const bannedRed = [...line.matchAll(new RegExp(RED_600_FILL, 'g'))].some(
+        ([, modifier]) => fillOpacity(modifier) !== 'translucent'
       );
-      if (!opaqueRed) return;
+      if (!bannedRed) return;
       offenders.push({ file: path.relative(SRC, file), line: index + 1, text: line.trim() });
     });
   }
@@ -751,7 +785,7 @@ describe('primary fill contrast', () => {
       const utilityForegrounds = new Map<string, string>();
       for (const [, variant, colour, modifier] of body.matchAll(new RegExp(TEXT_PATTERN, 'g'))) {
         if (!namesColour(colour ?? '')) continue;
-        utilityForegrounds.set(variant ?? '', modifier ? `${colour}/${modifier}` : (colour ?? ''));
+        utilityForegrounds.set(canonicalPrefix(variant ?? ''), modifier ? `${colour}/${modifier}` : (colour ?? ''));
       }
       const coveringForeground = (variant: string): string | undefined =>
         candidatePrefixes(variant)
@@ -785,13 +819,19 @@ describe('primary fill contrast', () => {
       // (4.40:1) in dark only, and resolving the foreground once missed it.
       const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap(
         ([, variant, prefix, key, modifier]) => {
-          if (!opaqueModifier(modifier)) return [];
+          const opacity = fillOpacity(modifier);
+          if (opacity === 'translucent') return [];
+          if (opacity === 'unresolvable') {
+            return [`${name}: ${prefix}-${key} has an opacity this sweep cannot resolve`];
+          }
           const themes = themesFor(body, variant ?? '', prefix ?? '');
           // The lowest white alpha any theme paints over this fill: a
           // translucent label is composited over it rather than assumed solid.
-          const alphas = themes
-            .map((theme) => whiteForegroundAlpha(themeForeground(variant ?? '', theme)))
-            .filter((alpha): alpha is number => alpha !== null);
+          const labels = themes.map((theme) => whiteLabel(themeForeground(variant ?? '', theme)));
+          if (labels.some((label) => label.kind === 'unresolvable')) {
+            return [`${name}: the white label over ${prefix}-${key} has an opacity this sweep cannot resolve`];
+          }
+          const alphas = labels.flatMap((label) => (label.kind === 'white' ? [label.alpha] : []));
           if (alphas.length === 0) return [];
           const alpha = Math.min(...alphas);
           const fill = resolveFill(key ?? '');
@@ -820,12 +860,20 @@ describe('primary fill contrast', () => {
       // guard too, since the stops never reach a TSX file.
       const semantic = [...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))].flatMap(
         ([, variant, prefix, token, modifier]) => {
-          if (!opaqueModifier(modifier)) return [];
+          const opacity = fillOpacity(modifier);
+          if (opacity === 'translucent') return [];
+          if (opacity === 'unresolvable') {
+            return [`${name}: ${prefix}-${token} has an opacity this sweep cannot resolve`];
+          }
           const themes = themesFor(body, variant ?? '', prefix ?? '');
           return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
             if (!themes.includes(theme)) return [];
-            const alpha = whiteForegroundAlpha(themeForeground(variant ?? '', theme));
-            if (alpha === null) return [];
+            const label = whiteLabel(themeForeground(variant ?? '', theme));
+            if (label.kind === 'other') return [];
+            if (label.kind === 'unresolvable') {
+              return [`${name}: the white label over ${prefix}-${token} has an opacity this sweep cannot resolve`];
+            }
+            const alpha = label.alpha;
             const rgb = hexToRgb(value);
             if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
             const ratio = whiteRatioOn(rgb, alpha);
@@ -915,7 +963,7 @@ describe('primary fill contrast', () => {
         new RegExp(TEXT_PATTERN, 'g')
       )) {
         if (!namesColour(colour ?? '')) continue;
-        found.set(variant ?? '', modifier ? `${colour}/${modifier}` : (colour ?? ''));
+        found.set(canonicalPrefix(variant ?? ''), modifier ? `${colour}/${modifier}` : (colour ?? ''));
       }
       return found;
     };
@@ -935,7 +983,12 @@ describe('primary fill contrast', () => {
     ) => {
       const own = foregrounds(segment);
       for (const [whole, variant, , key, modifier] of segment.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
-        if (!opaqueModifier(modifier)) continue;
+        const opacity = fillOpacity(modifier);
+        if (opacity === 'translucent') continue;
+        if (opacity === 'unresolvable') {
+          offenders.push(`${path.relative(SRC, file)}:${line} — ${whole} has an opacity this sweep cannot resolve`);
+          continue;
+        }
         const prefix = variant ?? '';
         // The foreground that covers this fill, most specific first. A
         // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
@@ -946,8 +999,15 @@ describe('primary fill contrast', () => {
           .find((value) => value !== undefined);
         // A translucent white label is composited over this fill rather than
         // assumed solid: `text-white/0` painted nothing and measured 21:1.
-        const alpha = whiteForegroundAlpha(fg);
-        if (alpha === null) continue;
+        const label = whiteLabel(fg);
+        if (label.kind === 'other') continue;
+        if (label.kind === 'unresolvable') {
+          offenders.push(
+            `${path.relative(SRC, file)}:${line} — ${fg} on ${whole} has an opacity this sweep cannot resolve`
+          );
+          continue;
+        }
+        const alpha = label.alpha;
         const fill = resolveFill(key ?? '');
         // A token in the `bg-` namespace that paints no colour is not a fill:
         // `bg-[length:200px_100px]` compiles to background-size, and reporting
@@ -1018,8 +1078,13 @@ describe('primary fill contrast', () => {
       // over this segment plus the static text it is a branch of: a `dark:`
       // sibling out there overrides an unprefixed fill in every branch.
 
-      for (const [, variant, fill, token, modifier] of segment.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))) {
-        if (!opaqueModifier(modifier)) continue;
+      for (const [whole, variant, fill, token, modifier] of segment.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))) {
+        const opacity = fillOpacity(modifier);
+        if (opacity === 'translucent') continue;
+        if (opacity === 'unresolvable') {
+          offenders.push(`${path.relative(SRC, file)}:${line} — ${whole} has an opacity this sweep cannot resolve`);
+          continue;
+        }
         const prefix = variant ?? '';
         const themes = themesFor(`${segment} ${inheritedContext}`, prefix, fill ?? '');
         const perTheme = semanticFill(token ?? '');
@@ -1056,8 +1121,15 @@ describe('primary fill contrast', () => {
           // surface token — widening it to any foreground turns 7 findings into
           // 150, nearly all of them icons at 3:1 non-text contrast, which is a
           // different question than the one this check answers.
-          const alpha = whiteForegroundAlpha(fg);
-          if (alpha === null) continue;
+          const label = whiteLabel(fg);
+          if (label.kind === 'other') continue;
+          if (label.kind === 'unresolvable') {
+            offenders.push(
+              `${path.relative(SRC, file)}:${line} — ${fg} on ${fill}-${token} has an opacity this sweep cannot resolve`
+            );
+            continue;
+          }
+          const alpha = label.alpha;
 
           const rgb = hexToRgb(value);
           // A translucent token over a gradient has no single value to measure.
