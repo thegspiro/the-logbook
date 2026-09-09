@@ -312,7 +312,10 @@ describe('primary fill contrast', () => {
       // pass can — and the repository's own convention prefers these utilities
       // over repeated inline classes, which makes it the more likely home for
       // one, not the less.
-      return [...body.matchAll(/\b(bg|from|via|to)-([a-z]+-\d{2,3}|white|black)\b(?!\/)/g)].flatMap(
+      // `/100` is the opaque colour, as everywhere else in this file; a call
+      // site carries only the utility name, so a shade skipped here is skipped
+      // by every check.
+      const palette = [...body.matchAll(/\b(bg|from|via|to)-([a-z]+-\d{2,3}|white|black)(?:\/100)?\b(?!\/)/g)].flatMap(
         ([, prefix, key]) => {
           const ratio = whiteOn(key ?? '');
           if (ratio === null) return [`${name}: ${prefix}-${key} is not in the installed Tailwind palette`];
@@ -321,6 +324,22 @@ describe('primary fill contrast', () => {
             : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
         }
       );
+
+      // Semantic fills and stops, resolved per theme exactly as the call-site
+      // sweep does. `--text-muted` is `#ffffff` in dark, so a utility built on
+      // it under `text-white` is invisible there — and invisible to every other
+      // guard too, since the stops never reach a TSX file.
+      const semantic = [...body.matchAll(/\b(bg|from|via|to)-(theme-[a-z]+(?:-[a-z]+)*)(?:\/100)?\b(?!\/)/g)].flatMap(
+        ([, prefix, token]) =>
+          [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
+            const rgb = hexToRgb(value);
+            if (!rgb) return [`${name}: ${prefix}-${token} is ${value} in ${theme}, unmeasurable`];
+            const ratio = contrastRatio(relativeLuminance(rgb.r, rgb.g, rgb.b), relativeLuminance(255, 255, 255));
+            return ratio >= 4.5 ? [] : [`${name}: white on ${prefix}-${token} is ${ratio.toFixed(2)}:1 in ${theme}`];
+          })
+      );
+
+      return [...palette, ...semantic];
     });
 
     expect(failures, 'move the fill two shades darker (600 -> 800) as btn-primary did').toEqual([]);
@@ -520,26 +539,40 @@ describe('primary fill contrast', () => {
         // The two trailing lookaheads both matter. The first forces the value
         // to be maximal, so `dark:bg-slate-950/50` cannot backtrack to
         // `slate-95` and slip past the opacity check on the `0` that follows.
-        // `transparent` excludes itself only for a flat `bg`. On a *gradient
-        // stop* it is a real override: `dark:from-transparent` replaces the
-        // semantic stop, and what shows in dark is whatever backs the gradient,
-        // not the token. Treating the two alike rejected valid adaptive
-        // gradients — the exclusion was written for flat backgrounds and
-        // inherited by stops when the sweep widened to them.
-        const inert = word === 'bg' ? String.raw`transparent(?![\w-])|none(?![\w-])` : String.raw`none(?![\w-])`;
-        const value = String.raw`[A-Za-z0-9[\]#.,%()_-]`;
-        const replacement = String.raw`(?!${inert})${value}+(?!${value})(?!\/(?!100\b))`;
+        // Does the `dark:` sibling actually set a colour?
         //
-        // The override has to carry the fill's own state variants. A
-        // `hover:bg-theme-…` is replaced by `dark:hover:bg-…`, not by a bare
-        // `dark:bg-…`, so looking only for the unqualified form reported a
-        // valid state-specific adaptive fill as a failure. Tailwind accepts
-        // either variant order, so both are searched.
+        // Asked semantically rather than by shape, because "looks opaque" was
+        // too generous: it accepted anything in the `bg-` namespace, and
+        // `bg-cover` sets background-size. `bg-theme-text-muted
+        // dark:bg-cover text-white` was therefore excused from dark entirely
+        // while still painting white on white — an inversion I introduced to
+        // escape enumerating colour *spellings*, which then swept in utilities
+        // that are not colours at all. Resolving the candidate answers both
+        // questions at once and cannot drift as the palette changes.
+        const setsColour = (raw: string): boolean => {
+          const slash = raw.indexOf('/');
+          const opacity = slash === -1 ? null : raw.slice(slash + 1);
+          const value = slash === -1 ? raw : raw.slice(0, slash);
+          // A translucent replacement composites over what is beneath rather
+          // than replacing it; `/100` is the opaque colour itself.
+          if (opacity !== null && opacity !== '100') return false;
+          if (value === 'none') return false;
+          // `transparent` sets no colour on a flat background, but on a
+          // gradient stop it does replace: what shows is whatever backs it.
+          if (value === 'transparent') return word !== 'bg';
+          if (value.startsWith('[')) return true;
+          if (value.startsWith('theme-')) return semanticFill(value).size > 0;
+          return PALETTE[value] !== undefined;
+        };
+
         const state = matchPrefix.replace(/(^|:)dark:/g, '$1');
-        const qualified = [`dark:${state}${word}-`, `${state}dark:${word}-`].map(
-          (prefix) => new RegExp(String.raw`\b${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${replacement}`)
+        const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const haystack = `${segment} ${inheritedContext}`;
+        const overridden = [`dark:${state}${word}-`, `${state}dark:${word}-`].some((prefix) =>
+          [...haystack.matchAll(new RegExp(String.raw`\b${escape(prefix)}([A-Za-z0-9[\]#.,%()_/-]+)`, 'g'))].some(
+            ([, raw]) => setsColour(raw ?? '')
+          )
         );
-        const overridden = qualified.some((pattern) => pattern.test(`${segment} ${inheritedContext}`));
         return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
       };
 
@@ -682,7 +715,7 @@ describe('primary fill contrast', () => {
         // `'bg-linear-to-r from-red-600 to-orange-600 text-white'` was measured
         // by nothing, numeric stops and all. Both gaps are the same mistake:
         // the prefilter has to admit whatever the passes below can measure.
-        if (!/\b(?:bg|from|via|to)-(?:[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*)\b/.test(value)) continue;
+        if (!/\b(?:bg|from|via|to)-(?:[a-z]+-\d{2,3}|theme-[a-z]+(?:-[a-z]+)*|white|black)\b/.test(value)) continue;
         if (covered.some((range) => index >= range.start && index < range.end)) continue;
         found.push({ value, line: source.slice(0, index).split('\n').length });
       }
