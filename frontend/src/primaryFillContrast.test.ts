@@ -115,7 +115,10 @@ const readPalette = (): Record<string, { r: number; g: number; b: number }> => {
 
   for (const file of [tailwindTheme, path.join(SRC, 'styles', 'index.css')]) {
     const css = fs.readFileSync(file, 'utf8');
-    for (const [, name, value] of css.matchAll(/--color-([a-z]+-\d{2,3})\s*:\s*([^;]+);/g)) {
+    // `white` and `black` have no shade number, and a gradient stop can name
+    // either — `to-white` under `text-white` is invisible text, which is the
+    // failure this file exists to catch.
+    for (const [, name, value] of css.matchAll(/--color-([a-z]+-\d{2,3}|white|black)\s*:\s*([^;]+);/g)) {
       const raw = (value ?? '').trim();
       const oklch = /^oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)/.exec(raw);
       if (oklch) {
@@ -303,13 +306,21 @@ describe('primary fill contrast', () => {
 
     const failures = [...css.matchAll(/@utility\s+([\w-]+)\s*\{(.*?)\n\}/gs)].flatMap(([, name, body]) => {
       if (!body?.includes('text-white')) return [];
-      return [...body.matchAll(/\bbg-([a-z]+)-(\d{2,3})\b(?!\/)/g)].flatMap(([, color, shade]) => {
-        const ratio = whiteOn(`${color}-${shade}`);
-        if (ratio === null) return [`${name}: bg-${color}-${shade} is not in the installed Tailwind palette`];
-        return ratio >= 7
-          ? []
-          : [`${name}: white on bg-${color}-${shade} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
-      });
+      // All four fill prefixes, and keyword colours alongside numbered shades.
+      // A gradient defined in a shared utility never writes its stops at the
+      // TSX call site, so the call-site sweep cannot see them and only this
+      // pass can — and the repository's own convention prefers these utilities
+      // over repeated inline classes, which makes it the more likely home for
+      // one, not the less.
+      return [...body.matchAll(/\b(bg|from|via|to)-([a-z]+-\d{2,3}|white|black)\b(?!\/)/g)].flatMap(
+        ([, prefix, key]) => {
+          const ratio = whiteOn(key ?? '');
+          if (ratio === null) return [`${name}: ${prefix}-${key} is not in the installed Tailwind palette`];
+          return ratio >= 7
+            ? []
+            : [`${name}: white on ${prefix}-${key} is ${ratio.toFixed(2)}:1, below the 7:1 AAA floor`];
+        }
+      );
     });
 
     expect(failures, 'move the fill two shades darker (600 -> 800) as btn-primary did').toEqual([]);
@@ -368,7 +379,7 @@ describe('primary fill contrast', () => {
     // below: Tailwind emits it as the fully opaque colour, so rejecting every
     // opacity modifier let the identical broken pairing through with two
     // characters appended. A translucent stop has no single value and stays out.
-    const fillPattern = String.raw`\b((?:[a-z-]+:)*)(?:bg|from|via|to)-([a-z]+)-(\d{2,3})(?:\/100)?\b(?!/)`;
+    const fillPattern = String.raw`\b((?:[a-z-]+:)*)(?:bg|from|via|to)-([a-z]+-\d{2,3}|white|black)(?:\/100)?\b(?!/)`;
     const textPattern = /\b((?:[a-z-]+:)*)text-([a-z]+)(?:-(\d{3}))?\b/g;
 
     /** The foreground each variant prefix paints, e.g. `''` -> white, `dark:` -> emerald-950. */
@@ -407,7 +418,7 @@ describe('primary fill contrast', () => {
       inheritedContext = ''
     ) => {
       const own = foregrounds(segment);
-      for (const [whole, variant, hue, shade] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
+      for (const [whole, variant, key] of segment.matchAll(new RegExp(fillPattern, 'g'))) {
         const prefix = variant ?? '';
         // The foreground that covers this fill, most specific first. A
         // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
@@ -417,8 +428,7 @@ describe('primary fill contrast', () => {
           .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
           .find((value) => value !== undefined);
         if (fg !== 'white') continue;
-        const key = `${hue}-${shade}`;
-        const ratio = whiteOn(key);
+        const ratio = whiteOn(key ?? '');
         if (ratio === null) {
           offenders.push(`${path.relative(SRC, file)}:${line} — ${whole} is not in the installed Tailwind palette`);
           continue;
@@ -510,8 +520,15 @@ describe('primary fill contrast', () => {
         // The two trailing lookaheads both matter. The first forces the value
         // to be maximal, so `dark:bg-slate-950/50` cannot backtrack to
         // `slate-95` and slip past the opacity check on the `0` that follows.
+        // `transparent` excludes itself only for a flat `bg`. On a *gradient
+        // stop* it is a real override: `dark:from-transparent` replaces the
+        // semantic stop, and what shows in dark is whatever backs the gradient,
+        // not the token. Treating the two alike rejected valid adaptive
+        // gradients — the exclusion was written for flat backgrounds and
+        // inherited by stops when the sweep widened to them.
+        const inert = word === 'bg' ? String.raw`transparent(?![\w-])|none(?![\w-])` : String.raw`none(?![\w-])`;
         const value = String.raw`[A-Za-z0-9[\]#.,%()_-]`;
-        const replacement = String.raw`(?!transparent(?![\w-])|none(?![\w-]))${value}+(?!${value})(?!\/(?!100\b))`;
+        const replacement = String.raw`(?!${inert})${value}+(?!${value})(?!\/(?!100\b))`;
         //
         // The override has to carry the fill's own state variants. A
         // `hover:bg-theme-…` is replaced by `dark:hover:bg-…`, not by a bare
