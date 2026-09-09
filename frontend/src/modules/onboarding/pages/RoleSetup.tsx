@@ -354,14 +354,30 @@ const PositionSetup: React.FC = () => {
     // many rather than silently hiding one.
     const templates = buildPositionTemplates(MODULE_REGISTRY, organizationType);
 
-    // Pre-select essential positions
+    // Everything this agency has is selected, and that is load-bearing rather
+    // than a convenience.
+    //
+    // Unticking a position now removes it, so the set left ticked *is* the
+    // department's structure — and the overwhelmingly common path through this
+    // step is an administrator pressing Continue having edited nothing. That
+    // click has to be a no-op, which is the same invariant
+    // `test_continuing_without_editing_changes_nothing` holds for the grants
+    // inside each position.
+    //
+    // Six positions used to be preselected, from when leaving one unticked
+    // meant "do not submit it" and the row survived regardless. Carrying that
+    // list forward past the deletion change would have made the default
+    // Continue delete the twenty-three it does not name — Captain, Lieutenant,
+    // Firefighter, Engineer, EMT, Treasurer, Quartermaster and the rest — for
+    // every department that did not think to look.
+    //
+    // The templates are already narrowed to this agency type, and are built
+    // from what the backend seeded, so submitting all of them writes back
+    // exactly what is there.
     const initial: Record<string, RoleConfig> = {};
-    ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'member'].forEach((posId) => {
-      Object.values(templates).forEach((category) => {
-        const position = category.positions.find((p) => p.id === posId);
-        if (position) {
-          initial[posId] = { ...position };
-        }
+    Object.values(templates).forEach((category) => {
+      category.positions.forEach((position) => {
+        initial[position.id] = { ...position };
       });
     });
     return initial;
@@ -397,6 +413,11 @@ const PositionSetup: React.FC = () => {
 
   // Custom position modal
   const [showCustomModal, setShowCustomModal] = useState(false);
+
+  // The membership ladder batches its edits behind its own Save, so this step
+  // has to refuse to leave with them pending rather than navigate away and
+  // report success for the half of the step that did save.
+  const [ladderDirty, setLadderDirty] = useState(false);
   const [customPositionName, setCustomPositionName] = useState('');
   const [customPositionDescription, setCustomPositionDescription] = useState('');
 
@@ -514,6 +535,11 @@ const PositionSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    if (ladderDirty) {
+      toast.error('Save or discard your membership tier changes before continuing');
+      return;
+    }
+
     // Verify organization was created first
     if (!departmentName) {
       toast.error('Please complete organization setup first');
@@ -589,7 +615,7 @@ const PositionSetup: React.FC = () => {
             </p>
           </div>
 
-          <MembershipLadderSection />
+          <MembershipLadderSection onDirtyChange={setLadderDirty} />
 
           <RankLadderSection />
 
@@ -625,8 +651,8 @@ const PositionSetup: React.FC = () => {
                     or remove positions as your organization's needs evolve.
                   </p>
                   <p className="text-theme-text-secondary mt-2 text-sm">
-                    Leave a position unselected if your department does not have it — it will not be created. Your own
-                    System Owner position and the baseline Member position are always kept.
+                    Every position your department could have starts selected. Untick the ones you do not use and they
+                    will be removed — your own System Owner position and the baseline Member position are always kept.
                   </p>
                 </div>
               </div>

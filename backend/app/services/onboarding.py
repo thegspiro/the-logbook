@@ -1109,10 +1109,14 @@ class OnboardingService:
                 organization_id, member.get("rank") or ""
             )
             if member.get("rank") and resolved_rank is None:
+                # Loguru formats with str.format, not %-style: the printf
+                # placeholders logged literally and recorded neither the rank
+                # nor the contact, which is the whole content of the warning.
                 logger.warning(
-                    "Dropping unknown rank %r for IT contact %s during onboarding",
-                    member.get("rank"),
-                    email,
+                    "Dropping unknown rank {rank!r} for IT contact {email} "
+                    "during onboarding",
+                    rank=member.get("rank"),
+                    email=email,
                 )
             user.rank = resolved_rank
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Layers } from 'lucide-react';
 import MembershipTiersSection from '../../../components/settings/MembershipTiersSection';
 import { useTierEditor } from '../../../hooks/useTierEditor';
@@ -22,8 +22,26 @@ import { useTierEditor } from '../../../hooks/useTierEditor';
  * cannot be removed without moving those members first — which is correct, and
  * is work a department should not have been given by a default it never chose.
  */
-const MembershipLadderSection: React.FC = () => {
+interface MembershipLadderSectionProps {
+  /**
+   * Told whenever the ladder has edits that are not saved yet.
+   *
+   * Unlike the rank editor, where every action is its own write, tier edits are
+   * batched and persisted by one Save — the endpoint takes the whole ladder, and
+   * a per-rung save would make a half-applied ladder reachable. That makes it
+   * possible to edit the ladder, press the step's Continue, and lose the lot
+   * behind a "Positions configured successfully!" toast. The step guards its
+   * Continue on this.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDirtyChange }) => {
   const editor = useTierEditor();
+
+  useEffect(() => {
+    onDirtyChange?.(editor.dirty);
+  }, [editor.dirty, onDirtyChange]);
 
   return (
     <div className="card mb-6 p-6">
