@@ -16,6 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2430 (Feature 14, Equipment check & shifts, pass 4) merged
+at 10:45:53 — but the merge landed on head `db6af476f` (round 2's commit),
+**before** round 3's fix (`0b466619c`, EC-15 — the actual code fix for the
+two `eslint` warnings round 2's own completion gate had wrongly dismissed)
+was pushed at 10:52:37. Confirmed directly rather than assumed: `origin/
+main` after the merge still has `orgCallTypeChoices`/`textCallTypeChoices`
+inside `CallTypeChips.tsx` and no `callTypeChoices.ts` file — EC-15's fix
+never reached `main`. Not a reason to reopen #2430 (closed pull requests
+stay closed) or to push to its now-merged branch (CLAUDE.md Pitfall #24) —
+carried forward instead on a fresh branch,
+`security-review/equipment-check-shifts-ec15-fix-2026-09-09` (checked via
+`git ls-remote` against every equipment/EC-14 branch first; only the
+merged one existed), via `git cherry-pick` of the exact commit that never
+landed. Rotation row 14 → ✅ regardless — the feature's own review is
+complete and the "no findings" conclusion for the feature holds; EC-15 is
+a follow-up code-health fix, not a reason to hold the rotation open.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged mid-review before round 3's fix landed), preserved for history</summary>
+
 **Feature 14 (Equipment check & shifts, pass 4)** — PR
 [#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
 `security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
@@ -66,6 +86,8 @@ components` has nothing left to flag; updated both consumers. `npx eslint
 226 vitest tests passed across the four files this pass touched or reviewed.
 Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
 Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 13 closed, merge recorded via PR #2429), preserved for history</summary>
@@ -12142,7 +12164,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
@@ -12261,8 +12283,20 @@ Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
 full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `npm run
 typecheck` 0 errors; `eslint .` 0 errors, 0 warnings; `vitest run
 apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx CallTypeChips.test.tsx
-ShiftDetailPanel.test.tsx` 226 passed. Rotation row 14 → ⏳ (awaiting PR
-merge). Next after merge: 15 Scheduling.
+ShiftDetailPanel.test.tsx` 226 passed.
+
+**Addendum: PR #2430 merged mid-review, on a head one commit behind this
+entry.** The repo owner merged #2430 at 10:45:53, on head `db6af476f`
+(round 2's commit) — before round 3's fix (`0b466619c`, EC-15) was pushed
+at 10:52:37. Confirmed directly: `origin/main` post-merge still has the two
+`eslint` warnings this entry says were fixed. EC-15 was carried forward on
+a fresh branch per CLAUDE.md Pitfall #24
+(`security-review/equipment-check-shifts-ec15-fix-2026-09-09`, the merged
+branch never reused) via `git cherry-pick` of the exact commit that missed
+the merge — see the Open PR section for that follow-up. Rotation row 14 →
+✅ regardless; the feature's own review is complete and this is a
+follow-up code-health fix, not grounds to hold the rotation open. Next:
+15 Scheduling.
 
 ### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)
 
