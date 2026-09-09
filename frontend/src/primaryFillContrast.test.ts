@@ -42,9 +42,20 @@
  * A guard that cries wolf on valid code is worse than one with a stated blind
  * spot, so the blind spot is stated here instead.
  *
+ * **A translucent fill under a white label.** `bg-white/0 text-white` really is
+ * invisible, and this sweep skips it. Reporting it was implemented and
+ * measured: it reddens three correct call sites — a camera-overlay control on
+ * `bg-black/50` and a badge on `bg-white/20` — because what a translucent fill
+ * composites over is an ancestor's background, which a source sweep cannot
+ * walk to. The reasoning that excludes `/NN` fills was borrowed from the tint
+ * pattern (`bg-red-600/20` behind red-700 text) where nothing is at risk, and
+ * it is genuinely weaker once white is the label; it is kept because the
+ * alternative reports valid code, which is the trade this file has refused
+ * twice before.
+ *
  * The runtime pass covers what this cannot: `mobile-accessibility.spec.ts` runs
  * axe against rendered pages in all three themes, where a computed style has no
- * branches to correlate.
+ * branches to correlate and an ancestor's background is simply there to read.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -775,6 +786,42 @@ const candidatePrefixes = (prefix: string): string[] => {
 };
 
 /**
+ * The foreground covering a fill, most specific first — preferring white when
+ * two equally specific candidates disagree.
+ *
+ * `hover:focus:bg-white hover:text-black focus:text-white` has no
+ * `hover:focus:` foreground, so both `hover:` and `focus:` are fallbacks of the
+ * same specificity and Tailwind's stylesheet order decides which paints. This
+ * sweep cannot know that order (see the round-19 note on not modelling the
+ * cascade), so it takes the white one: a pairing that renders white on white
+ * under *some* ordering is worth reporting, and the alternative silently
+ * assumed the ordering that happened to be written.
+ */
+const coverAt = (prefix: string, lookups: Array<(key: string) => string | undefined>): string | undefined => {
+  const tiers = new Map<number, string[]>();
+  for (const candidate of candidatePrefixes(prefix)) {
+    const depth = splitVariants(candidate).length;
+    tiers.set(depth, [...(tiers.get(depth) ?? []), candidate]);
+  }
+  for (const depth of [...tiers.keys()].sort((a, b) => b - a)) {
+    // The lookups are a priority order, not a pool: a foreground written in
+    // this segment beats one inherited from the shared static text, because
+    // the branch is overriding it. Pooling them re-reported
+    // `FloatingActionButton` and `EmailPlatformChoice` — the two correct call
+    // sites round 19 already taught me not to touch, reached this time from
+    // the other direction.
+    for (const lookup of lookups) {
+      const values = (tiers.get(depth) ?? [])
+        .map((candidate) => lookup(candidate))
+        .filter((value): value is string => value !== undefined);
+      if (values.length === 0) continue;
+      return values.find((value) => isWhite(splitModifier(value).value)) ?? values[0];
+    }
+  }
+  return undefined;
+};
+
+/**
  * The variant prefix each theme paints its foreground through.
  *
  * `dark:` is the app's only theme variant (`@custom-variant dark (&:is(.dark
@@ -968,8 +1015,14 @@ describe('primary fill contrast', () => {
         const [, variant, colour, modifier] = match;
         if (!namesColour(colour ?? '')) continue;
         declarations.push({
+          // The enclosing selector scopes an applied token exactly as it scopes
+          // a raw declaration — `&:hover { @apply text-black; }` is a hover
+          // foreground, and filing it at the base variant overwrote the base
+          // white and silenced the utility. `rawVariant` was written for the
+          // raw half one round ago and not carried to the applied half: the
+          // applied-vs-raw axis of my own checklist, missed again.
           index: match.index ?? 0,
-          variant: variant ?? '',
+          variant: `${rawVariant(body, match.index ?? 0)}${variant ?? ''}`,
           token: modifier ? `${colour}/${modifier}` : (colour ?? ''),
         });
       }
@@ -1000,9 +1053,7 @@ describe('primary fill contrast', () => {
       if (![...utilityForegrounds.values()].some((value) => isWhite(splitModifier(value).value))) return [];
 
       const coveringForeground = (variant: string): string | undefined =>
-        candidatePrefixes(variant)
-          .map((candidate) => utilityForegrounds.get(candidate))
-          .find((found) => found !== undefined);
+        coverAt(variant, [(key) => utilityForegrounds.get(key)]);
 
       /**
        * The foreground a given theme paints over a fill.
@@ -1027,20 +1078,40 @@ describe('primary fill contrast', () => {
       // arriving on the fill side a round late.
       const fillSlot = (variant: string, prefix: string) =>
         `${canonicalPrefix(variant)}|${prefix === 'background' || prefix === 'background-color' ? 'bg' : prefix}`;
-      const lastFillAt = new Map<string, number>();
+      // The winning declaration per slot, by importance first and position
+      // second. `!important` is used 38 times in this stylesheet, so position
+      // alone is not the rule: `background-color: white !important` survives a
+      // later `@apply bg-black` and the element really is white-on-white.
+      const winner = new Map<string, { at: number; important: boolean }>();
+      const claim = (slot: string, at: number, important: boolean) => {
+        const held = winner.get(slot);
+        if (held && (held.important > important || (held.important === important && held.at > at))) return;
+        winner.set(slot, { at, important });
+      };
+      // A nested block scopes an applied FILL exactly as it scopes an applied
+      // foreground. Scoping only the foreground let a nested `@apply bg-black`
+      // claim the base slot and evict the base `bg-white`, so the utility was
+      // measured against nothing — the fill/foreground axis of the checklist,
+      // missed inside the very fix that added the scoping.
+      const scopedVariant = (index: number, textual: string) => `${rawVariant(body, index)}${textual}`;
       for (const match of [
         ...body.matchAll(new RegExp(FILL_PATTERN, 'g')),
         ...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g')),
-        ...body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g),
       ]) {
-        const isRaw = match[1] === 'background' || match[1] === 'background-color';
-        const slot = isRaw
-          ? fillSlot(rawVariant(body, match.index ?? 0), 'bg')
-          : fillSlot(match[1] ?? '', match[2] ?? '');
-        const at = match.index ?? 0;
-        if ((lastFillAt.get(slot) ?? -1) < at) lastFillAt.set(slot, at);
+        claim(fillSlot(scopedVariant(match.index ?? 0, match[1] ?? ''), match[2] ?? ''), match.index ?? 0, false);
       }
-      const winsAt = (slot: string, index: number) => lastFillAt.get(slot) === index;
+      for (const match of body.matchAll(/(?:^|[\s;{])(background-color|background)\s*:\s*([^;]+);/g)) {
+        const scope = rawVariant(body, match.index ?? 0);
+        const important = /!\s*important\s*$/.test(match[2] ?? '');
+        claim(fillSlot(scope, 'bg'), match.index ?? 0, important);
+        // `background` is a shorthand: it resets `background-image` too, so it
+        // supersedes any gradient stops declared before it. `background-color`
+        // does not, which is why the two cannot share one rule.
+        if (match[1] === 'background') {
+          for (const stop of ['from', 'via', 'to']) claim(fillSlot(scope, stop), match.index ?? 0, important);
+        }
+      }
+      const winsAt = (slot: string, index: number) => winner.get(slot)?.at === index;
 
       // All four fill prefixes, and arbitrary values and keyword colours
       // alongside numbered shades. A gradient defined in a shared utility never
@@ -1054,17 +1125,18 @@ describe('primary fill contrast', () => {
       // `bg-slate-600 text-slate-100 dark:text-white` is white-on-slate-600
       // (4.40:1) in dark only, and resolving the foreground once missed it.
       const palette = [...body.matchAll(new RegExp(FILL_PATTERN, 'g'))].flatMap((match) => {
-        const [, variant, prefix, key, modifier] = match;
-        if (!winsAt(fillSlot(variant ?? '', prefix ?? ''), match.index ?? 0)) return [];
+        const [, textual, prefix, key, modifier] = match;
+        const variant = scopedVariant(match.index ?? 0, textual ?? '');
+        if (!winsAt(fillSlot(variant, prefix ?? ''), match.index ?? 0)) return [];
         const opacity = fillOpacity(modifier);
         if (opacity === 'translucent') return [];
         if (opacity === 'unresolvable') {
           return [`${name}: ${prefix}-${key} has an opacity this sweep cannot resolve`];
         }
-        const themes = themesFor(body, variant ?? '', prefix ?? '');
+        const themes = themesFor(body, variant, prefix ?? '');
         // The lowest white alpha any theme paints over this fill: a
         // translucent label is composited over it rather than assumed solid.
-        const labels = themes.map((theme) => whiteLabel(themeForeground(variant ?? '', theme)));
+        const labels = themes.map((theme) => whiteLabel(themeForeground(variant, theme)));
         if (labels.some((label) => label.kind === 'unresolvable')) {
           return [`${name}: the white label over ${prefix}-${key} has an opacity this sweep cannot resolve`];
         }
@@ -1095,17 +1167,18 @@ describe('primary fill contrast', () => {
       // it under `text-white` is invisible there — and invisible to every other
       // guard too, since the stops never reach a TSX file.
       const semantic = [...body.matchAll(new RegExp(SEMANTIC_FILL_PATTERN, 'g'))].flatMap((match) => {
-        const [, variant, prefix, token, modifier] = match;
-        if (!winsAt(fillSlot(variant ?? '', prefix ?? ''), match.index ?? 0)) return [];
+        const [, textual, prefix, token, modifier] = match;
+        const variant = scopedVariant(match.index ?? 0, textual ?? '');
+        if (!winsAt(fillSlot(variant, prefix ?? ''), match.index ?? 0)) return [];
         const opacity = fillOpacity(modifier);
         if (opacity === 'translucent') return [];
         if (opacity === 'unresolvable') {
           return [`${name}: ${prefix}-${token} has an opacity this sweep cannot resolve`];
         }
-        const themes = themesFor(body, variant ?? '', prefix ?? '');
+        const themes = themesFor(body, variant, prefix ?? '');
         return [...semanticFill(token ?? '').entries()].flatMap(([theme, value]) => {
           if (!themes.includes(theme)) return [];
-          const label = whiteLabel(themeForeground(variant ?? '', theme));
+          const label = whiteLabel(themeForeground(variant, theme));
           if (label.kind === 'other') return [];
           if (label.kind === 'unresolvable') {
             return [`${name}: the white label over ${prefix}-${token} has an opacity this sweep cannot resolve`];
@@ -1132,7 +1205,10 @@ describe('primary fill contrast', () => {
           const [, property, declared] = match;
           const scope = rawVariant(body, match.index ?? 0);
           if (!winsAt(fillSlot(scope, 'bg'), match.index ?? 0)) return [];
-          const value = (declared ?? '').trim().replace(/\s+/g, '_');
+          const value = (declared ?? '')
+            .replace(/!\s*important\s*$/, '')
+            .trim()
+            .replace(/\s+/g, '_');
           return THEME_TOKENS.flatMap(({ theme }) => {
             const label = whiteLabel(themeForeground(scope, theme));
             if (label.kind === 'other') return [];
@@ -1318,7 +1394,6 @@ describe('primary fill contrast', () => {
       const fillText = `${segment} ${borrowed}`;
       for (const [whole, variant, , key, modifier] of fillText.matchAll(new RegExp(FILL_PATTERN, 'g'))) {
         const opacity = fillOpacity(modifier);
-        if (opacity === 'translucent') continue;
         if (opacity === 'unresolvable') {
           offenders.push(`${path.relative(SRC, file)}:${line} — ${whole} has an opacity this sweep cannot resolve`);
           continue;
@@ -1328,9 +1403,7 @@ describe('primary fill contrast', () => {
         // `dark:hover:` fill is covered by `dark:hover:text-*` if present, then
         // by `dark:text-*` — not by the `text-white` sitting beside it for the
         // light theme, which is a pairing that never renders.
-        const fg = candidatePrefixes(prefix)
-          .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
-          .find((value) => value !== undefined);
+        const fg = coverAt(prefix, [(key) => own.get(key), (key) => inherited.get(key)]);
         // A translucent white label is composited over this fill rather than
         // assumed solid: `text-white/0` painted nothing and measured 21:1.
         const label = whiteLabel(fg);
@@ -1341,6 +1414,9 @@ describe('primary fill contrast', () => {
           );
           continue;
         }
+        // A translucent fill stays out even under a white label — a stated
+        // limitation, not an oversight; see the header.
+        if (opacity === 'translucent') continue;
         const alpha = label.alpha;
         const fill = resolveFill(key ?? '');
         // A token in the `bg-` namespace that paints no colour is not a fill:
@@ -1426,9 +1502,7 @@ describe('primary fill contrast', () => {
           // Only report a token nothing renders if something did pair a
           // foreground with it; an unknown token with no text is not this
           // check's business.
-          const anyForeground = candidatePrefixes(prefix)
-            .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
-            .find((value) => value !== undefined);
+          const anyForeground = coverAt(prefix, [(key) => own.get(key), (key) => inherited.get(key)]);
           if (anyForeground !== undefined) {
             offenders.push(`${path.relative(SRC, file)}:${line} — ${fill}-${token} resolves to no theme value`);
           }
@@ -1440,9 +1514,7 @@ describe('primary fill contrast', () => {
           // The foreground this theme actually paints: the `dark:`-prefixed one
           // where the theme has that class, falling back to the unprefixed.
           const themePrefix = THEME_VARIANT[theme] ?? '';
-          const fg = candidatePrefixes(`${themePrefix}${prefix}`)
-            .flatMap((candidate) => [own.get(candidate), inherited.get(candidate)])
-            .find((candidateValue) => candidateValue !== undefined);
+          const fg = coverAt(`${themePrefix}${prefix}`, [(key) => own.get(key), (key) => inherited.get(key)]);
 
           // Still only `text-white`, evaluated per theme rather than once.
           //

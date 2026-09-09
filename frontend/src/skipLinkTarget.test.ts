@@ -272,7 +272,11 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
     // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
     // state, and OnboardingCheck has one.
     if (!/^\s*</.test(jsx)) return;
-    if (carriesTarget(jsx)) return;
+    // JSX comments are not markup. `{/* <main id="main-content"> */}` renders
+    // nothing, and leaving one behind while removing the real landmark kept
+    // this check green — a guard satisfied by the *remains* of the thing it
+    // checks for, which is the defect this whole file exists to prevent.
+    if (carriesTarget(jsx.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, ' '))) return;
 
     // A root that is a local component can carry the target itself —
     // `FinanceApprovalPage` renders every branch through one `<Shell>`.
