@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #2422 (Feature 11, Inventory, pass 4) merged clean, 17/17 CI
+checks green, mergeable_state clean. Squash-merged as `92a4917e7`. Feature
+11 is now fully closed for this pass — see the Log entries and
+`INV-11-inventory.md` for the full two-round correction history: 6 fixed
+across the two rounds (one, INV-26, a P1 genuine cross-tenant write), 5
+still open (INV-22 newly flagged this pass; INV-8, INV-9, INV-16, INV-17
+re-verified). Next: 12 Facilities.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422), preserved for history</summary>
+
 **Feature 11 (Inventory, pass 4)** — PR
 [#2422](https://github.com/thegspiro/the-logbook/pull/2422), branch
 `claude/security-review-inventory-pass1` (fresh name for this rotation pass;
@@ -41,8 +52,9 @@ error never got to see), INV-28 (P2, `get_inventory_summary`'s
 maintenance-due count materialized every due item — looked like INV-22's
 shape but was cheaply fixable, since only a count was ever read off the
 result). The 4 prior flags (INV-8, INV-9, INV-16, INV-17) re-verified still
-open both rounds. Full completion gate green both rounds. Awaiting CI. See
-the Log entries above and `INV-11-inventory.md` for detail.
+open both rounds. Full completion gate green both rounds.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10 pass 4, PR #2411), preserved for history</summary>
@@ -11788,6 +11800,27 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Feature 11 (Inventory, pass 4)'s PR #2422 merged
+
+Six fixes across two correction rounds (round 1: INV-23 pin-cap race,
+INV-24 first-time variant-group race, INV-25 `SizePreferencesModal`
+dropped-null; round 2: INV-26 **P1** cross-tenant write, INV-27 the
+save-after-failed-load regression INV-25's own fix introduced, INV-28
+`get_inventory_summary`'s unbounded count), plus INV-22 flagged (DOC-9
+shape) and the 4 prior flags (INV-8, INV-9, INV-16, INV-17) re-verified
+still open. 17/17 CI checks green on the final head, `mergeable_state:
+clean`, every review thread across both rounds resolved. Squash-merged as
+`92a4917e7`.
+
+The first draft of this PR had claimed a fully clean 0-finding pass with a
+docs-only diff — wrong on two axes Codex caught: a declared-but-unread
+frontend scope and an entirely unreviewed MCP tool surface sat behind the
+"complete" claim, and real defects were inside the ground the pass did
+claim to cover. See the round-1 and round-2 Log entries below and
+`INV-11-inventory.md` for the full detail.
+
+Feature 11 is now fully closed for this pass. Next: 12 Facilities.
 
 ### 2026-09-09 — Feature 11 (Inventory, pass 4, round 2) — corrected after a third Codex review round: 3 fixed (1 P1), 4 prior flags still open
 
