@@ -74,6 +74,7 @@ const RanksSection: React.FC = () => {
           deletingRankId={editor.deletingRankId}
           editingPositionsRankId={editor.editingPositionsRankId}
           rankValidationIssues={editor.rankValidationIssues}
+          seatOptions={editor.seatOptions}
           onSetEditingRank={editor.setEditingRank}
           onSetAddingRank={editor.setAddingRank}
           onSetRankForm={editor.setRankForm}

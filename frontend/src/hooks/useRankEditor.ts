@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ranksService } from '../services/api';
 import type { OperationalRankResponse, RankValidationIssue } from '../services/api';
+import type { PositionOption } from '../modules/scheduling/types/shiftSettings';
+import { ensureShiftSettingsLoaded } from '../modules/scheduling/services/shiftSettingsApi';
+import { rankEligibleSeatOptions } from '../modules/scheduling/utils/positionLabels';
 import { invalidateRanksCache } from './useRanks';
 
 export interface RankForm {
@@ -58,6 +61,30 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
   const [deletingRankId, setDeletingRankId] = useState<string | null>(null);
   const [editingPositionsRankId, setEditingPositionsRankId] = useState<string | null>(null);
   const [rankValidationIssues, setRankValidationIssues] = useState<RankValidationIssue[]>([]);
+  // Seeded with the built-ins so the picker is never empty, then replaced once
+  // shift settings land and the department's own seats are known.
+  // `rankEligibleSeatOptions` reads a cache synchronously, so calling it during
+  // render would show whatever had arrived by then and never re-render when the
+  // rest did — a department's custom seat would appear or not depending on
+  // whether another screen had already warmed the cache.
+  const [seatOptions, setSeatOptions] = useState<PositionOption[]>(() => rankEligibleSeatOptions());
+
+  useEffect(() => {
+    let cancelled = false;
+    // A failure leaves the built-in seats in place: they are correct, just not
+    // complete, and a rank editor with no seats at all is worse than one
+    // missing the department's own.
+    void ensureShiftSettingsLoaded()
+      .then(() => {
+        if (!cancelled) setSeatOptions(rankEligibleSeatOptions());
+      })
+      .catch(() => {
+        /* keep the built-ins */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Non-blocking on purpose: the validation call reports members whose rank
   // matches no configured rung. Its failure must not take the ladder down with
@@ -218,6 +245,7 @@ export function useRankEditor(options: UseRankEditorOptions = {}) {
     editingPositionsRankId,
     setEditingPositionsRankId,
     rankValidationIssues,
+    seatOptions,
     fetchRanks,
     handleAddRank,
     handleUpdateRank,

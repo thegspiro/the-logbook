@@ -120,6 +120,7 @@ const RankLadderSection: React.FC = () => {
           deletingRankId={editor.deletingRankId}
           editingPositionsRankId={editor.editingPositionsRankId}
           rankValidationIssues={editor.rankValidationIssues}
+          seatOptions={editor.seatOptions}
           allowCodeEdit={false}
           onSetEditingRank={editor.setEditingRank}
           onSetAddingRank={editor.setAddingRank}

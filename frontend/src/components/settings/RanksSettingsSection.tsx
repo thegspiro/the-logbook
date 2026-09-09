@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { OperationalRankResponse, RankValidationIssue } from '../../services/api';
+import type { PositionOption } from '../../modules/scheduling/types/shiftSettings';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 
 interface RankForm {
@@ -29,6 +30,15 @@ interface RanksSettingsSectionProps {
   deletingRankId: string | null;
   editingPositionsRankId: string | null;
   rankValidationIssues: RankValidationIssue[];
+  /**
+   * Crew seats a rank may be made eligible for.
+   *
+   * Supplied rather than assembled here, and by `useRankEditor` rather than by
+   * either screen, because the department's own seats live behind an async
+   * shift-settings load: a component reading that cache during render would
+   * show a custom seat only when some other screen happened to have warmed it.
+   */
+  seatOptions: PositionOption[];
   /**
    * Whether the code field is shown.
    *
@@ -52,6 +62,26 @@ interface RanksSettingsSectionProps {
   onToggleEligiblePosition: (rank: OperationalRankResponse, position: string) => void;
 }
 
+/**
+ * The seats this rank's picker offers.
+ *
+ * The department's seats, plus any this rank already holds that are no longer
+ * among them — a seat retired from Position Names, or `paramedic` set before
+ * the picker stopped offering it. Without the union the badge shows in display
+ * mode with no button to clear it, so the rank keeps conferring a seat nobody
+ * can see how to take back. A retired seat has no admin-chosen label left to
+ * read, so it falls back to `positionLabel`.
+ */
+const seatChoicesFor = (rank: OperationalRankResponse, seatOptions: PositionOption[]): PositionOption[] => {
+  const choices = [...seatOptions];
+  for (const held of rank.eligible_positions ?? []) {
+    if (!choices.some((choice) => choice.value === held)) {
+      choices.push({ value: held, label: positionLabel(held) });
+    }
+  }
+  return choices;
+};
+
 const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   ranks,
   ranksLoading,
@@ -62,6 +92,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   deletingRankId,
   editingPositionsRankId,
   rankValidationIssues,
+  seatOptions,
   allowCodeEdit = true,
   onSetEditingRank,
   onSetAddingRank,
@@ -282,26 +313,14 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {(
-                        [
-                          'officer',
-                          'driver',
-                          'firefighter',
-                          'ems',
-                          'captain',
-                          'lieutenant',
-                          'probationary',
-                          'volunteer',
-                          'other',
-                        ] as const
-                      ).map((pos) => {
-                        const isEligible = (rank.eligible_positions ?? []).includes(pos);
+                      {seatChoicesFor(rank, seatOptions).map((seat) => {
+                        const isEligible = (rank.eligible_positions ?? []).includes(seat.value);
                         return (
                           <button
-                            key={pos}
+                            key={seat.value}
                             type="button"
                             onClick={() => {
-                              void onToggleEligiblePosition(rank, pos);
+                              void onToggleEligiblePosition(rank, seat.value);
                             }}
                             className={`rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
                               isEligible
@@ -309,7 +328,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                                 : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-accent-blue border'
                             }`}
                           >
-                            {positionLabel(pos)}
+                            {seat.label}
                           </button>
                         );
                       })}

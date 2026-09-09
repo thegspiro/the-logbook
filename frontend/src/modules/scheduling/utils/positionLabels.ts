@@ -16,7 +16,22 @@
  */
 
 import { POSITION_LABELS } from '../../../constants/enums';
+import type { PositionOption } from '../types/shiftSettings';
 import { ensureShiftSettingsLoaded, getCachedShiftSettings } from '../services/shiftSettingsApi';
+
+/**
+ * The built-in seats a rank may confer eligibility for.
+ *
+ * Derived from `POSITION_LABELS` rather than typed out again, so a seat added
+ * to the vocabulary appears here without a second edit — `CANONICAL_POSITIONS`
+ * in `backend/app/utils/positions.py` is the authority and
+ * `tests/test_position_slots.py` holds the two in step.
+ *
+ * `paramedic` is withheld; see `rankEligibleSeatOptions` below for why.
+ */
+export const RANK_ELIGIBLE_BUILTIN_SEATS: string[] = Object.keys(POSITION_LABELS).filter(
+  (seat) => seat !== 'paramedic'
+);
 
 /**
  * Spellings that mean a built-in seat but are not its token. Mirrors
@@ -51,4 +66,37 @@ export const positionLabel = (position: string | null | undefined): string => {
   const folded = token.toLowerCase();
   const canonical = POSITION_ALIASES[folded] ?? folded;
   return POSITION_LABELS[canonical] ?? token.replace(/_/g, ' ');
+};
+
+/**
+ * Seats a rank may be made eligible for, in the department's own words.
+ *
+ * The rank editor used to carry its own inline list of nine seat tokens, so a
+ * department that added "Rescue Technician" in Scheduling → Position Names
+ * could put that seat on a template and on a shift, and then had no way to make
+ * any rank eligible for it. The seat existed everywhere except in the one
+ * screen that grants it, which reads as the rank editor being broken rather
+ * than as two lists disagreeing.
+ *
+ * `paramedic` is canonical, fillable and deliberately absent. Rank says where a
+ * member sits in the chain of command; a medic seat is a credential, and
+ * `ShiftEligibilityService.get_eligible_positions` grants it from step 3b — the
+ * member's certifications as of the shift date — precisely so a rank cannot
+ * confer it. Offering it here would let an officer rank hand out a seat that
+ * lapses with a card nobody checked.
+ */
+export const rankEligibleSeatOptions = (): PositionOption[] => {
+  // Sync read of a cache a background load fills, exactly as positionLabel and
+  // getPositionOptions do. Single-flight per organization.
+  void ensureShiftSettingsLoaded();
+  const options: PositionOption[] = RANK_ELIGIBLE_BUILTIN_SEATS.map((value) => ({
+    value,
+    label: positionLabel(value),
+  }));
+  for (const custom of getCachedShiftSettings().customPositions) {
+    if (!options.some((option) => option.value === custom.value)) {
+      options.push({ value: custom.value, label: custom.label });
+    }
+  }
+  return options;
 };

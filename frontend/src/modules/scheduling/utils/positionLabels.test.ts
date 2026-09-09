@@ -16,7 +16,7 @@ vi.mock('../services/shiftSettingsApi', () => ({
 }));
 
 // Imported after the mock is in place (store test pattern).
-import { positionLabel } from './positionLabels';
+import { positionLabel, rankEligibleSeatOptions } from './positionLabels';
 
 describe('positionLabel', () => {
   beforeEach(() => {
@@ -59,5 +59,50 @@ describe('positionLabel', () => {
     expect(positionLabel(null)).toBe('');
     expect(positionLabel(undefined)).toBe('');
     expect(positionLabel('  ')).toBe('');
+  });
+});
+
+describe('rankEligibleSeatOptions', () => {
+  beforeEach(() => {
+    getCachedShiftSettings.mockReset();
+    getCachedShiftSettings.mockReturnValue(DEFAULT_SETTINGS);
+  });
+
+  it("offers the department's own seats, not only the built-in ones", () => {
+    // Without this the rank editor's picker was a fixed list of nine tokens: a
+    // department could define Rescue Technician, staff it on a template, put it
+    // on a shift, and never make a single rank eligible for it.
+    getCachedShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [{ value: 'rescue_tech', label: 'Rescue Technician' }],
+    });
+
+    const options = rankEligibleSeatOptions();
+
+    expect(options).toContainEqual({ value: 'rescue_tech', label: 'Rescue Technician' });
+    expect(options.map((o) => o.value)).toContain('firefighter');
+  });
+
+  it('withholds the medic seat, which a certification confers and a rank must not', () => {
+    // get_eligible_positions grants `paramedic` from step 3b, the member's
+    // certifications as of the shift date. A rank that could hand it out would
+    // outlive the card.
+    expect(rankEligibleSeatOptions().map((o) => o.value)).not.toContain('paramedic');
+  });
+
+  it('names each built-in seat the way every other screen does', () => {
+    const ems = rankEligibleSeatOptions().find((o) => o.value === 'ems');
+    expect(ems?.label).toBe('EMT');
+  });
+
+  it('does not list a custom seat twice when it shadows a built-in token', () => {
+    // An admin may re-label a built-in seat by adding a custom one with the
+    // same value; the picker must still offer one button for it.
+    getCachedShiftSettings.mockReturnValue({
+      ...DEFAULT_SETTINGS,
+      customPositions: [{ value: 'officer', label: 'Company Officer' }],
+    });
+
+    expect(rankEligibleSeatOptions().filter((o) => o.value === 'officer')).toHaveLength(1);
   });
 });

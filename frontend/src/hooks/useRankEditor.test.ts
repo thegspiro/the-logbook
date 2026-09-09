@@ -35,6 +35,21 @@ vi.mock('../services/api', () => ({
 
 vi.mock('./useRanks', () => ({ invalidateRanksCache: vi.fn() }));
 
+// The department's own seats arrive behind an async settings load, so the hook
+// has to read them again once it lands. These mocks let a test hold that load
+// open and assert what the picker offered in the meantime.
+const ensureShiftSettingsLoaded = vi.fn();
+const rankEligibleSeatOptions = vi.fn();
+vi.mock('../modules/scheduling/services/shiftSettingsApi', () => ({
+  ensureShiftSettingsLoaded: (...args: unknown[]) => ensureShiftSettingsLoaded(...args) as unknown,
+}));
+vi.mock('../modules/scheduling/utils/positionLabels', () => ({
+  rankEligibleSeatOptions: (...args: unknown[]) => rankEligibleSeatOptions(...args) as unknown,
+}));
+
+const BUILTIN_SEATS = [{ value: 'officer', label: 'Officer' }];
+const WITH_CUSTOM_SEAT = [...BUILTIN_SEATS, { value: 'rescue_tech', label: 'Rescue Technician' }];
+
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
@@ -77,6 +92,10 @@ const installDefaults = () => {
   deleteRank.mockResolvedValue(undefined);
   reorderRanks.mockResolvedValue([rank()]);
   validateRanks.mockResolvedValue({ issues: [] });
+  ensureShiftSettingsLoaded.mockReset();
+  rankEligibleSeatOptions.mockReset();
+  ensureShiftSettingsLoaded.mockResolvedValue(undefined);
+  rankEligibleSeatOptions.mockReturnValue(BUILTIN_SEATS);
 };
 
 describe('useRankEditor with code editing allowed', () => {
@@ -216,5 +235,29 @@ describe('useRankEditor loading and failures', () => {
     });
 
     expect(createRank).not.toHaveBeenCalled();
+  });
+});
+
+describe('useRankEditor seat options', () => {
+  beforeEach(installDefaults);
+
+  it("re-reads the seats once the department's settings land", async () => {
+    // The cache is filled asynchronously and read synchronously. Reading it at
+    // render time and never again means a custom seat appears only when some
+    // other screen happened to have warmed the cache first.
+    rankEligibleSeatOptions.mockReturnValueOnce(BUILTIN_SEATS).mockReturnValue(WITH_CUSTOM_SEAT);
+    const { result } = renderHook(() => useRankEditor());
+
+    await waitFor(() => expect(result.current.seatOptions).toEqual(WITH_CUSTOM_SEAT));
+  });
+
+  it('keeps the built-in seats when the settings load fails', async () => {
+    // They are correct, just not complete. A picker with no seats at all is
+    // worse than one missing the department's own.
+    ensureShiftSettingsLoaded.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useRankEditor());
+
+    await waitFor(() => expect(result.current.ranksLoading).toBe(false));
+    expect(result.current.seatOptions).toEqual(BUILTIN_SEATS);
   });
 });
