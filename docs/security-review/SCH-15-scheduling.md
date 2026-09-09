@@ -1047,7 +1047,7 @@ of a loaded JSON value), no new capacity/count-then-insert pattern.
 | `npx vitest run src/modules/scheduling src/pages/scheduling`                    | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
 | `npm run build` (frontend)                                                      | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |
 
-## Pass 4 (2026-09-09) — 1 fix (SCH-13, LOW/MED), 0 flagged, SCH-10 re-verified unchanged
+## Pass 4 (2026-09-09) — 1 fix (SCH-13, LOW/MED, four Codex-caught rounds), 0 flagged, SCH-10 re-verified unchanged
 
 **Revision note.** Codex review of the draft PR caught four real gaps, all
 verified against the current code and addressed rather than disputed: (1)
@@ -1078,9 +1078,16 @@ the same branch before merge. A further Codex review of round 2's push
 caught two more real gaps — one of them a genuine deadlock, not merely a
 race — plus a robustness gap in round 2's own guard test that had kept it
 from being able to catch either; see "Round 3," also fixed on the same
-branch before merge. CLAUDE.md's stance on this is explicit: no round
-limit — repeated findings on a pushed fix mean the root cause isn't closed
-yet, not that review has become noise.
+branch before merge. A fourth Codex review, of PR #2437 itself, then found
+one more real gap — this time in the lock _order_ rounds 1-3 together
+established, not in any one lock's own completeness: an attach-and-report
+close-out could lock call-then-organization, the reverse of the deletion
+guard's own order, a genuine deadlock between two otherwise ordinary
+requests; see "Round 4," fixed on a fresh branch after PR #2437 had already
+merged (CLAUDE.md Pitfall #24 — never push to a merged branch), the same
+same-day-follow-up shape #2437 itself used for #2435. CLAUDE.md's stance on
+this is explicit: no round limit — repeated findings on a pushed fix mean
+the root cause isn't closed yet, not that review has become noise.
 
 **Baseline:** `8b89f319d` (the merge commit of PR #2212, pass 3's actual landing
 point — found via `git merge-base --is-ancestor` against pass 3's own tip
@@ -1496,6 +1503,60 @@ settings-dependent read in the function) and by the existing
 `test_call_tracking.py` mocked-unit-test suite (141 tests) passing
 unchanged, confirming no behavioral regression in the non-concurrent case.
 
+**Round 4 — Codex review of PR #2437 itself found one more real gap, this
+time in the lock _order_ established by rounds 1-3, not in a specific
+lock's own completeness:**
+
+4. **A close-out that both attaches an already-logged call and reports a
+   type breakdown locked call-then-organization — the reverse of the
+   deletion guard's own organization-then-call order.**
+   `SchedulingService.finalize_shift`/`save_closeout_calls` both call
+   `CallTrackingService.attach_response` (attaching this shift to a call
+   another unit already logged) _before_ calling `record_shift_calls`,
+   whose organization lock (round 1) only runs when a type breakdown is
+   also present. `attach_response`'s `INSERT` of an `OrgCallResponse` takes
+   an implicit database lock on the referenced `OrgCall` row via its
+   foreign key — so a close-out doing both attaches the call (lock A) and
+   only afterward locks the organization (lock B): call-then-organization.
+   The deletion guard (`_reject_deleting_a_used_call_type`, per gap 1
+   above) locks organization-then-call. Two ordinary, unrelated requests —
+   an attach-and-report close-out, a concurrent type deletion — can each
+   hold the lock the other wants next: a real InnoDB deadlock (error
+   1213), reproduced directly (see below), not merely a theoretical
+   ordering concern. **Fixed:** both callers now lock the organization
+   first — before the `attach_call_ids` loop runs — whenever this pass
+   will also validate a type breakdown (mirroring each caller's own
+   `record_shift_calls`-invocation gate: `reported_call_count is not None`
+   for `finalize_shift`, `count_provided` for `save_closeout_calls`, both
+   combined with a non-empty positive-valued `reported_call_types`), so
+   `attach_response`'s call-row lock never precedes the organization lock
+   in either caller.
+
+   Reproducing this one needed more than the pinned-snapshot-plus-`gather`
+   shape the first three classes use: that shape is built to expose
+   _read staleness_, and this bug is about lock _order_, not a stale read.
+   A gather-only version of the test (no explicit pausing) was run 15/15
+   times against the pre-round-4 code with **zero** failures — confirming
+   the natural interleaving isn't reliable here before spending effort on
+   a deterministic one, not merely assumed. `TestAttachThenRecordVs
+DeletionDeadlock` instead patches `CallTrackingService.attach_response`
+   to pause immediately after its own flush (the exact point where,
+   pre-fix, the attach-and-report close-out holds the attached call's row
+   lock and nothing else), matching the pause-and-release pattern
+   `test_facility_document_reference_race.py` already uses for its own
+   lock-order races: waits for that pause, starts the deletion, confirms
+   with a bounded wait that the deletion is genuinely blocked (not merely
+   not-yet-scheduled), then releases the paused attach and awaits both.
+   Confirmed failing 6/6 with `OperationalError` 1213 ("Deadlock found")
+   against the pre-round-4 code, and passing 5/5 with zero deadlocks
+   against the fix.
+
+   The patch is applied once, from the test itself, before either task
+   starts, and only the attach task ever calls the patched method — not
+   the two-coroutines-hold-the-same-`patch()` shape CLAUDE.md Pitfall #22
+   warns against (which corrupts the mock for the rest of the session
+   rather than merely failing this one test).
+
 **`calcom_service.py`'s 30-line change** (`parse_webhook_event`, now also
 recognizing `MEETING_ENDED` and dropping Cal.com-flagged no-show attendees
 from `attendee_emails`) is pure parsing logic with no outbound request and no
@@ -1537,6 +1598,8 @@ re-run clean as part of the full suite below; no regression in any of pass
 
 - `tests/test_call_type_deletion_race.py` (new) — SCH-13's guard test; see
   above for its shape and the fail-before/pass-after confirmation.
+  `TestAttachThenRecordVsDeletionDeadlock` (round 4) added to the same
+  file.
 
 Everything else: no fix was needed for the rest of this pass's scope, so no
 further guard test was added. Existing coverage for the new surface
@@ -1547,21 +1610,21 @@ reviewed above was confirmed present and passing rather than written fresh:
 `test_reserved_call_type_slug_migration.py`, plus decline/late-signup cases
 inside `test_scheduling.py`.
 
-## Completion gate (pass 4, after all three SCH-13 rounds)
+## Completion gate (pass 4, after all four SCH-13 rounds)
 
-| Check                                                                                                                            | Result                                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                    | ✅ 0 violations                                                                                                                        |
-| `black --check app/ tests/ alembic/`                                                                                             | ✅ 1556 files unchanged                                                                                                                |
-| `isort --check-only app/ tests/ alembic/`                                                                                        | ✅ clean (installed, not skipped)                                                                                                      |
-| `python3 scripts/validate_migrations.py --strict`                                                                                | ✅ single head, 440 revisions                                                                                                          |
-| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"`                    | ✅ 1250 passed, 1 skipped (pre-existing optional-dep skip) — +2 over round 1, the two new round-2 guard tests                          |
-| `pytest tests/test_call_type_deletion_race.py` — round-1 test, 5 runs each direction                                             | ✅ fails 5/5 on the pre-round-1 code, passes 5/5 on the round-1 fix                                                                    |
-| `pytest tests/test_call_type_deletion_race.py` — round-2 tests vs. round-1-only code                                             | ✅ both fail 3/5/5 against round-1-only code (identity-map staleness and the report-edit orphan both reproduce)                        |
-| `pytest tests/test_call_type_deletion_race.py::TestReportEditVsDeletionRace` — round-3's strengthened test vs. round-2-only code | ✅ fails 15/15 with `OperationalError` 1213 (deadlock found) — corroborates round-3 gap 2 directly, not on the review's analysis alone |
-| `pytest tests/test_call_type_deletion_race.py` — all 3 classes vs. the fully-fixed code                                          | ✅ passes 5/5 (and `TestReportEditVsDeletionRace` alone a further 15/15) with zero deadlocks                                           |
-| `pytest tests/` (full backend suite)                                                                                             | ✅ 11970 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — unchanged from round 2 (round 3 added no new test)           |
-| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                                        | ✅ 0 errors                                                                                                                            |
-| `npx eslint .`                                                                                                                   | ✅ 0 errors                                                                                                                            |
-| `npm run build`                                                                                                                  | ✅ built in 3.18s, PWA precache generated (364 entries) — pre-existing chunk-size warning only                                         |
-| `npx vitest run src/modules/scheduling src/pages/scheduling`                                                                     | ✅ 672 passed (42 files) — not mandatory, run anyway per pass 3's precedent, unaffected by this round's backend-only fix               |
+| Check                                                                                                                                 | Result                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                         | ✅ 0 violations                                                                                                                          |
+| `black --check app/ tests/ alembic/`                                                                                                  | ✅ 1556 files unchanged                                                                                                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                                             | ✅ clean (installed, not skipped)                                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                     | ✅ single head, 440 revisions                                                                                                            |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"`                         | ✅ 1251 passed, 1 skipped (pre-existing optional-dep skip) — +1 over round 3, round 4's new deadlock guard test                          |
+| `pytest tests/test_call_type_deletion_race.py` — round-1 test, 5 runs each direction                                                  | ✅ fails 5/5 on the pre-round-1 code, passes 5/5 on the round-1 fix                                                                      |
+| `pytest tests/test_call_type_deletion_race.py` — round-2 tests vs. round-1-only code                                                  | ✅ both fail 3/5/5 against round-1-only code (identity-map staleness and the report-edit orphan both reproduce)                          |
+| `pytest tests/test_call_type_deletion_race.py::TestReportEditVsDeletionRace` — round-3's strengthened test vs. round-2-only code      | ✅ fails 15/15 with `OperationalError` 1213 (deadlock found) — corroborates round-3 gap 2 directly, not on the review's analysis alone   |
+| `pytest tests/test_call_type_deletion_race.py::TestAttachThenRecordVsDeletionDeadlock` — gather-only variant vs. pre-round-4 code     | ➖ passed 15/15 with **no** failure — confirms natural interleaving alone doesn't expose this one; motivated the patch-and-pause rewrite |
+| `pytest tests/test_call_type_deletion_race.py::TestAttachThenRecordVsDeletionDeadlock` — patch-and-pause version vs. pre-round-4 code | ✅ fails 6/6 with `OperationalError` 1213 (deadlock found)                                                                               |
+| `pytest tests/test_call_type_deletion_race.py` — all 4 classes vs. the fully-fixed code                                               | ✅ passes 5/5 with zero deadlocks                                                                                                        |
+| `pytest tests/` (full backend suite)                                                                                                  | ✅ 11971 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1 over round 3, round 4's new guard test                      |
+| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                                             | ➖ not re-run this round — no frontend file touched                                                                                      |
+| `npx eslint .`                                                                                                                        | ➖ not re-run this round — no frontend file touched                                                                                      |

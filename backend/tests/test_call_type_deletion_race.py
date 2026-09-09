@@ -54,21 +54,44 @@ incomplete in two further ways**, both covered by the classes below:
    ``_edit_preserves_org_slugs`` can change an existing report to newly name
    a type at any time, independent of when its calls were recorded, and
    that edit never took the organization lock at all.
+
+**Codex review of PR #2437 itself (round 4) found a genuine deadlock, not
+merely a race, in the lock *order* the round-1-3 fixes established:**
+
+3. ``TestAttachThenRecordVsDeletionDeadlock`` — ``SchedulingService.
+   save_closeout_calls``/``finalize_shift`` call ``CallTrackingService.
+   attach_response`` (attaching to a call another unit already logged)
+   *before* ``record_shift_calls`` — whose organization lock only runs when
+   a type breakdown is also being recorded. ``attach_response``'s insert of
+   an ``OrgCallResponse`` takes an implicit database lock on the referenced
+   ``OrgCall`` row via its foreign key, so a close-out that both attaches an
+   existing call and reports a type breakdown locks call-then-organization —
+   the exact reverse of the deletion guard's organization-then-call order.
+   Two ordinary, unrelated requests (an attach-and-report close-out, a type
+   deletion) can deadlock each other. Fixed by locking the organization
+   first, in both callers, whenever a close-out will do both.
 """
 
 import asyncio
+import contextlib
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select, text
 
 from app.core.database import database_manager
-from app.models.call_tracking import CALL_TYPES_FROM_ORG_CALLS, CallTrackingMode
+from app.models.call_tracking import (
+    CALL_TYPES_FROM_ORG_CALLS,
+    CallTrackingMode,
+    OrgCall,
+)
 from app.models.training import Shift, ShiftCompletionReport
 from app.models.user import Organization, User
 from app.schemas.scheduling import CallTrackingSettings
 from app.services.call_tracking_service import CallTrackingService
+from app.services.scheduling_service import SchedulingService
 from app.services.shift_completion_service import ShiftCompletionService
 from app.services.shift_eligibility_service import ShiftEligibilityService
 
@@ -421,6 +444,182 @@ class TestReportEditVsDeletionRace:
                 f"(edit error={edit_error!r}, delete error={delete_error!r})"
             )
         finally:
+            await session_a.rollback()
+            await session_b.rollback()
+            await session_a.close()
+            await session_b.close()
+            await _cleanup_org(org_id)
+
+
+async def _make_attachable_call(org_id, call_type):
+    async with database_manager.session_factory() as session:
+        call = OrgCall(
+            organization_id=org_id, call_date=date(2026, 8, 18), call_type=call_type
+        )
+        session.add(call)
+        await session.commit()
+        return call.id
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestAttachThenRecordVsDeletionDeadlock:
+    async def test_attach_then_record_cannot_deadlock_a_concurrent_deletion(self):
+        """SCH-13 round 4: a close-out that both attaches an already-logged
+        call and reports a type breakdown must not deadlock a concurrent
+        type deletion.
+
+        Pure ``asyncio.gather`` interleaving (the shape every other class in
+        this file uses) does not reliably land the two transactions in the
+        exact order needed to trigger this one — confirmed by running the
+        gather-only version of this test 15/15 times against the pre-fix
+        code with no failure. This deadlock is about lock *order*, not read
+        staleness, so it needs the two sides actually paused at the right
+        points rather than merely pinned snapshots: ``attach_response`` is
+        patched to pause immediately after its own flush (the point where,
+        pre-fix, it already holds the attached call's row lock and has
+        touched nothing else), matching the pause-and-release pattern
+        ``test_facility_document_reference_race.py`` uses for its own
+        lock-order tests. This patches a class method once, before either
+        task starts, and only the attach task ever calls it — not the two-
+        coroutines-share-one-patch shape CLAUDE.md Pitfall #22 warns against.
+        """
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        org_id, shift_id = await _make_org_and_shift(
+            f"attachrace-{uuid.uuid4().hex[:12]}"
+        )
+        attach_call_id = await _make_attachable_call(org_id, "brush")
+
+        session_a = database_manager.session_factory()
+        session_b = database_manager.session_factory()
+        attach_task = None
+        delete_task = None
+        try:
+            pin = text("SELECT id FROM organizations WHERE id = :o")
+            await session_a.execute(pin, {"o": org_id})
+            await session_b.execute(pin, {"o": org_id})
+
+            attach_paused = asyncio.Event()
+            proceed_after_attach = asyncio.Event()
+            original_attach_response = CallTrackingService.attach_response
+
+            async def _paused_attach_response(self, *args, **kwargs):
+                result = await original_attach_response(self, *args, **kwargs)
+                attach_paused.set()
+                await proceed_after_attach.wait()
+                return result
+
+            async def delete_the_type():
+                incoming = CallTrackingSettings(
+                    mode=CallTrackingMode.COUNT_ONLY, call_types=[]
+                )
+                try:
+                    await _reject_deleting_a_used_call_type(session_b, org_id, incoming)
+                except ValueError as e:
+                    await session_b.rollback()
+                    return str(e)
+                await ShiftEligibilityService(session_b).update_scheduling_settings(
+                    organization_id=org_id,
+                    call_tracking={
+                        "mode": CallTrackingMode.COUNT_ONLY,
+                        "call_types": [],
+                    },
+                )
+                return None
+
+            with patch.object(
+                CallTrackingService, "attach_response", _paused_attach_response
+            ):
+                attach_task = asyncio.create_task(
+                    SchedulingService(session_a).save_closeout_calls(
+                        shift_id=shift_id,
+                        organization_id=org_id,
+                        reported_call_count=2,
+                        reported_call_types={"brush": 1},
+                        attach_call_ids=[attach_call_id],
+                        count_provided=True,
+                    )
+                )
+                await asyncio.wait_for(attach_paused.wait(), timeout=10)
+
+                delete_task = asyncio.create_task(delete_the_type())
+                # Give the deletion real time to run. Post-fix, A already
+                # locked the organization row before ever calling
+                # attach_response, so this must still be blocked on it —
+                # a bounded wait it is expected to time out on, the same
+                # "prove the blocked state, don't guess it" shape
+                # test_facility_document_reference_race.py uses.
+                try:
+                    await asyncio.wait_for(asyncio.shield(delete_task), timeout=2.0)
+                except asyncio.TimeoutError:
+                    pass
+
+                assert not delete_task.done(), (
+                    "the deletion completed while racing an attach-and-"
+                    "report close-out that has not yet released its "
+                    "organization lock — SCH-13's lock order regressed"
+                )
+
+                # Release A. Pre-fix, A now tries to lock the organization
+                # row the still-blocked deletion already holds, while the
+                # deletion itself is blocked on the call row A holds — a
+                # genuine InnoDB deadlock (error 1213), surfaced as a real
+                # exception on whichever side the server aborts rather than
+                # either task hanging. Post-fix, A already holds the
+                # organization lock, so it commits and releases everything,
+                # and the deletion — merely blocked, not deadlocked — then
+                # proceeds on its own once A is out of the way.
+                proceed_after_attach.set()
+
+                attach_result, delete_result = await asyncio.wait_for(
+                    asyncio.gather(attach_task, delete_task, return_exceptions=True),
+                    timeout=10,
+                )
+
+            for label, outcome in (
+                ("attach", attach_result),
+                ("delete", delete_result),
+            ):
+                assert not isinstance(
+                    outcome, BaseException
+                ), f"{label} raised {outcome!r} instead of completing"
+
+            attach_error = attach_result[1] if attach_result else None
+
+            async with database_manager.session_factory() as check:
+                org = await check.get(Organization, org_id)
+                settings_has_brush = any(
+                    t.get("slug") == "brush"
+                    for t in (org.settings or {})
+                    .get("scheduling", {})
+                    .get("call_tracking", {})
+                    .get("call_types", [])
+                )
+                attach_committed = (
+                    await check.execute(
+                        text(
+                            "SELECT 1 FROM org_call_responses "
+                            "WHERE call_id = :c AND shift_id = :s LIMIT 1"
+                        ),
+                        {"c": attach_call_id, "s": shift_id},
+                    )
+                ).first() is not None
+
+            assert not (
+                attach_committed and attach_error is None and not settings_has_brush
+            ), (
+                "orphan reproduced: this shift is attached to a 'brush' call "
+                "but the org's settings no longer configure it "
+                f"(attach result={attach_result!r}, delete result={delete_result!r})"
+            )
+        finally:
+            for task in (attach_task, delete_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
             await session_a.rollback()
             await session_b.rollback()
             await session_a.close()

@@ -16,6 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 15 follow-up, round 4 (SCH-13 deadlock fix)** — PR
+[#2441](https://github.com/thegspiro/the-logbook/pull/2441), branch
+`claude/security-review-scheduling-sch13-round4`. PR
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437) (rounds 1-3 of
+the same SCH-13 follow-up) merged clean at 18:06:50 UTC — 17/17 CI checks
+green, `mergeable_state: clean`, merge commit `7044c0e`. **But #2437 left
+one of its own review threads unresolved and unaddressed at merge time**: a
+Codex review posted at 17:10:14 UTC (comment
+[r3971105987](https://github.com/thegspiro/the-logbook/pull/2437#discussion_r3971105987)),
+after that round's fixes had already been pushed and while the PR was going
+green, named a fourth real gap — this one in the lock _order_ rounds 1-3
+together established, not in any single lock's own completeness. Confirmed
+directly rather than taken on faith: `SchedulingService.finalize_shift`/
+`save_closeout_calls` both call `CallTrackingService.attach_response`
+before `record_shift_calls`, whose organization lock (round 1) only fires
+when a type breakdown is also present. `attach_response`'s `INSERT` of an
+`OrgCallResponse` takes an implicit database lock on the referenced
+`OrgCall` row via its foreign key, so a close-out doing both locks
+call-then-organization — the exact reverse of the deletion guard's
+organization-then-call order. This is the same shape as EC-15 and the
+original SCH-13 follow-up itself (PR #2437 was already the "a Codex finding
+landed after merge" case for #2435; this is that same thing happening to
+#2437 in turn) — not a reason to reopen #2437 (closed pull requests stay
+closed) or push to its now-merged branch (CLAUDE.md Pitfall #24), so it is
+carried forward on a fresh branch off current `origin/main` instead.
+
+Fixed by locking the organization first, in both callers, whenever a
+close-out will both attach a call and validate a type breakdown. Guard
+test `TestAttachThenRecordVsDeletionDeadlock`
+(`tests/test_call_type_deletion_race.py`) needed more than the
+pinned-snapshot-plus-`gather` shape the first three SCH-13 classes use —
+that shape targets read staleness, and this bug is a lock-order deadlock —
+so it patches `CallTrackingService.attach_response` to pause after its own
+flush (matching `test_facility_document_reference_race.py`'s established
+pause-and-release pattern for lock-order races) rather than relying on
+natural interleaving. A gather-only version was tried first and passed
+15/15 with no failure against the pre-fix code, motivating the rewrite
+rather than reporting a false "no repro." The patch-and-pause version fails
+6/6 with a real `OperationalError` 1213 ("Deadlock found") against the
+pre-fix code and passes 5/5 with zero deadlocks against the fix; full
+backend suite 11971/11971 (one more than #2437's own run, from this new
+guard test); `flake8`/`black`/`isort` clean against `app/`, `tests/`,
+`alembic/`; migrations unchanged (single head, 440 revisions, no new
+migration this round). No frontend file touched. Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 4 → SCH-13, "Round 4."
+
+**Rotation row 15 stays `⏳` (awaiting merge)** — SCH-13 round 4 is real
+and unmerged, so the row must not read `✅` yet, matching the tracker's own
+established convention (e.g. the round-1-3 note this replaces, and the
+MP-08 log entries cited there).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15 follow-up, SCH-13 rounds 1-3, PR #2437, merged but left a round-4 gap open), preserved for history</summary>
+
 **Feature 15 follow-up (SCH-13 fix)** — PR
 [#2437](https://github.com/thegspiro/the-logbook/pull/2437), branch
 `security-review/scheduling-codex-followup-2026-09-09`. The four review
@@ -12346,6 +12400,7 @@ findings are all resolved with no open items. Rotation row 33 -> done.
 
 </details>
 
+</details>
 ---
 
 ## Relationship to the existing review passes
