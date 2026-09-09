@@ -18,6 +18,14 @@ import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface PipelineKanbanProps {
+  /**
+   * The pipeline this board is showing. Required, and passed rather than read
+   * off `stages`: a pipeline with no stages left — delete its last one and
+   * `delete_step` nulls the stranded prospects' `current_step_id` — still has
+   * applicants, and deriving the id from an empty stage list would exclude
+   * every one of them and render a blank board under a non-zero total.
+   */
+  pipelineId: string;
   stages: PipelineStage[];
   applicants: ApplicantListItem[];
   /**
@@ -32,6 +40,7 @@ interface PipelineKanbanProps {
 }
 
 export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
+  pipelineId,
   stages,
   applicants,
   totalApplicants,
@@ -62,10 +71,10 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   // coordinator is not even looking at. So the column is for this pipeline's
   // own strays only; a row from elsewhere is dropped, as it always was.
   //
-  // The board's pipeline comes from the stages it is drawing rather than a
-  // prop, so it cannot disagree with the columns actually on screen.
-  const boardPipelineId = stages[0]?.pipeline_id;
-
+  // `pipelineId` is a prop rather than `stages[0].pipeline_id` on purpose: a
+  // pipeline whose last stage was deleted has no stages and still has
+  // applicants, and deriving the id from an empty list would exclude all of
+  // them and blank the board. See the prop's own comment.
   const { applicantsByStage, unassignedApplicants } = useMemo(() => {
     const grouped: Record<string, ApplicantListItem[]> = {};
     for (const stage of stages) {
@@ -76,12 +85,12 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
       const stageGroup = grouped[applicant.current_stage_id];
       if (stageGroup) {
         stageGroup.push(applicant);
-      } else if (boardPipelineId !== undefined && applicant.pipeline_id === boardPipelineId) {
+      } else if (applicant.pipeline_id === pipelineId) {
         unassigned.push(applicant);
       }
     }
     return { applicantsByStage: grouped, unassignedApplicants: unassigned };
-  }, [stages, applicants, boardPipelineId]);
+  }, [stages, applicants, pipelineId]);
 
   const withheldCount = Math.max(0, (totalApplicants ?? applicants.length) - applicants.length);
 
