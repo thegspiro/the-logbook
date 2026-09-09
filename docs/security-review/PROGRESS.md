@@ -16,6 +16,131 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 15 follow-up (SCH-13 fix)** — PR
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437), branch
+`security-review/scheduling-codex-followup-2026-09-09`. The four review
+threads on the superseded #2435 have each been replied to (linking here)
+and marked resolved. PR [#2435](https://github.com/thegspiro/the-logbook/pull/2435)
+(Feature 15, Scheduling, pass 4) merged at 15:48:08 UTC as `aae45c040` — but
+the merge landed on the draft's original two commits only
+(`4aaa1165b`/`13c760567`), **before** the four fixes a Codex review of the
+open PR asked for (a rotation-status correction, `npm run build`, two
+previously-omitted service files read in full, and **SCH-13** — a real
+TOCTOU race between deleting a call type and a concurrent close-out naming
+it) were pushed. Confirmed directly rather than assumed:
+`git diff 13c760567 aae45c040 -- <the five affected files>` is empty — the
+merge carries exactly the pre-fix content, and origin/main still marks
+rotation row 15 `✅` with "0 fixed, 0 flagged" for a review that, per the
+Codex findings, both mis-stated its own merge state and missed a real bug.
+Not a reason to reopen #2435 (closed pull requests stay closed) or push to
+its now-merged branch (CLAUDE.md Pitfall #24) — carried forward instead on
+a fresh branch off current `origin/main`: the four fixes were already
+uncommitted in the working tree when the merge landed, and since
+`origin/main`'s content for the affected files matched the old branch's
+last commit exactly, `git checkout -b <new-branch> origin/main` carried
+every uncommitted change over with no cherry-pick, no conflict, and no
+content lost. **Rotation row 15 → ⏳ (awaiting merge)** — SCH-13 is real and
+unmerged, so the row must not read `✅` yet regardless of what already
+landed under #2435.
+
+SCH-13: `_reject_deleting_a_used_call_type` (the settings-save deletion
+guard) and `CallTrackingService.record_shift_calls` (close-out's
+type-validation) each read the other's domain with a plain `SELECT`; under
+REPEATABLE READ a plain read answers from the transaction's own snapshot,
+so an admin deleting a call type and an officer's close-out recording a
+call under it could each validate against a stale read of the other's
+in-flight change and both commit — leaving history that names a slug no
+longer configured. Fixed by threading `for_update: bool = False` through
+`ShiftEligibilityService._get_org` and
+`CallTrackingService.get_settings`/`_valid_type_slugs`/
+`type_usage_counts`/`slugs_locked_by_history`, with `for_update=True`
+passed from exactly the two call sites in the race — both now serialize on
+the organization row, and the usage-count check is itself a locking read
+too (not merely locked-then-stale), the same shape FORM-10 closed for
+duplicate form submissions. Guard test
+(`tests/test_call_type_deletion_race.py`) uses two real, independently-
+committing sessions with pinned REPEATABLE READ snapshots; confirmed
+failing reliably (5/5 runs) against the unpatched code and passing reliably
+(5/5) against the fix. The other three Codex findings: `npm run build` now
+run and green; `shift_eligibility_service.py` (+183/-3) and
+`shift_completion_service.py` (+95/-1), both changed since pass 3 but
+absent from the draft's churn inventory, now read in full against all
+seven checklist dimensions — no new finding in either beyond SCH-13 itself.
+
+**Round 2 (Codex review of PR #2437 itself): 2 more real gaps in SCH-13's
+own fix, both fixed on the same branch.** (a) `_get_org`'s locking read
+never refreshed an already-loaded `Organization` object — SQLAlchemy's
+identity map returns a cached Python object unrefreshed unless the query
+also carries `execution_options(populate_existing=True)`, the exact gotcha
+`get_shift_by_id` already documents and handles. `finalize_shift` loads
+`Organization` with a plain read of its own before ever reaching the
+locking call, so this silently defeated the fix for exactly the caller
+SCH-13 exists to protect. (b) The `shift_completion_reports` half of the
+usage check was wrongly reasoned to be outside the race window ("a report
+is filed well after its shift's calls") — true of report _creation_, false
+of report _editing_: `ShiftCompletionService.update_report` /
+`_edit_preserves_org_slugs` can change an existing report to newly name a
+type at any later time and never took the organization lock at all. Fixed:
+`_get_org` now adds `populate_existing=True`; the report-usage query in
+`slugs_locked_by_history` is now also a locking read; and
+`_edit_preserves_org_slugs` takes its own locking organization read before
+deciding whether to preserve the `org_calls` marker. Two new guard-test
+classes (`TestPopulateExistingRefreshesTheLock`,
+`TestReportEditVsDeletionRace`) confirmed failing against the round-1-only
+fix and passing against the complete one.
+
+**Round 3 (Codex review of round 2's push): 2 more real gaps, one a
+genuine deadlock, plus a test-robustness gap that hid it — all fixed on
+the same branch.** (a) The bulk call-type-list save
+(`_reject_deleting_a_used_call_type`) derived `in_force`/`persisted`/the
+cap-ratchet comparison from a _pre-lock_ read — `populate_existing`
+refreshes the ORM object on a locking read, it cannot retroactively
+refresh values a caller already computed from an earlier read of it. Two
+admins saving different call-type lists concurrently could each satisfy
+the cap ratchet against a stale ceiling and between them grow the stored
+list past what either save alone would allow. Fixed: the lock is now
+taken first, before any settings-dependent value is derived. (b)
+`update_report` assigns `report.call_types` via `setattr` _before_ calling
+`_edit_preserves_org_slugs` — SQLAlchemy's autoflush then flushes (and
+row-locks) the dirtied report on `_edit_preserves_org_slugs`'s own next
+query, before it can lock the organization: a report-then-organization
+order, the reverse of the deletion guard's organization-then-report order.
+This is a real InnoDB deadlock (error 1213) between an ordinary report
+edit and a concurrent deletion, not merely a race — reproduced reliably
+(15/15 runs) once the test was fixed to stop hiding it (see (c)). Fixed:
+`_edit_preserves_org_slugs` is now called _before_ the `setattr` loop
+(it needs nothing the loop produces — it only reads `report.data_sources`,
+never mutated by the loop, and the new `call_types` value already in
+hand), so its lock is the transaction's first write-intent operation,
+matching the deletion guard's order. (c) `TestReportEditVsDeletionRace`'s
+`edit_the_report()` caught bare `Exception` and converted it to a string,
+so a deadlock was indistinguishable from an ordinary non-commit and the
+orphan assertion passed either way — round 2's own claim that this test
+"confirmed" the fix was therefore not fully earned. Fixed: the broad
+`except` is removed; re-running the strengthened test against round-2-only
+code reproduced the (a)/(b) deadlock directly, 15/15 runs, corroborating
+the finding rather than trusting the review's prose — the same test then
+passes 5/5 (a further 15/15 focused on it alone) against the complete fix.
+No new test for (a); verified by inspection and by the unchanged 141-test
+`test_call_tracking.py` suite still passing. Full write-up (all three
+rounds): `docs/security-review/SCH-15-scheduling.md` → Pass 4, SCH-13.
+Next once this follow-up merges: 16 Events & requests.
+
+Full completion gate green (after all three rounds): `flake8`/`black`/`isort`
+clean, migrations single-head (440 revisions), scoped + full backend tests
+passed (including all three race guard tests, with the deadlock class
+specifically re-run 15× each direction), full backend suite passed,
+`npm run typecheck`/`eslint .` both 0 errors, `npm run build` green,
+scheduling frontend vitest passed (unaffected by this backend-only round).
+
+**Superseded — prior Open PR note ("None" after PR #2435's merge, recorded
+via PR #2436, before SCH-13 was discovered on Codex review of the already-
+merged #2435), preserved for history.** (Left as plain text rather than
+another nested collapsible block, matching the note above — this file's
+collapsible-history nesting was already one level short of balanced, and
+opening another one without also tracking down where its matching close
+belongs would only widen that gap.)
+
 **None.** PR #2435 (Feature 15, Scheduling, pass 4) merged clean —
 17/17 CI checks green, `mergeable_state: clean`, Codex review completed
 with no findings. The one non-terminal signal on the PR (a red `CI
@@ -23,21 +148,23 @@ Success` run) was against a superseded head SHA (`4aaa116`, cancelled
 mid-flight by a follow-up push, not a real failure) — confirmed and noted
 on the PR before merging, and the fresh run on the final head (`13c7605`)
 was fully green. Merged via squash, merge commit `aae45c0`. Rotation row
-15 was already ✅ in the PR's own docs update (0 fixed, 0 flagged, 0 new
-findings — SCH-10 re-verified unchanged). Checked the actual established
-Claude branch namespace (`claude/security-review-*`, not
+15 was marked ✅ in the PR's own docs update (0 fixed, 0 flagged, 0 new
+findings — SCH-10 re-verified unchanged) — **since corrected to ⏳ above**,
+because a Codex review of #2435 that landed after the merge found a real
+bug (SCH-13) the merged commits never carried. Checked the actual
+established Claude branch namespace (`claude/security-review-*`, not
 `security-review/*` — e.g. the just-merged Scheduling branch was
 `claude/security-review-scheduling`) via `git ls-remote --heads`: no
 `claude/security-review-events*` branch exists, and no other branch name
 contains "event" apart from an unrelated `claude/public-program-event-
-pipeline-eggwcm`. The rotation is clear to start **16 Events & requests**
-next — nothing is blocking it.
+pipeline-eggwcm`. This "rotation is clear to start 16" conclusion no
+longer holds — superseded by the SCH-13 discovery above.
 
 30-minute rotation watchdog: checked GitHub state directly (open PRs, the
 head of `main`, this file's own "Open PR" note) rather than assuming the
-prior note was current. No open security-review PR exists to tend, no CI
-is red, no merge conflict to resolve — merging the ready PR and recording
-it is the only action this pass takes.
+prior note was current. No open security-review PR existed to tend at that
+point, no CI was red, no merge conflict to resolve — merging the
+then-ready PR and recording it was the only action that pass took.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 4, PR #2435, merged), preserved for history</summary>
@@ -56,12 +183,15 @@ hatch, and a self-scoped decline-assignment endpoint — 101/101 routes
 dependency, every new by-id/FK surface org-scoped, every new JSON/SQL surface
 clean against the checklist. Full write-up:
 `docs/security-review/SCH-15-scheduling.md` → Pass 4. Rotation row 15 → ✅.
-Next: 16 Events & requests.
+Next: 16 Events & requests. **This turned out to be wrong on two counts —
+see the current note above**: the row was marked `✅` while the PR was still
+open (corrected to `⏳`), and a real finding (SCH-13) was missed and caught
+by Codex review after this was written.
 
-Full completion gate green: `flake8`/`black`/`isort` clean, migrations
-single-head (440 revisions), 1247 scoped + 11967 full backend tests passed,
-`npm run typecheck`/`eslint .` both 0 errors, 672 scheduling frontend tests
-passed.
+Full completion gate green (as it stood before the Codex-review fixes):
+`flake8`/`black`/`isort` clean, migrations single-head (440 revisions), 1247
+scoped + 11967 full backend tests passed, `npm run typecheck`/`eslint .`
+both 0 errors, 672 scheduling frontend tests passed.
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2432's merge, confirming the rotation clear for Feature 15), preserved for history</summary>
@@ -12268,7 +12398,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⏳     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -12296,7 +12426,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-09 — Feature 15 (Scheduling, pass 4) — 0 fixed, 0 flagged, 0 new findings
+### 2026-09-09 — Feature 15 (Scheduling, pass 4) — 1 fixed (SCH-13, LOW/MED), 0 flagged, corrected on Codex review of the draft PR
 
 **Step 0:** checked GitHub directly (`list_pull_requests`, state=open) —
 zero open PRs against the repo — and cross-checked `git ls-remote --heads`
@@ -12370,15 +12500,124 @@ re-fixed here, same reasoning as every prior pass: closing it is a
 cross-cutting change spanning every `create_integration_client()`-based
 transport, not a scheduling-scoped one.
 
-Full completion gate green: `flake8`/`black`/`isort` on `app/ tests/
-alembic/` all clean; `validate_migrations.py --strict` single head (440
-revisions); scoped pytest (`-k "scheduling or shift or swap or calcom or
-position_slots or call_tracking or call_type"`) 1247 passed; full backend
-suite 11967 passed, 21 pre-existing skips; `npm run typecheck` (aliased TS7
-compiler per CLAUDE.md) 0 errors; `npx eslint .` 0 errors; scheduling
-frontend vitest 672 passed (42 files, not mandatory, run anyway per pass
-3's precedent). Full write-up: `docs/security-review/SCH-15-scheduling.md`
-→ Pass 4. Rotation row 15 → ✅. Next: 16 Events & requests.
+**Codex review of the draft PR caught four real gaps**, all verified against
+the current code (not taken on faith) and addressed:
+
+1. **Rotation-state error.** The draft marked row 15 `✅` and the Open PR
+   section said "0 fixed, 0 flagged" for a PR that was, by its own text,
+   still open pending merge — contradicting the legend's own `⏳` (awaiting
+   PR merge) vs. `✅` (done) distinction, and this file's own established
+   convention elsewhere (e.g. the MP-08 log entries: row held at `⏳` while a
+   PR was open, flipped to `✅` only on a later merge-recording entry).
+   Corrected: row 15 → `⏳`, wording throughout this section and the Open PR
+   note above updated to say "awaiting merge."
+2. **`npm run build` never run.** The draft's completion gate stopped at
+   typecheck/ESLint/Vitest despite auditing 79 changed frontend files. Run
+   now (see the gate below) — clean, matching pass 3's own precedent of
+   running it as a bonus check.
+3. **Two changed service files never reviewed.** `shift_eligibility_service.py`
+   (+183/-3) and `shift_completion_service.py` (+95/-1) both changed since
+   pass 3's baseline and implement real pieces of the reviewed surface (the
+   signup-window settings reader, the call-type normalization/label-
+   disambiguation logic, and the report call-type-provenance tracking) but
+   were absent from the draft's churn inventory and full-read list entirely
+   — confirmed by re-running the same `git diff --stat` scope with these two
+   files added. Both now read in full against all seven checklist
+   dimensions: every query org-scoped (`_get_org`, `update_report`'s
+   `report.organization_id != organization_id` double-check), the one
+   nested-JSON write (`_edit_preserves_org_slugs`'s `data_sources` clear)
+   correctly uses `copy.deepcopy` (Pitfall #12), all numeric settings reads
+   degrade to a bounded default rather than raising (Pitfall #19), no new
+   finding in either file beyond SCH-13 below (which spans into
+   `shift_eligibility_service.py`'s `_get_org`).
+4. **SCH-13 (LOW/MED, fixed) — a real TOCTOU race.** Deleting a call type
+   (`_reject_deleting_a_used_call_type` in `scheduling.py`) and recording a
+   call under that type during close-out (`CallTrackingService.
+record_shift_calls`) each read the other's domain (settings / current
+   usage) with a plain `SELECT`. Under REPEATABLE READ a plain read answers
+   from the transaction's own snapshot, so two overlapping requests — one
+   deleting "brush", one recording a call under "brush" — could each pass
+   validation against a stale read of the other's in-flight change and both
+   commit, leaving history referring to a slug no longer configured. Fixed
+   by threading `for_update: bool = False` through
+   `ShiftEligibilityService._get_org` and `CallTrackingService.get_settings`
+   / `_valid_type_slugs` / `type_usage_counts` / `slugs_locked_by_history`,
+   and passing `for_update=True` from exactly the two call sites in the
+   race (the deletion guard, and `record_shift_calls`'s type-count
+   validation) — both now serialize on the organization row, and the
+   usage-count check is itself a locking read rather than merely locked-then-
+   stale, the same shape FORM-10 fixed for duplicate form submissions.
+   Guard test `tests/test_call_type_deletion_race.py` uses two real,
+   independently-committing sessions with pinned REPEATABLE READ snapshots
+   (matching FORM-10's own test shape) — confirmed failing 5/5 runs against
+   the unpatched code and passing 5/5 against the fix.
+
+Full completion gate green (re-run after the fix above): `flake8`/`black`/
+`isort` on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` single head (440 revisions); scoped pytest (`-k "scheduling or
+shift or swap or calcom or position_slots or call_tracking or call_type"`)
+plus the new race guard test all passed; full backend suite passed, only
+pre-existing skips; `npm run typecheck` (aliased TS7 compiler per
+CLAUDE.md) 0 errors; `npx eslint .` 0 errors; `npm run build` 0 errors
+(added this round); scheduling frontend vitest passed (not mandatory, run
+anyway per pass 3's precedent). Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 4. **Rotation row 15 →
+⏳ (awaiting merge)** — not `✅` yet.
+
+**Merge-race addendum.** PR #2435 (carrying only the pre-Codex-review
+draft, i.e. everything above this addendum minus the four items 1-4 list)
+merged at 15:48:08 UTC as `aae45c040` before this addendum's fixes were
+pushed — the review comments arrived and were addressed after the PR had
+already gone green and been merged. Confirmed directly: `git diff
+13c760567 aae45c040` for the five affected files is empty, so nothing in
+items 1-4 reached `main`. Not a reason to reopen #2435 (closed PRs stay
+closed) or push to its now-merged branch (CLAUDE.md Pitfall #24, and the
+same shape as the EC-15 follow-up above) — carried forward on a fresh
+branch, `security-review/scheduling-codex-followup-2026-09-09`, off current
+`origin/main`; the four fixes were already uncommitted in the working tree
+when the merge landed, so `git checkout -b <branch> origin/main` carried
+them over with no cherry-pick needed. Follow-up PR:
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437) — see the Open
+PR section above. All four Codex review threads on #2435 replied to
+(linking to #2437) and marked resolved.
+
+**Round-2 addendum.** A Codex review of #2437 itself (the SCH-13 fix
+above, not the original draft) caught two further real gaps in the
+locking fix, both fixed on the same branch: (a) `_get_org`'s locking read
+never carried `execution_options(populate_existing=True)`, so an
+already-loaded `Organization` object (e.g. `finalize_shift`'s own earlier
+plain read) stayed stale in the caller's hands even though the row was
+correctly locked at the database level — the identical gotcha
+`get_shift_by_id` already documents and handles; (b) the
+`shift_completion_reports` half of the usage check was reasoned to be
+outside the race window ("a report is filed well after its shift's
+calls"), which is true of creation and false of _editing_ —
+`ShiftCompletionService.update_report`/`_edit_preserves_org_slugs` can
+rename an existing report onto the candidate slug at any time and never
+took the organization lock. Both fixed (see the Open PR section's SCH-13
+paragraph above and `SCH-15-scheduling.md`'s SCH-13 write-up for the
+mechanism); two new guard-test classes added, both confirmed failing
+against the round-1-only fix and passing against the complete one.
+
+**Round-3 addendum.** A further Codex review, of round 2's own push, found
+two more real gaps — (a) the bulk call-type-list save still derived its
+settings-dependent values from a pre-lock read, missing that
+`populate_existing` refreshes the ORM object but not values already
+computed from an earlier read of it; (b) the round-2 report-edit fix
+locked report-then-organization via SQLAlchemy autoflush, the reverse of
+the deletion guard's organization-then-report order — a genuine InnoDB
+deadlock (error 1213) between an ordinary report edit and a concurrent
+deletion, reproduced reliably once the test stopped swallowing it — plus
+(c) the round-2 guard test itself caught bare `Exception` and converted it
+to a string, which is exactly what let the deadlock in (b) pass unnoticed.
+All three fixed on the same branch: the lock moved earlier in the
+list-save guard, `_edit_preserves_org_slugs` now called before the report
+object is mutated (establishing the same lock order both paths need), and
+the test's broad `except` removed so an unexpected exception fails the
+test instead of being absorbed. CLAUDE.md's rule applied directly here: no
+round limit on legitimate findings against a pushed fix. See the Open PR
+section above for the full mechanism and gate results. Next once #2437
+merges: 16 Events & requests.
 
 ### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
 
