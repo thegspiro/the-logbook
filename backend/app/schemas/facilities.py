@@ -9,7 +9,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -1066,7 +1066,12 @@ class FacilityRoomResponse(FacilityRoomBase):
 class FacilityEmergencyContactBase(BaseModel):
     facility_id: str
     contact_type: EmergencyContactTypeEnum
-    company_name: str = Field(..., max_length=200)
+    # Individually optional — the shipped ContactsSection.tsx form's own
+    # "company name or contact name is required" rule allows a vendor with no
+    # named contact, or a named contact (e.g. facility staff) with no
+    # company — but the validator below still requires at least one so the
+    # row has something to identify it by.
+    company_name: Optional[str] = Field(None, max_length=200)
     contact_name: Optional[str] = Field(None, max_length=200)
     phone: Optional[str] = Field(None, max_length=50)
     alt_phone: Optional[str] = Field(None, max_length=50)
@@ -1075,6 +1080,12 @@ class FacilityEmergencyContactBase(BaseModel):
     priority: int = Field(default=1, ge=1)
     notes: Optional[str] = None
     is_active: bool = True
+
+    @model_validator(mode="after")
+    def require_company_or_contact_name(self) -> "FacilityEmergencyContactBase":
+        if not (self.company_name or self.contact_name):
+            raise ValueError("company_name or contact_name is required")
+        return self
 
 
 class FacilityEmergencyContactCreate(FacilityEmergencyContactBase):
@@ -1366,7 +1377,13 @@ class FacilityComplianceItemCreate(BaseModel):
 
 class FacilityComplianceItemUpdate(BaseModel):
     checklist_id: Optional[str] = None
-    sort_order: Optional[int] = None
+    # The update endpoint predated the sort_order rename (unlike create, which
+    # FAC-46 made reachable for the first time); accept the previously
+    # documented item_number key too, so an existing caller's PATCH payload
+    # keeps applying instead of being silently dropped as an unknown field.
+    sort_order: Optional[int] = Field(
+        default=None, validation_alias=AliasChoices("sort_order", "item_number")
+    )
     description: Optional[str] = None
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None

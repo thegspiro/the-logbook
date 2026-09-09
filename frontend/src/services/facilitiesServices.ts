@@ -409,13 +409,16 @@ export interface ComplianceChecklistCreate {
 
 export interface ComplianceItem {
   id: string;
+  organizationId: string;
   checklistId: string;
-  description: string;
-  isCompleted: boolean;
-  completedDate?: string;
-  completedBy?: string;
-  notes?: string;
   sortOrder?: number;
+  description: string;
+  isCompliant?: boolean;
+  findings?: string;
+  correctiveAction?: string;
+  correctiveActionDeadline?: string;
+  correctiveActionCompleted: boolean;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -423,6 +426,11 @@ export interface ComplianceItem {
 export interface ComplianceItemCreate {
   description: string;
   sort_order?: number;
+  is_compliant?: boolean;
+  findings?: string;
+  corrective_action?: string;
+  corrective_action_deadline?: string;
+  corrective_action_completed?: boolean;
   notes?: string;
 }
 

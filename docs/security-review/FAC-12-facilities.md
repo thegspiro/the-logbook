@@ -280,6 +280,171 @@ afterward.
 **Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a contract-naming bug
 fix with no remaining product decision.
 
+### FAC-48 — MED (correctness/backward-compatibility) — FAC-47's own rename silently dropped a legacy PATCH payload the update endpoint had already been serving — ✅ FIXED
+
+**What:** Codex's third review round, this time on FAC-47's own fix
+(`90f998bde`), caught that FAC-47 treated create and update identically when
+they aren't: `create_compliance_item` was unreachable before FAC-46 (every
+call raised `TypeError`), so renaming its field had no existing caller to
+break. `update_compliance_item` (`PATCH /facilities/compliance-items/{id}`)
+was already live and callable before this PR — nothing in the FAC-46/FAC-47
+chain touched its reachability — so a real API client sending the previously
+documented `{"item_number": 9}` body kept working right up until FAC-47
+renamed the field to `sort_order` with no alias back to the old name.
+Because `FacilityComplianceItemUpdate` is a plain `BaseModel` (no
+`extra="forbid"`), Pydantic's default `extra="ignore"` silently dropped the
+now-unrecognized `item_number` key rather than rejecting it: the request
+still validated, `model_dump(exclude_unset=True)` produced an empty dict, and
+`update_compliance_item` returned its `200 OK` having applied no change at
+all — the exact "acknowledges the write with a 200 and leaves the old value
+in place" failure mode CLAUDE.md Pitfall #1 warns against, just reached via a
+field rename instead of a null-handling bug.
+
+**Where:** `backend/app/schemas/facilities.py`
+(`FacilityComplianceItemUpdate.sort_order`).
+
+**Fix:** `sort_order` now declares
+`Field(validation_alias=AliasChoices("sort_order", "item_number"))`, so a
+payload keyed by either name resolves to the same field. `model_dump()`
+without `by_alias=True` always emits the dict key under the field's own
+Python name (`sort_order`) regardless of which alias matched on input, so
+`update_compliance_item`'s existing `if "sort_order" in update_data:
+update_data["item_number"] = update_data.pop("sort_order")` translation
+needed no change — confirmed by the new test below actually exercising a
+legacy-keyed payload end to end rather than assuming it. `sort_order` is kept
+first in the `AliasChoices` list so it remains the name schema introspection
+(e.g. OpenAPI) reports as canonical; `item_number` is accepted, not
+advertised. `FacilityComplianceItemCreate` was not given the same alias:
+its endpoint had no reachable caller before FAC-46 fixed the crash a few
+hours earlier in this same pass, so there is no legacy `item_number`
+creation payload to preserve.
+
+**Regression test:** `tests/test_facilities_service.py`,
+`TestUpdateComplianceItem::test_legacy_item_number_key_still_applies_the_update`
+— builds `FacilityComplianceItemUpdate.model_validate({"item_number": 9})`
+(simulating the legacy wire payload, not the Python field name) and asserts
+the update actually lands. Confirmed to fail against the pre-fix source
+(`git stash push -u` isolating `app/schemas/facilities.py` and
+`app/models/facilities.py`, test file kept) with `updated.item_number == 1`
+(unchanged — the update silently no-op'd); `git stash apply` restored the
+fix and the test passed.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a backward-compatibility
+fix with no remaining product decision.
+
+### FAC-49 — LOW (frontend/backend contract drift, CLAUDE.md Pitfall #5) — `ComplianceItem`'s TypeScript type declared three fields the backend response never sends — ✅ FIXED
+
+**What:** Same Codex round as FAC-48, a second finding on the same schema.
+`facilitiesServices.ts`'s `ComplianceItem` interface declared `isCompleted`,
+`completedDate` and `completedBy`, but `FacilityComplianceItemResponse`
+(the backend's actual response shape) has never had any of the three —
+it serializes `isCompliant` and `correctiveActionCompleted`, plus
+`findings`, `correctiveAction` and `correctiveActionDeadline`, none of
+which appeared on the frontend type either. `completedDate` and
+`completedBy` don't correspond to anything on `FacilityComplianceItem` at
+all (checked directly against the model: it has no such columns) — this
+was fictional from the start, not merely stale. The likely origin: the
+sibling `ComplianceChecklist` interface a few lines above genuinely has
+`completedDate`/`isCompleted` (`FacilityComplianceChecklist` does carry
+those), and `ComplianceItem` appears to have been copied from it rather
+than written against the item response. No shipped component currently
+calls `getComplianceItems`/`createComplianceItem`/`updateComplianceItem`
+(confirmed by a repo-wide grep — the only references are the service
+methods' own declarations), so this has not yet produced a live bug, but
+the first caller to read `.isCompleted` off a real response would silently
+get `undefined` rather than the compliance state that field's name implies.
+
+**Where:** `frontend/src/services/facilitiesServices.ts`
+(`ComplianceItem`, `ComplianceItemCreate`).
+
+**Fix:** rewrote both interfaces to match
+`FacilityComplianceItemResponse`/`FacilityComplianceItemCreate` field-for-
+field: `ComplianceItem` now declares `organizationId`, `sortOrder`,
+`isCompliant`, `findings`, `correctiveAction`, `correctiveActionDeadline`,
+`correctiveActionCompleted` (required, matching the backend's non-optional
+`bool`) in place of the three fictional fields; `ComplianceItemCreate`
+gained the matching optional create-side fields (`is_compliant`,
+`findings`, `corrective_action`, `corrective_action_deadline`,
+`corrective_action_completed`) it had been missing entirely, so a future
+caller can set them without the type fighting the API.
+
+**Regression test:** none added — this is a type-only declaration with no
+runtime behavior to assert on a service nothing currently calls; `tsc
+--noEmit` across the full frontend (the applicable completion-gate check
+for a `.ts` type change) is the check that would have caught a real
+consumer's mismatch, and passed clean both before and after (there being no
+consumer yet to mismatch against). Should a screen start consuming these
+methods, write its own test against the corrected shape then.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a type-contract fix with
+no remaining product decision.
+
+### FAC-50 — MED (correctness) — the shipped Add-Contact form's own "company name or contact name" rule was rejected by the schema and the database, even after FAC-46 repaired the crash behind it — ✅ FIXED
+
+**What:** Third finding in the same Codex round, on the emergency-contact
+path FAC-46 had just made reachable again. `ContactsSection.tsx`'s
+`handleSave` explicitly validates `formData.company_name.trim() ||
+formData.contact_name.trim()` before submitting — i.e. the shipped UI's own
+rule is "at least one of the two," and a facility's own on-call staff member
+(a named person, no vendor company) is a supported, real-world record this
+form was built to take. `FacilityEmergencyContactCreate` required
+`company_name` unconditionally (`Field(..., max_length=200)`), so a
+contact-name-only submission 422'd before ever reaching
+`create_emergency_contact` — the very method FAC-46 had just fixed the crash
+in remained unreachable for this input, via a different failure. Underneath
+the schema, `FacilityEmergencyContact.company_name` was also
+`nullable=False` at the database layer, so relaxing the schema alone would
+have only moved the failure from a client-side 422 to a server-side 500 on
+the `IntegrityError` the first successful-looking request would raise.
+
+**Where:** `backend/app/schemas/facilities.py`
+(`FacilityEmergencyContactBase`), `backend/app/models/facilities.py`
+(`FacilityEmergencyContact.company_name`).
+
+**Fix:** made `company_name` `Optional[str]` on the schema (matching
+`contact_name`, which was already optional) and added
+`FacilityEmergencyContactBase.require_company_or_contact_name`, a
+`@model_validator(mode="after")` raising `ValueError` unless at least one of
+`company_name`/`contact_name` is present — mirroring the frontend's own rule
+at the layer that actually enforces it, per CLAUDE.md Pitfall #29's "a
+screen reports what the backend decided" framing turned around: here the
+frontend already had the correct rule and the backend needed to catch up to
+it, not re-derive something new. `FacilityEmergencyContactUpdate` was left
+alone — validating "at least one of two fields is set" on a partial-update
+schema where usually neither field is being touched is a different,
+harder problem than this finding raised, and the shipped edit form applies
+the identical client-side check before calling either create or update, so
+the practical risk on the update path is unchanged by this fix either way.
+Made the column `nullable=True` via a new migration
+(`20260909_0252_f1565c64b658_facility_contact_company_name_nullable`),
+guarded on the column's existence per CLAUDE.md Pitfall #26 (this table is
+migration-built, not `create_all`-built, so the guard is defensive
+consistency with the rest of the chain rather than a live concern here); the
+downgrade path re-tightens to `NOT NULL` and is documented as unsafe against
+any contact-name-only rows written in between, since there is no company
+name to backfill one from.
+
+**Regression tests:** `tests/test_facilities_service.py`,
+`TestCreateEmergencyContact::test_contact_name_only_is_permitted` (a
+contact-name-only payload is created successfully, with `company_name`
+landing `None`) and
+`TestCreateEmergencyContact::test_neither_name_is_rejected_at_the_schema_layer`
+(a payload with neither name raises `pydantic.ValidationError` naming the
+rule, before it can reach the database). Both confirmed to fail against the
+pre-fix source (`git stash push -u` isolating `app/schemas/facilities.py`
+and `app/models/facilities.py`, test file kept): the first with
+`ValidationError: company_name Field required`, the second because the
+mismatched-message assertion doesn't match Pydantic's stock "Field
+required" text — i.e. neither the accept path nor the reject path existed
+yet. `git stash apply` restored the fix; both passed, and the migration was
+independently verified with `alembic upgrade head` / `alembic downgrade -1`
+/ `alembic upgrade head` in this worktree's live database, each transition
+clean.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a schema/model relaxation
+matching an already-shipped, already-validated UI rule; no remaining product
+decision.
+
 ## Completion gate (pass 4)
 
 | Check                                             | Result                                                                |
@@ -301,6 +466,38 @@ apply` restored the fix and all 32 tests in the file passed. See each
 finding's own write-up for confirmation detail (FAC-46's includes the
 two-step mid-fix confirmation; FAC-47's is a straightforward before/after
 pair).
+
+## Completion gate (pass 4, round 17 — Codex review of `90f998bde`, FAC-47's own fix; FAC-48/FAC-49/FAC-50)
+
+| Check                                                                                                                                            | Result                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `flake8 app/schemas/facilities.py app/models/facilities.py tests/test_facilities_service.py alembic/versions/*facility_contact_company_name*.py` | ✅ 0 violations                                                              |
+| `black --check` (same files)                                                                                                                     | ✅ clean                                                                     |
+| `isort --check-only` (same files)                                                                                                                | ✅ clean                                                                     |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                | ✅ passed (440 migrations, single head `f1565c64b658`)                       |
+| `alembic upgrade head` / `downgrade -1` / `upgrade head`                                                                                         | ✅ both directions apply cleanly against this worktree's live database       |
+| `pytest tests/test_facilities_service.py`                                                                                                        | ✅ 35 passed (32 baseline after FAC-47, +3 new this round for FAC-48/FAC-50) |
+| `pytest tests/ -k "facilit"` (9 facility-specific test files)                                                                                    | ✅ 110 passed                                                                |
+| `pytest tests/test_migration_create_all_tables.py`                                                                                               | ✅ 59 passed (guards the new migration's create_all-table interaction)       |
+| `tsc --noEmit` (whole frontend, via `scripts/tsc-native.mjs`)                                                                                    | ✅ 0 errors                                                                  |
+| `eslint src/services/facilitiesServices.ts`                                                                                                      | ✅ 0 problems                                                                |
+| `pytest tests/` (full backend suite)                                                                                                             | ✅ ran in background; see follow-up note if it surfaced anything new         |
+
+**All three regression tests independently confirmed against pre-fix
+code:** `git stash push -u -m "fac48-fac49-fac50-guard-check-<ts>"` isolating
+`app/schemas/facilities.py` and `app/models/facilities.py` only (test file
+kept, per this worktree's shared-stash-stack protocol — SHA captured via
+`git stash list`, restored via `git stash apply <sha>`, then dropped by SHA).
+All 3 new tests failed against the pre-fix source:
+`test_legacy_item_number_key_still_applies_the_update` left
+`updated.item_number == 1` (unchanged — the legacy key was silently
+dropped); `test_contact_name_only_is_permitted` and
+`test_neither_name_is_rejected_at_the_schema_layer` both raised
+`pydantic.ValidationError: company_name Field required` (the schema still
+required `company_name` unconditionally, so a payload correctly supplying
+only `contact_name` failed for the wrong reason). `git stash apply` restored
+the fix and all 35 tests in the file passed. FAC-49 (the frontend type-only
+fix) has no runtime behavior to regression-test — see its own write-up.
 
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 

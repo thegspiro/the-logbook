@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.dialects import mysql
 
 from app.models.facilities import Facility, FacilityComplianceItem, FacilityPhoto
@@ -451,6 +452,37 @@ class TestUpdateComplianceItem:
             )
         assert updated.item_number == 9
 
+    async def test_legacy_item_number_key_still_applies_the_update(
+        self, service, org_id
+    ):
+        """Codex review of the FAC-47 fix itself, PR #2425: unlike create
+        (unreachable before FAC-46), the update endpoint was already live
+        before this rename, so a real caller may still send the previously
+        documented `{"item_number": 9}` PATCH body. Without accepting that
+        key too, Pydantic's default extra="ignore" behavior silently drops
+        it, `exclude_unset=True` sees no field set, and the update
+        "succeeds" as a no-op that leaves the ordering unchanged.
+        `FacilityComplianceItemUpdate.sort_order` now accepts `item_number`
+        as an additional validation alias, so the legacy payload still
+        resolves to `sort_order` and still applies.
+        """
+        item = FacilityComplianceItem(
+            id=str(uuid4()),
+            organization_id=org_id,
+            checklist_id=str(uuid4()),
+            item_number=1,
+            description="Exit lights",
+            corrective_action_completed=False,
+        )
+        legacy_payload = FacilityComplianceItemUpdate.model_validate({"item_number": 9})
+        with patch.object(service, "get_compliance_item", return_value=item):
+            updated = await service.update_compliance_item(
+                item_id=item.id,
+                item_data=legacy_payload,
+                organization_id=org_id,
+            )
+        assert updated.item_number == 9
+
 
 class TestCreateEmergencyContact:
     """FAC-46: `create_emergency_contact` passed `created_by=created_by` into
@@ -486,6 +518,41 @@ class TestCreateEmergencyContact:
                 created_by=str(uuid4()),
             )
         assert contact.company_name == "Acme Alarm Co."
+
+    async def test_contact_name_only_is_permitted(self, service, org_id):
+        """Codex review of the FAC-46 fix, PR #2425: the shipped
+        ContactsSection.tsx form's own "company name or contact name is
+        required" rule permits submitting only a contact_name (e.g. a
+        facility's own on-call staff, with no vendor company behind them),
+        but `FacilityEmergencyContactCreate` required `company_name` and the
+        model column was NOT NULL -- so this supported input still 422'd
+        before ever reaching this now-repaired method. `company_name` is now
+        nullable on both the schema and the column (see the paired
+        migration), guarded by a schema-level "at least one" validator.
+        """
+        facility = MagicMock()
+        with patch.object(service, "get_facility", return_value=facility):
+            contact = await service.create_emergency_contact(
+                contact_data=FacilityEmergencyContactCreate(
+                    facility_id=str(uuid4()),
+                    contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+                    contact_name="Jane Doe",
+                ),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert contact.contact_name == "Jane Doe"
+        assert contact.company_name is None
+
+    def test_neither_name_is_rejected_at_the_schema_layer(self):
+        """The other half of the same finding: a payload with neither name
+        must fail validation before it can reach the database and produce
+        a contact nothing can identify."""
+        with pytest.raises(ValidationError, match="company_name or contact_name"):
+            FacilityEmergencyContactCreate(
+                facility_id=str(uuid4()),
+                contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            )
 
 
 class TestModelConstructorsMatchTheirColumns:
