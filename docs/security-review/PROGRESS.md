@@ -16,10 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 15 (Scheduling, pass 4)** — branch
-`claude/security-review-scheduling`, PR pending (created this pass; number
-recorded in a fast follow-up commit once GitHub assigns it, matching how the
-EC-15 note below handled the same sequencing). **0 fixed, 0 flagged, 0 new
+**Feature 15 (Scheduling, pass 4)** — PR
+[#2435](https://github.com/thegspiro/the-logbook/pull/2435), branch
+`claude/security-review-scheduling`. **0 fixed, 0 flagged, 0 new
 findings** — SCH-10 (the DNS-rebinding TOCTOU, cross-cutting) re-verified
 unchanged and still correctly tracked in `docs/KNOWN_LIMITATIONS.md`. Six
 days of `main` since pass 3's actual landing point (`8b89f319d`, PR #2212's
