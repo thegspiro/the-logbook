@@ -214,19 +214,34 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
   const missing: number[] = [];
 
   lines.forEach((line, index) => {
-    const opener = /^(\s*)return \($/.exec(line);
+    // Both return forms. `return (` wrapping is a formatting choice, and this
+    // repository already writes the other one — `return <SkeletonPage />;` in
+    // StorefrontPage. Recognising only the parenthesised form would make
+    // Prettier's line-length threshold part of an accessibility invariant, and
+    // would silently skip a one-line loading branch in a replacement shell.
+    const parenthesised = /^(\s*)return \($/.exec(line);
+    const direct = /^(\s*)return (<.*)$/.exec(line);
+    const opener = parenthesised ?? direct;
     if (!opener || (opener[1] ?? '').length > maxIndent) return;
 
-    // Balance the parens to take the whole returned expression.
-    let depth = 0;
     const body: string[] = [];
-    for (let k = index; k < lines.length; k++) {
-      const current = lines[k] ?? '';
-      depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
-      body.push(current);
-      if (depth <= 0) break;
+    if (parenthesised) {
+      // Balance the parens to take the whole returned expression.
+      let depth = 0;
+      for (let k = index; k < lines.length; k++) {
+        const current = lines[k] ?? '';
+        depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
+        body.push(current);
+        if (depth <= 0) break;
+      }
+    } else {
+      // An unparenthesised return ends at the statement's semicolon.
+      for (let k = index; k < lines.length; k++) {
+        body.push(lines[k] ?? '');
+        if ((lines[k] ?? '').trimEnd().endsWith(';')) break;
+      }
     }
-    const jsx = body.slice(1).join('\n');
+    const jsx = parenthesised ? body.slice(1).join('\n') : body.join('\n').replace(/^\s*return\s+/, '');
 
     // Only a branch that returns markup directly. A helper returning an object
     // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
@@ -250,6 +265,69 @@ const branchesMissingTarget = (page: string, component: string): number[] => {
   });
 
   return missing;
+};
+
+/**
+ * The source file a component name refers to, resolved through the file that
+ * renders it.
+ *
+ * A route file often renames the page it imports: `modules/inventory/routes.tsx`
+ * declares `ImportInventoryPage` for `pages/ImportInventory.tsx`. Comparing a
+ * rendered *name* against a file *basename* therefore misses that page
+ * entirely — which mattered because the comparison guards the shell exemption,
+ * so a real routing shape could have slipped a nested page past it.
+ */
+const componentFile = (name: string, declaredIn: string): string | null => {
+  const source = read(declaredIn);
+  const from = (specifier: string): string | null => {
+    if (!specifier.startsWith('.')) return null;
+    const resolved = path.resolve(path.dirname(path.join(SRC, declaredIn)), specifier);
+    for (const candidate of [`${resolved}.tsx`, path.join(resolved, 'index.tsx')]) {
+      if (fs.existsSync(candidate)) return path.relative(SRC, candidate);
+    }
+    return null;
+  };
+
+  const lazy = new RegExp(
+    String.raw`const\s+${name}\s*=\s*lazyWithRetry\(\s*\(\)\s*=>\s*import\(\s*['"]([^'"]+)['"]`
+  ).exec(source);
+  if (lazy?.[1]) return from(lazy[1]);
+
+  const imported = new RegExp(
+    String.raw`import\s+(?:\{[^}]*\b${name}\b[^}]*\}|${name})\s+from\s+['"]([^'"]+)['"]`
+  ).exec(source);
+  if (imported?.[1]) return from(imported[1]);
+
+  const byFilename = globSync(path.join(SRC, `**/${name}.tsx`));
+  return byFilename.length === 1 ? path.relative(SRC, byFilename[0] ?? '') : null;
+};
+
+/** Every page file rendered inside the AppLayout route, aliases resolved. */
+const layoutPageFiles = (): Set<string> => {
+  const { layoutJsx } = routeJsx();
+  const files = new Set<string>();
+
+  for (const name of renderedComponents(layoutJsx)) {
+    const file = componentFile(name, 'App.tsx');
+    if (file) files.add(file);
+  }
+
+  for (const [, factory] of layoutJsx.matchAll(/\{(get\w+Routes)\(\)\}/g)) {
+    const declaration = new RegExp(String.raw`export\s+(?:const|function)\s+${factory}\b`);
+    const routesPath = globSync(path.join(SRC, 'modules/*/routes.tsx')).find((candidate) =>
+      declaration.test(fs.readFileSync(candidate, 'utf8'))
+    );
+    if (!routesPath) continue;
+    const relative = path.relative(SRC, routesPath);
+    const source = fs.readFileSync(routesPath, 'utf8');
+    const start = declaration.exec(source)?.index ?? 0;
+    const stop = source.indexOf('\nexport ', start + 1);
+    for (const name of renderedComponents(source.slice(start, stop === -1 ? undefined : stop))) {
+      const file = componentFile(name, relative);
+      if (file) files.add(file);
+    }
+  }
+  return files;
 };
 
 /**
@@ -432,10 +510,8 @@ describe('skip link target', () => {
     // components `App.tsx` renders *inside* the AppLayout route, factories
     // expanded. Anything in there is nested by construction and cannot be a
     // replacement shell, whatever its markup says.
-    const nested = new Set(componentsRenderedIn(routeJsx().layoutJsx));
-    const misfiled = Object.keys(REPLACING_SHELLS)
-      .map((file) => path.basename(file, '.tsx'))
-      .filter((component) => nested.has(component));
+    const nested = layoutPageFiles();
+    const misfiled = Object.keys(REPLACING_SHELLS).filter((file) => nested.has(file));
 
     expect(
       misfiled,

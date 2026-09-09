@@ -3702,8 +3702,12 @@ one statically:
 The `PageLoadingFallback` case is reachable rather than theoretical: finance,
 grants-fundraising and training route to `lazyWithRetry` pages with no inner
 `<Suspense>`, so navigating to one suspends against the global boundary with
-`AppLayout` already mounted. Every other module wraps its lazy pages in
-`<Suspense fallback={null}>`, which keeps the suspension local.
+`AppLayout` already mounted. Most other modules wrap their lazy pages in
+`<Suspense fallback={null}>`, which keeps the suspension local — but **not all
+of the reachable routes live in a module**: `App.tsx` mounts
+`LearningCenterPage` and `LearningPathPage` directly inside the layout route,
+both `lazyWithRetry` and neither wrapped. Any inventory of "which routes can
+suspend against the global boundary" has to include those two.
 
 **A third pre-layout state was found and fixed rather than accepted**, and the
 difference is the whole rule here. The top-level `ErrorBoundary` also renders
@@ -3714,11 +3718,12 @@ are the ones that cannot, not the only ones that lacked a target; a new
 full-screen state should be checked against that test (does it replace, or does
 it coexist?) rather than assumed to belong on this list.
 
-**What a fix would take.** Either give those three modules the inner
-`<Suspense>` the other twenty-seven already have — which would make the global
-fallback unreachable while `AppLayout` is mounted, and only then is putting the
-id on it safe — or resolve the skip target at click time against the visible
-main rather than by id. The first is 47 route entries and changes what a page
+**What a fix would take.** Either give every unwrapped route the inner
+`<Suspense>` most modules already have — the three modules above **and** the two
+learning routes in `App.tsx`, since missing any one of them leaves the global
+fallback reachable and the condition for safely putting the id on it false — or
+resolve the skip target at click time against the visible main rather than by
+id. The first is 47 route entries and changes what a page
 swap looks like (a quiet in-layout replace instead of a whole-app spinner); the
 second changes a shared contract that `index.html`, `AppLayout` and three e2e
 specs all read. Both are their own change set.

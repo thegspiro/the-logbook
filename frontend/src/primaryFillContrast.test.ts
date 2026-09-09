@@ -23,6 +23,28 @@
  * badge) because a hand-typed class string is not something a palette change
  * can find. This walks the source instead. Tinted reds — `bg-red-600/20` and
  * friends, which sit behind red-700 text — are a different pattern and pass.
+ *
+ * ## What this sweep does not decide
+ *
+ * It is a ratchet over source text, not a proof about rendered pixels, and a
+ * green run is not a guarantee that every call site clears AA. One gap is known
+ * and deliberately left open:
+ *
+ * **Fragments from separate interpolations.** Branch splitting treats each
+ * quoted fragment as mutually exclusive, and fragments from *different*
+ * interpolations are not — they render together. A template that puts the fill
+ * in one and the foreground in another is measured by neither half. Correlating
+ * the Nth branch of one interpolation with the Nth of another is unsound (the
+ * conditions need not match), and the obvious heuristic — flatten the template
+ * when its foregrounds agree — was built, measured, and rejected: it reported
+ * **15 findings across real call sites** that render nothing of the kind,
+ * because a foreground inside one branch was paired with fills it never wears.
+ * A guard that cries wolf on valid code is worse than one with a stated blind
+ * spot, so the blind spot is stated here instead.
+ *
+ * The runtime pass covers what this cannot: `mobile-accessibility.spec.ts` runs
+ * axe against rendered pages in all three themes, where a computed style has no
+ * branches to correlate.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -490,7 +512,17 @@ describe('primary fill contrast', () => {
         // `slate-95` and slip past the opacity check on the `0` that follows.
         const value = String.raw`[A-Za-z0-9[\]#.,%()_-]`;
         const replacement = String.raw`(?!transparent(?![\w-])|none(?![\w-]))${value}+(?!${value})(?!\/(?!100\b))`;
-        const overridden = new RegExp(String.raw`\bdark:${word}-${replacement}`).test(`${segment} ${inheritedContext}`);
+        //
+        // The override has to carry the fill's own state variants. A
+        // `hover:bg-theme-…` is replaced by `dark:hover:bg-…`, not by a bare
+        // `dark:bg-…`, so looking only for the unqualified form reported a
+        // valid state-specific adaptive fill as a failure. Tailwind accepts
+        // either variant order, so both are searched.
+        const state = matchPrefix.replace(/(^|:)dark:/g, '$1');
+        const qualified = [`dark:${state}${word}-`, `${state}dark:${word}-`].map(
+          (prefix) => new RegExp(String.raw`\b${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${replacement}`)
+        );
+        const overridden = qualified.some((pattern) => pattern.test(`${segment} ${inheritedContext}`));
         return overridden ? ['light'] : ['light', 'dark', 'high-contrast'];
       };
 
