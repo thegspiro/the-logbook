@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2441](https://github.com/thegspiro/the-logbook/pull/2441)
+(Feature 15 follow-up, round 4 — SCH-13 deadlock fix) merged clean at
+21:25:01 UTC, merge commit `0584599`. Rotation row 15 (Scheduling) is now
+`✅`. Next: Feature 16, Events & requests.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15 follow-up, round 4, SCH-13 deadlock fix, PR #2441 — now merged), preserved for history</summary>
+
 **Feature 15 follow-up, round 4 (SCH-13 deadlock fix)** — PR
 [#2441](https://github.com/thegspiro/the-logbook/pull/2441), branch
 `claude/security-review-scheduling-sch13-round4`. PR
@@ -62,10 +70,13 @@ guard test); `flake8`/`black`/`isort` clean against `app/`, `tests/`,
 migration this round). No frontend file touched. Full write-up:
 `docs/security-review/SCH-15-scheduling.md` → Pass 4 → SCH-13, "Round 4."
 
-**Rotation row 15 stays `⏳` (awaiting merge)** — SCH-13 round 4 is real
-and unmerged, so the row must not read `✅` yet, matching the tracker's own
-established convention (e.g. the round-1-3 note this replaces, and the
-MP-08 log entries cited there).
+**Rotation row 15 stayed `⏳` (awaiting merge) until this merged** — SCH-13
+round 4 was real and unmerged, so the row could not read `✅` yet, matching
+the tracker's own established convention (e.g. the round-1-3 note this
+replaced, and the MP-08 log entries cited there). It is `✅` now that
+#2441 has merged.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15 follow-up, SCH-13 rounds 1-3, PR #2437, merged but left a round-4 gap open), preserved for history</summary>
@@ -12453,7 +12464,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⏳     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -12480,6 +12491,31 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Watchdog pass — Step 0 bookkeeping only, PR #2441 merged
+
+**Step 0:** the rotation's driving loop had gone quiet — PR #2441 (Feature
+15 follow-up, round 4, SCH-13 deadlock fix) was merged by the repo owner at
+21:25:01 UTC, merge commit `0584599`, but this file still carried it as the
+**Open PR** and rotation row 15 as `⏳` an hour and twenty minutes later,
+with zero further security-review commits or open PRs in that window
+(confirmed via `list_pull_requests` state=open → `[]`, and `list_branches`
+→ no unmerged `claude/security-review-*`/`security-review/*` branch besides
+the stale, already-superseded `security-review/equipment-check-shifts-2026-09-09`
+from earlier that morning). Cleared the **Open PR** row to "None," marked
+row 15 `✅`, and preserved the round-4 note under `<details>` per this
+file's own convention.
+
+**Scope of this pass:** bookkeeping only. This iteration ran from a
+separately-provisioned session scoped to a single designated branch
+(`claude/friendly-babbage-nym6w0`), not the per-feature
+`claude/security-review-<feature>` branch the rotation normally opens for
+each new PR — so rather than start Feature 16 (Events & requests) under a
+branch identity this session isn't authorized to create, this pass stops
+after the doc fix and flags the gap for the human owner. Next: Feature 16,
+Events & requests (`events.py`, `event_requests.py`), whenever the regular
+`/loop 30m /security-review` session (or one explicitly authorized to open
+new branches) picks it up.
 
 ### 2026-09-09 — Feature 15 (Scheduling, pass 4) — 1 fixed (SCH-13, LOW/MED), 0 flagged, corrected on Codex review of the draft PR
 
