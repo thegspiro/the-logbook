@@ -613,7 +613,7 @@ class OnboardingService:
             # recognise, and a status record that disagrees with the
             # organization row is a second answer to the same question.
             status.organization_type = org_type_enum.value
-            await self._mark_step_completed(status, 1, "organization")  # Now Step 1
+            await self._mark_step_completed(status, "organization")
 
         return org
 
@@ -1198,9 +1198,7 @@ class OnboardingService:
         if status:
             status.admin_email = email
             status.admin_username = username
-            await self._mark_step_completed(
-                status, 7, "admin_user"
-            )  # Step 7: System Owner creation
+            await self._mark_step_completed(status, "admin_user")
 
         # Log event
         await log_audit_event(
@@ -1248,9 +1246,7 @@ class OnboardingService:
         status = await self.get_onboarding_status()
         if status:
             status.enabled_modules = final_modules
-            await self._mark_step_completed(
-                status, 10, "modules"
-            )  # Step 10: final step
+            await self._mark_step_completed(status, "modules")
 
         # ── Also persist to Organization.settings.modules (canonical store) ──
         from app.schemas.organization import ModuleSettings
@@ -1377,10 +1373,26 @@ class OnboardingService:
         await self.db.refresh(status, attribute_names=["updated_at"])
         return status
 
-    async def _mark_step_completed(
-        self, status: OnboardingStatus, step_number: int, step_name: str
-    ):
+    @classmethod
+    def step_number(cls, step_name: str) -> int:
+        """The 1-based position of a step in the wizard.
+
+        Derived rather than passed in. Every caller used to hand over a
+        literal alongside the name, and three of them were left behind by
+        steps inserted since: the System Owner was recorded as step 7 and the
+        module step as 10, against a list where they are 9 and 12, and the
+        notifications endpoint recorded a "notifications" step that has never
+        existed. ``GET /onboarding/status`` reports ``current_step`` from
+        these, so a resumed setup was told it was further back than it was.
+        """
+        for step in cls.STEPS:
+            if step["name"] == step_name:
+                return int(step["id"])
+        raise ValueError(f"Unknown onboarding step: {step_name}")
+
+    async def _mark_step_completed(self, status: OnboardingStatus, step_name: str):
         """Mark a step as completed in onboarding status"""
+        step_number = self.step_number(step_name)
         # Copy the dict so SQLAlchemy detects the JSON column mutation.
         # Assigning the same dict object back won't trigger change detection.
         steps = dict(status.steps_completed or {})
@@ -1390,7 +1402,9 @@ class OnboardingService:
             "step_number": step_number,
         }
         status.steps_completed = steps
-        status.current_step = step_number + 1
+        # The last step has no successor, so completing it leaves the wizard
+        # on its final step rather than one past the end.
+        status.current_step = min(step_number + 1, len(self.STEPS))
         await self.db.flush()
 
     async def _mark_legacy_completed(self):

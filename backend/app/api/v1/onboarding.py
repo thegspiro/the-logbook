@@ -1415,7 +1415,7 @@ async def configure_notifications(
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
         onboarding_status.email_configured = config.email_enabled
-        await service._mark_step_completed(onboarding_status, 6, "notifications")
+        await service._mark_step_completed(onboarding_status, "email_config")
 
     return {
         "message": "Notifications configured successfully",
@@ -1883,7 +1883,7 @@ async def save_session_stations(
 
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
-        await service._mark_step_completed(onboarding_status, 2, "stations")
+        await service._mark_step_completed(onboarding_status, "stations")
 
     await db.commit()
 
@@ -1947,7 +1947,7 @@ async def save_session_apparatus(
 
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
-        await service._mark_step_completed(onboarding_status, 3, "apparatus")
+        await service._mark_step_completed(onboarding_status, "apparatus")
 
     await db.commit()
 

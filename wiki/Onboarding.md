@@ -36,45 +36,63 @@ The system automatically detects if onboarding is needed by checking:
 
 ### 2. Onboarding Steps
 
-The onboarding process consists of 10 steps:
+The wizard is twelve steps. Only two are required — the organization and the
+System Owner — and every other step can be skipped and set up later from
+Settings.
 
-#### Step 1: Welcome
+The System Owner is created at step 9, not at the end: the IT team, position
+and module steps all run against a signed-in session.
 
-- Introduction to The Logbook
-- System information display
-- Security feature overview
+#### Step 1: Organization Setup
 
-#### Step 2: Department Information
+- Name, organization type, timezone and contact details
+- Mailing and physical address, department identifiers (FDID / State ID / Dept ID)
+- Logo (optional)
+- Commits the organization, and creates the headquarters facility and location
+  from the department address
 
-- Set your department/organization name
-- Upload logo (optional)
-- Choose navigation layout (top or left)
+#### Step 2: Stations
 
-#### Step 3: Email Platform
+- Add the stations beyond headquarters — skippable, and many departments have one
+- Creates a facility and location per station
+
+#### Step 3: Apparatus
+
+- Unit number, type, minimum staffing and riding positions
+- Creates the lightweight apparatus records shift staffing needs
+
+#### Step 4: Navigation Layout
+
+- Choose a top bar or a left sidebar
+
+#### Step 5: Email Platform
 
 - Select email platform for notifications:
   - Gmail / Google Workspace
   - Microsoft 365 / Outlook
   - Self-hosted email server (SMTP)
   - Cloudflare Email Service (REST API — no SMTP server needed)
-  - Other providers / Skip
-- Configure platform-specific settings (OAuth credentials, SMTP host/port, or Cloudflare Account ID and API Token)
+  - Other / Skip
 
-#### Step 4: File Storage
+#### Step 6: Email Configuration
 
-- Choose file storage solution:
-  - Local storage
+- Configure platform-specific settings (OAuth credentials, SMTP host/port, or
+  Cloudflare Account ID and API Token)
+- Send a test message to verify the connection; credentials are encrypted
+  server-side
+
+#### Step 7: File Storage
+
+- Choose a file storage solution:
+  - Google Drive
+  - OneDrive / SharePoint
   - Amazon S3
-  - MinIO (S3-compatible)
-  - Azure Blob Storage
-  - Google Cloud Storage
+  - Local storage
+  - Configure Later
+- Enter the platform's credentials on the following screen. Skipping stores the
+  choice without credentials rather than discarding the step
 
-#### Step 5: File Storage Configuration
-
-- Configure storage credentials and settings
-- Test connection
-
-#### Step 6: Authentication Platform
+#### Step 8: Authentication Platform
 
 - Choose how users will authenticate:
   - **Google OAuth** - Sign in with Google accounts (recommended for Google Workspace users)
@@ -89,37 +107,53 @@ The onboarding process consists of 10 steps:
 > `AZURE_AD_*` environment variables and optionally restrict by email domain.
 > See [Authentication > OAuth](Security-Authentication#oauth).
 
-#### Step 7: IT Team & Backup Access
+#### Step 9: System Owner
+
+- Create the first administrator account: username, email, password (12+
+  characters), name and membership number
+- Sets the authentication cookies — the administrator is signed in from here on
+
+#### Step 10: IT Team & Backup Access
 
 - Add IT team contact information
 - Configure backup access email and phone
 - Set secondary admin email for emergencies
+- IT contacts become user accounts at completion, each required to change its
+  password on first sign-in
 
-#### Step 8: Module Selection
+#### Step 11: Positions & Permissions
+
+- Ready-made position templates with a two-tier permission model (View Access /
+  Manage Access) per module
+- The **Operational Ranks** group (Fire Chief, Deputy/Assistant Chief, Captain,
+  Lieutenant, Engineer, Firefighter, **EMT**) mirrors the ranks seeded for the
+  organization, narrowed and renamed to suit the agency type — an EMS-only
+  service has no fire line, and calls its Engineer a Driver / Operator. The
+  Leadership, Officer, Support and Member groups cover corporate and
+  administrative roles
+- Each position starts ticked to exactly what the backend seeds it with, so
+  pressing Continue without editing anything changes no grants
+
+#### Step 12: Module Selection
 
 - Choose which modules to enable:
-  - **Essential:** Member Management, Events & RSVP, Documents & Files
-  - **Operations:** Training & Certifications, Equipment & Inventory, Scheduling & Shifts
+  - **Core:** Member Management, Events & RSVP, Documents & Files, Custom Forms
+    (always on)
+  - **Operations:** Training & Certifications, Inventory, Medical Supplies,
+    Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
   - **Governance:** Elections & Voting, Meeting Minutes, Reports & Analytics
   - **Communication:** Email Notifications, Mobile App Access
-  - **Advanced:** Custom Forms, External Integrations
-- Optional modules show a clear **Enabled** state once turned on — the button
-  turns green with a checkmark and the card is highlighted — so it's obvious at a
-  glance which optional features are active _(2026-06-25)_
+  - **Advanced:** External Integrations
+  - **Membership:** Prospective Members Pipeline
+- A module shows a clear **Enabled** state once turned on — the button turns
+  green with a checkmark and the card is highlighted — so it is obvious at a
+  glance which are active _(2026-06-25)_
+- Continuing here finalizes setup and hands off to the Department Setup
+  checklist at `/setup`
 
-> **Positions & Permissions:** Before module selection, the wizard's
-> **Set Up Positions & Permissions** step offers ready-made position templates.
-> The **Operational Ranks** group (Fire Chief, Deputy/Assistant Chief, Captain,
-> Lieutenant, Engineer, Firefighter, **EMT** _(EMT added 2026-06-25)_) mirrors the
-> default operational ranks seeded for the organization; the Leadership, Officer,
-> Support, and Member groups cover corporate/administrative roles.
-
-#### Step 9: Admin User Creation & Review
-
-- Create first administrator account
-- Review all configuration
-- Complete onboarding
-- Generate post-onboarding checklist
+> Modules the wizard does not ask about — Communications, Finance, Grants &
+> Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information
+> and the Testing Checklist — are turned on later under **Settings → Modules**.
 
 ### 3. Reset Progress
 

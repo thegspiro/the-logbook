@@ -96,14 +96,20 @@ number of screens a user sees depends on the services they select.
 #### Step 11: Module Selection
 
 - Choose which modules to enable:
-  - **Essential**: Member Management, Events & RSVP, Documents & Files
-  - **Recommended**: Training & Certifications, Equipment & Inventory, Scheduling, Elections, Compliance
-  - **Optional**: Notifications, Mobile App, Forms & Surveys, Integrations
+  - **Core** (always on): Member Management, Events & RSVP, Documents & Files, Custom Forms
+  - **Operations**: Training & Certifications, Inventory, Medical Supplies, Shift Scheduling, Apparatus & Fleet, Facilities Management, Department Store
+  - **Governance**: Elections & Voting, Meeting Minutes, Reports & Analytics
+  - **Communication**: Email Notifications, Mobile App Access
+  - **Advanced**: External Integrations
+  - **Membership**: Prospective Members Pipeline
+- Modules the wizard does not ask about — Communications, Finance, Grants &
+  Fundraising, HR & Payroll, Incidents, Medical Screening, Public Information and
+  the Testing Checklist — are turned on later under **Settings → Modules**
 
 #### Step 12: Complete
 
-- Finalizes onboarding and redirects to dashboard
-- Generate post-onboarding checklist
+- Finalizes onboarding and hands off to the Department Setup checklist at `/setup`
+- The checklist derives each step from live entity counts rather than a stored list
 
 ### 3. Post-Onboarding Checklist
 

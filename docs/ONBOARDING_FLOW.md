@@ -639,29 +639,49 @@ Body: {
 
 **Module Categories**:
 
-**Essential (Core)**:
+**Essential (Core)** — always on, not offered as a choice:
 
 - Member Management
 - Events & RSVP
 - Documents & Files
+- Custom Forms
 
-**Recommended (Operations)**:
+**Operations**:
 
 - Training & Certifications
-- Equipment & Inventory
-- Scheduling & Shifts
+- Inventory
+- Medical Supplies
+- Shift Scheduling
+- Apparatus & Fleet
+- Facilities Management
+- Department Store
 
-**Recommended (Governance)**:
+**Governance**:
 
 - Elections & Voting
-- Compliance & Auditing
+- Meeting Minutes
+- Reports & Analytics
 
-**Optional (Communication)**:
+**Communication**:
 
-- Notifications & Alerts
-- Mobile App
-- Forms & Surveys
-- Integrations
+- Email Notifications
+- Mobile App Access
+
+**Advanced**:
+
+- External Integrations
+
+**Membership**:
+
+- Prospective Members Pipeline
+
+The list comes from `MODULE_REGISTRY`
+(`frontend/src/modules/onboarding/config/moduleRegistry.ts`), whose ids are held
+to the backend's offered set by `tests/test_onboarding_module_parity.py`.
+Modules the wizard deliberately does not ask about — Communications, Finance,
+Grants & Fundraising, HR & Payroll, Incidents, Medical Screening, Public
+Information and the Testing Checklist — are turned on later from
+**Settings → Modules**.
 
 **Per-Module Actions**:
 
