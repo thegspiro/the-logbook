@@ -7605,11 +7605,20 @@ class SchedulingService:
                         )
 
             # Create attendance records for manually-entered hours
+            #
+            # Locking read: the shift row above is now locked (for_update),
+            # but that alone does not refresh this transaction's REPEATABLE
+            # READ snapshot for a *different* table. _authorize_shift_management
+            # ran a plain shift query first (the earliest read in this
+            # transaction), which is what establishes that snapshot -- a
+            # concurrent check-in's attendance row committed after that point
+            # but before this locking wait resolved would otherwise be
+            # invisible here, same as Pitfall #27's second half.
             if manual_hours:
                 existing = await self.db.execute(
-                    select(ShiftAttendance.user_id).where(
-                        ShiftAttendance.shift_id == str(shift_id)
-                    )
+                    select(ShiftAttendance.user_id)
+                    .where(ShiftAttendance.shift_id == str(shift_id))
+                    .with_for_update()
                 )
                 existing_user_ids = {row[0] for row in existing.all()}
                 for entry in manual_hours:
@@ -7633,13 +7642,19 @@ class SchedulingService:
                     self.db.add(att)
                 await self.db.flush()
 
-            # Auto-close open attendance (checked in, never checked out)
+            # Auto-close open attendance (checked in, never checked out).
+            # Same locking-read requirement as the manual_hours query above:
+            # the transaction's snapshot predates the shift lock, so this
+            # must be a current read to see a concurrent check-in that
+            # committed while finalize_shift was waiting on the shift lock.
             open_att_result = await self.db.execute(
-                select(ShiftAttendance).where(
+                select(ShiftAttendance)
+                .where(
                     ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.checked_in_at.isnot(None),
                     ShiftAttendance.checked_out_at.is_(None),
                 )
+                .with_for_update()
             )
             for open_att in open_att_result.scalars().all():
                 open_att.checked_out_at = shift.end_time or now
@@ -7939,14 +7954,21 @@ class SchedulingService:
         if shift.is_finalized:
             return None, "Shift is already finalized — reopen it to make changes"
 
+        # Locking read: the shift lock above does not refresh this
+        # transaction's REPEATABLE READ snapshot for the ShiftAttendance
+        # table, which was established by _authorize_shift_management's
+        # earlier plain shift query. Without with_for_update() here, a
+        # member who checked in while this request waited on the shift lock
+        # would still read as "no attendance row yet" and get a duplicate
+        # row inserted below.
         existing = {
             str(a.user_id): a
             for a in (
                 (
                     await self.db.execute(
-                        select(ShiftAttendance).where(
-                            ShiftAttendance.shift_id == str(shift_id)
-                        )
+                        select(ShiftAttendance)
+                        .where(ShiftAttendance.shift_id == str(shift_id))
+                        .with_for_update()
                     )
                 )
                 .scalars()

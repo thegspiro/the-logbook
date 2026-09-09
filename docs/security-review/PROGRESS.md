@@ -173,6 +173,46 @@ runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass
 keyword suite 1132 passed / 1 pre-existing skip; full backend suite 11940
 passed / 21 pre-existing skips / 0 failed; no frontend files touched.
 
+**Round 7 (Codex review of round 6's own fix, same PR):** 2 more fixed —
+one P1, one P2, both a new bug class this rotation: locking the shift row
+(rounds 2–6) closes lock-ordering deadlocks and identity-map staleness on
+the shift object, but does not by itself refresh this transaction's
+REPEATABLE READ _snapshot_ for a different table. `_authorize_shift_management`'s
+plain shift query is the transaction's first consistent read and fixes
+that snapshot; a later locking read on the shift bypasses it for the shift
+row only, but a later _plain_ read of `ShiftAttendance` still answers from
+that same stale snapshot — Pitfall #27's second half ("the count itself
+must be a locking read"), now surfacing on attendance reconciliation
+rather than a capacity check. (a) P1 — `finalize_shift`'s `manual_hours`
+existing-user check and its auto-close-open-attendance query were both
+plain reads; a member checking in while finalize waits on the shift lock
+a concurrent check-in held would have their attendance row left open
+(`checked_out_at IS NULL`) forever, invisible to the finalize that just
+ran. (b) P2 — `save_closeout_attendance`'s (round 6's own fix) `existing`
+attendance-rows read was the same shape; the same race reintroduces AP-13
+finding 2's duplicate-row bug (`shift_attendance` still has no unique
+constraint on `(shift_id, user_id)`), just via a stale read instead of a
+missing lock. Fixed by adding `.with_for_update()` to all three queries.
+Also identified but **not fixed this round**: `CallTrackingService._partition_existing`
+(reached from `record_shift_calls`, which both `finalize_shift` and
+`save_closeout_calls` reconcile through) has the same shape, but its
+second query is a `COUNT`/`GROUP BY` aggregate across every responder on a
+call — locking that safely needs its own design pass, not a one-line
+bolt-on, so it's flagged in the write-up for a follow-up rather than
+rushed. Verified with two new two-real-session tests
+(`test_shift_finalize_attendance_snapshot_staleness.py`,
+`test_shift_closeout_attendance_snapshot_staleness.py`): session B fixes
+its snapshot with a plain preload before session A commits a fresh
+attendance row, then the real method is run and checked against the table
+fresh from a third session. Confirmed both failing pre-fix (an attendance
+row left open; a literal second row created) via `git stash push -u` on
+the fix alone (the only diff in the file), passing with the fix restored,
+stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 8.
+Completion gate: flake8/black/isort clean; scoped keyword suite 1134
+passed / 1 pre-existing skip; full backend suite run in progress, this
+note updated with the exact count once it completes.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
 
