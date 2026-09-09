@@ -3298,10 +3298,14 @@ class FacilitiesService:
         if not checklist:
             raise ValueError("Invalid compliance checklist")
 
+        # sort_order is the schema's wire-level name (matching the frontend
+        # contract); the model's column is still item_number.
+        item_payload = item_data.model_dump(exclude={"checklist_id", "sort_order"})
         item = FacilityComplianceItem(
             organization_id=organization_id,
             checklist_id=checklist_id,
-            **item_data.model_dump(exclude={"checklist_id"}),
+            item_number=item_data.sort_order,
+            **item_payload,
         )
 
         self.db.add(item)
@@ -3327,7 +3331,16 @@ class FacilitiesService:
         ):
             raise ValueError("Invalid compliance checklist")
 
-        await self._apply_updates(item, item_data)
+        # sort_order is the schema's wire-level name for the model's
+        # item_number column (see create_compliance_item) -- apply_updates
+        # would otherwise reject it as an unknown field.
+        update_data = item_data.model_dump(exclude_unset=True)
+        if "sort_order" in update_data:
+            update_data["item_number"] = update_data.pop("sort_order")
+        apply_updates(item, update_data)
+
+        await self.db.commit()
+        await self.db.refresh(item)
 
         return item
 

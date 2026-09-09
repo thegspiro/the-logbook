@@ -11,6 +11,7 @@ Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
 import inspect
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -18,12 +19,13 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.dialects import mysql
 
-from app.models.facilities import Facility, FacilityPhoto
+from app.models.facilities import Facility, FacilityComplianceItem, FacilityPhoto
 from app.schemas.facilities import (
     EmergencyContactTypeEnum,
     FacilityAccessKeyUpdate,
     FacilityCapitalProjectUpdate,
     FacilityComplianceItemCreate,
+    FacilityComplianceItemResponse,
     FacilityComplianceItemUpdate,
     FacilityDocumentResponse,
     FacilityEmergencyContactCreate,
@@ -374,6 +376,80 @@ class TestCreateComplianceItem:
             organization_id="org",
             created_by="user",
         )
+
+    async def test_sort_order_is_stored_as_item_number(self, service, org_id):
+        """Codex review of the FAC-46 fix, PR #2425: the frontend's already-
+        shipped `ComplianceItemCreate.sort_order` (facilitiesServices.ts) and
+        the schema's `item_number` field were different names for the same
+        thing, so a real caller's `sort_order` was silently dropped by
+        Pydantic rather than stored — the request would succeed with the
+        requested ordering quietly lost. The schema field is now named
+        `sort_order` to match; the ORM column stays `item_number`
+        (unchanged, no migration) and the service translates between them.
+        """
+        checklist = MagicMock()
+        with patch.object(service, "get_compliance_checklist", return_value=checklist):
+            item = await service.create_compliance_item(
+                checklist_id=str(uuid4()),
+                item_data=FacilityComplianceItemCreate(
+                    description="Exit lights", sort_order=3
+                ),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert item.item_number == 3
+        assert not hasattr(item, "sort_order")
+
+    def test_response_serializes_item_number_as_sort_order(self):
+        """The other half of the same finding: a response built from the ORM
+        row must expose the frontend's expected `sortOrder` key, not the
+        model's own `itemNumber`. `FacilityComplianceItemResponse` reads the
+        model's `item_number` attribute (`validation_alias`) but serializes
+        it under `sortOrder` (`serialization_alias`), matching
+        `ComplianceItem.sortOrder` in facilitiesServices.ts.
+        """
+        item = FacilityComplianceItem(
+            id=str(uuid4()),
+            organization_id=str(uuid4()),
+            checklist_id=str(uuid4()),
+            item_number=7,
+            description="Exit lights",
+            corrective_action_completed=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        payload = FacilityComplianceItemResponse.model_validate(item).model_dump(
+            by_alias=True
+        )
+        assert payload["sortOrder"] == 7
+        assert "itemNumber" not in payload
+        assert "item_number" not in payload
+
+
+class TestUpdateComplianceItem:
+    """Codex review of the FAC-46 fix, PR #2425 -- the update path has the
+    identical sort_order/item_number translation need as create above, and
+    without it `apply_updates` would reject `sort_order` outright as an
+    unknown field on `FacilityComplianceItem` (it only maps to real column
+    names) rather than silently dropping it.
+    """
+
+    async def test_sort_order_update_is_applied_to_item_number(self, service, org_id):
+        item = FacilityComplianceItem(
+            id=str(uuid4()),
+            organization_id=org_id,
+            checklist_id=str(uuid4()),
+            item_number=1,
+            description="Exit lights",
+            corrective_action_completed=False,
+        )
+        with patch.object(service, "get_compliance_item", return_value=item):
+            updated = await service.update_compliance_item(
+                item_id=item.id,
+                item_data=FacilityComplianceItemUpdate(sort_order=9),
+                organization_id=org_id,
+            )
+        assert updated.item_number == 9
 
 
 class TestCreateEmergencyContact:

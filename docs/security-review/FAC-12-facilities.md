@@ -210,27 +210,97 @@ unit/AST tests with mocked sessions, not concurrency-timing-sensitive).
 **Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — this is a straightforward
 bug fix with no remaining product decision, not an owner-facing limitation.
 
+### FAC-47 — MED (correctness) — reviving `create_compliance_item` exposed a request/response field-name mismatch with the shipped frontend contract — ✅ FIXED
+
+**What:** Codex reviewing FAC-46's fix caught that making
+`create_compliance_item` actually callable (it had crashed unconditionally
+before FAC-46) exposed a second, independent contract mismatch it had been
+masking: the frontend's already-shipped `ComplianceItemCreate.sort_order`
+(`facilitiesServices.ts`) and the response type's `ComplianceItem.sortOrder`
+were never the same wire name as the backend schema's `item_number` /
+`itemNumber`. Since `FacilityComplianceItemCreate` is a plain `BaseModel`
+with no `extra="forbid"`, a request body's `sort_order` key was silently
+discarded by Pydantic rather than rejected — the create would succeed
+(post-FAC-46) with `HTTP 201`, but the caller's requested ordering was
+quietly lost, not stored. The response side had the identical mismatch in
+reverse: `FacilityComplianceItemResponse` serialized the field as
+`itemNumber` (via `alias_generator=to_camel` on `item_number`), which the
+frontend's `ComplianceItem.sortOrder` would never read, leaving that field
+permanently `undefined` in the UI. CLAUDE.md Pitfall #5's frontend/backend
+schema contract — verify the schema field a frontend component actually
+sends/reads matches the backend's, not just that a Pydantic type exists.
+
+**Where:** `backend/app/schemas/facilities.py` (`FacilityComplianceItemCreate`,
+`FacilityComplianceItemUpdate`, `FacilityComplianceItemResponse`),
+`backend/app/services/facilities_service.py` (`create_compliance_item`,
+`update_compliance_item`).
+
+**Fix:** renamed the Pydantic-level field on all three schemas from
+`item_number` to `sort_order`, matching the frontend's own field names on
+both the request (`sort_order`, plain snake_case — this app's request-body
+convention) and response (`sortOrder`, via the shared `to_camel` alias
+generator) sides. The ORM column stays `item_number` — no migration, since
+this is a wire-contract rename, not a storage-shape change:
+
+- `FacilityComplianceItemResponse.sort_order` uses
+  `Field(validation_alias="item_number", serialization_alias="sortOrder")`
+  so it reads the ORM's `item_number` attribute on `model_validate()` but
+  serializes under `sortOrder`, overriding the class-level `to_camel`
+  generator (which would otherwise have produced `itemNumber` from a field
+  literally named `item_number` — the point of the explicit aliases is
+  decoupling the Python attribute name from the wire name).
+- `create_compliance_item` now builds the model with
+  `item_number=item_data.sort_order` explicitly (excluding `sort_order`
+  from the `**model_dump()` spread that supplies the rest), rather than
+  relying on keyword names lining up.
+- `update_compliance_item` no longer routes through the shared
+  `_apply_updates` helper (which calls `apply_updates()` directly on the
+  schema's own field names — see `app/utils/model_updates.py`, and would
+  raise `ValueError: Cannot update unknown field 'sort_order'` since the
+  model has no such attribute); it now translates `sort_order` →
+  `item_number` in the `model_dump(exclude_unset=True)` payload before
+  calling `apply_updates()` itself, mirroring the existing manual-translate
+  pattern already used elsewhere in this file (e.g. `update_facility`'s own
+  direct `apply_updates(facility, update_data)` call) rather than
+  introducing a new one.
+
+**Regression tests:** `tests/test_facilities_service.py`, three new tests —
+`TestCreateComplianceItem::test_sort_order_is_stored_as_item_number`,
+`TestCreateComplianceItem::test_response_serializes_item_number_as_sort_order`,
+and the new `TestUpdateComplianceItem::test_sort_order_update_is_applied_to_item_number`.
+All three confirmed to fail against the pre-fix source via `git stash
+push -u` isolating `app/schemas/facilities.py` and
+`app/services/facilities_service.py` (test file kept): the create test
+failed with `item.item_number == None` (silently dropped, not stored), the
+response test raised `KeyError: 'sortOrder'` (serialized as `itemNumber`
+instead), and the update test failed the same way as the create test.
+`git stash apply` restored the fix; all 32 tests in the file passed
+afterward.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`: n/a — a contract-naming bug
+fix with no remaining product decision.
+
 ## Completion gate (pass 4)
 
-| Check                                             | Result                                                         |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                |
-| `black --check app/ tests/ alembic/`              | ✅ 1541 files unchanged                                        |
-| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                       |
-| `python3 scripts/validate_migrations.py --strict` | ✅ passed (439 migrations, single head, no schema change)      |
-| `pytest tests/test_facilities_service.py`         | ✅ 29 passed (7 new: FAC-46's 6, none pre-existing broken)     |
-| `pytest tests/ -k "facilities or documents"`      | ✅ 331 passed, 1 skipped (pre-existing, optional dependency)   |
-| `pytest tests/` (full backend suite)              | ✅ 11922 passed, 21 skipped (pre-existing Docker/optional-dep) |
-| `tsc --noEmit` / `eslint .`                       | n/a — no frontend file changed this pass                       |
+| Check                                             | Result                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/`              | ✅ clean                                                              |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                              |
+| `python3 scripts/validate_migrations.py --strict` | ✅ passed (439 migrations, single head, no schema change)             |
+| `pytest tests/test_facilities_service.py`         | ✅ 32 passed (29 baseline after FAC-46, +3 new this round for FAC-47) |
+| `pytest tests/ -k "facilities or documents"`      | ✅ 334 passed, 1 skipped (pre-existing, optional dependency)          |
+| `pytest tests/` (full backend suite)              | ✅ 11925 passed, 21 skipped (pre-existing Docker/optional-dep)        |
+| `tsc --noEmit` / `eslint .`                       | n/a — no frontend file changed this pass                              |
 
-**FAC-46's regression tests independently confirmed against pre-fix code:**
-`git stash push -u` isolating `app/schemas/facilities.py` and
-`app/services/facilities_service.py` only (test file kept) — all 6 new tests
-failed with the exact errors the finding describes; `git stash apply` restored
-the fix and all 29 tests in the file passed. See the finding's own write-up
-for the two-step confirmation detail (the `created_by` bug in
-`create_compliance_item` was independently observed mid-fix, between
-correcting the `checklist_id` mismatch and correcting `created_by`).
+**FAC-46's and FAC-47's regression tests independently confirmed against
+pre-fix code:** `git stash push -u` isolating `app/schemas/facilities.py`
+and `app/services/facilities_service.py` only (test file kept) — all 9 new
+tests failed with the exact errors each finding describes; `git stash
+apply` restored the fix and all 32 tests in the file passed. See each
+finding's own write-up for confirmation detail (FAC-46's includes the
+two-step mid-fix confirmation; FAC-47's is a straightforward before/after
+pair).
 
 ## FAC-22 — CRITICAL (unrecoverable, org-wide data loss) — `delete_folder` never checked `is_system` — urgent post-merge fix, PR #2194 — ✅ FIXED
 

@@ -1349,7 +1349,12 @@ class FacilityComplianceItemCreate(BaseModel):
     # the schema only so FacilityComplianceItemUpdate's identical field
     # doesn't need special-casing wherever both are handled generically.
     checklist_id: Optional[str] = None
-    item_number: Optional[int] = None
+    # Named to match the already-shipped frontend contract
+    # (ComplianceItemCreate.sort_order in facilitiesServices.ts); the ORM
+    # column underneath is still FacilityComplianceItem.item_number
+    # (unchanged to avoid a migration) — see create_compliance_item's own
+    # translation of this field.
+    sort_order: Optional[int] = None
     description: str
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
@@ -1361,7 +1366,7 @@ class FacilityComplianceItemCreate(BaseModel):
 
 class FacilityComplianceItemUpdate(BaseModel):
     checklist_id: Optional[str] = None
-    item_number: Optional[int] = None
+    sort_order: Optional[int] = None
     description: Optional[str] = None
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
@@ -1375,7 +1380,12 @@ class FacilityComplianceItemResponse(UTCResponseBase):
     id: str
     organization_id: str
     checklist_id: str
-    item_number: Optional[int] = None
+    # Reads the ORM's item_number column but serializes as sortOrder,
+    # matching the request-side field above and the frontend's ComplianceItem
+    # type (facilitiesServices.ts) — see FacilityComplianceItemCreate.sort_order.
+    sort_order: Optional[int] = Field(
+        default=None, validation_alias="item_number", serialization_alias="sortOrder"
+    )
     description: str
     is_compliant: Optional[bool] = None
     findings: Optional[str] = None
