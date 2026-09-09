@@ -64,11 +64,8 @@ import {
   shiftHoursForOneMember,
 } from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
-import {
-  CallTypeChips,
-  orgCallTypeChoices,
-  textCallTypeChoices,
-} from '../../modules/scheduling/components/CallTypeChips';
+import { CallTypeChips } from '../../modules/scheduling/components/CallTypeChips';
+import { orgCallTypeChoices, textCallTypeChoices } from '../../modules/scheduling/components/callTypeChoices';
 import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
