@@ -88,7 +88,13 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
             Advance members automatically by years of service
           </span>
           <span className="text-theme-text-muted block text-sm">
-            A nightly job promotes each member to the highest tier their years of service qualify them for. Turn this
+            {/* Monthly, not nightly: `membership_tier_advance` is registered
+                with cron `0 8 1 * *`. Saying "nightly" would have a member
+                sitting on the wrong tier — and so with the wrong voting and
+                training treatment — for up to a month after their anniversary,
+                with the screen insisting it had already happened. */}
+            On the first of each month, a scheduled job promotes every member to the highest tier their years of service
+            qualify them for — so someone reaching a threshold mid-month moves at the start of the next one. Turn this
             off if your department promotes by vote, by application, or on a date of its own choosing.
           </span>
         </span>
@@ -200,6 +206,16 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                       <span className="text-theme-text-secondary text-sm">Can vote in elections</span>
                     </label>
 
+                    {/* Stored, and read by nothing. No nomination or candidate
+                        path in `election_service.py` consults
+                        `can_hold_office`, so clearing it does not stop a member
+                        being nominated or elected. CLAUDE.md pitfall #19 allows
+                        exactly two responses to that — wire a reader, or say on
+                        the control that it is not in effect — and wiring office
+                        eligibility into the ballot is a change to elections,
+                        not to this screen. Saying so is the honest half until
+                        it is. Remove this note in the same change that adds the
+                        reader. */}
                     <label className="flex items-start gap-2">
                       <input
                         type="checkbox"
@@ -207,7 +223,13 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         checked={tier.benefits.can_hold_office !== false}
                         onChange={(e) => onUpdateBenefits(tier.id, { can_hold_office: e.target.checked })}
                       />
-                      <span className="text-theme-text-secondary text-sm">Can hold elected office</span>
+                      <span className="text-theme-text-secondary text-sm">
+                        Can hold elected office
+                        <span className="text-theme-alert-warning-title block text-xs font-medium">
+                          Recorded, but not yet enforced — elections do not check this, so clearing it will not stop a
+                          member being nominated. Screen candidates by hand until it does.
+                        </span>
+                      </span>
                     </label>
 
                     <label className="flex items-start gap-2">
@@ -283,6 +305,25 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                         </span>
                       </span>
                     </label>
+
+                    {/* `training_exempt_types` is a separate, narrower list that
+                        `TrainingService.get_training_report` honours on its own:
+                        a tier with `training_exempt: false` and a non-empty list
+                        still has those requirement types counted as met. The
+                        checkbox above reads unchecked in that state, so without
+                        this an officer believes the tier is fully graded while
+                        it is not — and toggling the box on and off again leaves
+                        the list untouched. Shown rather than edited: adding a
+                        type picker is a larger change than saying what is
+                        already in effect. */}
+                    {tier.benefits.training_exempt !== true &&
+                      (tier.benefits.training_exempt_types?.length ?? 0) > 0 && (
+                        <p className="alert-warning text-theme-text-secondary ml-6 text-xs">
+                          Not fully exempt, but these requirement types are still counted as met for this tier:{' '}
+                          <strong>{(tier.benefits.training_exempt_types ?? []).join(', ')}</strong>. This screen cannot
+                          change that list yet.
+                        </p>
+                      )}
                   </div>
                 )}
               </div>

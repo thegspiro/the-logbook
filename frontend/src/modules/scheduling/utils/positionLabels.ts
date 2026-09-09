@@ -69,34 +69,32 @@ export const positionLabel = (position: string | null | undefined): string => {
 };
 
 /**
- * Seats a rank may be made eligible for, in the department's own words.
+ * Seats a rank may be made eligible for.
  *
- * The rank editor used to carry its own inline list of nine seat tokens, so a
- * department that added "Rescue Technician" in Scheduling → Position Names
- * could put that seat on a template and on a shift, and then had no way to make
- * any rank eligible for it. The seat existed everywhere except in the one
- * screen that grants it, which reads as the rank editor being broken rather
- * than as two lists disagreeing.
+ * Derived from the canonical vocabulary rather than typed out again: the rank
+ * editor used to carry its own inline list of nine tokens, which could drift
+ * from `CANONICAL_POSITIONS` without anything saying so.
  *
- * `paramedic` is canonical, fillable and deliberately absent. Rank says where a
- * member sits in the chain of command; a medic seat is a credential, and
- * `ShiftEligibilityService.get_eligible_positions` grants it from step 3b — the
- * member's certifications as of the shift date — precisely so a rank cannot
- * confer it. Offering it here would let an officer rank hand out a seat that
- * lapses with a card nobody checked.
+ * **A department's own `customPositions` are deliberately not offered.** They
+ * belong to the seat vocabulary in every other sense — a template can carry
+ * one, `canonical_position` round-trips it verbatim, and the board renders its
+ * label — but nobody can be put in one. `ShiftSignupRequest`,
+ * `ShiftAssignmentCreate` and `StandingShiftCreate` all type `position` as the
+ * closed `ShiftPosition` enum, and `shift_assignments.position` is a MySQL
+ * ENUM behind them, so a custom seat is refused at request validation and
+ * again at the flush. Granting a rank eligibility for one would be a promise
+ * the app cannot keep — the same reason a module checkbox with no permission
+ * behind it is not rendered. See `docs/KNOWN_LIMITATIONS.md` (SCHED-CUSTOM-SEAT).
+ *
+ * `paramedic` is canonical, fillable and withheld for a different reason. Rank
+ * says where a member sits in the chain of command; a medic seat is a
+ * credential, and `ShiftEligibilityService.get_eligible_positions` grants it
+ * from step 3b — the member's certifications as of the shift date — precisely
+ * so a rank cannot confer it. Offering it here would let an officer rank hand
+ * out a seat that lapses with a card nobody checked.
  */
-export const rankEligibleSeatOptions = (): PositionOption[] => {
-  // Sync read of a cache a background load fills, exactly as positionLabel and
-  // getPositionOptions do. Single-flight per organization.
-  void ensureShiftSettingsLoaded();
-  const options: PositionOption[] = RANK_ELIGIBLE_BUILTIN_SEATS.map((value) => ({
+export const rankEligibleSeatOptions = (): PositionOption[] =>
+  RANK_ELIGIBLE_BUILTIN_SEATS.map((value) => ({
     value,
     label: positionLabel(value),
   }));
-  for (const custom of getCachedShiftSettings().customPositions) {
-    if (!options.some((option) => option.value === custom.value)) {
-      options.push({ value: custom.value, label: custom.label });
-    }
-  }
-  return options;
-};

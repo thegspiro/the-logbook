@@ -182,7 +182,7 @@ class MembershipTierService:
         **A member is only advanced along a ladder they are already on.** A
         ``membership_type`` that is not one of this organization's configured
         tiers used to be treated as sort_order 0 — the bottom rung — so this
-        unattended nightly job promoted the four legacy types that are not
+        unattended monthly job promoted the four legacy types that are not
         tiers in the shipped defaults (``administrative``, ``honorary``,
         ``retired``, ``prospective``) into an operational tier. Setting
         ``membership_type`` fires ``_reconcile_membership``, which rewrote

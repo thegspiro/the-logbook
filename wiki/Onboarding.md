@@ -136,7 +136,7 @@ through, and what each one lets them do:
   (and what it is, over what period), and whether they are exempt from training
 - Turn off automatic advancement if your department promotes by vote, by
   application, or on a date of its own choosing — it is on by default and a
-  nightly job acts on it
+  monthly job acts on it
 
 > This is the one to check against your bylaws. It decides who is in the ballot
 > electorate, and a department that leaves the shipped arrangement in place

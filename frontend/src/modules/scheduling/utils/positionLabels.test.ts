@@ -68,10 +68,13 @@ describe('rankEligibleSeatOptions', () => {
     getCachedShiftSettings.mockReturnValue(DEFAULT_SETTINGS);
   });
 
-  it("offers the department's own seats, not only the built-in ones", () => {
-    // Without this the rank editor's picker was a fixed list of nine tokens: a
-    // department could define Rescue Technician, staff it on a template, put it
-    // on a shift, and never make a single rank eligible for it.
+  it('does not offer a custom seat nobody can be assigned to', () => {
+    // A custom seat belongs to the vocabulary everywhere else — a template can
+    // carry it, `canonical_position` round-trips it, the board renders its
+    // label — but `ShiftSignupRequest`, `ShiftAssignmentCreate` and
+    // `StandingShiftCreate` all type `position` as the closed `ShiftPosition`
+    // enum, with a MySQL ENUM column behind them. Granting a rank eligibility
+    // for one is a promise the app refuses at request validation.
     getCachedShiftSettings.mockReturnValue({
       ...DEFAULT_SETTINGS,
       customPositions: [{ value: 'rescue_tech', label: 'Rescue Technician' }],
@@ -79,7 +82,7 @@ describe('rankEligibleSeatOptions', () => {
 
     const options = rankEligibleSeatOptions();
 
-    expect(options).toContainEqual({ value: 'rescue_tech', label: 'Rescue Technician' });
+    expect(options.map((o) => o.value)).not.toContain('rescue_tech');
     expect(options.map((o) => o.value)).toContain('firefighter');
   });
 
@@ -95,9 +98,7 @@ describe('rankEligibleSeatOptions', () => {
     expect(ems?.label).toBe('EMT');
   });
 
-  it('does not list a custom seat twice when it shadows a built-in token', () => {
-    // An admin may re-label a built-in seat by adding a custom one with the
-    // same value; the picker must still offer one button for it.
+  it('offers each built-in seat exactly once', () => {
     getCachedShiftSettings.mockReturnValue({
       ...DEFAULT_SETTINGS,
       customPositions: [{ value: 'officer', label: 'Company Officer' }],

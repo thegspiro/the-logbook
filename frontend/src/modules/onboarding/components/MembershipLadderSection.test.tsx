@@ -58,7 +58,7 @@ describe('MembershipLadderSection', () => {
   });
 
   it('offers auto-advance as something a department can turn off', async () => {
-    // It defaults on, and a nightly task acts on it. A department that promotes
+    // It defaults on, and a monthly task acts on it. A department that promotes
     // by vote needs to be able to say so before the job runs.
     const user = userEvent.setup();
     render(<MembershipLadderSection />);

@@ -610,7 +610,8 @@ Body: {
 `organization.settings["membership_tiers"]` decides who is in the ballot
 electorate, who may stand for office, whether a member must meet a
 meeting-attendance threshold to vote, and who is graded for training — and
-`run_membership_tier_advance` promotes members along it nightly as
+`run_membership_tier_advance` promotes members along it monthly (cron
+`0 8 1 * *`) as
 `performed_by="system"`. It shipped with a ladder (Probationary at 0 years,
 Active at 1, Senior at 10, Life at 20) and **no screen anywhere**: not in setup,
 not in Settings, though the API and three frontend service methods existed. A

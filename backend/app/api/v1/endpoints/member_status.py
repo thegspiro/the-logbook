@@ -1070,7 +1070,7 @@ async def update_membership_tier_config(
     # different readers use one each and they must not disagree.
     # `resolve_tier` returns the qualifying rung with the greatest `sort_order`,
     # while qualification itself is by `years_required` -- so a ladder where a
-    # lower threshold sits above a higher one makes the nightly `advance_all`
+    # lower threshold sits above a higher one makes the monthly `advance_all`
     # *demote*: reorder Life above Senior and a 25-year Life member qualifies
     # for both, resolves to Senior because its sort_order is now greater, and
     # is rewritten overnight. Nothing raises, and the member finds out at the

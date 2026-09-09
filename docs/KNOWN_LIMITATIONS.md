@@ -3930,6 +3930,61 @@ to, and the fix above has to be done.
 failure message, so the next person to try the obvious fix is told why it is not
 one rather than discovering the duplicate id in review.
 
+## SCHED-CUSTOM-SEAT — A Department's Own Crew Seat Cannot Be Assigned to Anybody (2026-09-09)
+
+A department defines its own seats in Scheduling → Position Names, and they
+belong to the vocabulary nearly everywhere: a shift template can carry one,
+`canonical_position` round-trips it verbatim rather than folding its case, the
+board renders the admin-chosen label, and `getPositionOptions` offers it in the
+template form's dropdown.
+
+Nobody can be put in one. Every route that seats a member types `position` as
+the closed `ShiftPosition` enum — `ShiftSignupRequest`, `ShiftAssignmentCreate`,
+`ShiftAssignmentUpdate` and `StandingShiftCreate` — and `shift_assignments.position`
+is a MySQL `ENUM` behind them. A custom seat is therefore refused at request
+validation with a 422, and would be refused again at the flush.
+
+**What this costs.** A department can build a template around "Rescue
+Technician", publish shifts from it, and watch every attempt to claim that seat
+fail. The seat looks configured everywhere except where it counts.
+
+**Why it is recorded rather than fixed here.** Widening it is a schema
+migration on an ENUM column plus a decision about how an open-vocabulary seat is
+validated against a shift's own list — a scheduling change, not an onboarding
+one. What this branch did do is stop the rank editor offering custom seats: a
+rank made eligible for one grants nothing, and offering it is a promise the app
+cannot keep, the same reason a module checkbox with no permission behind it is
+not rendered. `rankEligibleSeatOptions` in
+`frontend/src/modules/scheduling/utils/positionLabels.ts` states this, and
+`positionLabels.test.ts` asserts a custom seat is not offered.
+
+**What would fix it.** Widen the four request schemas to a validated string
+checked against the shift's configured seats, migrate the ENUM columns to
+`VARCHAR`, and then restore custom seats to the rank picker in the same change.
+
+## TIER-OFFICE — `can_hold_office` Is Stored, Editable, and Read by Nothing (2026-09-09)
+
+`MembershipTierBenefits.can_hold_office` has shipped in the schema and in the
+default ladder (Probationary is `False`) since membership tiers existed. No
+nomination or candidate path reads it: `election_service.py` consumes the tier's
+voting and attendance settings only, and a repository-wide search finds the
+field in the schema, the defaults, and a docstring — nowhere else.
+
+Until this branch nothing surfaced it, so it was inert but invisible. The tier
+editor now exposes it as a control, which makes the gap reachable: an
+administrator can clear "Can hold elected office" for Probationary, save it
+successfully, and have a probationary member nominated and elected anyway.
+
+**What was done.** CLAUDE.md pitfall #19 allows exactly two responses to a
+setting whose only effect is being stored — wire a reader in the same change, or
+mark it in the UI as not yet in effect. Wiring office eligibility into candidate
+validation is a change to elections, so the control carries a warning naming what
+it does not do and telling officers to screen candidates by hand.
+
+**What would fix it.** Consult the nominee's tier in the candidate-creation and
+nomination paths, refuse a member whose tier clears the flag, and delete the
+warning in the same change.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
