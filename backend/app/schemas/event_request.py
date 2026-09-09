@@ -24,6 +24,11 @@ class EventRequestCreate(BaseModel):
 
     outreach_type: str = Field(
         ...,
+        min_length=1,
+        # Matches EventRequest.outreach_type's String(100). Without the cap a
+        # longer value reached MySQL as a DataError and a member of the public
+        # got a 500 on a form they filled in correctly.
+        max_length=100,
         description="Type of outreach event (configurable per department, e.g., fire_safety_demo, station_tour)",
     )
     description: str = Field(..., min_length=10, max_length=2000)
@@ -61,6 +66,24 @@ class EventRequestCreate(BaseModel):
     hp_website: Optional[str] = Field(None, alias="website", max_length=255)
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _date_range_ordered(self) -> "EventRequestCreate":
+        """A window that ends before it starts is not a date preference.
+
+        ``EventRequestSchedule`` has refused a reversed window since the room
+        double-booking check was added; intake did not, so a requester could
+        store one and the coordinator's board rendered "March 20 – March 3".
+        """
+        if (
+            self.preferred_date_start
+            and self.preferred_date_end
+            and self.preferred_date_end < self.preferred_date_start
+        ):
+            raise ValueError(
+                "preferred_date_end must not be before preferred_date_start"
+            )
+        return self
 
 
 class EventRequestStatusUpdate(BaseModel):

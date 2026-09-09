@@ -93,6 +93,30 @@ def get_pipeline_settings(org: Optional[Organization]) -> dict:
     return merged
 
 
+def event_duration_minutes(org: Optional[Organization]) -> int:
+    """The department's default event length, for a date given without an end.
+
+    ``events.defaults.default_duration_minutes`` is the setting the events
+    module already owns for exactly this question, so the request pipeline
+    reads it rather than inventing a second answer (CLAUDE.md pitfall #29).
+
+    Read defensively: the settings blob is free-form JSON, and a bad value here
+    would otherwise take down every attempt to schedule a request rather than
+    the one setting somebody typed wrong.
+    """
+    fallback = int(_event_settings_defaults()["defaults"]["default_duration_minutes"])
+    if org is None:
+        return fallback
+    stored = ((org.settings or {}).get("events", {}) or {}).get("defaults", {})
+    if not isinstance(stored, dict):
+        return fallback
+    try:
+        minutes = int(stored.get("default_duration_minutes", fallback))
+    except (TypeError, ValueError):
+        return fallback
+    return minutes if minutes > 0 else fallback
+
+
 def get_outreach_types(org: Optional[Organization]) -> list[dict[str, str]]:
     """Read outreach event types from an organization, falling back to defaults."""
     defaults = _event_settings_defaults()["outreach_event_types"]
@@ -106,6 +130,78 @@ def configured_task_ids(org: Optional[Organization]) -> set[str]:
     """The set of pipeline task ids this department has configured."""
     tasks = get_pipeline_settings(org).get("tasks", []) or []
     return {str(t.get("id")) for t in tasks if isinstance(t, dict) and t.get("id")}
+
+
+# The fixed vocabularies the requester's preference fields may hold. Unlike
+# ``outreach_event_types`` and ``outreach_roles`` these are NOT per-department
+# configurable: the model's comments, the generated form's <select> options and
+# every reader in the admin board and the public status page are all written
+# against these exact values, so a value outside them renders as a raw slug the
+# coordinator has to decode.
+DATE_FLEXIBILITIES = ("specific_dates", "general_timeframe", "flexible")
+VENUE_PREFERENCES = ("their_location", "our_station", "either")
+TIMES_OF_DAY = ("morning", "afternoon", "evening", "flexible")
+
+# app/models/event_request.EventRequest.outreach_type is String(100). A longer
+# value reaches MySQL as a DataError and surfaces to a member of the public as
+# a 500 on a form they filled in correctly.
+OUTREACH_TYPE_MAX_LENGTH = 100
+
+
+def _clamp_choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
+    """Settle a preference field onto one of its known values."""
+    text = str(value).strip().lower() if value is not None else ""
+    return text if text in allowed else default
+
+
+def normalize_request_preferences(org: Optional[Organization], data: dict) -> dict:
+    """Settle a requester's answers onto the pipeline's canonical shapes.
+
+    Applied on **every** write path (CLAUDE.md pitfall #20): the JSON endpoint
+    validates against ``EventRequestCreate``, but the forms path maps whatever
+    a department typed into its own form options straight onto the model, so
+    without a shared write-side authority the two intakes store different
+    vocabularies for the same four questions and every reader has to tell them
+    apart.
+
+    Returns a new dict with ``outreach_type``, ``date_flexibility``,
+    ``venue_preference`` and ``preferred_time_of_day`` settled. Nothing is
+    dropped and nothing raises — a public submission is never worth losing over
+    a preference field, and the description the requester actually wrote is the
+    part the coordinator reads.
+    """
+    settled = dict(data)
+
+    outreach_type = str(settled.get("outreach_type") or "").strip()
+    configured = {t["value"] for t in get_outreach_types(org) if t.get("value")}
+    if outreach_type not in configured:
+        # Falling back rather than storing the unknown value keeps the board's
+        # type filter and the acknowledgement email's subject meaningful. The
+        # requester's own words survive in `description`.
+        outreach_type = "other"
+    settled["outreach_type"] = outreach_type[:OUTREACH_TYPE_MAX_LENGTH]
+
+    flexibility = _clamp_choice(
+        settled.get("date_flexibility"), DATE_FLEXIBILITIES, "flexible"
+    )
+    # "I have specific dates" with no date is not a specific request, and
+    # calling it one defeats `lead_time_error`, which only measures a request
+    # that names a date: claiming specific_dates and omitting the date walked
+    # straight past the department's minimum notice. Downgrading rather than
+    # refusing keeps a real enquiry — a requester who picked the option and
+    # then left the picker alone is asking the department to suggest a date,
+    # which is exactly what general_timeframe means.
+    if flexibility == "specific_dates" and not settled.get("preferred_date_start"):
+        flexibility = "general_timeframe"
+    settled["date_flexibility"] = flexibility
+
+    settled["venue_preference"] = _clamp_choice(
+        settled.get("venue_preference"), VENUE_PREFERENCES, "their_location"
+    )
+    settled["preferred_time_of_day"] = _clamp_choice(
+        settled.get("preferred_time_of_day"), TIMES_OF_DAY, "flexible"
+    )
+    return settled
 
 
 def lead_time_error(
@@ -1100,6 +1196,173 @@ async def sync_staffing_shift_date(
         logger.warning(
             "Could not move staffing shift {} for request {}: {}",
             event_request.staffing_shift_id,
+            event_request.id,
+            e,
+        )
+
+
+# ============================================
+# Calendar event — the tie-in to the events module
+# ============================================
+
+
+async def get_linked_calendar_event(
+    db: AsyncSession, event_request: EventRequest
+) -> Optional[Any]:
+    """The calendar Event this request is linked to, if there is one.
+
+    Returned whatever its state; a caller that needs a *live* entry checks
+    ``is_cancelled`` itself, because "there is no entry" and "the entry was
+    stood down" lead to different decisions at every call site.
+
+    Org-scoped even though the id was stored by this pipeline: a request row
+    edited by any other path must not be able to reach another department's
+    event through the link (CLAUDE.md pitfall #14a).
+    """
+    if not event_request.event_id:
+        return None
+    from app.models.event import Event
+
+    return await db.scalar(
+        select(Event).where(
+            Event.id == str(event_request.event_id),
+            Event.organization_id == str(event_request.organization_id),
+        )
+    )
+
+
+async def sync_calendar_event_date(
+    db: AsyncSession,
+    event_request: EventRequest,
+    actor_id: Optional[str],
+) -> None:
+    """Move the calendar event when its request's confirmed date changes.
+
+    ``schedule_request`` puts the outreach event on the department calendar and
+    nothing moved it afterwards, so a request postponed and rescheduled left the
+    crew reading the old date off the calendar while the pipeline, the requester's
+    email and the staffing shift all carried the new one. The calendar is the
+    surface most members actually look at, which makes it the worst of the four
+    to leave stale.
+
+    Never raises into the caller, for the same reason ``sync_staffing_shift_date``
+    does not: the request has already been rescheduled, and failing that write to
+    report a calendar problem leaves the pipeline in a worse state than the stale
+    entry does.
+    """
+    if not event_request.event_id or not event_request.event_date:
+        return
+    from uuid import UUID
+
+    from app.schemas.event import EventUpdate
+    from app.services.event_service import EventService
+
+    try:
+        event = await get_linked_calendar_event(db, event_request)
+        if event is None or event.is_cancelled:
+            return
+
+        start = event_request.event_date
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        end = event_request.event_end_date
+        if end is None:
+            # The coordinator set this entry's length once; moving it to another
+            # date is not a reason to change it. `EventUpdate` refuses an end at
+            # or before the start, so a degenerate stored window (which the
+            # pre-2026-09-09 create path could produce) falls back to the
+            # shipped default length rather than failing the move — the
+            # organization is not loaded on this path, and a fallback for a
+            # window that should not exist does not justify a query for it.
+            span = event.end_datetime - event.start_datetime
+            if span <= timedelta(0):
+                span = timedelta(minutes=event_duration_minutes(None))
+            end = start + span
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+
+        if event.start_datetime == start and event.end_datetime == end:
+            return
+
+        await EventService(db).update_event(
+            event_id=UUID(str(event_request.event_id)),
+            organization_id=UUID(str(event_request.organization_id)),
+            event_data=EventUpdate(start_datetime=start, end_datetime=end),
+            updated_by=UUID(actor_id) if actor_id else None,
+        )
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="calendar_event_rescheduled",
+                notes="Moved the calendar event to the new date",
+                details={
+                    "event_id": str(event_request.event_id),
+                    "start_datetime": start.isoformat(),
+                },
+                performed_by=actor_id,
+            )
+        )
+    except Exception as e:
+        # A finalized event refuses a clock change on purpose — its credited
+        # hours were derived from the old window — so this is an expected miss,
+        # not only a failure.
+        logger.warning(
+            "Could not move calendar event {} for request {}: {}",
+            event_request.event_id,
+            event_request.id,
+            e,
+        )
+
+
+async def sync_calendar_event_cancelled(
+    db: AsyncSession,
+    event_request: EventRequest,
+    actor_id: Optional[str],
+    reason: Optional[str] = None,
+) -> None:
+    """Cancel the calendar event when its request is called off or loses its date.
+
+    Declining, cancelling, or postponing to a date TBD already stands the
+    staffing shift down; the calendar entry stayed, so the department kept an
+    outreach event on its schedule for something nobody was running. The link is
+    deliberately left in place afterwards — a coordinator asking "what happened
+    to that school visit" is served by the cancelled event and its reason, not by
+    a dangling reference to nothing.
+
+    Never raises into the caller, matching ``sync_staffing_shift_cancelled``.
+    """
+    if not event_request.event_id:
+        return
+    from uuid import UUID
+
+    from app.services.event_service import EventService
+
+    try:
+        event = await get_linked_calendar_event(db, event_request)
+        if event is None or event.is_cancelled:
+            return
+
+        await EventService(db).cancel_event(
+            event_id=UUID(str(event_request.event_id)),
+            organization_id=UUID(str(event_request.organization_id)),
+            reason=reason or "The outreach event this covered was cancelled.",
+            send_notifications=True,
+        )
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="calendar_event_cancelled",
+                notes="Cancelled the calendar event",
+                details={"event_id": str(event_request.event_id)},
+                performed_by=actor_id,
+            )
+        )
+    except Exception as e:
+        # An event whose attendance is already finalized refuses cancellation —
+        # it happened and credited hours. Leaving it standing is correct there.
+        logger.warning(
+            "Could not cancel calendar event {} for request {}: {}",
+            event_request.event_id,
             event_request.id,
             e,
         )

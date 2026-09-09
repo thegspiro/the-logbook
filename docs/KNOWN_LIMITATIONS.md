@@ -77,6 +77,46 @@ here.
 | **Skills-test completion does not enforce requirement `max_attempts`**   | ✅ Resolved                                        | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
 | **`GET /training/skills-testing/tests` has no pagination or result cap** | Open (LOW/MED, security review SKT3-2, 2026-09-04) | `list_tests` (`app/api/v1/endpoints/skills_testing.py`) — open to every member, not just officers — builds no `.limit()` into its query, and `SkillsTestingTestRecordsTab.tsx`'s default "All" filter calls it with zero params, fetching the org's entire non-practice skill-test history (plus a batch user/template fetch and, for non-officers, a per-row disclosure resolution) on every unfiltered load. No data-exposure risk (every row is already org-scoped and disclosure-filtered) — this is a resource-exhaustion/latency concern that scales with an organization's accumulated testing history. Closing it needs a paging contract (`limit`/`offset` or cursor), a chosen default/cap, and matching frontend pagination in `SkillsTestingTestRecordsTab.tsx` and `skillsTestingService.getTests()` — a product decision and coordinated frontend change, not a same-commit fix.  |
 
+## Outreach Requests — Two Deliberate Choices in the Public Pipeline (2026-09-09)
+
+Both are decisions rather than gaps, written down because each looks like an
+oversight to the next reader and the obvious "fix" for either is wrong.
+
+**The requester's status link is shared by a coordinator, not emailed.**
+Every event request carries a `status_token` and there is a public page at
+`/event-request/status/{token}` showing the request's stage, the confirmed date
+and — where the department has enabled `public_progress_visible` — its pipeline
+checklist, plus a self-service cancel. Nothing puts that URL in front of the
+requester automatically: the acknowledgement email does not carry it, and the
+public form's confirmation response does not return the token. A coordinator
+hands it out from the **Copy status link** control on the request detail panel
+in Events → Requests.
+
+That is the chosen posture, not an omission. The membership pipeline mails its
+equivalent (`/application-status/{token}`) because a prospect's application is
+a months-long relationship they are expected to track themselves; a station
+tour is a short exchange the department drives, and a link that reaches every
+requester's inbox is a link that reaches every forwarded inbox, spam filter and
+screenshot with it. **Do not "finish" this by adding the URL to the default
+`EVENT_REQUEST_STATUS` email template** — reopen the decision first. A
+department that wants self-service tracking can paste the link into its own
+template today.
+
+**Publishing a request form is not the same as opting into public intake.**
+Since 2026-09-09 both intake paths honour
+`events.request_pipeline.accept_public_requests`: the JSON endpoint refuses,
+and a public Form submission carrying the `event_request` integration is stored
+but produces no pipeline row, with the reason on the submission's
+`integration_result`. Previously only the JSON endpoint read the setting.
+
+Migration `d19b2c2ae9b9` turns the toggle on for every organization that
+already had a published, public request form at upgrade time, so no existing
+department loses requests. **A department publishing its first request form
+after that upgrade must also turn the toggle on** — the settings screen does
+not yet couple the two, and the symptom is a form that accepts submissions and
+files no requests. Coupling them (or warning on the Forms publish action) is an
+open product decision.
+
 ## Claude (MCP) — claude.ai Custom Connectors Need an OAuth Server (2026-09-03)
 
 The Claude (MCP) integration authenticates MCP clients with a static bearer
