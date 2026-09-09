@@ -97,11 +97,41 @@ passed (including all three race guard tests), full backend suite passed,
 `npm run typecheck`/`eslint .` both 0 errors, `npm run build` green,
 scheduling frontend vitest passed (unaffected by this backend-only round).
 
-**Superseded — prior Open PR note (Feature 15, Scheduling, pass 4, PR #2435, merged without the Codex-review fixes), preserved for history.** (Left
-as plain text rather than another nested collapsible block — this file's
-collapsible-history nesting was already one level short of balanced before
-this edit, and opening another one without also tracking down where its
-matching close belongs would only widen that gap.)
+**Superseded — prior Open PR note ("None" after PR #2435's merge, recorded
+via PR #2436, before SCH-13 was discovered on Codex review of the already-
+merged #2435), preserved for history.** (Left as plain text rather than
+another nested collapsible block, matching the note above — this file's
+collapsible-history nesting was already one level short of balanced, and
+opening another one without also tracking down where its matching close
+belongs would only widen that gap.)
+
+**None.** PR #2435 (Feature 15, Scheduling, pass 4) merged clean —
+17/17 CI checks green, `mergeable_state: clean`, Codex review completed
+with no findings. The one non-terminal signal on the PR (a red `CI
+Success` run) was against a superseded head SHA (`4aaa116`, cancelled
+mid-flight by a follow-up push, not a real failure) — confirmed and noted
+on the PR before merging, and the fresh run on the final head (`13c7605`)
+was fully green. Merged via squash, merge commit `aae45c0`. Rotation row
+15 was marked ✅ in the PR's own docs update (0 fixed, 0 flagged, 0 new
+findings — SCH-10 re-verified unchanged) — **since corrected to ⏳ above**,
+because a Codex review of #2435 that landed after the merge found a real
+bug (SCH-13) the merged commits never carried. Checked the actual
+established Claude branch namespace (`claude/security-review-*`, not
+`security-review/*` — e.g. the just-merged Scheduling branch was
+`claude/security-review-scheduling`) via `git ls-remote --heads`: no
+`claude/security-review-events*` branch exists, and no other branch name
+contains "event" apart from an unrelated `claude/public-program-event-
+pipeline-eggwcm`. This "rotation is clear to start 16" conclusion no
+longer holds — superseded by the SCH-13 discovery above.
+
+30-minute rotation watchdog: checked GitHub state directly (open PRs, the
+head of `main`, this file's own "Open PR" note) rather than assuming the
+prior note was current. No open security-review PR existed to tend at that
+point, no CI was red, no merge conflict to resolve — merging the
+then-ready PR and recording it was the only action that pass took.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 4, PR #2435, merged), preserved for history</summary>
 
 **Feature 15 (Scheduling, pass 4)** — PR
 [#2435](https://github.com/thegspiro/the-logbook/pull/2435), branch
@@ -12275,6 +12305,8 @@ Next: 00 cross-cutting baseline (second full pass), once this PR merges.
 Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
 Codex-round log entry above); the 14 original findings plus the 6 Codex
 findings are all resolved with no open items. Rotation row 33 -> done.
+
+</details>
 
 </details>
 
