@@ -52,15 +52,25 @@ class CallTrackingService:
     # Settings
     # ------------------------------------------------------------------
 
-    async def get_settings(self, organization_id: str) -> Dict[str, Any]:
-        """Return ``{"mode", "call_types"}`` for the org (never raises)."""
+    async def get_settings(
+        self, organization_id: str, for_update: bool = False
+    ) -> Dict[str, Any]:
+        """Return ``{"mode", "call_types"}`` for the org (never raises).
+
+        ``for_update=True`` locks the organization row (see
+        :meth:`ShiftEligibilityService._get_org`) rather than reading it
+        plainly — used by a caller whose decision must serialize against a
+        concurrent settings write instead of racing it (Pitfall #27).
+        """
         eligibility = ShiftEligibilityService(self.db)
-        org = await eligibility._get_org(str(organization_id))
+        org = await eligibility._get_org(str(organization_id), for_update=for_update)
         if not org:
             return {"mode": CallTrackingMode.DETAILED, "call_types": []}
         return eligibility.get_call_tracking_settings(org)
 
-    async def _valid_type_slugs(self, organization_id: str) -> set:
+    async def _valid_type_slugs(
+        self, organization_id: str, for_update: bool = False
+    ) -> set:
         """Slugs a submitted breakdown may name — **retired ones included**.
 
         Deliberately not filtered to active types. Retirement stops a type
@@ -70,8 +80,12 @@ class CallTrackingService:
         into a hard "Unknown call type" failure they cannot clear. What a
         close-out offers is decided where the wizard's row list is built, not
         here.
+
+        ``for_update=True`` — see :meth:`record_shift_calls`, the one caller
+        that needs this read to serialize against a concurrent type deletion
+        rather than validate against a stale settings snapshot.
         """
-        settings = await self.get_settings(str(organization_id))
+        settings = await self.get_settings(str(organization_id), for_update=for_update)
         return {t["slug"] for t in settings.get("call_types", [])}
 
     async def type_labels(self, organization_id: str) -> Dict[str, str]:
@@ -88,7 +102,10 @@ class CallTrackingService:
         return {t["slug"]: t["label"] for t in settings.get("call_types", [])}
 
     async def slugs_locked_by_history(
-        self, organization_id: str, candidates: Optional[set] = None
+        self,
+        organization_id: str,
+        candidates: Optional[set] = None,
+        for_update: bool = False,
     ) -> set:
         """Slugs that cannot be deleted without orphaning something.
 
@@ -111,8 +128,19 @@ class CallTrackingService:
         settings screen grew with the org's whole history for an answer that
         can only ever contain configured slugs. The database does the matching
         and stops at the first hit per slug.
+
+        ``for_update=True`` makes the ``org_calls`` half of this check a
+        locking read (Pitfall #27) — see :func:`_reject_deleting_a_used_call_type`
+        in ``scheduling.py``, the one caller for whom a plain ``SELECT`` would
+        answer from this transaction's own snapshot and miss a call recorded
+        by a concurrently-committing close-out. The ``shift_completion_reports``
+        half is not locked: a report is filed well after its shift's calls are
+        recorded, not in the same race window, so the same staleness risk
+        does not apply there.
         """
-        locked = set(await self.type_usage_counts(organization_id))
+        locked = set(
+            await self.type_usage_counts(organization_id, for_update=for_update)
+        )
         if candidates is not None:
             candidates = {s for s in candidates if s not in locked}
             if not candidates:
@@ -160,7 +188,9 @@ class CallTrackingService:
                     locked.add(value)
         return locked
 
-    async def type_usage_counts(self, organization_id: str) -> Dict[str, int]:
+    async def type_usage_counts(
+        self, organization_id: str, for_update: bool = False
+    ) -> Dict[str, int]:
         """Calls on record per type slug, across all dates.
 
         Unlike ``calls_by_type`` this is deliberately unwindowed and omits the
@@ -168,17 +198,24 @@ class CallTrackingService:
         "is anything filed under this type?" before offering to delete it.
         Windowing that question would report a type used only last year as
         unused and invite its deletion.
+
+        ``for_update=True`` makes this a locking read — see
+        :meth:`slugs_locked_by_history`. MySQL/MariaDB allow ``FOR UPDATE``
+        on a grouped, aggregate query (verified directly against this
+        codebase's own test database), so this needs no restructuring to
+        support it.
         """
-        rows = (
-            await self.db.execute(
-                select(OrgCall.call_type, func.count(OrgCall.id))
-                .where(
-                    OrgCall.organization_id == str(organization_id),
-                    OrgCall.call_type.isnot(None),
-                )
-                .group_by(OrgCall.call_type)
+        query = (
+            select(OrgCall.call_type, func.count(OrgCall.id))
+            .where(
+                OrgCall.organization_id == str(organization_id),
+                OrgCall.call_type.isnot(None),
             )
-        ).all()
+            .group_by(OrgCall.call_type)
+        )
+        if for_update:
+            query = query.with_for_update()
+        rows = (await self.db.execute(query)).all()
         return {slug: int(n) for slug, n in rows}
 
     # ------------------------------------------------------------------
@@ -216,7 +253,15 @@ class CallTrackingService:
             return 0, f"Call count cannot exceed {MAX_CALLS_PER_SHIFT} for one shift"
 
         if type_counts:
-            valid = await self._valid_type_slugs(organization_id)
+            # Locking: validation and the settings-side deletion guard
+            # (``_reject_deleting_a_used_call_type`` in ``scheduling.py``)
+            # both take the organization row lock before deciding, so a
+            # close-out that names a type and a concurrent admin deleting
+            # that same type serialize on it (Pitfall #27) instead of each
+            # acting on a stale read of the other's in-flight change — one
+            # of the two loses: either this validation sees the type is
+            # already gone, or the deletion guard sees this call's usage.
+            valid = await self._valid_type_slugs(organization_id, for_update=True)
             unknown = sorted(set(type_counts) - valid)
             if unknown:
                 return 0, f"Unknown call type(s): {', '.join(unknown)}"

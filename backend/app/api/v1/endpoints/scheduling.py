@@ -3658,7 +3658,24 @@ async def _reject_deleting_a_used_call_type(
 
     service = CallTrackingService(db)
 
-    locked = await service.slugs_locked_by_history(organization_id, removed)
+    # Locks the organization row before checking usage. The corresponding
+    # write path (CallTrackingService.record_shift_calls, when a close-out
+    # names a type) takes the same lock before validating against settings,
+    # so the two requests serialize on it instead of each deciding from a
+    # stale read of the other's in-flight change (Pitfall #27). A plain read
+    # here would let a concurrently-committing close-out's new call go unseen
+    # even after (re)acquiring the lock, under this transaction's own
+    # REPEATABLE READ snapshot — the same "the row is locked and the count is
+    # stale anyway" trap FORM-10 closed for form-submission de-duplication.
+    # Discarded: only the lock is needed here, not a fresher `org` — nothing
+    # below re-derives `in_force`/`persisted`, which were already correct
+    # against a plain read of settings that concurrent history-usage, not
+    # concurrent settings edits, is what this guard is protecting.
+    await eligibility._get_org(organization_id, for_update=True)
+
+    locked = await service.slugs_locked_by_history(
+        organization_id, removed, for_update=True
+    )
     blocked = sorted(removed & locked)
     if blocked:
         raise ValueError(

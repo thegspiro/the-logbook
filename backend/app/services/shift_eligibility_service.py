@@ -138,10 +138,25 @@ class ShiftEligibilityService:
     # Org settings helpers
     # ------------------------------------------------------------------
 
-    async def _get_org(self, organization_id: str) -> Optional[Organization]:
-        result = await self.db.execute(
-            select(Organization).where(Organization.id == organization_id)
-        )
+    async def _get_org(
+        self, organization_id: str, for_update: bool = False
+    ) -> Optional[Organization]:
+        """Load the organization row.
+
+        ``for_update=True`` takes a row lock and, on MySQL/MariaDB InnoDB,
+        reads the latest *committed* value regardless of this transaction's
+        REPEATABLE READ snapshot — unlike a plain ``SELECT``, which answers
+        from whatever snapshot the transaction's first read established
+        (CLAUDE.md Pitfall #27, "the row is locked and the count is stale
+        anyway"). Used by a validate-then-write sequence against
+        ``settings.scheduling.call_tracking`` that must serialize against a
+        concurrent writer rather than each reading its own stale snapshot of
+        the other's in-flight change.
+        """
+        query = select(Organization).where(Organization.id == organization_id)
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     def _get_scheduling_settings(self, org: Organization) -> dict:

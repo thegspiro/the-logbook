@@ -1047,7 +1047,30 @@ of a loaded JSON value), no new capacity/count-then-insert pattern.
 | `npx vitest run src/modules/scheduling src/pages/scheduling`                    | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
 | `npm run build` (frontend)                                                      | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |
 
-## Pass 4 (2026-09-09) — 0 fixes, 0 new findings, SCH-10 re-verified unchanged
+## Pass 4 (2026-09-09) — 1 fix (SCH-13, LOW/MED), 0 flagged, SCH-10 re-verified unchanged
+
+**Revision note.** Codex review of the draft PR caught four real gaps, all
+verified against the current code and addressed rather than disputed: (1)
+the draft's own churn inventory and full-read list omitted two files —
+`shift_eligibility_service.py` (+183/-3) and `shift_completion_service.py`
+(+95/-1) — that changed since pass 3's baseline and implement real pieces
+of the reviewed surface (the signup-window settings reader, the call-type
+normalization/label-disambiguation logic, and the report call-type-
+provenance tracking); both now read in full below. (2) The completion gate
+never ran `npm run build` despite the pass auditing 79 changed frontend
+files — run now, clean, matching pass 3's own precedent of running it as a
+bonus check. (3) **SCH-13** — a real TOCTOU race between deleting a call
+type and a concurrent close-out naming it, which could orphan history
+referring to a slug no longer configured. Fixed below. (4) The draft
+marked rotation row 15 `✅` and reported "0 fixed" while its own PR was
+still open — corrected in `PROGRESS.md` to `⏳` (awaiting merge), matching
+the tracker's own legend and established convention.
+
+**PR note.** The draft PR ([#2435](https://github.com/thegspiro/the-logbook/pull/2435))
+merged before these four fixes were pushed — a merge race, not a rejection;
+see `PROGRESS.md`'s Open PR section for the full account. All four items
+below are carried on a same-day follow-up PR, the same shape the EC-15
+follow-up (Feature 14) used for the identical situation.
 
 **Baseline:** `8b89f319d` (the merge commit of PR #2212, pass 3's actual landing
 point — found via `git merge-base --is-ancestor` against pass 3's own tip
@@ -1061,10 +1084,16 @@ hatch, and a self-scoped decline-assignment endpoint.
 
 **Diff-scoped, not re-read whole**, consistent with pass 3's practice once a
 baseline commit is reachable (the shallow clone needed deepening to reach it,
-as in prior passes). Real churn against the seven declared/adjacent backend
-files: `scheduling.py` (+503/-20), `scheduling_service.py` (+1083/-47),
-`schemas/scheduling.py` (+152/-4), `models/training.py` (+10, one new
-nullable column), `calcom_service.py` (+30/-9). `scheduling_module_config.py`,
+as in prior passes). Real churn against the **nine** declared/adjacent
+backend files — two more than the draft's "seven," corrected on Codex
+review (see the Revision note): `scheduling.py` (+503/-20),
+`scheduling_service.py` (+1083/-47), `schemas/scheduling.py` (+152/-4),
+`models/training.py` (+10, one new nullable column), `calcom_service.py`
+(+30/-9), `shift_eligibility_service.py` (+183/-3), and
+`shift_completion_service.py` (+95/-1) — the last two omitted from the
+draft's own inventory entirely despite being reached from `scheduling.py`'s
+settings endpoints and `record_shift_calls`/`update_report`'s call-type
+handling, and now read in full below. `scheduling_module_config.py`,
 `calcom_sync.py`, `standing_shift_service.py`,
 `app/mcp/tools/scheduling.py` are byte-identical to pass 3. 79 frontend files
 under `modules/scheduling/`+`pages/scheduling/` changed (+11250/-2322) — grep-swept
@@ -1195,6 +1224,130 @@ organization_id` before permitting the attach (XC-1) rather than trusting
   genuinely create_all-only — the two cases are not the same shape, and the
   new migration touching only `shifts` needs no guard.
 
+**The two previously-omitted service files, read in full against all seven
+checklist dimensions** (added on Codex review — see the Revision note):
+
+- **`shift_eligibility_service.py` (+183/-3).** New methods:
+  `get_signup_window_settings` (defensive `int()` casts with
+  `min(max(value,0), ceiling)` clamping, degrading to a built-in default
+  rather than raising on a hand-edited value — Pitfall #19), `stored_call_type_slugs`
+  / `effective_call_type_slugs` / `effective_call_type_slugs_for` (pure
+  reads off an already-loaded `org`, or `_get_org(organization_id)` for the
+  by-id variant — no client-supplied FK, no injection surface),
+  `_disambiguate_label` (pure string manipulation, no DB access). The one
+  pre-existing method that gained two new parameters,
+  `update_scheduling_settings`, still opens with
+  `copy.deepcopy(org.settings or {})` before mutating — confirmed unchanged
+  and still Pitfall #12-compliant (a shallow `dict()` here would let the two
+  new fields silently fail to persist, the exact bug that pitfall
+  describes). `_get_org`'s only caller-visible change this pass is the
+  `for_update` parameter added for SCH-13 below; every existing call site
+  (unaffected by the fix) keeps calling it with no `for_update` argument
+  and is unaffected.
+- **`shift_completion_service.py` (+95/-1).** `_edit_preserves_org_slugs`
+  and `_shift_has_incident_rows` (new) decide whether an edited report's
+  `call_types` list still supports an `org_calls` provenance marker — pure
+  reads, `report.organization_id` and `shift_id` both already org-resolved
+  by the caller (`update_report`, which itself double-checks
+  `report.organization_id != str(organization_id)` before any mutation,
+  in addition to its own `get_report(report_id, organization_id)` lookup —
+  XC-3 satisfied twice over, unchanged this pass). The one nested-JSON write
+  this diff adds (`update_report`, clearing a stale `data_sources` marker)
+  correctly uses `copy.deepcopy(report.data_sources or {})` before mutating
+  and reassigning — Pitfall #12 compliant, confirmed by reading the exact
+  lines rather than assumed from the pattern being familiar elsewhere in
+  this codebase.
+
+No new finding in either file on its own. Reading both in full, however, is
+what surfaced SCH-13 below: `shift_eligibility_service.py`'s `_get_org` and
+`shift_completion_service.py`'s consumer `record_shift_calls` (in
+`call_tracking_service.py`, itself already in scope) are the two ends of
+the same race.
+
+### SCH-13 — LOW/MED (fixed) — deleting a call type could race a concurrent close-out into orphaning it
+
+**What:** `_reject_deleting_a_used_call_type` (the settings-save guard in
+`scheduling.py`) decides whether a call-type slug can be dropped by reading
+_current_ `OrgCall`/`ShiftCompletionReport` usage. `CallTrackingService.
+record_shift_calls` (invoked from a shift close-out) decides whether a
+submitted type breakdown names a _valid_ slug by reading _current_ settings.
+Both reads were plain `SELECT`s. Under InnoDB's default REPEATABLE READ, a
+plain `SELECT` answers from the snapshot taken at the transaction's first
+read, not from whatever is current when the statement actually runs
+(CLAUDE.md Pitfall #27 — the same shape FORM-10 fixed for duplicate form
+submissions). Two overlapping requests — an administrator deleting "brush"
+from settings, and an officer's close-out recording a call under "brush" —
+could each pass its own validation against a stale read of the other's
+in-flight change, and both commit.
+
+**Where:** `app/api/v1/endpoints/scheduling.py:_reject_deleting_a_used_call_type`
+and `app/services/call_tracking_service.py:record_shift_calls` (the
+`if type_counts:` validation branch).
+
+**Failure scenario:** at T0, "brush" is configured with zero current usage
+(so the deletion guard's usage check would currently find nothing locked).
+An admin's settings PUT (removing "brush") and an officer's close-out PUT
+(reporting one call as "brush") arrive close enough together that both
+transactions take their first real read before either commits. Regardless
+of which one the database happens to serialize first: the admin's usage
+check (a plain `SELECT` on `org_calls`) doesn't see the officer's
+not-yet-committed (or, if it committed first, already-committed-but-outside-
+this-transaction's-snapshot) call, so it finds no usage and proceeds; the
+officer's validity check (a plain `SELECT` on `organizations.settings`)
+still sees "brush" as configured, so it validates and inserts. Final state:
+the org's settings no longer list "brush," but an `OrgCall` row exists with
+`call_type="brush"` — the exact orphan retirement exists to prevent. No
+cross-tenant or privilege component; this is a within-org data-integrity
+race, not an access-control bypass.
+
+**Impact:** LOW/MED. Requires a real race (an admin editing call-type
+settings within the same narrow window as an officer's close-out naming
+that type) with no security-boundary crossing — the outcome is an orphaned
+history row (a call whose type resolves to a raw slug instead of a label,
+and which can never again lock that slug's name from being reused for a
+differently-meant type), not unauthorized access or data exposure.
+
+**Fix:** threaded `for_update: bool = False` through
+`ShiftEligibilityService._get_org` and, in `call_tracking_service.py`,
+`get_settings` / `_valid_type_slugs` / `type_usage_counts` /
+`slugs_locked_by_history` (each defaulting to the prior plain-read
+behavior, so every other caller — settings `GET`, the usage-display
+helpers — is unaffected). `for_update=True` is passed from exactly the two
+call sites in the race:
+
+- `_reject_deleting_a_used_call_type` now takes a locking read of the
+  organization row (discarding the return value — only the lock matters,
+  since `in_force`/`persisted`/`removed` were already computed from an
+  earlier plain read that doesn't need freshness for the admin's own edit
+  intent) immediately before calling `slugs_locked_by_history(...,
+for_update=True)`.
+- `record_shift_calls`'s `if type_counts:` branch now calls
+  `self._valid_type_slugs(organization_id, for_update=True)`.
+
+Both now serialize on the organization row. Locking the row alone is not
+sufficient — the same "the row is locked and the count is stale anyway"
+trap FORM-10 closed — so `type_usage_counts`'s `OrgCall` query is _itself_
+also a locking read when `for_update=True`, verified directly against this
+codebase's own test database that MySQL permits `SELECT ... GROUP BY ...
+FOR UPDATE` without error (not assumed). The `ShiftCompletionReport` half
+of `slugs_locked_by_history` is deliberately left a plain read: a report is
+filed well after its shift's calls are recorded, not in the same race
+window, so the same staleness risk does not apply there — locking it would
+add contention with no corresponding correctness gain. Both new locking
+call sites acquire the organization row first and (optionally) the
+`org_calls` rows second, in the same order, so no lock-order inversion is
+introduced (the FAC-45 deadlock lesson).
+
+**Guard test:** `tests/test_call_type_deletion_race.py` — two real,
+independently-committing sessions (not the savepoint-based `db_session`
+fixture, which never truly commits) with both transactions' REPEATABLE READ
+snapshots pinned via a throwaway real read before either coroutine's actual
+work starts, run through `asyncio.gather`. Asserts the winner-agnostic
+invariant: it is never the case that "brush" is both absent from settings
+and present on a committed `OrgCall` row. Confirmed failing reliably (5/5
+runs) against the unpatched code and passing reliably (5/5 runs) against
+the fix.
+
 **`calcom_service.py`'s 30-line change** (`parse_webhook_event`, now also
 recognizing `MEETING_ENDED` and dropping Cal.com-flagged no-show attendees
 from `attendee_emails`) is pure parsing logic with no outbound request and no
@@ -1221,20 +1374,26 @@ scheduling-scoped change.
 
 **No new findings** on any other checklist dimension: no new
 `.like()`/`.ilike()` call in `scheduling_service.py` itself (still zero); no
-new CSV/export surface; no new Pitfall #12 JSON-mutation (`late_signup_until`
-is a scalar column, not JSON; the call-type settings write is a wholesale
-`model_dump()` reassignment, not an in-place nested mutation); no
-capacity/count-then-insert pattern added without a lock (`_partition_existing`
-above is the one new instance, and it locks). Existing guard tests
-(`test_scheduling_org_scoping.py`, `test_swap_offer_response.py`,
-`test_shift_template_equipment_checks.py`) re-run clean as part of the full
-suite below; no regression in any of pass 1/2/3's fixes.
+new CSV/export surface; no new Pitfall #12 JSON-mutation beyond the two
+already reviewed above (`late_signup_until` is a scalar column, not JSON;
+the call-type settings write is a wholesale `model_dump()` reassignment,
+not an in-place nested mutation); no capacity/count-then-insert pattern
+added without a lock beyond SCH-13 (`_partition_existing`, reviewed under
+the call-tracking feature above, is the one other new instance, and it
+already locks). Existing guard tests (`test_scheduling_org_scoping.py`,
+`test_swap_offer_response.py`, `test_shift_template_equipment_checks.py`)
+re-run clean as part of the full suite below; no regression in any of pass
+1/2/3's fixes.
 
 ### Guard tests
 
-None added — no fix was needed this pass. Existing coverage for the new
-surface reviewed above was confirmed present and passing rather than written
-fresh: `test_scheduling_closeout_backlog.py`, `test_member_hours_history.py`,
+- `tests/test_call_type_deletion_race.py` (new) — SCH-13's guard test; see
+  above for its shape and the fail-before/pass-after confirmation.
+
+Everything else: no fix was needed for the rest of this pass's scope, so no
+further guard test was added. Existing coverage for the new surface
+reviewed above was confirmed present and passing rather than written fresh:
+`test_scheduling_closeout_backlog.py`, `test_member_hours_history.py`,
 `test_shift_signup_window.py`, `test_shift_signup_window_enforcement.py`,
 `test_call_tracking.py`, `test_call_type_provenance_narrowing_migration.py`,
 `test_reserved_call_type_slug_migration.py`, plus decline/late-signup cases
@@ -1242,14 +1401,16 @@ inside `test_scheduling.py`.
 
 ## Completion gate (pass 4)
 
-| Check                                                                                                         | Result                                                                      |
-| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                 | ✅ 0 violations                                                             |
-| `black --check app/ tests/ alembic/`                                                                          | ✅ 1555 files unchanged                                                     |
-| `isort --check-only app/ tests/ alembic/`                                                                     | ✅ clean (installed, not skipped)                                           |
-| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 440 revisions                                               |
-| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1247 passed, 1 skipped (pre-existing optional-dep skip)                  |
-| `pytest tests/` (full backend suite)                                                                          | ✅ 11967 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep)     |
-| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                     | ✅ 0 errors                                                                 |
-| `npx eslint .`                                                                                                | ✅ 0 errors                                                                 |
-| `npx vitest run src/modules/scheduling src/pages/scheduling`                                                  | ✅ 672 passed (42 files) — not mandatory, run anyway per pass 3's precedent |
+| Check                                                                                                         | Result                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                                                                 | ✅ 0 violations                                                                                                          |
+| `black --check app/ tests/ alembic/`                                                                          | ✅ 1556 files unchanged                                                                                                  |
+| `isort --check-only app/ tests/ alembic/`                                                                     | ✅ clean (installed, not skipped)                                                                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                             | ✅ single head, 440 revisions                                                                                            |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots or call_tracking or call_type"` | ✅ 1248 passed, 1 skipped (pre-existing optional-dep skip) — +1, the new SCH-13 guard test                               |
+| `pytest tests/test_call_type_deletion_race.py` — 5 runs each direction                                        | ✅ fails 5/5 on unpatched code, passes 5/5 on the fix (confirmed by temporarily reverting)                               |
+| `pytest tests/` (full backend suite)                                                                          | ✅ 11968 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1 over pre-fix                                |
+| `npm run typecheck` (aliased TS7 compiler, per CLAUDE.md)                                                     | ✅ 0 errors                                                                                                              |
+| `npx eslint .`                                                                                                | ✅ 0 errors                                                                                                              |
+| `npm run build` (added this round — see the Revision note)                                                    | ✅ built in 5.26s, PWA precache generated (364 entries) — pre-existing chunk-size warning only                           |
+| `npx vitest run src/modules/scheduling src/pages/scheduling`                                                  | ✅ 672 passed (42 files) — not mandatory, run anyway per pass 3's precedent, unaffected by this round's backend-only fix |
