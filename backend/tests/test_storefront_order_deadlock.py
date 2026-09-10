@@ -15,11 +15,20 @@ the tally lock on its own traded a rare same-product oversell for a frequent
 different-product failure.
 
 The fix is the other half of pitfall #27 — lock the *parent* row, not the rows
-being counted. `_price_lines` takes an exclusive lock on the window before the
-tallies, so the decision serializes and the gaps are never held concurrently.
+being counted — and it took two rounds of review to get the granularity right:
 
-Codex raised this as a P2 on PR #2446 against the commit that added the tally
-locks. Measured before the fix: 2 deadlocks in 5 rounds. After: 0.
+* Locking only the products leaves disjoint carts colliding in the gap.
+  5 rounds -> 2 deadlocks. (Codex P2 on PR #2446.)
+* Locking the window row fixes that and still deadlocks *across* windows:
+  `store_orders` is indexed on (organization_id, window_id), so two open windows
+  with empty ranges share one gap while their parent rows are different and
+  therefore uncontended. The store supports several open windows at once —
+  that is what `other_open_windows` is for. 4 rounds -> 1 deadlock. (Codex P3.)
+* Locking the organisation's `store_settings` row covers every gap the tallies
+  can touch, because all of those ranges are org-scoped. 0 deadlocks in both.
+
+Both cases are exercised below, because the same-window one passing is exactly
+what made the cross-window one easy to miss.
 """
 
 import asyncio
@@ -42,9 +51,10 @@ _TALLY = text("""
     """)
 
 _LOCK_WINDOW = text("SELECT id FROM store_order_windows WHERE id = :w FOR UPDATE")
+_LOCK_ORG = text("SELECT id FROM store_settings WHERE organization_id = :o FOR UPDATE")
 
 
-async def _place(engine, org, window, product, number, *, lock_window):
+async def _place(engine, org, window, product, number, *, lock_org=True):
     """One order placement, mirroring `_price_lines` -> insert in raw SQL.
 
     Raw SQL rather than the service so the test pins the *lock protocol* — the
@@ -54,8 +64,11 @@ async def _place(engine, org, window, product, number, *, lock_window):
     async with engine.connect() as conn:
         tx = await conn.begin()
         try:
-            if lock_window:
-                await conn.execute(_LOCK_WINDOW, {"w": window})
+            # The service's order: organisation, then window, then the tally.
+            # `lock_org=False` reproduces the rejected window-only protocol.
+            if lock_org:
+                await conn.execute(_LOCK_ORG, {"o": org})
+            await conn.execute(_LOCK_WINDOW, {"w": window})
             await conn.execute(_TALLY, {"w": window, "o": org})
             # Widen the overlap the way real request handling does: both
             # transactions hold their locks while the other is still working.
@@ -86,103 +99,139 @@ async def _place(engine, org, window, product, number, *, lock_window):
             return "deadlock" if "1213" in str(exc) else f"other:{exc}"
 
 
-class TestConcurrentDisjointCarts:
-    async def test_two_members_ordering_different_products_both_succeed(
-        self, db_session
-    ):
-        org = str(uuid.uuid4())
-        window = str(uuid.uuid4())
-        products = [str(uuid.uuid4()), str(uuid.uuid4())]
-        engine = database_manager.engine
-
-        async with engine.connect() as conn:
-            async with conn.begin():
-                await conn.execute(
-                    text(
-                        "INSERT INTO organizations (id,name,organization_type,"
-                        "slug,timezone,active) VALUES (:i,'Deadlock FD',"
-                        "'fire_department',:s,'UTC',1)"
-                    ),
-                    {"i": org, "s": f"deadlock-{org[:8]}"},
-                )
+async def _seed(engine, org, windows, products):
+    """Org + its store_settings row + the given windows and products."""
+    async with engine.connect() as conn:
+        async with conn.begin():
+            await conn.execute(
+                text(
+                    "INSERT INTO organizations (id,name,organization_type,"
+                    "slug,timezone,active) VALUES (:i,'Deadlock FD',"
+                    "'fire_department',:s,'UTC',1)"
+                ),
+                {"i": org, "s": f"deadlock-{org[:8]}"},
+            )
+            # The row the per-org lock takes. `create_order` calls
+            # `get_settings()` before `_price_lines`, so in production it always
+            # exists by the time the lock is attempted.
+            await conn.execute(
+                text(
+                    "INSERT INTO store_settings (id,organization_id,is_enabled,"
+                    "store_name,currency,tax_rate) VALUES "
+                    "(:i,:o,1,'Store','USD',0)"
+                ),
+                {"i": str(uuid.uuid4()), "o": org},
+            )
+            for index, window in enumerate(windows):
                 await conn.execute(
                     text(
                         "INSERT INTO store_order_windows (id,organization_id,"
-                        "name,status) VALUES (:i,:o,'Spring order','open')"
+                        "name,status) VALUES (:i,:o,:n,'open')"
                     ),
-                    {"i": window, "o": org},
+                    {"i": window, "o": org, "n": f"Window {index}"},
                 )
-                for index, product in enumerate(products):
-                    await conn.execute(
-                        text(
-                            "INSERT INTO store_products (id,organization_id,"
-                            "name,price,status) VALUES (:i,:o,:n,10,'active')"
-                        ),
-                        {"i": product, "o": org, "n": f"Item {index}"},
-                    )
+            for index, product in enumerate(products):
+                await conn.execute(
+                    text(
+                        "INSERT INTO store_products (id,organization_id,"
+                        "name,price,status) VALUES (:i,:o,:n,10,'active')"
+                    ),
+                    {"i": product, "o": org, "n": f"Item {index}"},
+                )
 
+
+async def _cleanup(engine, org):
+    async with engine.connect() as conn:
+        async with conn.begin():
+            for table in (
+                "store_order_items",
+                "store_orders",
+                "store_products",
+                "store_order_windows",
+                "store_settings",
+            ):
+                await conn.execute(
+                    text(f"DELETE FROM {table} WHERE organization_id=:o"),
+                    {"o": org},
+                )
+            await conn.execute(
+                text("DELETE FROM organizations WHERE id=:o"), {"o": org}
+            )
+
+
+async def _rounds(engine, org, pairs, count):
+    """`count` rounds of two concurrent placements, flattened outcomes."""
+    outcomes = []
+    for index in range(count):
+        (win_a, prod_a), (win_b, prod_b) = pairs
+        outcomes.extend(
+            await asyncio.gather(
+                _place(engine, org, win_a, prod_a, f"ORD-2026-{index * 2 + 1:04d}"),
+                _place(engine, org, win_b, prod_b, f"ORD-2026-{index * 2 + 2:04d}"),
+            )
+        )
+    return outcomes
+
+
+class TestConcurrentDisjointCarts:
+    async def test_different_products_in_one_window_do_not_deadlock(self, db_session):
+        """Codex P2: the case the window lock was introduced for."""
+        org, window = str(uuid.uuid4()), str(uuid.uuid4())
+        products = [str(uuid.uuid4()), str(uuid.uuid4())]
+        engine = database_manager.engine
+        await _seed(engine, org, [window], products)
         try:
-            outcomes = []
-            for round_index in range(3):
-                outcomes.extend(
-                    await asyncio.gather(
-                        _place(
-                            engine,
-                            org,
-                            window,
-                            products[0],
-                            f"ORD-2026-{round_index * 2 + 1:04d}",
-                            lock_window=True,
-                        ),
-                        _place(
-                            engine,
-                            org,
-                            window,
-                            products[1],
-                            f"ORD-2026-{round_index * 2 + 2:04d}",
-                            lock_window=True,
-                        ),
-                    )
-                )
-
+            outcomes = await _rounds(
+                engine, org, [(window, products[0]), (window, products[1])], 3
+            )
             assert outcomes.count("deadlock") == 0, (
-                "concurrent orders for different products deadlocked: the "
-                "window row is not serializing the decision, so both "
-                "transactions hold gap locks over the empty order range and "
-                "block each other's insert. See this module's docstring.\n"
-                f"outcomes={outcomes}"
+                "two members ordering different products in one window "
+                f"deadlocked; see this module's docstring.\noutcomes={outcomes}"
             )
             assert all(o == "ok" for o in outcomes), f"outcomes={outcomes}"
         finally:
-            async with engine.connect() as conn:
-                async with conn.begin():
-                    for table in (
-                        "store_order_items",
-                        "store_orders",
-                        "store_products",
-                        "store_order_windows",
-                    ):
-                        await conn.execute(
-                            text(f"DELETE FROM {table} WHERE organization_id=:o"),
-                            {"o": org},
-                        )
-                    await conn.execute(
-                        text("DELETE FROM organizations WHERE id=:o"), {"o": org}
-                    )
+            await _cleanup(engine, org)
 
-    async def test_the_service_takes_the_window_lock(self):
-        """A source guard, so the DB-backed test above cannot be defeated by
-        quietly dropping the lock it depends on."""
+    async def test_two_open_windows_do_not_deadlock(self, db_session):
+        """Codex P3: the case the window lock did NOT cover.
+
+        `store_orders` is indexed on (organization_id, window_id), so two open
+        windows with empty ranges share a gap while their parent rows are
+        different and therefore uncontended. Only a lock above both — the
+        organisation — serializes this.
+        """
+        org = str(uuid.uuid4())
+        windows = [str(uuid.uuid4()), str(uuid.uuid4())]
+        products = [str(uuid.uuid4()), str(uuid.uuid4())]
+        engine = database_manager.engine
+        await _seed(engine, org, windows, products)
+        try:
+            outcomes = await _rounds(
+                engine, org, [(windows[0], products[0]), (windows[1], products[1])], 4
+            )
+            assert outcomes.count("deadlock") == 0, (
+                "concurrent orders into two different open windows deadlocked: "
+                "the per-window lock does not serialize them, because the gap "
+                "they contend for is org-scoped while their parent rows are "
+                f"not.\noutcomes={outcomes}"
+            )
+            assert all(o == "ok" for o in outcomes), f"outcomes={outcomes}"
+        finally:
+            await _cleanup(engine, org)
+
+    async def test_the_service_locks_the_org_before_the_window_and_tallies(self):
+        """A source guard, so the DB-backed tests cannot be defeated by quietly
+        dropping or reordering the locks they depend on."""
         import inspect
 
         from app.services.storefront_service import StorefrontService
 
         source = inspect.getsource(StorefrontService._price_lines)
-        assert "StoreOrderWindow.id == window.id" in source
-        assert "with_for_update()" in source
-        lock_at = source.index("StoreOrderWindow.id == window.id")
+        org_at = source.index("StoreSettings.organization_id == str(organization_id)")
+        window_at = source.index("StoreOrderWindow.id == window.id")
         tally_at = source.index("_ordered_quantities")
-        assert lock_at < tally_at, (
-            "the window lock must be taken BEFORE the tallies — after them it "
-            "cannot stop the two transactions holding the gap concurrently"
+        assert org_at < window_at < tally_at, (
+            "lock order must be organisation -> window -> tallies. The org lock "
+            "after the tallies cannot stop two transactions holding the same "
+            "org-scoped gap concurrently, which is the cross-window case."
         )

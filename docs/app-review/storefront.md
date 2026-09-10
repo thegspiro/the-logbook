@@ -100,17 +100,40 @@ two concurrent disjoint carts produced **2 deadlocks** without the remedy below
 and **0** with it.
 
 The remedy is the other half of Pitfall #27, which the first version had
-skipped — _lock the parent row, not the rows being counted_. The parent of a
-window-scoped tally is the **window**, not the products, and `_price_lines` now
-takes an exclusive lock on it before anything else. Lock order is
-window → products → tallies on every path, so they cannot invert.
+skipped — _lock the parent row, not the rows being counted_. **Getting the
+granularity of that parent right took two rounds of review, both measured
+against a real database rather than argued:**
 
-`tests/test_storefront_order_deadlock.py` drives three concurrent
-disjoint-cart rounds against a real database and asserts zero deadlocks; with
-the window lock removed it fails with
-`outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok']`. A source-level
-companion asserts the lock is taken _before_ the tallies, since after them it
-would not prevent the two transactions from holding the gap concurrently.
+| Locked                    | Same-window disjoint carts | Two open windows      |
+| ------------------------- | -------------------------- | --------------------- |
+| products only (first try) | 2 deadlocks / 5 rounds     | —                     |
+| + the window row          | 0                          | 1 deadlock / 4 rounds |
+| + the organisation        | 0                          | 0                     |
+
+The window row is **not** a sufficient parent. `store_orders` is indexed on
+`(organization_id, window_id)`, so two open windows with empty or sparse ranges
+share a single gap while their parent rows are different and therefore
+uncontended — and the store genuinely supports several open windows at once,
+which is what `other_open_windows` on the storefront payload is for (Codex P3
+on PR #2446). The organisation is the narrowest parent covering every gap the
+tallies can touch, because all of those ranges are org-scoped;
+`store_settings` is the row for it, one per organisation by unique constraint,
+and `create_order` has already called `get_settings()` before `_price_lines`
+so it always exists.
+
+Lock order is **organisation → window → products → tallies** on every path, so
+they cannot invert. The cost is that order placement serializes per
+organisation rather than per window — nothing for a department storefront, and
+what the capacity check needs anyway, since a tally another order can
+invalidate mid-decision is the defect this block exists to prevent.
+
+`tests/test_storefront_order_deadlock.py` exercises **both** cases against a
+real database. Disabling the org lock leaves the same-window test passing (the
+window lock does cover that one) and fails the cross-window test with
+`outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok', 'ok', 'ok']` —
+which is precisely why the second case was easy to miss. A source-level
+companion pins the lock _order_, since an org lock taken after the tallies
+would not stop two transactions holding the same gap.
 
 ### SF-9 — MED — Concurrent payment recording loses money off the ledger — FLAGGED
 
