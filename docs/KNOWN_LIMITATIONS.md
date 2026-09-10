@@ -1738,9 +1738,48 @@ picking one needs a real response-shape change (a 409 from
 `POST /events/{id}/rsvp-series`, matching frontend confirm-and-retry
 handling). Full write-up: `docs/security-review/EV-16-events-requests.md`
 (EV-23). A related ordering bug in the same review (EV-24: editing an
-existing waitlisted RSVP can promote it ahead of an earlier-queued party)
-is a straightforward engineering fix rather than an owner decision, and is
-tracked only in that findings doc.
+existing waitlisted RSVP could promote it ahead of an earlier-queued party)
+was a straightforward engineering fix rather than an owner decision and was
+fixed in the pass 4 follow-up (2026-09-10) — tracked only in that findings
+doc, not here.
+
+## Frontend — `typescript`'s declared version has drifted from the documented alias arrangement (2026-09-10, security review EV-16 pass 4)
+
+CLAUDE.md's "Two TypeScript installs" section requires the plain
+`typescript` dependency in `frontend/package.json` to stay at `5.9.3` (the
+version `typescript-eslint` can actually type-check against), with
+`typescript-native` carrying the newer compiler under an alias for
+`npm run typecheck`/`npm run build`. As of `26613a59` (current `main`),
+`frontend/package.json` declares `"typescript": "7.0.2"` directly — the
+exact version that broke this arrangement once before, on 2026-08-17, per
+that section's own account — while `package-lock.json` still resolves the
+plain `typescript` to `5.9.3`. A `node_modules/typescript` that matches the
+lockfile but not the manifest is, in CLAUDE.md's own words, "surviving only
+as an npm-auto-installed peer": not something a fresh
+`rm package-lock.json && npm install` can regenerate, since `npm install`
+reconciling the manifest to `7.0.2` hits `typescript-eslint`'s `<6.1.0` peer
+cap with an ERESOLVE.
+
+**Not currently breaking anything** — the most recent CI run on `main`
+(`26613a59`) shows "Frontend Lint, Typecheck & Build" green, so whatever
+installs the `node_modules` CI actually lints against is not (yet) in the
+drifted state a local `npm install` from this `package.json` would produce.
+This was found incidentally while running a routine backend-feature security
+review's frontend completion gate (`docs/security-review/EV-16-events-requests.md`
+pass 4), in a sandbox where the shared `node_modules` had drifted from the
+locked state and reproduced exactly the type-resolution failure mode that
+section predicts (1382 spurious `@typescript-eslint/no-unsafe-*` warnings
+from a fresh `npx eslint .`, none of them real).
+
+**Needs an owner decision on which way to resolve, not a mechanical
+revert:** either (a) pin `typescript` back to `5.9.3` in `package.json`, per
+CLAUDE.md's own rule ("the plain `typescript` moves only when the linter's
+cap does"), or (b) if the `7.0.2` declaration was intentional — e.g. a step
+toward eventually dropping the alias once `typescript-eslint` ships TS 7
+support — regenerate `package-lock.json` and confirm `npm install` still
+succeeds cleanly from a clean slate, and update CLAUDE.md's documented
+version to match. Cross-cutting frontend tooling, not any one feature's
+code, so it is flagged here rather than fixed inside a single-feature PR.
 
 ## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
 
