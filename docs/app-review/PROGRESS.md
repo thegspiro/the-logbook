@@ -2148,10 +2148,18 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   capacity check needs anyway. Guarded by
   `tests/test_storefront_order_deadlock.py`, which exercises **both** cases
   against a real database: disabling the org lock leaves the same-window test
-  passing and fails the cross-window one with
-  `outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok', 'ok', 'ok']` —
-  which is exactly why the second case was easy to miss — plus a source guard
-  pinning the lock _order_.
+  passing and fails the cross-window one — which is exactly why the second case
+  was easy to miss — plus a source guard pinning the lock _order_. That
+  detector was itself strengthened after measurement: with a fixed `sleep` and
+  orders left in place between rounds it caught the rejected protocol 4/4 in
+  isolation but only **2 runs in 3** whole-file, which is how CI runs it. A
+  rendezvous replaces the sleep and each round now starts from the empty range
+  the gap lock needs; detection is 6/6, clean 3/3.
+  **⚠️ The per-org lock missed PR #2446** — committed nine minutes after that
+  PR merged (merge `fba00fe` took the branch at `92920e7`, the fix is
+  `7b23d66`), so `main` briefly carried the window-only protocol measured at 1
+  deadlock / 4 rounds. It ships on the follow-up branch. Everything else from
+  A1–A4 was inside the merge.
   **SF-10 (NIT, fixed):**
   dead `exclude_order_id` parameter on the same helper. **SF-9 (MED, flagged):**
   `record_payment` is a read-modify-write on `amount_paid` with no row lock, so

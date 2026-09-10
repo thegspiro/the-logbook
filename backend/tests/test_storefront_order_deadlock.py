@@ -29,6 +29,14 @@ being counted — and it took two rounds of review to get the granularity right:
 
 Both cases are exercised below, because the same-window one passing is exactly
 what made the cross-window one easy to miss.
+
+A deadlock is a race, so this file has to work at being a dependable detector
+rather than assuming it is one. Two things do that, and both were measured by
+re-running the rejected protocol (flip `_place`'s `lock_org` default to False)
+rather than reasoned about: a rendezvous instead of a sleep, so the two
+transactions genuinely overlap regardless of connection warmth, and clearing
+the orders between rounds, so every round starts from the empty range the gap
+lock needs. Whole-file detection went from 2 runs in 3 to 6 in 6.
 """
 
 import asyncio
@@ -53,8 +61,35 @@ _TALLY = text("""
 _LOCK_WINDOW = text("SELECT id FROM store_order_windows WHERE id = :w FOR UPDATE")
 _LOCK_ORG = text("SELECT id FROM store_settings WHERE organization_id = :o FOR UPDATE")
 
+# How long a placement holds its locks waiting for the other one to catch up.
+# Paid once per round in the passing direction only (see `_rendezvous`), so it
+# buys determinism rather than costing it.
+_RENDEZVOUS_TIMEOUT = 0.3
 
-async def _place(engine, org, window, product, number, *, lock_org=True):
+
+async def _rendezvous(barrier):
+    """Hold this transaction's locks until the other has taken its own.
+
+    A fixed `sleep` here made this a *probabilistic* detector: whether the two
+    transactions really overlapped depended on connection and buffer-pool
+    warmth, so re-running the rejected protocol caught it 4/4 in isolation but
+    only ~2/3 of the time in a whole-file run — and a whole file is how CI runs
+    it. A regression that reappears deserves catching every time.
+
+    Timing out is the *expected* path once the org lock is in place: the second
+    transaction is still blocked acquiring that lock and cannot arrive, so the
+    first waits out the timeout, commits, and releases it. Without the org lock
+    both arrive at once and both hold the same gap.
+    """
+    try:
+        await asyncio.wait_for(barrier.wait(), timeout=_RENDEZVOUS_TIMEOUT)
+    except (asyncio.TimeoutError, asyncio.BrokenBarrierError):
+        # Broken rather than timed out means the other party was already cut
+        # loose by its own timeout. Same conclusion: stop waiting, proceed.
+        pass
+
+
+async def _place(engine, org, window, product, number, barrier, *, lock_org=True):
     """One order placement, mirroring `_price_lines` -> insert in raw SQL.
 
     Raw SQL rather than the service so the test pins the *lock protocol* — the
@@ -70,9 +105,7 @@ async def _place(engine, org, window, product, number, *, lock_org=True):
                 await conn.execute(_LOCK_ORG, {"o": org})
             await conn.execute(_LOCK_WINDOW, {"w": window})
             await conn.execute(_TALLY, {"w": window, "o": org})
-            # Widen the overlap the way real request handling does: both
-            # transactions hold their locks while the other is still working.
-            await asyncio.sleep(0.15)
+            await _rendezvous(barrier)
             order_id = str(uuid.uuid4())
             await conn.execute(
                 text(
@@ -159,17 +192,47 @@ async def _cleanup(engine, org):
             )
 
 
+async def _clear_orders(engine, org):
+    """Drop the rows a round placed, so the next one starts from an empty range.
+
+    This is what makes each round an independent trial rather than a weaker
+    repeat of the first. The gap lock only spans an *empty* range, which is
+    precisely the state a freshly opened window is in — once a round's orders
+    are sitting in the (organization_id, window_id) index, the two windows'
+    entries can be separated by real rows and the shared gap the defect needs
+    may simply not exist. Leaving them in place is why running more rounds did
+    not raise the detection rate the way it should have.
+    """
+    async with engine.connect() as conn:
+        async with conn.begin():
+            await conn.execute(
+                text("DELETE FROM store_order_items WHERE organization_id=:o"),
+                {"o": org},
+            )
+            await conn.execute(
+                text("DELETE FROM store_orders WHERE organization_id=:o"), {"o": org}
+            )
+
+
 async def _rounds(engine, org, pairs, count):
     """`count` rounds of two concurrent placements, flattened outcomes."""
     outcomes = []
     for index in range(count):
         (win_a, prod_a), (win_b, prod_b) = pairs
+        # A fresh barrier per round: a timed-out wait leaves the barrier broken,
+        # and reusing it would release the next round's pair immediately.
+        barrier = asyncio.Barrier(2)
         outcomes.extend(
             await asyncio.gather(
-                _place(engine, org, win_a, prod_a, f"ORD-2026-{index * 2 + 1:04d}"),
-                _place(engine, org, win_b, prod_b, f"ORD-2026-{index * 2 + 2:04d}"),
+                _place(
+                    engine, org, win_a, prod_a, f"ORD-2026-{index * 2 + 1:04d}", barrier
+                ),
+                _place(
+                    engine, org, win_b, prod_b, f"ORD-2026-{index * 2 + 2:04d}", barrier
+                ),
             )
         )
+        await _clear_orders(engine, org)
     return outcomes
 
 
