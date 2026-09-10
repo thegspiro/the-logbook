@@ -1390,10 +1390,20 @@ Body: {
 
 Marks onboarding as finished, and does three further things worth knowing:
 
-- **Persists the session data** — IT team, email configuration, file storage
-  and auth choice, and the module selections — into `Organization.settings`.
-  This is the point at which anything saved under `/session/*` reaches the
-  organization.
+- **Persists five settings groups** into `Organization.settings`: IT team,
+  email configuration, file storage, auth choice and module selections. Those
+  are held in the session until now and reach the organization here.
+
+  This is **not** true of `/session/*` generally, and assuming it is gets the
+  picture backwards in both directions. `/session/organization`,
+  `/session/stations`, `/session/apparatus`, `/session/roles` and
+  `/session/positions` commit their rows when they are called — the session
+  keeps only the resulting ids — so those writes are already durable before
+  `/complete` runs. In the other direction, `/session/department` is never
+  copied into settings at all: `_persist_session_data_to_org()` reads
+  `it_team`, `email`, `file_storage`, `auth` and `modules` and nothing else,
+  so the department block stays session-only and disappears with it.
+
 - **Seeds default data**: `_seed_default_data()` creates the standard admin
   hours categories and event mappings against the first organization and admin
   user, so hour tracking works immediately after setup. It is **best-effort** —
