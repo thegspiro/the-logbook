@@ -1035,6 +1035,20 @@ Creates the organization with its addresses and identifiers, commits
 immediately, and creates the headquarters facility and location from the
 department address.
 
+It also seeds the department's **positions** — `_create_default_roles`, despite
+the name — from `DEFAULT_POSITIONS` in `permissions.py`, narrowed to what the
+agency type actually has: an EMS-only service gets no Firefighter, and its chief
+is a Chief rather than a Fire Chief. `it_manager` (priority 100, all
+permissions) is the System Owner's position. This runs once per install, and
+the Positions step later lets the department keep, rename or drop what was
+seeded.
+
+> The wiki described this as "creates 6 default roles: Super Admin, Admin,
+> Chief, Officer, Member, Probationary" until 2026-09-10. That list was stale in
+> both its contents and its vocabulary: they are positions, not roles, and a
+> rank is the separate thing — a rank says where somebody sits, a position says
+> what they may do.
+
 ### Create Admin User
 
 ```
@@ -1050,7 +1064,8 @@ Body: {
 }
 ```
 
-Creates administrator user with Super Admin role.
+Creates the administrator, hashes the password with Argon2id, gives them the
+System Owner position, and writes an audit-log entry.
 
 `password` is checked by `validate_password_strength()`, which every path into
 `AuthService.register_user()` runs. A caller that meets only the length rule
