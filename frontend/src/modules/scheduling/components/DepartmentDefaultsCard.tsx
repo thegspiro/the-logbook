@@ -5,7 +5,7 @@
  * minimum staffing, overtime threshold, and assignment confirmation.
  */
 
-import React from 'react';
+import React, { useId } from 'react';
 import type { ShiftSettings } from '../types/shiftSettings';
 
 interface DepartmentDefaultsCardProps {
@@ -14,16 +14,27 @@ interface DepartmentDefaultsCardProps {
 }
 
 export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ settings, onSettingsChange }) => {
+  // The three number fields had a <label> each, sitting beside the input rather
+  // than wrapping it and carrying no htmlFor — which is a styled caption, not a
+  // label. A screen reader announced all three as "spin button, blank", and
+  // tapping the caption did not focus the field. `useId` rather than literal
+  // ids because this card is a component, not a page: two of them on one screen
+  // would otherwise point every label at the first card's inputs.
+  const durationId = useId();
+  const staffingId = useId();
+  const overtimeId = useId();
+
   return (
     <div className="card-secondary space-y-5 p-5">
       <h3 className="text-theme-text-primary text-base font-semibold">Department Defaults</h3>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+          <label htmlFor={durationId} className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Default Shift Duration (hours)
           </label>
           <input
+            id={durationId}
             type="number"
             value={settings.defaultDurationHours}
             onChange={(e) =>
@@ -39,8 +50,11 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
           />
         </div>
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Default Min Staffing</label>
+          <label htmlFor={staffingId} className="text-theme-text-secondary mb-1 block text-sm font-medium">
+            Default Min Staffing
+          </label>
           <input
+            id={staffingId}
             type="number"
             value={settings.defaultMinStaffing}
             onChange={(e) =>
@@ -55,10 +69,11 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
           />
         </div>
         <div>
-          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+          <label htmlFor={overtimeId} className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Overtime Threshold (hours/week)
           </label>
           <input
+            id={overtimeId}
             type="number"
             value={settings.overtimeThresholdHoursPerWeek}
             onChange={(e) =>
@@ -73,7 +88,7 @@ export const DepartmentDefaultsCard: React.FC<DepartmentDefaultsCardProps> = ({ 
           />
         </div>
         <div className="flex items-center">
-          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
+          <label className="mobile-touch-row text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={settings.requireAssignmentConfirmation}

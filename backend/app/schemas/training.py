@@ -18,6 +18,7 @@ from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
 from app.services.qualification_service import QUALIFICATIONS
+from app.utils.email_providers import REDACTED_SECRET
 from app.utils.ssrf_transport import relative_endpoint
 
 _response_config = ConfigDict(from_attributes=True)
@@ -761,6 +762,28 @@ class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponse
     updated_at: datetime
     created_by: Optional[UUID] = None
     # Note: api_key, api_secret, client_secret are never returned for security
+
+    @field_validator("config", mode="after")
+    @classmethod
+    def _redact_additional_headers(
+        cls, value: Optional[ExternalProviderConfig]
+    ) -> Optional[ExternalProviderConfig]:
+        """``additional_headers`` is an admin-defined header map that can
+        carry a credential (e.g. a custom auth header some LMS integrations
+        require outside the dedicated api_key/api_secret fields) — the same
+        "never echoed back" convention this schema already applies to those
+        fields, extended to an arbitrary-keyed dict where a fixed field list
+        can't cover it. Keys are kept so the admin UI can still show which
+        headers are configured; values are replaced with a fixed marker."""
+        if value is not None and value.additional_headers:
+            value = value.model_copy(
+                update={
+                    "additional_headers": {
+                        key: REDACTED_SECRET for key in value.additional_headers
+                    }
+                }
+            )
+        return value
 
     model_config = _response_config
 

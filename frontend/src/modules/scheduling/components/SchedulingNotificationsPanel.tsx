@@ -11,7 +11,7 @@
  * Extracted from the SchedulingPage monolith for maintainability.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import { Bell, Clock, Loader2, Mail, AlertTriangle, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { notificationsService, organizationService } from '../../../services/api';
@@ -126,6 +126,7 @@ const AVAILABLE_ROLES = [
 ];
 
 export const SchedulingNotificationsPanel: React.FC = () => {
+  const reminderLookaheadId = useId();
   const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
   const [loadingRules, setLoadingRules] = useState(true);
   const [rulesLoadFailed, setRulesLoadFailed] = useState(false);
@@ -426,7 +427,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex cursor-pointer items-center gap-3">
+            <label className="mobile-touch-row flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={declineSettings.notify_on_decline}
@@ -441,7 +442,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
             {declineSettings.notify_on_decline && (
               <>
                 {/* Notify shift officer */}
-                <label className="ml-4 flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={declineSettings.notify_shift_officer}
@@ -461,7 +462,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       <button
                         key={role.value}
                         onClick={() => toggleRole(role.value)}
-                        className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                        className={`mobile-touch-target rounded-lg border px-2.5 text-xs transition-colors ${
                           declineSettings.notify_roles.includes(role.value)
                             ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-400'
                             : 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary'
@@ -474,7 +475,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 </div>
 
                 {/* Send email toggle */}
-                <label className="ml-4 flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={declineSettings.send_email}
@@ -555,7 +556,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex cursor-pointer items-center gap-3">
+            <label className="mobile-touch-row flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={assignmentSettings.notify_on_assignment}
@@ -570,7 +571,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
             {assignmentSettings.notify_on_assignment && (
               <>
                 {/* Send email toggle */}
-                <label className="ml-4 flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={assignmentSettings.send_email}
@@ -654,7 +655,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex cursor-pointer items-center gap-3">
+            <label className="mobile-touch-row flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={reminderSettings.enabled}
@@ -670,10 +671,20 @@ export const SchedulingNotificationsPanel: React.FC = () => {
               <>
                 {/* Lookahead hours */}
                 <div className="ml-4">
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                  {/* The caption was a bare <label> with no htmlFor, and the
+                      select is its sibling rather than its child, so it named
+                      nothing: axe reported the select as having no accessible
+                      name and a screen reader announced a combo box with no
+                      question attached. htmlFor rather than wrapping, to leave
+                      the block layout alone. */}
+                  <label
+                    htmlFor={reminderLookaheadId}
+                    className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                  >
                     Send reminder this many hours before shift starts:
                   </label>
                   <select
+                    id={reminderLookaheadId}
                     value={reminderSettings.lookahead_hours}
                     onChange={(e) => {
                       void saveReminderSettings({
@@ -694,7 +705,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 </div>
 
                 {/* Send email toggle */}
-                <label className="ml-4 flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={reminderSettings.send_email}
@@ -778,7 +789,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         ) : (
           <div className="space-y-3">
             {/* Master toggle */}
-            <label className="flex cursor-pointer items-center gap-3">
+            <label className="mobile-touch-row flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={equipAlertSettings.notify_on_failure}
@@ -796,7 +807,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
             {equipAlertSettings.notify_on_failure && (
               <>
                 {/* Notify shift officer */}
-                <label className="ml-4 flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={equipAlertSettings.notify_shift_officer}
@@ -819,7 +830,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                       <button
                         key={role.value}
                         onClick={() => toggleEquipRole(role.value)}
-                        className={`rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                        className={`mobile-touch-target rounded-lg border px-2.5 text-xs transition-colors ${
                           equipAlertSettings.notify_roles.includes(role.value)
                             ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
                             : 'bg-theme-surface-hover border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary'
@@ -832,7 +843,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                 </div>
 
                 {/* Send email toggle */}
-                <label className="ml-4 flex cursor-pointer items-center gap-3">
+                <label className="mobile-touch-row ml-4 flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={equipAlertSettings.send_email}

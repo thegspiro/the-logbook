@@ -148,10 +148,90 @@ function groupLabelText(dimension: GroupKey, label: string): string {
   return ENUM_GROUPS.has(dimension) ? label.replace(/_/g, ' ') : label;
 }
 
+/**
+ * The key a collapsed group is stored under, scoped to the section showing it.
+ *
+ * Available and Unavailable are different populations that happen to share a
+ * heading, so "Uniforms" under one must not vanish from the other. Both tables
+ * read one `Set`, so without the section in the key they did exactly that --
+ * the state's own comment said otherwise and the implementation was what was
+ * wrong.
+ *
+ * Length-prefixed rather than joined by a separator: a bucket is a category
+ * name, a colour or a station somebody typed, so there is no character it
+ * cannot contain and any separator can be forged into a collision. The prefix
+ * is unambiguous whatever either half holds.
+ */
+function collapseKey(section: string, bucket: string): string {
+  return `${section.length}:${section}${bucket}`;
+}
+
 function locLabel(item: InventoryItem, locs: Location[]): string {
   if (item.storage_location) return item.storage_location;
   if (item.location_id) return locs.find((l) => l.id === item.location_id)?.name ?? '';
   return item.station ?? '';
+}
+
+/**
+ * Consecutive rows in one group run that are size/colour variants of the same
+ * product, keyed by the id of the row that leads each run.
+ *
+ * Adjacency is the contract, deliberately. `variant_group_id` is the backend's
+ * own grouping (`ItemVariantGroup` — "Dept T-Shirt" across S/M/L/XL), so the
+ * key is not re-derived here; what IS a judgement is which rows may be folded
+ * together, and folding only neighbours keeps the fold honest under whatever
+ * sort the member picked. Under the default name sort variants share a name
+ * prefix and land together, so the fold happens; under a sort that scatters
+ * them (quantity, purchase date) it simply does not, and the list renders
+ * exactly as it did before. Regrouping non-adjacent rows would instead move
+ * rows away from the order the member asked for, which is a worse trade than
+ * folding less often.
+ *
+ * Runs of one are not clusters — a lone variant is just a row.
+ */
+function variantClusters(entries: { item: InventoryItem }[]): {
+  leads: Map<string, InventoryItem[]>;
+  followerOf: Map<string, string>;
+} {
+  const leads = new Map<string, InventoryItem[]>();
+  const followerOf = new Map<string, string>();
+  let i = 0;
+  while (i < entries.length) {
+    const groupId = entries[i]?.item.variant_group_id;
+    let j = i + 1;
+    if (groupId) {
+      while (j < entries.length && entries[j]?.item.variant_group_id === groupId) j += 1;
+    }
+    const members = entries.slice(i, j).map((e) => e.item);
+    const lead = members[0];
+    if (lead && members.length > 1) {
+      leads.set(lead.id, members);
+      members.slice(1).forEach((m) => followerOf.set(m.id, lead.id));
+    }
+    i = j;
+  }
+  return { leads, followerOf };
+}
+
+/** The one value every member shares, or null when they differ. */
+function sharedValue<T>(members: InventoryItem[], read: (item: InventoryItem) => T): T | null {
+  const first = members[0];
+  if (!first) return null;
+  const value = read(first);
+  return members.every((m) => read(m) === value) ? value : null;
+}
+
+/**
+ * On-hand across a folded product row's loaded variants.
+ *
+ * Null when any member is serial-tracked, because those have no count to add
+ * and a sum that silently skipped them would understate the shelf. Counts only
+ * the variants ON THIS PAGE — see the "(n so far)" reasoning on `countLabel`;
+ * a folded row must not read as a catalogue total either.
+ */
+function clusterOnHand(members: InventoryItem[]): number | null {
+  if (members.some((m) => !m.is_lot_stocked && m.tracking_type !== 'pool')) return null;
+  return members.reduce((sum, m) => sum + onHandQuantity(m), 0);
 }
 
 function qtyLabel(item: InventoryItem): string {
@@ -167,6 +247,153 @@ function qtyLabel(item: InventoryItem): string {
   // counts every issued unit twice and can drive the figure negative.
   return `${item.quantity} / ${item.quantity + item.quantity_issued}`;
 }
+
+/* ------------------------------------------------------------------ */
+/*  VariantProductRow — one row standing in for a product's variants    */
+/* ------------------------------------------------------------------ */
+interface VariantProductRowProps {
+  members: InventoryItem[];
+  open: boolean;
+  categories: InventoryCategory[];
+  locations: Location[];
+  selIds: Set<string>;
+  toggle: (id: string) => void;
+  showStatus: boolean;
+  showCategory: boolean;
+  showSize: boolean;
+  showCondition: boolean;
+  showLocation: boolean;
+  canManage: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * The single row a folded variant cluster shows, and the header it keeps when
+ * opened.
+ *
+ * Every per-item column here reports the value the members SHARE, or "Mixed"
+ * when they do not. Picking the lead's value and presenting it as the
+ * product's would be a quiet lie the moment one size sat in a different
+ * cupboard — and a quartermaster reading "Station 2" off a folded row would
+ * walk to the wrong shelf. Same reasoning as the group header's count: state
+ * what is true of the whole thing, or say you cannot.
+ */
+const VariantProductRow: React.FC<VariantProductRowProps> = ({
+  members,
+  open,
+  categories,
+  locations,
+  selIds,
+  toggle,
+  showStatus,
+  showCategory,
+  showSize,
+  showCondition,
+  showLocation,
+  canManage,
+  onToggle,
+}) => {
+  const lead = members[0];
+  if (!lead) return null;
+
+  const name = getDisplayName(lead);
+  const allSelected = members.every((m) => selIds.has(m.id));
+  const onHand = clusterOnHand(members);
+  const status = sharedValue(members, (m) => m.status);
+  const condition = sharedValue(members, (m) => m.condition);
+  const categoryId = sharedValue(members, (m) => m.category_id);
+  const location = sharedValue(members, (m) => locLabel(m, locations));
+  // Distinct, in the order the rows arrived. A product stocked in two colours
+  // holds each size twice, and "L, L, M, M, S, S, XL, XL" reads as a fault in
+  // the list rather than as four sizes in two colours.
+  const sizes = [...new Set(members.map((m) => displaySize(m)).filter(Boolean))];
+  const mixed = <span className="text-theme-text-muted italic">Mixed</span>;
+
+  return (
+    <tr className="hover:bg-theme-surface-hover bg-theme-surface-hover/25 transition-colors">
+      <td data-label="" className="px-3 py-3">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={() => {
+            // `toggle` flips one id, so drive every member to the same target
+            // state rather than flipping each: a cluster with two of four
+            // already ticked must end all-on, not swap which two are ticked.
+            const target = !allSelected;
+            members.forEach((m) => {
+              if (selIds.has(m.id) !== target) toggle(m.id);
+            });
+          }}
+          className="form-checkbox"
+          aria-label={`Select every variant of ${name}`}
+        />
+      </td>
+      <td data-label="Name" className="px-3 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="text-theme-text-primary hover:text-theme-text-primary inline-flex items-center gap-2 text-left font-medium"
+        >
+          {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+          <span>{name}</span>
+          {/* Loaded members, not a catalogue total -- a cluster split across a
+              page boundary grows when the next page arrives, and this must
+              never read as "the product has 3 sizes" when it has five. */}
+          <span className="text-theme-text-muted text-xs font-normal">{members.length} loaded</span>
+        </button>
+      </td>
+      <td data-label="Status" className={`px-3 py-3 ${showStatus ? '' : 'md:hidden'}`}>
+        {status ? (
+          <span
+            className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(status)}`}
+          >
+            {status.replace(/_/g, ' ').toUpperCase()}
+          </span>
+        ) : (
+          mixed
+        )}
+      </td>
+      {showCategory && (
+        <td data-label="Category" className="text-theme-text-muted px-3 py-3">
+          {categoryId === null ? mixed : (categories.find((c) => c.id === categoryId)?.name ?? '')}
+        </td>
+      )}
+      <td data-label="Variant" className="text-theme-text-muted px-3 py-3 text-xs">
+        {sizes.length ? sizes.join(', ') : ''}
+      </td>
+      {showSize && (
+        <td data-label="Size" className="text-theme-text-muted px-3 py-3">
+          {mixed}
+        </td>
+      )}
+      <td data-label="Qty" className="text-theme-text-muted px-3 py-3 text-center tabular-nums">
+        {/* Null when any member is serial-tracked: those carry no count, and a
+            sum that skipped them would understate the shelf. */}
+        {onHand === null ? '--' : onHand}
+      </td>
+      {showCondition && (
+        <td data-label="Condition" className={`px-3 py-3 capitalize ${condition ? getConditionColor(condition) : ''}`}>
+          {condition ? condition.replace(/_/g, ' ') : mixed}
+        </td>
+      )}
+      {showLocation && (
+        <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
+          {location === null ? mixed : location || '-'}
+        </td>
+      )}
+      {/* Mobile-only detail cells, empty here: they describe one physical item
+          (serial, asset tag, barcode) and a product row is not one. */}
+      <td data-label="Manufacturer" className="hidden" />
+      <td data-label="Serial #" className="hidden" />
+      <td data-label="Asset Tag" className="hidden" />
+      <td data-label="Barcode" className="hidden" />
+      <td data-label="Cost" className="hidden" />
+      <td className="px-3 py-3" />
+      {canManage && <td data-label="" className="hidden" />}
+    </tr>
+  );
+};
 
 /* ------------------------------------------------------------------ */
 /*  ItemTable — reusable table for available / unavailable sections     */
@@ -204,6 +431,9 @@ interface ItemTableProps {
   groupLabels?: Map<string, string>;
   collapsed?: Set<string>;
   onToggleGroup?: (key: string) => void;
+  /** Variant clusters the member has opened, keyed by `collapseKey`. */
+  expandedVariants?: Set<string>;
+  onToggleVariants?: (key: string) => void;
   /** Renders the drag handle and the move arrows. Pinned section only. */
   pinnedMode?: boolean;
   onMovePin?: (itemId: string, toIndex: number) => void;
@@ -233,6 +463,8 @@ const ItemTable: React.FC<ItemTableProps> = ({
   groupLabels,
   collapsed,
   onToggleGroup,
+  expandedVariants,
+  onToggleVariants,
   pinnedMode = false,
   onMovePin,
 }) => {
@@ -264,6 +496,23 @@ const ItemTable: React.FC<ItemTableProps> = ({
     if (last && (!groupBy || last.key === key)) last.entries.push({ item, index });
     else runs.push({ key, entries: [{ item, index }] });
   });
+
+  // Never in the pinned shortlist. Its rows carry the reorder arrows, whose
+  // `index` is a position in `items`, and folding rows away leaves those
+  // positions pointing at something the member cannot see. A pin is also an
+  // explicit per-item choice, so folding the chosen items back together
+  // undoes the thing they asked for.
+  const { leads: variantLeads, followerOf: variantFollowerOf } = pinnedMode
+    ? { leads: new Map<string, InventoryItem[]>(), followerOf: new Map<string, string>() }
+    : runs.reduce(
+        (acc, run) => {
+          const found = variantClusters(run.entries);
+          found.leads.forEach((members, id) => acc.leads.set(id, members));
+          found.followerOf.forEach((leadId, id) => acc.followerOf.set(id, leadId));
+          return acc;
+        },
+        { leads: new Map<string, InventoryItem[]>(), followerOf: new Map<string, string>() }
+      );
 
   // One rule: the grouped dimension never appears in the row. The group header
   // states it once; repeating it on every row beneath is dead width. It applies
@@ -385,8 +634,23 @@ const ItemTable: React.FC<ItemTableProps> = ({
                 const gKey = run.key;
                 const startsGroup = Boolean(groupBy) && entryIndex === 0;
                 const bucket = gKey ?? '';
-                const isCollapsed = Boolean(groupBy) && (collapsed?.has(bucket) ?? false);
+                // Scoped to this section: `collapsed` is one Set shared by both
+                // tables, and the group key alone made a collapse in Available
+                // hide the same heading's rows in Unavailable.
+                const collapseId = collapseKey(label, bucket);
+                const isCollapsed = Boolean(groupBy) && (collapsed?.has(collapseId) ?? false);
                 const groupTotal = groupTotals?.get(bucket);
+                // Variant folding. A lead with an unopened cluster renders one
+                // product row in place of its members; a follower renders
+                // nothing until the cluster is opened.
+                const clusterMembers = variantLeads.get(item.id);
+                const clusterLeadId = clusterMembers ? item.id : variantFollowerOf.get(item.id);
+                const variantsOpen = clusterLeadId
+                  ? (expandedVariants?.has(collapseKey(label, clusterLeadId)) ?? false)
+                  : false;
+                // The product row stands in for the WHOLE cluster, its lead
+                // included, so while it is folded no member renders its own row.
+                const foldedAway = Boolean(clusterLeadId) && !variantsOpen;
                 const cat = categories.find((ct) => ct.id === item.category_id);
                 const loc = locLabel(item, locations);
                 const manufacturer = [item.manufacturer, item.model_number].filter(Boolean).join(' ');
@@ -405,7 +669,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                         >
                           <button
                             type="button"
-                            onClick={() => onToggleGroup?.(bucket)}
+                            onClick={() => onToggleGroup?.(collapseId)}
                             aria-expanded={!isCollapsed}
                             className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase"
                           >
@@ -427,7 +691,27 @@ const ItemTable: React.FC<ItemTableProps> = ({
                         </th>
                       </tr>
                     )}
-                    {!isCollapsed && (
+                    {/* Rendered open as well as folded, so the way back is in
+                        the same place as the way in. Open, it is the cluster's
+                        header and its members follow indented beneath. */}
+                    {!isCollapsed && clusterMembers && (
+                      <VariantProductRow
+                        members={clusterMembers}
+                        open={variantsOpen}
+                        categories={categories}
+                        locations={locations}
+                        selIds={selIds}
+                        toggle={toggle}
+                        showStatus={showStatus}
+                        showCategory={!grouped('category')}
+                        showSize={showSizeColumn}
+                        showCondition={!grouped('condition')}
+                        showLocation={!grouped('location')}
+                        canManage={canManage}
+                        onToggle={() => onToggleVariants?.(collapseKey(label, item.id))}
+                      />
+                    )}
+                    {!isCollapsed && !foldedAway && (
                       <tr
                         {...(pinnedMode
                           ? {
@@ -483,12 +767,20 @@ const ItemTable: React.FC<ItemTableProps> = ({
                             aria-label={`Select ${item.name}`}
                           />
                         </td>
-                        <td data-label="Name" className="px-3 py-3">
+                        {/* Indented under its product row, on the table layout
+                            only: below 768px `rwd-table` stacks each row into
+                            its own card, where there is no row above to be
+                            indented under and the padding would just be a
+                            ragged edge. */}
+                        <td data-label="Name" className={`py-3 pr-3 ${clusterLeadId ? 'pl-3 md:pl-9' : 'pl-3'}`}>
                           <Link
                             to={`/inventory/items/${item.id}`}
                             className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
                           >
-                            {getDisplayName(item)}
+                            {/* The size, not the shared product name: under an
+                                open product row every member would otherwise
+                                read as the same word repeated. */}
+                            {clusterLeadId ? displaySize(item) || getDisplayName(item) : getDisplayName(item)}
                           </Link>
                         </td>
                         {/* Status: a desktop column only when showStatus, but always
@@ -685,8 +977,13 @@ const InventoryItemsPage: React.FC = () => {
   const [loadedParams, setLoadedParams] = useState<ReturnType<typeof filterParams> | null>(null);
   // Collapsed group keys, per section. A group collapsed under Available
   // should not also vanish from Unavailable — they are different populations
-  // that happen to share a heading.
+  // that happen to share a heading. `collapseKey` is what makes that true;
+  // storing the bare group key here meant both tables answered to one toggle.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Variant clusters the member has opened, same keying. Folded is the
+  // default: a product stocked in six sizes is one line on the shelf list and
+  // six only when somebody asks which sizes are in.
+  const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
   const [skip, setSkip] = useState(0);
   const [selIds, setSelIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -740,13 +1037,16 @@ const InventoryItemsPage: React.FC = () => {
     return m;
   }, [groupCounts]);
 
-  const toggleGroup = (key: string) =>
-    setCollapsed((prev) => {
+  const toggleIn = (set: React.Dispatch<React.SetStateAction<Set<string>>>) => (key: string) =>
+    set((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
+
+  const toggleGroup = toggleIn(setCollapsed);
+  const toggleVariants = toggleIn(setExpandedVariants);
 
   /* ---- helpers ---- */
   const filterParams = useCallback(
@@ -1193,6 +1493,43 @@ const InventoryItemsPage: React.FC = () => {
   }, [canManage]);
 
   const hasMore = items.length < total;
+
+  /* ---- collapsed groups must not strand an empty page ----
+     Paging is by ITEM ROW — that is what the server counts and what
+     "Load More (n of m)" reports, and those numbers stay in item terms
+     because changing them to count visible rows would make the button
+     disagree with the total beside it.
+
+     What that costs is a page whose every row sits inside a collapsed group:
+     nothing renders, the member sees headings over an empty table, and
+     pressing Load More is the only way out of a state they did not choose to
+     enter. So when a load leaves ZERO visible rows in the two grouped
+     sections, fetch the next page until something is visible or the set runs
+     out.
+
+     Zero, not "fewer than a full page", deliberately: topping up to a full
+     page means collapsing one 400-row category pulls most of the catalogue in
+     a burst of requests. Pinned rows are excluded because they are never
+     grouped — counting them would suppress the top-up permanently for anyone
+     who keeps a shortlist, which is exactly the member most likely to
+     collapse a group. */
+  const visibleGroupedRows = useMemo(() => {
+    if (!loadedGroupBy) return availableItems.length + unavailableItems.length;
+    const shown = (section: string, list: InventoryItem[]) =>
+      list.filter((i) => !collapsed.has(collapseKey(section, i.group_key ?? ''))).length;
+    return shown('Available', availableItems) + shown('Unavailable', unavailableItems);
+  }, [loadedGroupBy, availableItems, unavailableItems, collapsed]);
+
+  useEffect(() => {
+    if (loading || loadingMore || !hasMore) return;
+    if (visibleGroupedRows > 0) return;
+    void handleMore();
+    // `handleMore` is omitted on purpose: it is redefined on every render, so
+    // listing it re-runs this effect continuously. The guards above are what
+    // terminate the loop — each call raises `items.length` toward `total`, and
+    // `hasMore` goes false when the set is exhausted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleGroupedRows, hasMore, loading, loadingMore]);
 
   /* ================================================================ */
   return (
@@ -1677,6 +2014,8 @@ const InventoryItemsPage: React.FC = () => {
             groupLabels={groupLabels}
             collapsed={collapsed}
             onToggleGroup={toggleGroup}
+            expandedVariants={expandedVariants}
+            onToggleVariants={toggleVariants}
           />
           <ItemTable
             label="Unavailable"
@@ -1702,6 +2041,8 @@ const InventoryItemsPage: React.FC = () => {
             groupLabels={groupLabels}
             collapsed={collapsed}
             onToggleGroup={toggleGroup}
+            expandedVariants={expandedVariants}
+            onToggleVariants={toggleVariants}
           />
         </div>
       )}

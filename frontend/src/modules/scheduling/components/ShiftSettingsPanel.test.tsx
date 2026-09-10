@@ -74,6 +74,8 @@ vi.mock('./ShiftReportsSettingsPanel', () => ({
 vi.mock('./PlatoonRosterPanel', () => ({ PlatoonRosterPanel: () => <div>PlatoonRosterPanel</div> }));
 
 import { ShiftSettingsPanel } from './ShiftSettingsPanel';
+import { schedulingService } from '../services/api';
+import type { SchedulingFeatureSettings } from '../services/api';
 
 const renderPanel = (activeTab: SettingsTab) =>
   renderWithRouter(
@@ -232,5 +234,51 @@ describe('ShiftSettingsPanel signup window', () => {
     // 0 means "closes exactly at the start" and must survive the round trip;
     // it is the value a `||` would silently replace with the default.
     await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ late_signup_grace_minutes: 0 }));
+  });
+});
+
+// A response that omits the feature flags. The declared type says this cannot
+// happen — every one of them is `boolean`, not `boolean | undefined` — but the
+// type is an assertion about a wire format rather than a check of one, and the
+// panel is what an officer reads a department's configuration off.
+//
+// Asserted here rather than left to the axe pass on purpose. axe caught these
+// only because the E2E fixture happens to omit the fields; the day that fixture
+// gains them, the pass goes green over a screen that still announces nothing.
+describe('ShiftSettingsPanel switches with the flags absent from the response', () => {
+  const SWITCH_NAMES = [
+    'Platoon scheduling',
+    'Automatic shift generation',
+    'Require end-of-shift equipment checks',
+    'Record a call count at close-out',
+    'Enforce EVOC for drivers',
+    'Restrict check-in to assigned members',
+  ];
+
+  // `mockReset()` before each default, per CLAUDE.md: an unconsumed
+  // `mockResolvedValueOnce` survives `vi.clearAllMocks()` and is handed out
+  // ahead of a later `mockResolvedValue`, so a block that only sets the fallback
+  // runs on whatever the previous test happened to queue. This block's whole
+  // point is the *shape* of the feature response, which makes it precisely the
+  // block that must not inherit somebody else's — and resetting also stops its
+  // own `{}` leaking forward into a later one.
+  beforeEach(() => {
+    mockLoadShiftSettings.mockReset();
+    mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    vi.mocked(schedulingService.getFeatureSettings).mockReset();
+    vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue({} as unknown as SchedulingFeatureSettings);
+  });
+
+  it('names every switch and gives every switch a state', async () => {
+    renderPanel('general');
+    // The close-out card only renders once the feature response resolves.
+    await screen.findByRole('switch', { name: 'Enforce EVOC for drivers' });
+
+    for (const name of SWITCH_NAMES) {
+      // `role="switch"` with no aria-checked is not announced as off — it is
+      // announced with no state at all, while the track beside it paints a
+      // confident "off" from the same undefined.
+      expect(screen.getByRole('switch', { name })).toHaveAttribute('aria-checked', 'false');
+    }
   });
 });

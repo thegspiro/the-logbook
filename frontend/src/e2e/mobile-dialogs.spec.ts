@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { signIn } from './helpers';
-import { BASE_PERMISSIONS, NARROW, PHONE, ROUTES } from './mobile-routes';
+import { NARROW, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import type { SignInState } from './mobile-routes';
 
 /**
  * The dialogs, measured — not just the routes that open them.
@@ -63,8 +63,7 @@ test.describe('mobile dialogs', () => {
   test('every dialog is named, labelled and fits a phone', async ({ page }) => {
     test.setTimeout(1_800_000);
 
-    let granted = BASE_PERMISSIONS;
-    await signIn(page, { permissions: granted });
+    let granted: SignInState | null = null;
 
     const unnamed: string[] = [];
     const axeFailures: string[] = [];
@@ -196,11 +195,7 @@ test.describe('mobile dialogs', () => {
     };
 
     for (const route of ROUTES) {
-      const needed = route.permissions ? [...BASE_PERMISSIONS, ...route.permissions] : BASE_PERMISSIONS;
-      if (needed.join() !== granted.join()) {
-        granted = needed;
-        await signIn(page, { permissions: granted });
-      }
+      granted = await signInForRoute(page, route, granted);
 
       await page.setViewportSize(PHONE);
       await page.goto(route.path);

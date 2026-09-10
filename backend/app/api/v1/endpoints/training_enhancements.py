@@ -270,7 +270,7 @@ async def get_instructor_qualifications(
     user_id: Optional[str] = Query(None),
     course_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("training.view_all", "training.manage")),
 ):
     """Get instructor qualifications"""
     service = InstructorQualificationService(db)
@@ -339,7 +339,7 @@ async def update_instructor_qualification(
 async def get_qualified_instructors(
     course_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("training.view_all", "training.manage")),
 ):
     """Get all qualified instructors for a specific course"""
     service = InstructorQualificationService(db)
@@ -354,7 +354,7 @@ async def validate_instructor(
     user_id: str,
     course_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("training.view_all", "training.manage")),
 ):
     """Check if a user is qualified to instruct a course"""
     service = InstructorQualificationService(db)
@@ -449,7 +449,7 @@ async def get_multi_agency_exercises(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("training.view_all", "training.manage")),
 ):
     """Get multi-agency training exercises"""
     service = MultiAgencyService(db)

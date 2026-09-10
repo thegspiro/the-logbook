@@ -76,8 +76,7 @@ This document describes the complete onboarding flow for The Logbook application
 └─ v
 ┌─ 11. Module Overview ────────────────── /onboarding/modules
 │  POST /onboarding/session/modules, then POST /onboarding/complete
-│  Per module: "Enable & Configure" → /onboarding/modules/{id}/config,
-│  "Configure Later", or "Ignore".
+│  Per module: "Enable" (in place), "Configure Later", or "Ignore".
 └─ v
 ┌─ 12. Setup Complete ─────────────────── /onboarding/complete
 │  Summary of what was configured, plus what still needs the
@@ -146,7 +145,6 @@ Response: {
 1. **Basic Information** (required):
    - Organization Name
    - URL Slug (auto-generated)
-   - Description (optional)
    - Organization Type: `fire_department`, `ems_only`, `fire_ems_combined`
    - Timezone
 
@@ -181,7 +179,6 @@ Response: {
 6. **Additional Information**:
    - County/Jurisdiction
    - Year Founded
-   - Tax ID (EIN)
 
 7. **Organization Logo**:
    - Drag-and-drop upload
@@ -194,7 +191,6 @@ POST /api/v1/onboarding/session/organization
 Body: {
   name: string,
   slug?: string,
-  description?: string,
   organization_type: "fire_department" | "ems_only" | "fire_ems_combined",
   timezone: string,
   phone?: string,
@@ -217,7 +213,6 @@ Body: {
   department_id?: string,
   county?: string,
   founded_year?: number,
-  tax_id?: string,
   logo?: string,  // Base64 data URL
   membership_id?: {   // omitted entirely when the department does not number members
     enabled: boolean,
@@ -425,7 +420,7 @@ after that.
 **API Call** (test connection):
 
 ```
-POST /api/v1/onboarding/test-email
+POST /api/v1/onboarding/test/email
 Body: {
   platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
   config: { ...platform-specific fields... }
@@ -435,7 +430,7 @@ Body: {
 **API Call** (save config):
 
 ```
-POST /api/v1/onboarding/save-email-config
+POST /api/v1/onboarding/session/email
 Body: {
   platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
   config: { ...platform-specific fields... }
@@ -455,12 +450,28 @@ Body: {
 
 **Purpose**: Choose file storage backend
 
-**Options**:
+**Options**, as the screen offers them and `save_file_storage_config` accepts
+them:
 
-- Local Storage (server filesystem)
-- AWS S3
-- Azure Blob Storage
-- Google Cloud Storage
+- `local` — Local Storage (server filesystem)
+- `googledrive` — Google Drive
+- `onedrive` — OneDrive / SharePoint
+- `s3` — Amazon S3, or any S3-compatible endpoint
+- `other` — decide later
+
+Azure Blob Storage and Google Cloud Storage are **not** options and never were;
+`azure` and `gcs` return a 400.
+
+> **Stored, but nothing reads it** _(2026-09-10)_: whichever platform is chosen,
+> uploads do not use it. `documents.py` writes to a fixed
+> `UPLOAD_DIR = "/app/uploads/documents"` and event attachments to their own
+> fixed directory; no code outside the settings schema and the onboarding
+> writer reads `s3_bucket_name`, `google_drive_client_id` or any other
+> `FileStorageSettings` field. So a correctly keyed S3 or Drive configuration
+> saves green and every file still lands on local disk — which matters most to
+> a department that chose cloud storage precisely so its files would be backed
+> up somewhere the server is not. This is CLAUDE.md pitfall 19, a setting whose
+> only effect is being stored.
 
 **Navigation**:
 
@@ -469,7 +480,7 @@ Body: {
 
 **Data Storage**: Zustand store (persisted to localStorage)
 
-- `fileStoragePlatform` = "local" | "s3" | "azure" | "gcs"
+- `fileStoragePlatform` = "local" | "googledrive" | "onedrive" | "s3" | "other"
 
 ---
 
@@ -488,9 +499,53 @@ being written to the session, and are persisted into
 POST /api/v1/onboarding/session/file-storage
 Body: {
   platform: "googledrive" | "onedrive" | "s3" | "local" | "other",
-  config: { ...platform-specific credentials }
+  config: { ... }   // platform-specific; exact camelCase keys, see below
 }
 ```
+
+`config` is a free dict on the schema, exactly like `/session/email`'s, and
+completion maps **exact camelCase** names out of it:
+
+| Platform      | Keys                                                                                |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `googledrive` | `googleDriveClientId`, `googleDriveClientSecret`, `googleDriveFolderId`             |
+| `onedrive`    | `oneDriveTenantId`, `oneDriveClientId`, `oneDriveClientSecret`, `sharePointSiteUrl` |
+| `s3`          | `s3AccessKeyId`, `s3SecretAccessKey`, `s3BucketName`, `s3Region`, `s3EndpointUrl`   |
+| `local`       | `localStoragePath`                                                                  |
+| `other`       | none                                                                                |
+
+**The backend validates none of these.** The save endpoint checks only that
+`platform` is one of the five, then encrypts whatever `config` holds. At
+completion `_persist_session_data_to_org()` reads the camelCase names above and
+drops every key it does not recognise. A caller using the snake_case spellings
+`FileStorageSettings` exposes — `s3_bucket_name`, `google_drive_client_id` —
+therefore gets a success response, has its credentials encrypted into the
+session, and ends up with an organization storing the platform choice and
+nothing else. There is no equivalent of email's `missing_for_enabled()` here, so
+no error is raised at any point.
+
+**The wizard does validate, so this is an API-only exposure.**
+`FileStorageConfiguration.tsx` marks `googleDriveClientId` and
+`googleDriveClientSecret`; `oneDriveTenantId`, `oneDriveClientId` and
+`oneDriveClientSecret`; and `s3BucketName`, `s3Region`, `s3AccessKeyId` and
+`s3SecretAccessKey` as **required**, and its `missingRequired` check blocks
+Save & Continue until each is filled, naming the ones outstanding. The rest —
+`googleDriveFolderId`, `sharePointSiteUrl`, `s3EndpointUrl` and
+`localStoragePath` — are optional there. On the three credential-bearing
+platforms the only route through the screen with an empty configuration is the
+explicit **"I'll add these later"** button, which posts `{}` deliberately so the
+platform choice is recorded and Settings can show what is missing. `local` is
+the exception, legitimately: its single field is optional, so saving it blank
+posts `{}` through the ordinary Save & Continue — meaning "use the server's
+default path", not "I have not finished". An installer following the wizard
+therefore cannot save half a credential set; a caller posting to the endpoint
+can.
+
+And no error is raised later either, because **nothing reads these settings**
+— see the note under step 8. Uploads go to fixed local directories whatever is
+stored here, so a dropped credential has no symptom at all: it is not that the
+department finds out late, it is that the correctly keyed configuration behaves
+the same way as the broken one.
 
 **Navigation**:
 
@@ -504,13 +559,58 @@ Body: {
 
 **Purpose**: Choose authentication method
 
-**Options**:
+**Options**, as the screen offers them and the endpoint accepts them:
 
-- Local (Username/Password)
-- OAuth 2.0 (Google, Microsoft) — **link-existing only** (see
-  "OAuth Sign-In Buttons" below); OAuth never creates new accounts
-- SAML (Enterprise SSO)
-- LDAP (Active Directory)
+- `local` — Username/Password
+- `google` — Google OAuth. **Link-existing only** (see "OAuth Sign-In Buttons"
+  below); OAuth never creates new accounts
+- `microsoft` — Microsoft Azure AD, on the same link-existing terms
+- `authentik` — self-hosted Authentik SSO. **Accepted and persisted, but there
+  is no sign-in flow behind it** — see the warning below
+
+Those four strings are the contract. SAML and LDAP are **not** among them and
+are not implemented (`LDAP_ENABLED` exists in config and gates nothing); a
+caller sending `saml`, `ldap` or `oauth` gets a 400 naming the four the
+endpoint accepts.
+
+> **Choosing `authentik` buys nothing and costs password recovery**
+> _(2026-09-10)_: it is accepted here and completion writes it to
+> `settings.auth.provider`, and `AuthSettings` even carries `authentik_url` /
+> `authentik_client_id` / `authentik_client_secret` — but there is no
+> authorization or callback route for it. `auth.py` implements `/oauth/google`
+> and `/oauth/microsoft` only, `GET /auth/oauth-config` reports just
+> `googleEnabled` and `microsoftEnabled`, and the login page renders those two
+> buttons. So the SSO a department selected does not exist.
+>
+> Signing in still works: `POST /auth/login` calls `authenticate_user()`
+> without consulting `settings.auth.provider`, and the password form renders
+> unconditionally. What the setting does change is recovery —
+> `forgot-password` refuses a local reset for any non-local provider, so a
+> member who forgets their password has no self-service way back and needs an
+> administrator to reset it. Use `local` unless you are configuring Google or
+> Microsoft.
+
+**API Call**:
+
+```
+POST /api/v1/onboarding/session/auth
+Body: { platform: "google" | "microsoft" | "authentik" | "local" }
+```
+
+The endpoint stores the choice and nothing else — `AuthConfigRequest` has no
+`config` field. Provider credentials are **not** part of onboarding: Google and
+Microsoft read `GOOGLE_*` / `AZURE_AD_*` from the server environment.
+
+**Have that environment configuration working before completing with a
+non-local provider.** `GET /auth/oauth-config` reports a provider enabled only
+when the organization selected it **and** the server is configured for it
+(`provider == "google" and GoogleOAuthService.is_configured()`), so an unset
+environment hides the sign-in button entirely. Completion persists the provider
+immediately, and `forgot-password` then refuses local resets for it — so
+finishing setup with `google` or `microsoft` before the environment is ready
+leaves no OAuth button and no reset link until an administrator sets the
+variables and restarts. Choosing `local` and switching later avoids the window
+altogether.
 
 **Navigation**:
 
@@ -518,7 +618,7 @@ Body: {
 
 **Data Storage**: Zustand store (persisted to localStorage)
 
-- `authPlatform` = "local" | "oauth" | "saml" | "ldap"
+- `authPlatform` = "google" | "microsoft" | "authentik" | "local"
 
 ---
 
@@ -586,7 +686,7 @@ tells the frontend to set `has_session`.
 ```
 POST /api/v1/onboarding/session/it-team
 Body: {
-  it_team: [{ name, email, phone, role }],
+  it_team: [{ name, email, phone, role, rank? }],
   backup_access: {
     email: string,
     phone: string,
@@ -748,6 +848,28 @@ Body: {
 }
 ```
 
+`POST /api/v1/onboarding/session/positions` is the same submission under the
+name the wizard actually uses, and its body is keyed `positions` rather than
+`roles`:
+
+```
+POST /api/v1/onboarding/session/positions
+Body: {
+  positions: [{ ...same item shape as above }]
+}
+```
+
+Copying the `roles` body to the `positions` route returns a 422:
+`PositionsSetupRequest` requires the `positions` key.
+
+**Neither list may be empty.** Both `RolesSetupRequest.roles` and
+`PositionsSetupRequest.positions` declare `min_length=1` (and `max_length=200`),
+so `{positions: []}` — the natural way to ask for "none of these" — is refused
+by Pydantic before the handler runs, and none of the retention logic below is
+reached. Unticking every configurable position is expressed by submitting the
+ones that remain, not by submitting nothing; the System Owner and Member
+positions are protected by the handler rather than by an empty request.
+
 > **Unticking a position removes it** _(2026-09-09)_: `save_session_roles`
 > used to delete only `is_system=False` rows, so an unticked seeded position
 > survived setup and went on appearing in every picker. It is now deleted,
@@ -814,7 +936,9 @@ Information and the Testing Checklist — are turned on later from
 
 **Per-Module Actions**:
 
-- "Enable & Configure" → `/onboarding/modules/{moduleId}/config`
+- "Enable" → Mark as "enabled". Enabling is the whole action; it does not
+  navigate. See 13a for why the per-module configuration step it used to open
+  was removed
 - "Configure Later" → Mark as "skipped"
 - "Ignore" → Mark as "ignored"
 
@@ -925,6 +1049,42 @@ the main application layout via sessionStorage keys `departmentName` and
 
 ## Backend API Endpoints
 
+### Responses
+
+The bodies below are requests. Responses are given here as the model that
+defines them, rather than copied out as JSON: a model name stays true when a
+field is added, and a hand-copied example does not — which is how the wiki came
+to document an organization body the route had stopped accepting.
+
+| Endpoint                                                                 | Response                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /onboarding/status`                                                 | `OnboardingStatusResponse` — `needs_onboarding`, `is_completed`, `current_step`, `total_steps`, `steps_completed`, `organization_name`                                                                                                                                                                 |
+| `POST /onboarding/start`                                                 | `StartSessionResponse` — `session_id`, `expires_at`, `csrf_token`, `message`, `current_step`, `steps`. A client cannot proceed without the first three                                                                                                                                                 |
+| `GET /onboarding/system-info`                                            | `SystemInfoResponse` — `app_name`, `version`, `environment`, `database`, `security`, `features`                                                                                                                                                                                                        |
+| `GET /onboarding/security-check`                                         | `SecurityCheckResponse` — `passed`, `issues`, `warnings`, `total_issues`, `total_warnings`                                                                                                                                                                                                             |
+| `GET /onboarding/database-check`                                         | `DatabaseCheckResponse` — `connected`, `database`, `host`, `port`, `server_time?`, `organizations_count?`, `error?`                                                                                                                                                                                    |
+| `POST /onboarding/organization`, `POST /onboarding/session/organization` | `OrganizationSetupResponse` — `id`, `name`, `slug`, `organization_type`, `timezone`, `active`, `created_at`                                                                                                                                                                                            |
+| `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`, `authenticated`. Also sets the auth cookies; `authenticated` is the signal the frontend uses to set its `has_session` hint, since the cookies themselves are httpOnly and invisible to it |
+| `POST /onboarding/modules`                                               | `{ message, modules }` — every accepted id, not only the enabled ones. The boolean is the **stored** value only for the ids the wizard asks about; for settings-only and legacy ids it echoes the request, so `finance: true` can come back with the setting untouched (see Configure Modules)         |
+| `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                                                                                                                                              |
+| `POST /onboarding/reset`                                                 | `{ success, message, next_step }` — **destructive**: empties the user, organization, role, facility and onboarding tables. Refused after completion, and restricted to the System Owner once one exists (see Reset Onboarding)                                                                         |
+| `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
+| `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
+| `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                                                                                                                                               |
+| `GET /onboarding/session/data`                                           | `{ session_id, expires_at, data }` — no response model; `data` is a **sanitised** subset (see Read Session Data). Unusually for a read, it requires the `X-CSRF-Token` header as well as `X-Session-ID`                                                                                                |
+| `POST /onboarding/test/email`                                            | `EmailTestResponse` — `success`, `message`, `details?`. Tests the connection without saving anything, and is rate-limited on its own scope so a department retrying it while fixing an SMTP typo cannot lock itself out of `/system-owner`                                                             |
+| every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                                                                                                                                   |
+| `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                                                                                                                                                |
+| `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                                                                                                                                           |
+
+**`/system-info`, `/security-check` and `/database-check` need `X-Session-ID`
+too.** They read as unauthenticated preflight checks and are not: each calls
+`validate_session(request, db, require_csrf=False)`, so a caller without the
+header gets a 401 and one with a session but no CSRF token succeeds. That is the
+opposite pairing from `/session/data`, which requires both — the three checks
+are reads a client makes before it has done anything, while `/session/data`
+reads back what was saved.
+
 ### Onboarding Status
 
 ```
@@ -940,6 +1100,65 @@ POST /api/v1/onboarding/start
 ```
 
 Initializes onboarding tracking.
+
+### Read Session Data
+
+```
+GET /api/v1/onboarding/session/data
+```
+
+Returns what a resumable session already holds. It is the router's only GET over
+session state — the other four read system, security and database status.
+
+**Nothing in the frontend calls it.** A repo-wide search of
+`frontend/src/modules/onboarding/` finds no reference to the path and no
+`getSessionData` on the API client; the wizard restores a refreshed step from its
+persisted Zustand store instead. So this route exists for API consumers, and its
+behaviour is not exercised by the screens.
+
+**It requires `X-CSRF-Token` as well as `X-Session-ID`**, which is unusual for a
+GET and easy to miss: `get_session_data` calls `validate_session(request, db)`
+without overriding `require_csrf`, whose default is `True`. A caller who sends
+only the session id gets a 403 (`AUTH_CSRF_INVALID`), not a 401, so the error
+does not point at the missing header.
+
+There is no response model. The shape is:
+
+```json
+{
+  "session_id": "...",
+  "expires_at": "2026-09-10T19:30:00+00:00",
+  "data": {
+    "department": {
+      "name": "...",
+      "logo": "...",
+      "navigation_layout": "...",
+      "saved_at": "..."
+    },
+    "email": { "platform": "gmail", "configured": true },
+    "file_storage": { "platform": "s3", "configured": true },
+    "auth": { "platform": "local", "saved_at": "..." },
+    "it_team": { "members_count": 2, "has_backup_access": true },
+    "modules": { "enabled": ["events", "inventory"], "saved_at": "..." }
+  }
+}
+```
+
+Every key inside `data` is omitted when the corresponding step has not been
+saved, so an early-stage session returns `"data": {}`.
+
+**`data` is sanitised, but not uniformly — each section is treated differently.** For
+`email` and `file_storage` only the platform name is returned, plus a
+`configured: true` that reports the section's _presence_ rather than its
+validity — a skipped file-storage step stores `{}` and still comes back
+`configured: true`. `auth` and `modules` are returned in full; that is safe
+because `save_auth_config` stores only `{platform, saved_at}` and never the
+Authentik or OAuth secrets. `department`, including the base64 logo, is returned
+in full. The IT team is reduced to a count and a boolean, so the contact details
+`/complete` later persists are never readable back.
+
+It reads `session.data` and nothing else, so what it reports is the session blob,
+not the state of any row a step may also have written.
 
 ### System Information
 
@@ -965,29 +1184,45 @@ GET /api/v1/onboarding/database-check
 
 Tests database connectivity.
 
-### Create Organization (Legacy)
+### Create Organization
 
-```
-POST /api/v1/onboarding/organization
-Body: {
-  name: string,
-  slug: string,
-  organization_type: string,
-  timezone: string,
-  description?: string
-}
-```
+Two routes accept this, and they take the **same** body — both bind
+`OrganizationSetupCreate`:
 
-Creates the first organization with default roles (simple version).
+- `POST /api/v1/onboarding/session/organization` — what the wizard calls. Also
+  associates the new organization with the onboarding session.
+- `POST /api/v1/onboarding/organization` — the same creation without that
+  association. It was once a five-field "simple" variant and this document
+  described it that way until 2026-09-10; it has taken the full schema for some
+  time, so the old minimal body now fails validation with a 422.
 
-### Create Organization (Comprehensive - Step 1)
+**Use the session route.** The direct one validates the session and then
+discards it — it never writes `session.data["department"]`. `/session/stations`
+and `/session/apparatus` read `session.data["department"]["organization_id"]`
+and nothing else, so after the direct route they answer
+`400 Organization must be created before adding stations` even though the
+organization row exists and is otherwise complete. A caller who takes the
+direct route gets an organization it cannot then attach stations or apparatus
+to, and no error names the reason.
+
+**The wizard loses the same id at step 6, and this one is reachable from the
+UI.** `save_department_info` replaces `session.data["department"]` wholesale —
+`{name, logo, navigation_layout, saved_at}` — and `organization_id` is not
+among the keys it writes back. Navigation Choice is step 6, straight after
+Stations (4) and Apparatus (5), so the normal forward path stores the id at
+step 3, uses it twice, then drops it. Every later save to `/session/stations`
+or `/session/apparatus` answers
+`400 Organization must be created before adding stations`, and the wizard has
+Back buttons that lead there. Re-saving Organization Setup restores the id,
+because `save_session_organization` writes the block again — but nothing tells
+an installer that, and the error points at the organization rather than at the
+step that erased the reference to it.
 
 ```
 POST /api/v1/onboarding/session/organization
 Body: {
   name: string,
   slug?: string,
-  description?: string,
   organization_type: "fire_department" | "ems_only" | "fire_ems_combined",
   timezone: string,
   phone?: string,
@@ -1003,12 +1238,40 @@ Body: {
   department_id?: string,
   county?: string,
   founded_year?: number,
-  tax_id?: string,
-  logo?: string
+  logo?: string,
+  membership_id?: {   // omitted entirely when the department does not number members
+    enabled: boolean,
+    auto_generate: boolean,
+    prefix: string,
+    next_number: number
+  }
 }
 ```
 
-Creates organization with comprehensive details and commits to database immediately.
+Creates the organization with its addresses and identifiers, commits
+immediately, and creates the headquarters facility and location from the
+department address.
+
+It also seeds the department's **positions** — `_create_default_roles`, despite
+the name — from `DEFAULT_POSITIONS` in `permissions.py`, narrowed to what the
+agency type actually has: an EMS-only service gets no Firefighter, and its chief
+is a Chief rather than a Fire Chief. `it_manager` (priority 100, all
+permissions) is the System Owner's position. This runs once per install, and
+the Positions step later lets the department keep or drop what was seeded, and
+add positions of its own. It does **not** rename a seeded one:
+`save_session_roles` updates an existing position's permissions, priority and
+description, and never assigns the submitted `name`. The response is actively
+misleading about it: the handler appends `role_data.name` — the name that was
+**submitted** — to `updated`, so a caller who renames a seeded position gets it
+back in the `updated` list under the new name while the stored row keeps the
+old one. Do not read that list as confirmation the rename persisted. The wizard
+exposes no rename control for them either.
+
+> The wiki described this as "creates 6 default roles: Super Admin, Admin,
+> Chief, Officer, Member, Probationary" until 2026-09-10. That list was stale in
+> both its contents and its vocabulary: they are positions, not roles, and a
+> rank is the separate thing — a rank says where somebody sits, a position says
+> what they may do.
 
 ### Create Admin User
 
@@ -1025,7 +1288,53 @@ Body: {
 }
 ```
 
-Creates administrator user with Super Admin role.
+Creates the administrator, hashes the password with Argon2id, gives them the
+System Owner position, and writes an audit-log entry.
+
+`password` is checked by `validate_password_strength()`, which every path into
+`AuthService.register_user()` runs. A caller that meets only the length rule
+still receives a 400, so the full contract is:
+
+- **at least 12 characters on this endpoint**, whatever `PASSWORD_MIN_LENGTH`
+  says, and no more than `PASSWORD_MAX_LENGTH` (128). `SystemOwnerCreate`
+  hard-codes `min_length=12` on `password` and `password_confirm`, so the
+  effective floor is `max(12, PASSWORD_MIN_LENGTH)`. A deployment that lowers
+  the setting — which config permits, with only a warning from the security
+  check — still gets a schema-level 422 here, raised by Pydantic before
+  `validate_password_strength()` runs, so none of the rules below are reported
+  with it
+- at least one uppercase letter, one lowercase letter, one number and one
+  special character — each class is separately configurable
+  (`PASSWORD_REQUIRE_UPPERCASE` and its three siblings) and all four are on by
+  default
+- no three sequential characters anywhere in it (`123`, `abc`, …) and no
+  character repeated three times in a row
+- no keyboard pattern anywhere in it: `qwerty`, `asdfgh`, `zxcvbn`, `qazwsx`,
+  `qweasd`, `!@#$%^`, `1qaz2wsx`, `1234qwer`, `asdf1234`
+- not a common password. This one is an **exact match** against a fixed list,
+  not a substring test like the two above, and the list includes
+  department-flavoured entries (`firefighter`, `station`, `medic`, `ambulance`)
+  alongside the usual ones
+- where the breached-password check is configured, not present in the breach
+  corpus. That check **fails open** — an outage skips it rather than blocking a
+  password change (see the Attack Protection table in CLAUDE.md)
+
+The rules above are aggregated: a password breaking more than one comes back as
+`Password requirements not met (N issues): …` with the whole list. Two things
+sit outside that aggregation, so a caller can be rejected twice for one
+password:
+
+- **Over `PASSWORD_MAX_LENGTH` returns immediately**, reporting only the length.
+  Nothing else is evaluated — the ceiling exists to keep an unbounded input out
+  of Argon2, so the check runs before any work is done on the value.
+- **The breach check runs only after every local rule passes.**
+  `AuthService.register_user()` calls `validate_password_strength()` first and
+  `check_password_not_breached()` after it, so a password that is both weak and
+  breached reports the local failures, and only reveals the breach hit once
+  those are fixed.
+
+This is the one bootstrap call that creates the administrator, so a rejection
+here has no signed-in user to retry it.
 
 ### Configure Modules
 
@@ -1037,6 +1346,101 @@ Body: {
 ```
 
 Saves enabled module configuration.
+
+### Configure Modules (Direct)
+
+```
+POST /api/v1/onboarding/modules
+Body: {
+  enabled_modules: string[]   // e.g. ["training", "inventory", "scheduling"]
+}
+```
+
+The non-session counterpart. It validates the onboarding session and refuses
+once onboarding is complete, so a still-valid session cannot be replayed to
+change module settings after setup. The response reports every module with its
+resulting boolean, not only the ones enabled — with the caveat below.
+
+Only the ids the wizard asks about are applied to the organization —
+`ONBOARDING_CORE_MODULES` (`members`, `events`, `documents`, `forms`) and
+`ONBOARDING_OFFERED_MODULES` (`training`, `inventory`, `medical_supplies`,
+`scheduling`, `apparatus`, `facilities`, `storefront`, `elections`, `minutes`,
+`reports`, `notifications`, `mobile`, `integrations`, `prospective_members`). Two other groups are accepted by validation and go nowhere:
+
+- **Settings-only** (`communications`, `finance`, `grants`, `hr_payroll`,
+  `incidents`, `medical_screening`, `public_info`, `testing`) — real
+  `ModuleSettings` fields, but `configure_modules` writes
+  `key in normalized if key in asked_about else <default>`, so these keep their
+  default. **The response disagrees with what is stored**: it is built as
+  `{module: module in final_modules}` over every accepted id, so submitting
+  `finance` returns `finance: true` while `settings.modules.finance` stays at
+  its default. Turn these on from Settings → Modules after setup.
+- **Legacy** (`compliance`, `meetings`, `fundraising`, `equipment`, `vehicles`,
+  `budget`) — accepted so an older saved session still loads, but not
+  `ModuleSettings` fields at all: recorded on `OnboardingStatus` and no further.
+
+**A sixth spelling group: hyphenated aliases.** `ONBOARDING_ACCEPTED_MODULE_IDS`
+runs every id through `_with_hyphenated()`, so wherever an underscored id is
+accepted its hyphenated twin is too — `medical-supplies`,
+`prospective-members`, `hr-payroll`, `medical-screening` and `public-info`.
+They exist because saved sessions carry both spellings and the wizard's own
+config routes were hyphenated.
+
+Persistence normalizes them (`mid.replace("-", "_")`), so submitting
+`medical-supplies` correctly stores `medical_supplies: true`. **The response
+does not normalize.** It is keyed off `available_modules`, which holds both
+spellings, and tested against `final_modules`, which holds the literal id you
+sent — so the same response carries `"medical-supplies": true` _and_
+`"medical_supplies": false`, describing one module twice with opposite answers.
+The underscored key is the one that is wrong. Prefer the underscored spelling
+on the way in and the stored settings on the way out.
+
+So the response reports the resulting boolean **for the asked-about ids only**;
+for the other two groups it echoes the request, and for a hyphenated alias it
+answers under a key nothing reads.
+
+**The wizard's own path does not behave this way.** The screens call
+`POST /onboarding/session/modules`, and completion rebuilds the whole map as
+`{k: k in normalized for k in ModuleSettings.model_fields}` — with no
+`else <default>` branch. Every settings-only module is therefore written
+`false` by finishing setup, rather than keeping its default. Exactly one is
+affected today, and it is a live regression rather than a hypothetical:
+`public_info` defaults to **true** and the wizard never offers it, so
+completing onboarding turns the Public Information module off. The other seven
+default to false, so the two paths agree on them by coincidence.
+
+That holds only when something was submitted. `_persist_session_data_to_org()`
+guards the rebuild with `if modules_data and modules_data.get("enabled")`, and
+an empty list is falsy — so a caller who posts `{modules: []}` to
+`/session/modules` has it stored, and completion then skips the whole block.
+`Organization.settings.modules` is never written, every declared default
+survives, and `public_info` stays **true**. Selecting nothing and selecting
+everything-but therefore diverge sharply, and the empty case is the one that
+leaves defaults intact.
+
+Both halves of this are worth knowing before relying on either route: the
+direct route preserves defaults and misreports the result, the session route
+reports nothing per-module and silently overwrites defaults.
+
+### Save Department Info
+
+```
+POST /api/v1/onboarding/session/department
+Body: {
+  name: string,                        // 3-100 characters
+  logo?: string,                       // base64-encoded image
+  navigation_layout: "top" | "left"    // required; anything else is a 422
+}
+```
+
+What the Navigation Choice step submits. `navigation_layout` is validated
+against exactly those two literals by a `field_validator`, so a plausible
+guess (`sidebar`, `horizontal`) is refused.
+
+This is the one session group `/complete` does **not** copy into
+`Organization.settings` — see Complete Onboarding — so the layout choice and
+the name recorded here stay on the session row. The organization's own name and
+logo come from the organization routes, not from this call.
 
 ### Configure Roles
 
@@ -1056,6 +1460,116 @@ Body: {
 
 Configures roles with two-tier permissions during onboarding.
 
+### Save Email Configuration
+
+```
+POST /api/v1/onboarding/session/email
+Body: {
+  platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
+  config: { ... }   // platform-specific; see the key table below
+}
+```
+
+`config` is typed as a free dict by the schema, so nothing validates its keys on
+the way in. `_email_settings_from_onboarding()` maps **exact camelCase** names;
+anything it does not recognise — a snake_case guess, say — is dropped silently.
+On `gmail`, `microsoft` and `selfhosted` the write is then rejected for a field
+the caller believes it sent; on `cloudflare` it is not (see below).
+
+| Platform     | Keys                                                                                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| all          | `fromEmail`, `fromName`                                                                                                                                                           |
+| `gmail`      | `googleAppPassword`                                                                                                                                                               |
+| `microsoft`  | `microsoftAuthMethod` (`"app_password"` or `"oauth"`), and for OAuth `microsoftTenantId`, `microsoftClientId`, `microsoftClientSecret`; for `app_password` `microsoftAppPassword` |
+| `selfhosted` | `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword`, `smtpEncryption`                                                                                                          |
+| `other`      | none — see below                                                                                                                                                                  |
+| `cloudflare` | `cloudflareAccountId`, `cloudflareApiToken`                                                                                                                                       |
+
+Do **not** put `enabled` or `platform` inside `config`. The mapper never reads
+them: `platform` is the top-level field, and enablement is derived as
+`platform != "other" and bool(config)`. A caller who sets `config.enabled: false`
+alongside valid credentials gets a success response and a configuration stored
+**enabled**.
+
+`other` is the configure-later choice, not a custom-SMTP one: it forces
+`enabled` to false whatever `config` holds, so SMTP fields sent with it are
+stored disabled. Custom SMTP goes under `selfhosted`.
+
+**Disabled here does not mean the installation sends no mail.**
+`EmailService._get_smtp_config()` takes the organization's section only when it
+is `enabled`, and otherwise falls through to the deployment's `SMTP_*` settings.
+So on a deployment with a global relay configured, choosing `other` leaves
+transactional mail going out through that relay; what it disables is the
+configuration onboarding collected, not outbound email.
+
+`fromEmail` is required on `gmail`, `microsoft` and `selfhosted`. On the two
+presets it doubles as the SMTP login — `resolve_smtp_settings()` returns
+`user: from_email` for them, because an App Password is issued per account, so
+the account that logs in is the account the mail is sent from and one field
+covers both; a malformed address there fails authentication rather than merely
+delivery. **On `selfhosted` it does not**: that branch returns
+`user: smtp_user`, so the sending address and the login are independent fields
+and `fromEmail` alone authenticates nothing. The provider password field is
+required on `gmail`; all three Microsoft OAuth fields are required together. **`cloudflare` is checked for none of this** —
+`missing_for_enabled()` handles the two presets and `selfhosted` and falls
+through for it — so a Cloudflare payload with no `fromEmail` is accepted and
+stored enabled, and nothing downstream supplies the address it lacks.
+`EmailService._get_smtp_config()` short-circuits on the organization's own
+`enabled` flag, so it returns the org section with `from_email: None` rather
+than falling back to `SMTP_FROM_EMAIL`; `_get_cloudflare_config()` then resolves
+`org_email["from_email"] or self._smtp_config["from_email"]`, which is `None` on
+both sides. **A globally configured sender does not rescue this payload** — the
+write succeeds and every send builds an invalid From address. Same gap as the
+account-ID and token one below, from the same missing branch.
+
+On `selfhosted` **the backend** requires only `smtpHost` and `fromEmail`.
+`smtpUsername` and `smtpPassword` are a pair there: an anonymous relay with
+neither is a complete configuration, while a username without a password is
+rejected — that combination means a credential was not restored rather than one
+that was never needed. Because the sending address is not the login on this
+platform, omitting both leaves the connection unauthenticated: that is correct
+for an internal relay that authorises by network, and silently wrong for any
+server that expects credentials, where the write succeeds and delivery fails
+later. Send `smtpUsername` and `smtpPassword` unless the relay genuinely takes
+neither.
+
+**The wizard is stricter, so an anonymous relay is an API-only configuration.**
+`EmailConfiguration.tsx` adds Server Address, Port, Username _and_ Password to
+its missing-fields list for `selfhosted`, in both `handleTestConnection` and
+`handleContinue`, so the screen refuses before it calls either endpoint. An
+installer cannot set up a relay that needs no credentials; a caller posting to
+`/session/email` can.
+
+`microsoftAuthMethod` takes exactly `"app_password"` or `"oauth"`. Omitting it
+means App Password — every Microsoft row written before OAuth existed carries no
+method, so absence has to keep authenticating the way it always did. Any other
+value is refused with a 400 rather than stored, because every reader treats an
+unrecognised method as App Password and the settings schema each read rebuilds
+through rejects it, which would lock the organization out of the screen that
+could fix it.
+
+**`cloudflare` is not checked at all.** `missing_for_enabled()` covers the
+preset platforms (`gmail`, `microsoft`) and `selfhosted`; `cloudflare` falls
+through it and returns nothing missing. So a non-empty `cloudflare` config whose
+keys were all dropped — snake_case guesses, or a typo — is accepted, reported as
+saved, and persisted **enabled** with no account ID and no API token. Nothing
+surfaces until mail fails to send. `invalid_for_enabled()` is narrower still: it
+only judges the Microsoft OAuth tenant and client IDs.
+
+**The 400 does not name a key in either spelling.** `save_email_config` passes
+the field `missing_for_enabled()` returns through `required_field_message()`,
+which renders it as prose from a label table — `smtp_host` becomes
+`Enabling selfhosted email requires an SMTP host. Enter it, or leave email
+disabled.` A caller who guessed snake_case therefore gets a message that names
+neither `smtpHost` nor `smtp_host`, so nothing in the response points at the key
+they should have sent. Match the label back to the table above to find it.
+
+What actually stores mail settings. Passwords and API keys inside `config` are
+encrypted with AES-256 before they are written; only `platform` is kept in plain
+text. `POST /onboarding/complete` later persists the result into the
+organization's settings. Rejected once onboarding is complete, so a still-valid
+session cannot keep rewriting a finished organization's data.
+
 ### Configure Notifications
 
 ```
@@ -1072,7 +1586,51 @@ Body: {
 }
 ```
 
-Configures email and SMS settings.
+**Records that the step happened; it does not store credentials.** The handler
+sets `email_configured` from `email_enabled`, marks the `email_config` step
+complete, and returns the two booleans it was given. Every other field in the
+body — the SMTP host, user and from-address, the Twilio SID and number — is
+discarded. A caller that sends credentials here gets a success response and has
+configured nothing; **Save Email Configuration** above is the endpoint that
+stores them.
+
+### Reset Onboarding
+
+```
+POST /api/v1/onboarding/reset
+Body: none
+```
+
+**Destructive and irreversible.** It empties the tables outright —
+`OnboardingSession`, `OnboardingStatus`, `Location`, `Facility`, `User`, `Role`
+and `Organization` among them — rather than deleting a single organization's
+rows. There is no undo and no confirmation beyond the two guards below. The
+wizard reaches it from `ResetProgressButton`.
+
+Two guards, and the second is the one an API caller will not expect:
+
+- **Refused after completion** — `Cannot reset after onboarding is completed.
+Use the admin panel to manage settings.` So it is a bootstrap-only escape
+  hatch, not a factory reset.
+- **Once a System Owner exists, only that user may call it.** The owner is
+  identified by the wildcard position `create_system_owner` grants, and the
+  caller must be authenticated as them; anyone else gets
+  `System-owner authentication is required to reset onboarding.` Before a
+  System Owner exists no **user** authentication is required, which is what
+  makes an abandoned half-finished setup recoverable — but the call is not
+  open: `reset_onboarding` runs `validate_session` first, so a live
+  `X-Session-ID` and its matching `X-CSRF-Token` are needed either way. A
+  recovery client without those gets a 401 or 403 before any of the checks
+  below are reached. If the system-owner position is
+  missing entirely the reset is refused rather than allowed —
+  `System-owner role is missing; onboarding cannot be reset safely.` — failing
+  closed on the one operation where failing open would be unrecoverable.
+
+Returns `{ success, message, next_step }`, where `next_step` is
+`"Navigate to /onboarding/start to begin again"` — the only pointer a caller
+gets back after an operation that has just deleted the users, organization
+and session it was working with. Rate-limited on its own scope, like
+`/test/email`.
 
 ### Complete Onboarding
 
@@ -1083,7 +1641,95 @@ Body: {
 }
 ```
 
-Marks onboarding as finished.
+Marks onboarding as finished, and does three further things worth knowing:
+
+- **Persists five settings groups** into `Organization.settings`: IT team,
+  email configuration, file storage, auth choice and module selections. Those
+  are held in the session until now and reach the organization here.
+
+  **What happens when one of them fails differs per group, and the differences
+  matter more than the similarity.** Take the case of an `ENCRYPTION_KEY`
+  rotated without the previous key, so no stored ciphertext decrypts:
+
+  | Group        | On failure                                                                                                                                                                                               |
+  | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Email        | **Completion is refused.** `_incomplete_session_email()` runs _before_ anything is persisted and returns 400                                                                                             |
+  | File storage | **Silent.** Its whole block is a `try/except Exception` that logs a warning and continues                                                                                                                |
+  | IT team      | Contacts persist regardless — the settings assignment is outside any `try`. Only `create_it_team_users()` is wrapped, so the contacts are recorded while their **login accounts** may silently not exist |
+  | Auth         | Not wrapped; a plain assignment that cannot fail this way                                                                                                                                                |
+  | Modules      | Not wrapped; likewise                                                                                                                                                                                    |
+
+  So file storage is the group that leaves a department complete with no
+  platform and no credentials recorded, having seen nothing but a success
+  screen; a log warning is the only trace. Email is the opposite — it blocks
+  completion with an error naming the step to return to. The email block inside
+  `_persist_session_data_to_org()` has its own `try/except` as well, but it
+  covers what happens _after_ that pre-check has already decrypted the section
+  successfully, such as re-encryption failing.
+
+  This is **not** true of `/session/*` generally, and assuming it is gets the
+  picture backwards in both directions. `/session/organization`,
+  `/session/stations`, `/session/apparatus`, `/session/roles` and
+  `/session/positions` commit their rows when they are called, so those writes
+  are already durable before `/complete` runs. What the session keeps
+  afterwards differs by step: `/session/stations` and `/session/apparatus`
+  record only `facility_ids` / `apparatus_ids` and a count, while
+  `/session/roles` — and `/session/positions`, which delegates to it — record
+  `{id, name, priority}` for every submitted role. Descriptions and permission
+  lists are written to the `Role` rows and are **not** copied into the session. In the other direction, `/session/department` is never
+  copied into settings at all: `_persist_session_data_to_org()` reads
+  `it_team`, `email`, `file_storage`, `auth` and `modules` and nothing else,
+  so the department block never reaches the organization.
+
+  It does not follow that it goes away. **A completed session's row is never
+  deleted.** Neither `/complete` nor `OnboardingService.complete_onboarding()`
+  removes it, no scheduled job reaps expired rows, and the only statement in
+  the backend that deletes from this table is inside `/onboarding/reset` —
+  which is refused once onboarding is complete. Expiry (`expires_at`) stops
+  the row validating; it does not remove it.
+
+  So every finished installation keeps its onboarding session indefinitely,
+  holding the encrypted email and file-storage credentials plus, as plain JSON
+  rather than encrypted: the IT-team members and backup-access contact details,
+  the department name, its uploaded logo (base64 or a URL, as validated at save
+  time) and the navigation choice, the created facility and apparatus ids, the
+  id, name and priority of every position the department configured, the chosen
+  auth provider, the module selections, and the email and file-storage platform
+  names. The row itself also carries the `session_id`, the **`ip_address`** the
+  setup was run from and the **`user_agent`** of the browser that ran it — both
+  columns on `onboarding_sessions`, written at creation for security tracking —
+  and `data["csrf_token"]`. Retained with them is the activity metadata a
+  retention review has to count as well: the row's `id`, `expires_at`,
+  `created_at` and `updated_at` columns, and the plaintext `saved_at` stamped
+  into every section as it is written, which together record when the setup was
+  run and how long it took. Position descriptions and permission lists are
+  **not** among them — those live on the `Role` rows. `/complete` clears the browser's copy
+  thoroughly — a successful `completeOnboarding()` calls
+  `clearSession({ preserveAuth: true })`, which removes the session and CSRF
+  identifiers **and** `onboarding_data` and the whole persisted
+  `onboarding-storage` wizard state, so the names, logos and answers held
+  client-side do go (the in-memory Zustand state survives until reload). It is
+  the server row that stays.
+  Worth knowing for a retention review, and worth stating here because
+  "session" invites the assumption that it is transient.
+
+- **Seeds default data**: `_seed_default_data()` creates the standard admin
+  hours categories and event mappings so hour tracking works immediately after
+  setup. It attributes them to the oldest organization and to **whichever user
+  the database returns first** — the query is `select(User).limit(1)` with no
+  `order_by`, so `created_by` is not guaranteed to be the System Owner. When
+  onboarding also created IT-team accounts, one of those ordinary members can
+  be recorded as the creator. Treat `created_by` on a seeded category as
+  unspecified rather than meaningful.
+
+  It is also **best-effort** — the whole body is wrapped in `try/except` and a
+  failure is logged as `Non-critical: failed to seed admin hours defaults`
+  while completion continues. So an installation can complete successfully and
+  still lack these defaults, and the only trace is that warning. Worth knowing
+  before concluding the categories were deleted.
+
+- **Writes an audit entry** — `onboarding.completed`, recording the
+  organization name, admin username and enabled modules.
 
 ### Configure Stations
 
@@ -1156,10 +1802,10 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
     "emailConfigured": false,
 
     // File Storage
-    "fileStoragePlatform": "local",             // "local" | "s3" | "azure" | "gcs" | null
+    "fileStoragePlatform": "local",             // "googledrive" | "onedrive" | "s3" | "local" | "other" | null
 
     // Authentication
-    "authPlatform": "local",                    // "local" | "oauth" | "saml" | "ldap" | null
+    "authPlatform": "local",                    // "google" | "microsoft" | "authentik" | "local" | null
 
     // IT Team
     "itTeamConfigured": false,
@@ -1207,8 +1853,15 @@ The `rolesConfig` field stores all role configurations (system and custom) so th
 
 - `sessionId` — stored in `sessionStorage` as `onboarding_session_id`, limiting the
   short-lived bearer identifier to the current tab and browser session
-- `csrfToken` — stored in a `SameSite=Strict` cookie as
-  `onboarding_csrf_token` for the double-submit check
+- `csrfToken` — stored in **`sessionStorage`** as `onboarding_csrf_token`,
+  and sent explicitly as the `X-CSRF-Token` header on every protected
+  onboarding mutation. It is **not** a cookie: nothing in the backend sets
+  `onboarding_csrf_token`, and the client reads a cookie of that name only to
+  migrate a value an older build left, after which it deletes it. A client
+  written against the cookie contract sends no header and takes a 403 on every
+  mutation. This differs from the main app, where CSRF _is_ a double-submit
+  cookie — the onboarding client is tab-scoped by design, matching the session
+  identifier beside it.
 - `errors` — only kept in memory
 
 **Legacy compatibility**: The `syncWithSessionStorage()` function in the store reads from `sessionStorage` on first load if the Zustand store is empty, migrating any data from the older approach. Separately, `loadSession()` and `clearSession()` in the API client delete any `onboarding_session_id` left in `localStorage` by a client built before 2026-08-15, so a stale identifier is dropped rather than presented.
