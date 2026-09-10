@@ -39,7 +39,8 @@ export function useTierEditor() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const fetchConfig = useCallback(async () => {
+  /** Resolves true when the ladder was read, false when the read failed. */
+  const fetchConfig = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     try {
       const data = await memberStatusService.getTierConfig();
@@ -56,12 +57,14 @@ export function useTierEditor() {
       // what makes Save the obvious next action instead of leaving a department
       // looking at settings no reader honours.
       setDirty(data.is_saved === false);
+      return true;
     } catch {
       // A failed load is not an empty ladder. Rendering "no tiers configured"
       // would tell a department it has no membership structure because a
       // request failed, and inviting them to build one from scratch here would
       // then remove the rungs their members are standing on.
       setFailed(true);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -181,8 +184,22 @@ export function useTierEditor() {
       // Both are reports about the roster and about storage, not config.
       const { member_counts: _counts, is_saved: _isSaved, ...payload } = config;
       await memberStatusService.updateTierConfig(payload);
+      // Cleared here rather than left to the refresh below. `fetchConfig`
+      // swallows its own failure, so a read that fails after an accepted PUT
+      // leaves `dirty` true — and the section has by then swapped its Save
+      // button for the failure panel, so the step's Continue guard goes on
+      // refusing an edit the administrator has no control left to save. The
+      // write was accepted; the ladder on screen is the stored one.
+      setDirty(false);
       toast.success('Membership tiers saved');
-      await fetchConfig();
+      if (!(await fetchConfig())) {
+        // The refresh only picks up member counts and any server-side
+        // normalisation. Reporting its failure as "could not be loaded,
+        // nothing has changed" would contradict the success toast raised a
+        // line earlier and hide the ladder that was just stored.
+        setFailed(false);
+        setConfig((prev) => (prev ? { ...prev, is_saved: true } : prev));
+      }
     } catch (err: unknown) {
       // The backend names the tier and how many members hold it when it
       // refuses a removal. A generic message would leave an officer with no

@@ -217,6 +217,56 @@ describe('useTierEditor saving', () => {
   });
 });
 
+describe('a save the refresh could not confirm', () => {
+  beforeEach(installDefaults);
+
+  it('stays clean, so the step is not left refusing an edit that was stored', async () => {
+    // `fetchConfig` swallows its own failure, so a read that fails after an
+    // accepted PUT used to leave `dirty` true. The section has by then swapped
+    // its Save button for the failure panel, and `RoleSetup`'s Continue guard
+    // goes on refusing — an administrator stranded on the step with no control
+    // left that would clear it.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    expect(result.current.dirty).toBe(true);
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(updateTierConfig).toHaveBeenCalled();
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('keeps showing the ladder it just stored, rather than the load-failure panel', async () => {
+    // That panel says "could not be loaded — nothing has changed", which after
+    // an accepted PUT is untrue and contradicts the success toast raised a
+    // moment earlier. The write landed; the ladder on screen is the stored one.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(result.current.failed).toBe(false);
+    expect(result.current.tiers).toHaveLength(2);
+    expect(result.current.config?.is_saved).toBe(true);
+  });
+
+  it('still reports a failed load that was not preceded by a save', async () => {
+    // The narrowing is to the post-save refresh only. An ordinary read failure
+    // must still reach the panel, or a department is told it has no ladder.
+    getTierConfig.mockRejectedValue(new Error('network'));
+    const { result } = renderHook(() => useTierEditor());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.failed).toBe(true);
+  });
+});
+
 describe('useTierEditor and a ladder that was never saved', () => {
   beforeEach(installDefaults);
 
