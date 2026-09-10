@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Users, AlertTriangle } from 'lucide-react';
+import { Users, AlertTriangle, HelpCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { PipelineStage, ApplicantListItem } from '../types';
 import { STAGE_TYPE_ICONS, STAGE_HEADER_COLORS } from '../constants';
@@ -18,6 +18,14 @@ import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums
 import { getErrorMessage } from '../../../utils/errorHandling';
 
 interface PipelineKanbanProps {
+  /**
+   * The pipeline this board is showing. Required, and passed rather than read
+   * off `stages`: a pipeline with no stages left — delete its last one and
+   * `delete_step` nulls the stranded prospects' `current_step_id` — still has
+   * applicants, and deriving the id from an empty stage list would exclude
+   * every one of them and render a blank board under a non-zero total.
+   */
+  pipelineId: string;
   stages: PipelineStage[];
   applicants: ApplicantListItem[];
   /**
@@ -32,6 +40,7 @@ interface PipelineKanbanProps {
 }
 
 export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
+  pipelineId,
   stages,
   applicants,
   totalApplicants,
@@ -43,20 +52,45 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   const [draggedApplicant, setDraggedApplicant] = useState<ApplicantListItem | null>(null);
   const [dropTargetStageId, setDropTargetStageId] = useState<string | null>(null);
 
-  // Group applicants by current stage
-  const applicantsByStage = useMemo(() => {
+  // Group applicants by current stage.
+  //
+  // Anyone whose stage id matches no column is collected rather than dropped.
+  // This used to be a silent `if (stageGroup)` and it lost real people: the API
+  // maps a null current_step_id to '', which is what a prospect is left with
+  // when the stage they were on is deleted, and an id belonging to a stage that
+  // has since gone matches nothing either. Either way they vanished from the
+  // board with nothing on screen to say so — while the header count, which
+  // comes from the server, still counted them.
+  // A stage mismatch alone is not enough to call someone unassigned, because
+  // the store hands this board other pipelines' applicants. `fetchApplicants`
+  // only ever assigns `applicants` on success and its catch leaves the previous
+  // list in place, so switching pipeline shows the old one's rows until the new
+  // fetch lands — and permanently if it fails. Those rows match no stage here,
+  // and collecting them would put a card for someone else's pipeline on this
+  // board: opening it and pressing Advance moves them along a workflow the
+  // coordinator is not even looking at. So the column is for this pipeline's
+  // own strays only; a row from elsewhere is dropped, as it always was.
+  //
+  // `pipelineId` is a prop rather than `stages[0].pipeline_id` on purpose: a
+  // pipeline whose last stage was deleted has no stages and still has
+  // applicants, and deriving the id from an empty list would exclude all of
+  // them and blank the board. See the prop's own comment.
+  const { applicantsByStage, unassignedApplicants } = useMemo(() => {
     const grouped: Record<string, ApplicantListItem[]> = {};
     for (const stage of stages) {
       grouped[stage.id] = [];
     }
+    const unassigned: ApplicantListItem[] = [];
     for (const applicant of applicants) {
       const stageGroup = grouped[applicant.current_stage_id];
       if (stageGroup) {
         stageGroup.push(applicant);
+      } else if (applicant.pipeline_id === pipelineId) {
+        unassigned.push(applicant);
       }
     }
-    return grouped;
-  }, [stages, applicants]);
+    return { applicantsByStage: grouped, unassignedApplicants: unassigned };
+  }, [stages, applicants, pipelineId]);
 
   const withheldCount = Math.max(0, (totalApplicants ?? applicants.length) - applicants.length);
 
@@ -87,16 +121,33 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     const targetStageIndex = sortedStages.findIndex((s) => s.id === targetStageId);
     const delta = targetStageIndex - currentStageIndex;
 
+    // Dropping on the column you started in, or on something that is not a
+    // stage, means nothing — no move, and nothing worth saying.
+    if (targetStageIndex < 0 || delta === 0) {
+      setDraggedApplicant(null);
+      return;
+    }
+
+    // Dragged out of the Unassigned column. There is no stage to advance
+    // *from*, so neither advance nor regress applies. This used to fall into
+    // the guard above and do nothing at all — the card simply sprang back with
+    // no explanation, which reads as a broken board rather than a refusal.
+    if (currentStageIndex < 0) {
+      // No instruction to follow it, deliberately: there is no control that
+      // assigns a stage. Advance, Back and Skip all need a current one, and
+      // current_step_id is protected from the generic update. Saying "open
+      // them to set one" sent coordinators to a dead end.
+      toast.error(`${draggedApplicant.first_name} is not on a stage of this pipeline, so they cannot be moved.`);
+      setDraggedApplicant(null);
+      return;
+    }
+
     // One stage at a time, in either direction. Forward is an advance, which
     // runs the stage's completion gate server-side; backward is a regress,
     // which reopens the previous stage. A multi-stage jump has no single
     // meaning — the stages in between would be neither completed nor skipped —
     // so it is refused here rather than guessed at; the drawer's Skip button
     // is the way past a stage that cannot be satisfied.
-    if (currentStageIndex < 0 || targetStageIndex < 0 || delta === 0) {
-      setDraggedApplicant(null);
-      return;
-    }
 
     if (Math.abs(delta) !== 1) {
       toast.error('Applicants move one stage at a time — drop on an adjacent stage.');
@@ -134,6 +185,39 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     setDraggedApplicant(null);
     setDropTargetStageId(null);
   };
+
+  const renderCards = (columnApplicants: ApplicantListItem[], emptyLabel: string) => (
+    <div className="max-h-[calc(100dvh-300px)] min-h-[100px] space-y-2 overflow-y-auto p-2" onDragEnd={handleDragEnd}>
+      {columnApplicants.length === 0 ? (
+        <div className="text-theme-text-muted flex h-20 items-center justify-center text-xs">{emptyLabel}</div>
+      ) : (
+        columnApplicants.map((applicant) => (
+          <div key={applicant.id} className="relative">
+            {onToggleSelect && (
+              <div className="absolute top-2 left-2 z-10">
+                <input
+                  type="checkbox"
+                  checked={selectedApplicants?.has(applicant.id) ?? false}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    onToggleSelect(applicant.id);
+                  }}
+                  aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
+                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                />
+              </div>
+            )}
+            <ApplicantCard
+              applicant={applicant}
+              onClick={onApplicantClick}
+              onDragStart={handleDragStart}
+              isDragging={draggedApplicant?.id === applicant.id}
+            />
+          </div>
+        ))
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -186,44 +270,39 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
               </div>
 
               {/* Cards */}
-              <div
-                className="max-h-[calc(100dvh-300px)] min-h-[100px] space-y-2 overflow-y-auto p-2"
-                onDragEnd={handleDragEnd}
-              >
-                {stageApplicants.length === 0 ? (
-                  <div className="text-theme-text-muted flex h-20 items-center justify-center text-xs">
-                    No applicants
-                  </div>
-                ) : (
-                  stageApplicants.map((applicant) => (
-                    <div key={applicant.id} className="relative">
-                      {onToggleSelect && (
-                        <div className="absolute top-2 left-2 z-10">
-                          <input
-                            type="checkbox"
-                            checked={selectedApplicants?.has(applicant.id) ?? false}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              onToggleSelect(applicant.id);
-                            }}
-                            aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                        </div>
-                      )}
-                      <ApplicantCard
-                        applicant={applicant}
-                        onClick={onApplicantClick}
-                        onDragStart={handleDragStart}
-                        isDragging={draggedApplicant?.id === applicant.id}
-                      />
-                    </div>
-                  ))
-                )}
-              </div>
+              {renderCards(stageApplicants, 'No applicants')}
             </div>
           );
         })}
+
+        {/*
+          Only when it has occupants, so a healthy board looks exactly as it
+          always has. Not a drop target either: there is no "move to no stage"
+          operation, so it takes no drag handlers and never highlights.
+        */}
+        {unassignedApplicants.length > 0 && (
+          <div role="group" aria-label="Unassigned applicants" className="drop-surface w-64 shrink-0 sm:w-72">
+            <div className="border-theme-surface-border rounded-t-lg border-t-2 border-b p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="text-theme-text-muted h-4 w-4" />
+                  <h3
+                    className="text-theme-text-primary truncate text-sm font-medium"
+                    title="These applicants are not on any stage of this pipeline, so they cannot be advanced. They can still be put on hold, withdrawn or rejected."
+                  >
+                    Unassigned
+                  </h3>
+                </div>
+                <div className="text-theme-text-muted flex items-center gap-1 text-xs">
+                  <Users className="h-3 w-3" />
+                  {unassignedApplicants.length}
+                </div>
+              </div>
+            </div>
+
+            {renderCards(unassignedApplicants, 'No applicants')}
+          </div>
+        )}
       </div>
     </>
   );

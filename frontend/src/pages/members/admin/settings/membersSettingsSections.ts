@@ -18,12 +18,19 @@
  * members officer on a page where every toggle 403s — which is exactly the
  * defect that took six review rounds on the scheduling close-out queue, and it
  * is cheaper to encode the endpoint's own answer here than to rediscover it.
+ *
+ * Ranks and EVOC arrived from the same global screen and are the clearest case
+ * for why this list exists: the two sit side by side under one heading and are
+ * gated on entirely different modules. Operational Ranks now accepts
+ * `members.manage` because the ladder moved here and the gate moved with it.
+ * EVOC does not — it is served by the apparatus API, and widening that was not
+ * part of the move.
  */
 
-import { Eye, Hash } from 'lucide-react';
+import { Eye, Hash, Layers, Shield, Truck } from 'lucide-react';
 import type { SettingsSection } from '../../../../components/settings/SettingsLayout';
 
-export type MembersSettingsTab = 'visibility' | 'ids';
+export type MembersSettingsTab = 'visibility' | 'ids' | 'ranks' | 'tiers' | 'evoc';
 
 export interface MembersSettingsSection extends SettingsSection<MembersSettingsTab> {
   /** The route this section is reached at. */
@@ -55,6 +62,37 @@ export const MEMBERS_SETTINGS_SECTIONS: MembersSettingsSection[] = [
     path: '/members/admin/settings/ids',
     // PATCH /organization/settings/membership-id
     permissions: ['settings.edit', 'organization.update_settings'],
+  },
+  {
+    key: 'ranks',
+    label: 'Operational Ranks',
+    icon: Shield,
+    description: 'The ladder and who may fill which seat',
+    path: '/members/admin/settings/ranks',
+    // POST/PATCH/DELETE /operational-ranks, POST /operational-ranks/reorder
+    permissions: ['settings.manage', 'members.manage'],
+  },
+  {
+    key: 'tiers',
+    label: 'Membership Tiers',
+    icon: Layers,
+    description: 'The ladder, and what each tier confers',
+    path: '/members/admin/settings/tiers',
+    // GET/PUT /users/membership-tiers/config — both require members.manage, so
+    // unlike its neighbours this section's own grant and the hub's are the same
+    // one.
+    permissions: ['members.manage'],
+  },
+  {
+    key: 'evoc',
+    label: 'EVOC Levels',
+    icon: Truck,
+    description: 'Driver certification ladder',
+    path: '/members/admin/settings/evoc',
+    // POST/PATCH/DELETE /apparatus/evoc-levels. Deliberately not members.manage:
+    // the levels belong to the apparatus API and widening it was a separate
+    // decision from moving the page.
+    permissions: ['apparatus.manage'],
   },
 ];
 

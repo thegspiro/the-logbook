@@ -104,6 +104,7 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
           <p className="text-theme-text-muted text-xs">Send email notifications, reminders, and alerts</p>
         </div>
         <Toggle
+          label="Enable Email Notifications"
           checked={emailSettings.enabled}
           onChange={() => onEmailSettingsChange((s) => ({ ...s, enabled: !s.enabled }))}
         />

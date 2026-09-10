@@ -402,7 +402,13 @@ const EmailTemplatesPage: React.FC = () => {
       onSectionChange={handleTabChange}
       navLabel="Email settings sections"
       title="Email Templates"
-      headerAside={<Breadcrumbs />}
+      // The shell's own slot, not headerAside. headerAside renders inside the
+      // header row's shrink-0 aside — fine for the HelpLink it is documented
+      // for, and 6px too wide for a two-crumb trail at 320px, where it took
+      // the page outside the viewport (WCAG SC 1.4.10). showBreadcrumbs gives
+      // the trail its own full-width row above the header, which is where
+      // every other settings screen puts it.
+      showBreadcrumbs
       // Only the Templates panel needs the wide column — it is the one that
       // puts the editor and the live preview beside each other. The other four
       // sections are lists and read better at the width every other settings

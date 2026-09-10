@@ -647,18 +647,41 @@
      without, some without the focus ring the rest of the app's controls carry.
      (Keyboard focus is themed globally by *:focus-visible; the focus classes
      here match how btn-* and form-input state it explicitly.) */
-  @apply focus:ring-theme-focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50;
+  @apply focus:ring-theme-focus-ring relative inline-flex w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50;
+
+  /* 44px tall to the finger, 24px tall to the eye.
+     The pill was h-6 — 44x24 — at every one of its ~20 call sites, which is 20px
+     under the tap minimum the rest of the app is ratcheted to, and the reason
+     most SettingsLayout screens sat exempt from the mobile presentation pass
+     rather than measured by it.
+     Height comes from a transparent vertical border rather than from h-11 or
+     padding, because `background-clip: padding-box` then keeps the paint off it:
+     the border box is 44px for hit-testing and layout, the painted padding box
+     is the same 24px pill as before. `rounded-full` on a 44px border box leaves
+     the padding box a 12px radius — exactly half of 24 — so it stays a pill
+     rather than a rounded rectangle.
+     Not a negative margin to claw the 20px of layout back. form-checkbox above
+     carries the scar: `padding: 14px; margin: -14px` grew no hit area on a
+     replaced element while the negative margin stayed in force, turning a gap-3
+     beside a checkbox into a 2px overlap at ~100 call sites at once. Rows that
+     had the switch as their tallest element are 20px taller now, and that is
+     the honest cost of the control being reachable. */
+  @apply h-11 border-y-[10px] border-transparent bg-clip-padding;
 }
 
 @utility toggle-track-sm {
-  /* Pairs with toggle-knob-sm: knob translates x-1 (off) to x-6 (on). */
+  /* Pairs with toggle-knob-sm: knob translates x-1 (off) to x-6 (on), measured
+     from the same content edge as before — the base adds no horizontal border. */
   @apply toggle-track;
 }
 
 @utility toggle-track-md {
-  /* Pairs with toggle-knob-md: the transparent border insets the larger knob,
-     which translates x-0 (off) to x-5 (on). */
-  @apply toggle-track border-2 border-transparent;
+  /* Pairs with toggle-knob-md: the larger knob is inset 2px, and that inset is
+     padding rather than a border on purpose. Padding sits *inside* the painted
+     padding box, so the pill stays its full 44px wide; a 2px x-border would clip
+     the paint to 40px and visibly narrow every -md switch in the app. The knob
+     still translates x-0 (off) to x-5 (on) across a 40px content box. */
+  @apply toggle-track px-0.5;
 }
 
 /* --- Settings Navigation --- */

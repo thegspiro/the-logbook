@@ -249,7 +249,8 @@ const PositionRosterPage: React.FC = () => {
               icon={Users}
               title={`Nobody is cleared as ${loadedPositionLabel}`}
               description={
-                'Grant the position to a rank under Settings → Ranks, set a training program’s target ' +
+                'Grant the position to a rank under Members Administration → Settings → Operational Ranks, ' +
+                'set a training program’s target ' +
                 'position, or add it to the open-position list in scheduling settings.'
               }
             />

@@ -15,10 +15,11 @@
  *
  * The mobile ratchet cannot cover this. It measures `/onboarding/start` as the
  * representative onboarding step, on the assumption that the rest render the
- * same shell — and `ModuleConfigTemplate` did not, which is how it shipped
- * without the landmark while the rest of onboarding was being fixed. Reaching
- * that step in a browser needs a seeded onboarding store, or it redirects to
- * step 1 and the pass measures step 1 twice under a second name.
+ * same shell — and the per-module configuration step (since removed) did not,
+ * which is how it shipped without the landmark while the rest of onboarding was
+ * being fixed. Reaching a later step in a browser needs a seeded onboarding
+ * store, or it redirects to step 1 and the pass measures step 1 twice under a
+ * second name.
  *
  * So the assumption is checked where it is cheap and exact: in the source. Every
  * page component reachable outside `AppLayout` must render `id="main-content"`.
@@ -34,6 +35,31 @@ const SRC = path.dirname(fileURLToPath(import.meta.url));
 
 /** Read a source file under `src/`. */
 const read = (relative: string): string => fs.readFileSync(path.join(SRC, relative), 'utf8');
+
+/**
+ * Does this markup set the skip link's target id?
+ *
+ * JSX spells one attribute four ways — `id="main-content"`, `id='main-content'`,
+ * and either of those wrapped in braces as an expression — and every one of
+ * them renders the same DOM. An exact substring test recognises one, so
+ * `id={'main-content'}` reads to this file as no target at all, which is wrong
+ * in both directions at once: a page written that way is reported as missing a
+ * landmark it has, and a page *nested inside* AppLayout that writes it that way
+ * duplicates the id without the sweep below noticing.
+ *
+ * Matching on the attribute rather than the bare string is what keeps the
+ * second direction honest — `href="#main-content"` (the skip link itself) and a
+ * `getElementById('main-content')` call are not landmarks and must not read as
+ * ones.
+ *
+ * The leading `(?<![\w-])` is doing real work, not defensive padding: a `\b`
+ * there matches after the hyphen in `data-id=`, so `data-id="main-content"`
+ * read as the landmark while creating no such DOM id at all. That is this
+ * file's own failure mode in miniature — a check satisfied by something that
+ * merely looks like the thing it is checking for.
+ */
+const carriesTarget = (markup: string): boolean =>
+  /(?<![\w-])id=(?:["']main-content["']|\{\s*(['"`])main-content\1\s*\})/.test(markup);
 
 /**
  * The page components a chunk of route JSX references.
@@ -77,7 +103,7 @@ const renderedComponents = (jsx: string): string[] => {
  * block, brace-matched, from the `<Routes>` body. Anything left is public. The
  * count assertion below is what stops a parse that silently matches nothing.
  */
-const publicPages = (): Array<{ file: string; component: string }> => {
+const routeJsx = (): { publicJsx: string; layoutJsx: string } => {
   const app = read('App.tsx');
   const routesBody = app.slice(app.indexOf('<Routes>'), app.lastIndexOf('</Routes>'));
 
@@ -122,22 +148,35 @@ const publicPages = (): Array<{ file: string; component: string }> => {
       break;
     }
   }
-  const publicJsx = routesBody.slice(0, layoutStart) + routesBody.slice(layoutEnd);
+  return {
+    publicJsx: routesBody.slice(0, layoutStart) + routesBody.slice(layoutEnd),
+    layoutJsx: routesBody.slice(layoutStart, layoutEnd),
+  };
+};
 
-  // Route factories called out here render their own pages; read each one.
-  const factories = [...publicJsx.matchAll(/\{(get\w+Routes)\(\)\}/g)].map(([, name]) => name ?? '');
-  const factoryJsx = factories.flatMap((factory) => {
+/** Every page component a slice of route JSX renders, its route factories included. */
+const componentsRenderedIn = (jsx: string): string[] => {
+  const factories = [...jsx.matchAll(/\{(get\w+Routes)\(\)\}/g)].map(([, name]) => name ?? '');
+  const fromFactories = factories.flatMap((factory) => {
+    // Both declaration forms. Matching only `export const` was latent while
+    // this ran on the public slice alone — every public factory happens to be
+    // a const — and threw the moment it was pointed at the layout slice, where
+    // `getMedicalScreeningRoutes` is an `export function`.
+    const declaration = new RegExp(String.raw`export\s+(?:const|function)\s+${factory}\b`);
     const file = globSync(path.join(SRC, 'modules/*/routes.tsx')).find((candidate) =>
-      fs.readFileSync(candidate, 'utf8').includes(`export const ${factory}`)
+      declaration.test(fs.readFileSync(candidate, 'utf8'))
     );
     if (!file) throw new Error(`no module router exports ${factory}`);
     const source = fs.readFileSync(file, 'utf8');
-    const from = source.indexOf(`export const ${factory}`);
+    const from = declaration.exec(source)?.index ?? 0;
     const to = source.indexOf('\nexport ', from + 1);
     return renderedComponents(source.slice(from, to === -1 ? undefined : to));
   });
+  return [...new Set([...renderedComponents(jsx), ...fromFactories])];
+};
 
-  const names = [...new Set([...renderedComponents(publicJsx), ...factoryJsx])];
+const publicPages = (): Array<{ file: string; component: string }> => {
+  const names = componentsRenderedIn(routeJsx().publicJsx);
 
   // The component name travels with the file. A page file often declares
   // helper components beside the page itself, and their returns are indented
@@ -165,9 +204,205 @@ const publicPages = (): Array<{ file: string; component: string }> => {
   });
 };
 
+/**
+ * The line numbers of every component-level render branch in `page` that does
+ * not provide the skip-link target.
+ *
+ * Shared by both directions of the sweep, deliberately. It was inlined in the
+ * public-page check and the replacing-shell check used a file-wide
+ * `includes()` instead — which is the *first* defect this whole sweep was
+ * written to fix ("the file mentions the id" is not "every branch has it"),
+ * reintroduced in the check meant to supersede it. `AppLayout` renders the
+ * target in two branches, at its left-nav and bottom-nav roots; deleting it
+ * from either one left the other, and a substring check stayed green while
+ * that layout's skip link dangled.
+ */
+const branchesMissingTarget = (page: string, component: string): number[] => {
+  const source = read(page);
+  // Only this component's own body. A helper declared beside it in the same
+  // file returns markup at the same indentation, and that markup is rendered
+  // *inside* the component — so its root is not a render branch and must not
+  // be given the landmark.
+  const declaration = new RegExp(
+    `(?:export\\s+)?(?:const\\s+${component}\\b|function\\s+${component}\\b|class\\s+${component}\\b)`
+  ).exec(source);
+  const bodyStart = declaration?.index ?? 0;
+  const next = /\n(?:export\s+)?(?:const|function|class)\s+[A-Z]\w*/.exec(source.slice(bodyStart + 1));
+  const bodyEnd = next ? bodyStart + 1 + next.index : source.length;
+  const offset = source.slice(0, bodyStart).split('\n').length - 1;
+  const lines = source.slice(bodyStart, bodyEnd).split('\n');
+
+  // How deep a component-level return sits. A function component's body is at
+  // 2 and an `if` branch inside it at 4; a class puts its returns inside
+  // `render()`, two levels further in. Deeper than that is a `.map()` callback
+  // or a nested helper, which renders a fragment rather than a page.
+  const maxIndent = /^(?:export\s+)?class\b/.test(declaration?.[0] ?? '') ? 6 : 4;
+  const missing: number[] = [];
+
+  lines.forEach((line, index) => {
+    // Both return forms. `return (` wrapping is a formatting choice, and this
+    // repository already writes the other one — `return <SkeletonPage />;` in
+    // StorefrontPage. Recognising only the parenthesised form would make
+    // Prettier's line-length threshold part of an accessibility invariant, and
+    // would silently skip a one-line loading branch in a replacement shell.
+    const parenthesised = /^(\s*)return \($/.exec(line);
+    const direct = /^(\s*)return (<.*)$/.exec(line);
+    // A concise arrow body has no `return` at all: `const Page = () => <div/>`
+    // and `= () => (` are both render branches, and this repository writes
+    // them — every placeholder page in `PlaceholderPages.tsx` is one. Keying
+    // solely on the `return` keyword skipped such a component silently, which
+    // is the same defect as the unparenthesised-return gap one step further
+    // along: a formatting choice deciding what the guard looks at.
+    // …but only the component under test. An inner helper is written this way
+    // far more often than a page root is — every icon in `FileStorageChoice`
+    // and `AuthenticationChoice` is a `const Icon = () => (<svg …>)` inside the
+    // page body — and those render *inside* the page, so their roots must not
+    // carry the landmark. Indentation cannot separate the two (a helper sits at
+    // the same depth as the component's own return), but the declared name can.
+    const conciseHead = String.raw`^(\s*)(?:export\s+)?const\s+${component}\b[^=]*=\s*(?:\([^)]*\)|\w+)\s*=>\s*`;
+    const conciseParen = new RegExp(`${conciseHead}\\($`).exec(line);
+    const conciseDirect = new RegExp(`${conciseHead}(<.*)$`).exec(line);
+    const opener = parenthesised ?? direct ?? conciseParen ?? conciseDirect;
+    if (!opener || (opener[1] ?? '').length > maxIndent) return;
+
+    const body: string[] = [];
+    if (parenthesised ?? conciseParen) {
+      // Balance the parens to take the whole returned expression.
+      let depth = 0;
+      for (let k = index; k < lines.length; k++) {
+        const current = lines[k] ?? '';
+        depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
+        body.push(current);
+        if (depth <= 0) break;
+      }
+    } else {
+      // An unparenthesised return ends at the statement's semicolon.
+      for (let k = index; k < lines.length; k++) {
+        body.push(lines[k] ?? '');
+        if ((lines[k] ?? '').trimEnd().endsWith(';')) break;
+      }
+    }
+    // The markup comes from the opener's own capture group rather than by
+    // stripping a prefix off the joined text: `export const X: React.FC = () =>
+    // <div/>` has an `=` before the arrow, so a prefix strip either misses the
+    // arrow or eats into the JSX depending on how greedy it is. The group
+    // already knows exactly where the markup starts.
+    const jsx =
+      (parenthesised ?? conciseParen) ? body.slice(1).join('\n') : [opener[2] ?? '', ...body.slice(1)].join('\n');
+
+    // Only a branch that returns markup directly. A helper returning an object
+    // whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is not a render
+    // state, and OnboardingCheck has one.
+    if (!/^\s*</.test(jsx)) return;
+    // JSX comments are not markup. `{/* <main id="main-content"> */}` renders
+    // nothing, and leaving one behind while removing the real landmark kept
+    // this check green — a guard satisfied by the *remains* of the thing it
+    // checks for, which is the defect this whole file exists to prevent.
+    if (carriesTarget(jsx.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, ' '))) return;
+
+    // A root that is a local component can carry the target itself —
+    // `FinanceApprovalPage` renders every branch through one `<Shell>`.
+    const root = /<([A-Z]\w+)/.exec(jsx);
+    if (root?.[1]) {
+      const rootDeclaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
+      if (rootDeclaration && carriesTarget(source.slice(rootDeclaration.index, rootDeclaration.index + 2000))) {
+        return;
+      }
+    }
+    missing.push(offset + index + 1);
+  });
+
+  return missing;
+};
+
+/**
+ * The source file a component name refers to, resolved through the file that
+ * renders it.
+ *
+ * A route file often renames the page it imports: `modules/inventory/routes.tsx`
+ * declares `ImportInventoryPage` for `pages/ImportInventory.tsx`. Comparing a
+ * rendered *name* against a file *basename* therefore misses that page
+ * entirely — which mattered because the comparison guards the shell exemption,
+ * so a real routing shape could have slipped a nested page past it.
+ */
+const componentFile = (name: string, declaredIn: string): string | null => {
+  const source = read(declaredIn);
+  const from = (specifier: string): string | null => {
+    if (!specifier.startsWith('.')) return null;
+    const resolved = path.resolve(path.dirname(path.join(SRC, declaredIn)), specifier);
+    for (const candidate of [`${resolved}.tsx`, path.join(resolved, 'index.tsx')]) {
+      if (fs.existsSync(candidate)) return path.relative(SRC, candidate);
+    }
+    return null;
+  };
+
+  const lazy = new RegExp(
+    String.raw`const\s+${name}\s*=\s*lazyWithRetry\(\s*\(\)\s*=>\s*import\(\s*['"]([^'"]+)['"]`
+  ).exec(source);
+  if (lazy?.[1]) return from(lazy[1]);
+
+  const imported = new RegExp(
+    String.raw`import\s+(?:\{[^}]*\b${name}\b[^}]*\}|${name})\s+from\s+['"]([^'"]+)['"]`
+  ).exec(source);
+  if (imported?.[1]) return from(imported[1]);
+
+  const byFilename = globSync(path.join(SRC, `**/${name}.tsx`));
+  return byFilename.length === 1 ? path.relative(SRC, byFilename[0] ?? '') : null;
+};
+
+/** Every page file rendered inside the AppLayout route, aliases resolved. */
+const layoutPageFiles = (): Set<string> => {
+  const { layoutJsx } = routeJsx();
+  const files = new Set<string>();
+
+  for (const name of renderedComponents(layoutJsx)) {
+    const file = componentFile(name, 'App.tsx');
+    if (file) files.add(file);
+  }
+
+  for (const [, factory] of layoutJsx.matchAll(/\{(get\w+Routes)\(\)\}/g)) {
+    const declaration = new RegExp(String.raw`export\s+(?:const|function)\s+${factory}\b`);
+    const routesPath = globSync(path.join(SRC, 'modules/*/routes.tsx')).find((candidate) =>
+      declaration.test(fs.readFileSync(candidate, 'utf8'))
+    );
+    if (!routesPath) continue;
+    const relative = path.relative(SRC, routesPath);
+    const source = fs.readFileSync(routesPath, 'utf8');
+    const start = declaration.exec(source)?.index ?? 0;
+    const stop = source.indexOf('\nexport ', start + 1);
+    for (const name of renderedComponents(source.slice(start, stop === -1 ? undefined : stop))) {
+      const file = componentFile(name, relative);
+      if (file) files.add(file);
+    }
+  }
+  return files;
+};
+
+/**
+ * Shells outside the public page set that provide the target themselves.
+ *
+ * What they have in common is that each *replaces* whatever else would hold the
+ * landmark, so exactly one `#main-content` is ever in the DOM while they render
+ * — which is precisely what the two wrappers in `PRE_LAYOUT_WRAPPERS` below
+ * cannot promise. Membership here is a requirement, not a permission: the test
+ * that follows asserts each of these really does carry the target, so a file
+ * cannot be parked in this list to silence the inverse sweep.
+ */
+const REPLACING_SHELLS: Record<string, string> = {
+  'components/layout/AppLayout.tsx': 'the shell every route behind sign-in renders through',
+  'components/ErrorBoundary.tsx':
+    'the top-level fallback — an error boundary unmounts the tree it caught, AppLayout included',
+};
+
 describe('skip link target', () => {
+  // Deduplicated by file AND component, not by file alone. This repository
+  // colocates page components — `PlaceholderPages.tsx` declares several — so
+  // collapsing on the file dropped every component after the first, and a
+  // colocated page missing the landmark was never looked at. Only a component
+  // routed twice should collapse.
   const entries = publicPages().filter(
-    (entry, index, all) => all.findIndex((other) => other.file === entry.file) === index
+    (entry, index, all) =>
+      all.findIndex((other) => other.file === entry.file && other.component === entry.component) === index
   );
   const pages = entries.map((entry) => entry.file);
 
@@ -212,57 +447,7 @@ describe('skip link target', () => {
      * unlabelled landmark; the user cannot skip to content either way.
      */
     const findings = entries.flatMap(({ file: page, component }) => {
-      const source = read(page);
-      // Only the page component's own body. A helper declared beside it in the
-      // same file returns markup at the same indentation, and that markup is
-      // rendered *inside* the page — so its root is not a render branch and
-      // must not be given the landmark.
-      const declaration = new RegExp(`(?:export\\s+)?(?:const\\s+${component}\\b|function\\s+${component}\\b)`).exec(
-        source
-      );
-      const bodyStart = declaration?.index ?? 0;
-      const next = /\n(?:export\s+)?(?:const|function)\s+[A-Z]\w*/.exec(source.slice(bodyStart + 1));
-      const bodyEnd = next ? bodyStart + 1 + next.index : source.length;
-      const offset = source.slice(0, bodyStart).split('\n').length - 1;
-      const lines = source.slice(bodyStart, bodyEnd).split('\n');
-      const missing: number[] = [];
-
-      lines.forEach((line, index) => {
-        // A component-level return, by indentation: the component body sits at
-        // 2, an `if` branch inside it at 4. Deeper is a `.map()` callback or a
-        // nested helper, which renders a fragment rather than a page.
-        const opener = /^(\s*)return \($/.exec(line);
-        if (!opener || (opener[1] ?? '').length > 4) return;
-
-        // Balance the parens to take the whole returned expression.
-        let depth = 0;
-        const body: string[] = [];
-        for (let k = index; k < lines.length; k++) {
-          const current = lines[k] ?? '';
-          depth += (current.match(/\(/g) ?? []).length - (current.match(/\)/g) ?? []).length;
-          body.push(current);
-          if (depth <= 0) break;
-        }
-        const jsx = body.slice(1).join('\n');
-
-        // Only a branch that returns markup directly. A helper returning an
-        // object whose fields hold JSX (`{ icon: <Clock /> , title: … }`) is
-        // not a render state, and OnboardingCheck has one.
-        if (!/^\s*</.test(jsx)) return;
-        if (jsx.includes('id="main-content"')) return;
-
-        // A root that is a local component can carry the target itself —
-        // `FinanceApprovalPage` renders every branch through one `<Shell>`.
-        const root = /<([A-Z]\w+)/.exec(jsx);
-        if (root?.[1]) {
-          const declaration = new RegExp(`const ${root[1]}[^=]*=[^=]*=>\\s*\\(`).exec(source);
-          if (declaration && source.slice(declaration.index, declaration.index + 2000).includes('id="main-content"')) {
-            return;
-          }
-        }
-        missing.push(offset + index + 1);
-      });
-
+      const missing = branchesMissingTarget(page, component);
       return missing.length > 0
         ? [`${page} — no skip-link target in the branch(es) returning at line ${missing.join(', ')}`]
         : [];
@@ -292,7 +477,42 @@ describe('skip link target', () => {
      * public page is missing the target — never whether a protected one has
      * acquired it.
      */
-    const owners = new Set([...pages, 'components/layout/AppLayout.tsx']);
+    const owners = new Set([...pages, ...Object.keys(REPLACING_SHELLS)]);
+
+    /**
+     * Wrappers that render *before* `AppLayout` — and sometimes inside it.
+     *
+     * These are the tempting place to close the remaining gap: the skip link
+     * genuinely points at nothing while the app is loading its first chunk or
+     * checking the session. Neither can own the target, and the reason is the
+     * same both times — each renders in **two** positions, so a static id is
+     * right in one and a duplicate in the other:
+     *
+     * - `PageLoadingFallback` is the fallback of the one `<Suspense>` wrapping
+     *   every route. React does not unmount the children it is standing in for
+     *   on an update — it hides them with `display: none` and leaves them in
+     *   the DOM, and `getElementById` then answers with the *hidden*
+     *   `AppLayout` main rather than the visible fallback. That is reachable,
+     *   not theoretical: finance, grants-fundraising and training route to
+     *   `lazyWithRetry` pages with no inner `<Suspense>`, so navigating to one
+     *   suspends against this boundary with `AppLayout` already mounted.
+     *   Focusing a `display: none` element is worse than focusing nothing.
+     * - `ProtectedRoute`'s auth-loading branches render outside the layout on a
+     *   cold load, but module routes nest `<ProtectedRoute requiredModule=…>`
+     *   *inside* the layout route, so the same branch can render within
+     *   `AppLayout`'s `<main>` — a nested landmark and a duplicate id.
+     *
+     * They are named rather than merely excluded so the offender message can
+     * say this, instead of reading as an oversight. See
+     * `docs/KNOWN_LIMITATIONS.md` for the gap that is left open.
+     */
+    const PRE_LAYOUT_WRAPPERS: Record<string, string> = {
+      'App.tsx':
+        'PageLoadingFallback can render while AppLayout is suspended-but-mounted, ' +
+        'where the hidden AppLayout main would win getElementById',
+      'components/ProtectedRoute.tsx':
+        'its loading branches also render inside AppLayout, via the nested ' + 'ProtectedRoute in every module route',
+    };
 
     // Comments discuss the id (this file's own header does); only markup counts.
     const stripComments = (source: string): string =>
@@ -305,13 +525,64 @@ describe('skip link target', () => {
     const offenders = globSync(path.join(SRC, '**/*.tsx'))
       .map((file) => path.relative(SRC, file))
       .filter((file) => !owners.has(file) && !file.endsWith('.test.tsx'))
-      .filter((file) => stripComments(read(file)).includes('id="main-content"'));
+      .filter((file) => carriesTarget(stripComments(read(file))));
 
     expect(
-      offenders,
-      'these files are only ever rendered inside AppLayout, which already provides ' +
+      offenders.map((file) => {
+        const wrapper = PRE_LAYOUT_WRAPPERS[file];
+        return wrapper ? `${file} — ${wrapper}` : file;
+      }),
+      'these files render inside AppLayout, which already provides ' +
         '<main id="main-content">; a second one duplicates the id and makes the skip ' +
         'link target ambiguous'
+    ).toEqual([]);
+  });
+
+  it('is provided by every shell that replaces the tree holding it', () => {
+    /**
+     * The other half of `REPLACING_SHELLS`: being listed there exempts a file
+     * from the inverse sweep, so the list has to cost something. Without this,
+     * the way to silence a duplicate-id failure would be to add the file to the
+     * exemption — which is the failure mode this whole series has been about,
+     * a check that can be satisfied without the thing it checks for being true.
+     *
+     * `ErrorBoundary` is here because its fallback is a full-screen page of
+     * reload and navigation controls that the skip link should reach. It can
+     * hold the landmark where a Suspense fallback cannot: an error boundary
+     * unmounts the subtree it caught, so `AppLayout`'s main is gone rather than
+     * hidden.
+     */
+    // Membership has to be earned by something other than the symptom.
+    //
+    // Being on this list exempts a file from the inverse sweep, and the branch
+    // check below is satisfied by the id being present — which is exactly what
+    // is wrong when a *nested* page acquires one. So a protected page that
+    // accidentally gained the target could be "fixed" by adding it here, and
+    // both halves would go green on the strength of the duplicate itself.
+    //
+    // This derives the disqualifying fact independently of the id: the set of
+    // components `App.tsx` renders *inside* the AppLayout route, factories
+    // expanded. Anything in there is nested by construction and cannot be a
+    // replacement shell, whatever its markup says.
+    const nested = layoutPageFiles();
+    const misfiled = Object.keys(REPLACING_SHELLS).filter((file) => nested.has(file));
+
+    expect(
+      misfiled,
+      'these are rendered inside the AppLayout route, so they cannot be replacement ' +
+        'shells; a nested page with a duplicate id is the defect, not an exemption'
+    ).toEqual([]);
+
+    const missing = Object.entries(REPLACING_SHELLS).flatMap(([file, why]) => {
+      const component = path.basename(file, '.tsx');
+      const branches = branchesMissingTarget(file, component);
+      return branches.length > 0 ? [`${file} — branch(es) at line ${branches.join(', ')} (${why})`] : [];
+    });
+
+    expect(
+      missing,
+      'these shells replace whatever else would hold the landmark, so each must ' +
+        'render <main id="main-content"> itself'
     ).toEqual([]);
   });
 });

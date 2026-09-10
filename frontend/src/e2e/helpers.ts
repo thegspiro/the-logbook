@@ -325,6 +325,32 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
     () => ({ members: [], period_start: '2026-08-01', period_end: '2026-08-20', total_members: 0 }),
   ],
   ['**/api/v1/ranks**', () => []],
+  // The rank ladder under Members Administration reads these. Without them the
+  // catch-all above fulfils both with `{}`, and the section maps over it.
+  ['**/api/v1/operational-ranks', () => []],
+  ['**/api/v1/operational-ranks?**', () => []],
+  ['**/api/v1/operational-ranks/validate**', () => ({ issues: [], total: 0 })],
+  // The membership ladder, with rungs rather than an empty list: this section's
+  // reorder, rights and remove controls only exist once a tier renders, and an
+  // empty ladder would ratchet a screen that has none of them on it. The counts
+  // are what make the remove button's disabled state reachable.
+  [
+    '**/api/v1/users/membership-tiers/config**',
+    () => ({
+      auto_advance: true,
+      tiers: [
+        { id: 'probationary', name: 'Probationary', years_required: 0, sort_order: 0, benefits: {} },
+        {
+          id: 'active',
+          name: 'Active Member',
+          years_required: 1,
+          sort_order: 1,
+          benefits: { voting_eligible: true, can_hold_office: true },
+        },
+      ],
+      member_counts: { active: 2 },
+    }),
+  ],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 

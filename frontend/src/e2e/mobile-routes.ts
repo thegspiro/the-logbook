@@ -57,6 +57,44 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // All five sections of this settings screen, each listed rather than left to
+  // a representative, because each renders a different body under one shell.
+  //
+  // The first two were exempt until toggle-track grew to a 44px hit box: they
+  // are toggle-only, so a single 44x24 switch was the whole of their debt and
+  // the entry recording that said to list them the moment it was fixed.
+  //
+  // `members.manage` alone on ranks and tiers on purpose — it is what those
+  // routes stand on *and* what their endpoints accept, so it is the grant a real
+  // roster officer arrives with, and the one fixture that would catch route gate
+  // and endpoint gate drifting apart again.
+  {
+    path: '/members/admin/settings/visibility',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'settings.manage'],
+  },
+  {
+    path: '/members/admin/settings/ids',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'settings.edit'],
+  },
+  { path: '/members/admin/settings/ranks', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // The membership ladder. Its rows carry controls the rank ladder has no
+  // equivalent of — a reorder pair, a rights disclosure and a remove button, all
+  // of which the fixture's two rungs put on screen.
+  { path: '/members/admin/settings/tiers', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
+  // EVOC needs a grant from another module entirely: the levels are served by
+  // the apparatus API, so without `apparatus.manage` the page filters the
+  // section out and redirects, and the pass would measure Operational Ranks
+  // under EVOC's name.
+  {
+    path: '/members/admin/settings/evoc',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['members.manage', 'apparatus.manage'],
+  },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.check_in'] },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
@@ -134,16 +172,37 @@ export const ALL_ROUTES: RouteCheck[] = [
   // The second of the seven SettingsLayout screens, and the only other one that
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
+  // All five /members/admin/settings sections above are the third, reaching the
+  // same shell through five different bodies.
   //
-  // The remaining six are not listed, and each has a reason:
-  // /scheduling/admin/settings/*, /members/admin/settings/*,
-  // /elections/settings and /communications/email-templates carry non-shell debt
-  // of their own (17, 1, 2 and 4 controls under 44px — mostly `toggle-track`,
-  // which is 44x24 at every one of its call sites app-wide), and the events and
-  // department-setup panels render inside a hub route rather than at a path of
-  // their own. Adding any of them means fixing that debt first, not raising a
-  // budget. /members/admin/settings/visibility is the cheapest of them: one
-  // control, and the only thing between it and a budget of 0.
+  // Those five were the toggle-track story: they carried one 44x24 switch each
+  // and nothing else, so growing the switch's hit box to 44px was the whole of
+  // what stood between them and a budget of 0. That is done, and they are
+  // listed.
+  //
+  // Three remain unlisted, for three different reasons, each measured rather
+  // than assumed:
+  //
+  // /scheduling/admin/settings/* carries worse than tap targets. Its
+  // eligibility and notifications sections hit the ErrorBoundary outright under
+  // this suite's API mocks, because each reads an array straight off a response
+  // the catch-all answers with `{}` — which is what a gateway or proxy error
+  // page does in production too. That is a fix of its own.
+  //
+  // /communications/email-templates is two-thirds done: its four list filters
+  // are 44px now and its breadcrumb no longer overflows 320px, both fixed here.
+  // What is left is a heading-order jump — the shell's <h1>, then <h3> group
+  // headers with an <h4> beneath them — which is a heading hierarchy to
+  // re-level across the page and its list, not a control to resize.
+  //
+  // The events and department-setup panels are a different problem entirely:
+  // they render inside a hub route rather than at a path of their own, so there
+  // is no address for this pass to visit and no amount of debt paid down
+  // changes that. Covering them means giving them routes or measuring them
+  // another way.
+  // Held off by toggle-track and on the pass now that it is 44px: both of its
+  // sub-44px controls were switches, and both its unnamed selects are named.
+  { path: '/elections/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
   { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
 
@@ -174,12 +233,13 @@ export const ALL_ROUTES: RouteCheck[] = [
   //: Step 1 is the representative: the remaining steps render the same shell,
   //: the same progress strip and the same form utilities.
   //:
-  //: "Render the same shell" is an assumption, and it was wrong once:
-  //: `ModuleConfigTemplate` builds its own root, so it had no `#main-content`
-  //: and the skip link pointed at nothing. Reaching it here is not the fix —
-  //: it redirects to step 1 unless the onboarding store is seeded, so the pass
-  //: would measure step 1 twice and report it as coverage. `skipLinkTarget.test.ts`
-  //: checks the assumption directly instead, on every page that owns its shell.
+  //: "Render the same shell" is an assumption, and it was wrong once: the
+  //: per-module configuration step (since removed) built its own root, so it
+  //: had no `#main-content` and the skip link pointed at nothing. Reaching a
+  //: step here is not the fix — one redirects to step 1 unless the onboarding
+  //: store is seeded, so the pass would measure step 1 twice and report it as
+  //: coverage. `skipLinkTarget.test.ts` checks the assumption directly instead,
+  //: on every page that owns its shell.
   { path: '/onboarding/start', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 

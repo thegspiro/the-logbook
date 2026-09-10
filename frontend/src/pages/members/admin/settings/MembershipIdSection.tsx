@@ -115,6 +115,7 @@ const MembershipIdSection: React.FC<Props> = ({ save, saveDebounced }) => {
             <p className="text-theme-text-muted text-xs">Display membership IDs on member profiles and lists</p>
           </div>
           <Toggle
+            label="Enable Membership ID Numbers"
             checked={settings.enabled}
             disabled={loading}
             onChange={() => update({ enabled: !settings.enabled }, { immediate: true })}
@@ -129,6 +130,7 @@ const MembershipIdSection: React.FC<Props> = ({ save, saveDebounced }) => {
                 <p className="text-theme-text-muted text-xs">Automatically assign sequential IDs to new members</p>
               </div>
               <Toggle
+                label="Auto-Generate IDs"
                 checked={settings.auto_generate}
                 disabled={loading}
                 onChange={() => update({ auto_generate: !settings.auto_generate }, { immediate: true })}

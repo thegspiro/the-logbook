@@ -5543,10 +5543,17 @@ export const SHOTS = [
       await page.waitForTimeout(600);
       // Bring the Group by control to the top of the frame so the control and
       // the headings it produces are in the same picture.
+      //
+      // Not caught either, for the same reason as the wait above: framing is
+      // what this shot is FOR. Swallowing a detached-element error here files
+      // a picture that omits the control beside the headings it produced, and
+      // no downstream check can see that — the page is grouped and populated,
+      // it is simply framed wrong. By this point the control has already been
+      // selected on and its headings waited for, so a failure here is a real
+      // fault rather than a missing element.
       await page
         .locator("#group-by")
-        .evaluate((el) => el.scrollIntoView({ block: "start" }))
-        .catch(() => {});
+        .evaluate((el) => el.scrollIntoView({ block: "start" }));
       await page.waitForTimeout(400);
     },
   },

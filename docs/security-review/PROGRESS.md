@@ -16,6 +16,695 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2441](https://github.com/thegspiro/the-logbook/pull/2441)
+(Feature 15 follow-up, round 4 — SCH-13 deadlock fix) merged clean at
+21:25:01 UTC, merge commit `0584599`. Rotation row 15 (Scheduling) is now
+`✅`. Next: Feature 16, Events & requests.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15 follow-up, round 4, SCH-13 deadlock fix, PR #2441 — now merged), preserved for history</summary>
+
+**Feature 15 follow-up, round 4 (SCH-13 deadlock fix)** — PR
+[#2441](https://github.com/thegspiro/the-logbook/pull/2441), branch
+`claude/security-review-scheduling-sch13-round4`. PR
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437) (rounds 1-3 of
+the same SCH-13 follow-up) merged clean at 18:06:50 UTC — 17/17 CI checks
+green, `mergeable_state: clean`, merge commit `7044c0e`. **But #2437 left
+one of its own review threads unresolved and unaddressed at merge time**: a
+Codex review posted at 17:10:14 UTC (comment
+[r3971105987](https://github.com/thegspiro/the-logbook/pull/2437#discussion_r3971105987)),
+after that round's fixes had already been pushed and while the PR was going
+green, named a fourth real gap — this one in the lock _order_ rounds 1-3
+together established, not in any single lock's own completeness. Confirmed
+directly rather than taken on faith: `SchedulingService.finalize_shift`/
+`save_closeout_calls` both call `CallTrackingService.attach_response`
+before `record_shift_calls`, whose organization lock (round 1) only fires
+when a type breakdown is also present. `attach_response`'s `INSERT` of an
+`OrgCallResponse` takes an implicit database lock on the referenced
+`OrgCall` row via its foreign key, so a close-out doing both locks
+call-then-organization — the exact reverse of the deletion guard's
+organization-then-call order. This is the same shape as EC-15 and the
+original SCH-13 follow-up itself (PR #2437 was already the "a Codex finding
+landed after merge" case for #2435; this is that same thing happening to
+#2437 in turn) — not a reason to reopen #2437 (closed pull requests stay
+closed) or push to its now-merged branch (CLAUDE.md Pitfall #24), so it is
+carried forward on a fresh branch off current `origin/main` instead.
+
+Fixed by locking the organization first, in both callers, whenever a
+close-out will both attach a call and validate a type breakdown. Guard
+test `TestAttachThenRecordVsDeletionDeadlock`
+(`tests/test_call_type_deletion_race.py`) needed more than the
+pinned-snapshot-plus-`gather` shape the first three SCH-13 classes use —
+that shape targets read staleness, and this bug is a lock-order deadlock —
+so it patches `CallTrackingService.attach_response` to pause after its own
+flush (matching `test_facility_document_reference_race.py`'s established
+pause-and-release pattern for lock-order races) rather than relying on
+natural interleaving. A gather-only version was tried first and passed
+15/15 with no failure against the pre-fix code, motivating the rewrite
+rather than reporting a false "no repro." The patch-and-pause version fails
+6/6 with a real `OperationalError` 1213 ("Deadlock found") against the
+pre-fix code and passes 5/5 with zero deadlocks against the fix; full
+backend suite 11971/11971 (one more than #2437's own run, from this new
+guard test); `flake8`/`black`/`isort` clean against `app/`, `tests/`,
+`alembic/`; migrations unchanged (single head, 440 revisions, no new
+migration this round). No frontend file touched. Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 4 → SCH-13, "Round 4."
+
+**Rotation row 15 stayed `⏳` (awaiting merge) until this merged** — SCH-13
+round 4 was real and unmerged, so the row could not read `✅` yet, matching
+the tracker's own established convention (e.g. the round-1-3 note this
+replaced, and the MP-08 log entries cited there). It is `✅` now that
+#2441 has merged.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15 follow-up, SCH-13 rounds 1-3, PR #2437, merged but left a round-4 gap open), preserved for history</summary>
+
+**Feature 15 follow-up (SCH-13 fix)** — PR
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437), branch
+`security-review/scheduling-codex-followup-2026-09-09`. The four review
+threads on the superseded #2435 have each been replied to (linking here)
+and marked resolved. PR [#2435](https://github.com/thegspiro/the-logbook/pull/2435)
+(Feature 15, Scheduling, pass 4) merged at 15:48:08 UTC as `aae45c040` — but
+the merge landed on the draft's original two commits only
+(`4aaa1165b`/`13c760567`), **before** the four fixes a Codex review of the
+open PR asked for (a rotation-status correction, `npm run build`, two
+previously-omitted service files read in full, and **SCH-13** — a real
+TOCTOU race between deleting a call type and a concurrent close-out naming
+it) were pushed. Confirmed directly rather than assumed:
+`git diff 13c760567 aae45c040 -- <the five affected files>` is empty — the
+merge carries exactly the pre-fix content, and origin/main still marks
+rotation row 15 `✅` with "0 fixed, 0 flagged" for a review that, per the
+Codex findings, both mis-stated its own merge state and missed a real bug.
+Not a reason to reopen #2435 (closed pull requests stay closed) or push to
+its now-merged branch (CLAUDE.md Pitfall #24) — carried forward instead on
+a fresh branch off current `origin/main`: the four fixes were already
+uncommitted in the working tree when the merge landed, and since
+`origin/main`'s content for the affected files matched the old branch's
+last commit exactly, `git checkout -b <new-branch> origin/main` carried
+every uncommitted change over with no cherry-pick, no conflict, and no
+content lost. **Rotation row 15 → ⏳ (awaiting merge)** — SCH-13 is real and
+unmerged, so the row must not read `✅` yet regardless of what already
+landed under #2435.
+
+SCH-13: `_reject_deleting_a_used_call_type` (the settings-save deletion
+guard) and `CallTrackingService.record_shift_calls` (close-out's
+type-validation) each read the other's domain with a plain `SELECT`; under
+REPEATABLE READ a plain read answers from the transaction's own snapshot,
+so an admin deleting a call type and an officer's close-out recording a
+call under it could each validate against a stale read of the other's
+in-flight change and both commit — leaving history that names a slug no
+longer configured. Fixed by threading `for_update: bool = False` through
+`ShiftEligibilityService._get_org` and
+`CallTrackingService.get_settings`/`_valid_type_slugs`/
+`type_usage_counts`/`slugs_locked_by_history`, with `for_update=True`
+passed from exactly the two call sites in the race — both now serialize on
+the organization row, and the usage-count check is itself a locking read
+too (not merely locked-then-stale), the same shape FORM-10 closed for
+duplicate form submissions. Guard test
+(`tests/test_call_type_deletion_race.py`) uses two real, independently-
+committing sessions with pinned REPEATABLE READ snapshots; confirmed
+failing reliably (5/5 runs) against the unpatched code and passing reliably
+(5/5) against the fix. The other three Codex findings: `npm run build` now
+run and green; `shift_eligibility_service.py` (+183/-3) and
+`shift_completion_service.py` (+95/-1), both changed since pass 3 but
+absent from the draft's churn inventory, now read in full against all
+seven checklist dimensions — no new finding in either beyond SCH-13 itself.
+
+**Round 2 (Codex review of PR #2437 itself): 2 more real gaps in SCH-13's
+own fix, both fixed on the same branch.** (a) `_get_org`'s locking read
+never refreshed an already-loaded `Organization` object — SQLAlchemy's
+identity map returns a cached Python object unrefreshed unless the query
+also carries `execution_options(populate_existing=True)`, the exact gotcha
+`get_shift_by_id` already documents and handles. `finalize_shift` loads
+`Organization` with a plain read of its own before ever reaching the
+locking call, so this silently defeated the fix for exactly the caller
+SCH-13 exists to protect. (b) The `shift_completion_reports` half of the
+usage check was wrongly reasoned to be outside the race window ("a report
+is filed well after its shift's calls") — true of report _creation_, false
+of report _editing_: `ShiftCompletionService.update_report` /
+`_edit_preserves_org_slugs` can change an existing report to newly name a
+type at any later time and never took the organization lock at all. Fixed:
+`_get_org` now adds `populate_existing=True`; the report-usage query in
+`slugs_locked_by_history` is now also a locking read; and
+`_edit_preserves_org_slugs` takes its own locking organization read before
+deciding whether to preserve the `org_calls` marker. Two new guard-test
+classes (`TestPopulateExistingRefreshesTheLock`,
+`TestReportEditVsDeletionRace`) confirmed failing against the round-1-only
+fix and passing against the complete one.
+
+**Round 3 (Codex review of round 2's push): 2 more real gaps, one a
+genuine deadlock, plus a test-robustness gap that hid it — all fixed on
+the same branch.** (a) The bulk call-type-list save
+(`_reject_deleting_a_used_call_type`) derived `in_force`/`persisted`/the
+cap-ratchet comparison from a _pre-lock_ read — `populate_existing`
+refreshes the ORM object on a locking read, it cannot retroactively
+refresh values a caller already computed from an earlier read of it. Two
+admins saving different call-type lists concurrently could each satisfy
+the cap ratchet against a stale ceiling and between them grow the stored
+list past what either save alone would allow. Fixed: the lock is now
+taken first, before any settings-dependent value is derived. (b)
+`update_report` assigns `report.call_types` via `setattr` _before_ calling
+`_edit_preserves_org_slugs` — SQLAlchemy's autoflush then flushes (and
+row-locks) the dirtied report on `_edit_preserves_org_slugs`'s own next
+query, before it can lock the organization: a report-then-organization
+order, the reverse of the deletion guard's organization-then-report order.
+This is a real InnoDB deadlock (error 1213) between an ordinary report
+edit and a concurrent deletion, not merely a race — reproduced reliably
+(15/15 runs) once the test was fixed to stop hiding it (see (c)). Fixed:
+`_edit_preserves_org_slugs` is now called _before_ the `setattr` loop
+(it needs nothing the loop produces — it only reads `report.data_sources`,
+never mutated by the loop, and the new `call_types` value already in
+hand), so its lock is the transaction's first write-intent operation,
+matching the deletion guard's order. (c) `TestReportEditVsDeletionRace`'s
+`edit_the_report()` caught bare `Exception` and converted it to a string,
+so a deadlock was indistinguishable from an ordinary non-commit and the
+orphan assertion passed either way — round 2's own claim that this test
+"confirmed" the fix was therefore not fully earned. Fixed: the broad
+`except` is removed; re-running the strengthened test against round-2-only
+code reproduced the (a)/(b) deadlock directly, 15/15 runs, corroborating
+the finding rather than trusting the review's prose — the same test then
+passes 5/5 (a further 15/15 focused on it alone) against the complete fix.
+No new test for (a); verified by inspection and by the unchanged 141-test
+`test_call_tracking.py` suite still passing. Full write-up (all three
+rounds): `docs/security-review/SCH-15-scheduling.md` → Pass 4, SCH-13.
+Next once this follow-up merges: 16 Events & requests.
+
+Full completion gate green (after all three rounds): `flake8`/`black`/`isort`
+clean, migrations single-head (440 revisions), scoped + full backend tests
+passed (including all three race guard tests, with the deadlock class
+specifically re-run 15× each direction), full backend suite passed,
+`npm run typecheck`/`eslint .` both 0 errors, `npm run build` green,
+scheduling frontend vitest passed (unaffected by this backend-only round).
+
+**Superseded — prior Open PR note ("None" after PR #2435's merge, recorded
+via PR #2436, before SCH-13 was discovered on Codex review of the already-
+merged #2435), preserved for history.** (Left as plain text rather than
+another nested collapsible block, matching the note above — this file's
+collapsible-history nesting was already one level short of balanced, and
+opening another one without also tracking down where its matching close
+belongs would only widen that gap.)
+
+**None.** PR #2435 (Feature 15, Scheduling, pass 4) merged clean —
+17/17 CI checks green, `mergeable_state: clean`, Codex review completed
+with no findings. The one non-terminal signal on the PR (a red `CI
+Success` run) was against a superseded head SHA (`4aaa116`, cancelled
+mid-flight by a follow-up push, not a real failure) — confirmed and noted
+on the PR before merging, and the fresh run on the final head (`13c7605`)
+was fully green. Merged via squash, merge commit `aae45c0`. Rotation row
+15 was marked ✅ in the PR's own docs update (0 fixed, 0 flagged, 0 new
+findings — SCH-10 re-verified unchanged) — **since corrected to ⏳ above**,
+because a Codex review of #2435 that landed after the merge found a real
+bug (SCH-13) the merged commits never carried. Checked the actual
+established Claude branch namespace (`claude/security-review-*`, not
+`security-review/*` — e.g. the just-merged Scheduling branch was
+`claude/security-review-scheduling`) via `git ls-remote --heads`: no
+`claude/security-review-events*` branch exists, and no other branch name
+contains "event" apart from an unrelated `claude/public-program-event-
+pipeline-eggwcm`. This "rotation is clear to start 16" conclusion no
+longer holds — superseded by the SCH-13 discovery above.
+
+30-minute rotation watchdog: checked GitHub state directly (open PRs, the
+head of `main`, this file's own "Open PR" note) rather than assuming the
+prior note was current. No open security-review PR existed to tend at that
+point, no CI was red, no merge conflict to resolve — merging the
+then-ready PR and recording it was the only action that pass took.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 4, PR #2435, merged), preserved for history</summary>
+
+**Feature 15 (Scheduling, pass 4)** — PR
+[#2435](https://github.com/thegspiro/the-logbook/pull/2435), branch
+`claude/security-review-scheduling`. **0 fixed, 0 flagged, 0 new
+findings** — SCH-10 (the DNS-rebinding TOCTOU, cross-cutting) re-verified
+unchanged and still correctly tracked in `docs/KNOWN_LIMITATIONS.md`. Six
+days of `main` since pass 3's actual landing point (`8b89f319d`, PR #2212's
+merge commit — found via `git merge-base`, not assumed from the doc's prose)
+brought a large new department-editable call-types feature, a close-out
+backlog queue, a member's own hours-history screen, a late-signup escape
+hatch, and a self-scoped decline-assignment endpoint — 101/101 routes
+(97+3+1, up from 96 pre-pass) re-enumerated with a recognized auth
+dependency, every new by-id/FK surface org-scoped, every new JSON/SQL surface
+clean against the checklist. Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 4. Rotation row 15 → ✅.
+Next: 16 Events & requests. **This turned out to be wrong on two counts —
+see the current note above**: the row was marked `✅` while the PR was still
+open (corrected to `⏳`), and a real finding (SCH-13) was missed and caught
+by Codex review after this was written.
+
+Full completion gate green (as it stood before the Codex-review fixes):
+`flake8`/`black`/`isort` clean, migrations single-head (440 revisions), 1247
+scoped + 11967 full backend tests passed, `npm run typecheck`/`eslint .`
+both 0 errors, 672 scheduling frontend tests passed.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2432's merge, confirming the rotation clear for Feature 15), preserved for history</summary>
+
+**None.** PR #2432 (Feature 14 follow-up, EC-15 fix) merged clean at
+11:33:04 — merge commit `ab73a97`, the cherry-picked round-3 fix landed as
+intended. Confirmed directly: `origin/main` now has
+`frontend/src/modules/scheduling/components/callTypeChoices.ts` and
+`CallTypeChips.tsx` no longer exports `orgCallTypeChoices`/
+`textCallTypeChoices`/`CallTypeChoice` — `npx eslint .` on the current
+head reports 0 warnings, matching the PR's own completion-gate numbers.
+Rotation row 14 was already ✅ before this merge (the feature's own
+review concluded "no findings"; EC-15 was a follow-up code-health fix, not
+grounds to hold the rotation open). No `security-review/scheduling-*` or
+`security-review/SCH-15*` branch exists yet (checked via `git
+ls-remote --heads`), so the rotation is clear to start **15 Scheduling**
+next — nothing is blocking it.
+
+30-minute rotation watchdog: checked GitHub state directly (open PRs, the
+head of `main`, this file's own "Open PR" note) rather than assuming the
+prior note was current; it was 2+ hours stale relative to PR #2432's
+actual merge. No open security-review PR exists to tend, no CI is red, no
+merge conflict to resolve — recording the merge is the only action this
+pass takes.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 follow-up, PR #2432, EC-15 fix, merged), preserved for history</summary>
+
+**Feature 14 follow-up (EC-15 fix)** — PR
+[#2432](https://github.com/thegspiro/the-logbook/pull/2432), branch
+`security-review/equipment-check-shifts-ec15-fix-2026-09-09`. PR #2430
+(Feature 14, Equipment check & shifts, pass 4) merged at 10:45:53 — but
+the merge landed on head `db6af476f` (round 2's commit), **before**
+round 3's fix (`0b466619c`, EC-15 — the actual code fix for the two
+`eslint` warnings round 2's own completion gate had wrongly dismissed) was
+pushed at 10:52:37. Confirmed directly rather than assumed: `origin/main`
+after the merge still had `orgCallTypeChoices`/`textCallTypeChoices`
+inside `CallTypeChips.tsx` and no `callTypeChoices.ts` file — EC-15's fix
+never reached `main`. Not a reason to reopen #2430 (closed pull requests
+stay closed) or to push to its now-merged branch (CLAUDE.md Pitfall #24) —
+carried forward instead on a fresh branch (checked via `git ls-remote`
+against every equipment/EC-14 branch first; only the merged one existed),
+via `git cherry-pick` of the exact commit that never landed. Rotation row
+14 → ✅ regardless — the feature's own review is complete and the "no
+findings" conclusion for the feature holds; EC-15 is a follow-up
+code-health fix, not a reason to hold the rotation open. Full completion
+gate re-run and confirmed green on the fresh branch before pushing.
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2430's merge, recorded via docs-only PR #2431, before EC-15's merge-race was discovered), preserved for history</summary>
+
+**None.** PR #2430 (Feature 14, Equipment check & shifts, pass 4) merged
+clean — 17/17 CI checks green, `mergeable_state: clean`, final Codex review
+(commit `db6af47`) completed with no further findings. Merged via merge
+commit `89c399c` (this one landed as a regular merge rather than the usual
+squash, in a same-day auto-merge; content is identical either way and no
+history was rewritten). The pass's own conclusion was "0 fixed, 0 flagged"
+after two rounds of Codex-caught diff-scope corrections (five gaps in round
+1, two more in round 2 — see the Log entry and
+`EC-14-equipment-check-shifts.md` for the full correction history).
+Rotation row 14 → ✅. Next: 15 Scheduling.
+
+**Correction:** written before EC-15's merge-race was discovered — #2430
+actually merged one commit before round 3's EC-15 fix landed, so the
+pass's true conclusion is "1 fixed (EC-15), 0 flagged", not "0 fixed, 0
+flagged" as stated above. See the current Open PR note at the top of this
+section.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14 pass 4, PR #2430, merged), preserved for history</summary>
+
+**Feature 14 (Equipment check & shifts, pass 4)** — PR
+[#2430](https://github.com/thegspiro/the-logbook/pull/2430), branch
+`security-review/equipment-check-shifts-2026-09-09` (fresh name — `git
+ls-remote` checked against every equipment/EC-14 branch in this repo's
+history before creating it, per CLAUDE.md Pitfall #24; none existed). 1
+fixed (EC-15, LOW — a code-health lint fix, see round 3), 0 flagged, after
+**three** rounds of Codex-caught gaps. Round 1 (5 gaps): two routes omitted from the 57→50
+route-count correction itself (`list_templates`/`get_template`, both
+`check_view`-or-`check_submit`-or-`check_manage`); a second migration
+touching `shift_completion_reports`
+(`20260905_1900_c9f4a2b71d38_rename_reserved_call_type_slug`) not reviewed
+alongside the one that was; `ShiftDetailPanel.tsx`/`ShiftCheckInPage.tsx`
+diffed against the wrong path (assumed under `modules/inventory/pages/`,
+actually `pages/scheduling/` — silently returned an empty diff instead of
+`ShiftDetailPanel.tsx`'s real +1806/-1553); `ApparatusDetailPage.tsx`/
+`FleetBoardPage.tsx`/`MyChecklistsPage.tsx` not diffed at all; and
+`scheduled_tasks.py`/`scheduling_service.py` — pass 2's own established
+adjacent-surface rule — not re-checked at all (the `scheduling_service.py`
+diff turned out to be almost entirely this rotation's own already-merged
+AP-13 findings 5–10, one genuinely new and genuinely out-of-scope
+Scheduling-only feature, and nothing EC-14-shaped). Also corrected the
+completion gate: `npx tsc --noEmit` resolves the linter's TS 5.9, not the
+build's aliased TS7 — reran as `npm run typecheck`, still 0 errors.
+**Round 2 (2 more gaps, on the round-1 fix itself):** the backend fix
+reviewed in round 1 (`_edit_preserves_org_slugs`, commit `360306d42`) has a
+frontend half — `CallTypeChips.tsx`, `useCallTypeLabels.ts`,
+`schedulingStore.ts`, `ShiftReportsTab.tsx`, all from the same commit — that
+round 1 never looked at, even though those files decide the values sent to
+the backend method it did review; and the `apiCache.ts` count was 17 new
+entries across three commits, not 15 — the other two
+(`/inventory/items/colors`, already fixed under Feature 34's own
+`FE5-34-frontend-shared.md`; `/fulfillment-options`) went unmentioned. Both
+verified against real code: the frontend half only ever offers the org's
+own configured slugs or values already on the report being edited, and the
+backend's own validation is what actually enforces the invariant regardless
+of what the UI sends; the two additional cache entries are each already
+disposed of by their own owning rotation entries. No finding either way.
+**Round 3 (1 gap, on round 2's own review): the completion gate's "2
+pre-existing, unrelated" ESLint warnings on `CallTypeChips.tsx` were wrong
+on both counts** — never actually inspected as part of this feature until
+round 2's frontend-half review, and CLAUDE.md owns a discovered warning
+the moment it's found, "unrelated" not being a sanctioned response.
+**Fixed as EC-15 (LOW):** split the file's two non-component exports
+(`orgCallTypeChoices`/`textCallTypeChoices`/`CallTypeChoice`) into a new
+sibling module, `callTypeChoices.ts`, so `react-refresh/only-export-
+components` has nothing left to flag; updated both consumers. `npx eslint
+.` now 0 warnings repository-wide; `npm run typecheck` still 0 errors;
+226 vitest tests passed across the four files this pass touched or reviewed.
+Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
+Pass 4.
+
+</details>
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13 closed, merge recorded via PR #2429), preserved for history</summary>
+
+**None.** PR #2428 (Feature 13, Apparatus & NFC, pass 11) merged clean —
+11/11 review threads resolved, `mergeable_state: clean`. Squash-merged as
+`1005d5bac`. Feature 13 is now fully closed for this pass — see the Log
+entry and `AP-13-apparatus-nfc.md` for the full correction history (10
+findings across 9 Codex review rounds on the pass's own initial fix, the
+longest single-PR chain this rotation has produced: shift-lock ordering,
+SQLAlchemy identity-map staleness on both `Shift` and `ShiftAttendance`,
+UTC-tagging-on-refresh, and REPEATABLE READ snapshot staleness across
+`finalize_shift`, `save_closeout_calls`, `save_closeout_attendance`,
+`member_check_in`, and `CallTrackingService._partition_existing`).
+Rotation row 13 → ✅. Next: 14 Equipment check & shifts.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 13 pass 4, PR #2428, merged), preserved for history</summary>
+
+**Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4)** — PR
+[#2428](https://github.com/thegspiro/the-logbook/pull/2428), branch
+`security-review/apparatus-nfc-2026-09-09` (fresh name — `git ls-remote`
+checked against every apparatus/nfc/AP-13 branch in this repo's history
+before creating it, per CLAUDE.md Pitfall #24). Assigned directly out of
+rotation order (the normal ⬜-first pick was 12 Facilities, already merged —
+see below); Feature 13 was the explicit assignment for this pass. 1 fixed
+(P2 — `SchedulingService.member_check_in`, one of the three targets the NFC
+check-in station dispatches into, was a read-then-write on `ShiftAttendance`
+with no row lock and no unique constraint to fall back on; a bounced NFC tap
+could create a duplicate attendance row and leave `member_check_out`/
+`get_my_attendance` crashing with `MultipleResultsFound` on every later call
+for that pair). Rest of the feature re-verified clean: 88/88 + 5/5 route auth
+coverage, all 36 `SET NULL` FKs still `nullable=True`, all 4 `.ilike()` sites
+still escaped, both target endpoints the frontend's new archive-modal fix
+calls (`change_apparatus_status`/`archive_apparatus`) org-scoped and
+correctly gated.
+
+**Round 2 (Codex review of the pass-11 fix, same PR):** 2 more fixed. (a) P2
+— `finalize_shift` fetched its shift row without a lock while
+`member_check_in` (round 1's own fix) now locks the shift row first and the
+attendance row second; `finalize_shift` locks `ShiftAttendance` rows first
+(via its auto-close-open-attendance flush) and only touches the shift row at
+commit — the reverse order, a textbook InnoDB deadlock risk between an NFC
+tap and an officer finalizing the same shift. Fixed by locking the shift row
+first in `finalize_shift` too. (b) A related finding on round 1's own guard
+test: `test_shift_check_in_race.py`'s session B never established a
+consistent-read snapshot before session A's commit, because B's first
+statement was itself the (blocking, so necessarily post-commit) shift lock —
+meaning the test would have passed even without `.with_for_update()` on the
+attendance check, the exact "count/existence check itself must be a locking
+read" half of Pitfall #27 that FAC-57 also had to learn this rotation. Fixed
+by priming B's snapshot with an early plain read before A commits; verified
+by removing the attendance check's `.with_for_update()` in isolation and
+confirming the corrected test now fails without it. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, findings 2 and 3.
+Completion gate green both rounds (full backend suite: 11935 passed, 21
+pre-existing skips, 0 failed; flake8/black/isort clean; no frontend files
+touched).
+
+**Round 3 (Codex review of round 2's own fix, same PR):** 1 more fixed, same
+shape as (a) above but a different second method: P2 — `save_closeout_calls`
+(the closeout wizard's call-count step) also fetched its shift row without a
+lock, then reconciled `OrgCall`/`OrgCallResponse` rows through
+`record_shift_calls` (implicit locks at DELETE/UPDATE time) before touching
+the shift row at commit — the same reversed order `finalize_shift` (round
+2's fix) had already been corrected out of, just against a different pair of
+call sites reaching the same two tables. An officer saving the closeout-calls
+step while another finalizes the same shift could deadlock. Fixed by locking
+the shift row first in `save_closeout_calls` too; confirmed via grep that
+`record_shift_calls`/`attach_response` have exactly these two call sites in
+the codebase, so no third method needs the same fix. Verified with the same
+blocking-proof pattern as round 2 (`test_shift_closeout_calls_lock_order_race.py`):
+confirmed failing (`asyncio.TimeoutError`) via `git stash push -u` on the fix
+alone, passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4.
+Completion gate green: full backend suite 11936 passed / 21 pre-existing
+skips / 0 failed; flake8/black/isort clean; no frontend files touched.
+
+**Round 4 (Codex review of round 3's own fix, same PR):** 1 more fixed, a
+different bug class — P2, SQLAlchemy identity-map staleness, not lock
+ordering. `finalize_shift`'s and `save_closeout_calls`'s REST endpoints both
+authorize the caller through `_authorize_shift_management`, which does a
+plain, non-locking `get_shift_by_id` first — loading the `Shift` into the
+session's identity map. The service method's own subsequent
+`for_update=True` call, on the same session, genuinely locks and reads the
+latest committed row at the database level, but SQLAlchemy's default
+identity-map behavior returns the earlier, already-loaded Python object
+unchanged rather than refreshing its attributes — so `shift.is_finalized`
+could still read stale (`False`) even after a lock correctly resolved
+against a shift a concurrent request had just finalized. Fixed once, at the
+root, by adding `.execution_options(populate_existing=True)` to
+`get_shift_by_id`'s query whenever `for_update=True`, so a locking read
+always refreshes the object it returns — covers all three `for_update`
+callers (`member_check_in`, `finalize_shift`, `save_closeout_calls`), not
+just the two Codex named. Verified with a new test
+(`test_shift_lock_identity_map_staleness.py`) that deliberately mimics
+`_authorize_shift_management`'s own shape (a plain read, then later a
+locking re-read on the same session/object): confirmed failing
+(`assert False == True` — the object's `is_finalized` stayed stale despite
+the lock resolving correctly and the concurrent commit landing) via
+`git stash push -u` isolating just the `populate_existing` addition,
+passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 5.
+Completion gate green: full backend suite 11937 passed / 21 pre-existing
+skips / 0 failed; flake8/black/isort clean; no frontend files touched.
+
+**Round 5 (Codex review of round 4's own fix, same PR):** 1 more fixed —
+P1, and the one round this rotation that revealed a bug affecting ordinary,
+non-racing requests, not just a concurrency edge case. Round 4's
+`populate_existing=True` fix correctly refreshes an already-identity-mapped
+`Shift` on a locking re-read, but refreshing an object already in the
+identity map fires SQLAlchemy's `"refresh"` event, not `"load"` — a
+distinct event with a distinct callback signature — and
+`core/database.py`'s UTC-tagging listener (which exists because MySQL
+`DATETIME` columns carry no tzinfo, so aiomysql always returns naive
+`datetime`s) was registered only on `"load"`. So the locking re-read
+silently stripped the tzinfo `_authorize_shift_management`'s earlier plain
+load had stamped on, and `finalize_shift`'s
+`shift.end_time > datetime.now(timezone.utc)` check then raised `TypeError`
+comparing naive vs. aware — caught by the method's own exception handling
+and surfaced as an ordinary error response, not a 500 stack trace, so it
+would have read as "finalization mysteriously rejects a shift with a valid
+end time" rather than pointing at its own cause. Reproduced directly
+(no concurrency needed — the double read happens on every REST-path call):
+a single authorize-then-finalize sequence on one session raised exactly
+that comparison `TypeError`. Fixed at the root in `core/database.py`:
+factored the shared column-walking/stamping logic into `_stamp_utc()` and
+registered it on both `"load"` and `"refresh"` — closes the gap for every
+other `session.refresh()` call site in the codebase too
+(`apparatus_service.py`, `training_session_service.py`,
+`member_leave_service.py`, `admin_hub_service.py`, `template_service.py`,
+`external_training_service.py`), not just the two `for_update` methods this
+PR touches. One pre-existing test
+(`test_scheduling.py::test_update_shift_validates_effective_time_range`,
+`invalid-*` cases) asserted a naive-datetime equality after an explicit
+`db_session.refresh(shift)` that was only ever true because of this same
+bug; updated to compare both sides UTC-normalized, matching the pattern the
+test's own `valid` branch already used. Verified with a new test
+(`test_shift_refresh_utc_tagging.py`, two cases: the narrow tzinfo-survival
+check and the end-to-end `finalize_shift` reproduction): confirmed both
+failing (`assert ... tzinfo is not None`; `TypeError` surfaced as `error`)
+via `git stash push -u` isolating the new `"refresh"` listener registration
+alone, passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 6.
+Completion gate green: flake8/black/isort clean; scoped keyword suite 1131
+passed / 1 pre-existing skip; full backend suite 11939 passed / 21
+pre-existing skips / 0 failed; no frontend files touched.
+
+**Round 6 (Codex review of round 5's own fix, same PR):** 1 more fixed, a
+third instance of findings 3/4's shape — P2, `save_closeout_attendance`
+(closeout wizard step 1) also read the shift with a plain, non-locking
+`get_shift_by_id`, then mutated an existing member's `ShiftAttendance` row
+in place before a later entry's `_user_in_org` lookup (the XC-1 in-org check
+for a client-supplied user id) triggered SQLAlchemy autoflush — an implicit
+UPDATE, and therefore an implicit attendance-row lock — before
+`shift.closeout_step` was ever assigned or the shift row locked. The reverse
+of `finalize_shift`'s (finding 3) now-fixed shift-then-attendance order: a
+closeout-attendance save updating one existing member and adding one new
+member, racing a finalize on the same shift, could deadlock. Same bug class
+as findings 3/4, reached through a different implicit flush (autoflush via
+`_user_in_org`'s `SELECT`, rather than a DELETE/UPDATE inside
+`record_shift_calls`). Fixed by locking the shift row first in
+`save_closeout_attendance` too; grepped for other methods that mutate an
+existing `ShiftAttendance` row ahead of a later `SELECT` in the same
+method — confirmed no third instance beyond this one and findings 2/4,
+which are already fixed. Verified with the same blocking-proof pattern as
+findings 3/4 (`test_shift_closeout_attendance_lock_order_race.py`, using two
+entries — one for a member with a pre-existing attendance row, one new — to
+exercise the mutate-then-autoflush shape): confirmed failing
+(`asyncio.TimeoutError`) via `git stash push -u` on the fix alone (the only
+diff in the file), passing with the fix restored, stable across 3 repeated
+runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md` → Pass
+11, finding 7. Completion gate green: flake8/black/isort clean; scoped
+keyword suite 1132 passed / 1 pre-existing skip; full backend suite 11940
+passed / 21 pre-existing skips / 0 failed; no frontend files touched.
+
+**Round 7 (Codex review of round 6's own fix, same PR):** 2 more fixed —
+one P1, one P2, both a new bug class this rotation: locking the shift row
+(rounds 2–6) closes lock-ordering deadlocks and identity-map staleness on
+the shift object, but does not by itself refresh this transaction's
+REPEATABLE READ _snapshot_ for a different table. `_authorize_shift_management`'s
+plain shift query is the transaction's first consistent read and fixes
+that snapshot; a later locking read on the shift bypasses it for the shift
+row only, but a later _plain_ read of `ShiftAttendance` still answers from
+that same stale snapshot — Pitfall #27's second half ("the count itself
+must be a locking read"), now surfacing on attendance reconciliation
+rather than a capacity check. (a) P1 — `finalize_shift`'s `manual_hours`
+existing-user check and its auto-close-open-attendance query were both
+plain reads; a member checking in while finalize waits on the shift lock
+a concurrent check-in held would have their attendance row left open
+(`checked_out_at IS NULL`) forever, invisible to the finalize that just
+ran. (b) P2 — `save_closeout_attendance`'s (round 6's own fix) `existing`
+attendance-rows read was the same shape; the same race reintroduces AP-13
+finding 2's duplicate-row bug (`shift_attendance` still has no unique
+constraint on `(shift_id, user_id)`), just via a stale read instead of a
+missing lock. Fixed by adding `.with_for_update()` to all three queries.
+Also identified but **not fixed this round**: `CallTrackingService._partition_existing`
+(reached from `record_shift_calls`, which both `finalize_shift` and
+`save_closeout_calls` reconcile through) has the same shape, but its
+second query is a `COUNT`/`GROUP BY` aggregate across every responder on a
+call — locking that safely needs its own design pass, not a one-line
+bolt-on, so it's flagged in the write-up for a follow-up rather than
+rushed. Verified with two new two-real-session tests
+(`test_shift_finalize_attendance_snapshot_staleness.py`,
+`test_shift_closeout_attendance_snapshot_staleness.py`): session B fixes
+its snapshot with a plain preload before session A commits a fresh
+attendance row, then the real method is run and checked against the table
+fresh from a third session. Confirmed both failing pre-fix (an attendance
+row left open; a literal second row created) via `git stash push -u` on
+the fix alone (the only diff in the file), passing with the fix restored,
+stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 8.
+Completion gate green: flake8/black/isort clean; scoped keyword suite 1134
+passed / 1 pre-existing skip; full backend suite 11942 passed / 21
+pre-existing skips / 0 failed; no frontend files touched.
+
+**Round 8 (Codex review of round 7's own fix, same PR):** 2 more fixed —
+one P1, one P2 — both the same snapshot-staleness shape as round 7, in two
+places round 7 didn't reach. (a) P1 — `finalize_shift`'s `total_hours`
+`SUM` and per-member `call_count` queries were still plain reads on the
+stale transaction snapshot; round 7 only fixed the open-attendance query,
+which by construction never matches an already-checked-out row (the shape
+`save_closeout_attendance` writes), so a member's completed attendance
+committed while finalize waited on the shift lock was silently excluded
+from both the shift total and their own call-count snapshot. (b) P2 — the
+identity-map sibling of finding 5, now on `ShiftAttendance`: `NfcTagService._check_in_shift`
+preloads the caller's attendance row plainly before `member_check_in` runs
+its own locking read on the same session; without `populate_existing=True`
+on that locking read, a second NFC tap targeting a pre-existing
+(not-yet-checked-in) attendance row already cached by that session would
+see the stale `checked_in_at=None` even after a first tap committed a real
+check-in, passing the "Already checked in" guard and silently overwriting
+it. Fixed by adding `.with_for_update()` to the two `finalize_shift`
+queries and `.execution_options(populate_existing=True)` to
+`member_check_in`'s locking read. Verified with two new tests
+(`test_shift_finalize_snapshot_totals_staleness.py`,
+`test_shift_check_in_identity_map_staleness.py`); the check-in test
+specifically required constructing a _pre-existing_ placeholder attendance
+row before either session touches it — an earlier version that preloaded a
+nonexistent row passed even without the fix, because `get_my_attendance`
+returning `None` caches nothing in the identity map and can't exercise a
+refresh-staleness bug at all. Confirmed all three assertions failing
+pre-fix (`total_hours` `0.0` instead of `1.0`; a `call_count` never set; a
+second tap's error `None` instead of `"Already checked in"`) via
+`git stash push -u` on the fix alone (the only diff in the file), passing
+with the fix restored, stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 9.
+Completion gate green: flake8/black/isort clean; scoped keyword suite 1136
+passed / 1 pre-existing skip; full backend suite 11944 passed / 21
+pre-existing skips / 0 failed; no frontend files touched.
+
+**Round 9 (Codex review of round 8's own fix, same PR):** 1 more fixed — the
+item finding 8's write-up explicitly deferred rather than fixed. Codex
+confirmed the gap in `CallTrackingService._partition_existing` is real:
+`record_shift_calls` (reached from both `finalize_shift` and
+`save_closeout_calls`, after each locks the shift) uses it to inventory a
+shift's existing `OrgCall`/`OrgCallResponse` rows, and its existence-check
+query was a plain read on the same stale transaction snapshot. Two
+closeout-calls saves racing on the same shift — the second queued behind
+the first's shift lock — would have the second's existence check still
+read "no calls recorded yet" even after the first committed a real one,
+doubling the shift's persisted call responses. Fixed by adding
+`.with_for_update()` to that query — a plain, non-aggregate `SELECT`, so
+the design concern that justified deferring it didn't actually apply to
+this half; the second, aggregate query (owned-vs-shared classification)
+stays deferred, unchanged, since it doesn't decide whether a new row gets
+created and so doesn't produce this doubling bug. Verified with a new test
+(`test_shift_closeout_calls_snapshot_staleness.py`): session B preloads
+the shift plainly, session A saves the closeout-calls step reporting one
+call and commits, session B runs the same real, unmodified save — asserted
+against the database that exactly one `OrgCall` row exists, not two.
+Confirmed failing pre-fix (2 distinct rows found) via `git stash push -u`
+on the fix alone (the only diff in the file), passing with the fix
+restored, stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 10.
+Completion gate green: flake8/black/isort clean; scoped keyword suite 1274
+passed / 1 pre-existing skip; full backend suite 11945 passed / 21
+pre-existing skips / 0 failed; no frontend files touched.
+
+</details>
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12 pass 4 merged, transient "None" state before Feature 13 opened), preserved for history</summary>
+
+**None.** PR #2425 (Feature 12, Facilities, pass 4) merged clean, 17/17 CI
+checks green, `mergeable_state: clean`. Squash-merged as `d24934d67`. Feature
+12 is now fully closed for this pass — see the Log entries and
+`FAC-12-facilities.md` for the full correction history (the pass's own
+initial review plus seven subsequent Codex review rounds, each finding
+additional or fix-related bugs — some independent, pre-existing bugs
+(one, FAC-47, a crash had been masking until an earlier round's fix made
+its path reachable; another, FAC-50, independently observable via a 422
+the whole time); others genuine regressions in a prior round's own fix):
+`FAC-46` through `FAC-57`, 12 findings total, all fixed; the 4 prior flags
+(FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open, unchanged since
+pass 3. Next: 13 Apparatus & NFC.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12 pass 4, PR #2425), preserved for history</summary>
+
+**Feature 12 (Facilities, pass 4) ✅ merged** — PR
+[#2425](https://github.com/thegspiro/the-logbook/pull/2425) merged
+2026-09-09 04:59 UTC (this file's own "Awaiting CI and review" note was
+stale — confirmed merged via the GitHub API directly rather than trusted as
+written, since the two facts disagreed). Branch
+`claude/security-review-facilities-pass4` (fresh name; no facilities-review
+branch exists locally or on origin from passes 1–3, so CLAUDE.md Pitfall #24
+poses no collision here). 1 fixed (FAC-46, HIGH — two unconditional
+`TypeError`s that broke `create_compliance_item` and `create_emergency_contact`
+on every single call, one of them wired to real shipped UI), 4 prior flags
+(FAC-13, FAC-30, FAC-41, FAC-44) re-verified still open and unchanged since
+pass 3. Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4.
+Rotation row 12 updated accordingly.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422, merged), preserved for history</summary>
+
 **None.** PR #2422 (Feature 11, Inventory, pass 4) merged clean, 17/17 CI
 checks green, mergeable_state clean. Squash-merged as `92a4917e7`. Feature
 11 is now fully closed for this pass — see the Log entries and
@@ -23,9 +712,6 @@ checks green, mergeable_state clean. Squash-merged as `92a4917e7`. Feature
 across the two rounds (one, INV-26, a P1 genuine cross-tenant write), 5
 still open (INV-22 newly flagged this pass; INV-8, INV-9, INV-16, INV-17
 re-verified). Next: 12 Facilities.
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 11 pass 4, PR #2422), preserved for history</summary>
 
 **Feature 11 (Inventory, pass 4)** — PR
 [#2422](https://github.com/thegspiro/the-logbook/pull/2422), branch
@@ -11721,6 +12407,11 @@ Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
 Codex-round log entry above); the 14 original findings plus the 6 Codex
 findings are all resolved with no open items. Rotation row 33 -> done.
 
+</details>
+
+</details>
+
+</details>
 ---
 
 ## Relationship to the existing review passes
@@ -11770,10 +12461,10 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
@@ -11800,6 +12491,709 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-09 — Watchdog pass — Step 0 bookkeeping only, PR #2441 merged
+
+**Step 0:** the rotation's driving loop had gone quiet — PR #2441 (Feature
+15 follow-up, round 4, SCH-13 deadlock fix) was merged by the repo owner at
+21:25:01 UTC, merge commit `0584599`, but this file still carried it as the
+**Open PR** and rotation row 15 as `⏳` an hour and twenty minutes later,
+with zero further security-review commits or open PRs in that window
+(confirmed via `list_pull_requests` state=open → `[]`, and `list_branches`
+→ no unmerged `claude/security-review-*`/`security-review/*` branch besides
+the stale, already-superseded `security-review/equipment-check-shifts-2026-09-09`
+from earlier that morning). Cleared the **Open PR** row to "None," marked
+row 15 `✅`, and preserved the round-4 note under `<details>` per this
+file's own convention.
+
+**Scope of this pass:** bookkeeping only. This iteration ran from a
+separately-provisioned session scoped to a single designated branch
+(`claude/friendly-babbage-nym6w0`), not the per-feature
+`claude/security-review-<feature>` branch the rotation normally opens for
+each new PR — so rather than start Feature 16 (Events & requests) under a
+branch identity this session isn't authorized to create, this pass stops
+after the doc fix and flags the gap for the human owner. Next: Feature 16,
+Events & requests (`events.py`, `event_requests.py`), whenever the regular
+`/loop 30m /security-review` session (or one explicitly authorized to open
+new branches) picks it up.
+
+### 2026-09-09 — Feature 15 (Scheduling, pass 4) — 1 fixed (SCH-13, LOW/MED), 0 flagged, corrected on Codex review of the draft PR
+
+**Step 0:** checked GitHub directly (`list_pull_requests`, state=open) —
+zero open PRs against the repo — and cross-checked `git ls-remote --heads`
+for any `security-review/*`/`claude/security-review-*` branch naming
+scheduling: none. Matches this file's own "Open PR: None" note recorded by
+the prior pass, so no PR to tend; proceeded straight to Feature 15.
+
+**Baseline:** pass 3's actual landing commit is `8b89f319d` (the merge of PR
+#2212), found via `git merge-base --is-ancestor` against pass 3's own tip
+commit rather than assumed from the doc's `299a163a^` reference (that was
+pass 3's own diff-scope starting point, one further step back). Six days and
+substantial feature work sit between it and this pass's HEAD (`fda025c8`):
+a large department-editable call-types feature (three new migrations, its
+own multi-round internal Codex review per commit messages), a close-out
+backlog queue, a member's own hours-history screen, a per-shift late-signup
+escape hatch (server-clock-bounded, capped at 720 minutes), and a
+self-scoped decline-assignment endpoint.
+
+**Diff-scoped against that baseline**, not re-read whole (pass 3's own
+precedent once a baseline is reachable — the shallow clone needed
+deepening to reach it, as in every prior pass that hit this). Real churn:
+`scheduling.py` (+503/-20, 5 new routes: `GET /shifts/needing-closeout`,
+`POST`/`DELETE /shifts/{id}/late-signup`, `POST
+/assignments/{id}/decline`, `GET /my-hours-history`), `scheduling_service.py`
+(+1083/-47), `schemas/scheduling.py` (+152/-4), `models/training.py`
+(+10, one nullable column), `calcom_service.py` (+30/-9, webhook-payload
+parsing only, no outbound-request change). Route/permission table
+re-enumerated from scratch: 101/101 routes (97+3+1) carry a recognized auth
+dependency. Nine existing `.view`-only reads were widened to `.view` OR
+`.manage` (each with an in-code comment naming why: `.manage` does not
+imply `.view`, and every Scheduling Administration page is gated on
+`.manage` alone) — strictly widening, verified not an XC-2 regression since
+`.manage` already gated every corresponding write. One OR-gate was narrowed
+(`get_position_roster` dropped `training.view_all`/`training.manage`,
+correctly, per its own comment) — the safe direction, re-verified rather
+than flagged.
+
+**New attack surface checked individually, all clean:** `open_late_signup`/
+`close_late_signup` resolve their shift through the same org-scoped,
+row-locked `get_shift_by_id` helper every other mutation uses, with the
+reopening window both schema-bounded (≤720 min) and clamped against the
+shift's own roster deadline server-side; `decline_assignment` resolves its
+row by id **and** user_id **and** organization_id in one WHERE, matching
+`confirm_assignment`'s existing shape; `get_my_hours_history` is
+self-scoped on both the caller's own id and their org. Also read in full,
+reached from `scheduling.py`'s settings endpoints but not previously in
+this doc's scope: `models/call_tracking.py` + `services/
+call_tracking_service.py` (the new call-types feature) — every query
+org-scoped, the one `.like()` call uses `like_pattern()`/
+`LIKE_ESCAPE_CHAR` (Pitfall #25), a client-supplied `call_id` is
+org-validated before an attach (XC-1), a `with_for_update()` lock guards a
+count-then-write race citing AP-13's precedent (Pitfall #27), and all three
+new migrations guard `create_all`-only-adjacent tables, use parameterized
+SQL throughout, and correctly declare themselves irreversible where
+warranted. One migration (`add_shift_late_signup_until`) touches `shifts`
+with no explicit existence guard — looked at first read like a Pitfall #26
+gap, but verified (by running the repo's own
+`test_migration_create_all_tables.py` detection logic directly against the
+source, not by trusting pass 3's prose) that `shifts` is unconditionally
+created by an early migration and is not actually create_all-only; no fix
+needed. 79 frontend files grep-swept for the checklist's red flags
+(`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, raw `fetch()`) — zero hits, partial-scope
+disclosed rather than assumed clean.
+
+**SCH-10** (the DNS-rebinding TOCTOU, cross-cutting, previously flagged) —
+re-verified unchanged: neither `assert_outbound_url_safe` call site in
+`calcom_service.py` was touched this pass, and `docs/KNOWN_LIMITATIONS.md`'s
+entry already correctly lists it among the six remaining sites. Not
+re-fixed here, same reasoning as every prior pass: closing it is a
+cross-cutting change spanning every `create_integration_client()`-based
+transport, not a scheduling-scoped one.
+
+**Codex review of the draft PR caught four real gaps**, all verified against
+the current code (not taken on faith) and addressed:
+
+1. **Rotation-state error.** The draft marked row 15 `✅` and the Open PR
+   section said "0 fixed, 0 flagged" for a PR that was, by its own text,
+   still open pending merge — contradicting the legend's own `⏳` (awaiting
+   PR merge) vs. `✅` (done) distinction, and this file's own established
+   convention elsewhere (e.g. the MP-08 log entries: row held at `⏳` while a
+   PR was open, flipped to `✅` only on a later merge-recording entry).
+   Corrected: row 15 → `⏳`, wording throughout this section and the Open PR
+   note above updated to say "awaiting merge."
+2. **`npm run build` never run.** The draft's completion gate stopped at
+   typecheck/ESLint/Vitest despite auditing 79 changed frontend files. Run
+   now (see the gate below) — clean, matching pass 3's own precedent of
+   running it as a bonus check.
+3. **Two changed service files never reviewed.** `shift_eligibility_service.py`
+   (+183/-3) and `shift_completion_service.py` (+95/-1) both changed since
+   pass 3's baseline and implement real pieces of the reviewed surface (the
+   signup-window settings reader, the call-type normalization/label-
+   disambiguation logic, and the report call-type-provenance tracking) but
+   were absent from the draft's churn inventory and full-read list entirely
+   — confirmed by re-running the same `git diff --stat` scope with these two
+   files added. Both now read in full against all seven checklist
+   dimensions: every query org-scoped (`_get_org`, `update_report`'s
+   `report.organization_id != organization_id` double-check), the one
+   nested-JSON write (`_edit_preserves_org_slugs`'s `data_sources` clear)
+   correctly uses `copy.deepcopy` (Pitfall #12), all numeric settings reads
+   degrade to a bounded default rather than raising (Pitfall #19), no new
+   finding in either file beyond SCH-13 below (which spans into
+   `shift_eligibility_service.py`'s `_get_org`).
+4. **SCH-13 (LOW/MED, fixed) — a real TOCTOU race.** Deleting a call type
+   (`_reject_deleting_a_used_call_type` in `scheduling.py`) and recording a
+   call under that type during close-out (`CallTrackingService.
+record_shift_calls`) each read the other's domain (settings / current
+   usage) with a plain `SELECT`. Under REPEATABLE READ a plain read answers
+   from the transaction's own snapshot, so two overlapping requests — one
+   deleting "brush", one recording a call under "brush" — could each pass
+   validation against a stale read of the other's in-flight change and both
+   commit, leaving history referring to a slug no longer configured. Fixed
+   by threading `for_update: bool = False` through
+   `ShiftEligibilityService._get_org` and `CallTrackingService.get_settings`
+   / `_valid_type_slugs` / `type_usage_counts` / `slugs_locked_by_history`,
+   and passing `for_update=True` from exactly the two call sites in the
+   race (the deletion guard, and `record_shift_calls`'s type-count
+   validation) — both now serialize on the organization row, and the
+   usage-count check is itself a locking read rather than merely locked-then-
+   stale, the same shape FORM-10 fixed for duplicate form submissions.
+   Guard test `tests/test_call_type_deletion_race.py` uses two real,
+   independently-committing sessions with pinned REPEATABLE READ snapshots
+   (matching FORM-10's own test shape) — confirmed failing 5/5 runs against
+   the unpatched code and passing 5/5 against the fix.
+
+Full completion gate green (re-run after the fix above): `flake8`/`black`/
+`isort` on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` single head (440 revisions); scoped pytest (`-k "scheduling or
+shift or swap or calcom or position_slots or call_tracking or call_type"`)
+plus the new race guard test all passed; full backend suite passed, only
+pre-existing skips; `npm run typecheck` (aliased TS7 compiler per
+CLAUDE.md) 0 errors; `npx eslint .` 0 errors; `npm run build` 0 errors
+(added this round); scheduling frontend vitest passed (not mandatory, run
+anyway per pass 3's precedent). Full write-up:
+`docs/security-review/SCH-15-scheduling.md` → Pass 4. **Rotation row 15 →
+⏳ (awaiting merge)** — not `✅` yet.
+
+**Merge-race addendum.** PR #2435 (carrying only the pre-Codex-review
+draft, i.e. everything above this addendum minus the four items 1-4 list)
+merged at 15:48:08 UTC as `aae45c040` before this addendum's fixes were
+pushed — the review comments arrived and were addressed after the PR had
+already gone green and been merged. Confirmed directly: `git diff
+13c760567 aae45c040` for the five affected files is empty, so nothing in
+items 1-4 reached `main`. Not a reason to reopen #2435 (closed PRs stay
+closed) or push to its now-merged branch (CLAUDE.md Pitfall #24, and the
+same shape as the EC-15 follow-up above) — carried forward on a fresh
+branch, `security-review/scheduling-codex-followup-2026-09-09`, off current
+`origin/main`; the four fixes were already uncommitted in the working tree
+when the merge landed, so `git checkout -b <branch> origin/main` carried
+them over with no cherry-pick needed. Follow-up PR:
+[#2437](https://github.com/thegspiro/the-logbook/pull/2437) — see the Open
+PR section above. All four Codex review threads on #2435 replied to
+(linking to #2437) and marked resolved.
+
+**Round-2 addendum.** A Codex review of #2437 itself (the SCH-13 fix
+above, not the original draft) caught two further real gaps in the
+locking fix, both fixed on the same branch: (a) `_get_org`'s locking read
+never carried `execution_options(populate_existing=True)`, so an
+already-loaded `Organization` object (e.g. `finalize_shift`'s own earlier
+plain read) stayed stale in the caller's hands even though the row was
+correctly locked at the database level — the identical gotcha
+`get_shift_by_id` already documents and handles; (b) the
+`shift_completion_reports` half of the usage check was reasoned to be
+outside the race window ("a report is filed well after its shift's
+calls"), which is true of creation and false of _editing_ —
+`ShiftCompletionService.update_report`/`_edit_preserves_org_slugs` can
+rename an existing report onto the candidate slug at any time and never
+took the organization lock. Both fixed (see the Open PR section's SCH-13
+paragraph above and `SCH-15-scheduling.md`'s SCH-13 write-up for the
+mechanism); two new guard-test classes added, both confirmed failing
+against the round-1-only fix and passing against the complete one.
+
+**Round-3 addendum.** A further Codex review, of round 2's own push, found
+two more real gaps — (a) the bulk call-type-list save still derived its
+settings-dependent values from a pre-lock read, missing that
+`populate_existing` refreshes the ORM object but not values already
+computed from an earlier read of it; (b) the round-2 report-edit fix
+locked report-then-organization via SQLAlchemy autoflush, the reverse of
+the deletion guard's organization-then-report order — a genuine InnoDB
+deadlock (error 1213) between an ordinary report edit and a concurrent
+deletion, reproduced reliably once the test stopped swallowing it — plus
+(c) the round-2 guard test itself caught bare `Exception` and converted it
+to a string, which is exactly what let the deadlock in (b) pass unnoticed.
+All three fixed on the same branch: the lock moved earlier in the
+list-save guard, `_edit_preserves_org_slugs` now called before the report
+object is mutated (establishing the same lock order both paths need), and
+the test's broad `except` removed so an unexpected exception fails the
+test instead of being absorbed. CLAUDE.md's rule applied directly here: no
+round limit on legitimate findings against a pushed fix. See the Open PR
+section above for the full mechanism and gate results. Next once #2437
+merges: 16 Events & requests.
+
+### 2026-09-09 — Feature 14 (Equipment check & shifts, pass 4) — 1 fixed (EC-15, LOW), 0 flagged, corrected across three Codex review rounds
+
+**Merge-race note (30-minute rotation watchdog):** PR #2430 was merged at
+10:45:53 as fully green (17/17 CI checks, `mergeable_state: clean`, Codex
+review of commit `db6af47` — round 2's fix — completed with no further
+findings), so it was merged directly rather than left waiting. That merge
+landed one commit behind round 3's own fix (`0b466619c`, EC-15, pushed at
+10:52:37) — the watchdog check that triggered the merge ran against round
+2's head and had no way to see the round-3 push that followed it. It
+landed as a regular merge commit (`89c399c`) rather than the rotation's
+usual squash — the four pass commits are preserved individually on `main`
+rather than collapsed into one; no content difference, no history
+rewritten. EC-15 was carried forward on a fresh branch via `git
+cherry-pick` — see the Addendum below and PR #2432. Rotation row 14 → ✅
+either way: the feature's own review is complete and the corrected
+conclusion (1 fixed, 0 flagged) holds regardless of which commit the merge
+landed on. Next: 15 Scheduling.
+
+Diffed against pass 3's baseline (`b267ee1ca`): of the six declared backend
+files, only `shift_completion_service.py` changed (+50/-8), and that change
+(`_edit_preserves_org_slugs`, commit `360306d42`) was an already-merged
+correctness fix from a non-rotation commit — read in full against all seven
+checklist dimensions rather than trusted because it shipped clean elsewhere.
+Tenant isolation clean: the new helper takes no client-supplied id, reading
+only `report.organization_id` off an already org-validated report.
+
+**Codex review of the draft PR caught five real scope gaps**, all fixed in
+the doc rather than disputed: (1) the 57→50 route-count correction itself
+omitted two routes (`list_templates`/`get_template`, both `check_view`-or-
+`check_submit`-or-`check_manage` — 48+2=50, matching); (2) a second
+migration touching `shift_completion_reports`
+(`20260905_1900_c9f4a2b71d38_rename_reserved_call_type_slug`, one revision
+before the one that was reviewed) was never read — read in full this round,
+org-scoped correctly, no finding; (3) `ShiftDetailPanel.tsx`/
+`ShiftCheckInPage.tsx` were diffed against the wrong assumed path
+(`modules/inventory/pages/`, when pass 1 never stated a path and both
+actually live at `pages/scheduling/`) — the wrong path silently returned an
+empty diff, hiding `ShiftDetailPanel.tsx`'s real +1806/-1553 (mostly an
+accessibility restructure; grepped every added line for the checklist's red
+flags, zero hits, no finding); (4) three more declared frontend files
+(`ApparatusDetailPage.tsx`/`FleetBoardPage.tsx`/`MyChecklistsPage.tsx`)
+weren't diffed at all (small, cosmetic/permission-honesty fixes, no
+finding); (5) `scheduled_tasks.py`/`scheduling_service.py` — pass 2's own
+established "review when `ShiftCompletionService` reads what changed" rule
+— were never re-checked despite both changing since pass 3.
+`scheduled_tasks.py`'s diff turned out to touch only messaging-feature
+functions EC-14 has no stake in. `scheduling_service.py`'s 330-line diff
+turned out to be almost entirely this rotation's own already-merged AP-13
+findings 5–10 (confirmed via `git log`: the dominant commit is `1005d5bac`,
+PR #2428, merged earlier this same pass) plus one genuinely new,
+genuinely-Scheduling-only feature (`get_closeout_backlog` — checked whether
+`ShiftCompletionService` reads it; it doesn't, so out of scope by the same
+rule that put it in scope for `responding_members` last time) — no finding
+either way.
+
+Also corrected the completion gate: the draft ran `npx tsc --noEmit`, which
+resolves the linter's TS 5.9 rather than the build's aliased TS7 — reran as
+`npm run typecheck` per CLAUDE.md's "Two TypeScript installs" section, still
+0 errors.
+
+**Round 2 (Codex review of the round-1 fix, same PR): 2 more scope gaps.**
+(a) The round-1 backend review (`_edit_preserves_org_slugs`, commit
+`360306d42`) never looked at that same commit's frontend half —
+`CallTypeChips.tsx` (new component + 10-test file), `useCallTypeLabels.ts`
+(new `useOrgCallTypes` hook), `schedulingStore.ts` (new `callTypes` field),
+`ShiftReportsTab.tsx` (wires them in) — even though those files decide the
+values sent to the backend method round 1 did review. Read all four: the
+picker only ever offers the org's own configured slugs (via the
+already-reviewed `loadSettings()`) or values already on the report being
+edited, so it cannot inject a foreign value; and the backend's own
+`_edit_preserves_org_slugs` is what actually enforces the invariant
+regardless of what the frontend sends, independent of this UI. Grepped for
+the checklist's red flags — zero hits — and ran
+`CallTypeChips.test.tsx` (10/10). (b) The `apiCache.ts` diff is 17 new
+entries across three commits, not 15 — round 1 counted only `SEC4-3`'s
+additions. The other two: `/inventory/items/colors` is already fixed under
+Feature 34's own `FE5-34-frontend-shared.md` (a free-text, unconstrained
+column wrongly cleared as safe); `/fulfillment-options` was already
+dispositioned in round 1's write-up, just not counted in the running total.
+No finding either way — both gaps were about completeness of the record,
+not a live issue.
+
+**Round 3 (Codex review of round 2's own fix): 1 more gap, and this one was
+a real fix, not just a record correction.** Round 2's completion gate
+recorded `eslint`'s two warnings on `CallTypeChips.tsx`
+(`react-refresh/only-export-components`) as "pre-existing, unrelated" —
+wrong on both counts. The file didn't exist before this pass's own
+subject commit (`360306d42`), so it had never actually been inspected as
+part of this feature until round 2's frontend-half review; and CLAUDE.md's
+"fix or escalate, never dismiss" rule owns a discovered warning the moment
+it's found, regardless of whose commit introduced it. **Fixed as EC-15
+(LOW):** the file exported two non-component builders
+(`orgCallTypeChoices`/`textCallTypeChoices`) and their shared type
+alongside the `CallTypeChips` component; moved them into a new sibling
+module, `callTypeChoices.ts`, and updated its two consumers
+(`CallTypeChips.test.tsx`, `ShiftReportsTab.tsx`). `npx eslint .` now 0
+warnings repository-wide; `npm run typecheck` still 0 errors.
+
+Full write-up: `docs/security-review/EC-14-equipment-check-shifts.md` →
+Pass 4.
+
+Completion gate: flake8/black/isort clean; `validate_migrations.py --strict`
+440 revisions, single head; scoped suite 397 passed / 1 pre-existing skip;
+full backend suite 11945 passed / 21 pre-existing skips / 0 failed; `npm run
+typecheck` 0 errors; `eslint .` 0 errors, 0 warnings; `vitest run
+apiCache.test.ts EquipmentCheckTemplateBuilder.test.tsx CallTypeChips.test.tsx
+ShiftDetailPanel.test.tsx` 226 passed.
+
+**Addendum: PR #2430 merged mid-review, on a head one commit behind this
+entry.** The repo owner merged #2430 at 10:45:53, on head `db6af476f`
+(round 2's commit) — before round 3's fix (`0b466619c`, EC-15) was pushed
+at 10:52:37. Confirmed directly: `origin/main` post-merge still has the two
+`eslint` warnings this entry says were fixed. EC-15 was carried forward on
+a fresh branch per CLAUDE.md Pitfall #24 via `git cherry-pick` of the exact
+commit that missed the merge — PR
+[#2432](https://github.com/thegspiro/the-logbook/pull/2432). Rotation row
+14 → ✅ regardless; the feature's own review is complete and this is a
+follow-up code-health fix, not grounds to hold the rotation open. Next:
+15 Scheduling.
+
+### 2026-09-09 — Feature 13 (Apparatus & NFC, pass 11 — rotation pass 4, direct assignment) — 1 fixed (P2, race)
+
+Assigned directly (not the ⬜-first pick, which was 12 Facilities — already
+merged as PR #2425 by a concurrent session; see that entry below and the
+rotation-row correction it prompted). Diffed against pass 10's merge
+(`05372cb91`): only a schema alias fix (`ApparatusStatusChange`/
+`ApparatusArchive` gained `alias_generator=to_camel`) and a frontend fix for
+a dead `Archive` button (previously navigated to a non-existent route; now a
+proper `ArchiveApparatusModal`) had landed since. Re-ran the mechanical
+checks fresh (route-auth AST walk: 88/88 + 5/5 unchanged; `.ilike()` escape
+grep: all 4 sites still pass `escape=LIKE_ESCAPE_CHAR`; `SET NULL`/
+`nullable=True` pairing: all 36 FKs still correct) and traced every check-in
+code path this feature dispatches into, per this pass's specific brief on
+CLAUDE.md Pitfall #27.
+
+**AP-13 finding 2 (P2, fixed)** — `SchedulingService.member_check_in` (one of
+the three targets `NfcTagService.check_in`'s station dispatch delegates to,
+alongside `EventService.self_check_in` and `AdminHoursService.clock_in`) was
+a read-then-write on `ShiftAttendance` with no row lock at all, unlike its
+two dispatch siblings, and `shift_attendance` carries no unique constraint on
+`(shift_id, user_id)` to fall back on. A bounced NFC tap (a card held too
+long, or a member tapping twice) could create a duplicate attendance row;
+`member_check_out`/`get_my_attendance` then crash with
+`MultipleResultsFound` on every later call for that shift+member pair.
+Root-cause-fixed in `scheduling_service.py` (not one of this feature's
+declared files, but the trigger is this feature's own primary interaction —
+see the write-up's scope note for the reasoning, which follows pass 3's
+AP-8-vs-`TrainingCategory` precedent) using the same `for_update=True` +
+locking-read pattern this file already uses for shift seat-capacity checks.
+Reproduced live with two real, independently-committing sessions before
+being called a finding; new guard test
+(`tests/test_shift_check_in_race.py`) confirmed failing (`TimeoutError`)
+against the pre-fix method via `git stash push -u` on the fix alone, passing
+with the fix restored. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11. Completion gate
+green: full backend suite 11934 passed / 21 pre-existing skips / 0 failed;
+flake8/black/isort clean; no frontend files touched this pass so no
+`tsc`/`eslint` run.
+
+**Round 2 (Codex review of finding 2's own fix, same PR, same day):**
+
+**AP-13 finding 3 (P2, fixed)** — `finalize_shift` fetched its shift row
+without locking it, while `member_check_in` (finding 2's own fix) now locks
+the shift row first and `ShiftAttendance` second. `finalize_shift` takes the
+same two locks in the opposite order in practice — it auto-closes open
+`ShiftAttendance` rows (an implicit lock at flush time) before it ever
+updates the shift row (at commit) — a textbook InnoDB deadlock between an
+NFC tap and a concurrent officer finalization. Fixed by locking the shift
+row first in `finalize_shift` too, matching `member_check_in`'s order.
+Verified with a new test (`tests/test_shift_finalize_lock_order_race.py`)
+proving `finalize_shift` now blocks on the same shift lock a concurrent
+check-in holds — a live cross-table deadlock is fragile to reproduce
+reliably, but structurally eliminating the reversed order is what the fix
+actually needs demonstrated, and this is the same mechanism
+`test_shift_check_in_race.py` already proves for two concurrent check-ins.
+Confirmed failing (`asyncio.TimeoutError`, `finalize_shift` never attempts a
+locking read pre-fix) via `git stash push -u`, passing with the fix
+restored, stable across 3 repeated runs.
+
+Also caught: finding 2's own guard test (`test_shift_check_in_race.py`)
+never primed session B's snapshot before session A's commit — B's very
+first statement was itself the (necessarily post-commit, since it blocks)
+shift lock, so a later plain read would have seen A's row regardless of
+whether the attendance check was actually a locking read. The test would
+have passed even without `.with_for_update()` on that check — the exact
+"the count/existence check itself must be a locking read" half of Pitfall
+#27 FAC-57 also had to learn this rotation. Fixed by adding an early plain
+read via session B before A commits, pinning a stale snapshot; verified by
+removing the attendance check's `.with_for_update()` in isolation and
+confirming the corrected test now fails (`AssertionError`) without it, then
+restoring the fix. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
+→ Pass 11, finding 3. Completion gate green: `pytest -k "apparatus or nfc or
+evoc or equipment_check or compartment or shift_check_in or scheduling"` —
+1127 passed, 1 pre-existing skip; full backend suite 11935 passed / 21
+pre-existing skips / 0 failed; flake8/black/isort clean; no frontend files
+touched.
+
+**Round 3 (Codex review of round 2's own fix, same PR, same day):**
+
+**AP-13 finding 4 (P2, fixed)** — Same deadlock shape as finding 3, a
+different second method: `save_closeout_calls` also fetched its shift row
+without locking it, then reconciled `OrgCall`/`OrgCallResponse` rows through
+`record_shift_calls` (implicit locks at DELETE/UPDATE time) before touching
+the shift row at commit — the reversed order `finalize_shift` (finding 3)
+had already been corrected out of, reached by a different call site into the
+same two tables. Fixed by locking the shift row first in
+`save_closeout_calls` too; confirmed via grep this is the only remaining
+caller of `record_shift_calls`/`attach_response` with the wrong order — no
+third method needed the same fix. Verified with the same blocking-proof
+pattern as finding 3 (new test,
+`tests/test_shift_closeout_calls_lock_order_race.py`): confirmed failing
+(`asyncio.TimeoutError`) via `git stash push -u` on the fix alone, passing
+with the fix restored, stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 4.
+Completion gate green: `pytest -k "apparatus or nfc or evoc or
+equipment_check or compartment or shift_check_in or scheduling"` — 1128
+passed, 1 pre-existing skip; full backend suite 11936 passed / 21
+pre-existing skips / 0 failed; flake8/black/isort clean; no frontend files
+touched.
+
+**Round 4 (Codex review of round 3's own fix, same PR, same day):**
+
+**AP-13 finding 5 (P2, fixed)** — A different bug class from findings 2–4:
+SQLAlchemy identity-map staleness, not lock ordering. `finalize_shift`'s and
+`save_closeout_calls`'s REST endpoints both authorize the caller through
+`_authorize_shift_management`, a plain non-locking `get_shift_by_id` that
+loads the `Shift` into the session's identity map before the service
+method's own `for_update=True` call runs on the same session. That locking
+call genuinely locks and reads the latest committed row at the database
+level, but SQLAlchemy's identity map returns the earlier, already-loaded
+Python object unchanged rather than refreshing it — so `shift.is_finalized`
+could read stale even after the lock correctly resolved against a shift a
+concurrent request had just finalized. Fixed once, at the root: added
+`.execution_options(populate_existing=True)` to `get_shift_by_id`'s query
+whenever `for_update=True`, covering all three `for_update` callers, not
+just the two Codex named. Verified with a new test
+(`test_shift_lock_identity_map_staleness.py`) mimicking
+`_authorize_shift_management`'s own shape: confirmed failing
+(`assert False == True`) via `git stash push -u` isolating just the
+`populate_existing` addition, passing with the fix restored, stable across
+3 repeated runs. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`
+→ Pass 11, finding 5. Completion gate green: `pytest -k "apparatus or nfc
+or evoc or equipment_check or compartment or shift_check_in or
+scheduling"` — 1129 passed, 1 pre-existing skip; full backend suite 11937
+passed / 21 pre-existing skips / 0 failed; flake8/black/isort clean; no
+frontend files touched.
+
+**Round 5 (Codex review of round 4's own fix, same PR, same day):**
+
+**AP-13 finding 6 (P1, fixed)** — Round 4's `populate_existing=True` fix
+correctly refreshes a stale identity-mapped `Shift`, but refreshing an
+object already in the identity map fires SQLAlchemy's `"refresh"` event,
+not `"load"` — a distinct registration `core/database.py`'s UTC-tagging
+listener didn't have. So the locking re-read silently stripped the tzinfo
+`_authorize_shift_management`'s earlier plain load had stamped onto
+`shift.end_time`, and `finalize_shift`'s `end_time > datetime.now(timezone.utc)`
+check then raised `TypeError` comparing naive vs. aware — on _every ordinary_
+finalize with a real end time, not just a race. Fixed at the root: factored
+the stamping logic into `_stamp_utc()` and registered it on both `"load"`
+and `"refresh"`, closing the same gap for every other `session.refresh()`
+call site in the codebase. One pre-existing test asserted a naive-datetime
+equality that was only ever true because of this bug; corrected to compare
+both sides UTC-normalized. Verified with a new test
+(`test_shift_refresh_utc_tagging.py`, 2 cases); both confirmed failing
+(`TypeError`; `assert ... tzinfo is not None`) via `git stash push -u`
+isolating just the new `"refresh"` listener, passing with the fix restored,
+stable across 3 repeated runs. Full write-up:
+`docs/security-review/AP-13-apparatus-nfc.md` → Pass 11, finding 6.
+Completion gate green: scoped keyword suite 1131 passed / 1 pre-existing
+skip; full backend suite 11939 passed / 21 pre-existing skips / 0 failed.
+
+**Round 6 (Codex review of round 5's own fix, same PR, same day):**
+
+**AP-13 finding 7 (P2, fixed)** — A third instance of findings 3/4's
+reversed-lock-order shape: `save_closeout_attendance` mutated an existing
+member's `ShiftAttendance` row in place, then a later entry's
+`_user_in_org` lookup (the XC-1 in-org check) triggered SQLAlchemy
+autoflush — an implicit attendance-row lock — before the shift row was
+ever locked, the reverse of `finalize_shift`'s corrected order. Fixed by
+locking the shift row first, matching `finalize_shift`/`save_closeout_calls`.
+Verified with `test_shift_closeout_attendance_lock_order_race.py`
+(two entries, one pre-existing + one new, to exercise the mutate-then-
+autoflush shape): confirmed failing (`asyncio.TimeoutError`) via
+`git stash push -u`, passing with the fix restored, stable across 3
+repeated runs. Full write-up: `AP-13-apparatus-nfc.md` → Pass 11, finding 7. Completion gate green: scoped keyword suite 1132 passed / 1
+pre-existing skip; full backend suite 11940 passed / 21 pre-existing
+skips / 0 failed.
+
+**Round 7 (Codex review of round 6's own fix, same PR, same day):**
+
+**AP-13 finding 8 (P1/P2, fixed)** — A new bug class: locking the shift
+row closes lock-ordering deadlocks and shift-object identity-map
+staleness, but does not by itself refresh the transaction's REPEATABLE
+READ snapshot for `ShiftAttendance` — the plain shift query
+`_authorize_shift_management` runs first is what fixes that snapshot,
+and a locking read on the shift doesn't touch it. (a) P1 —
+`finalize_shift`'s auto-close-open-attendance query was a plain read on
+that stale snapshot; a check-in committed while finalize waited on the
+shift lock would be left open forever, invisible to the just-fixed
+open-attendance step. (b) P2 — `save_closeout_attendance`'s (finding 7)
+existing-rows read had the same shape; the same race reintroduces finding
+2's duplicate-row bug. Fixed both with `.with_for_update()`. Verified with
+two new tests (`test_shift_finalize_attendance_snapshot_staleness.py`,
+`test_shift_closeout_attendance_snapshot_staleness.py`), each proving the
+concurrently-committed row is seen by reading the table fresh from a third
+session: confirmed failing (an attendance row left open; a literal
+duplicate row) via `git stash push -u`, passing with the fix restored,
+stable across 3 repeated runs. Also identified but deliberately deferred:
+`CallTrackingService._partition_existing` has the same shape, but its
+second query is a `COUNT`/`GROUP BY` aggregate needing its own design pass
+— flagged in the write-up rather than rushed. Full write-up:
+`AP-13-apparatus-nfc.md` → Pass 11, finding 8. Completion gate green:
+scoped keyword suite 1134 passed / 1 pre-existing skip; full backend suite
+11942 passed / 21 pre-existing skips / 0 failed.
+
+**Round 8 (Codex review of round 7's own fix, same PR, same day):**
+
+**AP-13 finding 9 (P1/P2, fixed)** — Two more instances of finding 8's
+same snapshot-staleness shape. (a) P1 — `finalize_shift`'s `total_hours`
+`SUM` and per-member `call_count` queries were still plain reads; finding
+8's open-attendance fix doesn't cover an already-checked-out row (the
+shape `save_closeout_attendance` writes), so a completed attendance row
+committed mid-lock-wait was silently excluded from both totals. (b) P2 —
+the identity-map sibling of finding 5, now on `ShiftAttendance`:
+`NfcTagService._check_in_shift` preloads the attendance row plainly before
+`member_check_in`'s own locking read on the same session; without
+`populate_existing=True`, a second NFC tap targeting a pre-existing
+(not-yet-checked-in) row already cached by that session would see a stale
+`checked_in_at=None` even after a first tap committed a real check-in,
+silently overwriting it instead of being rejected. Fixed with
+`.with_for_update()` on the two `finalize_shift` queries and
+`.execution_options(populate_existing=True)` on `member_check_in`'s
+locking read. Verified with two new tests
+(`test_shift_finalize_snapshot_totals_staleness.py`,
+`test_shift_check_in_identity_map_staleness.py` — the latter specifically
+requiring a _pre-existing_ placeholder row, since `get_my_attendance`
+returning `None` caches nothing and can't exercise the staleness at all, a
+lesson learned mid-test): confirmed failing pre-fix (`total_hours` `0.0`
+instead of `1.0`; a `call_count` never set; a second tap's error `None`
+instead of `"Already checked in"`) via `git stash push -u`, passing with
+the fix restored, stable across 3 repeated runs. Full write-up:
+`AP-13-apparatus-nfc.md` → Pass 11, finding 9. Completion gate green:
+scoped keyword suite 1136 passed / 1 pre-existing skip; full backend suite
+11944 passed / 21 pre-existing skips / 0 failed.
+
+**Round 9 (Codex review of round 8's own fix, same PR, same day):**
+
+**AP-13 finding 10 (P1, fixed)** — Closed the item finding 8 deferred:
+`CallTrackingService._partition_existing`'s existence-check query (a
+plain, non-aggregate read of this shift's existing `OrgCallResponse.call_id`
+values) was on the same stale snapshot. Two closeout-calls saves racing on
+the same shift — the second queued behind the first's shift lock — would
+have the second's existence check still read "no calls recorded yet" even
+after the first committed, doubling the shift's persisted call responses.
+The design concern that justified deferring finding 8's item didn't
+actually apply to this half: it's a plain `SELECT`, not the aggregate
+`COUNT`/`GROUP BY` query (which stays deferred, unchanged, since it only
+classifies owned-vs-shared and doesn't decide whether a new row gets
+created). Fixed with `.with_for_update()`. Verified with a new test
+(`test_shift_closeout_calls_snapshot_staleness.py`): confirmed failing pre-fix
+(2 distinct `OrgCall` rows found instead of 1) via `git stash push -u`,
+passing with the fix restored, stable across 3 repeated runs. Full
+write-up: `AP-13-apparatus-nfc.md` → Pass 11, finding 10. Completion gate
+green: scoped keyword suite 1274 passed / 1 pre-existing skip; full
+backend suite 11945 passed / 21 pre-existing skips / 0 failed.
+
+Ten Codex review rounds total on this one PR, each finding a genuine issue
+in the previous round's own fix — the longest single-PR correction chain
+this rotation has produced. PR #2428 merged clean after round 9 produced
+no further findings: 11/11 review threads resolved, `mergeable_state:
+clean`. Squash-merged as `1005d5bac`. Rotation row 13 → ✅. Next: 14
+Equipment check & shifts.
+
+### 2026-09-09 — Feature 12 (Facilities, pass 4)'s PR #2425 merged
+
+The pass's own initial review (FAC-46, HIGH — two unconditional
+`TypeError`s, one wired to real shipped UI) plus seven subsequent Codex
+review rounds, each finding additional or fix-related bugs, through FAC-57
+(a genuine concurrency race, CLAUDE.md Pitfall #27's shape, in FAC-51's own
+merge-then-validate fix). Not the longest single-PR correction chain this
+rotation has seen: pass 3's "round N" numbering is a pass-wide ordinal
+spanning three PRs (#2191, #2195, #2198), not a per-PR count, but PR #2198
+(FAC-29 through FAC-45) alone still carried 8 of those numbered rounds on
+top of its own initial review (pass-3 rounds 8 through 14, plus round 16;
+round 15 was not its own completion-gate round) — comparable to, and
+arguably longer than, this PR's initial review plus seven. Not every round
+found a regression in
+the previous one's fix, and not every independent bug was masked the same
+way: FAC-47 was a pre-existing field-name mismatch a crash had genuinely
+been masking, reachable only once FAC-46's fix let
+`create_compliance_item` actually run; FAC-50 was independently observable
+the whole time — a contact-name-only submission 422'd at the schema layer
+before ever reaching the method FAC-46 fixed, so FAC-46's crash never
+stood between a caller and this defect. FAC-48, FAC-51, FAC-52, FAC-54 and
+FAC-57 were genuine regressions in a prior round's fix. 12 findings total
+(FAC-46 through FAC-57), all
+fixed. 4 prior flags (FAC-13, FAC-30, FAC-41, FAC-44) re-verified still
+open, unchanged since pass 3. 17/17 CI checks green on the final head,
+`mergeable_state: clean`, all 11 review threads resolved. Squash-merged as
+`d24934d67`.
+
+Worth recording for the rotation's own discipline: one of FAC-57's guard
+tests, a first draft racing two full service calls via bare
+`asyncio.gather` with no explicit synchronization, turned out to pass on
+_both_ sides of its own pre-fix `git stash` check — a false negative caught
+before commit by actually running that check, not assumed from the test
+reading correctly. Rewritten with explicit lock/block/release
+synchronization — an `asyncio.Event` fired when the second session reaches
+its own locking read, followed by a bounded wait asserting the task is
+still pending — the same pattern already used throughout
+`test_facility_document_reference_race.py`. That pattern is a heuristic,
+not a hard guarantee: on a sufficiently slow runner the bounded wait could
+still elapse before the second session's query reaches the database, so an
+implementation that accepts the lock parameter without truly acquiring a
+row lock could in principle pass by the two sessions coincidentally
+serializing in the right order anyway. Confirming genuine blocking beyond
+that heuristic would need lock-wait visibility from the database itself
+(e.g. polling `performance_schema.data_lock_waits`), which none of this
+suite's concurrency tests do today; treat this as a known limitation of an
+established, repository-wide test pattern, not a defect specific to
+FAC-57. See `FAC-12-facilities.md` → Pass 4 for the full
+round-by-round detail (FAC-47 through FAC-57): most carry their own
+before/after failure text from a `git stash`-isolated guard test. FAC-49,
+FAC-54 and FAC-56 are type-only corrections with no runtime behavior to
+exercise; FAC-53 is a real shipped runtime behavior (a form's
+payload-construction logic) but was verified without a test harness — the
+module had no existing component-test file and building one was judged
+disproportionate to the fix, per that finding's own write-up. All four
+were verified instead by inspection and `tsc --noEmit`/`eslint` passing
+clean.
+
+Feature 12 is now fully closed for this pass. Next: 13 Apparatus & NFC.
+
+### 2026-09-09 — Feature 12 (Facilities, pass 4) — 1 fixed (HIGH, two-part), 4 prior flags re-verified open
+
+Full re-review against all seven checklist dimensions: `facilities.py` (98
+routes, all permission-gated — re-counted, unchanged since pass 3),
+`facilities_service.py` read end to end, the MCP tool surface
+(`app/mcp/tools/facilities.py`, three read-only tools, all org-scoped, no
+sensitive fields projected — found clean), and the frontend module (all 35
+files in `frontend/src/modules/facilities/` plus
+`frontend/src/services/facilitiesServices.ts`) read/grepped for the
+recurring pitfalls, no new findings there.
+
+**FAC-46 (HIGH, fixed)** — a whole-file AST sweep of every `Model(...)`
+constructor call in `facilities_service.py` against each model's actual
+mapped columns found two service methods passing a keyword argument their
+target didn't accept: `create_compliance_item` called with
+`checklist_id=checklist_id` by its only caller but the method's signature
+didn't have that parameter (`TypeError` on every call, verified directly by
+binding the endpoint's exact call shape against the real signature — also
+compounded by a required-body-field schema mismatch that meant even a
+well-formed call would 422 before reaching the crash, since the shipped
+frontend type never sends `checklist_id`; this path is unreachable through
+today's UI, no "add compliance item" control exists), and
+`create_emergency_contact` passing `created_by=created_by` into
+`FacilityEmergencyContact(...)`, a model with no such column — this one
+**is** wired to real, shipped UI (`ContactsSection.tsx`'s "Add Emergency
+Contact" form), so every attempt to add a facility emergency contact has
+been failing with an unhandled 500 for every organization using this
+screen, unconditionally, since the method was written. Fixed both (the
+compliance-item path now takes `checklist_id` as an explicit,
+path-authoritative parameter matching `list_compliance_items`' own shape;
+neither method stores `created_by` where the model has no column for it,
+though both keep accepting it for signature consistency). 6 new guard
+tests, all confirmed to fail against the pre-fix source via `git stash`
+isolating just the two source files, including a reusable
+`TestModelConstructorsMatchTheirColumns` sweep so a future create method
+copying the same pattern fails a test instead of shipping silently.
+
+**Prior open findings re-verified, not re-derived:** FAC-13 (folder-tree
+over-restriction), FAC-30 (`facilities.delete` can't pass the generic
+Documents ACL), FAC-41 (org-wide reference lock), FAC-44 (unindexed
+scan-and-lock on two folder lookups) — all four confirmed still present in
+current code exactly as pass 3 described; none needed re-fixing. FAC-30,
+FAC-41 and FAC-44 had never been mirrored to `KNOWN_LIMITATIONS.md` despite
+being open owner-decision items since pass 3 — added this pass, alongside
+the already-present FAC-13 entry.
+
+Full write-up: `docs/security-review/FAC-12-facilities.md` → Pass 4. Full
+completion gate green (flake8/black/isort clean, migrations valid, 331
+facilities/documents tests + full 11922-test backend suite passed; no
+frontend file changed this pass, so `tsc`/`eslint` not run). Next: 13
+Apparatus & NFC.
 
 ### 2026-09-09 — Feature 11 (Inventory, pass 4)'s PR #2422 merged
 

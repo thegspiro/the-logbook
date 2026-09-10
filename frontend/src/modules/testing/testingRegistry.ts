@@ -20,6 +20,14 @@
 import { FACILITY_ENTRY_PERMISSIONS } from '../facilities/routes';
 import { MEDICAL_VIEW_PERMISSIONS } from '../medical-supplies/routes';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../governance/routes';
+import {
+  MEMBERS_SETTINGS_ANY_PERMISSION,
+  MEMBERS_SETTINGS_EVOC_GATE,
+  MEMBERS_SETTINGS_IDS_GATE,
+  MEMBERS_SETTINGS_RANKS_GATE,
+  MEMBERS_SETTINGS_TIERS_GATE,
+  MEMBERS_SETTINGS_VISIBILITY_GATE,
+} from '../membership/routes';
 
 export interface TestPageEntry {
   /** Route pattern exactly as declared in App.tsx or a module's routes.tsx. */
@@ -165,12 +173,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/onboarding/apparatus', label: 'Apparatus setup', isPublic: true },
       { path: '/onboarding/modules', label: 'Module selection', isPublic: true },
       {
+        path: '/onboarding/modules/:moduleId/config',
+        label: 'Module configuration (removed)',
+        note: 'The per-module permission step was removed; positions own that decision',
+        redirectsTo: '/onboarding/modules',
+        isPublic: true,
+      },
+      {
         path: '/onboarding/module-selection',
         label: 'Module selection (alias URL)',
         note: 'Same page, URL stays as typed',
         isPublic: true,
       },
-      { path: '/onboarding/modules/:moduleId/config', label: 'Module configuration', isPublic: true },
       { path: '/onboarding/system-owner', label: 'System owner creation', isPublic: true },
       {
         path: '/onboarding/admin-user',
@@ -202,14 +216,33 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/members/admin/settings',
         label: 'Members settings — ?tab= redirect',
-        permission: 'members.manage',
+        anyPermission: MEMBERS_SETTINGS_ANY_PERMISSION,
       },
       {
         path: '/members/admin/settings/visibility',
         label: 'Members settings — contact visibility',
-        permission: 'members.manage',
+        anyPermission: MEMBERS_SETTINGS_VISIBILITY_GATE,
       },
-      { path: '/members/admin/settings/ids', label: 'Members settings — membership IDs', permission: 'members.manage' },
+      {
+        path: '/members/admin/settings/ids',
+        label: 'Members settings — membership IDs',
+        anyPermission: MEMBERS_SETTINGS_IDS_GATE,
+      },
+      {
+        path: '/members/admin/settings/ranks',
+        label: 'Members settings — operational ranks',
+        anyPermission: MEMBERS_SETTINGS_RANKS_GATE,
+      },
+      {
+        path: '/members/admin/settings/tiers',
+        label: 'Members settings — membership tiers',
+        anyPermission: MEMBERS_SETTINGS_TIERS_GATE,
+      },
+      {
+        path: '/members/admin/settings/evoc',
+        label: 'Members settings — EVOC levels',
+        anyPermission: MEMBERS_SETTINGS_EVOC_GATE,
+      },
       { path: '/admin/members', label: 'Members admin (legacy URL)', redirectsTo: '/members/admin' },
       { path: '/members/add', label: 'Add member (legacy URL)', redirectsTo: '/members/admin?tab=add' },
       { path: '/members/import', label: 'Import members (legacy URL)', redirectsTo: '/members/admin?tab=import' },

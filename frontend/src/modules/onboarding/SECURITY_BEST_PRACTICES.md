@@ -56,10 +56,10 @@ version of this section listed only the first and called it complete.
 **`localStorage`, written by the Zustand `persist` middleware — this one
 outlives the tab:**
 
-| Key                      | Contents                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `navigationLayout`       | A UI preference                                                                                                                                                                                                                                                                                                                                                                                        |
-| **`onboarding-storage`** | The store's `partialize` set: department name, logo, navigation layout, email/file-storage/auth **platform names**, the "configured" booleans, **`systemOwnerFirstName` / `systemOwnerLastName` / `systemOwnerEmail`**, `stations`, `apparatus`, `positionsConfig`, `selectedModules`, `moduleStatuses`, `modulePermissionConfigs`, and wizard progress (`currentStep`, `completedSteps`, `lastSaved`) |
+| Key                      | Contents                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `navigationLayout`       | A UI preference                                                                                                                                                                                                                                                                                                                                                             |
+| **`onboarding-storage`** | The store's `partialize` set: department name, logo, navigation layout, email/file-storage/auth **platform names**, the "configured" booleans, **`systemOwnerFirstName` / `systemOwnerLastName` / `systemOwnerEmail`**, `stations`, `apparatus`, `positionsConfig`, `selectedModules`, `moduleStatuses`, and wizard progress (`currentStep`, `completedSteps`, `lastSaved`) |
 
 No passwords. No API keys. No OAuth secrets. Provider credentials —
 `googleClientSecret`, `microsoftClientSecret`, `s3SecretAccessKey`,
@@ -74,9 +74,6 @@ credential, and it is the identity the wizard is in the middle of creating — b
 it is PII sitting on a shared setup machine after the browser is closed, so it
 belongs in this inventory rather than being discovered later. `ResetProgressButton`
 clears it; nothing else does automatically.
-
-`modulePermissionConfigs` is persisted here too — and is read by nothing. See
-**ONBOARD-1** in [`docs/KNOWN_LIMITATIONS.md`](../../../../docs/KNOWN_LIMITATIONS.md).
 
 `utils/storage.ts` keeps the old key names in a `DEPRECATED_SENSITIVE_KEYS`
 list, purely so a returning browser gets them purged:

@@ -210,12 +210,16 @@ export interface EmergencyContact {
   id: string;
   facilityId: string;
   contactType: string;
-  companyName?: string;
-  contactName?: string;
-  phone?: string;
-  altPhone?: string;
-  email?: string;
-  serviceContractNumber?: string;
+  // Optional-and-nullable: FacilityEmergencyContactResponse declares these
+  // Optional[...] with no response_model_exclude_none, so a contact-name-
+  // only record (or one with a cleared field) comes back with an explicit
+  // JSON null, not an omitted key.
+  companyName?: string | null;
+  contactName?: string | null;
+  phone?: string | null;
+  altPhone?: string | null;
+  email?: string | null;
+  serviceContractNumber?: string | null;
   priority?: number;
   isActive?: boolean;
   createdAt: string;
@@ -231,6 +235,18 @@ export interface EmergencyContactCreate {
   alt_phone?: string;
   email?: string;
   service_contract_number?: string;
+  priority?: number;
+}
+
+export interface EmergencyContactUpdate {
+  facility_id?: string;
+  contact_type?: string;
+  company_name?: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  alt_phone?: string | null;
+  email?: string | null;
+  service_contract_number?: string | null;
   priority?: number;
 }
 
@@ -409,13 +425,21 @@ export interface ComplianceChecklistCreate {
 
 export interface ComplianceItem {
   id: string;
+  organizationId: string;
   checklistId: string;
+  // Optional-and-nullable: the backend response schema declares these
+  // Optional[...] with no response_model_exclude_none, so FastAPI sends an
+  // explicit JSON null (not an omitted key) whenever the item has no value
+  // yet — a plain `?:` here would type-check a `null` value straight past a
+  // caller that only checked for `undefined`.
+  sortOrder?: number | null;
   description: string;
-  isCompleted: boolean;
-  completedDate?: string;
-  completedBy?: string;
-  notes?: string;
-  sortOrder?: number;
+  isCompliant?: boolean | null;
+  findings?: string | null;
+  correctiveAction?: string | null;
+  correctiveActionDeadline?: string | null;
+  correctiveActionCompleted: boolean;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -423,6 +447,11 @@ export interface ComplianceItem {
 export interface ComplianceItemCreate {
   description: string;
   sort_order?: number;
+  is_compliant?: boolean;
+  findings?: string;
+  corrective_action?: string;
+  corrective_action_deadline?: string;
+  corrective_action_completed?: boolean;
   notes?: string;
 }
 
@@ -743,7 +772,7 @@ export const facilitiesService = {
     const response = await api.post<EmergencyContact>('/facilities/emergency-contacts', data);
     return response.data;
   },
-  async updateEmergencyContact(contactId: string, data: Partial<EmergencyContactCreate>): Promise<EmergencyContact> {
+  async updateEmergencyContact(contactId: string, data: EmergencyContactUpdate): Promise<EmergencyContact> {
     const response = await api.patch<EmergencyContact>(`/facilities/emergency-contacts/${contactId}`, data);
     return response.data;
   },
@@ -1129,6 +1158,29 @@ export const ranksService = {
   async getRanks(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
     const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
     return asArray(response.data);
+  },
+
+  /**
+   * The ladder as the screen that *edits* it must see it: a malformed response
+   * throws rather than becoming an empty list.
+   *
+   * `getRanks` above routes through `asArray` on purpose — a captive portal or
+   * proxy error page answers 200 with an HTML body, and every surface that only
+   * *displays* ranks (a dropdown, a filter, the elections roster) is better off
+   * rendering nothing than dying through the ErrorBoundary.
+   *
+   * The administration screen is the one place that inverts. There, an empty
+   * list is not a degraded view — it is a claim about the database, rendered as
+   * "no ranks configured", to an officer who can act on it. `asArray` erases
+   * exactly the distinction that screen exists to show, so it reads the
+   * response itself and lets the failure stay a failure.
+   */
+  async getRankLadder(): Promise<OperationalRankResponse[]> {
+    const response = await api.get<OperationalRankResponse[]>('/operational-ranks');
+    if (!Array.isArray(response.data)) {
+      throw new TypeError('The rank list response was not an array');
+    }
+    return response.data;
   },
 
   async getRank(rankId: string): Promise<OperationalRankResponse> {

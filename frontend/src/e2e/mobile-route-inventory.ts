@@ -154,7 +154,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     path: '/communications/email-templates',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    detail:
+      'one of the seven SettingsLayout screens, and the only one left carrying debt this pass would fail on. Its 20px list filters and its breadcrumb overflow at 320px are both fixed; what remains is a heading-order jump (the shell h1, then h3 group headers with an h4 under them), which is a hierarchy to re-level rather than a control to resize. List it when that is done.',
   },
   {
     path: '/communications/messages',
@@ -197,8 +198,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/elections/settings',
     source: 'src/modules/elections/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/elections/:electionId',
@@ -785,16 +786,32 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/members/admin/settings/visibility',
     source: 'src/modules/membership/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'first section of one SettingsLayout screen. Ratcheted at budget 0 it fails on a single 44x24 control: SettingsToggle, whose toggle-track is 44x24 at all 25 of its call sites app-wide. That is the same debt keeping the other six SettingsLayout section routes off the pass, and it is not this screen’s to carry — the toggles moved here unchanged from /settings?tab=members, where the general-section default meant the ratchet never measured them either. Shell, overflow and text coverage come from /members/admin; list this route the moment toggle-track is fixed.',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/members/admin/settings/ids',
     source: 'src/modules/membership/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'second section of the same SettingsLayout screen as /members/admin/settings/visibility above, and blocked from the pass by the same toggle-track geometry',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/members/admin/settings/ranks',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/members/admin/settings/tiers',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/members/admin/settings/evoc',
+    source: 'src/modules/membership/routes.tsx',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/members/admin/waivers',
@@ -939,7 +956,7 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     source: 'src/modules/onboarding/routes.tsx',
     coverage: 'exempt',
     detail:
-      'parameterized setup route; reachable only with a seeded onboarding store, so it redirects to step 1 under test. Its landmark, the one thing the shared shell does not give it, is asserted by skipLinkTarget.test.ts',
+      'legacy redirect to the module step; the per-module configuration screen it addressed has been removed, so there is nothing here to measure',
   },
   {
     path: '/onboarding/module-selection',

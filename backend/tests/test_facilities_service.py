@@ -11,19 +11,32 @@ Mocked sessions/getters — no DB — so it runs in the sandbox.
 """
 
 import inspect
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.dialects import mysql
 
-from app.models.facilities import Facility, FacilityPhoto
+from app.models.facilities import (
+    Facility,
+    FacilityComplianceItem,
+    FacilityEmergencyContact,
+    FacilityPhoto,
+)
 from app.schemas.facilities import (
+    EmergencyContactTypeEnum,
     FacilityAccessKeyUpdate,
     FacilityCapitalProjectUpdate,
+    FacilityComplianceItemCreate,
+    FacilityComplianceItemResponse,
     FacilityComplianceItemUpdate,
     FacilityDocumentResponse,
+    FacilityEmergencyContactCreate,
+    FacilityEmergencyContactResponse,
+    FacilityEmergencyContactUpdate,
     FacilityOccupantUpdate,
     FacilityPhotoResponse,
     FacilityRoomUpdate,
@@ -285,3 +298,488 @@ class TestFacilityFileResponseRedaction:
 
     def test_document_response_excludes_file_path(self):
         assert "file_path" not in FacilityDocumentResponse.model_fields
+
+
+class TestListComplianceItems:
+    """FAC-55: Codex review of the FAC-47/FAC-48 fix, PR #2425. Once
+    create/update actually stored the caller's requested `sort_order` (as
+    `item_number`), `list_compliance_items` still ordered solely by
+    descending `created_at` -- so the newly functional ordering was stored
+    but never read back in order. Ordered by `item_number` (NULLs last,
+    MySQL-compatible per `app/utils/sql_ordering.nulls_last_asc` --
+    `NULLS LAST` itself is Postgres/SQLite-only syntax MySQL rejects
+    outright), with the previous `created_at` ordering kept as the
+    tie-breaker for equal or missing values.
+    """
+
+    async def test_orders_by_item_number_with_created_at_as_tiebreak(
+        self, service, mock_db, org_id
+    ):
+        mock_db.execute.return_value = SimpleNamespace(
+            scalars=lambda: SimpleNamespace(all=lambda: [])
+        )
+        await service.list_compliance_items(org_id)
+
+        statement = mock_db.execute.await_args.args[0]
+        sql = str(
+            statement.compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        order_by = sql.split("order by", 1)[1].split("limit", 1)[0]
+        assert "nulls last" not in order_by
+        assert "item_number is null" in order_by
+        assert order_by.index("item_number") < order_by.index("created_at")
+
+
+class TestCreateComplianceItem:
+    """FAC-46: the only caller of `create_compliance_item`
+    (`POST /compliance-checklists/{checklist_id}/items`) passes
+    `checklist_id=checklist_id` as a keyword argument the method did not
+    accept — `TypeError: create_compliance_item() got an unexpected keyword
+    argument 'checklist_id'` on every single call, unconditionally (not a
+    race, not an edge case). Not caught by the endpoint's `except ValueError`
+    handler, so it reached the client as a raw 500. Verified directly against
+    the method's real signature via `inspect.signature(...).bind(...)`
+    with the endpoint's exact call shape, both before this fix (raised
+    `TypeError`) and after (binds cleanly) — see the PR description for the
+    `git stash`-isolated confirmation against the pre-fix source.
+
+    Separately, the request body's `checklist_id` field was *required*
+    (`FacilityComplianceItemCreate.checklist_id: str`) while the shipped,
+    unused frontend service method (`facilitiesServices.ts`'s
+    `createComplianceItem`) never sends it — so even a caller who supplied
+    the right keyword arguments would have 422'd at the schema layer before
+    ever reaching this method. The field is now optional and ignored; the
+    URL path's checklist_id is the sole, authoritative source, matching
+    `list_compliance_items`' own explicit `checklist_id` parameter.
+    """
+
+    async def test_item_is_created_under_the_path_checklist(self, service, org_id):
+        checklist_id = str(uuid4())
+        checklist = MagicMock()
+        with patch.object(service, "get_compliance_checklist", return_value=checklist):
+            item = await service.create_compliance_item(
+                checklist_id=checklist_id,
+                item_data=FacilityComplianceItemCreate(description="Exit lights"),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert item.checklist_id == checklist_id
+        assert item.description == "Exit lights"
+
+    async def test_a_mismatched_body_checklist_id_is_ignored_not_trusted(
+        self, service, org_id
+    ):
+        """The URL path is authoritative — a caller cannot attach an item to
+        a different checklist by setting a mismatched value in the body."""
+        path_checklist_id = str(uuid4())
+        body_checklist_id = str(uuid4())
+        checklist = MagicMock()
+        with patch.object(service, "get_compliance_checklist", return_value=checklist):
+            item = await service.create_compliance_item(
+                checklist_id=path_checklist_id,
+                item_data=FacilityComplianceItemCreate(
+                    checklist_id=body_checklist_id, description="Exit lights"
+                ),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert item.checklist_id == path_checklist_id
+
+    async def test_invalid_checklist_raises_clean_value_error(self, service, org_id):
+        """A checklist outside the caller's org (or missing) is a 400, not a
+        500 — the endpoint's `except ValueError` handler covers this."""
+        with patch.object(service, "get_compliance_checklist", return_value=None):
+            with pytest.raises(ValueError, match="Invalid compliance checklist"):
+                await service.create_compliance_item(
+                    checklist_id=str(uuid4()),
+                    item_data=FacilityComplianceItemCreate(description="x"),
+                    organization_id=org_id,
+                    created_by=str(uuid4()),
+                )
+
+    def test_endpoint_call_shape_binds_against_the_real_signature(self):
+        """Source-inspection guard: the endpoint
+        (`api/v1/endpoints/facilities.py::create_facility_compliance_item`)
+        calls `service.create_compliance_item(checklist_id=..., item_data=...,
+        organization_id=..., created_by=...)`. Bind that exact call shape
+        against the real method signature so a future signature edit that
+        reopens the mismatch fails here instead of only at runtime."""
+        import inspect
+
+        sig = inspect.signature(FacilitiesService.create_compliance_item)
+        sig.bind(
+            None,  # self
+            checklist_id="x",
+            item_data=object(),
+            organization_id="org",
+            created_by="user",
+        )
+
+    async def test_sort_order_is_stored_as_item_number(self, service, org_id):
+        """Codex review of the FAC-46 fix, PR #2425: the frontend's already-
+        shipped `ComplianceItemCreate.sort_order` (facilitiesServices.ts) and
+        the schema's `item_number` field were different names for the same
+        thing, so a real caller's `sort_order` was silently dropped by
+        Pydantic rather than stored — the request would succeed with the
+        requested ordering quietly lost. The schema field is now named
+        `sort_order` to match; the ORM column stays `item_number`
+        (unchanged, no migration) and the service translates between them.
+        """
+        checklist = MagicMock()
+        with patch.object(service, "get_compliance_checklist", return_value=checklist):
+            item = await service.create_compliance_item(
+                checklist_id=str(uuid4()),
+                item_data=FacilityComplianceItemCreate(
+                    description="Exit lights", sort_order=3
+                ),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert item.item_number == 3
+        assert not hasattr(item, "sort_order")
+
+    def test_response_serializes_item_number_as_sort_order(self):
+        """The other half of the same finding: a response built from the ORM
+        row must expose the frontend's expected `sortOrder` key, not the
+        model's own `itemNumber`. `FacilityComplianceItemResponse` reads the
+        model's `item_number` attribute (`validation_alias`) but serializes
+        it under `sortOrder` (`serialization_alias`), matching
+        `ComplianceItem.sortOrder` in facilitiesServices.ts.
+        """
+        item = FacilityComplianceItem(
+            id=str(uuid4()),
+            organization_id=str(uuid4()),
+            checklist_id=str(uuid4()),
+            item_number=7,
+            description="Exit lights",
+            corrective_action_completed=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        payload = FacilityComplianceItemResponse.model_validate(item).model_dump(
+            by_alias=True
+        )
+        assert payload["sortOrder"] == 7
+        assert "itemNumber" not in payload
+        assert "item_number" not in payload
+
+
+class TestUpdateComplianceItem:
+    """Codex review of the FAC-46 fix, PR #2425 -- the update path has the
+    identical sort_order/item_number translation need as create above, and
+    without it `apply_updates` would reject `sort_order` outright as an
+    unknown field on `FacilityComplianceItem` (it only maps to real column
+    names) rather than silently dropping it.
+    """
+
+    async def test_sort_order_update_is_applied_to_item_number(self, service, org_id):
+        item = FacilityComplianceItem(
+            id=str(uuid4()),
+            organization_id=org_id,
+            checklist_id=str(uuid4()),
+            item_number=1,
+            description="Exit lights",
+            corrective_action_completed=False,
+        )
+        with patch.object(service, "get_compliance_item", return_value=item):
+            updated = await service.update_compliance_item(
+                item_id=item.id,
+                item_data=FacilityComplianceItemUpdate(sort_order=9),
+                organization_id=org_id,
+            )
+        assert updated.item_number == 9
+
+    async def test_legacy_item_number_key_still_applies_the_update(
+        self, service, org_id
+    ):
+        """Codex review of the FAC-47 fix itself, PR #2425: unlike create
+        (unreachable before FAC-46), the update endpoint was already live
+        before this rename, so a real caller may still send the previously
+        documented `{"item_number": 9}` PATCH body. Without accepting that
+        key too, Pydantic's default extra="ignore" behavior silently drops
+        it, `exclude_unset=True` sees no field set, and the update
+        "succeeds" as a no-op that leaves the ordering unchanged.
+        `FacilityComplianceItemUpdate.sort_order` now accepts `item_number`
+        as an additional validation alias, so the legacy payload still
+        resolves to `sort_order` and still applies.
+        """
+        item = FacilityComplianceItem(
+            id=str(uuid4()),
+            organization_id=org_id,
+            checklist_id=str(uuid4()),
+            item_number=1,
+            description="Exit lights",
+            corrective_action_completed=False,
+        )
+        legacy_payload = FacilityComplianceItemUpdate.model_validate({"item_number": 9})
+        with patch.object(service, "get_compliance_item", return_value=item):
+            updated = await service.update_compliance_item(
+                item_id=item.id,
+                item_data=legacy_payload,
+                organization_id=org_id,
+            )
+        assert updated.item_number == 9
+
+
+class TestCreateEmergencyContact:
+    """FAC-46: `create_emergency_contact` passed `created_by=created_by` into
+    `FacilityEmergencyContact(...)` — but that model has no `created_by`
+    column (only its sibling `FacilityComplianceChecklist` does; this one
+    tracks no author). SQLAlchemy's declarative constructor rejects any
+    keyword that isn't a mapped attribute, so this raised
+    `TypeError: 'created_by' is an invalid keyword argument for
+    FacilityEmergencyContact` on every call — unconditionally, not a race —
+    and unlike the compliance-item bug above, `POST /facilities/emergency-
+    contacts` is wired to real, shipped UI (`ContactsSection.tsx`'s "Add
+    Emergency Contact" form), so every attempt to add one has been failing
+    with a raw 500 for every organization using this screen.
+
+    Found by a repository-wide static sweep (AST-walking every
+    `Model(...)` call site in facilities_service.py against the model's
+    actual mapped attributes, both explicit keywords and `**schema.
+    model_dump()` spreads) after the identical bug was found by hand in
+    `create_compliance_item` — see TestCreateComplianceItem above. The
+    sweep found exactly these two instances and no others.
+    """
+
+    async def test_contact_is_created_without_crashing(self, service, org_id):
+        facility = MagicMock()
+        with patch.object(service, "get_facility", return_value=facility):
+            contact = await service.create_emergency_contact(
+                contact_data=FacilityEmergencyContactCreate(
+                    facility_id=str(uuid4()),
+                    contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+                    company_name="Acme Alarm Co.",
+                ),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert contact.company_name == "Acme Alarm Co."
+
+    async def test_contact_name_only_is_permitted(self, service, org_id):
+        """Codex review of the FAC-46 fix, PR #2425: the shipped
+        ContactsSection.tsx form's own "company name or contact name is
+        required" rule permits submitting only a contact_name (e.g. a
+        facility's own on-call staff, with no vendor company behind them),
+        but `FacilityEmergencyContactCreate` required `company_name` and the
+        model column was NOT NULL -- so this supported input still 422'd
+        before ever reaching this now-repaired method. `company_name` is now
+        nullable on both the schema and the column (see the paired
+        migration), guarded by a schema-level "at least one" validator.
+        """
+        facility = MagicMock()
+        with patch.object(service, "get_facility", return_value=facility):
+            contact = await service.create_emergency_contact(
+                contact_data=FacilityEmergencyContactCreate(
+                    facility_id=str(uuid4()),
+                    contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+                    contact_name="Jane Doe",
+                ),
+                organization_id=org_id,
+                created_by=str(uuid4()),
+            )
+        assert contact.contact_name == "Jane Doe"
+        assert contact.company_name is None
+
+    def test_neither_name_is_rejected_at_the_schema_layer(self):
+        """The other half of the same finding: a payload with neither name
+        must fail validation before it can reach the database and produce
+        a contact nothing can identify."""
+        with pytest.raises(ValidationError, match="company_name or contact_name"):
+            FacilityEmergencyContactCreate(
+                facility_id=str(uuid4()),
+                contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            )
+
+    def test_legacy_blank_name_row_still_serializes(self):
+        """FAC-52: Codex review of the FAC-50 fix, PR #2425. Before this
+        migration, `company_name` was a required `str` with no
+        `min_length`, so a caller could (and, per Codex, plausibly did)
+        persist `company_name=""` -- the only way to functionally "blank" a
+        column that couldn't yet be NULL. `require_company_or_contact_name`
+        originally lived on `FacilityEmergencyContactBase`, which
+        `FacilityEmergencyContactResponse` also inherits -- so reading back
+        exactly such a legacy row would raise `ValidationError` out of
+        `model_validate()` on every single GET/list, forever, for a row
+        nobody has written since. The validator now lives only on `Create`;
+        `Response` reports whatever is actually in the database.
+        """
+        legacy_row = FacilityEmergencyContact(
+            id=str(uuid4()),
+            organization_id=str(uuid4()),
+            facility_id=str(uuid4()),
+            contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            company_name="",
+            contact_name=None,
+            priority=1,
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        response = FacilityEmergencyContactResponse.model_validate(legacy_row)
+        assert response.company_name == ""
+
+
+class TestUpdateEmergencyContact:
+    """FAC-51: Codex review of the FAC-50 fix (PR #2425). FAC-50 made
+    `company_name`/`contact_name` individually nullable and added an "at
+    least one" validator -- but only on `FacilityEmergencyContactBase`
+    (`Create`/`Response` inherit it; `Update` does not, and `apply_updates`
+    sets attributes directly on the ORM object, never constructing a
+    validated schema for the merged result). A PATCH clearing the only
+    remaining name (`company_name: null` on a company-only contact) passed
+    request validation, persisted a row with both names null, and then
+    `FacilityEmergencyContactResponse.model_validate(contact)` -- which
+    inherits the same validator -- raised on that very row, turning a
+    single bad PATCH into a 500 on the request itself and every subsequent
+    read of that contact.
+    """
+
+    async def test_clearing_the_only_remaining_name_is_rejected(
+        self, service, mock_db, org_id
+    ):
+        contact = FacilityEmergencyContact(
+            id=str(uuid4()),
+            organization_id=org_id,
+            facility_id=str(uuid4()),
+            contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            company_name="Acme Alarm Co.",
+            contact_name=None,
+        )
+        with patch.object(service, "get_emergency_contact", return_value=contact):
+            with pytest.raises(ValueError, match="company_name or contact_name"):
+                await service.update_emergency_contact(
+                    contact_id=contact.id,
+                    contact_data=FacilityEmergencyContactUpdate(company_name=None),
+                    organization_id=org_id,
+                )
+        # Rejected before commit -- the invalid state is never persisted,
+        # even though apply_updates already mutated the in-memory object
+        # (which a real session would roll back on this exception).
+        mock_db.commit.assert_not_awaited()
+
+    async def test_clearing_one_name_while_the_other_remains_is_permitted(
+        self, service, org_id
+    ):
+        contact = FacilityEmergencyContact(
+            id=str(uuid4()),
+            organization_id=org_id,
+            facility_id=str(uuid4()),
+            contact_type=EmergencyContactTypeEnum.ALARM_COMPANY,
+            company_name="Acme Alarm Co.",
+            contact_name="Jane Doe",
+        )
+        with patch.object(service, "get_emergency_contact", return_value=contact):
+            updated = await service.update_emergency_contact(
+                contact_id=contact.id,
+                contact_data=FacilityEmergencyContactUpdate(company_name=None),
+                organization_id=org_id,
+            )
+        assert updated.company_name is None
+        assert updated.contact_name == "Jane Doe"
+
+
+class TestModelConstructorsMatchTheirColumns:
+    """Guards the whole bug class FAC-46 belongs to, not just its two known
+    instances: every `Model(...)` call in this file — explicit keywords and
+    `**schema.model_dump()` spreads alike — must only ever pass attributes
+    the target model actually maps. A future create method copying the same
+    `created_by=created_by` pattern onto a model without that column fails
+    here instead of shipping silently, the way these two did.
+    """
+
+    def test_no_constructor_call_passes_an_unmapped_keyword(self):
+        import ast
+
+        def class_attrs(src: str) -> dict[str, set[str]]:
+            out: dict[str, set[str]] = {}
+            for node in ast.walk(ast.parse(src)):
+                if isinstance(node, ast.ClassDef):
+                    attrs: set[str] = set()
+                    for stmt in node.body:
+                        if isinstance(stmt, ast.Assign):
+                            attrs.update(
+                                t.id for t in stmt.targets if isinstance(t, ast.Name)
+                            )
+                        elif isinstance(stmt, ast.AnnAssign) and isinstance(
+                            stmt.target, ast.Name
+                        ):
+                            attrs.add(stmt.target.id)
+                    if attrs:
+                        out[node.name] = attrs
+            return out
+
+        models_path = inspect.getfile(Facility).replace(".pyc", ".py")
+        services_path = inspect.getfile(FacilitiesService)
+        model_attrs = class_attrs(open(models_path).read())
+        schema_attrs = class_attrs(
+            open(
+                services_path.replace(
+                    "services/facilities_service", "schemas/facilities"
+                )
+            ).read()
+        )
+        tree = ast.parse(open(services_path).read())
+
+        explicit_issues = []
+        spread_issues = []
+        for fn in ast.walk(tree):
+            if not isinstance(fn, ast.AsyncFunctionDef):
+                continue
+            param_types = {}
+            for arg in fn.args.args:
+                if arg.annotation is not None:
+                    ann = arg.annotation
+                    name = (
+                        ann.id
+                        if isinstance(ann, ast.Name)
+                        else getattr(ann, "attr", None)
+                    )
+                    if name:
+                        param_types[arg.arg] = name
+            for node in ast.walk(fn):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id in model_attrs
+                ):
+                    continue
+                model_cls = node.func.id
+                allowed = model_attrs[model_cls]
+                for kw in node.keywords:
+                    if kw.arg is not None and kw.arg not in allowed:
+                        explicit_issues.append(
+                            f"{fn.name}:{node.lineno} {model_cls}({kw.arg}=...)"
+                        )
+                    elif kw.arg is None and isinstance(kw.value, ast.Call):
+                        call = kw.value
+                        if (
+                            isinstance(call.func, ast.Attribute)
+                            and call.func.attr == "model_dump"
+                            and isinstance(call.func.value, ast.Name)
+                            and call.func.value.id in param_types
+                        ):
+                            schema_cls = param_types[call.func.value.id]
+                            if schema_cls in schema_attrs:
+                                excluded = {
+                                    elt.value
+                                    for mdkw in call.keywords
+                                    if mdkw.arg == "exclude"
+                                    and isinstance(mdkw.value, ast.Set)
+                                    for elt in mdkw.value.elts
+                                    if isinstance(elt, ast.Constant)
+                                }
+                                missing = (
+                                    schema_attrs[schema_cls] - excluded
+                                ) - allowed
+                                if missing:
+                                    spread_issues.append(
+                                        f"{fn.name}:{node.lineno} "
+                                        f"{model_cls}(**{schema_cls}.model_dump()) "
+                                        f"has unmapped fields: {sorted(missing)}"
+                                    )
+
+        assert not explicit_issues, explicit_issues
+        assert not spread_issues, spread_issues

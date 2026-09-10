@@ -527,23 +527,22 @@ All Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_ca
 
 ### Onboarding Routes (No Auth, No AppLayout)
 
-| URL Path                               | Component                    |
-| -------------------------------------- | ---------------------------- |
-| `/`                                    | Welcome                      |
-| `/onboarding`                          | OnboardingCheck              |
-| `/onboarding/start`                    | OrganizationSetup            |
-| `/onboarding/navigation-choice`        | NavigationChoice             |
-| `/onboarding/email-platform`           | EmailPlatformChoice          |
-| `/onboarding/email-config`             | EmailConfiguration           |
-| `/onboarding/file-storage`             | FileStorageChoice            |
-| `/onboarding/file-storage-config`      | FileStorageConfigPlaceholder |
-| `/onboarding/authentication`           | AuthenticationChoice         |
-| `/onboarding/it-team`                  | ITTeamBackupAccess           |
-| `/onboarding/positions`                | PositionSetup                |
-| `/onboarding/modules`                  | ModuleOverview               |
-| `/onboarding/modules/:moduleId/config` | ModuleConfigTemplate         |
-| `/onboarding/system-owner`             | SystemOwnerCreation          |
-| `/onboarding/security-check`           | SecurityCheckPlaceholder     |
+| URL Path                          | Component                    |
+| --------------------------------- | ---------------------------- |
+| `/`                               | Welcome                      |
+| `/onboarding`                     | OnboardingCheck              |
+| `/onboarding/start`               | OrganizationSetup            |
+| `/onboarding/navigation-choice`   | NavigationChoice             |
+| `/onboarding/email-platform`      | EmailPlatformChoice          |
+| `/onboarding/email-config`        | EmailConfiguration           |
+| `/onboarding/file-storage`        | FileStorageChoice            |
+| `/onboarding/file-storage-config` | FileStorageConfigPlaceholder |
+| `/onboarding/authentication`      | AuthenticationChoice         |
+| `/onboarding/it-team`             | ITTeamBackupAccess           |
+| `/onboarding/positions`           | PositionSetup                |
+| `/onboarding/modules`             | ModuleOverview               |
+| `/onboarding/system-owner`        | SystemOwnerCreation          |
+| `/onboarding/security-check`      | SecurityCheckPlaceholder     |
 
 ### Protected Routes (Auth Required)
 

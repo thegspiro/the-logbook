@@ -358,6 +358,20 @@ const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'storefront']),
       },
       {
+        // Seeded by the backend as a system position, and until now the one
+        // seeded position the wizard never offered — so a department enabling
+        // Medical Supplies during setup could not see, let alone assign, the
+        // officer the module exists for. Its seeded grants are medical stock
+        // and rig checks without gear or uniforms, which is the whole point of
+        // splitting it out of the quartermaster.
+        id: 'ems_supply_officer',
+        name: 'EMS Supply Officer',
+        description: 'Medical supplies, stock lots, and what is aboard each rig',
+        icon: HeartPulse,
+        priority: 55,
+        permissions: generateRolePermissions(modules, 'specialist', ['medical_supplies']),
+      },
+      {
         id: 'scheduling_officer',
         name: 'Scheduling Officer',
         description: 'Manages duty rosters and shift scheduling',

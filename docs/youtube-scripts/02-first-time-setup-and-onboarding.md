@@ -310,26 +310,26 @@ Elections, Minutes]**
 > leaving off Facilities Management and some of the advanced modules — we can
 > always turn them on later."
 
-### MODULE CONFIGURATION (11:00 – 12:00)
+### WHAT ENABLING A MODULE DOES (11:00 – 12:00)
 
-**[SCREEN: After selecting modules, the ModuleConfigTemplate page loads for
-each enabled module in sequence.]**
+**[SCREEN: Stay on the module overview. Show the enabled cards with their green
+Enabled state.]**
 
-> "After selecting your modules, you'll walk through a quick configuration page
-> for each one. These are the module-specific settings — things like default
-> event types, training requirement categories, inventory classification
-> schemes."
+> "Enabling is the whole step — there's no per-module questionnaire to sit
+> through. Turning a module on makes it appear in the navigation for everyone
+> whose position can see it, and that's it."
 
-> "Don't overthink these. They're all changeable later from the Settings page.
-> The defaults are sensible for most departments, so if you're not sure, just
-> go with the defaults and customize once you've used the system for a few
-> weeks."
+> "Who can _manage_ each module is the step you already did — positions. And
+> every module's own settings, the detail like event types or training
+> requirement categories, live inside that module once you're in the app.
+> They're all changeable later, so nothing here is a decision you're stuck
+> with."
 
-**[SCREEN: Show one or two module config screens briefly, then click through
-the rest]**
+**[SCREEN: Briefly show Settings → Modules]**
 
-> "I'll click through these quickly — we'll cover the detail of each module in
-> the role-specific videos later in this series."
+> "And if you skip something now, this same list is under Settings → Modules.
+> A department that decides in March it wants the store can turn it on in
+> March."
 
 **[TRANSITION: Progress to next section]**
 

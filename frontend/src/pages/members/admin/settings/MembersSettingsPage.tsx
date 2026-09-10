@@ -18,13 +18,16 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router';
+import { Navigate, useNavigate } from 'react-router';
 import { SettingsLayout } from '../../../../components/settings/SettingsLayout';
 import { useAuthStore } from '../../../../stores/authStore';
 import { useSettingsAutosave } from '../../../../hooks/useSettingsAutosave';
 import { MEMBERS_SETTINGS_SECTIONS, type MembersSettingsTab, membersSettingsPathFor } from './membersSettingsSections';
 import ContactVisibilitySection from './ContactVisibilitySection';
 import MembershipIdSection from './MembershipIdSection';
+import RanksSection from './RanksSection';
+import TiersSection from './TiersSection';
+import EvocSection from './EvocSection';
 
 interface MembersSettingsPageProps {
   /** Which section this route mounts. */
@@ -58,7 +61,29 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
   // the honest destination, and when they can open none the layout below says so
   // rather than showing an empty nav.
   const openable = sections.some((entry) => entry.key === section);
-  const visibleSection = openable ? section : sections[0]?.key;
+  const fallback = sections[0]?.key;
+
+  // Where "back" goes depends on where the officer came from, because the two
+  // grants that reach this screen do not reach the same places. The routes admit
+  // the settings grants as well as the hub's, so a settings.manage officer with
+  // no members.manage arrives here legitimately — from the relocation link on
+  // /settings, or a legacy ?tab= redirect — and /members/admin refuses them.
+  // Offering a back control that answers Access Denied is worse than offering
+  // none, and the page already knows which it is.
+  const canOpenHub = checkPermission('members.manage');
+  const backPath = canOpenHub ? '/members/admin' : '/settings';
+  const backLabel = canOpenHub ? 'Back to members administration' : 'Back to organization settings';
+
+  // Redirected rather than rendered in place. Falling back silently left the
+  // address bar and the breadcrumb naming EVOC while Operational Ranks was on
+  // screen — and the hub lists every section unconditionally, so clicking "EVOC
+  // Levels" without the apparatus grant landed exactly there. The URL has to
+  // name what is being shown.
+  if (openable === false && fallback) {
+    return <Navigate to={membersSettingsPathFor(fallback)} replace />;
+  }
+
+  const visibleSection = openable ? section : fallback;
 
   if (!visibleSection) {
     return (
@@ -71,9 +96,9 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
         <button
           type="button"
           className="btn-secondary mobile-touch-target mt-6 px-4 text-sm font-medium"
-          onClick={() => void navigate('/members/admin')}
+          onClick={() => void navigate(backPath)}
         >
-          Back to members administration
+          {backLabel}
         </button>
       </div>
     );
@@ -83,6 +108,25 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
     void navigate(membersSettingsPathFor(key));
   };
 
+  // A switch rather than a ternary chain: `MembersSettingsTab` is exhaustive
+  // here, so a section added to the manifest without a body is a compile error
+  // rather than a page that silently renders contact visibility under someone
+  // else's heading.
+  const renderSection = () => {
+    switch (visibleSection) {
+      case 'ids':
+        return <MembershipIdSection save={saveVoid} saveDebounced={saveDebouncedVoid} />;
+      case 'ranks':
+        return <RanksSection />;
+      case 'tiers':
+        return <TiersSection />;
+      case 'evoc':
+        return <EvocSection />;
+      case 'visibility':
+        return <ContactVisibilitySection save={saveVoid} />;
+    }
+  };
+
   return (
     <SettingsLayout<MembersSettingsTab>
       sections={sections}
@@ -90,18 +134,14 @@ const MembersSettingsPage: React.FC<MembersSettingsPageProps> = ({ section }) =>
       onSectionChange={handleSectionChange}
       navLabel="Members settings sections"
       title="Members Settings"
-      subtitle="What members see of each other, and how they are numbered"
+      subtitle="What members see of each other, how they are numbered, and the ranks they hold"
       saveState={saveState}
       onRetrySave={retry}
-      onBack={() => void navigate('/members/admin')}
-      backLabel="Back to members administration"
+      onBack={() => void navigate(backPath)}
+      backLabel={backLabel}
       showBreadcrumbs
     >
-      {visibleSection === 'ids' ? (
-        <MembershipIdSection save={saveVoid} saveDebounced={saveDebouncedVoid} />
-      ) : (
-        <ContactVisibilitySection save={saveVoid} />
-      )}
+      {renderSection()}
     </SettingsLayout>
   );
 };

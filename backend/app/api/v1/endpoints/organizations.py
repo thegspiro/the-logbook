@@ -64,6 +64,26 @@ router = APIRouter()
 # complete, so acknowledgment is restricted to this set.
 REVIEW_CHECKLIST_KEYS = {"org_settings", "modules"}
 
+# Modules the setup wizard offers that deliberately get no checklist item of
+# their own, and why. Everything else it offers must add one, so a department
+# that turns a module on is told what the module still needs before anyone can
+# use it — which is how the Department Store and Medical Supplies came to be
+# enableable during setup and then silently unusable, with an empty catalog and
+# no indication that was the problem.
+#
+# tests/test_setup_checklist.py holds the partition.
+MODULES_WITHOUT_SETUP_CHECKLIST_ITEM: dict[str, str] = {
+    "members": "covered by the essential members and member-sign-in items",
+    "events": "covered by the essential first-event item",
+    "documents": "covered by the essential SOPs and policies item",
+    "apparatus": "covered by the essential apparatus item, module on or off",
+    "facilities": "covered by the essential stations and locations item",
+    "elections": "nothing to configure ahead of time; an election is created when one is called",
+    "minutes": "nothing to configure ahead of time; minutes are recorded per meeting",
+    "reports": "reads what the other modules record; there is nothing to seed",
+    "mobile": "the PWA needs no department-side setup",
+}
+
 
 # The two grants that may write settings (see the PATCH routes below). A
 # caller who may write the email section must also read its identifiers, or
@@ -730,10 +750,11 @@ async def get_setup_checklist(
     from app.models.document import Document, DocumentStatus
     from app.models.event import Event
     from app.models.forms import Form
-    from app.models.inventory import InventoryCategory
+    from app.models.inventory import MEDICAL_ITEM_TYPES, InventoryCategory
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
     from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.storefront import StoreProduct, StoreProductStatus
     from app.models.training import (
         BasicApparatus,
         ShiftTemplate,
@@ -846,16 +867,52 @@ async def get_setup_checklist(
         )
     ).scalar() or 0
 
+    # Non-medical only. Medical stock shares this catalog, separated by item
+    # type, and the ordinary inventory API excludes MEDICAL_ITEM_TYPES from
+    # every list it serves — so counting them here reported a department "done"
+    # on the gear item on the strength of categories the gear page never shows,
+    # which is the opposite of what a checklist is for.
     inventory_category_count = (
         await db.execute(
             select(func.count())
             .select_from(InventoryCategory)
             .where(
                 InventoryCategory.organization_id == org_id,
-                InventoryCategory.active == True,
-            )  # noqa: E712
+                InventoryCategory.active == True,  # noqa: E712
+                InventoryCategory.item_type.notin_(MEDICAL_ITEM_TYPES),
+            )
         )
     ).scalar() or 0
+
+    # The other half of that split.
+    medical_category_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(InventoryCategory)
+            .where(
+                InventoryCategory.organization_id == org_id,
+                InventoryCategory.active == True,  # noqa: E712
+                InventoryCategory.item_type.in_(MEDICAL_ITEM_TYPES),
+            )
+        )
+    ).scalar() or 0
+
+    # A published product, not a draft: an order window over a catalog of
+    # drafts opens a store with nothing in it.
+    store_product_count = 0
+    try:
+        store_product_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(StoreProduct)
+                .where(
+                    StoreProduct.organization_id == org_id,
+                    StoreProduct.status == StoreProductStatus.ACTIVE,
+                )
+            )
+        ).scalar() or 0
+    except Exception as e:
+        logger.warning(f"Failed to query store product count for setup checklist: {e}")
 
     form_count = 0
     try:
@@ -1086,6 +1143,40 @@ async def get_setup_checklist(
                 category="inventory",
                 is_complete=inventory_category_count > 0,
                 count=inventory_category_count,
+                required=False,
+            )
+        )
+
+    if "medical_supplies" in enabled_modules:
+        items.append(
+            SetupChecklistItem(
+                key="medical_supplies",
+                title="Set Up Medical Supply Categories",
+                description=(
+                    "Create the categories your EMS stock is tracked under, so "
+                    "supplies can be received with lot numbers and expiration dates."
+                ),
+                path="/medical-supplies/categories",
+                category="inventory",
+                is_complete=medical_category_count > 0,
+                count=medical_category_count,
+                required=False,
+            )
+        )
+
+    if "storefront" in enabled_modules:
+        items.append(
+            SetupChecklistItem(
+                key="storefront",
+                title="Add Products to the Department Store",
+                description=(
+                    "Publish the apparel and gear members can order. An order "
+                    "window over an empty catalog opens a store with nothing in it."
+                ),
+                path="/inventory/admin/store",
+                category="storefront",
+                is_complete=store_product_count > 0,
+                count=store_product_count,
                 required=False,
             )
         )

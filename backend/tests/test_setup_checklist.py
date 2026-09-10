@@ -7,14 +7,24 @@ asserting it was done, which is exactly what the old hardcoded
 ``is_complete=True`` on ``org_settings`` amounted to.
 """
 
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from app.api.v1.endpoints.organizations import REVIEW_CHECKLIST_KEYS
+from app.api.v1.endpoints.organizations import (
+    MODULES_WITHOUT_SETUP_CHECKLIST_ITEM,
+    REVIEW_CHECKLIST_KEYS,
+)
 from app.schemas.organization import (
     OrganizationSettings,
     SetupChecklistItem,
     SetupProgressSettings,
+)
+from app.services.onboarding import (
+    ONBOARDING_CORE_MODULES,
+    ONBOARDING_OFFERED_MODULES,
 )
 
 
@@ -79,3 +89,55 @@ def test_only_review_items_are_acknowledgeable():
         "email",
     ):
         assert measured not in REVIEW_CHECKLIST_KEYS
+
+
+@pytest.mark.unit
+def test_every_offered_module_either_has_a_checklist_item_or_says_why_not():
+    """A module a department can enable must say what it still needs.
+
+    Turning a module on during setup does not make it usable: the Department
+    Store needs a catalog before anyone can order, and Medical Supplies needs
+    categories before stock can be received. Both shipped enableable and then
+    silently empty, with nothing anywhere telling the department that was the
+    problem — the checklist had stopped being extended around the time
+    Prospective Members was added.
+
+    Read from source, because a checklist item is a branch in a function, not
+    a value this test could import.
+    """
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "api"
+        / "v1"
+        / "endpoints"
+        / "organizations.py"
+    ).read_text()
+    gated = set(re.findall(r'if "(\w+)" in enabled_modules:', source))
+
+    offered = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
+    unexplained = sorted(offered - gated - set(MODULES_WITHOUT_SETUP_CHECKLIST_ITEM))
+    assert not unexplained, (
+        "Setup offers these modules, and the department setup checklist "
+        "neither adds an item for them nor records why they need none: "
+        f"{unexplained}"
+    )
+
+
+@pytest.mark.unit
+def test_the_no_item_list_does_not_excuse_a_module_that_has_one():
+    """The two halves must be a partition, not overlapping opinions."""
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "app"
+        / "api"
+        / "v1"
+        / "endpoints"
+        / "organizations.py"
+    ).read_text()
+    gated = set(re.findall(r'if "(\w+)" in enabled_modules:', source))
+    both = sorted(gated & set(MODULES_WITHOUT_SETUP_CHECKLIST_ITEM))
+    assert not both, (
+        "These modules have a checklist item and are also listed as needing "
+        f"none: {both}"
+    )

@@ -289,8 +289,15 @@ class TestShiftCRUD:
             assert updated is None
             assert error == "end_time must be after start_time"
             await db_session.refresh(shift)
-            assert shift.start_time == at_hour(7)
-            assert shift.end_time == at_hour(existing_end_hour)
+            # refresh() now UTC-tags naive DATETIME values the same way an
+            # initial load does (AP-13 finding 6), so compare both sides as
+            # UTC-aware rather than assuming shift.start_time stayed naive.
+            assert shift.start_time.replace(tzinfo=timezone.utc) == at_hour(7).replace(
+                tzinfo=timezone.utc
+            )
+            assert shift.end_time.replace(tzinfo=timezone.utc) == at_hour(
+                existing_end_hour
+            ).replace(tzinfo=timezone.utc)
 
     @pytest.mark.asyncio
     async def test_non_time_update_allows_legacy_invalid_interval(

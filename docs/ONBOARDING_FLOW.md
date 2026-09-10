@@ -17,7 +17,8 @@ This document describes the complete onboarding flow for The Logbook application
 ┌─ 1. Organization Setup ──────────────── /onboarding/start
 │  POST /onboarding/session/organization
 │  Name, type, timezone, contact info, mailing + physical address,
-│  department identifiers (FDID / State ID / Dept ID), logo.
+│  department identifiers (FDID / State ID / Dept ID), member
+│  numbering, logo.
 │  COMMITS the organization, and creates the HQ Facility + Location
 │  from the department address.
 └─ v
@@ -60,13 +61,18 @@ This document describes the complete onboarding flow for The Logbook application
 └─ v
 ┌─ 9. IT Team & Backup Access ─────────── /onboarding/it-team
 │  POST /onboarding/session/it-team
-│  IT contacts and backup access. Contacts become user accounts at
-│  completion, with must_change_password set.
+│  IT contacts and backup access, each with an optional operational rank.
+│  Contacts become user accounts at completion, with must_change_password
+│  set and the rank applied if it still resolves.
 └─ v
-┌─ 10. Positions ──────────────────────── /onboarding/positions
-│  POST /onboarding/session/roles
-│  Two-tier permission model (view / manage) across position templates:
-│  leadership, officers, administrative, specialized, member.
+┌─ 10. Ranks & Positions ──────────────── /onboarding/positions
+│  GET/POST/PATCH/DELETE /operational-ranks   (the rank ladder)
+│  PATCH /users/{id}/profile                  (the System Owner's own rank)
+│  POST /onboarding/session/roles             (the positions)
+│  The department's rank ladder first — rename, reorder, remove, add, and set
+│  each rank's shift eligibility — then the two-tier permission model
+│  (view / manage) across position templates: leadership, officers,
+│  administrative, specialized, member.
 └─ v
 ┌─ 11. Module Overview ────────────────── /onboarding/modules
 │  POST /onboarding/session/modules, then POST /onboarding/complete
@@ -162,6 +168,15 @@ Response: {
 5. **Department Identifiers**:
    - Identifier Type: `FDID`, `State ID`, or `Department ID`
    - Corresponding ID field based on selection
+   - **Member numbers** — whether members carry a badge/roster number, and if
+     so its prefix and where the sequence starts. Asked here rather than on a
+     members screen because the counter only numbers members created after it
+     is switched on: the System Owner arrives at step 9 and the IT team at step
+     10, so a department that answered later ended up with its first accounts
+     holding no number and the roster import starting at the number they should
+     have had. Omitted from the payload when the answer is no, which leaves the
+     shipped default (`enabled: false`) rather than writing an explicit one —
+     so "we do not number members" and "nobody asked" stay distinguishable.
 
 6. **Additional Information**:
    - County/Jurisdiction
@@ -203,7 +218,13 @@ Body: {
   county?: string,
   founded_year?: number,
   tax_id?: string,
-  logo?: string  // Base64 data URL
+  logo?: string,  // Base64 data URL
+  membership_id?: {   // omitted entirely when the department does not number members
+    enabled: boolean,
+    auto_generate: boolean,
+    prefix: string,
+    next_number: number
+  }
 }
 Response: {
   id: string,
@@ -582,7 +603,66 @@ Body: {
 
 ### 12. Positions (`/onboarding/positions`)
 
-**Purpose**: Configure roles and permissions using a two-tier model
+**Purpose**: Describe the department's membership ladder, rank ladder and positions
+
+**The membership ladder** (`MembershipLadderSection`, rendered first):
+
+`organization.settings["membership_tiers"]` decides who is in the ballot
+electorate, who may stand for office, whether a member must meet a
+meeting-attendance threshold to vote, and who is graded for training — and
+`run_membership_tier_advance` promotes members along it monthly (cron
+`0 8 1 * *`) as
+`performed_by="system"`. It shipped with a ladder (Probationary at 0 years,
+Active at 1, Senior at 10, Life at 20) and **no screen anywhere**: not in setup,
+not in Settings, though the API and three frontend service methods existed. A
+department whose bylaws differ found out at its first election.
+
+Setup asks it because the answer is cheap there and expensive afterwards: once
+the roster holds rungs, a rung cannot be removed without moving those members
+first. It renders `components/settings/MembershipTiersSection` through the
+`useTierEditor` hook, the same pair that serves
+**Members → Settings → Membership Tiers**.
+
+Tier **ids** are not editable, for the reason rank codes are not: `id` is what
+`User.membership_type` stores and nothing cascades a change to it, so a renamed
+id is a rung emptied — `split_membership_type` refuses to guess a class for an
+id it does not recognise, and those members leave the operational body and the
+electorate at once. The display name, the years threshold, the order and every
+benefit are all editable; the id is derived once when a tier is created.
+
+`PUT /users/membership-tiers/config` validates through `MembershipTierSettings`
+and refuses to drop a tier members hold, naming how many. `GET` reports
+`member_counts` so the editor can show them and grey out an occupied rung.
+
+**The rank ladder** (`RankLadderSection`, rendered above the positions):
+
+`operational_ranks` is per-organization, and `seed_defaults` only ever fires
+into an empty table — so whatever it wrote on day one used to be what the
+department lived with, discovered later in Settings and usually after members
+had been assigned to it. Loading this step seeds the agency-appropriate
+defaults and lets the department rename them, reorder them, remove the ones it
+does not have, add its own, and set which shift seats each rank can fill.
+
+It renders `components/settings/RanksSettingsSection` — the same editor as
+**Members → Settings → Operational Ranks** — driven by the same `useRankEditor`
+hook, against the ordinary `/operational-ranks` endpoints. The ladder a
+department gets on day one and the one it maintains afterwards are therefore
+the same code. One thing differs: `allowCodeEdit={false}`.
+A rank code is the runtime key `get_rank_default_permissions()` resolves
+against, and setup is the worst place to change one, because there is no
+"before" against which to notice a rank has stopped conferring anything.
+Renaming here is display names only.
+
+A rank a department adds itself carries the editor's existing
+**No default permissions** badge: rank grants resolve from a code-level
+registry, so an invented code confers nothing on its own and those members
+need a position.
+
+**The System Owner's own rank** is set here too, through
+`PATCH /users/{id}/profile` — the ordinary endpoint, which validates the code
+against the department's ladder and enforces the permission-grant ceiling. It
+is here rather than on the account step because the ladder has to exist, and
+be the department's own, before there is a right answer.
 
 **Two-Tier Permission Model**:
 
@@ -603,6 +683,47 @@ Body: {
 - Permissions auto-generated from module registry
 - Custom role creation support
 - Priority-based role ordering (0-100)
+
+> **What a checkbox grants.** A row's two boxes usually mean `{module}.view`
+> and `{module}.manage` (plus the `{module}.*` wildcard, which is what carries
+> a module's action grants) — but a registry id is a _module settings_ key and
+> is only usually the permission prefix as well. `_MODULE_CHECKBOX_GRANTS` in
+> `app/core/permissions.py` is the one place that says otherwise, and the
+> wizard reads it through the generated `MODULE_CHECKBOX_TIERS`:
+>
+> - **Medical Supplies** grants `inventory.view_medical` /
+>   `inventory.manage_medical`. Manage grants view as well, because the route
+>   and the navigation entry both gate on `view_medical` and there is no
+>   manage-implies-view rule.
+> - **Mobile App Access** has no permission gate at all, so it is not a row.
+> - **Integrations** has no read-only console, so it has no View box.
+> - **Position Management**'s manage tier is the `positions.*` wildcard;
+>   `positions.manage` does not exist.
+>
+> A tier with no permission behind it is not rendered — a box that cannot grant
+> anything is a promise the app will not keep.
+> `tests/test_module_checkbox_grants.py` holds every row to permissions that
+> exist.
+
+> **A box another row already confers.** Every medical-supply route is gated
+> `require_permission("inventory.view_medical", "inventory.view")` — an OR — so
+> the broad Inventory grant opens the module on its own, without either medical
+> grant. Every seeded position down to `member` carries `inventory.view`, and
+> `facilities_manager` carries `inventory.manage`, so the editor's unticked
+> Medical Supplies box was telling most of the roster something untrue.
+>
+> It is shown ticked and not editable while Inventory confers it, with the
+> reason on the control. Nothing is written: unticking could not revoke the
+> access without taking Inventory away, and a control that silently does nothing
+> is worse than one that says why it is fixed. The lock is read off the grid
+> being edited rather than off a stored answer, so unticking Inventory releases
+> Medical Supplies in the same breath.
+>
+> `_CHECKBOX_CONFERRED_BY` in `app/core/permissions.py` is the authority,
+> projected to the wizard as the generated `MODULE_CHECKBOX_CONFERRED_BY`.
+> `tests/test_module_checkbox_grants.py` reads the medical endpoints and fails
+> if a route stops accepting the broad grant, or if one starts accepting
+> something the map does not describe.
 
 > **Operational Ranks group (EMT added 2026-06-25):** The position templates
 > include an **Operational Ranks** group — Fire Chief, Deputy Chief, Assistant
@@ -627,6 +748,14 @@ Body: {
 }
 ```
 
+> **Unticking a position removes it** _(2026-09-09)_: `save_session_roles`
+> used to delete only `is_system=False` rows, so an unticked seeded position
+> survived setup and went on appearing in every picker. It is now deleted,
+> except for `it_manager` (the System Owner's own), `member` (the baseline),
+> and any position somebody already holds. The response names what it removed
+> and the wizard's toast lists them. Reticking one puts it back with the
+> registry's grants, through the create branch.
+
 **Navigation**:
 
 - Button: "Continue to Module Selection" → `/onboarding/modules`
@@ -639,29 +768,49 @@ Body: {
 
 **Module Categories**:
 
-**Essential (Core)**:
+**Essential (Core)** — always on, not offered as a choice:
 
 - Member Management
 - Events & RSVP
 - Documents & Files
+- Custom Forms
 
-**Recommended (Operations)**:
+**Operations**:
 
 - Training & Certifications
-- Equipment & Inventory
-- Scheduling & Shifts
+- Inventory
+- Medical Supplies
+- Shift Scheduling
+- Apparatus & Fleet
+- Facilities Management
+- Department Store
 
-**Recommended (Governance)**:
+**Governance**:
 
 - Elections & Voting
-- Compliance & Auditing
+- Meeting Minutes
+- Reports & Analytics
 
-**Optional (Communication)**:
+**Communication**:
 
-- Notifications & Alerts
-- Mobile App
-- Forms & Surveys
-- Integrations
+- Email Notifications
+- Mobile App Access
+
+**Advanced**:
+
+- External Integrations
+
+**Membership**:
+
+- Prospective Members Pipeline
+
+The list comes from `MODULE_REGISTRY`
+(`frontend/src/modules/onboarding/config/moduleRegistry.ts`), whose ids are held
+to the backend's offered set by `tests/test_onboarding_module_parity.py`.
+Modules the wizard deliberately does not ask about — Communications, Finance,
+Grants & Fundraising, HR & Payroll, Incidents, Medical Screening, Public
+Information and the Testing Checklist — are turned on later from
+**Settings → Modules**.
 
 **Per-Module Actions**:
 
@@ -696,21 +845,19 @@ team, email, file storage, auth, and module settings into
 
 ---
 
-### 13a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
+### 13a. Module Configuration Template — removed
 
-**Purpose**: Configure individual module settings with two-tier permissions
+`/onboarding/modules/{moduleId}/config` collected "who may manage this module"
+into the wizard's Zustand store, reported **"permissions configured!"** and
+submitted nothing: no API client method carried the answer and no backend field
+held it. An administrator who used it to restrict a module during setup was told
+the restriction was in place when it was not.
 
-**Features**:
-
-- View Access configuration (typically all members)
-- Manage Access role selection
-- Module-specific permission descriptions
-- Auto-populated from module registry
-
-**Navigation**:
-
-- Button: "Save Configuration" → `/onboarding/modules`
-- Button: "Skip Configuration" → `/onboarding/modules`
+Who may manage a module is decided one step earlier, on the Positions step,
+which does save to the backend (`POST /onboarding/session/roles`). A second
+editor for the same decision would be a second answer to a question that already
+has one, so the step was removed rather than wired up. The route remains as a
+redirect to `/onboarding/modules` for a session restored from an older client.
 
 ---
 
@@ -751,8 +898,18 @@ organization settings, enabled modules, member sign-ins, SOPs and policies,
 first event, and MFA.
 
 **Module items** appear only when the module is enabled: shift templates,
-training courses and requirements, inventory categories, custom forms, verified
-email delivery, prospective-members pipeline, and integrations.
+training courses and requirements, inventory categories, medical supply
+categories, department store products, custom forms, verified email delivery,
+prospective-members pipeline, and integrations.
+
+A module the wizard offers must either add an item here or be named in
+`MODULES_WITHOUT_SETUP_CHECKLIST_ITEM` with the reason it needs none —
+Elections and Minutes have nothing to configure ahead of time, Apparatus and
+Facilities are covered by essential items whether or not their module is on.
+`tests/test_setup_checklist.py` holds that partition, because turning a module
+on is not the same as making it usable: the Department Store shipped
+enableable and then silently empty, with nothing telling the department its
+catalog was the problem.
 
 Items are either `kind: "auto"` (derived from entity counts) or `kind:
 "review"` (`org_settings`, `modules` — no measurable signal, completed by the
@@ -1026,12 +1183,6 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
       }
     },
 
-    // Module Permission Configs (persisted across navigation)
-    "modulePermissionConfigs": {
-      "training": ["chief-id", "training_officer-id"],   // Role IDs that can manage each module
-      "inventory": ["chief-id", "quartermaster-id"]
-    },
-
     // Modules
     "selectedModules": ["members", "events"],
     "moduleStatuses": { "members": "enabled", "training": "skipped" },
@@ -1051,15 +1202,6 @@ The `rolesConfig` field stores all role configurations (system and custom) so th
 - **Icon Serialization**: React icon components (e.g., `Shield`, `UserCog`) cannot be stored in localStorage. An `ICON_MAP` maps string names to components, and `getIconName()` serializes components back to strings.
 - **Auto-save**: Every change calls `triggerAutoSave()` which updates the `lastSaved` timestamp and syncs to localStorage.
 - **Restore**: On remount, `RoleSetup.tsx` reads from `rolesConfig` in the store and deserializes icons back to components.
-
-#### Module Permission Config Persistence
-
-The `modulePermissionConfigs` field stores which roles can manage each module. When a user navigates to a module config page (`/onboarding/modules/{moduleId}/config`):
-
-1. Available roles are dynamically read from `rolesConfig` (not hardcoded)
-2. Previously saved manage roles for the module are restored from `modulePermissionConfigs`
-3. On save, `setModulePermissionConfig(moduleId, manageRoles)` persists to the store
-4. **Orphaned role filtering**: When restoring, role IDs are validated against current `availableRoles` — if a role was removed in the Role Setup step, its ID is filtered out to prevent "undefined" display
 
 **Not persisted** (excluded from localStorage for security):
 
@@ -1304,7 +1446,7 @@ Before deploying to production:
 ### Onboarding State Persistence
 
 - **Role Permissions Persistence**: `rolesConfig` added to Zustand store with localStorage persistence; icon serialization via `ICON_MAP` enables storing React components
-- **Module Permission Config Persistence**: `modulePermissionConfigs` replaces hardcoded role lists and fake save handlers with real store persistence
+- **Module Permission Config Persistence**: `modulePermissionConfigs` replaces hardcoded role lists and fake save handlers with real store persistence _(the step it persisted for has since been removed — see 13a; the store field went with it)_
 - **Orphaned Role ID Filtering**: Role IDs validated against `availableRoles` on restore to prevent undefined entries when roles are removed
 - **Unified Role Initialization**: `DEFAULT_ROLES` in `permissions.py` is the single source of truth for all 16 system roles
 

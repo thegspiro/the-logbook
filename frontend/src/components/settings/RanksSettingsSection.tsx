@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { OperationalRankResponse, RankValidationIssue } from '../../services/api';
+import type { PositionOption } from '../../modules/scheduling/types/shiftSettings';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 
 interface RankForm {
@@ -29,6 +30,27 @@ interface RanksSettingsSectionProps {
   deletingRankId: string | null;
   editingPositionsRankId: string | null;
   rankValidationIssues: RankValidationIssue[];
+  /**
+   * Crew seats a rank may be made eligible for.
+   *
+   * Supplied rather than assembled here, and by `useRankEditor` rather than by
+   * either screen, because the department's own seats live behind an async
+   * shift-settings load: a component reading that cache during render would
+   * show a custom seat only when some other screen happened to have warmed it.
+   */
+  seatOptions: PositionOption[];
+  /**
+   * Whether the code field is shown.
+   *
+   * A rank code is the runtime key the backend resolves default permissions
+   * against. Settings shows it — a chief changing one is making a considered
+   * change, and the backend enforces a grant ceiling on it. The setup wizard
+   * withholds it: a department is describing a ladder it already uses, and a
+   * seeded rank that quietly stops conferring permissions is the accident the
+   * step exists to prevent. Defaults to shown, so the Settings screen reads
+   * unchanged.
+   */
+  allowCodeEdit?: boolean;
   onSetEditingRank: (rank: OperationalRankResponse | null) => void;
   onSetAddingRank: (adding: boolean) => void;
   onSetRankForm: React.Dispatch<React.SetStateAction<RankForm>>;
@@ -37,8 +59,38 @@ interface RanksSettingsSectionProps {
   onUpdateRank: () => void;
   onDeleteRank: (rankId: string) => void;
   onMoveRank: (index: number, direction: 'up' | 'down') => void;
+  /**
+   * Whether the viewer may reorder the ladder — `settings.manage`, which is not
+   * what the rest of this screen needs.
+   *
+   * A rank's `sort_order` is read by the inventory rule as a predicate, so
+   * placing a rank decides who sees restricted stock. That kept the higher grant
+   * when the ladder's contents moved to `members.manage`, and the controls have
+   * to follow the endpoint or they are a promise it will refuse.
+   */
+  canReorder: boolean;
   onToggleEligiblePosition: (rank: OperationalRankResponse, position: string) => void;
 }
+
+/**
+ * The seats this rank's picker offers.
+ *
+ * The department's seats, plus any this rank already holds that are no longer
+ * among them — a seat retired from Position Names, or `paramedic` set before
+ * the picker stopped offering it. Without the union the badge shows in display
+ * mode with no button to clear it, so the rank keeps conferring a seat nobody
+ * can see how to take back. A retired seat has no admin-chosen label left to
+ * read, so it falls back to `positionLabel`.
+ */
+const seatChoicesFor = (rank: OperationalRankResponse, seatOptions: PositionOption[]): PositionOption[] => {
+  const choices = [...seatOptions];
+  for (const held of rank.eligible_positions ?? []) {
+    if (!choices.some((choice) => choice.value === held)) {
+      choices.push({ value: held, label: positionLabel(held) });
+    }
+  }
+  return choices;
+};
 
 const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   ranks,
@@ -50,6 +102,8 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   deletingRankId,
   editingPositionsRankId,
   rankValidationIssues,
+  seatOptions,
+  allowCodeEdit = true,
   onSetEditingRank,
   onSetAddingRank,
   onSetRankForm,
@@ -58,17 +112,17 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
   onUpdateRank,
   onDeleteRank,
   onMoveRank,
+  canReorder,
   onToggleEligiblePosition,
 }) => {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-theme-text-primary text-lg font-semibold">Operational Ranks</h3>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Customize rank/position choices for your department. Higher ranks should appear first.
-          </p>
-        </div>
+      {/* Title and description come from the page's SettingsPanelHead, which
+          renders them as the <h2> every settings section uses. This carried its
+          own <h3> while the global settings page mounted it bare; keeping both
+          showed the heading twice, and keeping only the <h3> left it with no
+          <h2> above it — a heading-order jump the accessibility pass counts. */}
+      <div className="flex items-center justify-end">
         {!addingRank && !editingRank && (
           <button
             type="button"
@@ -88,7 +142,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
       {(addingRank || editingRank) && (
         <div className="border-theme-surface-border bg-theme-surface-secondary/50 rounded-lg border p-4">
           <p className="text-theme-text-primary mb-3 text-sm font-medium">{editingRank ? 'Edit Rank' : 'New Rank'}</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 gap-3 ${allowCodeEdit ? 'sm:grid-cols-2' : ''}`}>
             <div>
               <label className="text-theme-text-muted mb-1 block text-xs font-medium">Display Name</label>
               <input
@@ -114,24 +168,28 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                 autoFocus
               />
             </div>
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs font-medium">Code (internal identifier)</label>
-              <input
-                type="text"
-                value={rankForm.rank_code}
-                onChange={(e) =>
-                  onSetRankForm((prev) => ({
-                    ...prev,
-                    rank_code: e.target.value
-                      .toLowerCase()
-                      .replace(/\s+/g, '_')
-                      .replace(/[^a-z0-9_]/g, ''),
-                  }))
-                }
-                placeholder="e.g. captain"
-                className="form-input"
-              />
-            </div>
+            {allowCodeEdit && (
+              <div>
+                <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                  Code (internal identifier)
+                </label>
+                <input
+                  type="text"
+                  value={rankForm.rank_code}
+                  onChange={(e) =>
+                    onSetRankForm((prev) => ({
+                      ...prev,
+                      rank_code: e.target.value
+                        .toLowerCase()
+                        .replace(/\s+/g, '_')
+                        .replace(/[^a-z0-9_]/g, ''),
+                    }))
+                  }
+                  placeholder="e.g. captain"
+                  className="form-input"
+                />
+              </div>
+            )}
           </div>
           <div className="mt-3 flex justify-end gap-2">
             <button
@@ -148,7 +206,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
             <button
               type="button"
               onClick={editingRank ? onUpdateRank : onAddRank}
-              disabled={rankSaving || !rankForm.display_name.trim() || !rankForm.rank_code.trim()}
+              disabled={rankSaving || !rankForm.display_name.trim() || (allowCodeEdit && !rankForm.rank_code.trim())}
               className="btn-info inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               {rankSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
@@ -174,31 +232,41 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
               key={rank.id}
               className="hover:bg-theme-surface-secondary/50 group flex items-center gap-2 rounded-lg px-3 py-2 transition-colors"
             >
-              <div className="flex shrink-0 flex-col">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onMoveRank(idx, 'up');
-                  }}
-                  disabled={idx === 0}
-                  className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
-                  aria-label="Move up"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onMoveRank(idx, 'down');
-                  }}
-                  disabled={idx === ranks.length - 1}
-                  className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
-                  aria-label="Move down"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <GripVertical className="text-theme-text-muted/40 h-4 w-4 shrink-0" />
+              {/* Absent, not disabled, when the officer cannot reorder. The
+                  endpoint refuses them outright, so every click optimistically
+                  moved the row, failed, and snapped back — and a disabled
+                  control still says "you could do this", which this officer
+                  never will. The grip goes with them: it advertises a drag that
+                  is not on offer either. */}
+              {canReorder && (
+                <>
+                  <div className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onMoveRank(idx, 'up');
+                      }}
+                      disabled={idx === 0}
+                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      aria-label="Move up"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onMoveRank(idx, 'down');
+                      }}
+                      disabled={idx === ranks.length - 1}
+                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-20"
+                      aria-label="Move down"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <GripVertical className="text-theme-text-muted/40 h-4 w-4 shrink-0" />
+                </>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-theme-text-primary text-sm font-medium">{rank.display_name}</p>
@@ -266,26 +334,14 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {(
-                        [
-                          'officer',
-                          'driver',
-                          'firefighter',
-                          'ems',
-                          'captain',
-                          'lieutenant',
-                          'probationary',
-                          'volunteer',
-                          'other',
-                        ] as const
-                      ).map((pos) => {
-                        const isEligible = (rank.eligible_positions ?? []).includes(pos);
+                      {seatChoicesFor(rank, seatOptions).map((seat) => {
+                        const isEligible = (rank.eligible_positions ?? []).includes(seat.value);
                         return (
                           <button
-                            key={pos}
+                            key={seat.value}
                             type="button"
                             onClick={() => {
-                              void onToggleEligiblePosition(rank, pos);
+                              void onToggleEligiblePosition(rank, seat.value);
                             }}
                             className={`rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
                               isEligible
@@ -293,7 +349,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                                 : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-accent-blue border'
                             }`}
                           >
-                            {positionLabel(pos)}
+                            {seat.label}
                           </button>
                         );
                       })}

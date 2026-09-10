@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.permissions import DEFAULT_POSITIONS
+from app.core.permissions import DEFAULT_POSITIONS, module_checkbox_is_held
 
 pytestmark = pytest.mark.unit
 
@@ -82,18 +82,11 @@ def _expected() -> dict:
     expected = {}
     for slug, definition in DEFAULT_POSITIONS.items():
         granted = set(definition.get("permissions", []))
-        everything = "*" in granted
-
-        def held(module_id: str, action: str, granted=granted, everything=everything):
-            return (
-                everything
-                or f"{module_id}.*" in granted
-                or f"{module_id}.{action}" in granted
-            )
-
         expected[slug] = {
-            "view": [m for m in modules if held(m, "view")],
-            "manage": [m for m in modules if held(m, "manage")],
+            "view": [m for m in modules if module_checkbox_is_held(m, "view", granted)],
+            "manage": [
+                m for m in modules if module_checkbox_is_held(m, "manage", granted)
+            ],
         }
     return expected
 
