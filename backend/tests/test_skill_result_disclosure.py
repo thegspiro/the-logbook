@@ -113,6 +113,34 @@ class TestPolicyResolution:
         )
         assert (disclosure, release) == ("scores", "on_release")
 
+    def test_a_stored_unrecognised_disclosure_fails_closed(self):
+        """SKT4-5 follow-up: the write-time schema validators stop a *new* bad
+        value, but cannot fix a row written before they existed. Without this,
+        redact_test_for_view's fall-through treats anything that is not
+        literally "pending"/"scores" as full disclosure — fail open on
+        corrupted data. The safe default is the most restrictive tier."""
+        disclosure, _ = resolve_disclosure_policy(
+            _test(result_disclosure="Full"), None, None
+        )
+        assert disclosure == ResultDisclosure.NONE.value
+
+    def test_a_stored_unrecognised_release_fails_closed(self):
+        """An unrecognised release value must not behave as immediate release
+        — the safe default requires an explicit release action instead."""
+        _, release = resolve_disclosure_policy(
+            _test(result_release="on-release"), None, None
+        )
+        assert release == ResultRelease.ON_RELEASE.value
+
+    def test_an_unrecognised_value_from_any_source_fails_closed(self):
+        """The corrupted value can come from the test, the template, or the
+        organization default — the fail-closed check must not only guard the
+        test's own override."""
+        disclosure, _ = resolve_disclosure_policy(
+            _test(), _template(result_disclosure="fulll"), None
+        )
+        assert disclosure == ResultDisclosure.NONE.value
+
 
 class TestWhoCanSee:
     def test_officer_always_sees_everything(self):
@@ -381,3 +409,95 @@ class TestReturnedForCorrection:
         # And the outcome itself is still withheld, as for any pending view.
         assert redacted["overall_score"] is None
         assert redacted["score_breakdown"] is None
+
+
+class TestVoidedBeforeValidation:
+    """SKT4-6 — voiding overwrites ``status`` to ``voided``, which fails both
+    ``is_pending_validation`` and ``is_under_correction`` (they key on
+    ``status == "completed"``/``"in_progress"``) regardless of whether the
+    test was ever validated first. Without the dedicated check, a completed,
+    never-validated submission an officer rejects by voiding it — the
+    "rejection path for a member-run result an officer declines to validate"
+    ``void_test`` itself documents — would fall through to the resolved
+    disclosure tier and become fully readable, contradicting
+    ``notify_candidate_result_voided``'s own rule that an unvalidated
+    withdrawal must stay undisclosed.
+    """
+
+    def _voided(self, **overrides):
+        fields = {"status": "voided", "voided_at": "2026-09-10T00:00:00Z"}
+        fields.update(overrides)
+        return _test(**fields)
+
+    def test_unvalidated_void_stays_pending_to_the_candidate(self):
+        test = self._voided(validated_at=None)
+        assert _view(test) == RESULT_VIEW_PENDING
+
+    def test_unvalidated_void_stays_pending_to_a_named_viewer(self):
+        test = self._voided(validated_at=None)
+        assert (
+            _view(test, user_id=STRANGER, named_viewer_ids={STRANGER})
+            == RESULT_VIEW_PENDING
+        )
+
+    def test_a_previously_validated_void_still_discloses_normally(self):
+        """Once an officer signed off a result, voiding it later is itself a
+        disclosable event — this guard only protects a result nobody ever
+        accepted in the first place."""
+        test = self._voided(validated_at="2026-09-01T00:00:00Z")
+        assert _view(test) == ResultDisclosure.FULL.value
+
+    def test_the_examiner_and_an_officer_still_see_it_in_full(self):
+        test = self._voided(validated_at=None)
+        assert _view(test, user_id=EXAMINER) == ResultDisclosure.FULL.value
+        assert _view(test, is_officer=True) == ResultDisclosure.FULL.value
+
+    def test_redaction_hides_the_void_trail_too_not_just_the_score(self):
+        """The view alone is not the whole fix: `redact_test_for_view`'s
+        pending branch has to actually scrub the withdrawal, or a candidate
+        reading "pending" still sees status="voided" plus the officer's
+        reason and name — exactly the disclosure resolve_result_view exists
+        to prevent for this case."""
+        payload = {
+            "status": "voided",
+            "result": "pass",
+            "overall_score": 91.0,
+            "notes": "solid run",
+            "section_results": [{"section_id": "section-0"}],
+            "score_breakdown": {"percentage": 91.0},
+            "void_reason": "Candidate self-scored — result cannot stand",
+            "voided_at": "2026-09-10T00:00:00Z",
+            "voided_by": "user-officer",
+            "voided_by_name": "Dana Ruiz",
+        }
+
+        redacted = redact_test_for_view(payload, RESULT_VIEW_PENDING)
+
+        assert redacted["status"] != "voided"
+        assert redacted["void_reason"] is None
+        assert redacted["voided_at"] is None
+        assert redacted["voided_by"] is None
+        assert redacted["voided_by_name"] is None
+        # And the ordinary pending redaction still applies alongside it.
+        assert redacted["overall_score"] is None
+        assert redacted["result"] == "incomplete"
+
+    def test_redaction_flips_pending_validation_to_match_the_disguised_status(self):
+        """`pending_validation` is computed by `_build_test_response` from
+        `is_pending_validation(test)` *before* this redaction runs, and that
+        helper returns False for a still-voided ORM row (it keys on
+        status == "completed"). Left alone, the redacted payload would read
+        status="completed" with pending_validation=False — indistinguishable
+        from a genuinely decided result, which `MySkillTestResultPage`
+        renders as final and displays the rewritten "incomplete" result as a
+        failure. The flag must flip to match the status this branch
+        impersonates."""
+        payload = {"status": "voided", "pending_validation": False}
+        redacted = redact_test_for_view(payload, RESULT_VIEW_PENDING)
+        assert redacted["pending_validation"] is True
+
+    def test_redaction_leaves_the_void_trail_alone_for_a_full_view(self):
+        """A previously-validated void is disclosable, and full view must
+        change nothing — this guard is specific to the pending branch."""
+        payload = {"status": "voided", "void_reason": "Equipment failure"}
+        assert redact_test_for_view(payload, "full") == payload

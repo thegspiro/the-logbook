@@ -16,6 +16,188 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 19 (Skills testing), pass 4** — PR
+[#2473](https://github.com/thegspiro/the-logbook/pull/2473), branch
+`claude/friendly-babbage-pud8rg` (this watchdog session's designated
+branch, not a fresh `claude/security-review-<feature>` branch — the
+rotation had gone quiet: PR #2467 recorded PR #2460's merge and closed out
+Feature 18 at 2026-09-10T19:12 UTC, and by 20:47 UTC — over 90 minutes and
+several unrelated sessions' PRs later (#2462, #2470, #2471) — no branch or
+PR for Feature 19 existed, so a watchdog iteration started the pass
+directly, per that "Step 0 went quiet" pattern (same precedent as Feature
+18's own pass 4 and the 2026-09-09 watchdog pass, both documented below).
+
+Step 0 re-confirmed clean: `PROGRESS.md`'s Open PR row still read "None",
+and `list_pull_requests` (state=open) showed only #2471, #2470, #2462 —
+none security-review-shaped.
+
+**Scope check:** diffed against `d5b716ff8` (pass-3 merge, PR #2230) —
+backend surface is a single already-fixed line
+(`app/api/v1/endpoints/skills_testing.py:3157`, Feature 00's own SEC4-1),
+service/schema/model files byte-identical; seven frontend files changed,
+all confirmed cosmetic (contrast-shade bumps, a `Breadcrumbs` rollout, a
+`<main>`→`<div data-page-main>` landmark fix) by reading each diff
+directly. Re-verified all six pass 1–3 fixes (SKT-1 through SKT-4, SKT2-1,
+SKT3-1) intact by direct code read, re-enumerated all 29 routes via a
+fresh AST walk (unchanged), and re-verified SKT3-2 (unbounded `GET /tests`)
+still open/unchanged. Three new checks this pass — `GET /summary`'s
+aggregate-only claim, this file's own audit-log PII payloads against
+SEC-00's own stated criterion (SEC-00 explicitly scopes its sweep away
+from feature-owned files), and the uncapped `sections`/`criteria` JSON
+body against the global request-size middleware. **Codex review on the PR
+caught two mis-scoped claims in the first draft, both corrected on this
+same branch before merge:** the audit-log enumeration credited
+`email_test_results` with a `log_audit_event` call it does not have,
+mislabeled two `validate_test` lines as `complete_test`'s, cited
+`add_test_viewer` for a field it does not log, and omitted
+`release_test_results`, which does log `candidate_name` — corrected to the
+actual 7 sites. And the "uncapped JSON body, no finding" call was wrong:
+this repo's own `RankReorderRequest.ranks` caps at 500 items specifically
+because the same request-body byte ceiling can otherwise admit roughly a
+million small items — reclassified as **SKT4-1 (LOW/MED, OPEN/FLAGGED)**
+and mirrored into `KNOWN_LIMITATIONS.md`. **0 new code fixes, 1 new
+finding flagged (SKT4-1).** Full write-up:
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 4**.
+
+**Round 2 of Codex review, on the same push, caught four more accuracy
+issues:** round 1's own audit-log fix had overcorrected by dropping
+`add_test_viewer` instead of evaluating its `viewer_name` field — restored
+as an 8th site under the actual criterion (a named member's identity, not a
+specific field name), so the corrected count is 8, not 7. `GET /summary`'s
+"six queries" was also wrong — `get_testing_summary` issues up to eight
+across two conditional branches, every branch still aggregate-only on
+re-check. The `SEC4-1` line citation had drifted (3157 → 3167) after this
+pass's own comment additions. And the frontend file count was nine, not
+seven — `apiCache.ts`/`apiCache.test.ts` also changed and carry this
+feature's own PHI-cache exclusion, though the diff confirms every change in
+both files belongs to other features and this feature's own exclusion line
+is untouched. All four corrected on the same branch; replied to and
+resolved all five review threads (one from round 1 already resolved, plus
+these four). Full write-up updated in place — see "Corrections to prior
+write-ups" and the pass-4 disposition in
+`docs/security-review/SKT-19-skills-testing.md`.
+
+**Round 3 of Codex review surfaced two genuinely new findings and widened an
+existing one — not accuracy corrections this time, but gaps this pass's own
+"clean" language had missed:** **SKT4-2 (MED, OPEN/FLAGGED)** —
+`PUT /tests/{id}`'s `SkillTestUpdate.section_results` /
+`criteria_results` / `checklist_completed` have no `max_length`, the same
+amplification shape as SKT4-1 but member-reachable (`_authorize_test_write`
+lets any examiner-assigned member write, not only `training.manage`).
+**SKT4-3 (MED, OPEN/FLAGGED)** — `GET /summary`'s `pass_rate`/`average_score`
+apply no disclosure resolution at all, so a cohort of exactly one validated
+test discloses that test's own pass/fail and score to any member, regardless
+of the test's own disclosure settings; the first draft's "no per-row
+exposure" claim was true of the query shape but not the same thing as "no
+disclosure." And **SKT3-2's scope widened** to cover `GET /tests/export/csv`,
+which shares the identical unbounded-query root cause the first draft had
+only checked on the list endpoint. All three mirrored into
+`KNOWN_LIMITATIONS.md`; replied to and resolved all three review threads.
+Disposition is now **0 new code fixes, 3 new findings flagged (SKT4-1,
+SKT4-2, SKT4-3), 1 existing finding's scope widened (SKT3-2)** — see the
+pass-4 write-up for full detail.
+
+**Round 4 of Codex review changed the shape of this PR: three real code
+bugs, not documentation gaps.** All verified against the actual code before
+fixing, not taken on faith: **SKT4-4 (MED, FIXED)** — `email_test_results`
+only rejected `ResultDisclosure.NONE`, not the `RESULT_VIEW_PENDING` view an
+unvalidated official result reads as everywhere else in this file, so an
+officer could email a candidate a scorecard the read endpoints were still
+withholding; the email's own headline `result_text`/`score_text` bypassed
+redaction entirely, computed straight from the raw test row. Fixed by
+extracting `_ensure_disclosure_allows_email()` and checking both values.
+**SKT4-5 (MED/HIGH, FIXED)** — `result_disclosure`/`result_release` were a
+bare `Optional[str]` on all four write schemas with no enum validation;
+`redact_test_for_view` treats any unrecognised string as full disclosure
+(fail-open), and an unrecognised release value bypasses the `on_release`
+hold. Fixed with `field_validator`s rejecting non-enum values on all four
+schemas, mirroring the existing `type`/`score_mode` validator pattern in the
+same file. **SKT4-6 (MED, FIXED)** — voiding overwrites `status` to
+`voided`, which fails both `is_pending_validation` and `is_under_correction`
+regardless of whether the test was ever validated, so a completed-but-never-
+validated submission an officer voids (`void_test`'s own "rejection path for
+a member-run result an officer declines to validate") fell through to full
+disclosure — contradicting `notify_candidate_result_voided`'s own rule that
+this exact case must stay undisclosed. Fixed by mirroring that same rule in
+`resolve_result_view`. Also: three scope extensions, all flagged (not
+fixed) since each needs a content or product decision — **SKT4-1** now also
+covers `SkillCriterionSchema.checklist_items` (same uncapped shape, one
+level deeper); **SKT4-2** now also covers `result_viewer_positions` on both
+create and update, and its title changed accordingly; **SKT3-2** now also
+covers `GET /templates`, which loads every template's full `sections` JSON
+before filtering in Python. One new flagged finding, **SKT4-7 (MED,
+OPEN/FLAGGED)** — `PUT /tests/{id}` lets a member-examiner set
+`status`/`result`/`overall_score` directly, bypassing `complete_test`'s own
+computation; closing it needs a state-machine/API-contract decision about
+which fields a bare `PUT` may still set. 23 new guard tests added across
+three files (one new: `test_skill_result_disclosure_validation.py`). All
+mirrored into `KNOWN_LIMITATIONS.md`; replied to and resolved all seven
+round-4 review threads.
+
+**Round 5 of Codex review found round 4's own two fixes were each real but
+incomplete, not wrong.** **SKT4-5 follow-up (FIXED)** — the four
+`field_validator`s only stop a _new_ bad value from being saved; a row
+written before they existed would still read verbatim through
+`resolve_disclosure_policy` and fail open. Fixed by making
+`resolve_disclosure_policy` itself fail closed: an unrecognised disclosure
+now resolves to `none`, an unrecognised release to `on_release` (requires an
+explicit release rather than exposing immediately), regardless of whether
+the bad value came from the test, the template, or the org default. **SKT4-6
+follow-up (FIXED)** — `_build_test_response` populates `status`/
+`void_reason`/`voided_at`/`voided_by`/`voided_by_name` from the raw row
+unconditionally, and `redact_test_for_view`'s `pending` branch never touched
+any of them, so a candidate reading the pending view of a voided-unvalidated
+test still saw `status="voided"` plus the officer's own reason and name —
+exactly the disclosure the fix was meant to close, and exactly what
+`notify_candidate_result_voided` already refuses to send. Fixed by extending
+that same `pending` branch to rewrite `status` back to `completed` and clear
+the four void-specific fields, scoped to the `pending` branch only (a
+previously-validated void is unaffected). Also, a doc-scope note: the
+findings doc's "Backend: one line changed" scope-check description was
+correct as the pre-review starting point but read, without qualification, as
+describing the merged state — annotated in place. 5 new guard tests. All
+threads replied to and resolved.
+
+**Round 6 of Codex review found round 4's SKT4-5 fix had introduced a new
+gap, not left one open.** The `field_validator`s embed the rejected value
+verbatim in their `ValueError`, and `result_disclosure`/`result_release` had
+no `max_length` — so a long adversarial string (repeated `"SELECT "` with no
+`"FROM"`) reaching the global 422 handler's regex-based sanitizer made its
+`\bSELECT\b.*\bFROM\b` pattern backtrack superlinearly, measured at 6.43s for
+a 64 KB payload on `POST /tests`, open to every member. **Fixed** by adding
+`max_length=50` to both fields on all four write schemas — ample for the real
+enum values, far too short for that regex to matter — verified that Pydantic
+enforces `max_length` before the custom validator runs, so an overlong value
+now fails with a fixed-message `string_too_long` error instead of ever
+reaching the sanitizer. One new guard test. Thread replied to and resolved.
+
+**Round 7 of Codex review found round 5's SKT4-6 fix disguised `status` but
+left `pending_validation` inconsistent with it.** `_build_test_response`
+computes that flag from `is_pending_validation(test)` before the redaction
+runs, and that helper returns `False` for a still-`voided` row — so the
+redacted payload combined `status="completed"` with `pending_validation=
+False`, which the frontend reads as a final, decided result and renders the
+rewritten `"incomplete"` result as a **failure**, arguably worse than the
+original leak for a candidate whose voided test actually passed. **Fixed**
+by setting `pending_validation = True` in the same status-rewrite branch.
+One new guard test. Thread replied to and resolved.
+
+**Final disposition: 3 real code fixes (SKT4-4/5/6 — SKT4-5 closed in three
+steps, SKT4-6 in three), 4 findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7),
+1 existing finding's scope extended three times over (SKT3-2), across seven
+Codex review rounds.**
+
+Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
+`app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
+revisions, single head, no new migration); `pytest -k skill` 435 passed, 1
+skipped (pre-existing) — up from 405 before round 4's guard tests; frontend
+`typecheck`/`lint` both clean and unaffected (no frontend file touched any
+round). Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473
+until merged, then Feature 20 (Compliance).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, now merged), preserved for history</summary>
+
 **None.** PR [#2460](https://github.com/thegspiro/the-logbook/pull/2460)
 (Feature 18, Training extended, pass 4) merged clean via squash, merge
 commit `21470e693e2f`, all CI checks green including CI Success and
@@ -24,6 +206,8 @@ outstanding findings on the final commit. Merged directly by a 30-minute
 watchdog check (fully green, mergeable_state clean, idle ~30 minutes since
 the last push). Rotation row 18 is now `✅`. Next: Feature 19 (Skills
 testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, before the merge), preserved for history</summary>
@@ -12782,7 +12966,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -12805,6 +12989,159 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6, SKT4-5 in three steps, SKT4-6 in three), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across seven Codex review rounds
+
+**Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
+Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
+unrelated sessions' PRs (#2462, #2470, #2471) landing on the repo in that
+window — no branch or PR existed for Feature 19 despite `PROGRESS.md`
+already naming it "Next." Re-checked `PROGRESS.md`'s Open PR row (still
+"None") and live GitHub open PRs (`list_pull_requests`, state=open — only
+#2471/#2470/#2462, none security-review-shaped) before starting, per Step
+0's own rule. Confirmed clear; started Feature 19 directly, on this
+watchdog session's own designated branch
+(`claude/friendly-babbage-pud8rg`) rather than a fresh
+`claude/security-review-<feature>` branch — the same precedent Feature
+18's own pass 4 and the 2026-09-09 watchdog pass both used and documented.
+
+**Prior art loaded first:** `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+and this feature's own `SKT-19-skills-testing.md` (three prior passes,
+PRs #1901/#2017/#2230) — re-verified its open finding (SKT3-2) and its six
+fixed findings (SKT-1..4, SKT2-1, SKT3-1) rather than re-deriving any of
+them.
+
+**Scope check:** diffed the current tree against `d5b716ff8` (pass-3's
+merge commit). Backend: one line changed
+(`skills_testing.py:3167`, Feature 00's own `SEC4-1` fix to
+`email_test_results`'s error handling — already fixed, already covered by
+that pass's own gate; a first-draft citation of line 3157 was corrected on
+Codex review since this pass's own comment additions shifted it to the
+closing paren of the preceding call); service/schema/model files
+byte-identical. Frontend: **nine** files changed (first draft said seven,
+corrected on Codex review) — seven are read-and-confirmed cosmetic
+(contrast-shade bumps matching CLAUDE.md's AAA-contrast convention, a
+`Breadcrumbs` rollout, a `<main>`→`<div data-page-main>` landmark fix); the
+other two, `apiCache.ts`/`apiCache.test.ts`, carry this feature's own
+`/training/skills-testing/tests` PHI-cache exclusion and needed checking
+directly rather than being folded into "cosmetic" — confirmed via diff that
+every change in both files is a **different** feature's cache-exclusion
+entry and that this feature's own exclusion line is unchanged, untouched
+context. No new API call, input, or data-exposure surface either way.
+
+**Re-verified by direct code read** (not by trusting the diff alone): all six
+pass 1–3 fixes intact with current line numbers; all 29 routes' auth
+dependencies re-enumerated via a fresh `ast` walk (unchanged); SKT3-2
+(`GET /tests` has no pagination/cap) re-read end to end and confirmed still
+open, unregressed, its `KNOWN_LIMITATIONS.md` entry unchanged.
+
+**Two new checks, findings/corrections on both — first-draft "all clean"
+did not survive Codex review:** `GET /summary`'s "aggregate only, no
+per-row exposure" claim holds, but the query count was wrong — not a flat
+six, but **up to eight** across `get_testing_summary`'s two conditional
+branches (a passed-count query gated on `completed_count > 0`, a
+pending-validation query gated on `_can_manage_tests`) — every branch still
+aggregate-only, re-verified query by query. This file's own **8**
+`log_audit_event` calls carrying a named member's identity, checked against
+SEC-00 pass 4's own stated criterion ("the identifier is the subject of the
+audited event") — SEC-00 explicitly scoped its own sweep away from
+feature-owned code, so this file's payloads had never actually been checked
+against that standard until now, and they pass it — but getting to the
+correct list of 8 took two review rounds: round 1 fixed three wrong sites
+in the first draft's list (a nonexistent `email_test_results` call, two
+mislabeled `validate_test` lines, a missing `release_test_results`) but
+overcorrected by dropping `add_test_viewer`'s `viewer_name` entirely; round
+2 restored it as the 8th site, evaluated on the same criterion rather than
+excluded for having a differently-named field. The uncapped
+`sections`/`criteria` JSON body was **not** clean: reclassified as
+**SKT4-1 (LOW/MED, OPEN/FLAGGED)** after Codex pointed at this repo's own
+`RankReorderRequest.ranks`, which caps at 500 items precisely because the
+same request-body byte ceiling can otherwise admit roughly a million small
+items. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Round 3 of Codex review found two things this pass had missed outright,
+not misdescribed:** **SKT4-2 (MED, OPEN/FLAGGED)** — `PUT /tests/{id}`'s
+`section_results`/`criteria_results`/`checklist_completed` share SKT4-1's
+uncapped-list shape, but `update_test` is gated by `_authorize_test_write`,
+which any member holding `examiner_id` on an unvalidated test can satisfy —
+member-reachable, not officer-only like SKT4-1. **SKT4-3 (MED,
+OPEN/FLAGGED)** — `get_testing_summary`'s `pass_rate`/`average_score` apply
+no disclosure resolution at all, so a cohort of exactly one validated test
+discloses that test's pass/fail and score to any authenticated member
+regardless of its own disclosure settings; re-reading the handler had
+confirmed the query _shape_ carries no per-row `SELECT`, which is not the
+same guarantee as "no disclosure" for a small-n aggregate. SKT3-2's scope
+also widened to `GET /tests/export/csv`, which shares the same unbounded
+base query the first draft had only checked on the list endpoint. All three
+mirrored into `KNOWN_LIMITATIONS.md`; replied to and resolved all three
+review threads.
+
+**Round 4 found three real code bugs, not documentation gaps, all verified
+against the code and fixed:** **SKT4-4 (MED)** — `email_test_results`
+checked only `ResultDisclosure.NONE`, not the `RESULT_VIEW_PENDING` view an
+unvalidated official result reads as everywhere else in this file, and its
+own headline `result_text`/`score_text` bypassed redaction, computed
+straight from the raw row — fixed via a new `_ensure_disclosure_allows_email()`
+checking both. **SKT4-5 (MED/HIGH)** — `result_disclosure`/`result_release`
+had no enum validation on any of the four write schemas, and both the
+redaction and release-gate logic fail open on an unrecognised value — fixed
+with `field_validator`s on all four, mirroring this file's existing
+`type`/`score_mode` pattern. **SKT4-6 (MED)** — voiding an unvalidated test
+fell through to full disclosure because `is_pending_validation`/
+`is_under_correction` both key on a status `void_test` overwrites, contradicting
+`notify_candidate_result_voided`'s own rule that this case must stay
+undisclosed — fixed by mirroring that rule in `resolve_result_view`. Also
+widened SKT4-1 (checklist_items), SKT4-2 (result_viewer_positions, both
+routes), and SKT3-2 (`GET /templates`) again, and flagged one new finding,
+**SKT4-7 (MED, OPEN/FLAGGED)** — `PUT /tests/{id}` can set
+`status`/`result`/`overall_score` directly, bypassing `complete_test`. 23
+new guard tests across three files. All mirrored into `KNOWN_LIMITATIONS.md`;
+replied to and resolved all seven round-4 threads.
+
+**Round 5 found SKT4-5 and SKT4-6's round-4 fixes each real but incomplete.**
+SKT4-5's `field_validator`s only guard new writes — a row written before
+they existed still read through `resolve_disclosure_policy` unchecked, so it
+now also fails closed there (unrecognised disclosure → `none`, unrecognised
+release → `on_release`), regardless of which of the three sources (test,
+template, org default) the bad value came from. SKT4-6's fix hid the score
+but not the withdrawal itself: `_build_test_response` sets `status`/
+`void_reason`/`voided_at`/`voided_by`/`voided_by_name` unconditionally, and
+the `pending` redaction branch never touched them, so a candidate could still
+see `status="voided"` plus the officer's reason and name — now cleared too,
+scoped to that branch only (a previously-validated void is unaffected). Also
+annotated the findings doc's scope-check section as describing the pre-review
+starting point, not the merged state, after Codex flagged it as ambiguous
+post-fix. 5 new guard tests. All threads replied to and resolved.
+
+**Round 6 found round 4's SKT4-5 fix had opened a new gap.** Its
+`field_validator`s embed the rejected value verbatim in a `ValueError`, and
+neither `result_disclosure` nor `result_release` had a `max_length` — so a
+long adversarial string reaching the global 422 handler's regex sanitizer
+made its SQL-detection pattern backtrack superlinearly (6.43s for 64 KB, on
+`POST /tests`, open to every member). Fixed by adding `max_length=50` to
+both fields on all four write schemas, confirmed Pydantic enforces it before
+the custom validator runs. One new guard test. Thread replied to and
+resolved.
+
+**Round 7 found round 5's SKT4-6 fix disguised `status` but left
+`pending_validation` inconsistent.** `_build_test_response` computes that
+flag from `is_pending_validation(test)` before the redaction runs, which
+returns `False` for a still-`voided` row — so the redacted payload combined
+`status="completed"` with `pending_validation=False`, read by the frontend
+as a final, decided result and rendered as a **failure**. Fixed by setting
+`pending_validation = True` in the same status-rewrite branch. One new guard
+test. Thread replied to and resolved.
+
+Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
+(26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,
+invoked `/usr/local/bin/black` directly), `isort --check-only` (9.0.1), all
+clean, all CI's exact pins. `validate_migrations.py --strict`: 443
+revisions, single head, no new migration. `pytest tests/ -q -k skill`: 435
+passed, 1 skipped (pre-existing) — up from 405 before round 4's guard tests.
+`npm run typecheck` / `npm run lint`: both 0 errors/warnings, unaffected (no
+frontend file touched any round). Full write-up:
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 4**. Rotation row
+19 → `⏳`.
 
 ### 2026-09-10 — Feature 16 (Events & requests, pass 4) — 1 fixed (EV-24, P2), 1 re-verified open (EV-23), corrected on two Codex review rounds
 

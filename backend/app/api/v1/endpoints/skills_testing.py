@@ -129,6 +129,26 @@ def _ensure_test_results_emailable(test: SkillTest) -> None:
         )
 
 
+def _ensure_disclosure_allows_email(candidate_view: str) -> None:
+    """Reject emailing a result the candidate's own read path would withhold.
+
+    SKT4-4: "completed" (``_ensure_test_results_emailable`` above) is not the
+    same as "decided" — an unvalidated official result reads as
+    ``RESULT_VIEW_PENDING`` to its own candidate, the same withholding
+    ``GET /tests`` and ``GET /tests/{id}`` already apply. Emailing must refuse
+    that view too, not just ``none``, or an officer can hand the candidate a
+    scorecard the read endpoints are still withholding pending validation.
+    """
+    if candidate_view in (ResultDisclosure.NONE.value, RESULT_VIEW_PENDING):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This test's results are not disclosed to the candidate, or have "
+                "not been released yet, so they cannot be emailed."
+            ),
+        )
+
+
 # ============================================
 # Skill Templates
 # ============================================
@@ -3036,14 +3056,7 @@ async def email_test_results(
         named_viewer_ids=set(),
         user_position_slugs=set(),
     )
-    if candidate_view == ResultDisclosure.NONE.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "This test's results are not disclosed to the candidate, or have "
-                "not been released yet, so they cannot be emailed."
-            ),
-        )
+    _ensure_disclosure_allows_email(candidate_view)
 
     # Build section summaries
     sections_html = ""

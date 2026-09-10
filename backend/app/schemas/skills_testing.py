@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.skills_testing import ResultDisclosure, ResultRelease
 from app.schemas.base import UTCResponseBase
 from app.services.skills_testing_service import SCORE_MODES
 
@@ -26,6 +27,39 @@ CRITERION_TYPES = ("pass_fail", "score", "checklist", "time_limit", "statement")
 # Re-exported from the scoring service so the wire contract and the arithmetic
 # can never drift apart on what a mode is called.
 CRITERION_SCORE_MODES = SCORE_MODES
+
+_RESULT_DISCLOSURE_VALUES = {e.value for e in ResultDisclosure}
+_RESULT_RELEASE_VALUES = {e.value for e in ResultRelease}
+
+
+def _validate_result_disclosure_value(v: Optional[str]) -> Optional[str]:
+    """Reject an unrecognised disclosure tier rather than let it fall through.
+
+    ``redact_test_for_view`` only special-cases "pending" and "scores"; any
+    other string — "full", or a typo — returns the payload unredacted. A
+    typo here must not silently grant full disclosure (SKT4-5).
+    """
+    if v is not None and v not in _RESULT_DISCLOSURE_VALUES:
+        raise ValueError(
+            f"Unknown result disclosure '{v}'. Expected one of: "
+            + ", ".join(sorted(_RESULT_DISCLOSURE_VALUES))
+        )
+    return v
+
+
+def _validate_result_release_value(v: Optional[str]) -> Optional[str]:
+    """Reject an unrecognised release mode.
+
+    ``resolve_result_view`` only holds a result back when this value equals
+    ``ResultRelease.ON_RELEASE.value`` exactly; anything else — including a
+    typo — behaves as immediate release (SKT4-5).
+    """
+    if v is not None and v not in _RESULT_RELEASE_VALUES:
+        raise ValueError(
+            f"Unknown result release mode '{v}'. Expected one of: "
+            + ", ".join(sorted(_RESULT_RELEASE_VALUES))
+        )
+    return v
 
 
 class SkillCriterionSchema(BaseModel):
@@ -129,10 +163,20 @@ class SkillTemplateCreate(BaseModel):
     requirement_id: Optional[UUID] = None
     # Result disclosure — omit to inherit the organization default. See
     # ResultDisclosure / ResultRelease.
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     # Corporate position slugs whose holders may view results of these tests.
     result_viewer_positions: Optional[List[str]] = None
+
+    @field_validator("result_disclosure")
+    @classmethod
+    def validate_result_disclosure(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_disclosure_value(v)
+
+    @field_validator("result_release")
+    @classmethod
+    def validate_result_release(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_release_value(v)
 
 
 class SkillSheetLibraryItem(BaseModel):
@@ -174,10 +218,20 @@ class SkillTemplateUpdate(BaseModel):
     requirement_id: Optional[UUID] = None
     # Result disclosure — omit to inherit the organization default. See
     # ResultDisclosure / ResultRelease.
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     # Corporate position slugs whose holders may view results of these tests.
     result_viewer_positions: Optional[List[str]] = None
+
+    @field_validator("result_disclosure")
+    @classmethod
+    def validate_result_disclosure(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_disclosure_value(v)
+
+    @field_validator("result_release")
+    @classmethod
+    def validate_result_release(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_release_value(v)
 
 
 class SkillTemplateResponse(UTCResponseBase):
@@ -272,9 +326,19 @@ class SkillTestCreate(BaseModel):
     # template's requirement when omitted.
     requirement_id: Optional[UUID] = None
     # Per-test disclosure overrides; omit to inherit the template's.
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     result_viewer_positions: Optional[List[str]] = None
+
+    @field_validator("result_disclosure")
+    @classmethod
+    def validate_result_disclosure(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_disclosure_value(v)
+
+    @field_validator("result_release")
+    @classmethod
+    def validate_result_release(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_release_value(v)
 
 
 class SkillTestUpdate(BaseModel):
@@ -287,9 +351,20 @@ class SkillTestUpdate(BaseModel):
     notes: Optional[str] = None
     result: Optional[str] = None
     requirement_id: Optional[UUID] = None
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     result_viewer_positions: Optional[List[str]] = None
+
+    @field_validator("result_disclosure")
+    @classmethod
+    def validate_result_disclosure(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_disclosure_value(v)
+
+    @field_validator("result_release")
+    @classmethod
+    def validate_result_release(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_result_release_value(v)
+
     # Optimistic concurrency: the version the client last saw. Omit to keep the
     # previous last-write-wins behavior; send it to be refused with 409 rather
     # than silently overwriting a concurrent edit.

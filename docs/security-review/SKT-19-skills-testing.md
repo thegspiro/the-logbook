@@ -34,37 +34,37 @@ department) or `Depends(require_permission("training.manage"))` (officer-only
 actions), with one exception noted below. Every query reviewed filters
 `organization_id`.
 
-| Method | Path                                 | Auth dependency    | Permission                               | Org-scoped |
-| ------ | ------------------------------------ | ------------------ | ---------------------------------------- | ---------- |
-| GET    | `/templates`                         | `get_current_user` | –                                        | ✅         |
-| POST   | `/templates`                         | –                  | `training.manage`                        | ✅         |
-| GET    | `/library`                           | –                  | `training.manage`                        | ✅         |
-| POST   | `/library/{slug}/import`             | –                  | `training.manage`                        | ✅         |
-| GET    | `/templates/{template_id}`           | `get_current_user` | –                                        | ✅         |
-| PUT    | `/templates/{template_id}`           | –                  | `training.manage`                        | ✅         |
-| DELETE | `/templates/{template_id}`           | –                  | `training.manage`                        | ✅         |
-| POST   | `/templates/{template_id}/publish`   | –                  | `training.manage`                        | ✅         |
-| POST   | `/templates/{template_id}/duplicate` | –                  | `training.manage`                        | ✅         |
-| GET    | `/candidates`                        | –                  | `training.view` OR `training.manage`     | ✅         |
-| GET    | `/tests`                             | `get_current_user` | – (two-pass disclosure filter in-body)   | ✅         |
-| POST   | `/tests`                             | `get_current_user` | – (SoD on create — CS-8)                 | ✅         |
-| GET    | `/tests/{test_id}`                   | `get_current_user` | – (disclosure-gated in-body)             | ✅         |
-| PUT    | `/tests/{test_id}`                   | `get_current_user` | – (`_authorize_test_write`)              | ✅         |
-| POST   | `/tests/{test_id}/complete`          | `get_current_user` | – (`_authorize_test_write`)              | ✅         |
-| DELETE | `/tests/{test_id}`                   | –                  | `training.manage`                        | ✅         |
-| DELETE | `/tests/{test_id}/discard`           | `get_current_user` | – (own practice test only)               | ✅         |
-| POST   | `/tests/{test_id}/validate`          | –                  | `training.manage` (+ SoD, CS-8)          | ✅         |
-| POST   | `/tests/bulk-validate`               | –                  | `training.manage` (delegates to single)  | ✅         |
-| POST   | `/tests/{test_id}/release`           | –                  | `training.manage`                        | ✅         |
-| GET    | `/tests/{test_id}/viewers`           | –                  | `training.manage`                        | ✅         |
-| POST   | `/tests/{test_id}/viewers`           | –                  | `training.manage`                        | ✅         |
-| DELETE | `/tests/{test_id}/viewers/{user_id}` | –                  | `training.manage`                        | ✅         |
-| POST   | `/tests/{test_id}/cancel`            | `get_current_user` | – (`_authorize_test_write`)              | ✅         |
-| POST   | `/tests/{test_id}/void`              | –                  | `training.manage` (+ **new** SoD, SKT-2) | ✅         |
-| POST   | `/tests/{test_id}/return`            | –                  | `training.manage` (+ **new** SoD, SKT-3) | ✅         |
-| POST   | `/tests/{test_id}/email-results`     | –                  | `training.manage`                        | ✅         |
-| GET    | `/tests/export/csv`                  | –                  | `training.manage`                        | ✅         |
-| GET    | `/summary`                           | `get_current_user` | – (org-wide stats, no per-row exposure)  | ✅         |
+| Method | Path                                 | Auth dependency    | Permission                                          | Org-scoped |
+| ------ | ------------------------------------ | ------------------ | --------------------------------------------------- | ---------- |
+| GET    | `/templates`                         | `get_current_user` | –                                                   | ✅         |
+| POST   | `/templates`                         | –                  | `training.manage`                                   | ✅         |
+| GET    | `/library`                           | –                  | `training.manage`                                   | ✅         |
+| POST   | `/library/{slug}/import`             | –                  | `training.manage`                                   | ✅         |
+| GET    | `/templates/{template_id}`           | `get_current_user` | –                                                   | ✅         |
+| PUT    | `/templates/{template_id}`           | –                  | `training.manage`                                   | ✅         |
+| DELETE | `/templates/{template_id}`           | –                  | `training.manage`                                   | ✅         |
+| POST   | `/templates/{template_id}/publish`   | –                  | `training.manage`                                   | ✅         |
+| POST   | `/templates/{template_id}/duplicate` | –                  | `training.manage`                                   | ✅         |
+| GET    | `/candidates`                        | –                  | `training.view` OR `training.manage`                | ✅         |
+| GET    | `/tests`                             | `get_current_user` | – (two-pass disclosure filter in-body)              | ✅         |
+| POST   | `/tests`                             | `get_current_user` | – (SoD on create — CS-8)                            | ✅         |
+| GET    | `/tests/{test_id}`                   | `get_current_user` | – (disclosure-gated in-body)                        | ✅         |
+| PUT    | `/tests/{test_id}`                   | `get_current_user` | – (`_authorize_test_write`)                         | ✅         |
+| POST   | `/tests/{test_id}/complete`          | `get_current_user` | – (`_authorize_test_write`)                         | ✅         |
+| DELETE | `/tests/{test_id}`                   | –                  | `training.manage`                                   | ✅         |
+| DELETE | `/tests/{test_id}/discard`           | `get_current_user` | – (own practice test only)                          | ✅         |
+| POST   | `/tests/{test_id}/validate`          | –                  | `training.manage` (+ SoD, CS-8)                     | ✅         |
+| POST   | `/tests/bulk-validate`               | –                  | `training.manage` (delegates to single)             | ✅         |
+| POST   | `/tests/{test_id}/release`           | –                  | `training.manage`                                   | ✅         |
+| GET    | `/tests/{test_id}/viewers`           | –                  | `training.manage`                                   | ✅         |
+| POST   | `/tests/{test_id}/viewers`           | –                  | `training.manage`                                   | ✅         |
+| DELETE | `/tests/{test_id}/viewers/{user_id}` | –                  | `training.manage`                                   | ✅         |
+| POST   | `/tests/{test_id}/cancel`            | `get_current_user` | – (`_authorize_test_write`)                         | ✅         |
+| POST   | `/tests/{test_id}/void`              | –                  | `training.manage` (+ **new** SoD, SKT-2)            | ✅         |
+| POST   | `/tests/{test_id}/return`            | –                  | `training.manage` (+ **new** SoD, SKT-3)            | ✅         |
+| POST   | `/tests/{test_id}/email-results`     | –                  | `training.manage`                                   | ✅         |
+| GET    | `/tests/export/csv`                  | –                  | `training.manage`                                   | ✅         |
+| GET    | `/summary`                           | `get_current_user` | – (org-wide stats; small-cohort disclosure, SKT4-3) | ⚠️         |
 
 ## Verified good ✅
 
@@ -738,3 +738,637 @@ been a clean baseline per pass 2's own gate a week prior, then confirmed via
 it; the real numbers are recorded in the table above. Noted here so a future
 pass with a similarly bare worktree doesn't misreport a phantom "CI is red on
 main."
+
+---
+
+## Pass 4 (2026-09-10)
+
+**Prefix:** `SKT4` · **PR:** [#2473](https://github.com/thegspiro/the-logbook/pull/2473)
+
+**Scope check (pre-review snapshot — see "round 4" below for what this pass's
+own fixes then added):** diffed the current tree against `d5b716ff8` (the
+pass-3 merge commit for PR #2230), **before this pass made any fix of its
+own.** Everything in this subsection describes that starting point, not the
+merged state of this PR — round 4 below adds real diffs to
+`app/schemas/skills_testing.py` and `app/services/skills_testing_service.py`
+that this snapshot predates. **Backend: one line changed, in one file,** at
+the time this pass started.
+`app/api/v1/endpoints/skills_testing.py` gained the `SEC4-1` fix from
+Feature 00's own pass 4 (`c91060f7a`, "security(cross-cutting): 3 fixes, 0
+flagged") — `email_test_results`'s bare `except Exception as e: ... detail=
+f"Failed to send email: {str(e)}"` now reads `detail=safe_error_detail(e,
+fallback="Failed to send email")` at line 3167 (Codex review corrected a
+first-draft citation of line 3157, which after this pass's own comment
+additions is only the closing `)` of the preceding `send_email(...)` call —
+the actual guarded block is lines 3158-3168), closing an SMTP-host/
+credential-error disclosure that was this feature's own code but was found
+and fixed by the cross-cutting sweep rather than this rotation. `app/services/
+skills_testing_service.py`, `app/schemas/skills_testing.py`, and
+`app/models/skills_testing.py` are all **byte-identical** to pass 3
+(`git diff d5b716ff8 HEAD -- <each path>` empty). No new migration touches a
+skills-testing table.
+
+**Frontend: nine files changed — first draft undercounted at seven.** Read
+each diff directly rather than trusting the diffstat: `SkillTestOfficerActions.tsx`,
+`ActiveSkillTestPage.tsx`, `SkillsTestingTestRecordsTab.tsx` (green-600→700 /
+amber-600→700 / yellow-500→700 shade bumps, the same AAA-contrast sweep
+CLAUDE.md documents for `btn-success`/`btn-warning` and TRX4's sibling pass
+found on its own frontend files the same day); `MySkillTestResultPage.tsx` and
+`SkillsTestingPage.tsx` (a `<Breadcrumbs>` rollout); `SkillTemplateBuilderPage.tsx`
+and `StartSkillTestPage.tsx` (`<main>` → `<div data-page-main>`, a
+landmark-uniqueness fix) — those seven are genuinely cosmetic, no new API
+call, input, or data-exposure surface. Codex review correctly flagged that
+the first draft's "seven files" omitted `frontend/src/utils/apiCache.ts` and
+`apiCache.test.ts`, which also changed since `d5b716ff8` and which pass 2
+explicitly put in this feature's scope, since `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry is this feature's own PHI-cache
+control. Read both diffs directly: every addition is a **different**
+feature's cache-exclusion entry or test (apparatus operator/driver-exception
+routes, inventory reorder-requests/colors/clearances, `operational-ranks/
+validate`, `training/external/providers` and `training/multi-agency`, plus an
+`/admin-hours/` test-coverage expansion) — `git diff d5b716ff8 HEAD --
+frontend/src/utils/apiCache.ts` shows the `/training/skills-testing/tests`
+line itself as unchanged context, not a `+`/`-` line, so this feature's own
+exclusion is intact and unmodified. Confirmed, not assumed: no line touching
+`skills-testing` appears in either diff hunk.
+
+### Re-verification of pass 1–3 fixes
+
+Read the current code directly for each (not re-cited from any prior write-up):
+
+- **SKT-1** — `update_template` still routes through `apply_updates` inside a
+  `try/except ValueError` (`skills_testing.py:678-680`).
+- **SKT-2** — `void_test` still calls `assert_different_person(current_user.id,
+str(test.candidate_id), action="void", ...)` immediately after the
+  "already voided" guard and before any mutation (`skills_testing.py:2698-2706`).
+- **SKT-3** — `return_test_for_correction` still calls the identical guard
+  before the status mutation begins (`skills_testing.py:2863-2872`).
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:576-609`)
+  still locks `TrainingRequirement` with `.with_for_update()`; the `spent`
+  count in `assert_attempts_remaining` still carries
+  `.with_for_update(of=SkillTest)` (`:715`); `validate_test` still acquires
+  the capacity lock via a non-locking peek at `requirement_id` before
+  `_lock_test_for_transition` locks the specific test row.
+- **SKT2-1** — all ten `SkillTest.is_practice` comparisons are still
+  `.is_(False)`/`.is_(True)`; zero `# noqa: E712` in the file (`grep -c`
+  confirms).
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  (`str(viewer.id) == str(test.examiner_id)`, `skills_testing.py:2428-2432`),
+  immediately after the pre-existing candidate check, both before the
+  existing-grant lookup.
+
+All six guard test files (`test_skill_template_update_guard.py`,
+`test_skills_test_void.py`, `test_skill_test_return.py`,
+`test_skill_test_attempt_limit.py`, `test_skill_test_validate_locking.py`,
+`test_skill_test_viewers.py`) are present and pass (see completion gate).
+
+**Route auth coverage re-enumerated from scratch**, via a fresh Python `ast`
+walk over every `@router.<verb>` decorator and its function's `Depends(...)`
+defaults (not a re-read of any prior table): **29/29 routes**, same paths,
+same methods, same `get_current_user` / `require_permission(...)` gate as
+pass 1–3's table. The file's route surface has not moved since pass 1.
+
+### New checks this pass
+
+**`GET /summary`'s "no per-row exposure" claim re-verified by reading the
+handler, not by trusting the label — including the branches, per Codex
+review catching a first-draft undercount.** `get_testing_summary`
+(`skills_testing.py:3532-3658`) issues **up to eight** queries, not a flat
+six: six unconditional (`total_templates`, `published_templates`,
+`total_tests`, `tests_this_month`, `completed_tests`, `avg_score`), plus two
+conditional ones — the passed-count query only when `completed_count > 0`,
+and the pending-validation query only when `_can_manage_tests(current_user)`
+is true. Every one of the eight, in every branch, is still a bare
+`func.count`/`func.avg` filtered on `organization_id` (plus
+`is_practice`/`status`/`validated_at`/`result` predicates) — no query selects
+a `User` or a per-test row in any branch, and `pending_validation_count` is
+gated to `_can_manage_tests(current_user)` before it is even computed, with
+an in-code comment explaining why a member should not learn the org's
+outstanding review queue depth. The query-shape claim holds in all branches
+— but "no per-row exposure" is not the same guarantee as "no disclosure",
+and Codex review correctly pointed out this pass's first draft conflated
+the two: an aggregate over a cohort of one identifiable test still discloses
+that test's own result. See **SKT4-3** below.
+
+**Template visibility fail-direction checked, not assumed.** `list_templates`
+and `get_template` both treat `visibility="assigned_only"` identically to
+`"officers_only"` for a non-officer caller (`skills_testing.py:348-353`,
+`:610-615`) — there is no code path anywhere in this file that resolves an
+"assignment" and grants a non-officer access to an `assigned_only` template.
+This is a functional gap (the visibility tier does nothing beyond what
+`officers_only` already does), not a security one: the fail direction is
+**more** restrictive than the label implies, never less, so no member sees a
+template the officer who set `assigned_only` did not intend for them. Not
+reported as a finding since nothing here can leak; noted so a future pass
+implementing per-assignment visibility does not have to re-discover that the
+non-officer branch currently no-ops on this value.
+
+**Audit-log PII payloads checked against SEC-00's own precedent — first draft
+mis-enumerated, corrected across two Codex review rounds.**
+`SEC-00-cross-cutting-baseline.md`'s pass 4 swept `log_audit_event` payloads
+app-wide for PII-shaped keys but explicitly scoped itself away from "the
+module-level code each rotation feature owns" — so its "13 calls, all
+justified" count does not cover this file's own sites that carry a named
+member's identity alongside the id. This pass's first draft listed 8 sites
+under a `candidate_name`/`examiner_name` framing and got three of them wrong:
+it credited `email_test_results` with an audit-log call it does not have (the
+function never calls `log_audit_event` at all — it only puts the candidate/
+examiner name into the outgoing email body), mislabeled lines 2100-2102 as
+`complete_test` when they belong to `validate_test`, and — round 1's own
+fix — dropped `add_test_viewer` outright on the reasoning that its
+`viewer_name` field isn't named `candidate_name`/`examiner_name`. Round 2 of
+Codex review correctly rejected that last move: excluding a site because its
+PII field has a different name, rather than evaluating it, is exactly the
+"assessed" claim this section exists to make honest. Re-enumerated by reading
+every one of the file's 18 `log_audit_event` call sites directly, evaluating
+each by SEC-00's actual criterion (a named member's identity, whatever the
+field is called) rather than by field-name pattern-matching: the actual count
+is **8** — `complete_test:1809` (`candidate_name`), `delete_test:1899`
+(`candidate_name`), `validate_test:2100-2102` (`candidate_name` +
+`examiner_name`), `release_test_results:2270` (`candidate_name`) — omitted
+from the first draft — `add_test_viewer:2462` (`viewer_name`, alongside a bare
+`candidate_id`, not `candidate_name`), `cancel_test:2633` (`candidate_name`),
+`void_test:2763` (`candidate_name`), `return_test_for_correction:2915-2917`
+(`candidate_name` + `examiner_name`). Checked each against SEC-00's own
+stated criterion for the pattern being acceptable ("the identifier is the
+subject of the audited event... none incidental") rather than assuming it
+transfers: every one of these events is specifically about an action taken on
+or naming the candidate, examiner, or (for the viewer grant) the viewer being
+named — a completion, a deletion, a validation, a release, a viewer grant, a
+cancellation, a void, a return — the same shape as `deleted_full_name` on a
+user deletion. No finding; recorded so this file's own audit payloads are
+confirmed against the standard rather than left unverified because SEC-00's
+sweep skipped feature-owned files by design, and so that a future pass does
+not repeat round 1's mistake of dropping a site for not matching a field-name
+pattern instead of evaluating it.
+
+### SKT4-1 — LOW/MED — `sections`/`criteria` has no per-template item cap — OPEN / FLAGGED
+
+`SkillTemplateCreate.sections: List[SkillTemplateSectionSchema] =
+Field(..., min_length=1)` and `SkillTemplateSectionSchema.criteria` (default
+empty list) both lack a `max_length`. First draft of this pass called this
+"not a finding" on the reasoning that the route is `training.manage`-gated and
+the global `RequestSizeLimitMiddleware` (`MAX_REQUEST_BODY_SIZE`) caps the
+total request body regardless of section/criterion count — Codex review
+correctly rejected that reasoning by pointing at this repository's own
+precedent for the identical shape: `RankReorderRequest.ranks`
+(`app/schemas/operational_rank.py:108-113`) caps its list at
+`MAX_RANKS_PER_REORDER = 500` specifically _because_ the same request-body
+budget can otherwise admit roughly a million items at ~60 bytes each — the
+schema's own comment there states the byte ceiling is not a sane cardinality
+bound. `SkillTemplateSectionSchema`/`SkillCriterionSchema` are the same shape:
+an officer-gated caller can still submit a template with an unbounded number
+of sections/criteria, each of which Pydantic fully materializes and the
+create/update handlers persist, dump, and — in scoring and the CSV export path
+— iterate. A malicious or merely mistaken officer client can submit a
+several-hundred-thousand-entry template and force full materialization and
+persistence of it. Reclassified from "verified good" to an open finding rather
+than fixed in this pass: choosing `max_length` values for `sections` and
+`criteria` needs a genuine content decision (what does the largest real
+department's evaluation sheet actually look like) that this pass should not
+guess at, matching this rotation's standing preference for flagging over
+guessing on anything that changes accepted-input behavior. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+**Scope extended, round 4:** `SkillCriterionSchema.checklist_items:
+Optional[List[str]] = None` (`app/schemas/skills_testing.py:42`) is the same
+unbounded shape one level further in — a single criterion of type
+`"checklist"` can carry an uncapped list of item strings, stored inside the
+same `sections` JSON `sections`/`criteria` already covers. Capping only the
+outer two lists would leave this finding trivially reproducible with one
+section, one criterion, and millions of short `checklist_items` entries.
+Included in this finding's scope (not filed separately, since it is the same
+root cause and the same content-decision remedy) and in the
+`docs/KNOWN_LIMITATIONS.md` entry.
+
+### SKT4-2 — MED — `PUT /tests/{id}`'s result arrays have no per-field item cap, member-reachable — OPEN / FLAGGED
+
+The same amplification shape as SKT4-1, one level deeper and reachable by a
+broader population. `SkillTestUpdate.section_results:
+Optional[List[SectionResultSchema]]`, `SectionResultSchema.criteria_results:
+List[CriterionResultSchema]`, and `CriterionResultSchema.checklist_completed:
+Optional[List[bool]]` (`app/schemas/skills_testing.py:236-296`) all lack a
+`max_length`. `update_test` is gated by `_authorize_test_write`
+(`skills_testing.py:196-228`), which is **not** `training.manage`-only: any
+member who is the test's `examiner_id` on an unvalidated test may call it —
+"examining is deliberately open to the whole department" per this file's own
+route-inventory note — including a self-administered practice test where the
+member is their own examiner. So an ordinary member, not just an officer, can
+submit a near-`MAX_REQUEST_BODY_SIZE` `PUT` body containing a section list
+whose `criteria_results` are each further unbounded, multiplying the same
+cardinality problem across two nested list levels rather than SKT4-1's one.
+Pydantic fully materializes it, `update_test` persists and dumps it, and
+`complete_test`/scoring later iterate it. Flagged rather than fixed for the
+same reason as SKT4-1 — choosing sane `max_length` values for a real
+evaluation sheet's sections/criteria/checklist items is a content decision,
+not a guess this pass should make — and because it reaches further than
+SKT4-1 (member-writable, not officer-only), any chosen limits need to
+accommodate the largest legitimate in-progress test, not just the largest
+template. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Scope extended, round 4:** `SkillTestCreate.result_viewer_positions` and
+`SkillTestUpdate.result_viewer_positions` (both `Optional[List[str]]`, no
+`max_length`) are a third member-writable uncapped list this file's schemas
+carry, missed by this finding's first draft because it only enumerated the
+three result-shape fields. `_guard_official_test_policy_fields` deliberately
+lets an ordinary member set policy fields — including this one — on their own
+self-practice test, and `POST /tests` (create) accepts it, not only
+`PUT /tests/{id}` (update). `list_tests` later reads every non-null per-test
+`result_viewer_positions` list for a non-officer caller with any positions at
+all, iterating whatever was stored. Included in this finding's scope, and its
+`docs/KNOWN_LIMITATIONS.md` entry now names the create route too, not just
+update.
+
+### SKT4-3 — MED — `GET /summary`'s aggregates can disclose a single test's result in a small cohort — OPEN / FLAGGED
+
+`get_testing_summary` (`skills_testing.py:3532-3658`) is open to
+`get_current_user` — any authenticated member, no `training.manage`
+requirement — and returns `pass_rate` and `average_score` computed only from
+`SkillTest.organization_id`/`status`/`validated_at`/`is_practice` filters, with
+no disclosure resolution (`resolve_result_view`, `result_disclosure`,
+`ResultRelease`) applied anywhere in the handler. When an organization (or a
+template/date range a future filtered variant might add) has exactly one
+validated, non-practice, scored test, `pass_rate` is either 0% or 100% —
+directly revealing that one test's pass/fail — and `average_score` is that
+test's exact score, to a member with no relationship to the test and no
+officer permission, even where the underlying test's own `result_disclosure`
+would keep it hidden from everyone but the candidate and examiner. This
+pass's first draft treated "no query selects a `User` or a per-test row" as
+equivalent to "no disclosure," which Codex review correctly rejected — an
+aggregate is not automatically anonymous; it is anonymous only above some
+cohort size. Not fixed in this pass: the correct remedy (a minimum-cohort
+suppression threshold, gating `pass_rate`/`average_score` specifically to
+`training.manage` while leaving the count fields open, or something else) is
+a product decision about what "org-wide stats" is supposed to mean, not a
+same-commit fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### SKT4-4 — MED — `email-results` did not withhold an unvalidated official result — ✅ FIXED
+
+`_ensure_test_results_emailable` only checked `test.status == "completed"` —
+not the same gate as "decided". A completed, unvalidated official test
+resolves to `RESULT_VIEW_PENDING` for its own candidate everywhere else in
+this file (`GET /tests`, `GET /tests/{id}`), but `email_test_results`
+computed that same `candidate_view` and then checked it only against
+`ResultDisclosure.NONE.value` — not `RESULT_VIEW_PENDING` — so an officer
+could email a candidate a scorecard the read endpoints were still
+withholding pending validation. Worse than the read path in one respect:
+`result_text`/`score_text`, the email's headline summary line, are computed
+directly from `test.result`/`test.overall_score` rather than through
+`redact_test_for_view`, so even the `scores`/`pending` redaction the read
+endpoints apply to the JSON payload never touched the email's own pass/fail
+and percentage line — only the detailed section breakdown was redacted.
+**Fixed** by extracting the check into `_ensure_disclosure_allows_email()`
+and calling it with the already-computed `candidate_view`, now testing
+`candidate_view in (ResultDisclosure.NONE.value, RESULT_VIEW_PENDING)`. Guard
+tests in `test_skill_test_email_security.py` pin the pending and none cases
+as rejected and scores/full as accepted.
+
+### SKT4-5 — MED/HIGH — `result_disclosure`/`result_release` accepted any string, fail-open on a typo — ✅ FIXED
+
+Both fields were a bare `Optional[str]` on every write-side schema
+(`SkillTemplateCreate`, `SkillTemplateUpdate`, `SkillTestCreate`,
+`SkillTestUpdate`) with no validation against `ResultDisclosure`/
+`ResultRelease`. `redact_test_for_view` only special-cases the literal
+strings `"pending"` and `"scores"` — `if view != ResultDisclosure.SCORES.value:
+return payload` is the last branch, so any other string, including a typo
+like `"Full"` or `"on-release"`, returns the **unredacted** payload.
+Independently, `resolve_result_view` only honours the release hold when
+`release == ResultRelease.ON_RELEASE.value` exactly, so an unrecognised
+release value behaves as immediate release, silently bypassing an
+`on_release` policy. This is fail-open on the exact kind of input error a
+human officer typing a policy value into a form (or a client bug) would
+produce — a typo does not raise an error, it silently grants full
+disclosure. **Fixed** by adding a `field_validator` to `result_disclosure`
+and `result_release` on all four write schemas, rejecting any value outside
+`{e.value for e in ResultDisclosure}` / `{e.value for e in ResultRelease}`
+with a 422 (mirroring the existing `SkillCriterionSchema.type`/`score_mode`
+validators' exact pattern in the same file) — `None` (inherit the default)
+still passes. Response schemas (`SkillTemplateResponse`, `SkillTestResponse`)
+are deliberately left unvalidated: they report already-accepted values via
+`from_attributes`, and validating a response schema would make deserializing
+any pre-existing row with a legacy or already-bad value raise instead of
+serialize. Guard tests in `test_skill_result_disclosure_validation.py` pin
+every enum member as accepted, several typo/case-mismatch values as
+rejected on all four schemas, and that the schema's whitelist stays
+identical to the enum (so the two cannot drift apart the way this bug's
+absence let them).
+
+**Round 5 follow-up — write-time validation alone was not the whole fix.**
+Codex correctly pointed out that the four new `field_validator`s only stop a
+_new_ bad value from being saved; they do nothing for a row already written
+before the validators existed (a pre-fix bug, a direct DB edit, a migration
+mistake), and `resolve_disclosure_policy` still read such a value verbatim.
+**Fixed** by failing closed at resolution time too: `resolve_disclosure_policy`
+now checks its resolved `disclosure`/`release` against the same enum
+membership and substitutes the most restrictive safe default —
+`ResultDisclosure.NONE.value` for an unrecognised disclosure,
+`ResultRelease.ON_RELEASE.value` (requires an explicit release rather than
+exposing immediately) for an unrecognised release — regardless of which of
+the three sources (test, template, org config) the bad value came from. Three
+new guard tests in `TestPolicyResolution` cover a corrupted test-level
+disclosure, a corrupted release value, and a corrupted template-level value.
+
+**Round 6 follow-up — the round-4 fix introduced its own new gap.** Codex
+review on the same commit pointed out that `_validate_result_disclosure_value`/
+`_validate_result_release_value` embed the rejected value verbatim in their
+`ValueError` message, matching this file's own pre-existing `type`/
+`score_mode` validator style — but unlike `type` (`Field("pass_fail",
+max_length=50)`), `result_disclosure`/`result_release` had no `max_length`
+before round 4's fix added the validators, so nothing capped how large that
+embedded value could be. The global 422 handler (`main.py`) routes a custom
+validator's `ValueError` through `sanitize_error_message`, which scans the
+message against `_UNSAFE_PATTERNS` — including `\bSELECT\b.*\bFROM\b` — and
+only checks its own 300-character cap _after_ that scan. A long adversarial
+string containing repeated `"SELECT "` with no `"FROM"` makes that pattern's
+backtracking superlinear in the input length: Codex measured 6.43 seconds for
+a 64 KB payload, on an endpoint (`POST /tests`) open to every member, not
+just officers. This is a regression introduced by round 4's own fix, not a
+pre-existing gap — before that fix these fields accepted anything, so no
+`ValueError` (and therefore no call into `sanitize_error_message`) was ever
+reachable through them. **Fixed** by adding `max_length=50` to
+`result_disclosure`/`result_release` on all four write schemas — ample for
+the real enum values (`on_completion` is the longest, at 13 characters), far
+too short for the regex behind this pattern to matter. Pydantic enforces
+`max_length` before a field's `@field_validator` runs, so an overlong value
+now fails with a `string_too_long` error, which the 422 handler maps to a
+fixed constant message (`"Value is too long."`) — never reaching
+`sanitize_error_message` at all. One new guard test asserts the failure type
+is `string_too_long`, not the custom validator's `value_error`, on all four
+schemas.
+
+### SKT4-6 — MED — voiding an unvalidated test disclosed it in full to the candidate — ✅ FIXED
+
+`void_test` overwrites `test.status` to `SkillTestStatus.VOIDED.value`
+unconditionally — including for the exact case its own docstring names as
+"the rejection path for a member-run result an officer declines to
+validate," i.e. a completed test that was never validated. But
+`is_pending_validation()` and `is_under_correction()` both key on
+`status == "completed"`/`"in_progress"`, so once voided, **both** return
+`False` regardless of whether `validated_at` was ever set —
+`resolve_result_view` then fell through to `return disclosure`, the fully
+open default. A candidate whose unvalidated submission an officer rejected
+by voiding it could read the full scorecard, examiner notes, and
+`void_reason` — directly contradicting `notify_candidate_result_voided`,
+which explicitly refuses to notify on this exact case ("an unvalidated
+official result was only a pending placeholder, so even its withdrawal ...
+must remain undisclosed"): the read path and the notification path
+disagreed about whether this event was disclosable. **Fixed** by adding a
+check in `resolve_result_view` — `status == VOIDED and validated_at is
+None` → `RESULT_VIEW_PENDING` — mirroring `notify_candidate_result_voided`'s
+own rule exactly rather than inventing a new one. A test voided _after_
+being validated is unaffected and still discloses normally: only a result
+nobody ever accepted is protected. Five guard tests added to
+`test_skill_result_disclosure.py`'s new `TestVoidedBeforeValidation` class,
+covering the candidate, a named viewer, the previously-validated
+counter-case, and that the examiner/officer are unaffected.
+
+**Round 5 follow-up — the view alone was not the whole fix.** Codex correctly
+pointed out that `_build_test_response` populates `status`, `void_reason`,
+`voided_at`, `voided_by`, and `voided_by_name` from the raw test row
+unconditionally, and `redact_test_for_view`'s `pending` branch — the one this
+fix routes an unvalidated void through — clears `result`/`overall_score`/
+`section_results`/`notes`/etc. but never touched any of those five fields. A
+candidate reading the pending view of a voided-unvalidated test would still
+see `status="voided"` plus the officer's reason and name, which is exactly
+what this finding exists to prevent and exactly what `notify_candidate_result_voided`
+already refuses to disclose. **Fixed** by extending `redact_test_for_view`'s
+`pending` branch: when the withheld payload's `status` is `voided`, it is
+rewritten to `completed` (an ordinary awaiting-validation submission, not a
+tell) and the four void-specific fields are cleared, same as the ordinary
+pending fields already were. Scoped to the `pending` branch only — a
+previously-validated void reaching `full` view is unaffected, since that
+withdrawal is legitimately disclosable. Two new tests: one drives a full
+voided payload through `redact_test_for_view` directly and asserts every
+void field is scrubbed alongside the ordinary pending redaction, one asserts
+a `full`-view payload is untouched.
+
+**Round 7 follow-up — the round-5 fix disguised the status but not the
+consequence.** `_build_test_response` computes `pending_validation=
+is_pending_validation(test)` **before** this redaction runs, and that helper
+keys on `status == "completed"` — false for the still-`voided` ORM row, so
+the response carried `pending_validation=False` regardless of what this
+branch then rewrote `status` to. The round-5 fix left that combination
+intact: a redacted payload reading `status="completed"` with
+`pending_validation=False` is indistinguishable from a genuinely decided
+result, and Codex traced that `MySkillTestResultPage` renders exactly that
+combination as final, displaying the rewritten `"incomplete"` result as a
+**failure** — the opposite of undisclosed, and arguably worse than the
+original leak for a candidate whose test actually passed. **Fixed** by
+setting `pending_validation = True` inside the same status-rewrite branch, so
+the disguise is consistent across every field the frontend reads to decide
+finality, not just the ones a human reviewer thinks to check by hand. One new
+guard test.
+
+### SKT4-7 — MED — `PUT /tests/{id}` lets a member-examiner set `status`/`result`/`overall_score` directly, bypassing `complete_test` — OPEN / FLAGGED
+
+`_authorize_test_write` permits any member holding `examiner_id` on an
+unvalidated test to call `update_test`, and `SkillTestUpdate.status`,
+`.result`, and `.overall_score` are all plain, unrestricted optional fields
+that the handler assigns directly to the ORM row. `complete_test` is the
+dedicated endpoint that computes a result from `section_results` and sets
+`completed_at` — but nothing requires going through it: an examiner can
+`PUT` a test straight to `status="completed"` with a hand-picked `result`/
+`overall_score` and no `section_results` to justify them, and the officer
+`bulk_validate_tests`/`validate_test` path trusts and can credit that stored
+result exactly as if `complete_test` had produced it honestly. This is a
+data-integrity gap, not a disclosure one — an examiner (not necessarily the
+candidate; the self-scoring guard in `_authorize_test_write` only blocks the
+candidate from writing their own official test) could fabricate a result
+without ever running the criteria that would justify it. **Not fixed in
+this pass**: closing it means deciding which fields a bare `PUT` may still
+set (in-progress fields like `notes`/`elapsed_seconds`/draft
+`section_results`, presumably) versus which must route through
+`complete_test`'s own computation — a state-machine and API-contract
+decision, not a same-commit fix, and the kind of thing a wrong guess could
+break every legitimate incremental-save flow this endpoint already serves.
+Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### Corrections to prior write-ups
+
+None to passes 1-3. Within this pass's own first draft, before this PR merged:
+three Codex review rounds caught eight mis-scoped claims or missed findings,
+all corrected in place rather than recorded as a separate historical
+correction, since no inaccurate version of this document was ever the merged
+state. Round 1: the JSON-body-size "no finding" call (reclassified as
+SKT4-1), and the audit-log site enumeration's
+`email_test_results`/`complete_test`-vs-`validate_test`/`release_test_results`
+errors. Round 2: round 1's own fix to the audit-log enumeration had
+overcorrected by dropping `add_test_viewer` instead of evaluating it (restored
+as an 8th site, `viewer_name`); the `GET /summary` query count was a flat six
+instead of the actual up-to-eight across its two conditional branches; the
+`SEC4-1` line citation had drifted to the diff's own blank-comment-line
+insertion (3157 → 3167); and the frontend scope count was seven instead of
+nine, omitting two `apiCache.ts`/`apiCache.test.ts` changes this feature's own
+PHI-cache control lives in (verified as other features' additions, not a
+change to this feature's own exclusion line). Round 3: two genuinely new
+findings this pass's "clean"/"no finding" first-draft language had missed
+outright — **SKT4-2** (`PUT /tests/{id}`'s result arrays, member-reachable,
+same shape as SKT4-1) and **SKT4-3** (`GET /summary`'s small-cohort
+disclosure) — plus a scope gap in **SKT3-2** (below), which covered only
+`GET /tests` when `GET /tests/export/csv` shares the identical unbounded-query
+root cause. Round 4: three real code bugs (SKT4-4, SKT4-5, SKT4-6, all fixed
+— see each finding's own section), plus SKT4-1/SKT4-2/SKT3-2 all widened
+again (`checklist_items`, `result_viewer_positions` and its create route,
+`GET /templates`), and one more flagged finding (SKT4-7). Round 5: SKT4-5's
+and SKT4-6's round-4 fixes were each real but incomplete — SKT4-5 validated
+new writes but left a stored legacy value fail-open, SKT4-6 hid the score
+but left the void's own status/reason/officer-name visible — both closed
+with a second, narrower fix (see each finding's "Round 5 follow-up"). Also
+round 5: this section's own "Backend: one line changed" scope-check claim
+was, without qualification, read as describing the merged state rather than
+the pre-review starting point — annotated in place rather than reworded,
+since it is an accurate description of that starting point and the
+qualification is what was missing, not the claim itself. Round 6: round 4's
+own fix to SKT4-5 had introduced a new gap rather than left one open — the
+validators it added embedded the rejected value verbatim in a `ValueError`
+with no `max_length` capping how large that value could be, and the global
+422 handler's sanitizer scans such messages with a regex vulnerable to
+superlinear backtracking on adversarial input before it enforces its own
+length cap (see SKT4-5's "Round 6 follow-up"). Round 7: round 5's own fix to
+SKT4-6 disguised `status` correctly but left `pending_validation` computed
+from the pre-redaction row, so the redacted payload combined "completed"
+with "not pending" — read by the frontend as a final, failed result rather
+than the undisclosed one intended (see SKT4-6's "Round 7 follow-up").
+
+### SKT3-2 — LOW/MED — `GET /tests`, `GET /tests/export/csv`, and `GET /templates` have no pagination or result cap — still OPEN / FLAGGED
+
+Re-verified, not re-derived: read `list_tests` (`skills_testing.py:978-1198`)
+directly end to end this pass. No `.limit()`/`.offset()` anywhere in the
+function; the batch `User` and `SkillTemplate` fetches and the per-row
+`resolve_result_view()` loop are unchanged from pass 3's description.
+`skillsTestingService.getTests()` (frontend) still accepts no paging
+parameter, and `SkillsTestingTestRecordsTab.tsx`'s default "All" filter still
+calls `GET /tests` with zero query params. No code or scope change since
+pass 3 — the finding, its severity, and its original scope all stand
+unchanged. Left open for the same reason pass 3 gave: closing it needs a
+paging contract, a chosen default/cap, and a coordinated frontend change — a
+product decision, not a same-commit fix.
+
+**Scope extended this pass, on Codex review:** `export_tests_csv`
+(`skills_testing.py:3230-3325+`) builds the identical unbounded
+`select(SkillTest).where(organization_id == ...)` shape — no `.limit()`,
+optional filters (`status`, `candidate_id`, `template_id`, date range) that
+default to none applied — then loads every matching row, resolves a batch
+`User`/`SkillTemplate` map, and streams every row (or, for `detail=criteria`,
+every criterion within every row) into a `StringIO` buffer. `training.manage`-
+gated, unlike `GET /tests`, so the exposed population is smaller (officers
+only) but the per-request cost is higher (row expansion into CSV text, held
+in memory, then duplicated by `output.getvalue()`). This pass's first draft
+described SKT3-2 as scoped to `GET /tests` alone and left the export
+unexamined — the same root cause (no cap on the base query) reaches both
+routes, so `docs/KNOWN_LIMITATIONS.md`'s entry now names both. Closing this
+half needs the same kind of product decision as the list endpoint: a required
+bounded filter (e.g. a mandatory date range past some org-size threshold) or
+genuine streaming from the database rather than a fully-materialized query —
+not a same-commit fix.
+
+**Scope extended again, round 4:** `GET /templates` (`list_templates`,
+`skills_testing.py:326-390`) shares the same root cause a third time. Its
+query has no `.limit()` either, and it is worse than the two above in one
+respect: it is open to `get_current_user` (every member, like `GET /tests`,
+not officer-only like the export), and it loads each template's **full**
+`sections` JSON — the exact structure SKT4-1 has no size cap on — before
+doing visibility filtering and section/criteria counting in **Python**, so a
+large template (or simply an accumulated catalog of them) costs every caller
+the full deserialization, including for `officers_only`/`assigned_only`
+templates a non-officer caller will have filtered out of the response
+anyway. Included in this finding's scope and its `docs/KNOWN_LIMITATIONS.md`
+entry, which now names all three routes. Closing it needs the same kind of
+remedy as the others — paging, or selecting bounded summary columns instead
+of the full row — not a same-commit fix.
+
+## Guard tests added
+
+Round 4 turned up three real code bugs (SKT4-4, SKT4-5, SKT4-6), each fixed
+with its own guard tests:
+
+- `test_skill_test_email_security.py` — three new tests pinning
+  `_ensure_disclosure_allows_email()`: a pending view is rejected, a none
+  view is rejected, scores/full are accepted (SKT4-4).
+- `test_skill_result_disclosure_validation.py` — new file. Every
+  `ResultDisclosure`/`ResultRelease` member is accepted on all four
+  write-side schemas, several typo/case/separator variants are rejected on
+  all four with the expected error text, omitting either field is still
+  accepted, and the schema's whitelist is asserted equal to the enum so the
+  two cannot silently drift apart again (SKT4-5).
+- `test_skill_result_disclosure.py` — new `TestVoidedBeforeValidation`
+  class, five tests: the candidate and a named viewer both see
+  `RESULT_VIEW_PENDING` for an unvalidated void, a previously-validated void
+  still discloses normally, and the examiner/officer are unaffected (SKT4-6).
+
+Round 5 found each of SKT4-5 and SKT4-6's first fixes was incomplete, not
+wrong — both closed with a second, narrower fix and two more guard tests
+apiece:
+
+- `test_skill_result_disclosure.py`'s `TestPolicyResolution` — three new
+  tests: a corrupted test-level disclosure, a corrupted release value, and a
+  corrupted template-level disclosure all fail closed through
+  `resolve_disclosure_policy` (SKT4-5 follow-up).
+- `test_skill_result_disclosure.py`'s `TestVoidedBeforeValidation` — two new
+  tests: `redact_test_for_view` scrubs `status`/`void_reason`/`voided_at`/
+  `voided_by`/`voided_by_name` for a voided payload in the `pending` view,
+  and leaves them alone in `full` view (SKT4-6 follow-up).
+
+Round 6 found round 4's own SKT4-5 fix had opened a new gap, not left one
+incompletely closed:
+
+- `test_skill_result_disclosure_validation.py` — one new test: an overlong
+  `result_disclosure` fails with Pydantic's `string_too_long` (a fixed,
+  constant-message error type) on all four write schemas, not the custom
+  validator's value-embedding `value_error` (SKT4-5 round-6 follow-up).
+
+Round 7 found round 5's own SKT4-6 fix disguised `status` but left
+`pending_validation` inconsistent with it:
+
+- `test_skill_result_disclosure.py`'s `TestVoidedBeforeValidation` — one new
+  test: `redact_test_for_view` flips a `False` `pending_validation` to `True`
+  when it rewrites a voided payload's status (SKT4-6 round-7 follow-up).
+
+The six pre-existing guard test files from passes 1–3 were re-run, not
+re-written.
+
+## Completion gate (pass 4, final)
+
+| Check                                             | Result                                                                                                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations (`flake8==7.3.0`, CI's pin)                                                                                                                                                              |
+| `black --check app/ tests/ alembic/`              | ✅ 1578 files unchanged (`black==26.5.1`, CI's pin — installed explicitly; a stale `26.3.1` shadowed it on `PATH` via `~/.local/bin`, invoked `/usr/local/bin/black` directly to get the pinned version) |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==9.0.1`, CI's current pin)                                                                                                                                                              |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 443 revisions, single head `0533644945cd` — no new migration (Pydantic-level validation only, no column/schema change)                                                                                |
+| `pytest tests/ -q -k "skill"`                     | ✅ 435 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 30 new guard tests above                                                                                  |
+| `cd frontend && npm run typecheck`                | ✅ 0 errors (unaffected — no frontend file touched this pass)                                                                                                                                            |
+| `cd frontend && npm run lint`                     | ✅ 0 errors, 0 warnings (unaffected — no frontend file touched this pass)                                                                                                                                |
+
+Full backend suite not re-run beyond the `-k skill` scope: `app/schemas/
+skills_testing.py` and `app/services/skills_testing_service.py` have no
+consumer outside `app/api/v1/endpoints/skills_testing.py` itself (checked via
+`grep -rl` for both modules across `app/`), so the skill-scoped run is the
+full surface these fixes could affect.
+
+**Final disposition: 3 real code fixes (SKT4-4, SKT4-5, SKT4-6, all MED or
+MED/HIGH — SKT4-5 closed in three steps, SKT4-6 in three), 4 findings
+flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope extended
+three times over (SKT3-2), across seven Codex review rounds.** All six pass
+1–3 fixes re-verified intact by direct code read. None of this pass's
+"clean"/"no finding" first-draft language survived review unchanged — every
+one of rounds 1 through 7 found something the previous draft had gotten
+wrong, missed outright, fixed only halfway, or broke while fixing something
+else: an officer could email a candidate a result the read endpoints were
+still withholding (SKT4-4); a typo in a disclosure-policy field silently
+granted full disclosure instead of being rejected — including one already
+sitting in the database, which round 5 caught the first fix had no answer
+for, and the fix for _that_ introduced an unbounded field a regex-based error
+sanitizer could be made to backtrack superlinearly against, which round 6
+caught (SKT4-5); and voiding an unvalidated submission disclosed it in full
+rather than staying undisclosed like the notification path already assumed —
+round 5 caught that the first fix hid the score but not the withdrawal
+notice itself, and round 7 caught that _that_ fix disguised `status` but left
+`pending_validation` reading the payload as a final, failed result instead of
+an undisclosed one (SKT4-6). This pass's actual value was almost entirely
+produced by the review process rather than by the original re-verification
+work — the backend surface itself had exactly one line of unrelated change
+across three prior passes and roughly two weeks, and needed seven rounds of
+adversarial review on a "nothing to see here" docs PR to surface three real
+defects, get each genuinely and completely fixed rather than half-fixed or
+newly-broken, and flag four more that need a product/content decision this
+rotation correctly declined to guess at.
