@@ -485,9 +485,30 @@ being written to the session, and are persisted into
 POST /api/v1/onboarding/session/file-storage
 Body: {
   platform: "googledrive" | "onedrive" | "s3" | "local" | "other",
-  config: { ...platform-specific credentials }
+  config: { ... }   // platform-specific; exact camelCase keys, see below
 }
 ```
+
+`config` is a free dict on the schema, exactly like `/session/email`'s, and
+completion maps **exact camelCase** names out of it:
+
+| Platform      | Keys                                                                                |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `googledrive` | `googleDriveClientId`, `googleDriveClientSecret`, `googleDriveFolderId`             |
+| `onedrive`    | `oneDriveTenantId`, `oneDriveClientId`, `oneDriveClientSecret`, `sharePointSiteUrl` |
+| `s3`          | `s3AccessKeyId`, `s3SecretAccessKey`, `s3BucketName`, `s3Region`, `s3EndpointUrl`   |
+| `local`       | `localStoragePath`                                                                  |
+| `other`       | none                                                                                |
+
+**Nothing validates these, on either side.** The save endpoint checks only that
+`platform` is one of the five, then encrypts whatever `config` holds. At
+completion `_persist_session_data_to_org()` reads the camelCase names above and
+drops every key it does not recognise. A caller using the snake_case spellings
+`FileStorageSettings` exposes — `s3_bucket_name`, `google_drive_client_id` —
+therefore gets a success response, has its credentials encrypted into the
+session, and ends up with an organization storing the platform choice and
+nothing else. There is no equivalent of email's `missing_for_enabled()` here, so
+no error is raised at any point; the first symptom is uploads failing.
 
 **Navigation**:
 
@@ -501,13 +522,28 @@ Body: {
 
 **Purpose**: Choose authentication method
 
-**Options**:
+**Options**, as the screen offers them and the endpoint accepts them:
 
-- Local (Username/Password)
-- OAuth 2.0 (Google, Microsoft) — **link-existing only** (see
-  "OAuth Sign-In Buttons" below); OAuth never creates new accounts
-- SAML (Enterprise SSO)
-- LDAP (Active Directory)
+- `local` — Username/Password
+- `google` — Google OAuth. **Link-existing only** (see "OAuth Sign-In Buttons"
+  below); OAuth never creates new accounts
+- `microsoft` — Microsoft Azure AD, on the same link-existing terms
+- `authentik` — self-hosted Authentik SSO
+
+Those four strings are the contract. SAML and LDAP are **not** among them and
+are not implemented (`LDAP_ENABLED` exists in config and gates nothing); a
+caller sending `saml`, `ldap` or `oauth` gets a 400 naming the four that work.
+
+**API Call**:
+
+```
+POST /api/v1/onboarding/session/auth
+Body: { platform: "google" | "microsoft" | "authentik" | "local" }
+```
+
+The endpoint stores the choice and nothing else — `AuthConfigRequest` has no
+`config` field, so provider credentials are configured after setup rather than
+here.
 
 **Navigation**:
 
@@ -515,7 +551,7 @@ Body: {
 
 **Data Storage**: Zustand store (persisted to localStorage)
 
-- `authPlatform` = "local" | "oauth" | "saml" | "ldap"
+- `authPlatform` = "google" | "microsoft" | "authentik" | "local"
 
 ---
 
@@ -583,7 +619,7 @@ tells the frontend to set `has_session`.
 ```
 POST /api/v1/onboarding/session/it-team
 Body: {
-  it_team: [{ name, email, phone, role }],
+  it_team: [{ name, email, phone, role, rank? }],
   backup_access: {
     email: string,
     phone: string,
@@ -959,6 +995,7 @@ to document an organization body the route had stopped accepting.
 | `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
 | `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
 | `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                                                                                                                                               |
+| `POST /onboarding/test/email`                                            | `EmailTestResponse` — `success`, `message`, `details?`. Tests the connection without saving anything, and is rate-limited on its own scope so a department retrying it while fixing an SMTP typo cannot lock itself out of `/system-owner`                                                             |
 | every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                                                                                                                                   |
 | `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                                                                                                                                                |
 | `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                                                                                                                                           |
@@ -1107,8 +1144,19 @@ still receives a 400, so the full contract is:
   corpus. That check **fails open** — an outage skips it rather than blocking a
   password change (see the Attack Protection table in CLAUDE.md)
 
-Every failed rule is reported at once: a password breaking more than one comes
-back as `Password requirements not met (N issues): …` with the whole list.
+The rules above are aggregated: a password breaking more than one comes back as
+`Password requirements not met (N issues): …` with the whole list. Two things
+sit outside that aggregation, so a caller can be rejected twice for one
+password:
+
+- **Over `PASSWORD_MAX_LENGTH` returns immediately**, reporting only the length.
+  Nothing else is evaluated — the ceiling exists to keep an unbounded input out
+  of Argon2, so the check runs before any work is done on the value.
+- **The breach check runs only after every local rule passes.**
+  `AuthService.register_user()` calls `validate_password_strength()` first and
+  `check_password_not_breached()` after it, so a password that is both weak and
+  breached reports the local failures, and only reveals the breach hit once
+  those are fixed.
 
 This is the one bootstrap call that creates the administrator, so a rejection
 here has no signed-in user to retry it.
@@ -1358,10 +1406,10 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
     "emailConfigured": false,
 
     // File Storage
-    "fileStoragePlatform": "local",             // "local" | "s3" | "azure" | "gcs" | null
+    "fileStoragePlatform": "local",             // "googledrive" | "onedrive" | "s3" | "local" | "other" | null
 
     // Authentication
-    "authPlatform": "local",                    // "local" | "oauth" | "saml" | "ldap" | null
+    "authPlatform": "local",                    // "google" | "microsoft" | "authentik" | "local" | null
 
     // IT Team
     "itTeamConfigured": false,
