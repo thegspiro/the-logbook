@@ -14,8 +14,14 @@ matter what future writes do. CLAUDE.md pitfall #20 is explicit that a
 canonical shape needs the migration that settles the rows already there, and
 that a reader-side conversion is a stopgap.
 
-**Scope is deliberately narrow: only values outside the vocabulary are
-touched.** In particular ``date_flexibility = 'specific_dates'`` on a request
+Values are settled the way the runtime normalizer settles them —
+``LOWER(TRIM(...))`` first, and the fallback only for what is genuinely
+unrecognised. A plain equality test would both rewrite a recoverable
+`" morning"` into the fallback and, under these columns'
+case-insensitive collation, leave a `"Morning"` stored with its capital.
+
+**Beyond that, scope is deliberately narrow: only values outside the
+vocabulary are replaced.** In particular ``date_flexibility = 'specific_dates'`` on a request
 that names no date is left alone. The normalizer rewrites that at intake,
 because claiming specific dates without giving one walks past the department's
 minimum-notice gate — but that gate only ever runs at intake, and the value
@@ -92,12 +98,31 @@ def upgrade() -> None:
         placeholders = ", ".join(f":v{i}" for i in range(len(allowed)))
         params = {f"v{i}": value for i, value in enumerate(allowed)}
         params["fallback"] = fallback
-        # NULL is left as NULL: preferred_time_of_day is nullable, and absent is
-        # not the same claim as "flexible".
+        # LOWER(TRIM(...)) first, matching the runtime normalizer's
+        # `str(value).strip().lower()`, then fall back only for what is
+        # genuinely unrecognised.
+        #
+        # Both halves matter and a plain `NOT IN` gets both wrong. A stored
+        # " morning" is a value the normalizer would settle to "morning", so
+        # replacing it with the fallback would rewrite the requester's stated
+        # preference rather than canonicalise it. And these columns are
+        # utf8mb4_unicode_ci, so "Morning" compares *equal* to "morning" —
+        # `NOT IN` would leave it stored with its capital, still off-canonical
+        # and still unmatched by any reader doing an exact comparison.
+        #
+        # Applied to every non-NULL row rather than only the ones that differ:
+        # the CASE is a no-op for an already-canonical value, which keeps the
+        # statement idempotent without needing a collation-aware inequality.
+        #
+        # NULL is left as NULL — preferred_time_of_day is nullable, and absent
+        # is not the same claim as "flexible".
         bind.execute(
             sa.text(
-                f"UPDATE event_requests SET {column} = :fallback "
-                f"WHERE {column} IS NOT NULL AND {column} NOT IN ({placeholders})"
+                f"UPDATE event_requests SET {column} = CASE"
+                f" WHEN LOWER(TRIM({column})) IN ({placeholders})"
+                f" THEN LOWER(TRIM({column}))"
+                f" ELSE :fallback END"
+                f" WHERE {column} IS NOT NULL"
             ),
             params,
         )

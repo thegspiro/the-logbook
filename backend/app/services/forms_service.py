@@ -8,7 +8,16 @@ fields, submissions, public forms, integrations, and reporting.
 import html as html_lib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+)
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -180,6 +189,9 @@ class FormsService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Side effects that must not outrun the commit — see
+        # `_defer_until_committed`. Per-request, like the service itself.
+        self._post_commit: List[Callable[[], Awaitable[Any]]] = []
 
     # ============================================
     # Input Sanitization & Validation
@@ -1464,6 +1476,37 @@ class FormsService:
             await self.db.rollback()
             return False, safe_error_detail(e)
 
+    def _defer_until_committed(self, send: Callable[[], Awaitable[Any]]) -> None:
+        """Hold a side effect until the row it announces is durable.
+
+        An integration's writes are only flushed while it runs; the commit
+        happens in ``_process_integrations`` once every integration has
+        returned. Anything that reaches outside the transaction — an email, a
+        webhook — cannot be taken back if that commit then fails, so it waits
+        here and is drained afterwards. The service is built per request, so
+        this list never outlives one submission.
+
+        Takes a **callable**, not a coroutine. A coroutine object is live from
+        the moment it is created: a queue that is never drained leaves it to be
+        garbage-collected with a "never awaited" warning, and the work it
+        describes is decided before the commit it is supposed to follow.
+        """
+        self._post_commit.append(send)
+
+    async def _run_post_commit(self) -> None:
+        """Drain the deferred side effects. Never raises into the caller.
+
+        The submission and its integrations are already durable by the time
+        this runs, so a failed email is worth a log line, not an exception that
+        would report an intake as failed after it succeeded.
+        """
+        pending, self._post_commit = self._post_commit, []
+        for send in pending:
+            try:
+                await send()
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning("Deferred post-commit side effect failed: {}", e)
+
     async def _process_integrations(
         self, submission: FormSubmission, form: Form, is_public: bool = False
     ) -> None:
@@ -1597,6 +1640,9 @@ class FormsService:
             submission.integration_processed = True
             submission.integration_result = results
             await self.db.commit()
+
+        # Only now is the request the emails announce actually durable.
+        await self._run_post_commit()
 
         # Auto-advance pipeline steps linked to this form
         await self._auto_advance_pipeline_step(form, submission)
@@ -2697,8 +2743,18 @@ class FormsService:
             await apply_default_assignee(self.db, event_request, pipeline)
             await self.db.flush()
             if org is not None:
-                await send_request_notification(
-                    self.db, event_request, "on_submitted", org
+                # Queued, not sent. The request is only flushed at this point —
+                # `_process_integrations` commits after this returns, and
+                # `submit_public_form` rolls back if that fails. Sending here
+                # meant a deadlock on that commit (which the caller's own
+                # comment says can happen, and is why integration processing
+                # sits outside its retry loop) left the requester holding "we
+                # have received your request" for a row that no longer exists,
+                # and the coordinator an assignment for nothing.
+                self._defer_until_committed(
+                    lambda: send_request_notification(
+                        self.db, event_request, "on_submitted", org
+                    )
                 )
 
             return {

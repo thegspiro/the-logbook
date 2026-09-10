@@ -510,3 +510,124 @@ class TestPreferenceBackfill:
 
     def test_nulls_are_preserved(self):
         assert "IS NOT NULL" in self.BACKFILL.read_text()
+
+
+# ============================================
+# Round 3 — findings on the round-2 fixes
+# ============================================
+
+
+@pytest.mark.asyncio
+async def test_the_acknowledgement_waits_for_the_commit():
+    """The request is only flushed while the integration runs; the commit lands
+    in `_process_integrations` afterwards, and `submit_public_form` rolls back
+    if it fails. Sending during the integration left a member of the public
+    holding "we have received your request" for a row that no longer exists."""
+    order: list = []
+
+    service = FormsService(AsyncMock())
+    service.db.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+    service._auto_advance_pipeline_step = AsyncMock()
+
+    async def _fake_integration(*_args, **_kwargs):
+        service._defer_until_committed(
+            lambda: _send()  # noqa: E731 - deferred on purpose
+        )
+        return {"success": True}
+
+    async def _send():
+        order.append("email")
+
+    service._process_event_request = AsyncMock(side_effect=_fake_integration)
+
+    submission = SimpleNamespace(integration_processed=False, integration_result=None)
+    form = SimpleNamespace(
+        integration_type=IntegrationType.EVENT_REQUEST.value, integrations=[]
+    )
+    await service._process_integrations(submission, form)
+
+    assert order == ["commit", "email"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_deferred_send_does_not_fail_the_intake():
+    """By drain time the submission is durable — a bounced email is a log line,
+    not a reason to report the whole intake as failed."""
+    service = FormsService(AsyncMock())
+
+    async def _boom():
+        raise RuntimeError("smtp down")
+
+    service._defer_until_committed(_boom)
+    await service._run_post_commit()
+
+    assert service._post_commit == []
+
+
+class TestOutreachTypesAreReadDefensively:
+    """`update_event_settings` dumps with `exclude_unset`, so an explicit
+    `outreach_event_types: null` in a PATCH body is written through as `None` —
+    and `settings.get(key, defaults)` hands that back, because the key exists.
+    Five call sites iterate the result, two of them on public surfaces."""
+
+    def _org(self, stored):
+        return SimpleNamespace(
+            id=ORG_ID, settings={"events": {"outreach_event_types": stored}}
+        )
+
+    def test_an_explicit_null_falls_back_to_the_defaults(self):
+        from app.services.event_request_service import get_outreach_types
+
+        types = get_outreach_types(self._org(None))
+        assert {t["value"] for t in types} >= {"station_tour", "other"}
+
+    @pytest.mark.parametrize("stored", ["a string", 42, {}, []])
+    def test_a_non_list_falls_back_to_the_defaults(self, stored):
+        from app.services.event_request_service import get_outreach_types
+
+        assert get_outreach_types(self._org(stored))
+
+    def test_malformed_entries_are_dropped_not_returned(self):
+        from app.services.event_request_service import get_outreach_types
+
+        types = get_outreach_types(
+            self._org(
+                [{"value": "smoke_trailer", "label": "Smoke Trailer"}, "junk", {}]
+            )
+        )
+        assert [t["value"] for t in types] == ["smoke_trailer"]
+
+    def test_normalizing_a_request_survives_a_null_setting(self):
+        """The comprehension that reads this used to raise TypeError, which is
+        a 500 on the JSON endpoint and a failed integration on the forms path."""
+        from app.services.event_request_service import normalize_request_preferences
+
+        settled = normalize_request_preferences(
+            self._org(None),
+            {
+                "outreach_type": "station_tour",
+                "date_flexibility": "flexible",
+                "venue_preference": "either",
+                "preferred_time_of_day": "morning",
+                "preferred_date_start": None,
+            },
+        )
+        assert settled["outreach_type"] == "station_tour"
+
+
+class TestBackfillNormalizesRatherThanReplaces:
+    """The runtime normalizer applies `strip().lower()`. A plain equality test
+    in the migration would rewrite a recoverable `" morning"` to the fallback,
+    and — under these columns' case-insensitive collation — leave `"Morning"`
+    stored with its capital."""
+
+    BACKFILL = TestPreferenceBackfill.BACKFILL
+
+    def test_it_trims_and_lowercases_before_matching(self):
+        sql = self.BACKFILL.read_text()
+        assert "LOWER(TRIM(" in sql
+
+    def test_the_fallback_is_only_for_unrecognised_values(self):
+        sql = self.BACKFILL.read_text()
+        assert "CASE" in sql
+        assert "ELSE :fallback" in sql

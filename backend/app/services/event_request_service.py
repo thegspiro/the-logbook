@@ -118,12 +118,33 @@ def event_duration_minutes(org: Optional[Organization]) -> int:
 
 
 def get_outreach_types(org: Optional[Organization]) -> list[dict[str, str]]:
-    """Read outreach event types from an organization, falling back to defaults."""
+    """Read outreach event types from an organization, falling back to defaults.
+
+    Read defensively, because the stored value is free-form JSON that an
+    administrator can shape (pitfall #19). ``EventSettingsUpdate`` declares
+    ``outreach_event_types`` optional and ``update_event_settings`` dumps with
+    ``exclude_unset``, so an explicit ``null`` in the PATCH body is written
+    through as ``None`` — and ``settings.get(key, defaults)`` hands that ``None``
+    back, because the key is present. Every caller then iterates it: the
+    intake normalizer, the label lookup, the public ``/types/labels`` endpoint
+    and ``schedule_request``'s title builder would all raise ``TypeError``,
+    which is a 500 on two public surfaces.
+
+    A non-list stored value means "nothing usable is configured", which is what
+    the defaults are for. Entries that are not ``{"value": ..., "label": ...}``
+    dicts are dropped rather than allowed to break the caller that reads them.
+    """
     defaults = _event_settings_defaults()["outreach_event_types"]
     if org is None:
         return list(defaults)
     settings = (org.settings or {}).get("events", {})
-    return settings.get("outreach_event_types", defaults)
+    if not isinstance(settings, dict):
+        return list(defaults)
+    stored = settings.get("outreach_event_types", defaults)
+    if not isinstance(stored, list):
+        return list(defaults)
+    usable = [t for t in stored if isinstance(t, dict) and t.get("value")]
+    return usable if usable else list(defaults)
 
 
 def configured_task_ids(org: Optional[Organization]) -> set[str]:
@@ -205,7 +226,7 @@ def normalize_request_preferences(org: Optional[Organization], data: dict) -> di
     settled = dict(data)
 
     outreach_type = str(settled.get("outreach_type") or "").strip()
-    configured = {t["value"] for t in get_outreach_types(org) if t.get("value")}
+    configured = {t["value"] for t in get_outreach_types(org)}
     if outreach_type not in configured:
         # Falling back rather than storing the unknown value keeps the board's
         # type filter and the acknowledgement email's subject meaningful. The
