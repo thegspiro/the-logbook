@@ -117,6 +117,28 @@ def event_duration_minutes(org: Optional[Organization]) -> int:
     return minutes if minutes > 0 else fallback
 
 
+def public_daily_limit(pipeline: dict) -> int:
+    """The department's ceiling for public event requests in a day.
+
+    Read defensively for the same reason `get_outreach_types` is:
+    ``RequestPipelineUpdate.public_daily_limit`` is ``Optional[int]`` and
+    ``update_event_settings`` dumps with ``exclude_unset``, so an explicit
+    ``null`` in a PATCH body is persisted and ``pipeline.get(key, 50)`` hands
+    that ``None`` straight back. ``int(None)`` then raises inside the cap check
+    — a 500 on the JSON endpoint, and on the forms path a submission that looks
+    accepted while no request is created.
+
+    A value that is not a usable positive integer means "nothing sensible is
+    configured", which is what the shipped default is for.
+    """
+    default = int(_event_settings_defaults()["request_pipeline"]["public_daily_limit"])
+    try:
+        limit = int(pipeline.get("public_daily_limit", default))
+    except (TypeError, ValueError):
+        return default
+    return limit if limit > 0 else default
+
+
 def get_outreach_types(org: Optional[Organization]) -> list[dict[str, str]]:
     """Read outreach event types from an organization, falling back to defaults.
 

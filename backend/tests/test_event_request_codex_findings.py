@@ -861,3 +861,84 @@ class TestRequesterCancellationAfterTheEventStarted:
         ]
         assert "cancelled_by_requester" in actions
         assert "calendar_event_kept" in actions
+
+
+class TestDailyLimitIsReadDefensively:
+    """`RequestPipelineUpdate.public_daily_limit` is `Optional[int]` and the
+    settings writer persists an explicit null, so `pipeline.get(key, 50)` hands
+    back `None` and `int(None)` raised inside the cap check — a 500 on the JSON
+    endpoint, and on the forms path a submission that looks accepted while no
+    request is created."""
+
+    @pytest.mark.parametrize(
+        ("stored", "expected"),
+        [
+            ({"public_daily_limit": None}, 50),
+            ({"public_daily_limit": "lots"}, 50),
+            ({"public_daily_limit": 0}, 50),
+            ({"public_daily_limit": -3}, 50),
+            ({}, 50),
+            ({"public_daily_limit": 7}, 7),
+            ({"public_daily_limit": "7"}, 7),
+        ],
+    )
+    def test_it_falls_back_to_the_shipped_default(self, stored, expected):
+        from app.services.event_request_service import public_daily_limit
+
+        assert public_daily_limit(stored) == expected
+
+    @pytest.mark.asyncio
+    async def test_a_null_limit_does_not_fail_a_form_submission(self):
+        org = SimpleNamespace(
+            id=ORG_ID,
+            name="Oakville",
+            active=True,
+            timezone="UTC",
+            settings={
+                "events": {
+                    "request_pipeline": {
+                        "accept_public_requests": True,
+                        "public_daily_limit": None,
+                    }
+                }
+            },
+        )
+        service, db = _service(org)
+        submission = SimpleNamespace(
+            id=SUBMISSION_ID,
+            organization_id=ORG_ID,
+            data={
+                "f_name": "Dana Reyes",
+                "f_email": "dana@example.org",
+                "f_type": "station_tour",
+                "f_desc": "Station tour for a scout troop.",
+            },
+            ip_address="203.0.113.9",
+        )
+        integration = SimpleNamespace(
+            integration_type=IntegrationType.EVENT_REQUEST,
+            is_active=True,
+            field_mappings={
+                "f_name": "contact_name",
+                "f_email": "contact_email",
+                "f_type": "outreach_type",
+                "f_desc": "description",
+            },
+        )
+
+        with (
+            patch(
+                "app.services.event_request_service.send_request_notification",
+                AsyncMock(),
+            ),
+            patch(
+                "app.services.forms_service.daily_cap_exceeded",
+                AsyncMock(return_value=False),
+            ) as cap,
+        ):
+            result = await service._process_event_request(
+                submission, integration=integration, form=None, is_public=True
+            )
+
+        assert result["success"] is True
+        assert cap.await_args.args == (f"pub_event_request:{ORG_ID}", 50)

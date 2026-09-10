@@ -2541,6 +2541,7 @@ class FormsService:
             lead_time_error,
             normalize_request_preferences,
             parse_audience_size,
+            public_daily_limit,
             send_request_notification,
         )
 
@@ -2685,7 +2686,7 @@ class FormsService:
         # submitters (the EV-19 ordering, same shape).
         if is_public and await daily_cap_exceeded(
             f"pub_event_request:{submission.organization_id}",
-            int(pipeline.get("public_daily_limit", 50)),
+            public_daily_limit(pipeline),
         ):
             return {"success": False, "error": self.EVENT_REQUEST_DAILY_CAP_ERROR}
 

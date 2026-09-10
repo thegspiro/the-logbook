@@ -72,6 +72,7 @@ from app.services.event_request_service import (
     lead_time_error,
     normalize_request_preferences,
     open_staffing_shift,
+    public_daily_limit,
     render_request_template,
     resolve_confirmed_end,
 )
@@ -339,7 +340,7 @@ async def submit_public_event_request(
     # passed authorization, the honeypot and every business-rule rejection.
     if await daily_cap_exceeded(
         f"pub_event_request:{organization_id}",
-        int(pipeline.get("public_daily_limit", 50)),
+        public_daily_limit(pipeline),
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
