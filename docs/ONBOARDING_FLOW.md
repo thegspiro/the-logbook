@@ -558,17 +558,22 @@ are not implemented (`LDAP_ENABLED` exists in config and gates nothing); a
 caller sending `saml`, `ldap` or `oauth` gets a 400 naming the four the
 endpoint accepts.
 
-> **Choosing `authentik` leaves nobody able to sign in** _(2026-09-10)_: it is
-> accepted here and completion writes it to `settings.auth.provider`, and
-> `AuthSettings` even carries `authentik_url` / `authentik_client_id` /
-> `authentik_client_secret` — but there is no authorization or callback route
-> for it. `auth.py` implements `/oauth/google` and `/oauth/microsoft` only,
-> `GET /auth/oauth-config` reports just `googleEnabled` and `microsoftEnabled`,
-> and the login page renders those two buttons. Worse, the choice is not
-> merely inert: `forgot-password` refuses a local reset for any non-local
-> provider, so an organization set to `authentik` has no SSO to sign in with
-> **and** no password recovery. Use `local`, `google` or `microsoft` until the
-> flow exists.
+> **Choosing `authentik` buys nothing and costs password recovery**
+> _(2026-09-10)_: it is accepted here and completion writes it to
+> `settings.auth.provider`, and `AuthSettings` even carries `authentik_url` /
+> `authentik_client_id` / `authentik_client_secret` — but there is no
+> authorization or callback route for it. `auth.py` implements `/oauth/google`
+> and `/oauth/microsoft` only, `GET /auth/oauth-config` reports just
+> `googleEnabled` and `microsoftEnabled`, and the login page renders those two
+> buttons. So the SSO a department selected does not exist.
+>
+> Signing in still works: `POST /auth/login` calls `authenticate_user()`
+> without consulting `settings.auth.provider`, and the password form renders
+> unconditionally. What the setting does change is recovery —
+> `forgot-password` refuses a local reset for any non-local provider, so a
+> member who forgets their password has no self-service way back and needs an
+> administrator to reset it. Use `local` unless you are configuring Google or
+> Microsoft.
 
 **API Call**:
 
@@ -1026,7 +1031,7 @@ to document an organization body the route had stopped accepting.
 | `GET /onboarding/database-check`                                         | `DatabaseCheckResponse` — `connected`, `database`, `host`, `port`, `server_time?`, `organizations_count?`, `error?`                                                                                                                                                                                    |
 | `POST /onboarding/organization`, `POST /onboarding/session/organization` | `OrganizationSetupResponse` — `id`, `name`, `slug`, `organization_type`, `timezone`, `active`, `created_at`                                                                                                                                                                                            |
 | `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`, `authenticated`. Also sets the auth cookies; `authenticated` is the signal the frontend uses to set its `has_session` hint, since the cookies themselves are httpOnly and invisible to it |
-| `POST /onboarding/modules`                                               | `{ message, modules }` — every module with its resulting boolean, not only the enabled ones                                                                                                                                                                                                            |
+| `POST /onboarding/modules`                                               | `{ message, modules }` — every accepted id, not only the enabled ones. The boolean is the **stored** value only for the ids the wizard asks about; for settings-only and legacy ids it echoes the request, so `finance: true` can come back with the setting untouched (see Configure Modules)         |
 | `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                                                                                                                                              |
 | `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
 | `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
@@ -1383,7 +1388,22 @@ Body: {
 }
 ```
 
-Marks onboarding as finished.
+Marks onboarding as finished, and does three further things worth knowing:
+
+- **Persists the session data** — IT team, email configuration, file storage
+  and auth choice, and the module selections — into `Organization.settings`.
+  This is the point at which anything saved under `/session/*` reaches the
+  organization.
+- **Seeds default data**: `_seed_default_data()` creates the standard admin
+  hours categories and event mappings against the first organization and admin
+  user, so hour tracking works immediately after setup. It is **best-effort** —
+  the whole body is wrapped in `try/except` and a failure is logged as
+  `Non-critical: failed to seed admin hours defaults` while completion
+  continues. So an installation can complete successfully and still lack these
+  defaults, and the only trace is that warning. Worth knowing before concluding
+  the categories were deleted.
+- **Writes an audit entry** — `onboarding.completed`, recording the
+  organization name, admin username and enabled modules.
 
 ### Configure Stations
 

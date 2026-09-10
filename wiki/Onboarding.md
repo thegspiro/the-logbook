@@ -118,9 +118,11 @@ and module steps all run against a signed-in session.
 
 > **Do not choose Authentik yet (2026-09-10):** unlike the two above, it has no
 > sign-in flow — there is no Authentik authorization or callback route, and the
-> login page renders Google and Microsoft only. Selecting it also switches the
-> organization off local password resets, so it leaves no way in and no way to
-> recover. Local, Google and Microsoft all work.
+> login page renders Google and Microsoft only, so the SSO you selected is not
+> there. Passwords still work, but selecting it switches the organization off
+> self-service password resets: a member who forgets theirs needs an
+> administrator to reset it. Choose Local unless you are setting up Google or
+> Microsoft.
 
 #### Step 9: System Owner
 
@@ -472,8 +474,10 @@ a password that appears to satisfy the list. It must also contain:
 - nothing on the common-password list, which includes fire-service words
   (`firefighter`, `station`, `medic`, `ambulance`) as well as the usual ones
 
-The response lists every rule the password broke, not just the first. Full
-contract: [`docs/ONBOARDING_FLOW.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/ONBOARDING_FLOW.md#create-admin-user).
+The response lists every rule the password broke, not just the first — with two
+exceptions: a password over 128 characters is rejected on length alone, and the
+breached-password check runs only once every rule above passes, so a password
+that is both weak and breached reports the weakness first. Full contract: [`docs/ONBOARDING_FLOW.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/ONBOARDING_FLOW.md#create-admin-user).
 
 ### Database Connection Failed
 

@@ -88,9 +88,10 @@ number of screens a user sees depends on the services they select.
 
 > **Do not choose Authentik yet** (2026-09-10). It is accepted and stored, but
 > no Authentik sign-in flow exists — the login page offers Google and Microsoft
-> only. Because the setting also switches the organization off local password
-> resets, choosing it leaves no way in and no way to recover. Local, Google and
-> Microsoft all work.
+> only, so the SSO you selected is not there. Passwords still work, but the
+> setting switches the organization off self-service password resets: a member
+> who forgets theirs needs an administrator to reset it. Choose Local unless
+> you are setting up Google or Microsoft.
 
 #### Step 8: System Owner Creation
 
@@ -434,8 +435,10 @@ a password that appears to satisfy the list. It must also contain:
 - nothing on the common-password list, which includes fire-service words
   (`firefighter`, `station`, `medic`, `ambulance`) as well as the usual ones
 
-The response lists every rule the password broke, not just the first. Full
-contract: [`docs/ONBOARDING_FLOW.md`](./docs/ONBOARDING_FLOW.md#create-admin-user).
+The response lists every rule the password broke, not just the first — with two
+exceptions: a password over 128 characters is rejected on length alone, and the
+breached-password check runs only once every rule above passes, so a password
+that is both weak and breached reports the weakness first. Full contract: [`docs/ONBOARDING_FLOW.md`](./docs/ONBOARDING_FLOW.md#create-admin-user).
 
 ### Database Connection Failed
 
