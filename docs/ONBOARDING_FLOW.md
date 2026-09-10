@@ -583,8 +583,19 @@ Body: { platform: "google" | "microsoft" | "authentik" | "local" }
 ```
 
 The endpoint stores the choice and nothing else — `AuthConfigRequest` has no
-`config` field, so provider credentials are configured after setup rather than
-here.
+`config` field. Provider credentials are **not** part of onboarding: Google and
+Microsoft read `GOOGLE_*` / `AZURE_AD_*` from the server environment.
+
+**Have that environment configuration working before completing with a
+non-local provider.** `GET /auth/oauth-config` reports a provider enabled only
+when the organization selected it **and** the server is configured for it
+(`provider == "google" and GoogleOAuthService.is_configured()`), so an unset
+environment hides the sign-in button entirely. Completion persists the provider
+immediately, and `forgot-password` then refuses local resets for it — so
+finishing setup with `google` or `microsoft` before the environment is ready
+leaves no OAuth button and no reset link until an administrator sets the
+variables and restarts. Choosing `local` and switching later avoids the window
+altogether.
 
 **Navigation**:
 
@@ -1094,6 +1105,15 @@ Two routes accept this, and they take the **same** body — both bind
   described it that way until 2026-09-10; it has taken the full schema for some
   time, so the old minimal body now fails validation with a 422.
 
+**Use the session route.** The direct one validates the session and then
+discards it — it never writes `session.data["department"]`. `/session/stations`
+and `/session/apparatus` read `session.data["department"]["organization_id"]`
+and nothing else, so after the direct route they answer
+`400 Organization must be created before adding stations` even though the
+organization row exists and is otherwise complete. A caller who takes the
+direct route gets an organization it cannot then attach stations or apparatus
+to, and no error names the reason.
+
 ```
 POST /api/v1/onboarding/session/organization
 Body: {
@@ -1586,8 +1606,15 @@ The `rolesConfig` field stores all role configurations (system and custom) so th
 
 - `sessionId` — stored in `sessionStorage` as `onboarding_session_id`, limiting the
   short-lived bearer identifier to the current tab and browser session
-- `csrfToken` — stored in a `SameSite=Strict` cookie as
-  `onboarding_csrf_token` for the double-submit check
+- `csrfToken` — stored in **`sessionStorage`** as `onboarding_csrf_token`,
+  and sent explicitly as the `X-CSRF-Token` header on every protected
+  onboarding mutation. It is **not** a cookie: nothing in the backend sets
+  `onboarding_csrf_token`, and the client reads a cookie of that name only to
+  migrate a value an older build left, after which it deletes it. A client
+  written against the cookie contract sends no header and takes a 403 on every
+  mutation. This differs from the main app, where CSRF _is_ a double-submit
+  cookie — the onboarding client is tab-scoped by design, matching the session
+  identifier beside it.
 - `errors` — only kept in memory
 
 **Legacy compatibility**: The `syncWithSessionStorage()` function in the store reads from `sessionStorage` on first load if the Zustand store is empty, migrating any data from the older approach. Separately, `loadSession()` and `clearSession()` in the API client delete any `onboarding_session_id` left in `localStorage` by a client built before 2026-08-15, so a stale identifier is dropped rather than presented.
