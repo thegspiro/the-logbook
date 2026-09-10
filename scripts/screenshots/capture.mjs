@@ -165,12 +165,24 @@ async function detectPageError(page) {
   return match ? match[0].trim() : null;
 }
 
+/**
+ * The page's visible text, for the three checks below.
+ *
+ * Deliberately not caught. This one read feeds `detectCrash`,
+ * `detectPageError` AND `detectEmptyState`, so `.catch(() => "")` cleared all
+ * three guards at once: an empty string matches no pattern, so a read that
+ * failed reported a page with no crash, no error and no empty state — the
+ * exact clean bill of health the checks exist to withhold. `detectCrash` is
+ * the one that matters most, since its own comment calls a crash "a bug to
+ * fix" rather than a fact about the demo data.
+ *
+ * A blank page does not reject — `innerText` on an empty body returns "" —
+ * so a rejection here means the read itself failed (a destroyed execution
+ * context, a navigation mid-read). That is a fault worth reporting, and the
+ * caller is inside the per-shot try, so it is recorded against this shot.
+ */
 async function pageText(page) {
-  return page
-    .locator("main, body")
-    .first()
-    .innerText()
-    .catch(() => "");
+  return page.locator("main, body").first().innerText();
 }
 
 async function detectCrash(page) {
@@ -191,28 +203,32 @@ async function detectCrash(page) {
  * document already is, so they report the symptom rather than the cause.
  */
 async function detectHorizontalOverflow(page) {
-  return page
-    .evaluate(() => {
-      const de = document.documentElement;
-      if (de.scrollWidth <= de.clientWidth + 1) return null;
-      const culprits = [...document.querySelectorAll("body *")]
-        .filter((el) => {
-          const position = getComputedStyle(el).position;
-          if (position === "fixed" || position === "absolute") return false;
-          return el.getBoundingClientRect().right > de.clientWidth + 1;
-        })
-        .slice(0, 3)
-        .map(
-          (el) =>
-            `<${el.tagName.toLowerCase()} class="${String(el.className).slice(0, 70)}">`,
-        );
-      return {
-        scrollWidth: de.scrollWidth,
-        clientWidth: de.clientWidth,
-        culprits,
-      };
-    })
-    .catch(() => null);
+  // Not caught: `null` is this function's "measured, and it does not overflow"
+  // answer, so swallowing a rejection made a page that could not be measured
+  // indistinguishable from a clean one. Overflow is reported rather than fatal,
+  // but "I could not look" must not read as "I looked and it is fine" — and a
+  // rejecting evaluate this late means the context died, which invalidates the
+  // crash and empty-state checks that ran just before it too.
+  return page.evaluate(() => {
+    const de = document.documentElement;
+    if (de.scrollWidth <= de.clientWidth + 1) return null;
+    const culprits = [...document.querySelectorAll("body *")]
+      .filter((el) => {
+        const position = getComputedStyle(el).position;
+        if (position === "fixed" || position === "absolute") return false;
+        return el.getBoundingClientRect().right > de.clientWidth + 1;
+      })
+      .slice(0, 3)
+      .map(
+        (el) =>
+          `<${el.tagName.toLowerCase()} class="${String(el.className).slice(0, 70)}">`,
+      );
+    return {
+      scrollWidth: de.scrollWidth,
+      clientWidth: de.clientWidth,
+      culprits,
+    };
+  });
 }
 
 /**
@@ -278,12 +294,11 @@ async function detectEmptyState(page, selector) {
   // Scan what the image will actually contain. A clipped shot pictures one
   // section, and scanning the whole page around it flags copy that is nowhere
   // in the screenshot.
+  // Not caught, for the reason `pageText` records: "" matches no empty-state
+  // pattern, so a failed read of the clipped region reported the region as
+  // populated.
   const text = selector
-    ? await page
-        .locator(selector)
-        .first()
-        .innerText()
-        .catch(() => "")
+    ? await page.locator(selector).first().innerText()
     : await pageText(page);
 
   // Match per line, and only on lines short enough to be the message itself.
