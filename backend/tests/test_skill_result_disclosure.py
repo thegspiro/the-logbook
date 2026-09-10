@@ -482,6 +482,20 @@ class TestVoidedBeforeValidation:
         assert redacted["overall_score"] is None
         assert redacted["result"] == "incomplete"
 
+    def test_redaction_flips_pending_validation_to_match_the_disguised_status(self):
+        """`pending_validation` is computed by `_build_test_response` from
+        `is_pending_validation(test)` *before* this redaction runs, and that
+        helper returns False for a still-voided ORM row (it keys on
+        status == "completed"). Left alone, the redacted payload would read
+        status="completed" with pending_validation=False — indistinguishable
+        from a genuinely decided result, which `MySkillTestResultPage`
+        renders as final and displays the rewritten "incomplete" result as a
+        failure. The flag must flip to match the status this branch
+        impersonates."""
+        payload = {"status": "voided", "pending_validation": False}
+        redacted = redact_test_for_view(payload, RESULT_VIEW_PENDING)
+        assert redacted["pending_validation"] is True
+
     def test_redaction_leaves_the_void_trail_alone_for_a_full_view(self):
         """A previously-validated void is disclosable, and full view must
         change nothing — this guard is specific to the pending branch."""

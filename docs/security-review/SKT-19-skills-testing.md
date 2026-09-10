@@ -1142,6 +1142,23 @@ voided payload through `redact_test_for_view` directly and asserts every
 void field is scrubbed alongside the ordinary pending redaction, one asserts
 a `full`-view payload is untouched.
 
+**Round 7 follow-up — the round-5 fix disguised the status but not the
+consequence.** `_build_test_response` computes `pending_validation=
+is_pending_validation(test)` **before** this redaction runs, and that helper
+keys on `status == "completed"` — false for the still-`voided` ORM row, so
+the response carried `pending_validation=False` regardless of what this
+branch then rewrote `status` to. The round-5 fix left that combination
+intact: a redacted payload reading `status="completed"` with
+`pending_validation=False` is indistinguishable from a genuinely decided
+result, and Codex traced that `MySkillTestResultPage` renders exactly that
+combination as final, displaying the rewritten `"incomplete"` result as a
+**failure** — the opposite of undisclosed, and arguably worse than the
+original leak for a candidate whose test actually passed. **Fixed** by
+setting `pending_validation = True` inside the same status-rewrite branch, so
+the disguise is consistent across every field the frontend reads to decide
+finality, not just the ones a human reviewer thinks to check by hand. One new
+guard test.
+
 ### SKT4-7 — MED — `PUT /tests/{id}` lets a member-examiner set `status`/`result`/`overall_score` directly, bypassing `complete_test` — OPEN / FLAGGED
 
 `_authorize_test_write` permits any member holding `examiner_id` on an
@@ -1207,7 +1224,11 @@ validators it added embedded the rejected value verbatim in a `ValueError`
 with no `max_length` capping how large that value could be, and the global
 422 handler's sanitizer scans such messages with a regex vulnerable to
 superlinear backtracking on adversarial input before it enforces its own
-length cap (see SKT4-5's "Round 6 follow-up").
+length cap (see SKT4-5's "Round 6 follow-up"). Round 7: round 5's own fix to
+SKT4-6 disguised `status` correctly but left `pending_validation` computed
+from the pre-redaction row, so the redacted payload combined "completed"
+with "not pending" — read by the frontend as a final, failed result rather
+than the undisclosed one intended (see SKT4-6's "Round 7 follow-up").
 
 ### SKT3-2 — LOW/MED — `GET /tests`, `GET /tests/export/csv`, and `GET /templates` have no pagination or result cap — still OPEN / FLAGGED
 
@@ -1296,6 +1317,13 @@ incompletely closed:
   constant-message error type) on all four write schemas, not the custom
   validator's value-embedding `value_error` (SKT4-5 round-6 follow-up).
 
+Round 7 found round 5's own SKT4-6 fix disguised `status` but left
+`pending_validation` inconsistent with it:
+
+- `test_skill_result_disclosure.py`'s `TestVoidedBeforeValidation` — one new
+  test: `redact_test_for_view` flips a `False` `pending_validation` to `True`
+  when it rewrites a voided payload's status (SKT4-6 round-7 follow-up).
+
 The six pre-existing guard test files from passes 1–3 were re-run, not
 re-written.
 
@@ -1307,7 +1335,7 @@ re-written.
 | `black --check app/ tests/ alembic/`              | ✅ 1578 files unchanged (`black==26.5.1`, CI's pin — installed explicitly; a stale `26.3.1` shadowed it on `PATH` via `~/.local/bin`, invoked `/usr/local/bin/black` directly to get the pinned version) |
 | `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==9.0.1`, CI's current pin)                                                                                                                                                              |
 | `python3 scripts/validate_migrations.py --strict` | ✅ 443 revisions, single head `0533644945cd` — no new migration (Pydantic-level validation only, no column/schema change)                                                                                |
-| `pytest tests/ -q -k "skill"`                     | ✅ 434 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 29 new guard tests above                                                                                  |
+| `pytest tests/ -q -k "skill"`                     | ✅ 435 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 30 new guard tests above                                                                                  |
 | `cd frontend && npm run typecheck`                | ✅ 0 errors (unaffected — no frontend file touched this pass)                                                                                                                                            |
 | `cd frontend && npm run lint`                     | ✅ 0 errors, 0 warnings (unaffected — no frontend file touched this pass)                                                                                                                                |
 
@@ -1318,28 +1346,29 @@ consumer outside `app/api/v1/endpoints/skills_testing.py` itself (checked via
 full surface these fixes could affect.
 
 **Final disposition: 3 real code fixes (SKT4-4, SKT4-5, SKT4-6, all MED or
-MED/HIGH — SKT4-5 closed in three steps and SKT4-6 in two, after later
-rounds found each prior fix incomplete or newly-introducing a gap), 4
-findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope
-extended three times over (SKT3-2), across six Codex review rounds.** All
-six pass 1–3 fixes re-verified intact by direct code read. None of this
-pass's "clean"/"no finding" first-draft language survived review unchanged —
-every one of rounds 1 through 6 found something the previous draft had
-gotten wrong, missed outright, fixed only halfway, or (round 4→6) broke while
-fixing something else: an officer could email a candidate a result the read
-endpoints were still withholding (SKT4-4); a typo in a disclosure-policy
-field silently granted full disclosure instead of being rejected — including
-one already sitting in the database, which round 5 caught the first fix had
-no answer for, and the fix for _that_ introduced an unbounded field a
-regex-based error sanitizer could be made to backtrack superlinearly against,
-which round 6 caught (SKT4-5); and voiding an unvalidated submission
-disclosed it in full rather than staying undisclosed like the notification
-path already assumed, where round 5 caught that the first fix hid the score
-but not the withdrawal notice itself (SKT4-6). This pass's actual value was
-almost entirely produced by the review process rather than by the original
-re-verification work — the backend surface itself had exactly one line of
-unrelated change across three prior passes and roughly two weeks, and needed
-six rounds of adversarial review on a "nothing to see here" docs PR to
-surface three real defects, get each genuinely and completely fixed rather
-than half-fixed or newly-broken, and flag four more that need a
-product/content decision this rotation correctly declined to guess at.
+MED/HIGH — SKT4-5 closed in three steps, SKT4-6 in three), 4 findings
+flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope extended
+three times over (SKT3-2), across seven Codex review rounds.** All six pass
+1–3 fixes re-verified intact by direct code read. None of this pass's
+"clean"/"no finding" first-draft language survived review unchanged — every
+one of rounds 1 through 7 found something the previous draft had gotten
+wrong, missed outright, fixed only halfway, or broke while fixing something
+else: an officer could email a candidate a result the read endpoints were
+still withholding (SKT4-4); a typo in a disclosure-policy field silently
+granted full disclosure instead of being rejected — including one already
+sitting in the database, which round 5 caught the first fix had no answer
+for, and the fix for _that_ introduced an unbounded field a regex-based error
+sanitizer could be made to backtrack superlinearly against, which round 6
+caught (SKT4-5); and voiding an unvalidated submission disclosed it in full
+rather than staying undisclosed like the notification path already assumed —
+round 5 caught that the first fix hid the score but not the withdrawal
+notice itself, and round 7 caught that _that_ fix disguised `status` but left
+`pending_validation` reading the payload as a final, failed result instead of
+an undisclosed one (SKT4-6). This pass's actual value was almost entirely
+produced by the review process rather than by the original re-verification
+work — the backend surface itself had exactly one line of unrelated change
+across three prior passes and roughly two weeks, and needed seven rounds of
+adversarial review on a "nothing to see here" docs PR to surface three real
+defects, get each genuinely and completely fixed rather than half-fixed or
+newly-broken, and flag four more that need a product/content decision this
+rotation correctly declined to guess at.

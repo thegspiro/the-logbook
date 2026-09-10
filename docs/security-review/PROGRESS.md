@@ -171,15 +171,25 @@ enforces `max_length` before the custom validator runs, so an overlong value
 now fails with a fixed-message `string_too_long` error instead of ever
 reaching the sanitizer. One new guard test. Thread replied to and resolved.
 
+**Round 7 of Codex review found round 5's SKT4-6 fix disguised `status` but
+left `pending_validation` inconsistent with it.** `_build_test_response`
+computes that flag from `is_pending_validation(test)` before the redaction
+runs, and that helper returns `False` for a still-`voided` row — so the
+redacted payload combined `status="completed"` with `pending_validation=
+False`, which the frontend reads as a final, decided result and renders the
+rewritten `"incomplete"` result as a **failure**, arguably worse than the
+original leak for a candidate whose voided test actually passed. **Fixed**
+by setting `pending_validation = True` in the same status-rewrite branch.
+One new guard test. Thread replied to and resolved.
+
 **Final disposition: 3 real code fixes (SKT4-4/5/6 — SKT4-5 closed in three
-steps, SKT4-6 in two, after later rounds found each prior fix incomplete or
-newly-introducing a gap), 4 findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7),
-1 existing finding's scope extended three times over (SKT3-2), across six
+steps, SKT4-6 in three), 4 findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7),
+1 existing finding's scope extended three times over (SKT3-2), across seven
 Codex review rounds.**
 
 Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
 `app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
-revisions, single head, no new migration); `pytest -k skill` 434 passed, 1
+revisions, single head, no new migration); `pytest -k skill` 435 passed, 1
 skipped (pre-existing) — up from 405 before round 4's guard tests; frontend
 `typecheck`/`lint` both clean and unaffected (no frontend file touched any
 round). Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473
@@ -12980,7 +12990,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6, SKT4-5 in three steps, SKT4-6 in two), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across six Codex review rounds
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6, SKT4-5 in three steps, SKT4-6 in three), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across seven Codex review rounds
 
 **Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
 Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
@@ -13113,11 +13123,20 @@ both fields on all four write schemas, confirmed Pydantic enforces it before
 the custom validator runs. One new guard test. Thread replied to and
 resolved.
 
+**Round 7 found round 5's SKT4-6 fix disguised `status` but left
+`pending_validation` inconsistent.** `_build_test_response` computes that
+flag from `is_pending_validation(test)` before the redaction runs, which
+returns `False` for a still-`voided` row — so the redacted payload combined
+`status="completed"` with `pending_validation=False`, read by the frontend
+as a final, decided result and rendered as a **failure**. Fixed by setting
+`pending_validation = True` in the same status-rewrite branch. One new guard
+test. Thread replied to and resolved.
+
 Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
 (26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,
 invoked `/usr/local/bin/black` directly), `isort --check-only` (9.0.1), all
 clean, all CI's exact pins. `validate_migrations.py --strict`: 443
-revisions, single head, no new migration. `pytest tests/ -q -k skill`: 434
+revisions, single head, no new migration. `pytest tests/ -q -k skill`: 435
 passed, 1 skipped (pre-existing) — up from 405 before round 4's guard tests.
 `npm run typecheck` / `npm run lint`: both 0 errors/warnings, unaffected (no
 frontend file touched any round). Full write-up:

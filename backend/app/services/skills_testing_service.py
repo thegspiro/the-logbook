@@ -1088,6 +1088,17 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
             withheld["voided_at"] = None
             withheld["voided_by"] = None
             withheld["voided_by_name"] = None
+            # `pending_validation` is computed by the response builder from
+            # `is_pending_validation(test)` *before* this redaction runs, and
+            # that helper keys on status == "completed" — false for the
+            # still-voided ORM row. Left alone, the redacted payload would
+            # read status="completed" with pending_validation=False, which is
+            # indistinguishable from a genuinely decided result: the frontend
+            # renders exactly that combination as final and displays the
+            # rewritten "incomplete" result as a failure, the opposite of
+            # "undisclosed". Setting it true here matches the status this
+            # branch impersonates.
+            withheld["pending_validation"] = True
         return withheld
 
     if view != ResultDisclosure.SCORES.value:
