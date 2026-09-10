@@ -22,14 +22,32 @@ admin UI can still show which headers are configured) whenever an
 ``ExternalTrainingProviderResponse`` is built — via a ``field_validator``
 on its own ``config`` field, scoped to the response schema only so the
 create/update payloads still round-trip real values for storage.
+
+**Second-order bug the redaction fix itself introduced, caught by a
+further Codex review round on the same PR:** a load → edit → save UI round
+-trips the redaction marker for any header the caller didn't touch.
+``update_provider`` replaced the whole stored ``config`` with whatever the
+client submitted, so PATCHing a form populated from a GET response would
+silently overwrite the real header value with the literal ``'••••••••'``
+string, destroying it. Fixed the same way ``OrganizationService.
+update_settings`` already handles the identical shape for email/file
+-storage/auth secrets: when a submitted header value equals
+``REDACTED_SECRET``, keep the value the row already had for that key
+instead of persisting the marker.
 """
 
 import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.schemas.training import ExternalTrainingProviderResponse
-
-REDACTED = "••••••••"
+from app.api.v1.endpoints.external_training import update_provider
+from app.schemas.training import (
+    ExternalProviderConfig,
+    ExternalTrainingProviderResponse,
+    ExternalTrainingProviderUpdate,
+)
+from app.utils.email_providers import REDACTED_SECRET
 
 
 def _response(**config_overrides):
@@ -53,8 +71,8 @@ def test_additional_header_values_are_redacted():
 
     assert resp.config is not None
     assert resp.config.additional_headers == {
-        "X-Api-Key": REDACTED,
-        "Accept": REDACTED,
+        "X-Api-Key": REDACTED_SECRET,
+        "Accept": REDACTED_SECRET,
     }
 
 
@@ -98,4 +116,89 @@ def test_serialized_json_never_contains_the_real_header_value():
     dumped = resp.model_dump_json()
 
     assert "sk_live_super_secret" not in dumped
-    assert REDACTED in dumped
+    assert REDACTED_SECRET in dumped
+
+
+def _scalar_result(value):
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = value
+    return result
+
+
+def _user():
+    return SimpleNamespace(
+        id="user-1",
+        organization_id="org-1",
+        username="tester",
+    )
+
+
+async def test_update_preserves_unchanged_header_and_applies_a_real_new_one():
+    """Simulates the load -> edit -> save round trip: the client sends back
+    the redacted marker for a header it never touched, and a real new value
+    for one it did edit."""
+    provider = MagicMock()
+    provider.config = {
+        "additional_headers": {
+            "X-Api-Key": "the-real-secret-value",
+            "Accept": "application/json",
+        }
+    }
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_scalar_result(provider))
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    payload = ExternalTrainingProviderUpdate(
+        config=ExternalProviderConfig(
+            additional_headers={
+                "X-Api-Key": REDACTED_SECRET,  # untouched in the UI
+                "Accept": "application/xml",  # actually edited
+            }
+        )
+    )
+
+    with patch(
+        "app.api.v1.endpoints.external_training.apply_updates"
+    ) as mock_apply_updates:
+        await update_provider(
+            provider_id=uuid.uuid4(),
+            provider_update=payload,
+            db=db,
+            current_user=_user(),
+        )
+
+    applied_config = mock_apply_updates.call_args.args[1]["config"]
+    assert applied_config["additional_headers"] == {
+        "X-Api-Key": "the-real-secret-value",  # preserved, not clobbered
+        "Accept": "application/xml",  # the real edit went through
+    }
+
+
+async def test_update_with_no_prior_config_drops_a_redacted_only_submission():
+    """A brand-new provider (no stored config yet) has nothing to preserve;
+    a submitted marker resolves to None rather than persisting the literal
+    placeholder string."""
+    provider = MagicMock()
+    provider.config = None
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_scalar_result(provider))
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    payload = ExternalTrainingProviderUpdate(
+        config=ExternalProviderConfig(additional_headers={"X-Api-Key": REDACTED_SECRET})
+    )
+
+    with patch(
+        "app.api.v1.endpoints.external_training.apply_updates"
+    ) as mock_apply_updates:
+        await update_provider(
+            provider_id=uuid.uuid4(),
+            provider_update=payload,
+            db=db,
+            current_user=_user(),
+        )
+
+    applied_config = mock_apply_updates.call_args.args[1]["config"]
+    assert applied_config["additional_headers"] == {"X-Api-Key": None}

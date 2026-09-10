@@ -100,7 +100,18 @@ keeping keys visible. Guard test
 asserting the raw secret string never appears in the serialized JSON).
 Two real fixes total across this round (TRX4-6, TRX4-7); full backend
 suite re-run clean after both (12313 passed, 21 skipped pre-existing, 0
-failed). Full write-up:
+failed). **A sixth Codex review round, reviewing TRX4-7 itself, found the
+fix had a real bug: TRX4-8 (HIGH, data integrity)** — `update_provider`
+replaced the whole stored `config` with whatever a client submitted, so a
+load→edit→save form round-tripping TRX4-7's own redaction marker for an
+untouched header silently overwrote the real stored value with the
+literal `••••••••` string, destroying it. Fixed the same way
+`OrganizationService.update_settings` already handles the identical shape
+for email/file-storage/auth secrets: a submitted value equal to the
+shared `REDACTED_SECRET` constant is replaced with the row's existing
+value for that key before the write, rather than persisted verbatim.
+Guard tests added covering both a mixed untouched/edited submission and a
+brand-new row with nothing to preserve. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).

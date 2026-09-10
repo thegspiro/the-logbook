@@ -1084,11 +1084,40 @@ into the field today, not a fix for an active internal consumer.
 `ExternalTrainingProviderResponse` (only — `ExternalProviderConfig` itself,
 shared with the Create/Update schemas, is untouched, so real values still
 round-trip for storage) that replaces every `additional_headers` value with
-a fixed `••••••••` marker while keeping the keys, so the admin UI can still
-show which headers are configured. Guard tests added:
-`test_external_provider_header_redaction.py` (4 tests, including one
-asserting the raw secret string never appears in the model's serialized
-JSON).
+`REDACTED_SECRET` (`app/utils/email_providers.py` — the same shared
+constant `OrganizationService` already uses for this exact marker, rather
+than an independent literal) while keeping the keys, so the admin UI can
+still show which headers are configured.
+
+### TRX4-8 — HIGH (data integrity) — TRX4-7's own redaction fix silently destroyed real header values on save
+
+**Caught by a further Codex review round on this pass's own PR**, reviewing
+TRX4-7 itself. A load → edit → save UI flow (the normal shape for a
+provider-settings form) populates its form from the now-redacted
+`GET`/`PATCH` response, then `PATCH`es the whole `config` back.
+`update_provider` (`external_training.py`) replaced the entire stored
+`config` with whatever the client submitted — it did not merge — so
+`additional_headers` entries the caller never touched round-tripped as the
+literal `••••••••` string and were persisted verbatim, permanently
+overwriting the real value TRX4-7 had only redacted for display.
+`OrganizationService.update_settings` already solves the identical shape
+for email/file-storage/auth secrets: when a submitted value equals
+`REDACTED_SECRET`, keep the value the row already had instead of writing
+the marker.
+
+**Fix:** in `update_provider`, before finalizing `update_data["config"]`,
+walk the submitted `additional_headers` and replace any value equal to
+`REDACTED_SECRET` with the corresponding key's value from `provider.config`
+(read before `apply_updates` mutates the row, so it is still the pre-update
+stored value) — `None` if the key didn't exist before, matching
+`OrganizationService`'s own fallback. `create_provider` is unaffected
+(nothing to preserve on a brand-new row). Guard tests added to the same
+file: `test_update_preserves_unchanged_header_and_applies_a_real_new_one`
+(a mix of one untouched, redacted-marker header and one genuinely edited
+header — the untouched one survives, the edit lands) and
+`test_update_with_no_prior_config_drops_a_redacted_only_submission` (no
+prior config: a submitted marker resolves to `None`, never to the literal
+placeholder string).
 
 ### Verified good ✅ (pass 4, not previously stated this way)
 
@@ -1108,9 +1137,9 @@ JSON).
 | `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)                        |
 | `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                                              |
 | `pytest tests/test_multi_agency_endpoint_permissions.py -v`                                                       | ✅ 6 passed (new, TRX4-6)                                               |
-| `pytest tests/test_external_provider_header_redaction.py -v`                                                      | ✅ 4 passed (new, TRX4-7)                                               |
-| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1094 passed, 1 skipped (pre-existing), including all new guard tests |
-| `pytest tests/` (full backend suite)                                                                              | ✅ 12313 passed, 21 skipped (pre-existing), 0 failed                    |
+| `pytest tests/test_external_provider_header_redaction.py -v`                                                      | ✅ 6 passed (new, TRX4-7/TRX4-8)                                        |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1096 passed, 1 skipped (pre-existing), including all new guard tests |
+| `pytest tests/` (full backend suite)                                                                              | ✅ re-run after TRX4-8 — see PROGRESS.md for the final count            |
 | `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                             |
 | `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                             |
 | `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test)          |

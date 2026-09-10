@@ -18,6 +18,7 @@ from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
 from app.services.qualification_service import QUALIFICATIONS
+from app.utils.email_providers import REDACTED_SECRET
 from app.utils.ssrf_transport import relative_endpoint
 
 _response_config = ConfigDict(from_attributes=True)
@@ -778,7 +779,7 @@ class ExternalTrainingProviderResponse(ExternalTrainingProviderBase, UTCResponse
             value = value.model_copy(
                 update={
                     "additional_headers": {
-                        key: "••••••••" for key in value.additional_headers
+                        key: REDACTED_SECRET for key in value.additional_headers
                     }
                 }
             )
