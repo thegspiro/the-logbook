@@ -743,7 +743,7 @@ main."
 
 ## Pass 4 (2026-09-10)
 
-**Prefix:** `SKT4` · **PR:** TBD
+**Prefix:** `SKT4` · **PR:** [#2473](https://github.com/thegspiro/the-logbook/pull/2473)
 
 **Scope check:** diffed the current tree against `d5b716ff8` (the pass-3
 merge commit for PR #2230). **Backend: one line changed, in one file.**

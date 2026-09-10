@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 19 (Skills testing), pass 4** — PR TBD, branch
+**Feature 19 (Skills testing), pass 4** — PR
+[#2473](https://github.com/thegspiro/the-logbook/pull/2473), branch
 `claude/friendly-babbage-pud8rg` (this watchdog session's designated
 branch, not a fresh `claude/security-review-<feature>` branch — the
 rotation had gone quiet: PR #2467 recorded PR #2460's merge and closed out
@@ -51,7 +52,8 @@ Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
 `app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
 revisions, single head); `pytest -k skill` 405 passed, 1 skipped
 (pre-existing); frontend `typecheck` and `lint` both clean. Rotation row 19
-→ `⏳`. Opening PR next.
+→ `⏳`. Subscribed to PR activity. Next: tend #2473 until merged, then
+Feature 20 (Compliance).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, now merged), preserved for history</summary>
