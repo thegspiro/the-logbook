@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2460](https://github.com/thegspiro/the-logbook/pull/2460)
+(Feature 18, Training extended, pass 4) merged clean via squash, merge
+commit `21470e693e2f`, all CI checks green including CI Success and
+Playwright E2E, nine rounds of Codex review all resolved with no
+outstanding findings on the final commit. Merged directly by a 30-minute
+watchdog check (fully green, mergeable_state clean, idle ~30 minutes since
+the last push). Rotation row 18 is now `✅`. Next: Feature 19 (Skills
+testing).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, before the merge), preserved for history</summary>
+
 **Feature 18 (Training extended), pass 4** — PR
 [#2460](https://github.com/thegspiro/the-logbook/pull/2460), branch
 `claude/friendly-babbage-0mo420` (this watchdog session's designated
@@ -123,6 +135,8 @@ owner merge. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455), preserved for history</summary>
@@ -12767,7 +12781,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
