@@ -2307,20 +2307,29 @@ export const SHOTS = [
     alt: "The vehicle preset picker listing each pre-built check with its section and item counts",
     route: "/inventory/admin/checklists/templates/new",
     prepare: async (page) => {
-      // A new template starts as "equipment", and Load Vehicle Preset only
-      // renders on a vehicle or combined one.
-      await page
-        .locator("select")
-        .filter({ hasText: /Vehicle/i })
-        .first()
+      // The template type moved into the "Details" drawer, and the affordance
+      // it gates is now "Use a vehicle layout" rather than "Load Vehicle
+      // Preset". The old prepare looked for a bare <select> on the page body
+      // and timed out against zero of them: the only selects on this screen
+      // are inside the drawer.
+      await page.getByRole("button", { name: /^Details$/ }).first().click();
+      const drawer = page.locator(
+        '[role="dialog"][aria-labelledby="template-details-title"]',
+      );
+      await drawer.waitFor({ timeout: 15_000 });
+      await drawer
+        .locator("#equipment-check-template-type")
         .selectOption("vehicle", { timeout: 10_000 });
-      await page.waitForTimeout(600);
+      // Escape rather than a close button: the drawer is modal and its
+      // backdrop swallows any click aimed at the page underneath, which is
+      // how the first attempt at this fix spent 30s retrying one click.
+      await page.keyboard.press("Escape");
+      await drawer.waitFor({ state: "hidden", timeout: 10_000 });
       await page
-        .getByRole("button", { name: /Load Vehicle Preset/i })
+        .getByRole("button", { name: /Use a vehicle layout/i })
         .click({ timeout: 15_000 });
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(800);
     },
-    selector: "div.border-orange-500\\/20",
   },
   {
     id: "03-51-admin-subpage-header",
@@ -6904,9 +6913,25 @@ export const SHOTS = [
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
-      const search = page
-        .getByPlaceholder("Search inventory or type a new item name…")
-        .first();
+      // The quick-add bar is phone-only. `CatalogQuickAdd` renders in exactly
+      // one place in the builder, inside `!isLaptop && mobileAddLocations`,
+      // so at the 1440px this shot used to request there is no bar to wait
+      // for -- the laptop path types into the item rows instead. Same shape
+      // as CLAUDE.md pitfall #28a: the assertion was unsatisfiable at the
+      // width it named, not slow. Opening a location's "Add" is what mounts
+      // it.
+      // By its aria-label, not its visible "Add": the accessible name is
+      // `Add item to {location}`, and a /^Add$/ role query instead matches the
+      // add-a-location control in the toolbar, which opens a location-type
+      // picker and no quick-add bar at all.
+      await page
+        .getByRole("button", { name: /^Add item to / })
+        .first()
+        .click({ timeout: 15_000 });
+      // "Add or search items…", not CatalogQuickAdd's default of "Search
+      // inventory or type a new item name…": the builder passes its own
+      // placeholder at this call site, so the default never appears here.
+      const search = page.getByPlaceholder("Add or search items…").first();
       await search.waitFor({ timeout: 20_000 });
       // Typed, not filled: the search is debounced off change events, and a
       // programmatic value set fires none of them.
@@ -6918,11 +6943,22 @@ export const SHOTS = [
       await page.waitForSelector("text=SCBA Spare Cylinder", {
         timeout: 20_000,
       });
-      await page.waitForTimeout(400);
+      // Scroll the bar to the middle before the shot. The dropdown is
+      // absolutely positioned *below* the input, and the location card sits
+      // near the foot of a 390px-wide page: the first capture with this flow
+      // satisfied the wait above -- the matches were in the DOM -- and framed
+      // the input with every one of them clipped off the bottom, which is a
+      // shot of the wrong thing that reports success.
+      await page
+        .getByPlaceholder("Add or search items…")
+        .first()
+        .evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(600);
     },
     // The dropdown is absolutely positioned and overflows the compartment, so
-    // clip generously around the bar rather than to it.
-    viewport: { width: 1440, height: 1100 },
+    // clip generously around the bar rather than to it. Phone width because
+    // the bar exists only on that branch (see prepare).
+    viewport: { width: 390, height: 1100 },
   },
   {
     id: "03-68-inventory-match-dialog",
@@ -6942,11 +6978,16 @@ export const SHOTS = [
         "templates",
         (template) => template.name === "Engine Daily Check",
       )(page);
-      // The coverage button carries the count, so match on the link icon's
-      // own title rather than a label that changes with the data.
-      await page.click('button[title*="not linked to inventory"]', {
-        timeout: 20_000,
-      });
+      // "link the rest" in the coverage line is what opens the bulk dialog.
+      // `button[title="Not linked to inventory"]` is a per-item indicator --
+      // there are twelve of them on this template and clicking one opens
+      // nothing, which is why the wait that follows timed out even once the
+      // click itself started landing. The link renders only while
+      // `templateId && coverage.unlinked > 0`; Engine Daily Check is the
+      // seeded template with nothing linked, which is why this shot uses it.
+      await page
+        .getByRole("button", { name: /link the rest/i })
+        .click({ timeout: 20_000 });
       await page.waitForSelector(
         "text=exact name matches are selected for you",
         {
@@ -7584,9 +7625,15 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 802,
     anchor: "Checklist Timing",
-    alt: "Shift Reports settings with the Checklist Timing section selected",
-    route: "/scheduling/admin/settings/shift-reports",
-    prepare: clickSettingsSection("Checklist Timing"),
+    alt: "Checklist Settings — when crews are prompted to run their checklists and how long they have to check in",
+    // Its own page under Inventory Administration, not a section of the
+    // scheduling Shift Reports settings any more. Those sections are now
+    // What's turned on / Post-Shift Validation / Feedback Defaults /
+    // Apparatus Skills / Form Sections / Review Workflow / Rating Scale --
+    // no Checklist Timing among them, so `clickSettingsSection` waited 10s
+    // for a button that had moved. `schedulingHubCards.ts` links here under
+    // the label the guide still uses.
+    route: "/inventory/admin/checklists/settings",
     fullPage: true,
   },
   {
@@ -8048,6 +8095,12 @@ export const SHOTS = [
     anchor: "Screenshot of Fleet Readiness showing a list of apparatus with",
     alt: "Fleet Readiness listing each apparatus with its check status",
     route: "/inventory/checklists",
+    allowEmptyState:
+      '"No checks recorded yet" is the line on the units that have never ' +
+      "been checked, and having some of those beside units that have is what " +
+      "this board is for. GET /equipment-checks/fleet answers with E-1 " +
+      "carrying a passed check and a readiness reason; the phrase belongs to " +
+      "the rigs below it, not to the page.",
     fullPage: true,
   },
   {
@@ -12438,6 +12491,15 @@ export const SHOTS = [
     auth: "member",
     viewport: { width: 1440, height: 2200 },
     prepare: openSealPanels,
+    allowEmptyState:
+      '"No expiration recorded" belongs to the Controlled substance seal ' +
+      "intact row — a Function item, which has no expiry to record — and to " +
+      "the other pass/fail rows further down. It is true of them and says " +
+      "nothing about the two tamper-seal panels this shot is of, both of " +
+      "which are fully populated: the Drug Bag matching its last tag and " +
+      "offering \"Seal intact — clear 1 check\", the Trauma Bag differing " +
+      "from it and offering only \"Record seal\". Same reason 03-75 carries " +
+      "the flag.",
     fullPage: false,
   },
   {

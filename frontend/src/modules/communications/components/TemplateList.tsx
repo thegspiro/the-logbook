@@ -301,7 +301,12 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
             type="button"
             onClick={() => setListFilter(id)}
             aria-pressed={listFilter === id}
-            className={`badge shrink-0 transition-colors ${
+            /* `badge` is a label style — 20px tall, which is right for something
+               that only gets read and half the tap minimum for something that
+               gets pressed. These four decide what the entire list shows, so
+               they are sized as the controls they are rather than as the labels
+               they were borrowing from. */
+            className={`badge mobile-touch-target shrink-0 px-3 transition-colors ${
               listFilter === id
                 ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                 : 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover'

@@ -16,13 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 16 (Events & requests), pass 4** — PR
+[#2451](https://github.com/thegspiro/the-logbook/pull/2451), branch
+`claude/security-review-events-requests`. One fix, one
+re-verified-open finding, no regressions in pass 1-3's prior fixes. **EV-24**
+(P2 — resubmitting an already-waitlisted RSVP could promote it ahead of an
+earlier-queued party, since the resubmission path only ever asked "does my
+own party fit," never "is anyone ahead of me") fixed: a second locking read
+now checks for an earlier, ever-admissible waitlisted row before letting a
+resubmission through, mirroring `promote_from_waitlist`'s own "first in
+line stays first in line" rule. **EV-23** (series RSVP skips the training
+phase-gate warning) re-verified still open, unregressed since pass 3 —
+still needs a product decision on what "the" warning means for a series
+spanning multiple training phases, so still flagged rather than fixed.
+Diffed every file since pass 3's merge (`7af79795`); the only real change
+besides EV-24's fix is a member/manager-visible event-organizer-name
+feature (read in full, correctly org-scoped and permission-gated, no
+finding). Incidentally found and flagged (not fixed — cross-cutting, not
+this feature's code): `frontend/package.json` declares `typescript` at
+`7.0.2` rather than the `5.9.3` CLAUDE.md's "Two TypeScript installs"
+section documents, with the `5.9.3` `typescript-eslint` actually runs
+against present in the lockfile only as an auto-installed peer no manifest
+requests — the same shape as the section's own account of the 2026-08-17
+break. Not confirmed broken (CI's `npm ci` is green on the exact commit
+this branched from); mirrored in `docs/KNOWN_LIMITATIONS.md` for an owner
+to reconcile. Completion gate: flake8/black/isort clean; migrations
+single-head (441 revisions, no schema change); 713 events-scoped + 12065
+full backend suite pass, 0 failed (+8 new guard tests); `tsc --noEmit` 0
+errors; `eslint .` — see the findings doc's note on a local sandbox
+artifact from the `typescript` drift above (not a real regression; CI's own
+ESLint run is green). Full write-up:
+`docs/security-review/EV-16-events-requests.md` → Pass 4.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15 follow-up, round 4, SCH-13 deadlock fix, PR #2441 — now merged; Feature 16 next), preserved for history</summary>
+
 **None.** PR [#2441](https://github.com/thegspiro/the-logbook/pull/2441)
 (Feature 15 follow-up, round 4 — SCH-13 deadlock fix) merged clean at
 21:25:01 UTC, merge commit `0584599`. Rotation row 15 (Scheduling) is now
 `✅`. Next: Feature 16, Events & requests.
-
-<details>
-<summary>Superseded — prior Open PR note (Feature 15 follow-up, round 4, SCH-13 deadlock fix, PR #2441 — now merged), preserved for history</summary>
 
 **Feature 15 follow-up, round 4 (SCH-13 deadlock fix)** — PR
 [#2441](https://github.com/thegspiro/the-logbook/pull/2441), branch
