@@ -255,7 +255,11 @@ different failure modes from the same starting state on different
 attempts. Never run `rm package-lock.json && npm install` to "clean up" or
 diagnose this tree, and never hand-merge a generated lockfile across
 branches with `git merge` — regenerate a _specific_ package's resolution
-with a targeted `npm install <pkg>@<version>` against a lockfile freshly
+with a targeted `npm install <pkg>@<version> --workspace frontend` (run
+from the repo root, per this repo's single-lockfile convention — the
+`--workspace` flag is what targets `frontend/package.json` rather than
+the root one; omitting it can put the dependency in the wrong manifest
+while still touching the shared lockfile) against a lockfile freshly
 checked out from the base branch, and verify with `npm ci` afterward
 (never `npm install`, which re-resolves from the manifest rather than
 trusting the lockfile), the way #2452 and the `@vitest/ui` fix below both

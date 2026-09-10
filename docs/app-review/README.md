@@ -41,7 +41,7 @@ Same contract as the module audit, which worked well across 27 modules:
   migration, or is too large to verify in one iteration. Write it up with enough
   detail that the owner can decide; do not implement it unilaterally.
 - **Never** silence an error. The [CLAUDE.md completion gate](../../CLAUDE.md)
-  applies to every iteration: `tsc --noEmit`, `flake8`, `npm run lint`, and the
+  applies to every iteration: `npm run typecheck`, `flake8`, `npm run lint`, and the
   existing tests must all be clean before the feature is marked done.
 
 ## Finding IDs
