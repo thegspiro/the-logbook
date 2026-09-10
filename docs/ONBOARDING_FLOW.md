@@ -1404,10 +1404,18 @@ login, so a malformed one fails authentication rather than merely delivery. The
 provider password field is required on `gmail`; all three Microsoft OAuth fields
 are required together.
 
-On `selfhosted` only `smtpHost` and `fromEmail` are required. `smtpUsername` and
-`smtpPassword` are a pair: an anonymous relay with neither is a complete
-configuration, but a username without a password is rejected — that combination
-means a credential was not restored rather than one that was never needed.
+On `selfhosted` **the backend** requires only `smtpHost` and `fromEmail`.
+`smtpUsername` and `smtpPassword` are a pair there: an anonymous relay with
+neither is a complete configuration, while a username without a password is
+rejected — that combination means a credential was not restored rather than one
+that was never needed.
+
+**The wizard is stricter, so an anonymous relay is an API-only configuration.**
+`EmailConfiguration.tsx` adds Server Address, Port, Username _and_ Password to
+its missing-fields list for `selfhosted`, in both `handleTestConnection` and
+`handleContinue`, so the screen refuses before it calls either endpoint. An
+installer cannot set up a relay that needs no credentials; a caller posting to
+`/session/email` can.
 
 `microsoftAuthMethod` takes exactly `"app_password"` or `"oauth"`. Omitting it
 means App Password — every Microsoft row written before OAuth existed carries no
@@ -1519,9 +1527,13 @@ Marks onboarding as finished, and does three further things worth knowing:
   This is **not** true of `/session/*` generally, and assuming it is gets the
   picture backwards in both directions. `/session/organization`,
   `/session/stations`, `/session/apparatus`, `/session/roles` and
-  `/session/positions` commit their rows when they are called — the session
-  keeps only the resulting ids — so those writes are already durable before
-  `/complete` runs. In the other direction, `/session/department` is never
+  `/session/positions` commit their rows when they are called, so those writes
+  are already durable before `/complete` runs. What the session keeps
+  afterwards differs by step: `/session/stations` and `/session/apparatus`
+  record only `facility_ids` / `apparatus_ids` and a count, while
+  `/session/roles` — and `/session/positions`, which delegates to it — record
+  `{id, name, priority}` for every submitted role. Descriptions and permission
+  lists are written to the `Role` rows and are **not** copied into the session. In the other direction, `/session/department` is never
   copied into settings at all: `_persist_session_data_to_org()` reads
   `it_team`, `email`, `file_storage`, `auth` and `modules` and nothing else,
   so the department block never reaches the organization.
@@ -1534,9 +1546,13 @@ Marks onboarding as finished, and does three further things worth knowing:
   the row validating; it does not remove it.
 
   So every finished installation keeps its onboarding session indefinitely,
-  holding the encrypted email and file-storage credentials plus the IT-team
-  members and backup-access contact details, which are stored as plain JSON
-  rather than encrypted. `/complete` clears only the browser-side identifiers.
+  holding the encrypted email and file-storage credentials plus, as plain JSON
+  rather than encrypted: the IT-team members and backup-access contact details,
+  the department name and navigation choice, the created facility and apparatus
+  ids, and the id, name and priority of every position the department
+  configured. Position descriptions and permission lists are **not** among them
+  — those live on the `Role` rows. `/complete` clears only the browser-side
+  identifiers.
   Worth knowing for a retention review, and worth stating here because
   "session" invites the assumption that it is transient.
 
