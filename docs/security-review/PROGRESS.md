@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2451](https://github.com/thegspiro/the-logbook/pull/2451)
+(Feature 16, Events & requests, pass 4) merged clean via squash, merge
+commit `32763dd`, all 17 CI checks green including Playwright E2E, two
+rounds of Codex review both resolved with no unaddressed findings.
+Rotation row 16 is now `✅`. Next: Feature 17.
+
+A Codex review of the open PR caught one real gap this pass's own
+completion gate missed: the EV-24 fix's admissibility check compared
+`responded_at` with a bare `<`, so two waitlisted RSVPs tied to the same
+second (routine under MySQL's second-precision `DATETIME`) had no
+consistent "who's earlier" answer between the guard, `promote_from_
+waitlist`'s ordering, and the displayed waitlist position. Fixed on the
+same PR by adding `EventRSVP.id` as a second, deterministic tiebreaker in
+all three places — pushed as a follow-up commit, re-reviewed clean, then
+merged. New guard test:
+`tests/test_event_lifecycle.py::TestEventRSVP::test_tied_responded_at_uses_id_as_a_consistent_tiebreaker`,
+confirmed failing pre-fix and passing post-fix. Full write-up:
+`docs/security-review/EV-16-events-requests.md` → Pass 4.
+
+The same Codex review also flagged pass 4's own "incidentally found,
+flagged not fixed" `typescript` manifest note as a P1 — the completion
+gate's own recorded 1,382 ESLint warnings, it argued, should have blocked
+the pass rather than being noted and moved past. Investigated rather than
+either dismissed or blindly "fixed": those warnings do not reproduce
+against the exact committed `main` state (a direct `npx eslint .` there
+exits 0), so this pass's own conclusion — the manifest/lockfile drift
+described in the finding is real but not presently live — holds. Still
+worth correcting on its own terms per CLAUDE.md's own rule ("the plain
+`typescript` moves only when the linter's cap does"), so a small dedicated
+fix went out separately:
+[#2452](https://github.com/thegspiro/the-logbook/pull/2452), pinning
+`typescript` back to `5.9.3`. That PR's own Codex review then caught a
+second-order effect the pin alone doesn't clear — `npm ls typescript`
+still reports `frontend/node_modules/typescript@7.0.2` as `invalid`,
+reproducible even from a from-scratch lockfile regeneration, evidently an
+inherent consequence of the `typescript-native: npm:typescript@7.0.2`
+alias sharing its real package name with the direct dependency. `npm ci`,
+`eslint`, and `tsc-native.mjs --noEmit` are all still verified clean under
+it. Kept out of this feature's own rotation entry either way — cross-cutting
+frontend tooling, not Events & Requests code. See PR #2452 for the full
+investigation.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 4, PR #2451, before the Codex-review tiebreaker fix and the typescript follow-up), preserved for history</summary>
+
 **Feature 16 (Events & requests), pass 4** — PR
 [#2451](https://github.com/thegspiro/the-logbook/pull/2451), branch
 `claude/security-review-events-requests`. One fix, one
@@ -47,6 +92,8 @@ errors; `eslint .` — see the findings doc's note on a local sandbox
 artifact from the `typescript` drift above (not a real regression; CI's own
 ESLint run is green). Full write-up:
 `docs/security-review/EV-16-events-requests.md` → Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15 follow-up, round 4, SCH-13 deadlock fix, PR #2441 — now merged; Feature 16 next), preserved for history</summary>
