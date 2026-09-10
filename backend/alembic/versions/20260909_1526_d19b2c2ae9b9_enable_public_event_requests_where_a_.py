@@ -38,7 +38,7 @@ with ``JSON_SET`` because the CI matrix spans MySQL 8.0 and MariaDB 10.11,
 whose JSON support is not the same feature.
 
 Revision ID: d19b2c2ae9b9
-Revises: f1565c64b658
+Revises: c7e2a4b9d180
 Create Date: 2026-09-09 15:26:39.931866
 
 """
@@ -52,7 +52,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d19b2c2ae9b9"
-down_revision: Union[str, None] = "f1565c64b658"
+down_revision: Union[str, None] = "c7e2a4b9d180"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
