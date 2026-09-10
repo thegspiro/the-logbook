@@ -328,11 +328,15 @@ async def submit_public_event_request(
             "venue_preference": data.venue_preference,
             "preferred_time_of_day": data.preferred_time_of_day,
             "preferred_date_start": data.preferred_date_start,
+            "preferred_date_end": data.preferred_date_end,
         },
     )
 
     lead_error = lead_time_error(
-        pipeline, settled["date_flexibility"], data.preferred_date_start
+        pipeline,
+        settled["date_flexibility"],
+        data.preferred_date_start,
+        preferred_date_end=data.preferred_date_end,
     )
     if lead_error:
         raise HTTPException(status_code=400, detail=lead_error)
@@ -1144,8 +1148,15 @@ async def schedule_request(
         if existing_event is not None:
             from app.schemas.event import EventUpdate
 
+            # The title is deliberately not sent. A coordinator may have
+            # renamed the calendar entry, and a reschedule changes when and
+            # where the event is, not what it is called — overwriting it with
+            # the generated title discards that edit for a field the caller
+            # never asked to change. `sync_calendar_event_date` already sends
+            # only the clock and the room, so this keeps the two paths saying
+            # the same thing. The create branch below still names it, because
+            # there is nothing to preserve.
             update_fields: dict = {
-                "title": title,
                 "start_datetime": data.event_date,
                 "end_datetime": end_datetime,
             }

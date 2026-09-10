@@ -2263,3 +2263,164 @@ class TestAConditionalContactFieldDoesNotQualify:
         ).read_text()
         generator = source[source.index("Generate a public event request form") :]
         assert "condition_field_id" not in generator
+
+
+# ============================================
+# Round 14 — findings on the round-13 fixes
+# ============================================
+
+
+class TestAnAwareDatetimeIsConvertedNotJustAccepted:
+    """The driver formats a datetime by its wall clock and drops the offset, so
+    an aware non-UTC value passed through unchanged stores the wrong instant."""
+
+    def test_the_driver_really_drops_the_offset(self):
+        """The premise, measured rather than assumed."""
+        from pymysql.converters import escape_datetime
+
+        aware = datetime(2026, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=-4)))
+        assert escape_datetime(aware, "utf8mb4") == "'2026-10-01 12:00:00'"
+        assert (
+            escape_datetime(aware.astimezone(timezone.utc), "utf8mb4")
+            == "'2026-10-01 16:00:00'"
+        )
+
+    def test_an_offset_window_is_stored_as_utc(self):
+        """The reported payload: a naive start and an aware end four hours west.
+        The interval is six hours, and it must still be six after storage."""
+        start = datetime(2026, 10, 1, 10, 0)
+        end = datetime(2026, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=-4)))
+        data = EventRequestSchedule(event_date=start, event_end_date=end)
+
+        assert data.event_date == datetime(2026, 10, 1, 10, 0, tzinfo=timezone.utc)
+        assert data.event_end_date == datetime(2026, 10, 1, 16, 0, tzinfo=timezone.utc)
+        assert data.event_end_date - data.event_date == timedelta(hours=6)
+
+    def test_a_utc_value_is_unchanged(self):
+        start = datetime(2026, 10, 1, 10, 0, tzinfo=timezone.utc)
+        data = EventRequestSchedule(
+            event_date=start, event_end_date=start + timedelta(hours=2)
+        )
+
+        assert data.event_date == start
+
+    def test_the_create_schema_converts_too(self):
+        end = datetime(2026, 10, 2, 12, 0, tzinfo=timezone(timedelta(hours=-4)))
+        data = EventRequestCreate(
+            contact_name="Dana Reyes",
+            contact_email="dana@example.org",
+            outreach_type="station_tour",
+            description="A tour for a scout troop.",
+            preferred_date_start=datetime(2026, 10, 1, 10, 0),
+            preferred_date_end=end,
+        )
+
+        assert data.preferred_date_end == datetime(
+            2026, 10, 2, 16, 0, tzinfo=timezone.utc
+        )
+
+
+class TestALatestOnlyRangeIsStillASpecificDate:
+    """The generated form asks for "Earliest Date" and "Latest Date" and
+    requires neither. Measuring only the start let a latest acceptable date of
+    tomorrow walk past a department's minimum notice."""
+
+    ORG = None
+
+    def _settle(self, start, end):
+        from app.services.event_request_service import normalize_request_preferences
+
+        return normalize_request_preferences(
+            None,
+            {
+                "outreach_type": "other",
+                "date_flexibility": "specific_dates",
+                "venue_preference": "either",
+                "preferred_time_of_day": "morning",
+                "preferred_date_start": start,
+                "preferred_date_end": end,
+            },
+        )["date_flexibility"]
+
+    def test_a_latest_only_range_stays_specific(self):
+        end = datetime.now(timezone.utc) + timedelta(days=1)
+        assert self._settle(None, end) == "specific_dates"
+
+    def test_neither_bound_still_downgrades(self):
+        assert self._settle(None, None) == "general_timeframe"
+
+    def test_an_earliest_only_range_is_unaffected(self):
+        start = datetime.now(timezone.utc) + timedelta(days=30)
+        assert self._settle(start, None) == "specific_dates"
+
+    def test_a_latest_only_date_inside_the_minimum_is_refused(self):
+        from app.services.event_request_service import lead_time_error
+
+        error = lead_time_error(
+            {"min_lead_time_days": 14},
+            "specific_dates",
+            None,
+            preferred_date_end=datetime.now(timezone.utc) + timedelta(days=1),
+        )
+
+        assert error is not None
+        assert "14 days" in error
+
+    def test_a_latest_only_date_beyond_the_minimum_passes(self):
+        from app.services.event_request_service import lead_time_error
+
+        assert (
+            lead_time_error(
+                {"min_lead_time_days": 14},
+                "specific_dates",
+                None,
+                preferred_date_end=datetime.now(timezone.utc) + timedelta(days=30),
+            )
+            is None
+        )
+
+    def test_the_earliest_bound_still_wins_when_both_are_given(self):
+        from app.services.event_request_service import lead_time_error
+
+        now = datetime.now(timezone.utc)
+        error = lead_time_error(
+            {"min_lead_time_days": 14},
+            "specific_dates",
+            now + timedelta(days=2),
+            preferred_date_end=now + timedelta(days=60),
+        )
+
+        assert error is not None
+
+
+class TestReschedulingKeepsAnEditedCalendarTitle:
+    """A reschedule changes when and where an event is, not what it is called.
+    `sync_calendar_event_date` already sends only the clock and the room."""
+
+    def test_the_update_branch_does_not_send_a_title(self):
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "api"
+            / "v1"
+            / "endpoints"
+            / "event_requests.py"
+        ).read_text()
+        branch = source[source.index("update_fields: dict = {") :]
+        branch = branch[: branch.index("}")]
+
+        assert "start_datetime" in branch
+        assert "title" not in branch
+
+    def test_the_create_branch_still_names_the_event(self):
+        """There is nothing to preserve on a new entry."""
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "api"
+            / "v1"
+            / "endpoints"
+            / "event_requests.py"
+        ).read_text()
+
+        assert "EventCreate(\n                title=title," in source

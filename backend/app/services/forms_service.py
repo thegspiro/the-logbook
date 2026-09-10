@@ -2678,6 +2678,10 @@ class FormsService:
             return parsed
 
         preferred_start = _parse_request_date(mapped_data.get("preferred_date_start"))
+        # Parsed here rather than at the model build below: the normalizer and
+        # the lead-time gate both need it, and a latest-only range is still a
+        # named date.
+        preferred_end = _parse_request_date(mapped_data.get("preferred_date_end"))
 
         # A department may rename its own form's <select> options, so what
         # arrives here is not guaranteed to be one of the values every reader is
@@ -2712,6 +2716,7 @@ class FormsService:
                     "preferred_time_of_day", "flexible"
                 ),
                 "preferred_date_start": preferred_start,
+                "preferred_date_end": preferred_end,
             },
             form_outreach_types=self._mapped_field_options(
                 IntegrationType.EVENT_REQUEST, "outreach_type", integration, form
@@ -2739,7 +2744,12 @@ class FormsService:
         # of refused, which is the difference between this path and the JSON
         # endpoint, where the submitter is still there to be told and can pick
         # another date.
-        lead_warning = lead_time_error(pipeline, date_flexibility, preferred_start)
+        lead_warning = lead_time_error(
+            pipeline,
+            date_flexibility,
+            preferred_start,
+            preferred_date_end=preferred_end,
+        )
 
         # The department's daily ceiling for public event requests, applied here
         # for the same reason the JSON endpoint applies it: without it the
@@ -2769,9 +2779,7 @@ class FormsService:
                 date_flexibility=date_flexibility,
                 preferred_timeframe=mapped_data.get("preferred_timeframe"),
                 preferred_date_start=preferred_start,
-                preferred_date_end=_parse_request_date(
-                    mapped_data.get("preferred_date_end")
-                ),
+                preferred_date_end=preferred_end,
                 preferred_time_of_day=settled["preferred_time_of_day"],
                 audience_size=audience_size,
                 age_group=mapped_data.get("age_group"),

@@ -24,8 +24,18 @@ def _as_utc(value: datetime) -> datetime:
     a validator escapes as a 500 rather than the 422 the caller should get.
     Every datetime in this system is UTC (see CLAUDE.md), so a value that
     omitted its offset is read as the UTC it was always meant to be.
+
+    An **aware** value is converted rather than passed through. The driver
+    formats a datetime by its wall clock and drops the offset — pymysql renders
+    ``12:00:00-04:00`` as ``'2026-10-01 12:00:00'`` — so returning it unchanged
+    stores 12:00 where 16:00 was meant, and every surface reading it back (the
+    calendar entry, the signup sheet, the reminder emails, the status page)
+    inherits the error. Comparisons inside these validators are correct either
+    way; storage is not.
     """
-    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 class EventRequestCreate(BaseModel):

@@ -341,7 +341,15 @@ def normalize_request_preferences(
     # refusing keeps a real enquiry — a requester who picked the option and
     # then left the picker alone is asking the department to suggest a date,
     # which is exactly what general_timeframe means.
-    if flexibility == "specific_dates" and not settled.get("preferred_date_start"):
+    # Either bound counts as a named date. The generated form asks for
+    # "Earliest Date" and "Latest Date" and requires neither, so a requester who
+    # fills only the latter has still named a date the department has to work
+    # to — downgrading that to general_timeframe both contradicts the
+    # `preferred_date_end` the row keeps and skips the lead-time gate, which
+    # `lead_time_error` only applies to a specific_dates request.
+    if flexibility == "specific_dates" and not (
+        settled.get("preferred_date_start") or settled.get("preferred_date_end")
+    ):
         flexibility = "general_timeframe"
     settled["date_flexibility"] = flexibility
 
@@ -359,6 +367,7 @@ def lead_time_error(
     date_flexibility: Optional[str],
     preferred_date_start: Optional[datetime],
     now: Optional[datetime] = None,
+    preferred_date_end: Optional[datetime] = None,
 ) -> Optional[str]:
     """Reject a request whose earliest requested date is inside the lead time.
 
@@ -378,11 +387,15 @@ def lead_time_error(
         return None
     if min_days <= 0:
         return None
-    if date_flexibility != "specific_dates" or preferred_date_start is None:
+    # The earliest date the requester named. A latest-only range is still a
+    # named date — "it has to happen by Friday" is a harder constraint than an
+    # earliest date of Friday, not a softer one — and measuring only the start
+    # let a latest acceptable date of tomorrow walk past a two-week minimum.
+    requested = preferred_date_start or preferred_date_end
+    if date_flexibility != "specific_dates" or requested is None:
         return None
 
     reference = now or datetime.now(timezone.utc)
-    requested = preferred_date_start
     if requested.tzinfo is None:
         requested = requested.replace(tzinfo=timezone.utc)
     if requested >= reference + timedelta(days=min_days):
