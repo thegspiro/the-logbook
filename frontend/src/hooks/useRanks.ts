@@ -40,7 +40,21 @@ export function useRanks(activeOnly = true) {
   const fetchRanks = useCallback(async () => {
     try {
       setLoadingState({ key: cacheKeyString, loading: true });
-      const data = await ranksService.getRanks(activeOnly ? { is_active: true } : undefined);
+      // `getRankLadder`, not `getRanks`. The latter funnels the body through
+      // `asArray`, which turns a captive portal's or proxy's HTTP 200 HTML page
+      // into `[]` — so the catch below never runs, `failed` stays false, and
+      // the caller is handed an empty list that looks like a department with no
+      // ranks. `ranksService.test.ts` names that shape exactly: a guard above
+      // `asArray` never fires.
+      //
+      // Nothing a consumer *renders* changes. The reason `getRanks` is lenient
+      // — a dropdown showing nothing beats a page dying through the
+      // ErrorBoundary — is satisfied by this catch rather than by the
+      // normalization, and `ranks` is still `[]` afterwards. What changes is
+      // that the failure is now knowable, and that a garbage body is no longer
+      // written into the shared cache as a legitimate empty ladder for every
+      // later consumer to read.
+      const data = await ranksService.getRankLadder(activeOnly ? { is_active: true } : undefined);
       setCachedRanks(cacheKey, data);
       if (currentKeyRef.current === cacheKeyString) {
         setRankState({ key: cacheKeyString, ranks: data });

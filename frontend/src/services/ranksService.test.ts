@@ -64,3 +64,27 @@ describe('ranksService.getRankLadder', () => {
     await expect(ranksService.getRanks()).resolves.toEqual([]);
   });
 });
+
+describe('ranksService.getRankLadder filtering', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('passes the active filter through, so a strict read can replace a lenient one', () => {
+    // `useRanks` reads strictly now, and it filters to active ranks. Without
+    // this the strict reader would hand every consumer the inactive ranks too.
+    mockGet.mockResolvedValue({ data: [] });
+
+    void ranksService.getRankLadder({ is_active: true });
+
+    expect(mockGet).toHaveBeenCalledWith('/operational-ranks', { params: { is_active: true } });
+  });
+
+  it('sends no filter when none is asked for', () => {
+    mockGet.mockResolvedValue({ data: [] });
+
+    void ranksService.getRankLadder();
+
+    expect(mockGet).toHaveBeenCalledWith('/operational-ranks', { params: undefined });
+  });
+});

@@ -1175,8 +1175,8 @@ export const ranksService = {
    * exactly the distinction that screen exists to show, so it reads the
    * response itself and lets the failure stay a failure.
    */
-  async getRankLadder(): Promise<OperationalRankResponse[]> {
-    const response = await api.get<OperationalRankResponse[]>('/operational-ranks');
+  async getRankLadder(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
+    const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
     if (!Array.isArray(response.data)) {
       throw new TypeError('The rank list response was not an array');
     }
