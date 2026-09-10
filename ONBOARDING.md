@@ -424,7 +424,8 @@ Stores post-onboarding tasks:
 
 **Solution**: Ensure password has:
 
-- At least 12 characters, and no more than 128
+- At least 12 characters, and no more than `PASSWORD_MAX_LENGTH` (128 unless
+  your deployment overrides it)
 - One uppercase letter
 - One lowercase letter
 - One number
@@ -441,8 +442,9 @@ a password that appears to satisfy the list. It must also contain:
   (`firefighter`, `station`, `medic`, `ambulance`) as well as the usual ones
 
 The response lists every rule the password broke, not just the first — with two
-exceptions: a password over 128 characters is rejected on length alone, and the
-breached-password check runs only once every rule above passes, so a password
+exceptions: a password over `PASSWORD_MAX_LENGTH` is rejected on length alone,
+and the breached-password check runs only once every rule above passes, so a
+password
 that is both weak and breached reports the weakness first. Full contract: [`docs/ONBOARDING_FLOW.md`](./docs/ONBOARDING_FLOW.md#create-admin-user).
 
 ### Database Connection Failed

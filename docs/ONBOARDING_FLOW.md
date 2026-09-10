@@ -1424,10 +1424,15 @@ alongside valid credentials gets a success response and a configuration stored
 `enabled` to false whatever `config` holds, so SMTP fields sent with it are
 stored disabled and no mail is sent. Custom SMTP goes under `selfhosted`.
 
-`fromEmail` is required for every enabled configuration — it doubles as the SMTP
-login, so a malformed one fails authentication rather than merely delivery. The
+`fromEmail` is required on `gmail`, `microsoft` and `selfhosted` — it doubles
+as the SMTP login, so a malformed one fails authentication rather than merely delivery. The
 provider password field is required on `gmail`; all three Microsoft OAuth fields
-are required together.
+are required together. **`cloudflare` is checked for none of this** —
+`missing_for_enabled()` handles the two presets and `selfhosted` and falls
+through for it — so a Cloudflare payload with no `fromEmail` is accepted and
+stored enabled. Sending then depends on a global SMTP sender being configured;
+if there is none, the write still succeeds and delivery fails later. Same gap
+as the account-ID and token one below, from the same missing branch.
 
 On `selfhosted` **the backend** requires only `smtpHost` and `fromEmail`.
 `smtpUsername` and `smtpPassword` are a pair there: an anonymous relay with
@@ -1573,10 +1578,15 @@ Marks onboarding as finished, and does three further things worth knowing:
   So every finished installation keeps its onboarding session indefinitely,
   holding the encrypted email and file-storage credentials plus, as plain JSON
   rather than encrypted: the IT-team members and backup-access contact details,
-  the department name, its uploaded logo (base64 or a URL, as validated at
-  save time) and the navigation choice, the created facility and apparatus ids, and the id, name and priority of every position the department
-  configured. Position descriptions and permission lists are **not** among them
-  — those live on the `Role` rows. `/complete` clears the browser's copy
+  the department name, its uploaded logo (base64 or a URL, as validated at save
+  time) and the navigation choice, the created facility and apparatus ids, the
+  id, name and priority of every position the department configured, the chosen
+  auth provider, the module selections, and the email and file-storage platform
+  names. The row itself also carries the `session_id`, the **`ip_address`** the
+  setup was run from and the **`user_agent`** of the browser that ran it — both
+  columns on `onboarding_sessions`, written at creation for security tracking —
+  and `data["csrf_token"]`. Position descriptions and permission lists are
+  **not** among them — those live on the `Role` rows. `/complete` clears the browser's copy
   thoroughly — a successful `completeOnboarding()` calls
   `clearSession({ preserveAuth: true })`, which removes the session and CSRF
   identifiers **and** `onboarding_data` and the whole persisted
