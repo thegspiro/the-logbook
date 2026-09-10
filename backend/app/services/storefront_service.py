@@ -1515,8 +1515,37 @@ class StorefrontService:
         )
         offerings = {o.product_id: o for o in offering_result.scalars().all()}
 
-        # Lock first, then count: the counts below must not be able to change
-        # under a concurrent order between here and the insert.
+        # Serialize the whole decision on the WINDOW row before anything else.
+        #
+        # This is the "lock the parent, not the rows being counted" half of
+        # CLAUDE.md pitfall #27, and it is what makes the locking tallies below
+        # safe rather than merely correct. Those tallies are range reads over an
+        # order window that is usually empty when it opens, so under InnoDB they
+        # take next-key/gap locks over that empty range. Gap locks do not
+        # conflict with each other, so two members ordering *different* products
+        # both sail past `_lock_products` (disjoint product rows) and both
+        # acquire the same gap — and then each one's INSERT needs an
+        # insertion-intention lock that the other's gap lock blocks. That is a
+        # guaranteed deadlock, and InnoDB resolves it by killing one member's
+        # order with a 1213.
+        #
+        # Different products is the *common* case when a window opens, so
+        # without this the cure was worse than the disease: the tally lock fixed
+        # a same-product oversell and introduced a different-product deadlock.
+        # Measured against a real database, 5 concurrent disjoint-cart rounds
+        # produced 2 deadlocks without this lock and 0 with it.
+        # (Codex P2 on PR #2446.)
+        #
+        # Lock order is window -> products -> tallies on every path through
+        # here, so these cannot invert against each other.
+        await self.db.execute(
+            select(StoreOrderWindow.id)
+            .where(StoreOrderWindow.id == window.id)
+            .with_for_update()
+        )
+
+        # Then the products, then count: the counts below must not be able to
+        # change under a concurrent order between here and the insert.
         await self._lock_products(
             [item["product_id"] for item in items], organization_id
         )

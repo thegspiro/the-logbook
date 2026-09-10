@@ -83,6 +83,35 @@ path passes the flag twice, and the browse path still does not lock. The third
 assertion is what stops the next reader from "simplifying" this into an
 unconditional lock.
 
+**Corrected after review: the tally lock alone was worse than the bug it fixed.**
+Codex raised a P2 on PR #2446 against the first version of this change, and it
+was right. The tallies are range reads over an order window, and a window is
+empty exactly when it opens, so InnoDB takes next-key/**gap** locks over that
+empty range. Gap locks do not conflict with each other — so two members ordering
+**different** products both sail past `_lock_products` (their product rows are
+disjoint) and both acquire the same gap, and then each one's `INSERT` needs an
+insertion-intention lock that the other's gap lock blocks. InnoDB breaks the
+cycle by killing one member's order with a 1213.
+
+Different products is the _common_ case when a window opens, so the first
+version traded a rare same-product oversell for a frequent different-product
+failure. **Reproduced against a real database before believing it:** 5 rounds of
+two concurrent disjoint carts produced **2 deadlocks** without the remedy below
+and **0** with it.
+
+The remedy is the other half of Pitfall #27, which the first version had
+skipped — _lock the parent row, not the rows being counted_. The parent of a
+window-scoped tally is the **window**, not the products, and `_price_lines` now
+takes an exclusive lock on it before anything else. Lock order is
+window → products → tallies on every path, so they cannot invert.
+
+`tests/test_storefront_order_deadlock.py` drives three concurrent
+disjoint-cart rounds against a real database and asserts zero deadlocks; with
+the window lock removed it fails with
+`outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok']`. A source-level
+companion asserts the lock is taken _before_ the tallies, since after them it
+would not prevent the two transactions from holding the gap concurrently.
+
 ### SF-9 — MED — Concurrent payment recording loses money off the ledger — FLAGGED
 
 **What:** `record_payment` is a read-modify-write on a money column with no row
