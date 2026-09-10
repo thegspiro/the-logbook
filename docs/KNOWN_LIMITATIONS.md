@@ -4301,6 +4301,34 @@ it does not do and telling officers to screen candidates by hand.
 nomination paths, refuse a member whose tier clears the flag, and delete the
 warning in the same change.
 
+## SF-11 — A Storefront Cart Has No Line-Count Limit (2026-09-10)
+
+`StoreOrderCreate.items` is declared `List[StoreOrderItemInput] = Field(..., min_length=1)`
+in `backend/app/schemas/storefront.py` — a **minimum** and no maximum. Any member
+holding `storefront.order` can therefore submit a cart with an arbitrary number of
+lines, bounded only by the 60 MiB global request-body cap.
+
+**Why it is here rather than fixed.** Raised by automated security review on
+PR #2470, which serialized order placement on the organisation. The half of the
+finding that PR could answer was answered there: the work between the
+organisation lock and the insert no longer scales with the cart — its products
+are fetched in one query instead of one per line, guarded by a test asserting
+the query count is invariant to cart size. So a large cart now costs one query
+and a bounded in-memory loop, not N round-trips held under a department-wide
+lock.
+
+Capping the line count is a different kind of change. It alters a request
+contract on a payments path: every client sending a larger cart begins getting
+a 422, and nothing in the codebase establishes what a legitimate maximum is. A
+quartermaster placing a bulk order across the roster is the case that decides
+the number, and picking one silently inside a locking fix risks rejecting a
+real order the department needs to place.
+
+**What would fix it.** An owner decision on the maximum, then `max_length=<N>`
+on that field with a test at the boundary, and — separately — a rate limit on
+checkout, which is its own control with its own configuration rather than part
+of this one.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

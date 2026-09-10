@@ -2130,14 +2130,36 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   rare same-product oversell for a frequent different-product failure.
   Reproduced against a real database: **2 deadlocks in 5 rounds** without the
   remedy, **0** with it. The remedy is the half of Pitfall #27 the intermediate
-  version skipped — **lock the parent row, not the rows being counted**; the
-  parent of a window-scoped tally is the **window**, so `_price_lines` now takes
-  an exclusive lock on the window row before the products and the tallies (lock
-  order window → products → tallies on every path, so they cannot invert).
-  Guarded by `tests/test_storefront_order_deadlock.py`, which drives concurrent
-  disjoint carts against a real database and fails with
-  `outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok']` if the window lock
-  is removed, plus a source guard that the lock precedes the tallies.
+  version skipped — **lock the parent row, not the rows being counted**. Getting
+  the granularity of that parent right then took a **second** round of review
+  (Codex P3), because the window row is not a sufficient parent: `store_orders`
+  is indexed on `(organization_id, window_id)`, so two open windows with empty
+  ranges share one gap while their parent rows are different and therefore
+  uncontended — and the store supports several open windows at once, which is
+  what `other_open_windows` is for. Measured against a real database at each
+  step: products only → 2 deadlocks / 5 rounds; + the window row → 0
+  same-window but 1 deadlock / 4 rounds across windows; + the organisation → 0
+  on both. `_price_lines` now locks the org's `store_settings` row (one per org
+  by unique constraint, and `create_order` calls `get_settings()` first so it
+  always exists), then the window, then the products, then the tallies — lock
+  order organisation → window → products → tallies on every path, so they
+  cannot invert. Order placement therefore serializes per organisation rather
+  than per window, which is nothing for a department storefront and is what the
+  capacity check needs anyway. Guarded by
+  `tests/test_storefront_order_deadlock.py`, which exercises **both** cases
+  against a real database: disabling the org lock leaves the same-window test
+  passing and fails the cross-window one — which is exactly why the second case
+  was easy to miss — plus a source guard pinning the lock _order_. That
+  detector was itself strengthened after measurement: with a fixed `sleep` and
+  orders left in place between rounds it caught the rejected protocol 4/4 in
+  isolation but only **2 runs in 3** whole-file, which is how CI runs it. A
+  rendezvous replaces the sleep and each round now starts from the empty range
+  the gap lock needs; detection is 6/6, clean 3/3.
+  **⚠️ The per-org lock missed PR #2446** — committed nine minutes after that
+  PR merged (merge `fba00fe` took the branch at `92920e7`, the fix is
+  `7b23d66`), so `main` briefly carried the window-only protocol measured at 1
+  deadlock / 4 rounds. It ships on the follow-up branch. Everything else from
+  A1–A4 was inside the merge.
   **SF-10 (NIT, fixed):**
   dead `exclude_order_id` parameter on the same helper. **SF-9 (MED, flagged):**
   `record_payment` is a read-modify-write on `amount_paid` with no row lock, so

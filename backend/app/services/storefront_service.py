@@ -1515,29 +1515,50 @@ class StorefrontService:
         )
         offerings = {o.product_id: o for o in offering_result.scalars().all()}
 
-        # Serialize the whole decision on the WINDOW row before anything else.
+        # Serialize the whole decision on the ORGANISATION before anything else.
         #
         # This is the "lock the parent, not the rows being counted" half of
         # CLAUDE.md pitfall #27, and it is what makes the locking tallies below
         # safe rather than merely correct. Those tallies are range reads over an
         # order window that is usually empty when it opens, so under InnoDB they
-        # take next-key/gap locks over that empty range. Gap locks do not
-        # conflict with each other, so two members ordering *different* products
-        # both sail past `_lock_products` (disjoint product rows) and both
-        # acquire the same gap — and then each one's INSERT needs an
-        # insertion-intention lock that the other's gap lock blocks. That is a
-        # guaranteed deadlock, and InnoDB resolves it by killing one member's
-        # order with a 1213.
+        # take next-key/**gap** locks over that empty range. Gap locks do not
+        # conflict with each other, so two transactions can hold the same gap
+        # and then block each other's INSERT on the insertion-intention lock it
+        # needs — a guaranteed deadlock, which InnoDB resolves by killing one
+        # member's order with a 1213.
         #
-        # Different products is the *common* case when a window opens, so
-        # without this the cure was worse than the disease: the tally lock fixed
-        # a same-product oversell and introduced a different-product deadlock.
-        # Measured against a real database, 5 concurrent disjoint-cart rounds
-        # produced 2 deadlocks without this lock and 0 with it.
-        # (Codex P2 on PR #2446.)
+        # It took two rounds of review to get the granularity right, and both
+        # were measured against a real database rather than argued:
         #
-        # Lock order is window -> products -> tallies on every path through
-        # here, so these cannot invert against each other.
+        #   * Locking nothing but the products: two members ordering *different*
+        #     products sail past `_lock_products` (disjoint rows) and collide in
+        #     the gap. 5 disjoint-cart rounds -> 2 deadlocks. (Codex P2.)
+        #   * Locking the window row: fixes that, and still deadlocks *across*
+        #     windows. `store_orders` is indexed on (organization_id, window_id),
+        #     so two open windows with empty/sparse ranges share one gap while
+        #     their parent rows are different and therefore uncontended — and the
+        #     store genuinely supports several open windows at once, which is what
+        #     `other_open_windows` on the storefront payload is for.
+        #     4 cross-window rounds -> 1 deadlock. (Codex P3.)
+        #
+        # The organisation is the narrowest parent that covers every gap the
+        # tallies can touch, because every one of those ranges is org-scoped.
+        # `store_settings` is the natural row for it: exactly one per
+        # organisation (unique constraint), and `create_order` has already
+        # called `get_settings()` before reaching here, so it always exists.
+        #
+        # The cost is that order placement serializes per organisation rather
+        # than per window. For a department storefront that is nothing, and it is
+        # what the capacity check needs anyway — a tally that another order can
+        # invalidate mid-decision is the bug this whole block exists to prevent.
+        #
+        # Lock order is organisation -> window -> products -> tallies on every
+        # path through here, so these cannot invert against each other.
+        await self.db.execute(
+            select(StoreSettings.id)
+            .where(StoreSettings.organization_id == str(organization_id))
+            .with_for_update()
+        )
         await self.db.execute(
             select(StoreOrderWindow.id)
             .where(StoreOrderWindow.id == window.id)
@@ -1584,8 +1605,29 @@ class StorefrontService:
                     requested_per_variant.get(variant_key, 0) + quantity
                 )
 
+        # One query for the whole cart, not one per line. Everything from the
+        # organisation lock above to the insert is a critical section that now
+        # spans the whole organisation rather than a single window, and the
+        # request schema bounds only the *minimum* line count
+        # (`items: List[StoreOrderItemInput] = Field(..., min_length=1)`) — so a
+        # per-line round trip lets one large cart hold every other member's
+        # checkout in the department behind it. Same predicate `_lock_products`
+        # already uses: org-scoped, ids lowercased, so this resolves exactly the
+        # rows that were just locked. Raised as a security finding on PR #2470.
+        product_result = await self.db.execute(
+            select(StoreProduct)
+            .options(selectinload(StoreProduct.variants))
+            .where(
+                StoreProduct.id.in_({product_id for product_id, _v, _t in merged}),
+                StoreProduct.organization_id == str(organization_id),
+            )
+        )
+        products_by_id = {
+            product.id.lower(): product for product in product_result.scalars().all()
+        }
+
         for (product_id, variant_id, personalization), quantity in merged.items():
-            product = await self.get_product(product_id, organization_id)
+            product = products_by_id.get(product_id)
             if product is None or product.status != StoreProductStatus.ACTIVE:
                 raise ValueError("One of the items is no longer available")
 

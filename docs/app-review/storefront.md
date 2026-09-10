@@ -100,17 +100,59 @@ two concurrent disjoint carts produced **2 deadlocks** without the remedy below
 and **0** with it.
 
 The remedy is the other half of Pitfall #27, which the first version had
-skipped — _lock the parent row, not the rows being counted_. The parent of a
-window-scoped tally is the **window**, not the products, and `_price_lines` now
-takes an exclusive lock on it before anything else. Lock order is
-window → products → tallies on every path, so they cannot invert.
+skipped — _lock the parent row, not the rows being counted_. **Getting the
+granularity of that parent right took two rounds of review, both measured
+against a real database rather than argued:**
 
-`tests/test_storefront_order_deadlock.py` drives three concurrent
-disjoint-cart rounds against a real database and asserts zero deadlocks; with
-the window lock removed it fails with
-`outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok']`. A source-level
-companion asserts the lock is taken _before_ the tallies, since after them it
-would not prevent the two transactions from holding the gap concurrently.
+| Locked                    | Same-window disjoint carts | Two open windows      |
+| ------------------------- | -------------------------- | --------------------- |
+| products only (first try) | 2 deadlocks / 5 rounds     | —                     |
+| + the window row          | 0                          | 1 deadlock / 4 rounds |
+| + the organisation        | 0                          | 0                     |
+
+The window row is **not** a sufficient parent. `store_orders` is indexed on
+`(organization_id, window_id)`, so two open windows with empty or sparse ranges
+share a single gap while their parent rows are different and therefore
+uncontended — and the store genuinely supports several open windows at once,
+which is what `other_open_windows` on the storefront payload is for (Codex P3
+on PR #2446). The organisation is the narrowest parent covering every gap the
+tallies can touch, because all of those ranges are org-scoped;
+`store_settings` is the row for it, one per organisation by unique constraint,
+and `create_order` has already called `get_settings()` before `_price_lines`
+so it always exists.
+
+Lock order is **organisation → window → products → tallies** on every path, so
+they cannot invert. The cost is that order placement serializes per
+organisation rather than per window — nothing for a department storefront, and
+what the capacity check needs anyway, since a tally another order can
+invalidate mid-decision is the defect this block exists to prevent.
+
+`tests/test_storefront_order_deadlock.py` exercises **both** cases against a
+real database. Disabling the org lock leaves the same-window test passing (the
+window lock does cover that one) and fails the cross-window test — which is
+precisely why the second case was easy to miss. A source-level companion pins
+the lock _order_, since an org lock taken after the tallies would not stop two
+transactions holding the same gap.
+
+**The detector had to be made dependable, because a deadlock is a race.** As
+first written it used a fixed `sleep` to overlap the two transactions and left
+each round's orders in place. Re-running the rejected protocol under it caught
+the regression 4 times in 4 in isolation but only **2 in 3** in a whole-file
+run — and a whole file is how CI runs it, so a third of the time the ratchet
+would have waved the defect through. Two changes fixed that: a rendezvous
+instead of a sleep, so the overlap does not depend on connection or buffer-pool
+warmth, and clearing the orders between rounds, so every round starts from the
+**empty** range the gap lock needs rather than being a weaker repeat of the
+first. Extra rounds had not helped for that second reason. Detection is now
+**6 in 6**, with 3 in 3 clean when the lock is present.
+
+**⚠️ This fix was not in PR #2446.** The per-org lock was committed nine
+minutes after that PR merged (merge `fba00fe` took the branch at `92920e7`;
+the fix is `7b23d66`), so `main` briefly carried the window-only protocol —
+the configuration measured at 1 deadlock / 4 rounds above. It ships separately
+on the follow-up branch. Nothing else from the pass-5 work was affected; the
+storefront tally lock, the auth lockout lock and the scheduled-email org filter
+were all inside the merge.
 
 ### SF-9 — MED — Concurrent payment recording loses money off the ledger — FLAGGED
 
