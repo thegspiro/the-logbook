@@ -381,3 +381,45 @@ class TestReturnedForCorrection:
         # And the outcome itself is still withheld, as for any pending view.
         assert redacted["overall_score"] is None
         assert redacted["score_breakdown"] is None
+
+
+class TestVoidedBeforeValidation:
+    """SKT4-6 — voiding overwrites ``status`` to ``voided``, which fails both
+    ``is_pending_validation`` and ``is_under_correction`` (they key on
+    ``status == "completed"``/``"in_progress"``) regardless of whether the
+    test was ever validated first. Without the dedicated check, a completed,
+    never-validated submission an officer rejects by voiding it — the
+    "rejection path for a member-run result an officer declines to validate"
+    ``void_test`` itself documents — would fall through to the resolved
+    disclosure tier and become fully readable, contradicting
+    ``notify_candidate_result_voided``'s own rule that an unvalidated
+    withdrawal must stay undisclosed.
+    """
+
+    def _voided(self, **overrides):
+        fields = {"status": "voided", "voided_at": "2026-09-10T00:00:00Z"}
+        fields.update(overrides)
+        return _test(**fields)
+
+    def test_unvalidated_void_stays_pending_to_the_candidate(self):
+        test = self._voided(validated_at=None)
+        assert _view(test) == RESULT_VIEW_PENDING
+
+    def test_unvalidated_void_stays_pending_to_a_named_viewer(self):
+        test = self._voided(validated_at=None)
+        assert (
+            _view(test, user_id=STRANGER, named_viewer_ids={STRANGER})
+            == RESULT_VIEW_PENDING
+        )
+
+    def test_a_previously_validated_void_still_discloses_normally(self):
+        """Once an officer signed off a result, voiding it later is itself a
+        disclosable event — this guard only protects a result nobody ever
+        accepted in the first place."""
+        test = self._voided(validated_at="2026-09-01T00:00:00Z")
+        assert _view(test) == ResultDisclosure.FULL.value
+
+    def test_the_examiner_and_an_officer_still_see_it_in_full(self):
+        test = self._voided(validated_at=None)
+        assert _view(test, user_id=EXAMINER) == ResultDisclosure.FULL.value
+        assert _view(test, is_officer=True) == ResultDisclosure.FULL.value

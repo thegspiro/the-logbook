@@ -67,8 +67,8 @@ specific field name), so the corrected count is 8, not 7. `GET /summary`'s
 "six queries" was also wrong — `get_testing_summary` issues up to eight
 across two conditional branches, every branch still aggregate-only on
 re-check. The `SEC4-1` line citation had drifted (3157 → 3167) after this
-pass's own comment additions. And the frontend file count was seven, not
-nine — `apiCache.ts`/`apiCache.test.ts` also changed and carry this
+pass's own comment additions. And the frontend file count was nine, not
+seven — `apiCache.ts`/`apiCache.test.ts` also changed and carry this
 feature's own PHI-cache exclusion, though the diff confirms every change in
 both files belongs to other features and this feature's own exclusion line
 is untouched. All four corrected on the same branch; replied to and
@@ -97,13 +97,54 @@ Disposition is now **0 new code fixes, 3 new findings flagged (SKT4-1,
 SKT4-2, SKT4-3), 1 existing finding's scope widened (SKT3-2)** — see the
 pass-4 write-up for full detail.
 
+**Round 4 of Codex review changed the shape of this PR: three real code
+bugs, not documentation gaps.** All verified against the actual code before
+fixing, not taken on faith: **SKT4-4 (MED, FIXED)** — `email_test_results`
+only rejected `ResultDisclosure.NONE`, not the `RESULT_VIEW_PENDING` view an
+unvalidated official result reads as everywhere else in this file, so an
+officer could email a candidate a scorecard the read endpoints were still
+withholding; the email's own headline `result_text`/`score_text` bypassed
+redaction entirely, computed straight from the raw test row. Fixed by
+extracting `_ensure_disclosure_allows_email()` and checking both values.
+**SKT4-5 (MED/HIGH, FIXED)** — `result_disclosure`/`result_release` were a
+bare `Optional[str]` on all four write schemas with no enum validation;
+`redact_test_for_view` treats any unrecognised string as full disclosure
+(fail-open), and an unrecognised release value bypasses the `on_release`
+hold. Fixed with `field_validator`s rejecting non-enum values on all four
+schemas, mirroring the existing `type`/`score_mode` validator pattern in the
+same file. **SKT4-6 (MED, FIXED)** — voiding overwrites `status` to
+`voided`, which fails both `is_pending_validation` and `is_under_correction`
+regardless of whether the test was ever validated, so a completed-but-never-
+validated submission an officer voids (`void_test`'s own "rejection path for
+a member-run result an officer declines to validate") fell through to full
+disclosure — contradicting `notify_candidate_result_voided`'s own rule that
+this exact case must stay undisclosed. Fixed by mirroring that same rule in
+`resolve_result_view`. Also: three scope extensions, all flagged (not
+fixed) since each needs a content or product decision — **SKT4-1** now also
+covers `SkillCriterionSchema.checklist_items` (same uncapped shape, one
+level deeper); **SKT4-2** now also covers `result_viewer_positions` on both
+create and update, and its title changed accordingly; **SKT3-2** now also
+covers `GET /templates`, which loads every template's full `sections` JSON
+before filtering in Python. One new flagged finding, **SKT4-7 (MED,
+OPEN/FLAGGED)** — `PUT /tests/{id}` lets a member-examiner set
+`status`/`result`/`overall_score` directly, bypassing `complete_test`'s own
+computation; closing it needs a state-machine/API-contract decision about
+which fields a bare `PUT` may still set. 23 new guard tests added across
+three files (one new: `test_skill_result_disclosure_validation.py`). All
+mirrored into `KNOWN_LIMITATIONS.md`; replied to and resolved all seven
+round-4 review threads.
+
+**Final disposition: 3 real code fixes (SKT4-4/5/6), 4 findings flagged
+(SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope extended three
+times over (SKT3-2), across four Codex review rounds.**
+
 Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
 `app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
-revisions, single head); `pytest -k skill` 405 passed, 1 skipped
-(pre-existing); frontend `typecheck` and `lint` both clean — unaffected by
-any round's fixes since every change across all three rounds is docs-only.
-Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473 until
-merged, then Feature 20 (Compliance).
+revisions, single head, no new migration); `pytest -k skill` 428 passed, 1
+skipped (pre-existing) — up from 405 before round 4's guard tests; frontend
+`typecheck`/`lint` both clean and unaffected (no frontend file touched any
+round). Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473
+until merged, then Feature 20 (Compliance).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, now merged), preserved for history</summary>
@@ -12900,7 +12941,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 0 fixed, 3 new findings flagged (SKT4-1, SKT4-2, SKT4-3), SKT3-2 scope widened, corrected/found across three Codex review rounds
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across four Codex review rounds
 
 **Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
 Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
@@ -12986,14 +13027,38 @@ base query the first draft had only checked on the list endpoint. All three
 mirrored into `KNOWN_LIMITATIONS.md`; replied to and resolved all three
 review threads.
 
+**Round 4 found three real code bugs, not documentation gaps, all verified
+against the code and fixed:** **SKT4-4 (MED)** — `email_test_results`
+checked only `ResultDisclosure.NONE`, not the `RESULT_VIEW_PENDING` view an
+unvalidated official result reads as everywhere else in this file, and its
+own headline `result_text`/`score_text` bypassed redaction, computed
+straight from the raw row — fixed via a new `_ensure_disclosure_allows_email()`
+checking both. **SKT4-5 (MED/HIGH)** — `result_disclosure`/`result_release`
+had no enum validation on any of the four write schemas, and both the
+redaction and release-gate logic fail open on an unrecognised value — fixed
+with `field_validator`s on all four, mirroring this file's existing
+`type`/`score_mode` pattern. **SKT4-6 (MED)** — voiding an unvalidated test
+fell through to full disclosure because `is_pending_validation`/
+`is_under_correction` both key on a status `void_test` overwrites, contradicting
+`notify_candidate_result_voided`'s own rule that this case must stay
+undisclosed — fixed by mirroring that rule in `resolve_result_view`. Also
+widened SKT4-1 (checklist_items), SKT4-2 (result_viewer_positions, both
+routes), and SKT3-2 (`GET /templates`) again, and flagged one new finding,
+**SKT4-7 (MED, OPEN/FLAGGED)** — `PUT /tests/{id}` can set
+`status`/`result`/`overall_score` directly, bypassing `complete_test`. 23
+new guard tests across three files. All mirrored into `KNOWN_LIMITATIONS.md`;
+replied to and resolved all seven round-4 threads.
+
 Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
 (26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,
 invoked `/usr/local/bin/black` directly), `isort --check-only` (9.0.1), all
 clean, all CI's exact pins. `validate_migrations.py --strict`: 443
-revisions, single head. `pytest tests/ -q -k skill`: 405 passed, 1 skipped
-(pre-existing). `npm run typecheck` / `npm run lint`: both 0
-errors/warnings. Full write-up: `docs/security-review/SKT-19-skills-testing.md`
-→ **Pass 4**. Rotation row 19 → `⏳`.
+revisions, single head, no new migration. `pytest tests/ -q -k skill`: 428
+passed, 1 skipped (pre-existing) — up from 405 before round 4's guard tests.
+`npm run typecheck` / `npm run lint`: both 0 errors/warnings, unaffected (no
+frontend file touched any round). Full write-up:
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 4**. Rotation row
+19 → `⏳`.
 
 ### 2026-09-10 — Feature 16 (Events & requests, pass 4) — 1 fixed (EV-24, P2), 1 re-verified open (EV-23), corrected on two Codex review rounds
 

@@ -949,7 +949,11 @@ def resolve_result_view(
     a test those gates hide stays hidden rather than surfacing as a pending row
     that would vanish again the moment it was validated.
     """
-    from app.models.skills_testing import ResultDisclosure, ResultRelease
+    from app.models.skills_testing import (
+        ResultDisclosure,
+        ResultRelease,
+        SkillTestStatus,
+    )
 
     if is_officer:
         return ResultDisclosure.FULL.value
@@ -986,6 +990,22 @@ def resolve_result_view(
     # the officer bounced it and nothing about it stands. Same answer as a
     # pending one — the reader may know it exists, not how it went.
     if is_pending_validation(test) or is_under_correction(test):
+        return RESULT_VIEW_PENDING
+
+    # SKT4-6: voiding overwrites status to VOIDED, which fails both checks
+    # above regardless of whether the test was ever validated first — an
+    # unvalidated submission an officer rejects (void_test's own "rejection
+    # path for a member-run result an officer declines to validate") would
+    # otherwise fall through to the resolved disclosure tier and become fully
+    # readable to the candidate. notify_candidate_result_voided already
+    # encodes the correct rule ("an unvalidated official result was only a
+    # pending placeholder, so even its withdrawal ... must remain
+    # undisclosed") — mirrored here so the read path agrees with the
+    # notification path instead of contradicting it.
+    if (
+        getattr(test, "status", None) == SkillTestStatus.VOIDED.value
+        and getattr(test, "validated_at", None) is None
+    ):
         return RESULT_VIEW_PENDING
 
     return disclosure
