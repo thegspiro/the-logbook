@@ -83,6 +83,22 @@ depends_on: Union[str, Sequence[str], None] = None
 #   * the form-level marker with NO `event_request` row at all — the direct
 #     path runs on label-based mapping.
 #
+# The form must also be one an ANONYMOUS submitter can actually use. This
+# mirrors `api/public/forms.py`'s own predicate,
+# `(require_authentication or not allow_multiple_submissions) and not
+# current_user` -> 401, including its NULL semantics: a NULL
+# `require_authentication` is falsy in Python and so does not require auth,
+# while a NULL `allow_multiple_submissions` is falsy and therefore *does*.
+#
+# This is what the flag governs after the same change makes `is_public` mean
+# "anonymous". A department whose only request form requires a login has its
+# submissions exempt from `accept_public_requests` outright, so turning the
+# flag on preserves nothing for them — it does one thing only, which is to
+# open the unauthenticated `POST /api/v1/event-requests/public` for a
+# department that has never accepted an anonymous request. A backfill whose
+# entire justification is "preserve current behaviour" must not widen a
+# public surface.
+#
 # The case deliberately excluded is the marker plus rows an administrator has
 # DEACTIVATED. `_process_integrations` computes
 # `disabled = bool(same_type_rows) and integration is None` and skips the
@@ -95,6 +111,8 @@ _ORG_IDS_WITH_PUBLISHED_REQUEST_FORM = sa.text("""
     FROM forms f
     WHERE f.status = 'published'
       AND f.is_public = 1
+      AND (f.require_authentication = 0 OR f.require_authentication IS NULL)
+      AND f.allow_multiple_submissions = 1
       AND (
         EXISTS (
             SELECT 1 FROM form_integrations fi

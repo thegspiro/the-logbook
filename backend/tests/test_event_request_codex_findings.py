@@ -631,3 +631,28 @@ class TestBackfillNormalizesRatherThanReplaces:
         sql = self.BACKFILL.read_text()
         assert "CASE" in sql
         assert "ELSE :fallback" in sql
+
+
+class TestBackfillExcludesAuthenticatedOnlyForms:
+    """A backfill justified as "preserve current behaviour" must not widen a
+    public surface.
+
+    `api/public/forms.py` refuses an anonymous submission when
+    `require_authentication or not allow_multiple_submissions`. For such a form
+    the department never took an anonymous request — and once `is_public` means
+    "anonymous", its submissions are exempt from `accept_public_requests`
+    outright. Turning the flag on therefore preserves nothing for them; it does
+    one thing only, which is to open the unauthenticated JSON endpoint.
+    """
+
+    SQL = TestBackfillSelection._sql
+
+    def test_it_requires_an_anonymous_eligible_form(self):
+        sql = TestBackfillSelection._sql()
+        assert "f.require_authentication = 0" in sql
+        assert "f.allow_multiple_submissions = 1" in sql
+
+    def test_a_null_require_authentication_still_qualifies(self):
+        """NULL is falsy in Python, so the endpoint does not require auth —
+        the SQL has to say the same thing rather than dropping the row."""
+        assert "f.require_authentication IS NULL" in TestBackfillSelection._sql()
