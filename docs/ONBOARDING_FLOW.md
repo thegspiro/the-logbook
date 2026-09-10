@@ -1077,6 +1077,14 @@ to document an organization body the route had stopped accepting.
 | `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                                                                                                                                                |
 | `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                                                                                                                                           |
 
+**`/system-info`, `/security-check` and `/database-check` need `X-Session-ID`
+too.** They read as unauthenticated preflight checks and are not: each calls
+`validate_session(request, db, require_csrf=False)`, so a caller without the
+header gets a 401 and one with a session but no CSRF token succeeds. That is the
+opposite pairing from `/session/data`, which requires both — the three checks
+are reads a client makes before it has done anything, while `/session/data`
+reads back what was saved.
+
 ### Onboarding Status
 
 ```
@@ -1131,7 +1139,7 @@ There is no response model. The shape is:
     "file_storage": { "platform": "s3", "configured": true },
     "auth": { "platform": "local", "saved_at": "..." },
     "it_team": { "members_count": 2, "has_backup_access": true },
-    "modules": { "...": true }
+    "modules": { "enabled": ["events", "inventory"], "saved_at": "..." }
   }
 }
 ```
@@ -1495,9 +1503,14 @@ and `fromEmail` alone authenticates nothing. The provider password field is
 required on `gmail`; all three Microsoft OAuth fields are required together. **`cloudflare` is checked for none of this** —
 `missing_for_enabled()` handles the two presets and `selfhosted` and falls
 through for it — so a Cloudflare payload with no `fromEmail` is accepted and
-stored enabled. Sending then depends on a global SMTP sender being configured;
-if there is none, the write still succeeds and delivery fails later. Same gap
-as the account-ID and token one below, from the same missing branch.
+stored enabled, and nothing downstream supplies the address it lacks.
+`EmailService._get_smtp_config()` short-circuits on the organization's own
+`enabled` flag, so it returns the org section with `from_email: None` rather
+than falling back to `SMTP_FROM_EMAIL`; `_get_cloudflare_config()` then resolves
+`org_email["from_email"] or self._smtp_config["from_email"]`, which is `None` on
+both sides. **A globally configured sender does not rescue this payload** — the
+write succeeds and every send builds an invalid From address. Same gap as the
+account-ID and token one below, from the same missing branch.
 
 On `selfhosted` **the backend** requires only `smtpHost` and `fromEmail`.
 `smtpUsername` and `smtpPassword` are a pair there: an anonymous relay with
@@ -1624,6 +1637,15 @@ Marks onboarding as finished, and does three further things worth knowing:
   email configuration, file storage, auth choice and module selections. Those
   are held in the session until now and reach the organization here.
 
+  Three of the five are **best-effort**. The IT-team, email and file-storage
+  blocks each sit inside their own `try/except Exception` in
+  `_persist_session_data_to_org()`, which logs a warning and continues; auth and
+  modules are not wrapped. So if the stored ciphertext cannot be decrypted —
+  after an `ENCRYPTION_KEY` rotation without the previous key, say — `/complete`
+  still marks onboarding finished and commits, and the department ends up
+  complete with no file-storage platform and no credentials recorded, having
+  seen nothing but a success. The warning in the log is the only trace.
+
   This is **not** true of `/session/*` generally, and assuming it is gets the
   picture backwards in both directions. `/session/organization`,
   `/session/stations`, `/session/apparatus`, `/session/roles` and
@@ -1655,7 +1677,11 @@ Marks onboarding as finished, and does three further things worth knowing:
   names. The row itself also carries the `session_id`, the **`ip_address`** the
   setup was run from and the **`user_agent`** of the browser that ran it — both
   columns on `onboarding_sessions`, written at creation for security tracking —
-  and `data["csrf_token"]`. Position descriptions and permission lists are
+  and `data["csrf_token"]`. Retained with them is the activity metadata a
+  retention review has to count as well: the row's `id`, `expires_at`,
+  `created_at` and `updated_at` columns, and the plaintext `saved_at` stamped
+  into every section as it is written, which together record when the setup was
+  run and how long it took. Position descriptions and permission lists are
   **not** among them — those live on the `Role` rows. `/complete` clears the browser's copy
   thoroughly — a successful `completeOnboarding()` calls
   `clearSession({ preserveAuth: true })`, which removes the session and CSRF
