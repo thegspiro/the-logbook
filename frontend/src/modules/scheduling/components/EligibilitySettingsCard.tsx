@@ -110,7 +110,7 @@ export const EligibilitySettingsCard: React.FC = () => {
               <button
                 key={type}
                 onClick={() => toggleExcludedType(type)}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                className={`mobile-touch-target rounded-lg border px-3 text-sm transition-colors ${
                   isExcluded
                     ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
@@ -137,7 +137,7 @@ export const EligibilitySettingsCard: React.FC = () => {
               <button
                 key={pos}
                 onClick={() => toggleOpenPosition(pos)}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                className={`mobile-touch-target rounded-lg border px-3 text-sm transition-colors ${
                   isOpen
                     ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
@@ -155,7 +155,7 @@ export const EligibilitySettingsCard: React.FC = () => {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+          className="mobile-touch-target gap-2 rounded-lg bg-violet-600 px-5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           Save Eligibility Settings

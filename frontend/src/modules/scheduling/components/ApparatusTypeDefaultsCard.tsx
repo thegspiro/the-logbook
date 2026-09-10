@@ -172,7 +172,7 @@ export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps>
                   </div>
                   <button
                     onClick={() => startEdit(type)}
-                    className="shrink-0 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                    className="mobile-touch-target shrink-0 text-xs text-violet-600 hover:underline dark:text-violet-400"
                   >
                     Edit
                   </button>

@@ -7,6 +7,10 @@
  * is exactly the silent gap this whole area exists to prevent.
  */
 
+import type { Page } from '@playwright/test';
+import { signIn } from './helpers';
+import type { MockOptions } from './helpers';
+
 export interface RouteCheck {
   path: string;
   /**
@@ -38,6 +42,33 @@ export interface RouteCheck {
    * same extras adjacent in the list below.
    */
   permissions?: string[];
+  /**
+   * Fixture state this route needs before its real body will render.
+   *
+   * The sibling of `permissions`, and it exists for the same failure: a
+   * permission the fixture lacks redirects to the dashboard, and a *setting*
+   * the fixture lacks can silently substitute one page for another. Platoons is
+   * the worked example — see `expectText` below.
+   */
+  fixture?: Omit<MockOptions, 'permissions'>;
+  /**
+   * Text that must be on the page for the visit to count as having reached it.
+   *
+   * A budget of 0 on a route that rendered something else is worse than no
+   * entry at all: it reads as coverage. Two routes in this list have already
+   * been that — /analytics and /profile matched no <Route>, fell through the
+   * catch-all and reported the dashboard's numbers under their own names for as
+   * long as the file existed.
+   *
+   * `phantom` in mobile-route-integrity.spec.ts catches only the version of
+   * that where the path matches no route. It cannot catch a real route whose
+   * page decides, at render time, to show a different section — which is
+   * exactly what /scheduling/admin/settings/platoons does when the department
+   * has platoons off: the section is filtered out of the list and
+   * `visibleSection` falls back to General. Both this file's passes then
+   * measured General twice and called one of them Platoons.
+   */
+  expectText?: string;
 }
 
 /** Granted for every route; see the per-route `permissions` note above. */
@@ -51,6 +82,35 @@ export const BASE_PERMISSIONS = ['inventory.manage', 'facilities.manage'];
 //: literal (`manage` never implies `view`) and a real scheduling officer holds
 //: both; a fixture that held only one would be modelling a role nobody has.
 export const SCHEDULING_ADMIN = ['scheduling.manage', 'scheduling.view'];
+
+/**
+ * Sign in for a route, re-signing only when what it needs actually changed.
+ *
+ * Shared because all three passes need the identical decision and this file
+ * exists so they cannot drift: a route that needs fixture state to render its
+ * real body needs it in the accessibility and dialogs passes too, not only in
+ * whichever one it was added for.
+ *
+ * Returns the state to pass to the next call.
+ */
+export interface SignInState {
+  permissions: string[];
+  fixture: string;
+}
+
+export const signInForRoute = async (
+  page: Page,
+  route: RouteCheck,
+  state: SignInState | null
+): Promise<SignInState> => {
+  const permissions = route.permissions ? [...BASE_PERMISSIONS, ...route.permissions] : BASE_PERMISSIONS;
+  const fixture = JSON.stringify(route.fixture ?? {});
+  if (state && state.permissions.join() === permissions.join() && state.fixture === fixture) {
+    return state;
+  }
+  await signIn(page, { ...route.fixture, permissions });
+  return { permissions, fixture };
+};
 
 export const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
@@ -180,23 +240,80 @@ export const ALL_ROUTES: RouteCheck[] = [
   // what stood between them and a budget of 0. That is done, and they are
   // listed.
   //
-  // Three remain unlisted, for three different reasons, each measured rather
-  // than assumed:
+  // The six /scheduling/admin/settings sections below are the fourth, and they
+  // are the screen this note used to describe as unlistable. Every number it
+  // carried was a guess and the guess was low: "17 controls under 44px, mostly
+  // toggle-track". Measuring it once the two ErrorBoundary crashes and the one
+  // overflow were fixed — earlier categories mask the tap budget — gave 80,
+  // spread 11, 16, 11, 17, 22 and 3, and none of them was a toggle. They were
+  // bare checkboxes whose wrapping label was 20px tall, 21x16 "Edit" links,
+  // 26-36px chips and a few 20px text buttons: a sweep of nine patterns rather
+  // than one utility, which is what the entries below now stand on.
   //
-  // /scheduling/admin/settings/* is now measured rather than guessed at, and
-  // the guess was low. Its two ErrorBoundary crashes are fixed and its one
-  // overflow is fixed, which is what let the pass reach the category behind
-  // them: 80 controls under 44px across the six sections — 11, 16, 11, 17, 22
-  // and 3 — where the note here used to say 17 for the screen. They are not
-  // toggle-track (that is 44px now); they are bare checkboxes with no wrapping
-  // label, 16px icon buttons, 20px text links and 26-36px chips, which is a
-  // sweep of its own rather than one utility.
+  {
+    path: '/scheduling/admin/settings/general',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Overtime advisory',
+  },
+  {
+    path: '/scheduling/admin/settings/apparatus',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Apparatus Type Defaults',
+  },
+  // The first version of this entry carried neither `fixture` nor `expectText`
+  // and a comment saying general and platoons "render the same panel today".
+  // They did, and not for the reason given: the fixture serves
+  // `platoons_enabled: false`, so the page filtered Platoons out of its section
+  // list and fell back to General. Both passes measured the General body twice
+  // and reported one of them under this URL — tap 0, AA 0, and about the wrong
+  // page. `PlatoonRosterPanel` could have carried any amount of debt.
+  {
+    path: '/scheduling/admin/settings/platoons',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    fixture: { platoonsEnabled: true },
+    // The roster panel's own heading, not the section head's title: it proves
+    // the body rendered, which is the thing that was not happening.
+    expectText: 'Platoon Roster',
+  },
+  {
+    path: '/scheduling/admin/settings/eligibility',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Save Eligibility Settings',
+  },
+  {
+    path: '/scheduling/admin/settings/notifications',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Scheduling Notifications',
+  },
+  {
+    path: '/scheduling/admin/settings/shift-reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Post-Shift Validation',
+  },
+  // Two remain unlisted, for two different reasons, each measured rather than
+  // assumed:
   //
   // /communications/email-templates is two-thirds done: its four list filters
   // are 44px now and its breadcrumb no longer overflows 320px, both fixed here.
   // What is left is a heading-order jump — the shell's <h1>, then <h3> group
   // headers with an <h4> beneath them — which is a heading hierarchy to
-  // re-level across the page and its list, not a control to resize.
+  // re-level across the page and its list, not a control to resize. The six
+  // sections above had the near side of the same defect (h1 straight to a card's
+  // <h3>) and it was fixed the way every other settings screen does it, with a
+  // SettingsPanelHead <h2> opening the panel; email-templates needs more than
+  // that, because its <h4>s have to move too.
   //
   // The events and department-setup panels are a different problem entirely:
   // they render inside a hub route rather than at a path of their own, so there

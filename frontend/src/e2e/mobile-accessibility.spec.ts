@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { signIn } from './helpers';
-import { BASE_PERMISSIONS, NARROW, PHONE, ROUTES } from './mobile-routes';
+import { NARROW, PHONE, ROUTES, signInForRoute } from './mobile-routes';
+import type { SignInState } from './mobile-routes';
 
 /**
  * WCAG conformance over the same routes the presentation pass measures.
@@ -139,6 +139,34 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // 2026-08-23 and 2026-09-07 notes in CLAUDE.md), not one this screen makes on
   // its own. Call sites are held to AA by policy.
   '/members/admin/settings/tiers': 1,
+  // The scheduling settings sections, measured the first time they went on the
+  // pass. Every node is a shared status colour rather than a decision these
+  // screens make: `text-*-700` on a matching `/10` tint (the required, optional
+  // and apparatus-position badges), `text-theme-text-muted` on
+  // `bg-theme-surface-hover`, the `text-violet-600` action links, and white on
+  // `bg-violet-600`. All AA-clean — this file asserts that at zero — and short
+  // of 7:1. Platoons and Shift Reports are absent because they measure zero.
+  //
+  // Apparatus is 123 for one reason: it lists every apparatus and resource type
+  // the department has and each row carries three or four of those badges. It is
+  // the same handful of tokens counted many times over, not a screen with a
+  // palette problem of its own.
+  //
+  // General is 6 rather than the 5 it first measured, and the extra one is a fix
+  // rather than a regression: the "Safety" badge beside EVOC enforcement failed
+  // AA at emerald-700 and clears it at emerald-800, which moves it out of the
+  // asserted count and into this one — exactly what the audit log's amber-800
+  // severity badges did five entries above.
+  //
+  // Platoons briefly had 6 here too, which was the tell that something was
+  // wrong: it was General's number, measured twice, because the fixture had
+  // platoons off and the page substituted a section. `fixture` and `expectText`
+  // in mobile-routes.ts are what stop that, and the real Platoons body has no
+  // AAA shortfall at all.
+  '/scheduling/admin/settings/general': 6,
+  '/scheduling/admin/settings/apparatus': 123,
+  '/scheduling/admin/settings/eligibility': 3,
+  '/scheduling/admin/settings/notifications': 17,
   '/admin/analytics': 1,
   '/grants': 12,
   '/reports': 8,
@@ -174,8 +202,7 @@ test.describe('mobile accessibility', () => {
     // runner and a tighter cap was once reached by load alone.
     test.setTimeout(2_400_000);
 
-    let granted = BASE_PERMISSIONS;
-    await signIn(page, { permissions: granted });
+    let granted: SignInState | null = null;
 
     /**
      * Both of axe's result arrays, from one run.
@@ -235,11 +262,7 @@ test.describe('mobile accessibility', () => {
     const table: string[] = [];
 
     for (const route of ROUTES) {
-      const needed = route.permissions ? [...BASE_PERMISSIONS, ...route.permissions] : BASE_PERMISSIONS;
-      if (needed.join() !== granted.join()) {
-        granted = needed;
-        await signIn(page, { permissions: granted });
-      }
+      granted = await signInForRoute(page, route, granted);
 
       await page.setViewportSize(PHONE);
       let aaCount = 0;

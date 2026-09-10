@@ -192,6 +192,18 @@ export interface MockOptions {
   empty?: boolean;
   /** Permissions granted to the signed-in fixture user. */
   permissions?: string[];
+  /**
+   * Whether the department runs platoon (A/B/C) scheduling.
+   *
+   * Off by default — the shape most departments have, and what the closeout
+   * fixtures below were written against. Opt-in per test rather than simply
+   * switched on, because the flag hides a whole settings section:
+   * SchedulingSettingsPage drops Platoons from its section list when this is
+   * false and falls back to General, so anything visiting
+   * /scheduling/admin/settings/platoons without it measures the General body
+   * under the Platoons URL — green, and about the wrong page.
+   */
+  platoonsEnabled?: boolean;
 }
 
 /**
@@ -199,7 +211,11 @@ export interface MockOptions {
  * registers them in order and Playwright matches the last registration first,
  * so later entries win.
  */
-const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () => unknown][] => [
+const routes = ({
+  empty = false,
+  permissions = [],
+  platoonsEnabled = false,
+}: MockOptions): [string, () => unknown][] => [
   // Catch-all. Anything not listed below answers with an empty object rather
   // than reaching the dev-server proxy, which has no backend behind it.
   ['**/api/v1/**', () => ({})],
@@ -310,7 +326,7 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
   [
     '**/api/v1/scheduling/settings**',
     () => ({
-      platoons_enabled: false,
+      platoons_enabled: platoonsEnabled,
       require_end_of_shift_checks: false,
       call_tracking: { mode: 'detailed', call_types: [] },
       signup_closes_minutes_before: 0,
