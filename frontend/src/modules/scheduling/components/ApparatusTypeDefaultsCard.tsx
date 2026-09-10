@@ -106,13 +106,13 @@ export const ApparatusTypeDefaultsCard: React.FC<ApparatusTypeDefaultsCardProps>
                     <div className="flex gap-2">
                       <button
                         onClick={cancelEdit}
-                        className="text-theme-text-muted hover:text-theme-text-primary text-xs"
+                        className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target px-2 text-xs"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={saveEdit}
-                        className="text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
+                        className="mobile-touch-target px-2 text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
                       >
                         Save
                       </button>
