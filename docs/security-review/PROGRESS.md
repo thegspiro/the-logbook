@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 17 (Training core), pass 4** — branch
-`claude/security-review-training-core-pass4`, PR pending push. 0 fixes,
+**Feature 17 (Training core), pass 4** — PR
+[#2455](https://github.com/thegspiro/the-logbook/pull/2455), branch
+`claude/security-review-training-core-pass4`. 0 fixes,
 0 new flags: diffed the seven declared files against the pass-3 merge
 (`0d1f92c41`) and found only two changed (`training.py`,
 `training_compliance.py`), both from one non-security-review feature branch
@@ -29,7 +30,7 @@ two real bugs the redesign fixed along the way (a broken `role_id`/`id`
 profile-matching lookup, and a `MissingGreenlet` crash from an un-eager-
 loaded `positions` relationship) were pre-existing, not introduced by it.
 Full write-up: `docs/security-review/TR-17-training-core.md` → Pass 4. Next:
-push, open the PR, tend it to green, then Feature 18 (Training extended).
+tend #2455 to green, then Feature 18 (Training extended).
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2451's merge, Feature 16 pass 4), preserved for history</summary>
