@@ -16,6 +16,77 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2451](https://github.com/thegspiro/the-logbook/pull/2451)
+(Feature 16, Events & requests, pass 4) merged clean via squash, merge
+commit `32763dd`, all 17 CI checks green including Playwright E2E, two
+rounds of Codex review both resolved with no unaddressed findings.
+Rotation row 16 is now `✅`. Next: Feature 17.
+
+A Codex review of the open PR caught one real gap this pass's own
+completion gate missed: the EV-24 fix's admissibility check compared
+`responded_at` with a bare `<`, so two waitlisted RSVPs tied to the same
+second (routine under MySQL's second-precision `DATETIME`) had no
+consistent "who's earlier" answer between the guard, `promote_from_
+waitlist`'s ordering, and the displayed waitlist position. Fixed on the
+same PR by adding `EventRSVP.id` as a second, deterministic tiebreaker in
+all three places — pushed as a follow-up commit, re-reviewed clean, then
+merged. New guard test:
+`tests/test_event_lifecycle.py::TestEventRSVP::test_tied_responded_at_uses_id_as_a_consistent_tiebreaker`,
+confirmed failing pre-fix and passing post-fix. Full write-up:
+`docs/security-review/EV-16-events-requests.md` → Pass 4.
+
+The same Codex review also flagged pass 4's own "incidentally found,
+flagged not fixed" `typescript` manifest note as a P1 — the completion
+gate's own recorded 1,382 ESLint warnings, it argued, should have blocked
+the pass rather than being noted and moved past. Investigated rather than
+either dismissed or blindly "fixed": those warnings do not reproduce
+against the exact committed `main` state — a direct `npx eslint .` there
+prints no output at all and exits 0, i.e. genuinely 0 warnings, not merely
+a count that happens to clear `npm run lint`'s `--max-warnings 10`
+threshold — so this pass's own conclusion — the manifest/lockfile drift
+described in the finding is real but not presently live — holds. Still
+worth correcting on its own terms per CLAUDE.md's own rule ("the plain
+`typescript` moves only when the linter's cap does"), so a small dedicated
+fix went out separately:
+[#2452](https://github.com/thegspiro/the-logbook/pull/2452), pinning
+`typescript` back to `5.9.3`. That PR's own Codex review then caught a
+second-order effect the pin alone doesn't clear — `npm ls typescript`
+reports `frontend/node_modules/typescript` as `invalid`, and bare `tsc`
+from `frontend/` resolves `7.0.2`, not `5.9.3`. Confirmed twice,
+independently, via a fresh `npm ci` directly against `origin/main` with no
+local edits — an intermediate re-investigation briefly concluded this was
+clean, based on testing a lockfile that had been hand-merged across
+branches with `git merge` (not a reliable way to verify a generated
+lockfile); that conclusion was wrong and is retracted. `npm ci`, `eslint`,
+and `tsc-native.mjs --noEmit` are all still verified clean regardless, and
+CI's own "Frontend Lint" job stays green across every PR touching this
+tree — so nothing in the actual build/lint/test path is broken, but `npm
+ls typescript` itself is a real, standing failure, escalated (not
+resolved) in `docs/KNOWN_LIMITATIONS.md`. Separately confirmed: a full,
+lockfile-free `rm package-lock.json && npm install` is unreliable for this
+tree on top of that — across attempts it has reproduced the same invalid
+entry, silently shifted the root `typescript` to an undeclared `6.0.3`,
+and crashed npm outright (`Cannot read properties of null (reading
+'edgesOut')`) — so it should never be used to diagnose or "clean up" this
+tree; only a targeted `npm install <pkg>@<version> --workspace frontend`
+(run from the repo root — `--workspace` is what targets
+`frontend/package.json` rather than the root manifest) against a lockfile
+freshly checked out from the base branch, verified with `npm ci`
+afterward, is reliable. Corrected CLAUDE.md's "Two TypeScript installs"
+section accordingly. Kept out of this feature's own rotation entry either
+way — cross-cutting frontend tooling, not Events & Requests code.
+
+A second, genuinely separate and real issue surfaced during this same
+investigation: `frontend/package.json` declared `@vitest/ui: ^5.0.0`
+against `vitest: ^4.1.10`, a real version mismatch that crashed `npm run
+test:ui` outright (`ERR_MODULE_NOT_FOUND`). Fixed by pinning `@vitest/ui`
+to `^4.1.10` — verified via fresh `npm ci`, `npm ls` clean, and the script
+no longer crashing. See `docs/KNOWN_LIMITATIONS.md`'s own entry for
+detail.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 4, PR #2451, before the Codex-review tiebreaker fix and the typescript follow-up), preserved for history</summary>
+
 **Feature 16 (Events & requests), pass 4** — PR
 [#2451](https://github.com/thegspiro/the-logbook/pull/2451), branch
 `claude/security-review-events-requests`. One fix, one
@@ -47,6 +118,8 @@ errors; `eslint .` — see the findings doc's note on a local sandbox
 artifact from the `typescript` drift above (not a real regression; CI's own
 ESLint run is green). Full write-up:
 `docs/security-review/EV-16-events-requests.md` → Pass 4.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15 follow-up, round 4, SCH-13 deadlock fix, PR #2441 — now merged; Feature 16 next), preserved for history</summary>
@@ -12497,7 +12570,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
@@ -12523,6 +12596,83 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-10 — Feature 16 (Events & requests, pass 4) — 1 fixed (EV-24, P2), 1 re-verified open (EV-23), corrected on two Codex review rounds
+
+**Step 0:** the rotation had gone quiet — no open security-review PR, no
+new branch for Feature 16, over 5 hours since PR #2441's merge despite the
+30-minute cadence. Started the pass directly rather than wait further.
+
+**Pass 4:** re-verified every pass 1-3 fix against the diff since pass 3's
+merge (`7af79795`, PR #2216) — no regressions; the only real change besides
+this pass's own fix is a correctly org-scoped/permission-gated
+event-organizer-name feature. **EV-24** (P2) fixed: resubmitting an
+already-`WAITLISTED` RSVP could be promoted ahead of an earlier-queued,
+ever-admissible party, since the capacity check only ever asked "does my
+own party fit," never "is anyone ahead of me." **EV-23** re-verified still
+open, unregressed. Opened as PR
+[#2451](https://github.com/thegspiro/the-logbook/pull/2451).
+
+**Codex review, round 1:** caught a real gap in the EV-24 fix itself — the
+admissibility check's `responded_at < X` predicate had no tiebreaker, so
+two RSVPs tied to the same second (routine under MySQL's second-precision
+`DATETIME`) had no consistent "who's earlier" answer between the guard,
+`promote_from_waitlist`'s ordering, and the displayed waitlist position.
+Fixed on the same PR by adding `EventRSVP.id` as a second, deterministic
+sort key in all three places. New guard test:
+`test_tied_responded_at_uses_id_as_a_consistent_tiebreaker`, confirmed
+failing pre-fix (once two identity-map/timestamp-precision gotchas in the
+test itself were found and corrected) and passing post-fix.
+
+Round 1 also flagged the pass's own "incidentally found, not fixed"
+`typescript` manifest note as a P1, arguing the completion gate's recorded
+1,382 ESLint warnings should have blocked the pass. Investigated: those
+warnings do not reproduce against the exact committed `main` state (a
+direct `npx eslint .` there prints nothing and exits 0 — genuinely 0
+warnings). The pass's own conclusion held; the manifest/lockfile drift is
+real but not presently live. Opened a small, dedicated fix anyway per
+CLAUDE.md's own rule ("the plain `typescript` moves only when the linter's
+cap does"): PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452).
+
+**PR #2452's own Codex review** then caught a second-order effect the pin
+alone doesn't clear: `npm ls typescript` reports
+`frontend/node_modules/typescript@7.0.2 invalid`, and bare `tsc` from
+`frontend/` resolves `7.0.2` not `5.9.3` — confirmed twice, independently,
+via a fresh `npm ci` directly against `origin/main` with no local edits.
+(A mid-investigation detour briefly concluded this was clean, based on
+testing a lockfile that had been hand-merged across branches with `git
+merge` rather than freshly checked out — not a reliable way to verify a
+generated lockfile. That conclusion was wrong and is retracted; this Log
+entry states the corrected, twice-confirmed finding.) `npm ci`, `eslint`,
+and `tsc-native.mjs --noEmit` are all still verified clean regardless, so
+nothing in the build/lint/test path is broken, but `npm ls typescript`
+itself is a real, standing failure — escalated in
+`docs/KNOWN_LIMITATIONS.md`, not resolved. Separately confirmed: `rm
+package-lock.json && npm install` (full, lockfile-free re-resolution) is
+unreliable for this tree on its own terms — across attempts it has
+reproduced this same invalid entry, silently shifted the root `typescript`
+to an undeclared `6.0.3`, and crashed npm outright with an internal error
+— so it should never be used to diagnose or "clean up" this dependency
+tree; only a targeted `npm install <pkg>@<version> --workspace frontend`
+(run from the repo root — `--workspace` is what targets
+`frontend/package.json` rather than the root manifest) against a freshly
+checked-out lockfile, verified with `npm ci` afterward, is reliable.
+Corrected CLAUDE.md's "Two TypeScript installs" section and the
+`docs/KNOWN_LIMITATIONS.md` entry to say so accurately. Separately, and
+genuinely: found and fixed a real
+`@vitest/ui@^5.0.0` vs `vitest@^4.1.10` version mismatch that crashed
+`npm run test:ui` outright — pinned `@vitest/ui` to `^4.1.10`, verified
+clean. PR #2452 kept the `5.9.3` `typescript` pin (still strictly more
+correct than `7.0.2`) and merged; the `@vitest/ui` fix and the doc
+corrections landed on this bookkeeping PR (#2454) instead, since #2452 was
+already merged by the time they were found.
+
+Both #2451 and #2452 merged clean, all CI green, Codex review threads
+resolved. Rotation row 16 → `✅` in both the prose note and the Rotation
+table (a third Codex round on this bookkeeping PR caught the table itself
+still reading `⬜` — fixed). Full write-up:
+`docs/security-review/EV-16-events-requests.md` → Pass 4. Next: Feature 17,
+Training core.
 
 ### 2026-09-09 — Watchdog pass — Step 0 bookkeeping only, PR #2441 merged
 

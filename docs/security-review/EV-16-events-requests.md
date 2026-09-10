@@ -224,7 +224,7 @@ and the endpoint's Python `sorted(...)` sorts on `(responded_at, id)`
 instead of `responded_at` alone. The id order does not correspond to
 arrival order (ids are random UUIDs, not sequential) — that is not the
 point: the fix only needs the three sites to agree with each other on
-*some* order, not to reconstruct real-world arrival order for a genuine
+_some_ order, not to reconstruct real-world arrival order for a genuine
 tie, which no stored column can recover after the fact.
 
 **Guard test:**
@@ -294,6 +294,16 @@ pattern by direct grep, independent of ESLint's type-aware rules — and
 explicitly via `scripts/tsc-native.mjs`, sidestepping this exact ambiguity)
 ran clean.
 
+**Resolved (2026-09-10), via #2452 and the PR #2454 bookkeeping pass:** the
+1,382-warning symptom traced above is gone. `frontend/package.json`'s plain
+`typescript` is pinned back to `5.9.3` (PR #2452), and a clean `npm ci`
+against the committed lockfile now runs `eslint .` with zero output — not
+merely under the configured `--max-warnings 10` threshold, but genuinely
+zero. See CLAUDE.md's "Two TypeScript installs" section and
+`docs/KNOWN_LIMITATIONS.md` for the current state, including the separate,
+still-open `npm ls typescript` `ELSPROBLEMS` finding that pin did not close
+(escalated, not blocking any build/test path).
+
 ## Flagged for owner decision (unchanged from pass 3)
 
 ### EV-23 — P2 — series RSVP never shows the training phase-gate warning it claims to have already confirmed — OPEN, re-verified unregressed
@@ -353,6 +363,15 @@ security-review PR, and the correct fix (pin `typescript` back to `5.9.3`
 in `package.json`, per CLAUDE.md's own rule "the plain `typescript` moves
 only when the linter's cap does") touches shared tooling config, not this
 feature's code. Mirrored in `docs/KNOWN_LIMITATIONS.md`.
+
+**Resolved (2026-09-10), PR #2452:** `frontend/package.json`'s `typescript`
+is pinned back to `5.9.3`, closing the manifest/lockfile drift this section
+flagged. A distinct, narrower finding surfaced during that fix's
+verification — `npm ls typescript` reports `ELSPROBLEMS` because
+`frontend/node_modules/typescript` still nests `7.0.2` even with the pin
+correct — and remains open, escalated (not a regression of this finding;
+see CLAUDE.md's "Two TypeScript installs" section and
+`docs/KNOWN_LIMITATIONS.md` for detail).
 
 ---
 
