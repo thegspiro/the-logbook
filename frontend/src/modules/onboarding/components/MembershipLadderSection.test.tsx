@@ -177,7 +177,13 @@ describe('what the step is told while the ladder is still being read', () => {
     render(<MembershipLadderSection onLoadingChange={onLoadingChange} />);
 
     await screen.findByText(/could not be loaded/i);
-    expect(onLoadingChange).toHaveBeenLastCalledWith(false);
+    // Waited for rather than asserted outright: the panel is rendered by the
+    // commit that sets `failed` and clears `loading`, but the effect reporting
+    // it upward flushes on a later tick — so `findByText` can resolve off the
+    // MutationObserver with only `true` reported yet. That interleaving depends
+    // on machine load, which is why this passed locally and failed in CI.
+    await waitFor(() => expect(onLoadingChange).toHaveBeenLastCalledWith(false));
+    expect(onLoadingChange).toHaveBeenCalledTimes(2);
   });
 });
 
