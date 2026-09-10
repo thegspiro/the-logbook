@@ -295,28 +295,34 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: SCHEDULING_ADMIN,
     expectText: 'Scheduling Notifications',
   },
-  // Three remain unlisted, for three different reasons, each measured rather
-  // than assumed:
+  // This one's body is seven subsections behind an in-page tab strip held in
+  // `useState`, so what follows is measured for the subsection
+  // `ShiftReportsSettingsPanel` initialises to and nothing else. Behind the
+  // strip, unmeasured and unpaid: 38, 6, 6, 9 and 9 controls under 44px in
+  // Feedback Defaults, Apparatus Skills, Form Sections, Review Workflow and
+  // Rating Scale — apparatus-type chips at 32px, a 12x12 icon pair, checkbox
+  // labels at 40px, an "Add level" link at 16px, four Saves at 34-36px.
+  // Post-Shift Validation is clean.
   //
-  // /scheduling/admin/settings/shift-reports was listed here at 0 for a day and
-  // should not have been. Its body is seven subsections behind an in-page tab
-  // strip driven by `useState`, and this pass renders whichever one
-  // `ShiftReportsSettingsPanel` initialises to — so a budget of 0 was a
-  // statement about one seventh of the screen. Clicking through the other six
-  // finds 38, 6, 6, 9 and 9 controls under 44px (Feedback Defaults, Apparatus
-  // Skills, Form Sections, Review Workflow, Rating Scale; Post-Shift Validation
-  // is clean): apparatus-type chips at 32px, a 12x12 icon pair, checkbox labels
-  // at 40px, an "Add level" link at 16px and four Save buttons at 34-36px.
+  // Recorded here rather than acted on, because the sweep and the coverage are
+  // one job: with no way to drive the strip, fixing those would be asserted by
+  // inspection and never measured. Teach the pass to cycle the strip, then
+  // sweep what it reports.
   //
-  // That is its own sweep, and paying it down is only half the job — the pass
-  // has no way to *reach* those subsections, so fixing them would be asserted
-  // by inspection and never measured. Both halves belong together: teach the
-  // pass to cycle the strip, then sweep what it reports. The route stays exempt
-  // until then rather than carrying a number that means one seventh of what it
-  // appears to.
-  //
-  // The five sections above have no equivalent: each renders its whole body at
-  // its own address.
+  // What this entry is *not* is a reason to drop the route. The check is
+  // incomplete, not wrong — the reachable subsection is measured, and dropping
+  // it would take the crash, overflow, reflow and AA checks with it for the one
+  // seventh that does render. `expectText` names copy from that body rather
+  // than a label in the strip, which renders whichever subsection is active and
+  // would pass no matter what was on screen.
+  {
+    path: '/scheduling/admin/settings/shift-reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+    expectText: 'Control whether shift reports are available for your department and which features are included.',
+  },
+  // Two remain unlisted, each measured rather than assumed:
   //
   // /communications/email-templates is two-thirds done: its four list filters
   // are 44px now and its breadcrumb no longer overflows 320px, both fixed here.

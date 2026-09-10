@@ -94,15 +94,12 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
           <div className="space-y-1.5">
             {/* The <label> is the point here, and it was missing. The row used
                 to be a <div> holding a bare checkbox, so the only thing that
-                toggled the position was the 16px box itself and a screen reader
-                announced an unnamed checkbox — the built-in positions above have
-                had their label all along, and this list never did.
-
-                Putting `mobile-touch-row` on the row did not fix that: a 44px
-                <div> around a checkbox grows nothing a finger can land on. The
-                utility belongs on whatever the tap actually resolves to, which
-                is what form-checkbox in index.css means by "give a bare checkbox
-                mobile-touch-target on its label, not padding on the box".
+                toggled the position would be the 16px box itself, and a screen
+                reader would announce an unnamed checkbox. Sizing the surrounding
+                <div> is not a substitute: a 44px box around a checkbox grows
+                nothing a finger can land on, which is what form-checkbox in
+                index.css means by "give a bare checkbox mobile-touch-target on
+                its label, not padding on the box".
 
                 Remove stays outside the label — nested in it, a click on the
                 bin would toggle the checkbox on the way past. */}
