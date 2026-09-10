@@ -34,37 +34,37 @@ department) or `Depends(require_permission("training.manage"))` (officer-only
 actions), with one exception noted below. Every query reviewed filters
 `organization_id`.
 
-| Method | Path                                 | Auth dependency    | Permission                               | Org-scoped |
-| ------ | ------------------------------------ | ------------------ | ---------------------------------------- | ---------- |
-| GET    | `/templates`                         | `get_current_user` | –                                        | ✅         |
-| POST   | `/templates`                         | –                  | `training.manage`                        | ✅         |
-| GET    | `/library`                           | –                  | `training.manage`                        | ✅         |
-| POST   | `/library/{slug}/import`             | –                  | `training.manage`                        | ✅         |
-| GET    | `/templates/{template_id}`           | `get_current_user` | –                                        | ✅         |
-| PUT    | `/templates/{template_id}`           | –                  | `training.manage`                        | ✅         |
-| DELETE | `/templates/{template_id}`           | –                  | `training.manage`                        | ✅         |
-| POST   | `/templates/{template_id}/publish`   | –                  | `training.manage`                        | ✅         |
-| POST   | `/templates/{template_id}/duplicate` | –                  | `training.manage`                        | ✅         |
-| GET    | `/candidates`                        | –                  | `training.view` OR `training.manage`     | ✅         |
-| GET    | `/tests`                             | `get_current_user` | – (two-pass disclosure filter in-body)   | ✅         |
-| POST   | `/tests`                             | `get_current_user` | – (SoD on create — CS-8)                 | ✅         |
-| GET    | `/tests/{test_id}`                   | `get_current_user` | – (disclosure-gated in-body)             | ✅         |
-| PUT    | `/tests/{test_id}`                   | `get_current_user` | – (`_authorize_test_write`)              | ✅         |
-| POST   | `/tests/{test_id}/complete`          | `get_current_user` | – (`_authorize_test_write`)              | ✅         |
-| DELETE | `/tests/{test_id}`                   | –                  | `training.manage`                        | ✅         |
-| DELETE | `/tests/{test_id}/discard`           | `get_current_user` | – (own practice test only)               | ✅         |
-| POST   | `/tests/{test_id}/validate`          | –                  | `training.manage` (+ SoD, CS-8)          | ✅         |
-| POST   | `/tests/bulk-validate`               | –                  | `training.manage` (delegates to single)  | ✅         |
-| POST   | `/tests/{test_id}/release`           | –                  | `training.manage`                        | ✅         |
-| GET    | `/tests/{test_id}/viewers`           | –                  | `training.manage`                        | ✅         |
-| POST   | `/tests/{test_id}/viewers`           | –                  | `training.manage`                        | ✅         |
-| DELETE | `/tests/{test_id}/viewers/{user_id}` | –                  | `training.manage`                        | ✅         |
-| POST   | `/tests/{test_id}/cancel`            | `get_current_user` | – (`_authorize_test_write`)              | ✅         |
-| POST   | `/tests/{test_id}/void`              | –                  | `training.manage` (+ **new** SoD, SKT-2) | ✅         |
-| POST   | `/tests/{test_id}/return`            | –                  | `training.manage` (+ **new** SoD, SKT-3) | ✅         |
-| POST   | `/tests/{test_id}/email-results`     | –                  | `training.manage`                        | ✅         |
-| GET    | `/tests/export/csv`                  | –                  | `training.manage`                        | ✅         |
-| GET    | `/summary`                           | `get_current_user` | – (org-wide stats, no per-row exposure)  | ✅         |
+| Method | Path                                 | Auth dependency    | Permission                                          | Org-scoped |
+| ------ | ------------------------------------ | ------------------ | --------------------------------------------------- | ---------- |
+| GET    | `/templates`                         | `get_current_user` | –                                                   | ✅         |
+| POST   | `/templates`                         | –                  | `training.manage`                                   | ✅         |
+| GET    | `/library`                           | –                  | `training.manage`                                   | ✅         |
+| POST   | `/library/{slug}/import`             | –                  | `training.manage`                                   | ✅         |
+| GET    | `/templates/{template_id}`           | `get_current_user` | –                                                   | ✅         |
+| PUT    | `/templates/{template_id}`           | –                  | `training.manage`                                   | ✅         |
+| DELETE | `/templates/{template_id}`           | –                  | `training.manage`                                   | ✅         |
+| POST   | `/templates/{template_id}/publish`   | –                  | `training.manage`                                   | ✅         |
+| POST   | `/templates/{template_id}/duplicate` | –                  | `training.manage`                                   | ✅         |
+| GET    | `/candidates`                        | –                  | `training.view` OR `training.manage`                | ✅         |
+| GET    | `/tests`                             | `get_current_user` | – (two-pass disclosure filter in-body)              | ✅         |
+| POST   | `/tests`                             | `get_current_user` | – (SoD on create — CS-8)                            | ✅         |
+| GET    | `/tests/{test_id}`                   | `get_current_user` | – (disclosure-gated in-body)                        | ✅         |
+| PUT    | `/tests/{test_id}`                   | `get_current_user` | – (`_authorize_test_write`)                         | ✅         |
+| POST   | `/tests/{test_id}/complete`          | `get_current_user` | – (`_authorize_test_write`)                         | ✅         |
+| DELETE | `/tests/{test_id}`                   | –                  | `training.manage`                                   | ✅         |
+| DELETE | `/tests/{test_id}/discard`           | `get_current_user` | – (own practice test only)                          | ✅         |
+| POST   | `/tests/{test_id}/validate`          | –                  | `training.manage` (+ SoD, CS-8)                     | ✅         |
+| POST   | `/tests/bulk-validate`               | –                  | `training.manage` (delegates to single)             | ✅         |
+| POST   | `/tests/{test_id}/release`           | –                  | `training.manage`                                   | ✅         |
+| GET    | `/tests/{test_id}/viewers`           | –                  | `training.manage`                                   | ✅         |
+| POST   | `/tests/{test_id}/viewers`           | –                  | `training.manage`                                   | ✅         |
+| DELETE | `/tests/{test_id}/viewers/{user_id}` | –                  | `training.manage`                                   | ✅         |
+| POST   | `/tests/{test_id}/cancel`            | `get_current_user` | – (`_authorize_test_write`)                         | ✅         |
+| POST   | `/tests/{test_id}/void`              | –                  | `training.manage` (+ **new** SoD, SKT-2)            | ✅         |
+| POST   | `/tests/{test_id}/return`            | –                  | `training.manage` (+ **new** SoD, SKT-3)            | ✅         |
+| POST   | `/tests/{test_id}/email-results`     | –                  | `training.manage`                                   | ✅         |
+| GET    | `/tests/export/csv`                  | –                  | `training.manage`                                   | ✅         |
+| GET    | `/summary`                           | `get_current_user` | – (org-wide stats; small-cohort disclosure, SKT4-3) | ⚠️         |
 
 ## Verified good ✅
 
@@ -838,9 +838,11 @@ is true. Every one of the eight, in every branch, is still a bare
 a `User` or a per-test row in any branch, and `pending_validation_count` is
 gated to `_can_manage_tests(current_user)` before it is even computed, with
 an in-code comment explaining why a member should not learn the org's
-outstanding review queue depth. Confirmed clean in all branches; the
-aggregate-only claim holds regardless of which of the up-to-eight queries
-run.
+outstanding review queue depth. The query-shape claim holds in all branches
+— but "no per-row exposure" is not the same guarantee as "no disclosure",
+and Codex review correctly pointed out this pass's first draft conflated
+the two: an aggregate over a cohort of one identifiable test still discloses
+that test's own result. See **SKT4-3** below.
 
 **Template visibility fail-direction checked, not assumed.** `list_templates`
 and `get_template` both treat `visibility="assigned_only"` identically to
@@ -922,25 +924,80 @@ guess at, matching this rotation's standing preference for flagging over
 guessing on anything that changes accepted-input behavior. Mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
 
+### SKT4-2 — MED — `PUT /tests/{id}`'s result arrays have no per-field item cap, member-reachable — OPEN / FLAGGED
+
+The same amplification shape as SKT4-1, one level deeper and reachable by a
+broader population. `SkillTestUpdate.section_results:
+Optional[List[SectionResultSchema]]`, `SectionResultSchema.criteria_results:
+List[CriterionResultSchema]`, and `CriterionResultSchema.checklist_completed:
+Optional[List[bool]]` (`app/schemas/skills_testing.py:236-296`) all lack a
+`max_length`. `update_test` is gated by `_authorize_test_write`
+(`skills_testing.py:196-228`), which is **not** `training.manage`-only: any
+member who is the test's `examiner_id` on an unvalidated test may call it —
+"examining is deliberately open to the whole department" per this file's own
+route-inventory note — including a self-administered practice test where the
+member is their own examiner. So an ordinary member, not just an officer, can
+submit a near-`MAX_REQUEST_BODY_SIZE` `PUT` body containing a section list
+whose `criteria_results` are each further unbounded, multiplying the same
+cardinality problem across two nested list levels rather than SKT4-1's one.
+Pydantic fully materializes it, `update_test` persists and dumps it, and
+`complete_test`/scoring later iterate it. Flagged rather than fixed for the
+same reason as SKT4-1 — choosing sane `max_length` values for a real
+evaluation sheet's sections/criteria/checklist items is a content decision,
+not a guess this pass should make — and because it reaches further than
+SKT4-1 (member-writable, not officer-only), any chosen limits need to
+accommodate the largest legitimate in-progress test, not just the largest
+template. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### SKT4-3 — MED — `GET /summary`'s aggregates can disclose a single test's result in a small cohort — OPEN / FLAGGED
+
+`get_testing_summary` (`skills_testing.py:3532-3658`) is open to
+`get_current_user` — any authenticated member, no `training.manage`
+requirement — and returns `pass_rate` and `average_score` computed only from
+`SkillTest.organization_id`/`status`/`validated_at`/`is_practice` filters, with
+no disclosure resolution (`resolve_result_view`, `result_disclosure`,
+`ResultRelease`) applied anywhere in the handler. When an organization (or a
+template/date range a future filtered variant might add) has exactly one
+validated, non-practice, scored test, `pass_rate` is either 0% or 100% —
+directly revealing that one test's pass/fail — and `average_score` is that
+test's exact score, to a member with no relationship to the test and no
+officer permission, even where the underlying test's own `result_disclosure`
+would keep it hidden from everyone but the candidate and examiner. This
+pass's first draft treated "no query selects a `User` or a per-test row" as
+equivalent to "no disclosure," which Codex review correctly rejected — an
+aggregate is not automatically anonymous; it is anonymous only above some
+cohort size. Not fixed in this pass: the correct remedy (a minimum-cohort
+suppression threshold, gating `pass_rate`/`average_score` specifically to
+`training.manage` while leaving the count fields open, or something else) is
+a product decision about what "org-wide stats" is supposed to mean, not a
+same-commit fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
 ### Corrections to prior write-ups
 
 None to passes 1-3. Within this pass's own first draft, before this PR merged:
-two Codex review rounds caught five mis-scoped claims, all corrected in place
-rather than recorded as a separate historical correction, since no inaccurate
-version of this document was ever the merged state. Round 1: the JSON-body-size
-"no finding" call (reclassified as SKT4-1), and the audit-log site
-enumeration's `email_test_results`/`complete_test`-vs-`validate_test`/
-`release_test_results` errors. Round 2: round 1's own fix to the audit-log
-enumeration had overcorrected by dropping `add_test_viewer` instead of
-evaluating it (restored as an 8th site, `viewer_name`); the `GET /summary`
-query count was a flat six instead of the actual up-to-eight across its two
-conditional branches; the `SEC4-1` line citation had drifted to the diff's own
-blank-comment-line insertion (3157 → 3167); and the frontend scope count was
-seven instead of nine, omitting two `apiCache.ts`/`apiCache.test.ts` changes
-this feature's own PHI-cache control lives in (verified as other features'
-additions, not a change to this feature's own exclusion line).
+three Codex review rounds caught eight mis-scoped claims or missed findings,
+all corrected in place rather than recorded as a separate historical
+correction, since no inaccurate version of this document was ever the merged
+state. Round 1: the JSON-body-size "no finding" call (reclassified as
+SKT4-1), and the audit-log site enumeration's
+`email_test_results`/`complete_test`-vs-`validate_test`/`release_test_results`
+errors. Round 2: round 1's own fix to the audit-log enumeration had
+overcorrected by dropping `add_test_viewer` instead of evaluating it (restored
+as an 8th site, `viewer_name`); the `GET /summary` query count was a flat six
+instead of the actual up-to-eight across its two conditional branches; the
+`SEC4-1` line citation had drifted to the diff's own blank-comment-line
+insertion (3157 → 3167); and the frontend scope count was seven instead of
+nine, omitting two `apiCache.ts`/`apiCache.test.ts` changes this feature's own
+PHI-cache control lives in (verified as other features' additions, not a
+change to this feature's own exclusion line). Round 3: two genuinely new
+findings this pass's "clean"/"no finding" first-draft language had missed
+outright — **SKT4-2** (`PUT /tests/{id}`'s result arrays, member-reachable,
+same shape as SKT4-1) and **SKT4-3** (`GET /summary`'s small-cohort
+disclosure) — plus a scope gap in **SKT3-2** (below), which covered only
+`GET /tests` when `GET /tests/export/csv` shares the identical unbounded-query
+root cause.
 
-### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — still OPEN / FLAGGED
+### SKT3-2 — LOW/MED — `GET /tests` (and, as of this pass, `GET /tests/export/csv`) has no pagination or result cap — still OPEN / FLAGGED
 
 Re-verified, not re-derived: read `list_tests` (`skills_testing.py:978-1198`)
 directly end to end this pass. No `.limit()`/`.offset()` anywhere in the
@@ -949,11 +1006,28 @@ function; the batch `User` and `SkillTemplate` fetches and the per-row
 `skillsTestingService.getTests()` (frontend) still accepts no paging
 parameter, and `SkillsTestingTestRecordsTab.tsx`'s default "All" filter still
 calls `GET /tests` with zero query params. No code or scope change since
-pass 3 — the finding, its severity, and its `docs/KNOWN_LIMITATIONS.md` entry
-("`GET /training/skills-testing/tests` has no pagination or result cap") all
-stand unchanged. Left open for the same reason pass 3 gave: closing it needs a
+pass 3 — the finding, its severity, and its original scope all stand
+unchanged. Left open for the same reason pass 3 gave: closing it needs a
 paging contract, a chosen default/cap, and a coordinated frontend change — a
 product decision, not a same-commit fix.
+
+**Scope extended this pass, on Codex review:** `export_tests_csv`
+(`skills_testing.py:3230-3325+`) builds the identical unbounded
+`select(SkillTest).where(organization_id == ...)` shape — no `.limit()`,
+optional filters (`status`, `candidate_id`, `template_id`, date range) that
+default to none applied — then loads every matching row, resolves a batch
+`User`/`SkillTemplate` map, and streams every row (or, for `detail=criteria`,
+every criterion within every row) into a `StringIO` buffer. `training.manage`-
+gated, unlike `GET /tests`, so the exposed population is smaller (officers
+only) but the per-request cost is higher (row expansion into CSV text, held
+in memory, then duplicated by `output.getvalue()`). This pass's first draft
+described SKT3-2 as scoped to `GET /tests` alone and left the export
+unexamined — the same root cause (no cap on the base query) reaches both
+routes, so `docs/KNOWN_LIMITATIONS.md`'s entry now names both. Closing this
+half needs the same kind of product decision as the list endpoint: a required
+bounded filter (e.g. a mandatory date range past some org-size threshold) or
+genuine streaming from the database rather than a fully-materialized query —
+not a same-commit fix.
 
 ## Guard tests added
 
@@ -980,15 +1054,20 @@ diff against pass 3 is a single already-reviewed, already-fixed line
 run above is the one surface this pass's own re-verification work could
 plausibly affect.
 
-**Disposition: 0 new code fixes, 1 new finding flagged (SKT4-1, LOW/MED),
-corrected across two Codex review rounds.** All six pass 1–3 fixes
-re-verified intact by direct code read; two open findings are now carried
-(SKT3-2, unchanged, and the newly-flagged SKT4-1); the summary aggregate-only
-check and the audit-payload PII check both hold on their substance, though
-five accuracy details across both — the query count, the audit-log site
-enumeration (twice, in opposite directions), a stale line citation, and the
-frontend scope count — needed correcting on review (see "Corrections to prior
-write-ups" above). This pass's value is the re-verification, the corrected
-audit-log enumeration, and the newly-flagged template-size gap — the backend
-surface itself has had a total of one line change (already fixed elsewhere)
-across three passes and roughly two weeks.
+**Disposition: 0 new code fixes, 3 new findings flagged (SKT4-1, SKT4-2,
+SKT4-3, all LOW/MED-MED), 1 existing finding's scope extended (SKT3-2), all
+corrected or found across three Codex review rounds.** All six pass 1–3
+fixes re-verified intact by direct code read; four open findings are now
+carried (SKT3-2, scope widened to cover the CSV export, and the three new
+SKT4-x findings). None of this pass's "clean"/"no finding" first-draft
+language survived review unchanged — the query count, the audit-log site
+enumeration (twice, in opposite directions), a stale line citation, the
+frontend scope count, the uncapped template body, the uncapped result-array
+body, and the summary's small-cohort disclosure were all wrong or incomplete
+in the first draft (see "Corrections to prior write-ups" above). This pass's
+value ended up being almost entirely from review rather than from the
+original re-verification pass — the backend surface itself has had a total of
+one line change (already fixed elsewhere) across three passes and roughly two
+weeks, but the review process surfaced three real gaps in this file's
+own input-size and aggregate-disclosure posture that three prior passes had
+not caught.

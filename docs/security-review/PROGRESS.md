@@ -77,13 +77,33 @@ these four). Full write-up updated in place — see "Corrections to prior
 write-ups" and the pass-4 disposition in
 `docs/security-review/SKT-19-skills-testing.md`.
 
+**Round 3 of Codex review surfaced two genuinely new findings and widened an
+existing one — not accuracy corrections this time, but gaps this pass's own
+"clean" language had missed:** **SKT4-2 (MED, OPEN/FLAGGED)** —
+`PUT /tests/{id}`'s `SkillTestUpdate.section_results` /
+`criteria_results` / `checklist_completed` have no `max_length`, the same
+amplification shape as SKT4-1 but member-reachable (`_authorize_test_write`
+lets any examiner-assigned member write, not only `training.manage`).
+**SKT4-3 (MED, OPEN/FLAGGED)** — `GET /summary`'s `pass_rate`/`average_score`
+apply no disclosure resolution at all, so a cohort of exactly one validated
+test discloses that test's own pass/fail and score to any member, regardless
+of the test's own disclosure settings; the first draft's "no per-row
+exposure" claim was true of the query shape but not the same thing as "no
+disclosure." And **SKT3-2's scope widened** to cover `GET /tests/export/csv`,
+which shares the identical unbounded-query root cause the first draft had
+only checked on the list endpoint. All three mirrored into
+`KNOWN_LIMITATIONS.md`; replied to and resolved all three review threads.
+Disposition is now **0 new code fixes, 3 new findings flagged (SKT4-1,
+SKT4-2, SKT4-3), 1 existing finding's scope widened (SKT3-2)** — see the
+pass-4 write-up for full detail.
+
 Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
 `app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
 revisions, single head); `pytest -k skill` 405 passed, 1 skipped
 (pre-existing); frontend `typecheck` and `lint` both clean — unaffected by
-either round's fixes since the changes are docs-only. Rotation row 19 →
-`⏳`. Subscribed to PR activity. Next: tend #2473 until merged, then
-Feature 20 (Compliance).
+any round's fixes since every change across all three rounds is docs-only.
+Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473 until
+merged, then Feature 20 (Compliance).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, now merged), preserved for history</summary>
@@ -12880,7 +12900,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 0 fixed, 1 new finding flagged (SKT4-1), 1 re-verified open (SKT3-2), corrected across two Codex review rounds
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 0 fixed, 3 new findings flagged (SKT4-1, SKT4-2, SKT4-3), SKT3-2 scope widened, corrected/found across three Codex review rounds
 
 **Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
 Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
@@ -12948,6 +12968,23 @@ excluded for having a differently-named field. The uncapped
 `RankReorderRequest.ranks`, which caps at 500 items precisely because the
 same request-body byte ceiling can otherwise admit roughly a million small
 items. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Round 3 of Codex review found two things this pass had missed outright,
+not misdescribed:** **SKT4-2 (MED, OPEN/FLAGGED)** — `PUT /tests/{id}`'s
+`section_results`/`criteria_results`/`checklist_completed` share SKT4-1's
+uncapped-list shape, but `update_test` is gated by `_authorize_test_write`,
+which any member holding `examiner_id` on an unvalidated test can satisfy —
+member-reachable, not officer-only like SKT4-1. **SKT4-3 (MED,
+OPEN/FLAGGED)** — `get_testing_summary`'s `pass_rate`/`average_score` apply
+no disclosure resolution at all, so a cohort of exactly one validated test
+discloses that test's pass/fail and score to any authenticated member
+regardless of its own disclosure settings; re-reading the handler had
+confirmed the query _shape_ carries no per-row `SELECT`, which is not the
+same guarantee as "no disclosure" for a small-n aggregate. SKT3-2's scope
+also widened to `GET /tests/export/csv`, which shares the same unbounded
+base query the first draft had only checked on the list endpoint. All three
+mirrored into `KNOWN_LIMITATIONS.md`; replied to and resolved all three
+review threads.
 
 Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
 (26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,
