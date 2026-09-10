@@ -1009,12 +1009,21 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 md:flex-row">
-      {/* Mobile: horizontal scrollable tabs */}
-      <nav
-        className="border-theme-surface-border -mx-4 border-b px-4 md:hidden"
-        aria-label="Shift report settings sections"
-      >
-        <div className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2">
+      {/* Mobile: horizontal scrollable tabs.
+          Eight sections do not fit 375px and are not meant to — the strip
+          scrolls. `data-mobile-scroll-region` declares that intent to the mobile
+          presentation pass, which otherwise reads the last button sitting past
+          the viewport edge as the page overflowing. The marker comes with a
+          contract, and `tabIndex` is the half worth naming: a scroll container
+          only a pointer can move puts the sections past the fold out of reach of
+          a keyboard-only officer entirely. */}
+      <nav className="border-theme-surface-border -mx-4 border-b px-4 md:hidden">
+        <div
+          className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2"
+          aria-label="Shift report settings sections"
+          data-mobile-scroll-region
+          tabIndex={0}
+        >
           {SECTIONS.map(({ key, label, icon: Icon }) => {
             const isActive = activeSection === key;
             return (

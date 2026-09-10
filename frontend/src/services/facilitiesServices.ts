@@ -14,7 +14,7 @@ import type {
   Room,
   FacilitySystem,
 } from '../modules/facilities/types';
-import { asArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 
 // ============================================
 // Facilities Create / Update payloads
@@ -1177,10 +1177,7 @@ export const ranksService = {
    */
   async getRankLadder(params?: { is_active?: boolean }): Promise<OperationalRankResponse[]> {
     const response = await api.get<OperationalRankResponse[]>('/operational-ranks', { params });
-    if (!Array.isArray(response.data)) {
-      throw new TypeError('The rank list response was not an array');
-    }
-    return response.data;
+    return expectArray(response.data, 'rank list');
   },
 
   async getRank(rankId: string): Promise<OperationalRankResponse> {

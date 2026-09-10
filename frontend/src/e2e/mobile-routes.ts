@@ -183,11 +183,14 @@ export const ALL_ROUTES: RouteCheck[] = [
   // Three remain unlisted, for three different reasons, each measured rather
   // than assumed:
   //
-  // /scheduling/admin/settings/* carries worse than tap targets. Its
-  // eligibility and notifications sections hit the ErrorBoundary outright under
-  // this suite's API mocks, because each reads an array straight off a response
-  // the catch-all answers with `{}` — which is what a gateway or proxy error
-  // page does in production too. That is a fix of its own.
+  // /scheduling/admin/settings/* is now measured rather than guessed at, and
+  // the guess was low. Its two ErrorBoundary crashes are fixed and its one
+  // overflow is fixed, which is what let the pass reach the category behind
+  // them: 80 controls under 44px across the six sections — 11, 16, 11, 17, 22
+  // and 3 — where the note here used to say 17 for the screen. They are not
+  // toggle-track (that is 44px now); they are bare checkboxes with no wrapping
+  // label, 16px icon buttons, 20px text links and 26-36px chips, which is a
+  // sweep of its own rather than one utility.
   //
   // /communications/email-templates is two-thirds done: its four list filters
   // are 44px now and its breadcrumb no longer overflows 320px, both fixed here.

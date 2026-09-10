@@ -6,7 +6,7 @@
 
 import { AxiosError } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
-import { asArray } from '../../../utils/asArray';
+import { asArray, expectArray } from '../../../utils/asArray';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -1030,7 +1030,17 @@ export const schedulingService = {
   },
   async getEligibilitySettings(): Promise<SchedulingEligibilitySettings> {
     const response = await api.get<SchedulingEligibilitySettings>('/scheduling/eligibility/settings');
-    return response.data;
+    // Verified, not swallowed. Both fields are read with `.includes` the moment
+    // the card renders, so a body without them took the settings screen down
+    // through the ErrorBoundary — and coercing them to `[]` instead would be
+    // worse than the crash, because "no membership types excluded" and "no open
+    // positions" are claims about who may sign up for a shift, shown to the
+    // officer who sets that policy. The card already toasts on a rejection.
+    return {
+      ...response.data,
+      excluded_membership_types: expectArray(response.data?.excluded_membership_types, 'excluded membership types'),
+      open_positions: expectArray(response.data?.open_positions, 'open positions'),
+    };
   },
   async updateEligibilitySettings(
     data: Partial<SchedulingEligibilitySettings>

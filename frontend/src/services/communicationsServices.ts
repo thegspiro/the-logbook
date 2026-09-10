@@ -22,7 +22,7 @@ import type {
   EmailFooter,
   EmailFooterLibrary,
 } from './adminServices';
-import { asArray } from '../utils/asArray';
+import { asArray, expectArray } from '../utils/asArray';
 
 export const notificationsService = {
   async getRules(params?: {
@@ -33,7 +33,14 @@ export const notificationsService = {
     const response = await api.get<{ rules: NotificationRuleRecord[]; total: number }>('/notifications/rules', {
       params,
     });
-    return response.data;
+    // Verified rather than trusted. Callers destructure `rules` and go straight
+    // to `.some` / `.find` on it, so a body without the key crashed the page —
+    // and quietly substituting `[]` is the one thing SchedulingNotificationsPanel
+    // explains it must not do: with no rules loaded every switch reads as off,
+    // an already-enabled notification looks disabled, and toggling it posts a
+    // second rule with the same name instead of flipping the one that exists.
+    // Its catch is written for exactly that, and only runs if this rejects.
+    return { ...response.data, rules: expectArray(response.data?.rules, 'notification rules') };
   },
 
   async createRule(data: Record<string, unknown>): Promise<NotificationRuleRecord> {
