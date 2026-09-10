@@ -226,6 +226,26 @@ For stages with explicit completion criteria:
 1. Click **Complete Step** to mark the stage as done
 2. If auto-advance is enabled, the applicant moves to the next stage automatically
 
+### Placing an applicant who is on no stage
+
+An applicant can end up on no stage at all. Deleting a stage moves everyone on
+it to the next one, or to the previous one if you deleted the last stage — but
+if you delete a pipeline's *only remaining* stage there is nowhere to move them
+to, and they are left without one.
+
+The board shows these applicants in an **Unassigned** column rather than hiding
+them. Open one and you will see **Not on a stage**, with a picker of the
+stages in their pipeline: choose the stage they should be working and click
+**Place**. The stage is recorded as in progress and the placement appears in
+their activity log.
+
+This is for recovery only. It is refused for an applicant who is already on a
+stage — use **Advance**, **Move Back** or **Skip** for those — so it cannot be
+used to move someone past a stage's requirements. Note that placing an
+applicant mid-pipeline does not mark the earlier stages complete, because
+nobody completed them; their progress count will read low until those stages
+are worked or skipped.
+
 ### Holding, Rejecting, or Withdrawing
 
 | Action         | Effect                                                            |

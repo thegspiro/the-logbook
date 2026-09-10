@@ -477,6 +477,21 @@ class AdvanceProspectRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
 
 
+class AssignStageRequest(BaseModel):
+    """Schema for placing a prospect who is on no stage onto one.
+
+    Recovery only — the service refuses an applicant who already has a stage,
+    so this cannot be used to move one past a gate.
+    """
+
+    step_id: str = Field(
+        ..., description="Stage to place the applicant on; must be in their pipeline"
+    )
+    notes: Optional[str] = Field(
+        None, description="Optional notes for the activity log"
+    )
+
+
 # --- Kanban Board Schemas ---
 
 
