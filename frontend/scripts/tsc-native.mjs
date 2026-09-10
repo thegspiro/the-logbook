@@ -11,10 +11,11 @@
  * with is the same package installed a second time under another name.
  *
  * Why this wrapper rather than calling the binary by path: both installs ship a
- * `tsc` bin, so npm links only one of them into node_modules/.bin — plain `tsc`
- * is the 5.9.3 one. The path to the alias also moves depending on whether npm
- * hoists it to the repo root or nests it under frontend/, so it is resolved
- * here instead of hardcoded.
+ * `tsc` bin, and which one a bare `tsc` resolves to depends on the current
+ * directory — 5.9.3 from the repo root, but 7.0.2 from frontend/, because
+ * frontend/node_modules/.bin/tsc shadows the root's. The path to the alias
+ * also moves depending on whether npm hoists it to the repo root or nests it
+ * under frontend/, so it is resolved here instead of hardcoded.
  */
 
 import { spawnSync } from 'node:child_process';

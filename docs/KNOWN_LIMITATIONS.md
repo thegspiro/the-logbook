@@ -1849,13 +1849,17 @@ regeneration is unreliable for this tree and should be avoided).
 
 Verified via a fresh `npm ci`: `npm ls vitest @vitest/ui` reports no
 invalid nodes, `npx vitest --ui --run` starts cleanly (no longer crashes),
-a scoped subset (36 files, 817 tests) passes cleanly, and a full-suite run
-completed all 6,982 individual tests successfully (one test _file_'s
-worker process crashed mid-run with "Worker exited unexpectedly" — an
-environment artifact of this same investigation session disrupting
-`node_modules` mid-run, not a test failure; every test that did run
-passed). CI's own frontend test job is the authoritative full-suite
-signal regardless.
+and a scoped subset (36 files, 817 tests) passes cleanly. A first
+full-suite attempt did not reach a clean full-suite result: one test
+_file_'s worker process crashed mid-run ("Worker exited unexpectedly")
+before completing, so that file's tests cannot be reported as passed — every
+other file among the 6,982 individual tests that did finish passed, but the
+crashed file is an open question this local run did not answer, not a
+confirmed pass. Not re-run again locally, to avoid repeating the same
+heavy-npm-operation resource pressure suspected of causing the crash.
+CI's own frontend test job is the authoritative full-suite signal and was
+green on this branch, so nothing here blocks the PR — but this note itself
+now says exactly that, rather than describing an unverified file as passed.
 
 ## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
 

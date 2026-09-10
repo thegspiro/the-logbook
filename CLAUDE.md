@@ -269,10 +269,16 @@ support). A workspace can only declare one package named `typescript`, so the
 plain name is the version the linter needs and the compiler the project builds
 with is the same package installed again under an alias.
 
-This is not cosmetic. It is what keeps the lockfile regenerable: with
-`typescript` declared at 7.0.2, `rm package-lock.json && npm install` failed
-outright with ERESOLVE against typescript-eslint's peer range, so the lockfile
-could not be rebuilt and any bump of typescript-eslint broke the install.
+This is not cosmetic. It is what keeps `npm install` able to resolve at all:
+with `typescript` declared at 7.0.2, `rm package-lock.json && npm install`
+failed outright with ERESOLVE against typescript-eslint's peer range — a
+different, worse failure than anything below, since it couldn't even produce
+a lockfile. The alias fixes that specific rejection. It does **not** make a
+from-scratch regeneration safe in general: see "Separately: this lockfile is
+not safely regenerable from scratch either" above for the three failure
+modes still observed with the alias correctly in place. Never run `rm
+package-lock.json && npm install` on this tree regardless of which problem
+you're trying to solve.
 
 Consequences worth knowing:
 
