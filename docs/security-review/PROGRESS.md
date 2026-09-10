@@ -59,11 +59,30 @@ and mirrored into `KNOWN_LIMITATIONS.md`. **0 new code fixes, 1 new
 finding flagged (SKT4-1).** Full write-up:
 `docs/security-review/SKT-19-skills-testing.md` → **Pass 4**.
 
+**Round 2 of Codex review, on the same push, caught four more accuracy
+issues:** round 1's own audit-log fix had overcorrected by dropping
+`add_test_viewer` instead of evaluating its `viewer_name` field — restored
+as an 8th site under the actual criterion (a named member's identity, not a
+specific field name), so the corrected count is 8, not 7. `GET /summary`'s
+"six queries" was also wrong — `get_testing_summary` issues up to eight
+across two conditional branches, every branch still aggregate-only on
+re-check. The `SEC4-1` line citation had drifted (3157 → 3167) after this
+pass's own comment additions. And the frontend file count was seven, not
+nine — `apiCache.ts`/`apiCache.test.ts` also changed and carry this
+feature's own PHI-cache exclusion, though the diff confirms every change in
+both files belongs to other features and this feature's own exclusion line
+is untouched. All four corrected on the same branch; replied to and
+resolved all five review threads (one from round 1 already resolved, plus
+these four). Full write-up updated in place — see "Corrections to prior
+write-ups" and the pass-4 disposition in
+`docs/security-review/SKT-19-skills-testing.md`.
+
 Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
 `app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
 revisions, single head); `pytest -k skill` 405 passed, 1 skipped
-(pre-existing); frontend `typecheck` and `lint` both clean. Rotation row 19
-→ `⏳`. Subscribed to PR activity. Next: tend #2473 until merged, then
+(pre-existing); frontend `typecheck` and `lint` both clean — unaffected by
+either round's fixes since the changes are docs-only. Rotation row 19 →
+`⏳`. Subscribed to PR activity. Next: tend #2473 until merged, then
 Feature 20 (Compliance).
 
 <details>
@@ -12861,7 +12880,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 0 fixed, 0 new findings, 1 re-verified open (SKT3-2)
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 0 fixed, 1 new finding flagged (SKT4-1), 1 re-verified open (SKT3-2), corrected across two Codex review rounds
 
 **Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
 Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
@@ -12884,13 +12903,21 @@ them.
 
 **Scope check:** diffed the current tree against `d5b716ff8` (pass-3's
 merge commit). Backend: one line changed
-(`skills_testing.py:3157`, Feature 00's own `SEC4-1` fix to
+(`skills_testing.py:3167`, Feature 00's own `SEC4-1` fix to
 `email_test_results`'s error handling — already fixed, already covered by
-that pass's own gate); service/schema/model files byte-identical. Frontend:
-seven files changed, all read directly and confirmed cosmetic (contrast-shade
-bumps matching CLAUDE.md's AAA-contrast convention, a `Breadcrumbs` rollout,
-a `<main>`→`<div data-page-main>` landmark fix) — no new API call, input, or
-data-exposure surface.
+that pass's own gate; a first-draft citation of line 3157 was corrected on
+Codex review since this pass's own comment additions shifted it to the
+closing paren of the preceding call); service/schema/model files
+byte-identical. Frontend: **nine** files changed (first draft said seven,
+corrected on Codex review) — seven are read-and-confirmed cosmetic
+(contrast-shade bumps matching CLAUDE.md's AAA-contrast convention, a
+`Breadcrumbs` rollout, a `<main>`→`<div data-page-main>` landmark fix); the
+other two, `apiCache.ts`/`apiCache.test.ts`, carry this feature's own
+`/training/skills-testing/tests` PHI-cache exclusion and needed checking
+directly rather than being folded into "cosmetic" — confirmed via diff that
+every change in both files is a **different** feature's cache-exclusion
+entry and that this feature's own exclusion line is unchanged, untouched
+context. No new API call, input, or data-exposure surface either way.
 
 **Re-verified by direct code read** (not by trusting the diff alone): all six
 pass 1–3 fixes intact with current line numbers; all 29 routes' auth
@@ -12898,18 +12925,29 @@ dependencies re-enumerated via a fresh `ast` walk (unchanged); SKT3-2
 (`GET /tests` has no pagination/cap) re-read end to end and confirmed still
 open, unregressed, its `KNOWN_LIMITATIONS.md` entry unchanged.
 
-**Three new checks, all clean, no finding:** `GET /summary`'s "aggregate
-only, no per-row exposure" claim verified by reading all six of its queries
-directly (every one a bare `func.count`/`func.avg` on `organization_id`,
-the one member-facing count gated on `_can_manage_tests`); this file's own
-8 `log_audit_event` calls carrying `candidate_name`/`examiner_name` checked
-against SEC-00 pass 4's own stated criterion for the pattern ("the
-identifier is the subject of the audited event") — SEC-00 explicitly
-scoped its own sweep away from feature-owned code, so this file's payloads
-had never actually been checked against that standard until now, and they
-pass it; the uncapped `sections`/`criteria` JSON body checked against the
-global `RequestSizeLimitMiddleware` plus the `training.manage` gate,
-matching the "bounded by construction" shape SEC-00 accepts elsewhere.
+**Two new checks, findings/corrections on both — first-draft "all clean"
+did not survive Codex review:** `GET /summary`'s "aggregate only, no
+per-row exposure" claim holds, but the query count was wrong — not a flat
+six, but **up to eight** across `get_testing_summary`'s two conditional
+branches (a passed-count query gated on `completed_count > 0`, a
+pending-validation query gated on `_can_manage_tests`) — every branch still
+aggregate-only, re-verified query by query. This file's own **8**
+`log_audit_event` calls carrying a named member's identity, checked against
+SEC-00 pass 4's own stated criterion ("the identifier is the subject of the
+audited event") — SEC-00 explicitly scoped its own sweep away from
+feature-owned code, so this file's payloads had never actually been checked
+against that standard until now, and they pass it — but getting to the
+correct list of 8 took two review rounds: round 1 fixed three wrong sites
+in the first draft's list (a nonexistent `email_test_results` call, two
+mislabeled `validate_test` lines, a missing `release_test_results`) but
+overcorrected by dropping `add_test_viewer`'s `viewer_name` entirely; round
+2 restored it as the 8th site, evaluated on the same criterion rather than
+excluded for having a differently-named field. The uncapped
+`sections`/`criteria` JSON body was **not** clean: reclassified as
+**SKT4-1 (LOW/MED, OPEN/FLAGGED)** after Codex pointed at this repo's own
+`RankReorderRequest.ranks`, which caps at 500 items precisely because the
+same request-body byte ceiling can otherwise admit roughly a million small
+items. Mirrored into `KNOWN_LIMITATIONS.md`.
 
 Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
 (26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,

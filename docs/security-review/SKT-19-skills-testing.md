@@ -747,28 +747,44 @@ main."
 
 **Scope check:** diffed the current tree against `d5b716ff8` (the pass-3
 merge commit for PR #2230). **Backend: one line changed, in one file.**
-`app/api/v1/endpoints/skills_testing.py:3157` gained the `SEC4-1` fix from
+`app/api/v1/endpoints/skills_testing.py` gained the `SEC4-1` fix from
 Feature 00's own pass 4 (`c91060f7a`, "security(cross-cutting): 3 fixes, 0
 flagged") — `email_test_results`'s bare `except Exception as e: ... detail=
 f"Failed to send email: {str(e)}"` now reads `detail=safe_error_detail(e,
-fallback="Failed to send email")`, closing an SMTP-host/credential-error
-disclosure that was this feature's own code but was found and fixed by the
-cross-cutting sweep rather than this rotation. `app/services/
+fallback="Failed to send email")` at line 3167 (Codex review corrected a
+first-draft citation of line 3157, which after this pass's own comment
+additions is only the closing `)` of the preceding `send_email(...)` call —
+the actual guarded block is lines 3158-3168), closing an SMTP-host/
+credential-error disclosure that was this feature's own code but was found
+and fixed by the cross-cutting sweep rather than this rotation. `app/services/
 skills_testing_service.py`, `app/schemas/skills_testing.py`, and
 `app/models/skills_testing.py` are all **byte-identical** to pass 3
 (`git diff d5b716ff8 HEAD -- <each path>` empty). No new migration touches a
 skills-testing table.
 
-**Frontend: seven files changed, all cosmetic.** Read each diff directly
-rather than trusting the diffstat: `SkillTestOfficerActions.tsx`,
+**Frontend: nine files changed — first draft undercounted at seven.** Read
+each diff directly rather than trusting the diffstat: `SkillTestOfficerActions.tsx`,
 `ActiveSkillTestPage.tsx`, `SkillsTestingTestRecordsTab.tsx` (green-600→700 /
 amber-600→700 / yellow-500→700 shade bumps, the same AAA-contrast sweep
 CLAUDE.md documents for `btn-success`/`btn-warning` and TRX4's sibling pass
 found on its own frontend files the same day); `MySkillTestResultPage.tsx` and
 `SkillsTestingPage.tsx` (a `<Breadcrumbs>` rollout); `SkillTemplateBuilderPage.tsx`
 and `StartSkillTestPage.tsx` (`<main>` → `<div data-page-main>`, a
-landmark-uniqueness fix). None adds a new API call, new user input, or touches
-org-scoping/permission/data-exposure surface.
+landmark-uniqueness fix) — those seven are genuinely cosmetic, no new API
+call, input, or data-exposure surface. Codex review correctly flagged that
+the first draft's "seven files" omitted `frontend/src/utils/apiCache.ts` and
+`apiCache.test.ts`, which also changed since `d5b716ff8` and which pass 2
+explicitly put in this feature's scope, since `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry is this feature's own PHI-cache
+control. Read both diffs directly: every addition is a **different**
+feature's cache-exclusion entry or test (apparatus operator/driver-exception
+routes, inventory reorder-requests/colors/clearances, `operational-ranks/
+validate`, `training/external/providers` and `training/multi-agency`, plus an
+`/admin-hours/` test-coverage expansion) — `git diff d5b716ff8 HEAD --
+frontend/src/utils/apiCache.ts` shows the `/training/skills-testing/tests`
+line itself as unchanged context, not a `+`/`-` line, so this feature's own
+exclusion is intact and unmodified. Confirmed, not assumed: no line touching
+`skills-testing` appears in either diff hunk.
 
 ### Re-verification of pass 1–3 fixes
 
@@ -809,14 +825,22 @@ pass 1–3's table. The file's route surface has not moved since pass 1.
 ### New checks this pass
 
 **`GET /summary`'s "no per-row exposure" claim re-verified by reading the
-handler, not by trusting the label.** `get_testing_summary`
-(`skills_testing.py:3532-3658`) issues six queries, every one a bare
+handler, not by trusting the label — including the branches, per Codex
+review catching a first-draft undercount.** `get_testing_summary`
+(`skills_testing.py:3532-3658`) issues **up to eight** queries, not a flat
+six: six unconditional (`total_templates`, `published_templates`,
+`total_tests`, `tests_this_month`, `completed_tests`, `avg_score`), plus two
+conditional ones — the passed-count query only when `completed_count > 0`,
+and the pending-validation query only when `_can_manage_tests(current_user)`
+is true. Every one of the eight, in every branch, is still a bare
 `func.count`/`func.avg` filtered on `organization_id` (plus
 `is_practice`/`status`/`validated_at`/`result` predicates) — no query selects
-a `User` or a per-test row, and `pending_validation_count` is gated to
-`_can_manage_tests(current_user)` before it is even computed, with an in-code
-comment explaining why a member should not learn the org's outstanding review
-queue depth. Confirmed clean; the claim holds.
+a `User` or a per-test row in any branch, and `pending_validation_count` is
+gated to `_can_manage_tests(current_user)` before it is even computed, with
+an in-code comment explaining why a member should not learn the org's
+outstanding review queue depth. Confirmed clean in all branches; the
+aggregate-only claim holds regardless of which of the up-to-eight queries
+run.
 
 **Template visibility fail-direction checked, not assumed.** `list_templates`
 and `get_template` both treat `visibility="assigned_only"` identically to
@@ -832,34 +856,43 @@ implementing per-assignment visibility does not have to re-discover that the
 non-officer branch currently no-ops on this value.
 
 **Audit-log PII payloads checked against SEC-00's own precedent — first draft
-mis-enumerated, corrected on Codex review.** `SEC-00-cross-cutting-baseline.md`'s
-pass 4 swept `log_audit_event` payloads app-wide for PII-shaped keys but
-explicitly scoped itself away from "the module-level code each rotation
-feature owns" — so its "13 calls, all justified" count does not cover this
-file's own sites that carry `candidate_name`/`examiner_name` alongside the id.
-This pass's first draft listed 8 sites and got three of them wrong: it credited
-`email_test_results` with an audit-log call it does not have (the function
-never calls `log_audit_event` at all — it only puts the candidate/examiner name
-into the outgoing email body), mislabeled lines 2100-2102 as `complete_test`
-when they belong to `validate_test`, and cited `add_test_viewer` even though
-that call logs `viewer_name`/`candidate_id` — a different viewer, and an id
-rather than a name — not `candidate_name`/`examiner_name`. It also omitted
-`release_test_results`, which does log `candidate_name`. Re-enumerated by
-reading every one of the file's 18 `log_audit_event` call sites directly: the
-actual count carrying `candidate_name` and/or `examiner_name` is **7**:
-`complete_test:1809` (candidate only), `delete_test:1899` (candidate only),
-`validate_test:2100-2102` (candidate + examiner), `release_test_results:2270`
-(candidate only), `cancel_test:2633` (candidate only), `void_test:2763`
-(candidate only), `return_test_for_correction:2915-2917` (candidate +
-examiner). Checked each against SEC-00's own stated criterion for the pattern
-being acceptable ("the identifier is the subject of the audited event... none
-incidental") rather than assuming it transfers: every one of these events is
-specifically about an action taken on or by the named candidate/examiner — a
-completion, a deletion, a validation, a release, a cancellation, a void, a
-return — the same shape as `deleted_full_name` on a user deletion. No finding;
-recorded so this file's own audit payloads are confirmed against the standard
-rather than left unverified because SEC-00's sweep skipped feature-owned files
-by design.
+mis-enumerated, corrected across two Codex review rounds.**
+`SEC-00-cross-cutting-baseline.md`'s pass 4 swept `log_audit_event` payloads
+app-wide for PII-shaped keys but explicitly scoped itself away from "the
+module-level code each rotation feature owns" — so its "13 calls, all
+justified" count does not cover this file's own sites that carry a named
+member's identity alongside the id. This pass's first draft listed 8 sites
+under a `candidate_name`/`examiner_name` framing and got three of them wrong:
+it credited `email_test_results` with an audit-log call it does not have (the
+function never calls `log_audit_event` at all — it only puts the candidate/
+examiner name into the outgoing email body), mislabeled lines 2100-2102 as
+`complete_test` when they belong to `validate_test`, and — round 1's own
+fix — dropped `add_test_viewer` outright on the reasoning that its
+`viewer_name` field isn't named `candidate_name`/`examiner_name`. Round 2 of
+Codex review correctly rejected that last move: excluding a site because its
+PII field has a different name, rather than evaluating it, is exactly the
+"assessed" claim this section exists to make honest. Re-enumerated by reading
+every one of the file's 18 `log_audit_event` call sites directly, evaluating
+each by SEC-00's actual criterion (a named member's identity, whatever the
+field is called) rather than by field-name pattern-matching: the actual count
+is **8** — `complete_test:1809` (`candidate_name`), `delete_test:1899`
+(`candidate_name`), `validate_test:2100-2102` (`candidate_name` +
+`examiner_name`), `release_test_results:2270` (`candidate_name`) — omitted
+from the first draft — `add_test_viewer:2462` (`viewer_name`, alongside a bare
+`candidate_id`, not `candidate_name`), `cancel_test:2633` (`candidate_name`),
+`void_test:2763` (`candidate_name`), `return_test_for_correction:2915-2917`
+(`candidate_name` + `examiner_name`). Checked each against SEC-00's own
+stated criterion for the pattern being acceptable ("the identifier is the
+subject of the audited event... none incidental") rather than assuming it
+transfers: every one of these events is specifically about an action taken on
+or naming the candidate, examiner, or (for the viewer grant) the viewer being
+named — a completion, a deletion, a validation, a release, a viewer grant, a
+cancellation, a void, a return — the same shape as `deleted_full_name` on a
+user deletion. No finding; recorded so this file's own audit payloads are
+confirmed against the standard rather than left unverified because SEC-00's
+sweep skipped feature-owned files by design, and so that a future pass does
+not repeat round 1's mistake of dropping a site for not matching a field-name
+pattern instead of evaluating it.
 
 ### SKT4-1 — LOW/MED — `sections`/`criteria` has no per-template item cap — OPEN / FLAGGED
 
@@ -892,10 +925,20 @@ guessing on anything that changes accepted-input behavior. Mirrored into
 ### Corrections to prior write-ups
 
 None to passes 1-3. Within this pass's own first draft, before this PR merged:
-Codex review caught the two mis-scoped claims above (the audit-log site
-enumeration, and the JSON-body-size "no finding" call) — both corrected in
-place rather than recorded as a separate historical correction, since no
-inaccurate version of this document was ever the merged state.
+two Codex review rounds caught five mis-scoped claims, all corrected in place
+rather than recorded as a separate historical correction, since no inaccurate
+version of this document was ever the merged state. Round 1: the JSON-body-size
+"no finding" call (reclassified as SKT4-1), and the audit-log site
+enumeration's `email_test_results`/`complete_test`-vs-`validate_test`/
+`release_test_results` errors. Round 2: round 1's own fix to the audit-log
+enumeration had overcorrected by dropping `add_test_viewer` instead of
+evaluating it (restored as an 8th site, `viewer_name`); the `GET /summary`
+query count was a flat six instead of the actual up-to-eight across its two
+conditional branches; the `SEC4-1` line citation had drifted to the diff's own
+blank-comment-line insertion (3157 → 3167); and the frontend scope count was
+seven instead of nine, omitting two `apiCache.ts`/`apiCache.test.ts` changes
+this feature's own PHI-cache control lives in (verified as other features'
+additions, not a change to this feature's own exclusion line).
 
 ### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — still OPEN / FLAGGED
 
@@ -937,13 +980,15 @@ diff against pass 3 is a single already-reviewed, already-fixed line
 run above is the one surface this pass's own re-verification work could
 plausibly affect.
 
-**Disposition: 0 new code fixes, 1 new finding flagged (SKT4-1, LOW/MED).**
-All six pass 1–3 fixes re-verified intact by direct code read; two open
-findings are now carried (SKT3-2, unchanged, and the newly-flagged SKT4-1);
-the summary aggregate-only check and the audit-payload PII check both came
-back clean, though the latter's own first-draft site enumeration needed
-correcting on Codex review (see "Corrections to prior write-ups" above). This
-pass's value is the re-verification, the corrected audit-log enumeration, and
-the newly-flagged template-size gap — the backend surface itself has had a
-total of one line change (already fixed elsewhere) across three passes and
-roughly two weeks.
+**Disposition: 0 new code fixes, 1 new finding flagged (SKT4-1, LOW/MED),
+corrected across two Codex review rounds.** All six pass 1–3 fixes
+re-verified intact by direct code read; two open findings are now carried
+(SKT3-2, unchanged, and the newly-flagged SKT4-1); the summary aggregate-only
+check and the audit-payload PII check both hold on their substance, though
+five accuracy details across both — the query count, the audit-log site
+enumeration (twice, in opposite directions), a stale line citation, and the
+frontend scope count — needed correcting on review (see "Corrections to prior
+write-ups" above). This pass's value is the re-verification, the corrected
+audit-log enumeration, and the newly-flagged template-size gap — the backend
+surface itself has had a total of one line change (already fixed elsewhere)
+across three passes and roughly two weeks.
