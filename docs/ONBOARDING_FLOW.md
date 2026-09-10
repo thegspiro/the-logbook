@@ -964,22 +964,17 @@ GET /api/v1/onboarding/database-check
 
 Tests database connectivity.
 
-### Create Organization (Legacy)
+### Create Organization
 
-```
-POST /api/v1/onboarding/organization
-Body: {
-  name: string,
-  slug: string,
-  organization_type: string,
-  timezone: string,
-  description?: string
-}
-```
+Two routes accept this, and they take the **same** body — both bind
+`OrganizationSetupCreate`:
 
-Creates the first organization with default roles (simple version).
-
-### Create Organization (Comprehensive - Step 1)
+- `POST /api/v1/onboarding/session/organization` — what the wizard calls. Also
+  associates the new organization with the onboarding session.
+- `POST /api/v1/onboarding/organization` — the same creation without that
+  association. It was once a five-field "simple" variant and this document
+  described it that way until 2026-09-10; it has taken the full schema for some
+  time, so the old minimal body now fails validation with a 422.
 
 ```
 POST /api/v1/onboarding/session/organization
@@ -1011,7 +1006,9 @@ Body: {
 }
 ```
 
-Creates organization with comprehensive details and commits to database immediately.
+Creates the organization with its addresses and identifiers, commits
+immediately, and creates the headquarters facility and location from the
+department address.
 
 ### Create Admin User
 
@@ -1046,7 +1043,7 @@ Saves enabled module configuration.
 ```
 POST /api/v1/onboarding/modules
 Body: {
-  enabled_modules: string[]   // e.g. ["training", "compliance", "scheduling"]
+  enabled_modules: string[]   // e.g. ["training", "inventory", "scheduling"]
 }
 ```
 
@@ -1054,6 +1051,12 @@ The non-session counterpart. It validates the onboarding session and refuses
 once onboarding is complete, so a still-valid session cannot be replayed to
 change module settings after setup. The response reports every module with its
 resulting boolean, not only the ones enabled.
+
+Use ids that are fields on `ModuleSettings`. The six in
+`ONBOARDING_LEGACY_MODULES` — `compliance`, `meetings`, `fundraising`,
+`equipment`, `vehicles`, `budget` — are accepted so an older saved session still
+loads, but they are not `ModuleSettings` fields: they are recorded on
+`OnboardingStatus` and go no further, so enabling one turns nothing on.
 
 ### Configure Roles
 
@@ -1073,6 +1076,22 @@ Body: {
 
 Configures roles with two-tier permissions during onboarding.
 
+### Save Email Configuration
+
+```
+POST /api/v1/onboarding/session/email
+Body: {
+  platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
+  config: { ... }   // platform-specific; the schema types this as a free dict
+}
+```
+
+What actually stores mail settings. Passwords and API keys inside `config` are
+encrypted with AES-256 before they are written; only `platform` is kept in plain
+text. `POST /onboarding/complete` later persists the result into the
+organization's settings. Rejected once onboarding is complete, so a still-valid
+session cannot keep rewriting a finished organization's data.
+
 ### Configure Notifications
 
 ```
@@ -1089,7 +1108,13 @@ Body: {
 }
 ```
 
-Configures email and SMS settings.
+**Records that the step happened; it does not store credentials.** The handler
+sets `email_configured` from `email_enabled`, marks the `email_config` step
+complete, and returns the two booleans it was given. Every other field in the
+body — the SMTP host, user and from-address, the Twilio SID and number — is
+discarded. A caller that sends credentials here gets a success response and has
+configured nothing; **Save Email Configuration** above is the endpoint that
+stores them.
 
 ### Complete Onboarding
 

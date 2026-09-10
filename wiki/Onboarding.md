@@ -227,31 +227,43 @@ After completing onboarding, a checklist is automatically created with critical 
 ## API Endpoints
 
 The request and response bodies live in
-[`docs/ONBOARDING_FLOW.md`](../docs/ONBOARDING_FLOW.md#backend-api-endpoints),
-which is the reference this page defers to.
+[`docs/ONBOARDING_FLOW.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/ONBOARDING_FLOW.md#backend-api-endpoints),
+which is the reference this page defers to. That is an absolute link on purpose:
+`wiki/setup-wiki.sh` publishes `wiki/*.md` and generates two pages from `docs/`,
+so `docs/ONBOARDING_FLOW.md` is not in the published wiki and a relative
+`../docs/...` would resolve to nothing from the rendered page.
 
 They were written out in full here as well until 2026-09-10, and the two copies
-had drifted: this page documented the legacy `POST /onboarding/organization` as
-the way to create an organization, while the wizard had moved to
-`POST /onboarding/session/organization` — a different endpoint with a different
-payload. Nothing kept the two in step, and nothing would have.
+had drifted: this page documented `POST /onboarding/organization` with a
+five-field body, which that route stopped accepting when it moved to the full
+`OrganizationSetupCreate` schema. A caller following it now gets a 422. Nothing
+kept the two copies in step, and nothing would have.
 
 The surface, so it is visible at a glance:
 
-| Purpose                      | Endpoint                                                           |
-| ---------------------------- | ------------------------------------------------------------------ |
-| Is onboarding needed         | `GET /api/v1/onboarding/status`                                    |
-| Begin a session              | `POST /api/v1/onboarding/start`                                    |
-| Host and version details     | `GET /api/v1/onboarding/system-info`                               |
-| Security preconditions       | `GET /api/v1/onboarding/security-check`                            |
-| Database reachability        | `GET /api/v1/onboarding/database-check`                            |
-| Create the organization      | `POST /api/v1/onboarding/session/organization`                     |
-| Create the System Owner      | `POST /api/v1/onboarding/system-owner`                             |
-| Enable modules               | `POST /api/v1/onboarding/modules`                                  |
-| Notification defaults        | `POST /api/v1/onboarding/notifications`                            |
-| Finish onboarding            | `POST /api/v1/onboarding/complete`                                 |
-| Post-setup checklist         | `GET /api/v1/organization/setup-checklist`                         |
-| Acknowledge a checklist item | `POST /api/v1/organization/setup-checklist/{item_key}/acknowledge` |
+| Purpose                          | Endpoint                                                           |
+| -------------------------------- | ------------------------------------------------------------------ |
+| Is onboarding needed             | `GET /api/v1/onboarding/status`                                    |
+| Begin a session                  | `POST /api/v1/onboarding/start`                                    |
+| Host and version details         | `GET /api/v1/onboarding/system-info`                               |
+| Security preconditions           | `GET /api/v1/onboarding/security-check`                            |
+| Database reachability            | `GET /api/v1/onboarding/database-check`                            |
+| Create the organization          | `POST /api/v1/onboarding/session/organization`                     |
+| Create the System Owner          | `POST /api/v1/onboarding/system-owner`                             |
+| Enable modules                   | `POST /api/v1/onboarding/modules`                                  |
+| Email configuration              | `POST /api/v1/onboarding/session/email`                            |
+| Record that email was configured | `POST /api/v1/onboarding/notifications`                            |
+| Finish onboarding                | `POST /api/v1/onboarding/complete`                                 |
+| Post-setup checklist             | `GET /api/v1/organization/setup-checklist`                         |
+| Acknowledge a checklist item     | `POST /api/v1/organization/setup-checklist/{item_key}/acknowledge` |
+
+The last two rows about mail are not interchangeable. `/session/email` is what
+stores the encrypted SMTP settings, which `/complete` then persists into the
+organization. `/notifications` sets the `email_configured` flag on the
+onboarding status and marks the step done — it returns the `email_enabled` and
+`sms_enabled` booleans it was given and discards everything else in the body, so
+a caller that sends SMTP or Twilio credentials there receives a success response
+and has configured nothing.
 
 ## Security Verification Requirements
 
