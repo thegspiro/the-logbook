@@ -61,6 +61,12 @@ interface ProspectiveMembersState {
 
   // Applicant data
   applicants: ApplicantListItem[];
+  /**
+   * Which pipeline `applicants` was loaded for, so a list belonging to a
+   * pipeline nobody is looking at any more can be recognised and dropped.
+   * Null whenever the list is empty or its pipeline is unknown.
+   */
+  applicantsPipelineId: string | null;
   currentApplicant: Applicant | null;
 
   // Pagination
@@ -220,6 +226,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   preferredPipelineId: readPreference(PIPELINE_STORAGE_KEY),
 
   applicants: [],
+  applicantsPipelineId: null,
   currentApplicant: null,
 
   totalApplicants: 0,
@@ -375,8 +382,25 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     // The board groups into stage columns client-side, so it needs the
     // whole set; the table pages normally.
     const pageSize = state.viewMode === 'kanban' ? KANBAN_PAGE_SIZE : state.pageSize;
+    const requestedPipelineId = state.filters.pipeline_id ?? null;
 
-    set({ isLoading: true, error: null });
+    // Drop a list belonging to a different pipeline before the request, not
+    // after it. Selecting another pipeline sets filters.pipeline_id and leaves
+    // `applicants` alone, so the board kept drawing the previous pipeline's
+    // applicants until the new fetch resolved -- and, because the catch below
+    // only records the error, kept drawing them forever when it failed. The
+    // board then showed one pipeline's rows under another's stage columns.
+    //
+    // Only on an actual pipeline change: search and status filters go through
+    // setFilters too, and blanking the list on every keystroke would flash an
+    // empty board over a perfectly good one.
+    const isPipelineChange = requestedPipelineId !== state.applicantsPipelineId;
+
+    set({
+      isLoading: true,
+      error: null,
+      ...(isPipelineChange ? { applicants: [], totalApplicants: 0, applicantsPipelineId: null } : {}),
+    });
 
     try {
       const response = await applicantService.getApplicants({
@@ -396,6 +420,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
 
       set({
         applicants: response.items,
+        applicantsPipelineId: requestedPipelineId,
         totalApplicants: response.total,
         currentPage: response.page,
         totalPages: response.total_pages,
