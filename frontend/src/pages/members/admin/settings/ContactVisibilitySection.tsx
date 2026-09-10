@@ -117,6 +117,7 @@ const ContactVisibilitySection: React.FC<Props> = ({ save }) => {
             <p className="text-theme-text-muted text-xs">Enable display of contact info for all members</p>
           </div>
           <Toggle
+            label="Show Contact Information"
             checked={settings.enabled}
             disabled={loading}
             onChange={() => update({ enabled: !settings.enabled })}
@@ -128,6 +129,7 @@ const ContactVisibilitySection: React.FC<Props> = ({ save }) => {
             <div className="flex items-center justify-between py-2">
               <p className="text-theme-text-primary text-sm">Show Email Addresses</p>
               <Toggle
+                label="Show Email Addresses"
                 checked={settings.show_email}
                 disabled={loading}
                 onChange={() => update({ show_email: !settings.show_email })}
@@ -136,6 +138,7 @@ const ContactVisibilitySection: React.FC<Props> = ({ save }) => {
             <div className="flex items-center justify-between py-2">
               <p className="text-theme-text-primary text-sm">Show Phone Numbers</p>
               <Toggle
+                label="Show Phone Numbers"
                 checked={settings.show_phone}
                 disabled={loading}
                 onChange={() => update({ show_phone: !settings.show_phone })}
@@ -144,6 +147,7 @@ const ContactVisibilitySection: React.FC<Props> = ({ save }) => {
             <div className="flex items-center justify-between py-2">
               <p className="text-theme-text-primary text-sm">Show Mobile Numbers</p>
               <Toggle
+                label="Show Mobile Numbers"
                 checked={settings.show_mobile}
                 disabled={loading}
                 onChange={() => update({ show_mobile: !settings.show_mobile })}

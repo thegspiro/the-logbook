@@ -20,8 +20,21 @@ interface SettingsToggleProps {
    */
   onChange: (next: boolean) => void;
   disabled?: boolean;
-  /** Accessible name. Required whenever no visible label is tied to the switch. */
-  label?: string;
+  /**
+   * The switch's accessible name.
+   *
+   * Required, not optional. It was optional and documented as "required
+   * whenever no visible label is tied to the switch" — which is every call site,
+   * because none of them ties one: the text beside a switch here is a sibling
+   * `<p>`, not a `<label htmlFor>`. Nine of the fifteen call sites duly omitted
+   * it, and axe reported `button-name (critical)` on all three settings screens
+   * that had just been put on the accessibility pass. A screen reader announced
+   * "switch, not pressed" and nothing else.
+   *
+   * A required prop is the only version of this rule that holds: a comment did
+   * not, and a test would only cover the screens someone remembered to measure.
+   */
+  label: string;
   color?: 'red' | 'blue';
 }
 
