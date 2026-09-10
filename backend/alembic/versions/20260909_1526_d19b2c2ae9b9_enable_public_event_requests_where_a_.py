@@ -226,15 +226,27 @@ _LABEL_TARGETS = {
     "special needs": "special_requests",
 }
 
-# Display-only field types, which never appear in a submission and so can
-# never supply a target however they are labelled. `PublicFormPage` renders a
-# `section_header` as a heading and returns before the input branch, so no
-# value is posted for it — `_apply_label_fallback` iterates the *submitted*
-# data and never sees the field, and a stored mapping pointing at it is equally
-# inert because the mapping loop only reads ids present in that data. It is the
-# only such type today: every other `FieldType` reaches an input in
-# `FieldRenderer`.
-_NON_INPUT_FIELD_TYPES = ("section_header",)
+# Field types an **anonymous** requester can never submit a value for, and
+# which therefore can never supply a target however they are labelled.
+# `_apply_label_fallback` iterates the *submitted* data, so it never sees such
+# a field; a stored mapping pointing at one is equally inert, because the
+# mapping loop reads only ids that data carries.
+#
+# Two types, unreachable for different reasons, and the second is why this
+# tuple is scoped to anonymous forms rather than being a general "non-input"
+# list:
+#
+# * `section_header` is display-only everywhere — `PublicFormPage` renders it
+#   as a heading and returns before the input branch, and it is the one
+#   `FieldType` that never reaches an input in `FieldRenderer`.
+# * `member_lookup` *is* an ordinary input on an authenticated form. It is
+#   unreachable here because `app/api/public/forms.py` strips it from the
+#   public form response outright ("Don't expose member_lookup to public
+#   forms"), so an anonymous requester is never shown the field and cannot
+#   answer it. Every form this backfill considers is public and
+#   unauthenticated, which is what makes excluding it correct — it would be
+#   wrong in a check that also covered internal forms.
+_NON_INPUT_FIELD_TYPES = ("section_header", "member_lookup")
 
 _FIELD_TYPE_TARGETS = {
     "email": "contact_email",

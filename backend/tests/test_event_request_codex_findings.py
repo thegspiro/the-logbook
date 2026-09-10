@@ -2054,9 +2054,24 @@ class TestDisplayOnlyFieldsCannotQualifyAForm:
             ],
         )
 
-    def test_section_header_is_the_only_display_only_type(self):
+    def test_the_unreachable_types_are_pinned(self):
         module = self._module()
-        assert module._NON_INPUT_FIELD_TYPES == ("section_header",)
+        assert module._NON_INPUT_FIELD_TYPES == ("section_header", "member_lookup")
+
+    def test_a_member_lookup_cannot_supply_a_target_anonymously(self):
+        """`app/api/public/forms.py` strips `member_lookup` from the public form
+        response, so an anonymous requester is never shown the field. It is an
+        ordinary input on an authenticated form — which is why this exclusion is
+        correct only because every candidate form here is public."""
+        assert not self._can([], [("Name", "member_lookup"), ("Email", "email")])
+
+    def test_the_public_endpoint_still_strips_member_lookup(self):
+        """Pins the premise: if the public form ever exposed it, the exclusion
+        above would start under-selecting working forms."""
+        source = (
+            Path(__file__).resolve().parents[1] / "app" / "api" / "public" / "forms.py"
+        ).read_text()
+        assert 'f.field_type != "member_lookup"' in source
 
 
 class TestTheStaffingReadAgreesWithTheWrite:
@@ -2099,3 +2114,64 @@ class TestTheStaffingReadAgreesWithTheWrite:
         state = await get_staffing_state(AsyncMock(), request)
 
         assert state["shift_id"] is None
+
+
+class TestTheConfiguredEventDurationIsBounded:
+    """`resolve_confirmed_end` feeds this into `timedelta(minutes=...)`, which
+    raises OverflowError for a large enough value — a 500 on every attempt to
+    schedule or postpone a request with no explicit end time."""
+
+    @staticmethod
+    def _org(minutes):
+        return SimpleNamespace(
+            id=ORG_ID,
+            settings={"events": {"defaults": {"default_duration_minutes": minutes}}},
+        )
+
+    def test_an_unrepresentable_duration_falls_back(self):
+        from app.services.event_request_service import event_duration_minutes
+
+        # The value that raises: `timedelta(minutes=10**20)` is an OverflowError.
+        assert event_duration_minutes(self._org(10**20)) == 60
+
+    def test_a_merely_absurd_duration_falls_back_too(self):
+        """Bounded, not just guarded against the overflow — a duration past the
+        cap would otherwise push the event centuries out without raising."""
+        from app.schemas.event import MAX_EVENT_DURATION_MINUTES
+        from app.services.event_request_service import event_duration_minutes
+
+        assert event_duration_minutes(self._org(MAX_EVENT_DURATION_MINUTES + 1)) == 60
+
+    def test_the_cap_itself_is_accepted(self):
+        from app.schemas.event import MAX_EVENT_DURATION_MINUTES
+        from app.services.event_request_service import event_duration_minutes
+
+        assert (
+            event_duration_minutes(self._org(MAX_EVENT_DURATION_MINUTES))
+            == MAX_EVENT_DURATION_MINUTES
+        )
+
+    def test_ordinary_durations_are_unaffected(self):
+        from app.services.event_request_service import event_duration_minutes
+
+        assert event_duration_minutes(self._org(90)) == 90
+
+    def test_scheduling_with_an_absurd_setting_no_longer_raises(self):
+        from app.services.event_request_service import resolve_confirmed_end
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        end = resolve_confirmed_end(start, None, None, self._org(10**20))
+
+        assert end == start + timedelta(minutes=60)
+
+    def test_the_settings_schema_refuses_it_at_the_boundary(self):
+        from app.schemas.event import MAX_EVENT_DURATION_MINUTES, EventDefaultsUpdate
+
+        with pytest.raises(ValidationError):
+            EventDefaultsUpdate(default_duration_minutes=MAX_EVENT_DURATION_MINUTES + 1)
+        assert (
+            EventDefaultsUpdate(
+                default_duration_minutes=MAX_EVENT_DURATION_MINUTES
+            ).default_duration_minutes
+            == MAX_EVENT_DURATION_MINUTES
+        )

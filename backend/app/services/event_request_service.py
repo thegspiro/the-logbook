@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.user import Organization, User
+from app.schemas.event import MAX_EVENT_DURATION_MINUTES
 from app.utils.outreach_roles import (
     MAX_TOTAL_SEATS,
     normalize_staffing_roles,
@@ -114,7 +115,16 @@ def event_duration_minutes(org: Optional[Organization]) -> int:
         minutes = int(stored.get("default_duration_minutes", fallback))
     except (TypeError, ValueError):
         return fallback
-    return minutes if minutes > 0 else fallback
+    # Bounded above as well as below. `resolve_confirmed_end` feeds this into
+    # `timedelta(minutes=...)`, which raises OverflowError for a large enough
+    # value — a 500 on every attempt to schedule or postpone a request with no
+    # explicit end time. `EventDefaultsUpdate` now refuses such a value at the
+    # boundary, but this reader still has to cope with one an older build
+    # already stored, which is the same reason the rest of this function reads
+    # defensively.
+    if minutes <= 0 or minutes > MAX_EVENT_DURATION_MINUTES:
+        return fallback
+    return minutes
 
 
 def public_daily_limit(pipeline: dict) -> int:
