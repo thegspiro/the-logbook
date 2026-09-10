@@ -769,3 +769,105 @@ submissions`/`training_waivers`/`training_enhancements`/
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ all passed (no new backend test needed — no code change, doc-only fix) |
 | `cd frontend && npx tsc --noEmit`                                                                                 | ✅ 0 errors (no frontend file changed this pass)                          |
 | `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                                               |
+
+---
+
+## Pass 4 (2026-09-10)
+
+**Prefix:** `TRX4`
+
+**Scope check:** diffed the current tree against `7455d6708` (the pass-3
+merge commit for PR #2223) across all fifteen declared artifacts (the
+twelve feature files, `training_program_service.py`, `schemas/training.py`,
+and `frontend/src/utils/apiCache.ts`) — **zero** backend changes; the only
+touch is 37 added lines in `apiCache.ts`. A broader glob
+(`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
+`services/*training*`, `services/course_*`, `schemas/*training*`, wider
+than this feature's own file list, to catch anything a stale declared list
+would miss) additionally returns `api/v1/endpoints/training.py` and
+`services/training_compliance.py` — both Feature 17's (Training core) own
+files, matched only because the glob is name-based, and already reviewed
+by that feature's own pass 4 (PR #2455, TR4-1..TR4-4, merged
+2026-09-10T11:28:16Z). Confirmed by name against this feature's twelve-file
+list: neither matches.
+
+### Re-verification of pass 1-3 fixes
+
+Re-read the current code directly for each (not re-cited from the doc);
+every one is unchanged, consistent with the zero-diff scope check above:
+
+- **TRX-1** — `training_program_service.py`'s batch `User` lookup in the
+  prerequisite-gate error path still filters `User.organization_id`.
+- **TRX-2 / TRX-5 / TRX-5b** — `update_provider`, `CourseCohortService.
+update_cohort`, and `CourseSyllabusService.update_class` all still route
+  through `apply_updates`.
+- **TRX-3 / TRX2-1** — `get_effectiveness_evaluations` still calls
+  `can_view_officer_training_data` and confines non-officers to their own
+  `user_id`; `get_evaluations` still accepts and applies the parameter.
+- **TRX-4** — `_get_cohort_class` still takes `cohort_id`, threaded into
+  both `reschedule_class`/`cancel_class` before any write.
+- **TRX-6** — `training_waivers.py` still calls `assert_all_in_org` on
+  `requirement_ids` (create and update).
+- **TRX-7** — `training_submission_service.py` still calls `assert_in_org`
+  on `category_id` (create and update).
+- **TRX-8** — `RecertificationService._validate_references` (and the
+  sibling `_validate_references` methods in the same module — `Instructor
+QualificationService`, `TrainingEffectivenessService`,
+  `MultiAgencyService`) still exist and are still called from create/update.
+- **TRX-9** — `MultiAgencyService`'s own `_validate_references` still calls
+  `assert_in_org` (allow_none) on `training_session_id`/`training_record_id`.
+- **TRX-10** — `XAPIService.ingest_statement`'s `_provider_validated` flag
+  and `ingest_batch`'s once-per-batch validation are both still present and
+  wired as before.
+
+### TRX4-1 — Corrects pass 2's own "verified good" claim — `/training/instructors/validate/{user_id}/{course_id}` is no longer left cacheable, closed outside this rotation
+
+Pass 2 (TRX2-1's write-up) explicitly checked this endpoint against the
+`UNCACHEABLE_PREFIXES` sweep and recorded it as "echoes back only a boolean
+the caller-supplied `user_id` already implies" and therefore correctly left
+cacheable. That premise no longer holds as a reason to leave it cacheable:
+`frontend/src/utils/apiCache.ts:64` now carries
+`'/training/instructors/validate/'` with the comment "a named member's
+qualification verdict" — added by an unrelated, later pass
+(`ae423afa3`, "Fix two data-leakage findings: separation reports, response
+cache", 2026-09-07), not by this feature's own rotation. Read the response
+shape directly (`InstructorQualificationService.validate_instructor` /
+its schema) to confirm the addition is correct rather than assuming it:
+the response is not a bare boolean — it carries the instructor's
+qualification detail keyed to the named `user_id` in the URL, which is the
+same per-member PII shape `/training/instructors/qualifications` (already
+excluded, one line above) exists for. This pass's own re-check of every
+GET route in the feature's fifteen artifacts against the current
+`UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` list found no further gap.
+
+**Disposition:** documentation-only correction — the code was already
+fixed, by a different security-review pass, outside this feature's own
+scope. No further code change needed here; this entry retires pass 2's
+stale "correctly left cacheable" claim for this one route.
+
+### Verified good ✅ (pass 4, not previously stated this way)
+
+- **`docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry is
+  current and needs no correction from this pass.** Re-read in full: it
+  already reflects `external_training_service.py`'s closure (TRX3-1) and
+  `push_service.py`'s independent closure, both re-verified there as of
+  pass 3, and the remaining six-site count matches the file's own content
+  today (five via `create_integration_client`, one — `audit_ship_service.py`
+  — with its own client construction). Nothing in this feature's own file
+  set is on that list.
+- **No new endpoint, model, or migration touches any training-extended
+  table since pass 3** — confirmed via the zero-diff scope check above
+  rather than inferred from a diff-stat alone.
+
+## Completion gate (pass 4)
+
+| Check                                                                                                             | Result                                                               |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (feature scope)                                                                     | ✅ 0 violations (no Python file changed this pass)                   |
+| `black --check` (feature scope)                                                                                   | ✅ unchanged                                                         |
+| `isort --check-only` (feature scope)                                                                              | ✅ clean                                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head `0533644945cd`                         |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1086 passed, 1 skipped (pre-existing optional-dependency skip)    |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors (no frontend file changed this pass)                     |
+| `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                                          |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 88 passed (no frontend file changed this pass; re-run to confirm) |

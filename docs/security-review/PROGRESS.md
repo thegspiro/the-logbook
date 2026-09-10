@@ -16,6 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 18 (Training extended), pass 4** — opened as a pull request from
+`claude/friendly-babbage-0mo420` (this watchdog session's designated
+branch, not a fresh `claude/security-review-<feature>` branch — the
+rotation had gone quiet for ~4h19m since PR #2455's merge with no new
+branch for Feature 18, so a watchdog iteration started the pass directly,
+the same "Step 0 went quiet" pattern Feature 16's own pass 4 and the
+2026-09-09 watchdog pass both document below). Zero-diff scope check
+against pass 3's merge (`7455d6708`): only `frontend/src/utils/apiCache.ts`
+changed among this feature's fifteen declared artifacts, and that change
+was made by an unrelated pass. One doc correction (TRX4-1, retiring a
+stale pass-2 "verified good" claim); all ten pass-1 and one pass-2 finding
+re-verified intact. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
+18 → `⏳`. PR number to be recorded here once opened.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455), preserved for history</summary>
+
 **None.** PR [#2455](https://github.com/thegspiro/the-logbook/pull/2455)
 (Feature 17, Training core, pass 4) merged clean via squash, merge commit
 `569348ef`, all 17 CI checks green including Playwright E2E and CI
@@ -12654,7 +12672,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
