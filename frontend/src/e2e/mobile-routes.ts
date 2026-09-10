@@ -180,23 +180,52 @@ export const ALL_ROUTES: RouteCheck[] = [
   // what stood between them and a budget of 0. That is done, and they are
   // listed.
   //
-  // Three remain unlisted, for three different reasons, each measured rather
-  // than assumed:
+  // The six /scheduling/admin/settings sections below are the fourth, and they
+  // are the screen this note used to describe as unlistable. Every number it
+  // carried was a guess and the guess was low: "17 controls under 44px, mostly
+  // toggle-track". Measuring it once the two ErrorBoundary crashes and the one
+  // overflow were fixed — earlier categories mask the tap budget — gave 80,
+  // spread 11, 16, 11, 17, 22 and 3, and none of them was a toggle. They were
+  // bare checkboxes whose wrapping label was 20px tall, 21x16 "Edit" links,
+  // 26-36px chips and a few 20px text buttons: a sweep of nine patterns rather
+  // than one utility, which is what the entries below now stand on.
   //
-  // /scheduling/admin/settings/* is now measured rather than guessed at, and
-  // the guess was low. Its two ErrorBoundary crashes are fixed and its one
-  // overflow is fixed, which is what let the pass reach the category behind
-  // them: 80 controls under 44px across the six sections — 11, 16, 11, 17, 22
-  // and 3 — where the note here used to say 17 for the screen. They are not
-  // toggle-track (that is 44px now); they are bare checkboxes with no wrapping
-  // label, 16px icon buttons, 20px text links and 26-36px chips, which is a
-  // sweep of its own rather than one utility.
+  // `general` and `platoons` render the same panel today. Both are listed
+  // anyway — they are separate addresses, and a divergence between them is
+  // something to measure rather than to assume away.
+  { path: '/scheduling/admin/settings/general', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  { path: '/scheduling/admin/settings/apparatus', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  { path: '/scheduling/admin/settings/platoons', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
+  {
+    path: '/scheduling/admin/settings/eligibility',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+  },
+  {
+    path: '/scheduling/admin/settings/notifications',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+  },
+  {
+    path: '/scheduling/admin/settings/shift-reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: SCHEDULING_ADMIN,
+  },
+  // Two remain unlisted, for two different reasons, each measured rather than
+  // assumed:
   //
   // /communications/email-templates is two-thirds done: its four list filters
   // are 44px now and its breadcrumb no longer overflows 320px, both fixed here.
   // What is left is a heading-order jump — the shell's <h1>, then <h3> group
   // headers with an <h4> beneath them — which is a heading hierarchy to
-  // re-level across the page and its list, not a control to resize.
+  // re-level across the page and its list, not a control to resize. The six
+  // sections above had the near side of the same defect (h1 straight to a card's
+  // <h3>) and it was fixed the way every other settings screen does it, with a
+  // SettingsPanelHead <h2> opening the panel; email-templates needs more than
+  // that, because its <h4>s have to move too.
   //
   // The events and department-setup panels are a different problem entirely:
   // they render inside a hub route rather than at a path of their own, so there

@@ -1130,6 +1130,25 @@
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
 }
 
+@utility mobile-touch-row {
+  /* The same 44px minimum for a control shaped like a row rather than a button:
+     a <label> wrapping a checkbox, which is how form-checkbox above says a bare
+     checkbox should get its target.
+
+     `mobile-touch-target` is the wrong tool there for exactly one reason, and it
+     is worth naming because it is the obvious thing to reach for: its
+     `justify-center` centres a row that should read from the left, beside the
+     box the label belongs to.
+
+     The min-width is *not* the difference, though a first draft of this said so
+     — "the row is as wide as the panel anyway". Most of these rows are, and one
+     is not: the `Req` label in PositionListEditor sits inline beside a select
+     and measures about 40px. The tap rule is `height < 44 || width < 44`, so it
+     still counted. Set both here; on a full-width row the min-width costs
+     nothing. */
+  @apply flex min-h-[44px] min-w-[44px] items-center;
+}
+
 @utility touch-target-phone {
   /* #21a The 44px touch minimum, applied on phones only.
      `mobile-touch-target` above enforces it at every width, which is right for

@@ -139,6 +139,29 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // 2026-08-23 and 2026-09-07 notes in CLAUDE.md), not one this screen makes on
   // its own. Call sites are held to AA by policy.
   '/members/admin/settings/tiers': 1,
+  // The scheduling settings sections, measured the first time they went on the
+  // pass. Every node is a shared status colour rather than a decision these
+  // screens make: `text-*-700` on a matching `/10` tint (the required, optional
+  // and apparatus-position badges), `text-theme-text-muted` on
+  // `bg-theme-surface-hover`, the `text-violet-600` action links, and white on
+  // `bg-violet-600`. All AA-clean — this file asserts that at zero — and short
+  // of 7:1. Shift Reports is absent because it measures zero.
+  //
+  // Apparatus is 123 for one reason: it lists every apparatus and resource type
+  // the department has and each row carries three or four of those badges. It is
+  // the same handful of tokens counted many times over, not a screen with a
+  // palette problem of its own.
+  //
+  // General and Platoons are 6 rather than the 5 they first measured, and the
+  // extra one is a fix rather than a regression: the "Safety" badge beside EVOC
+  // enforcement failed AA at emerald-700 and clears it at emerald-800, which
+  // moves it out of the asserted count and into this one — exactly what the
+  // audit log's amber-800 severity badges did five entries above.
+  '/scheduling/admin/settings/general': 6,
+  '/scheduling/admin/settings/apparatus': 123,
+  '/scheduling/admin/settings/platoons': 6,
+  '/scheduling/admin/settings/eligibility': 3,
+  '/scheduling/admin/settings/notifications': 17,
   '/admin/analytics': 1,
   '/grants': 12,
   '/reports': 8,

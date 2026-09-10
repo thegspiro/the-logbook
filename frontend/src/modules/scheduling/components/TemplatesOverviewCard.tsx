@@ -26,7 +26,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
         <h3 className="text-theme-text-primary text-base font-semibold">Shift Templates</h3>
         <button
           onClick={onNavigateToTemplates}
-          className="text-sm text-violet-600 hover:underline dark:text-violet-400"
+          className="mobile-touch-target text-sm text-violet-600 hover:underline dark:text-violet-400"
         >
           Manage templates
         </button>

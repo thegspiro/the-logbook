@@ -18,7 +18,8 @@ import type { ShiftSettings } from '../types/shiftSettings';
 import { BUILTIN_POSITIONS } from '../types/shiftSettings';
 import { getCachedShiftSettings, loadShiftSettings, shiftSettingsService } from '../services/shiftSettingsApi';
 import type { SettingsTab } from './schedulingSettingsSections';
-import { LOCALLY_SAVED_SECTIONS } from './schedulingSettingsSections';
+import { LOCALLY_SAVED_SECTIONS, SCHEDULING_SETTINGS_SECTIONS } from './schedulingSettingsSections';
+import SettingsPanelHead from '../../../components/settings/SettingsPanelHead';
 import { SchedulingNotificationsPanel } from './SchedulingNotificationsPanel';
 import { TemplatesOverviewCard } from './TemplatesOverviewCard';
 import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
@@ -190,8 +191,23 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
     }
   };
 
+  const section = SCHEDULING_SETTINGS_SECTIONS.find((s) => s.key === activeTab);
+
   return (
     <div className="space-y-6">
+      {/* SettingsLayout renders the page's <h1> and nothing else, so a body that
+          opens on a card's <h3> leaves the document going h1 → h3. axe reported
+          that on five of the six sections the first time this screen was
+          audited; it had been there all along, behind the crash and the tap
+          budget that were failing first.
+
+          The h2 is what every other settings screen puts here — SettingsPage and
+          ElectionsSettingsPage both open each panel with this same component —
+          and it is not a duplicate of the shell's subtitle, which is the fixed
+          "Department-wide scheduling defaults". Shift Reports gains a heading it
+          simply never had. */}
+      {section && <SettingsPanelHead title={section.label} description={section.description} />}
+
       {/* ─── General Tab ─── */}
       {activeTab === 'general' && (
         <div className="space-y-6">
@@ -206,10 +222,21 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   platoon rosters on shifts.
                 </p>
               </div>
+              {/* `!!` on every aria-checked in this panel, and it is load-bearing.
+                  These flags are typed `boolean`, but the type is an assertion
+                  about a wire format, not a check of one: a response that omits
+                  the field leaves `undefined`, and React drops an attribute set
+                  to undefined entirely. A `role="switch"` with no `aria-checked`
+                  is not announced as off — it is announced with no state at all,
+                  while the track beside it paints a confident "off" from the same
+                  undefined. Coercing makes what a screen reader hears and what
+                  the pixels say come from one truthiness test. axe caught three
+                  of these the first time this screen was audited. */}
               <button
                 type="button"
                 role="switch"
-                aria-checked={platoonsEnabled}
+                aria-label="Platoon scheduling"
+                aria-checked={!!platoonsEnabled}
                 disabled={savingPlatoonToggle}
                 onClick={() => {
                   void handleTogglePlatoons(!platoonsEnabled);
@@ -283,7 +310,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={feature.auto_generate_enabled}
+                  aria-label="Automatic shift generation"
+                  aria-checked={!!feature.auto_generate_enabled}
                   disabled={savingFeature}
                   onClick={() => {
                     void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled });
@@ -357,7 +385,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={feature.require_end_of_shift_checks}
+                  aria-label="Require end-of-shift equipment checks"
+                  aria-checked={!!feature.require_end_of_shift_checks}
                   disabled={savingFeature}
                   onClick={() => {
                     void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks });
@@ -412,7 +441,12 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <div>
                   <p className="text-theme-text-primary text-sm font-medium">
                     Enforce EVOC for drivers
-                    <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    {/* emerald-800, not the -700 this started at: axe measured
+                        the -700 against the tinted pill behind it at under
+                        4.5:1, and at 10px there is no large-text exemption to
+                        fall back on. -800 with -400 in dark is the pairing the
+                        rest of the app's status badges already use. */}
+                    <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-400">
                       Safety
                     </span>
                   </p>
@@ -426,7 +460,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   type="button"
                   role="switch"
                   aria-label="Enforce EVOC for drivers"
-                  aria-checked={feature.enforce_evoc}
+                  aria-checked={!!feature.enforce_evoc}
                   disabled={savingFeature}
                   onClick={() => {
                     void saveFeature({ enforce_evoc: !feature.enforce_evoc });
@@ -447,7 +481,8 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={feature.restrict_checkin_to_assigned}
+                  aria-label="Restrict check-in to assigned members"
+                  aria-checked={!!feature.restrict_checkin_to_assigned}
                   disabled={savingFeature}
                   onClick={() => {
                     void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned });
@@ -652,7 +687,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               void handleReset();
             }}
             disabled={saving}
-            className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors disabled:opacity-50"
+            className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target text-sm transition-colors disabled:opacity-50"
           >
             Reset to defaults
           </button>

@@ -69,7 +69,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
           {BUILTIN_POSITIONS.map((pos) => (
             <label
               key={pos.value}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2.5 transition-colors ${
+              className={`mobile-touch-row cursor-pointer gap-2 rounded-lg border p-2.5 transition-colors ${
                 settings.enabledPositions.includes(pos.value)
                   ? 'border-violet-500/30 bg-violet-500/5'
                   : 'border-theme-surface-border bg-theme-surface-hover/30'
@@ -95,7 +95,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
             {settings.customPositions.map((cp) => (
               <div
                 key={cp.value}
-                className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center justify-between rounded-lg border p-2.5"
+                className="bg-theme-surface-hover/50 border-theme-surface-border mobile-touch-row justify-between rounded-lg border p-2.5"
               >
                 <div className="flex items-center gap-2">
                   <input
@@ -139,7 +139,7 @@ export const PositionNamesCard: React.FC<PositionNamesCardProps> = ({
           <button
             onClick={addCustomPosition}
             disabled={!newPositionLabel.trim() || allPositionOptions.some((p) => p.value === newPositionValue)}
-            className="shrink-0 rounded-lg bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mobile-touch-target shrink-0 rounded-lg bg-violet-600 px-4 text-sm text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Add Position
           </button>
