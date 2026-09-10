@@ -443,11 +443,24 @@ Stores post-onboarding tasks:
 
 **Solution**: Ensure password has:
 
-- At least 12 characters
+- At least 12 characters, and no more than 128
 - One uppercase letter
 - One lowercase letter
 - One number
 - One special character
+
+Those five are not the whole rule, and the three below are what usually rejects
+a password that appears to satisfy the list. It must also contain:
+
+- no three sequential characters (`123`, `abc`, …) and no character repeated
+  three times in a row
+- no keyboard pattern — `qwerty`, `asdfgh`, `zxcvbn`, `qazwsx`, `qweasd`,
+  `!@#$%^`, `1qaz2wsx`, `1234qwer`, `asdf1234`
+- nothing on the common-password list, which includes fire-service words
+  (`firefighter`, `station`, `medic`, `ambulance`) as well as the usual ones
+
+The response lists every rule the password broke, not just the first. Full
+contract: [`docs/ONBOARDING_FLOW.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/ONBOARDING_FLOW.md#create-admin-user).
 
 ### Database Connection Failed
 

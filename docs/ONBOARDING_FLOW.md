@@ -1090,13 +1090,25 @@ System Owner position, and writes an audit-log entry.
 still receives a 400, so the full contract is:
 
 - at least `PASSWORD_MIN_LENGTH` characters (12 by default) and no more than
-  `PASSWORD_MAX_LENGTH`
+  `PASSWORD_MAX_LENGTH` (128)
 - at least one uppercase letter, one lowercase letter, one number and one
-  special character
-- not a common password, and not built from sequential or repeated characters
+  special character — each class is separately configurable
+  (`PASSWORD_REQUIRE_UPPERCASE` and its three siblings) and all four are on by
+  default
+- no three sequential characters anywhere in it (`123`, `abc`, …) and no
+  character repeated three times in a row
+- no keyboard pattern anywhere in it: `qwerty`, `asdfgh`, `zxcvbn`, `qazwsx`,
+  `qweasd`, `!@#$%^`, `1qaz2wsx`, `1234qwer`, `asdf1234`
+- not a common password. This one is an **exact match** against a fixed list,
+  not a substring test like the two above, and the list includes
+  department-flavoured entries (`firefighter`, `station`, `medic`, `ambulance`)
+  alongside the usual ones
 - where the breached-password check is configured, not present in the breach
   corpus. That check **fails open** — an outage skips it rather than blocking a
   password change (see the Attack Protection table in CLAUDE.md)
+
+Every failed rule is reported at once: a password breaking more than one comes
+back as `Password requirements not met (N issues): …` with the whole list.
 
 This is the one bootstrap call that creates the administrator, so a rejection
 here has no signed-in user to retry it.
@@ -1177,18 +1189,18 @@ Body: {
 
 `config` is typed as a free dict by the schema, so nothing validates its keys on
 the way in. `_email_settings_from_onboarding()` maps **exact camelCase** names;
-anything it does not recognise — a snake_case guess, say — is dropped silently,
-and `missing_for_enabled()` then rejects the write for a field the caller
-believes it sent.
+anything it does not recognise — a snake_case guess, say — is dropped silently.
+On `gmail`, `microsoft` and `selfhosted` the write is then rejected for a field
+the caller believes it sent; on `cloudflare` it is not (see below).
 
-| Platform     | Keys                                                                                                                                          |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| all          | `fromEmail`, `fromName`                                                                                                                       |
-| `gmail`      | `googleAppPassword`                                                                                                                           |
-| `microsoft`  | `microsoftAuthMethod`, and for OAuth `microsoftTenantId`, `microsoftClientId`, `microsoftClientSecret`; for basic auth `microsoftAppPassword` |
-| `selfhosted` | `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword`, `smtpEncryption`                                                                      |
-| `other`      | none — see below                                                                                                                              |
-| `cloudflare` | `cloudflareAccountId`, `cloudflareApiToken`                                                                                                   |
+| Platform     | Keys                                                                                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| all          | `fromEmail`, `fromName`                                                                                                                                                           |
+| `gmail`      | `googleAppPassword`                                                                                                                                                               |
+| `microsoft`  | `microsoftAuthMethod` (`"app_password"` or `"oauth"`), and for OAuth `microsoftTenantId`, `microsoftClientId`, `microsoftClientSecret`; for `app_password` `microsoftAppPassword` |
+| `selfhosted` | `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword`, `smtpEncryption`                                                                                                          |
+| `other`      | none — see below                                                                                                                                                                  |
+| `cloudflare` | `cloudflareAccountId`, `cloudflareApiToken`                                                                                                                                       |
 
 Do **not** put `enabled` or `platform` inside `config`. The mapper never reads
 them: `platform` is the top-level field, and enablement is derived as
@@ -1210,10 +1222,29 @@ On `selfhosted` only `smtpHost` and `fromEmail` are required. `smtpUsername` and
 configuration, but a username without a password is rejected — that combination
 means a credential was not restored rather than one that was never needed.
 
-Note the asymmetry: these are the wire names, while `missing_for_enabled()`
-reports a missing field by its **stored** snake_case name (`from_email`,
-`microsoft_tenant_id`, `smtp_host`), so the field named in a 400 is not spelled
-the way the caller sent it.
+`microsoftAuthMethod` takes exactly `"app_password"` or `"oauth"`. Omitting it
+means App Password — every Microsoft row written before OAuth existed carries no
+method, so absence has to keep authenticating the way it always did. Any other
+value is refused with a 400 rather than stored, because every reader treats an
+unrecognised method as App Password and the settings schema each read rebuilds
+through rejects it, which would lock the organization out of the screen that
+could fix it.
+
+**`cloudflare` is not checked at all.** `missing_for_enabled()` covers the
+preset platforms (`gmail`, `microsoft`) and `selfhosted`; `cloudflare` falls
+through it and returns nothing missing. So a non-empty `cloudflare` config whose
+keys were all dropped — snake_case guesses, or a typo — is accepted, reported as
+saved, and persisted **enabled** with no account ID and no API token. Nothing
+surfaces until mail fails to send. `invalid_for_enabled()` is narrower still: it
+only judges the Microsoft OAuth tenant and client IDs.
+
+**The 400 does not name a key in either spelling.** `save_email_config` passes
+the field `missing_for_enabled()` returns through `required_field_message()`,
+which renders it as prose from a label table — `smtp_host` becomes
+`Enabling selfhosted email requires an SMTP host. Enter it, or leave email
+disabled.` A caller who guessed snake_case therefore gets a message that names
+neither `smtpHost` nor `smtp_host`, so nothing in the response points at the key
+they should have sent. Match the label back to the table above to find it.
 
 What actually stores mail settings. Passwords and API keys inside `config` are
 encrypted with AES-256 before they are written; only `platform` is kept in plain
