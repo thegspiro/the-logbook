@@ -1,5 +1,29 @@
 # Screenshot currency
 
+## Disposition for September 10, 2026 — toggle switches grew a 44px hit target
+
+Queued, not yet shot. `toggle-track` (`frontend/src/styles/index.css`) went from a
+24px-tall painted pill (`h-6`) to a 44px-tall border box around the same 24px
+paint, so every row using `SettingsToggle` — or anything else styled with
+`toggle-track` / `toggle-track-sm` / `toggle-track-md` — is up to 20px taller
+wherever the switch is the row's tallest element. The pill itself is
+pixel-identical; nothing here is a color or edge finding `audit_images.py`
+would catch, which is why it ran clean (568/568 filled, no new baseline
+findings) on this rebase and still needs a human queue entry.
+
+`SettingsToggle` / `toggle-track` appear in at least: `EmailSettingsSection`,
+`ElectionsSettingsPage`, `MembershipIdSection`, `ContactVisibilitySection`,
+`SchedulingNotificationsPanel`, `ShiftSettingsPanel`, `CallTypesCard`,
+`PipelineSection`, `EmailSection` (events settings), `UserSettingsPage`,
+`VisibilityControl` (member profile), `MfaPolicyCard`, `AdminMetricsSettings`,
+and `ItemFormModal`. That reaches settings screens across guides 01, 03, 04,
+08 and 10, plus the member-profile visibility panel — a capture pass is needed
+to tell which of those rows actually pictured a switch as the tallest element
+(and so shifted) versus one already taller from its own label/description text
+(and so didn't move at all). Re-run `capture.mjs` for the affected guides and
+diff against the current images before recapturing; do not recapture on the
+assumption alone.
+
 ## Disposition for September 8, 2026 — Operational Ranks and EVOC Levels moved into Members Administration
 
 **Resolved 2026-09-09.** All three items below are recaptured; nothing from
