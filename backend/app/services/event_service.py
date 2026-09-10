@@ -1475,7 +1475,39 @@ class EventService:
             # the event at all was already refused above, before this function
             # touched the session.)
             requested_seats = 1 + effective_guest_count
-            if occupied_seats + requested_seats > event.max_attendees:
+            would_fit = occupied_seats + requested_seats <= event.max_attendees
+
+            # EV-24: a member resubmitting an RSVP that is *already* waitlisted
+            # (editing notes, say) reaches this same capacity check the modal
+            # uses for a first-time RSVP — but this isn't one, and a plain
+            # "does my own party fit" question ignores the party queued ahead
+            # of them. promote_from_waitlist never promotes anyone while an
+            # earlier, ever-admissible party is still waiting, even one that
+            # does not currently fit (see "Whoever is first in line stays
+            # first in line" above); this write has to honor the same rule; or
+            # a member further back whose party happens to be small enough for
+            # today's gap could resubmit and slip in ahead of someone who has
+            # been waiting longer for those same seats.
+            queue_jump = False
+            if (
+                would_fit
+                and existing_rsvp is not None
+                and old_status == RSVPStatus.WAITLISTED.value
+            ):
+                with self.db.no_autoflush:
+                    earlier_result = await self.db.execute(
+                        select(EventRSVP.id)
+                        .where(EventRSVP.event_id == str(event_id))
+                        .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+                        .where(EventRSVP.id != existing_rsvp.id)
+                        .where(EventRSVP.responded_at < existing_rsvp.responded_at)
+                        .where(1 + EventRSVP.guest_count <= event.max_attendees)
+                        .limit(1)
+                        .with_for_update()
+                    )
+                queue_jump = earlier_result.first() is not None
+
+            if not would_fit or queue_jump:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
 

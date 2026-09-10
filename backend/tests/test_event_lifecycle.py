@@ -571,6 +571,151 @@ class TestEventRSVP:
         assert err2 is None
         assert rsvp2.status.value == "waitlisted"
 
+    async def test_resubmitting_a_waitlisted_rsvp_cannot_jump_the_queue(
+        self, db_session, setup_org_and_users
+    ):
+        """EV-24: editing an already-waitlisted RSVP (e.g. its notes) must not
+        promote it ahead of an earlier-queued party, even when its own smaller
+        party happens to fit the current gap.
+
+        Reproduces the exact scenario from the finding: two seats are free,
+        the head of the queue needs three (too big to fit yet), and a member
+        further back with a one-person party resubmits without changing
+        anything. Before the fix, the bare capacity check let the smaller
+        party through because it only asked "does *my* party fit" — never
+        "is anyone ahead of me". promote_from_waitlist itself never does
+        this (it always fetches the earliest fitting row first), so this
+        write path has to honor the same order.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        user3_id = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, "
+                "last_name, email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+            ),
+            {
+                "id": user3_id,
+                "org": org_id,
+                "un": "bwilson",
+                "fn": "Bob",
+                "ln": "Wilson",
+                "em": "bwilson@test.com",
+                "pw": "hashed",
+            },
+        )
+        await db_session.flush()
+
+        svc = EventService(db_session)
+        event = await svc.create_event(
+            event_data=_make_event_create(
+                title="Contested Waitlist Event",
+                requires_rsvp=True,
+                max_attendees=3,
+                allow_guests=True,
+            ),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+
+        # user1 takes the whole roster with a party of three.
+        rsvp1, err1 = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=2),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err1 is None
+        assert rsvp1.status.value == "going"
+
+        # user2 (the eventual head of the queue) also needs three seats and
+        # is waitlisted -- queued first.
+        rsvp2, err2 = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user2_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=2),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err2 is None
+        assert rsvp2.status.value == "waitlisted"
+
+        # user3 asks for a single seat while the roster is still full and is
+        # waitlisted too -- queued second, behind user2.
+        rsvp3, err3 = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user3_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err3 is None
+        assert rsvp3.status.value == "waitlisted"
+
+        # Force the two waitlisted rows' queue order deterministically, since
+        # both were inserted within the same test and MySQL's clock
+        # resolution should not be what this test depends on.
+        await db_session.execute(
+            text(
+                "UPDATE event_rsvps SET responded_at = :ts "
+                "WHERE user_id = :uid AND event_id = :eid"
+            ),
+            {
+                "ts": datetime.now(timezone.utc) - timedelta(minutes=10),
+                "uid": user2_id,
+                "eid": event.id,
+            },
+        )
+        await db_session.execute(
+            text(
+                "UPDATE event_rsvps SET responded_at = :ts "
+                "WHERE user_id = :uid AND event_id = :eid"
+            ),
+            {
+                "ts": datetime.now(timezone.utc) - timedelta(minutes=5),
+                "uid": user3_id,
+                "eid": event.id,
+            },
+        )
+        await db_session.flush()
+
+        # user1 shrinks their own party down to one, freeing two seats. This
+        # triggers the automatic promotion loop, which correctly refuses to
+        # promote user2 (still too big for a two-seat gap) and leaves both
+        # waitlisted -- exactly the "two seats free" precondition the finding
+        # describes.
+        rsvp1_again, err1b = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=0),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err1b is None
+        assert rsvp1_again.status.value == "going"
+
+        # user2 must still be waitlisted -- promotion correctly skipped them,
+        # since a party of three does not fit a two-seat gap.
+        rsvp2_check = await db_session.execute(
+            text(
+                "SELECT status FROM event_rsvps WHERE user_id = :uid AND event_id = :eid"
+            ),
+            {"uid": user2_id, "eid": event.id},
+        )
+        assert rsvp2_check.scalar_one() == "waitlisted"
+
+        # user3 resubmits their own already-waitlisted RSVP without changing
+        # anything meaningful. Their one-seat party fits the two-seat gap on
+        # its own, but user2 is still queued ahead of them and is
+        # ever-admissible (three fits the event's own cap of three) -- so
+        # this must NOT be promoted to "going" out of turn.
+        rsvp3_again, err3b = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user3_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err3b is None
+        assert rsvp3_again.status.value == "waitlisted"
+
 
 # ── Attendance Tests ────────────────────────────────────────────────
 

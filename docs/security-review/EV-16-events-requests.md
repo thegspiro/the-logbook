@@ -13,6 +13,306 @@ read, extracted from `event_requests.py`)
 
 ---
 
+## Pass 4 (2026-09-10) — 1 fix (EV-24, P2), EV-23 re-flagged, full re-verification against pass 3
+
+**Scoped since pass 3's merge:** `7af79795` (PR #2216). Diffed the nine
+files pass 3 declared, plus a fresh grep across every backend file changed
+in range for `from app.models.event import` / `from app.models.event_request
+import` / `EventService(` / `EventRequestService` / `event_request_service.`
+— none found beyond the declared surface, so this pass's "nothing else
+touches these models" claim is checked, not assumed (the EC-14/SCH-15
+lesson pass 2/3 both cite).
+
+**Five of the nine changed:** `events.py` (+94/-19), `schemas/event.py`
+(+11), `event_service.py` (+36/-9, before this pass's own fix),
+`forms_service.py` (+257/-30, a Forms-module deadlock-retry fix — see
+below). `event_requests.py`, `event_request_service.py`,
+`models/event.py`, `models/event_request.py`, `schemas/event_request.py`
+are **byte-identical** to pass 3 (`git diff --stat` confirms). No new
+migration touches `events`, `event_requests`, or `event_rsvps`
+(`git diff --name-only` against `alembic/versions/`, then grepped each
+changed file's content — not filename — for the three table names; zero
+hits, matching the SCH-15-pass-2-established discipline of not trusting a
+migration's filename to say what it touches).
+
+**The whole non-fix diff is one feature, read in full: member/manager-visible
+event organizer names.** `events.py` gained `_resolve_display_names` /
+`_names_to_resolve` (batched, org-scoped `User` lookup keyed by response
+field so the organizer and the finalizer don't collapse onto one another) and
+wired `created_by_name` onto `GET /{event_id}` and
+`get_check_in_monitoring_stats` (an `outerjoin` constrained to
+`creator.organization_id == Event.organization_id`, so a `created_by`
+pointing outside the org resolves to no name rather than naming a
+stranger). Both gate the field the same way: `get_event`'s `created_by_name`
+resolves only for a caller holding `events.manage`
+(`_names_to_resolve` — the gate lives server-side because this endpoint's
+response is cached client-side, so a field withheld only in JSX would still
+ship to every member); `get_check_in_monitoring_stats` sits entirely behind
+its own `events.manage`-gated route, so presence alone is the only condition
+worth checking there. `_build_event_response` never populates
+`created_by_name` at any of its other six call sites (`list_events`,
+`create_event`, `update_event`, `duplicate_event`, `cancel_event`,
+`finalize_attendance`, `end_event`) — confirmed by grep, not inferred — so
+the field defaults to `None` everywhere except the one gated detail read.
+Frontend: `EventDetailPage.tsx`, `EventCheckInMonitoringPage.tsx`,
+`EventCheckInModal.tsx`, `EventOverrideAttendanceModal.tsx` thread the same
+string through as a plain prop with no independent fetch; the check-in
+monitoring page also gained a full-response shape guard (rejects a payload
+missing any required field rather than rendering blank totals) and switched
+its QR-check-in-data fetch to `_skipCache: true` (a staleness fix — the
+90s stale-while-revalidate window could show a closed check-in window as
+still open — not a security change). No new endpoint, no new unauthenticated
+route, no change to any org-scoping or permission gate. **Verified good, no
+finding.**
+
+`forms_service.py`'s diff is the Forms module's own deadlock-retry fix for
+`submit_public_form` (an InnoDB gap-lock collision between two first-ever
+submissions to two _different_ no-repeat forms, same shape as FAC-45/MSG-13)
+— it touches `_process_integrations`'s caller, the function this feature's
+`_process_event_request` hooks into, but not that hook itself. Owned by the
+Forms feature's own rotation entry, not re-litigated here; confirmed by
+reading it that the retry loop re-runs `get_form_by_slug` and the intake
+guards but calls `_process_integrations` (and therefore
+`_process_event_request`) at most once per successful commit, so this
+feature's intake path is not exposed to a double-processed submission by the
+retry.
+
+### Route inventory re-run from scratch (AST walk, not diff)
+
+56/56 routes in `events.py` (one more than pass 3's stated "55/55" — no
+`@router` line was added or removed since `7af79795`, so this is pass 3's
+count being off by one, not a regression; re-verified by grepping `@router\.`
+occurrences directly) and 23/23 in `event_requests.py`, both matching the
+prior passes' route sets exactly. Every route's `Depends(...)` and
+`require_permission(...)`/`require_all_permissions(...)` arguments extracted
+programmatically and diffed against pass 3's inventory: identical gates
+throughout. No new unauthenticated route. The five public/low-auth routes
+are the same ones prior passes named: `events.py`'s
+`GET /public-calendar` (no dependency); `event_requests.py`'s
+`POST /public` (`_rate_limit_public_request` → `require_captcha`, in that
+order — EV-18's fix re-confirmed still in place), `GET /status/{token}`,
+`POST /status/{token}/cancel`, and `GET /types/labels`.
+
+### Re-verified from pass 3, not re-derived
+
+- **EV-23 still open, unregressed.** `rsvp_to_series` still passes
+  `override=True` unconditionally to every occurrence
+  (`event_service.py:1777`), with the same comment claiming a confirmation
+  that does not exist anywhere in the series path. Confirmed no frontend or
+  backend change since pass 3 touches this — `event_service.py`'s diff this
+  round is entirely the organizer-name feature above, nowhere near
+  `rsvp_to_series`. Left **FLAGGED**, unchanged from pass 3's reasoning
+  (a series spanning multiple training phases has no single-valued "the"
+  warning without a product decision on which occurrence it warns for).
+- **`ondelete="SET NULL"` nullability** — re-grepped all 8 such FKs across
+  `models/event.py` and `models/event_request.py`; all `nullable=True`.
+- **No `.like()`/`.ilike()` anywhere in this feature's four backend files** —
+  re-confirmed by grep.
+- **No CSV export** — `import_events_csv` remains an import
+  (`csv.DictReader`), not an export; `SafeCsvWriter` does not apply.
+- **RSVP capacity locking, both halves of Pitfall #27**, re-read at their
+  current line numbers in `create_or_update_rsvp` and `promote_from_waitlist`
+  — event-row lock, then a locking capacity read, before the waitlist
+  decision, at both sites.
+- **Events-specific MCP tools** (`app/mcp/tools/events.py`,
+  `app/mcp/tools/writes.py`) — byte-identical to pass 3 (`git diff --stat`),
+  no re-read needed.
+- **Frontend banned-pattern sweep** re-run over the 24 files that changed
+  since pass 3 (`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`,
+  the three banned `.toLocale*` methods, a `date-fns` import, a direct
+  `fetch(` call, `localStorage`) — zero hits beyond the same two
+  already-sanctioned `EventsPage.tsx` filter-preset uses pass 2 named.
+
+## Findings (pass 4)
+
+### EV-24 — P2 (fairness/ordering, not tenancy or capacity-correctness) — resubmitting an already-waitlisted RSVP could promote it ahead of an earlier-queued party — ✅ FIXED
+
+**What:** flagged, not fixed, in pass 3. `create_or_update_rsvp`'s capacity
+check only ever asked "does _this_ party fit the current gap" — including
+when `existing_rsvp` was already `WAITLISTED` and the member was merely
+resubmitting (editing notes, e.g., via the modal's prefilled reopen).
+`promote_from_waitlist` itself never promotes anyone while an earlier,
+ever-admissible party is still queued, even one that does not currently fit
+("first in line stays first in line" — the queue query's own
+comment/test), but the direct-resubmission path never asked that question
+at all.
+
+**Where:** `app/services/event_service.py`, `create_or_update_rsvp`
+(capacity-decision block, was `event_service.py:1477-1480` at pass 3).
+
+**Failure scenario:** an event caps at 3 seats. Member A holds all 3 with a
+party of 3 (self + 2 guests). Member B (needing 3 seats) and Member C
+(needing 1) both RSVP "going" while the roster is full and are both
+waitlisted, B first. Member A then shrinks their own party to 1, freeing 2
+seats — the automatic promotion loop correctly checks B (head of the queue,
+needs 3) and refuses, since a 2-seat gap can't hold a 3-seat party, and
+leaves both B and C waitlisted. Member C now reopens their own RSVP modal
+and resubmits without changing anything. Before this fix: their 1-seat party
+fits the 2-seat gap, so the plain capacity check promoted them straight to
+`going` — ahead of B, who has been waiting longer for exactly those seats,
+and whose position the member-facing UI (`user_waitlist_position`) explicitly
+showed as ahead of C's.
+
+**Impact:** LOW/MED, as scoped in pass 3 — a fairness/ordering defect, not a
+tenancy or capacity-correctness one. The event is never oversubscribed by
+this path (C's party still has to fit), and it cannot be triggered by a
+party larger than the actual free capacity. The harm is queue-jumping: a
+member gets promoted out of turn by the accident of reopening their own
+modal, while the person actually next in line keeps waiting with no
+indication anything happened.
+
+**Fix:** when an existing `WAITLISTED` row is being resubmitted with status
+`going` and the plain capacity check would otherwise let it through, a second
+locking read asks whether any _other_ `WAITLISTED` row for the same event has
+an earlier `responded_at` and is ever-admissible
+(`1 + guest_count <= event.max_attendees` — the identical filter
+`promote_from_waitlist`'s own queue query uses, so the two never disagree on
+what "admissible" means). If one exists, the resubmission stays waitlisted;
+the ordinary promotion path decides when it is actually this row's turn.
+Scoped deliberately to _resubmissions of an already-waitlisted row_
+(`existing_rsvp is not None and old_status == "waitlisted"`) — a brand-new
+member's first RSVP taking an open seat is not "jumping" anything, since
+they never held a queue position to skip ahead from; extending the guard to
+new RSVPs would freeze every open seat behind any large waitlisted party
+indefinitely, which is not what was reported and is a materially different
+(and arguably worse) behavior change. The added read only ever runs when the
+plain capacity check would otherwise succeed (`would_fit`), so it costs
+nothing on the already-common "doesn't fit anyway" and "brand-new RSVP"
+paths, and it locks (`with_for_update()`, `no_autoflush`) inside the same
+per-event serialized transaction `create_or_update_rsvp` already holds —
+no new lock-ordering surface, since only one call for a given event can be
+inside this function at a time (Pitfall #22/#27 already covers the class of
+bug a second lock could introduce; this one adds no new lock target beyond
+the `event_rsvps` rows already touched by the existing capacity query).
+
+**Guard tests:**
+`tests/test_event_lifecycle.py::TestEventRSVP::test_resubmitting_a_waitlisted_rsvp_cannot_jump_the_queue`
+reproduces the exact scenario above end-to-end against a real database (3
+users, real capacity/waitlist mechanics, deterministic `responded_at`
+ordering via an explicit `UPDATE`) — confirmed to fail
+(`assert 'going' == 'waitlisted'`) against the pre-fix code and pass with
+it. `tests/test_event_rsvp_waitlist.py::TestResubmittingAWaitlistedRsvpCannotJumpTheQueue`
+(7 cases, mocked DB) covers: the core block: an earlier admissible row
+blocks the resubmission (confirmed to fail pre-fix); no earlier row lets it
+through; an earlier row too big for the _whole event_ does not block
+(mirrors `promote_from_waitlist`'s own admissibility filter); a brand-new
+RSVP never triggers the extra query (asserts the exact query count); editing
+an already-`going` RSVP never triggers it either; a resubmission that
+wouldn't fit regardless skips the query entirely; and a structural check
+(mirroring `TestPromoteFromWaitlist::test_the_queue_query_excludes_parties_
+that_can_never_fit`'s own pattern) that the admissibility filter and the
+`responded_at` ordering clause are actually present in the source, since a
+mocked DB never executes the real SQL predicate — confirmed to fail pre-fix
+(both the core-block test and the structural test).
+
+## Completion gate (pass 4)
+
+| Check                                             | Result                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                            |
+| `black --check app/ tests/ alembic/`              | ✅ 1564 files unchanged                                    |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                   |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head, 441 revisions (no schema change this pass) |
+| `pytest tests/ -k "event"`                        | ✅ 713 passed, 1 skipped (pre-existing), +8 new            |
+| `pytest tests/` (full backend suite)              | ✅ 12065 passed, 21 skipped (pre-existing), 0 failed       |
+| `tsc --noEmit`                                    | ✅ 0 errors                                                |
+| `eslint .`                                        | ⚠️ see note below                                          |
+
+**ESLint note:** a direct `npx eslint .` in this sandbox produced 1382
+warnings, all `@typescript-eslint/no-unsafe-*` — a broad type-resolution
+failure, not a real regression, and not evidence of anything wrong in this
+feature's own files. Investigated rather than dismissed, because CLAUDE.md's
+"Two TypeScript installs" section predicts exactly this symptom from exactly
+this cause: `frontend/package.json` declares the plain `typescript`
+dependency at `7.0.2` (current `main`, `26613a59`), not the `5.9.3` that
+section's table says it should be, and `package-lock.json` confirms the
+`5.9.3` `typescript-eslint` actually type-checks against
+(`node_modules/typescript`) is present **only** as an auto-installed peer
+dependency (`"peer": true` in the lockfile) satisfying `typescript-eslint`'s
+own `<6.1.0` peer range — not as anything any `package.json` in the repo
+explicitly requests. That is the precise shape CLAUDE.md's account of the
+2026-08-17 break describes ("left the linter running on a 5.9.3 that no
+manifest asked for, surviving only as an npm-auto-installed peer"). Whether
+this specific committed lockfile is still regenerable from scratch
+(`rm package-lock.json && npm install`) was **not** tested here — a full
+reinstall against this sandbox's shared `node_modules` is outside this
+feature's scope and risky in a multi-session environment — so this is
+reported as a verified documentation/manifest mismatch with the same
+symptom shape as the prior break, not as a confirmed repeat of it. The most
+recent CI run on `main` (`26613a59`, the exact commit this pass branched
+from) shows **"Frontend Lint, Typecheck & Build" green** — `npm ci` against
+the current, already-resolved lockfile works today regardless of how that
+resolution happened. Confirmed no Events & Requests file participates in the
+underlying divergence: the events-owned frontend diff for this pass
+(`EventDetailPage.tsx`, `EventCheckInMonitoringPage.tsx`, the two attendance
+modals, the two skeleton/breadcrumb-only page diffs) contains no banned
+pattern by direct grep, independent of ESLint's type-aware rules — and
+`tsc --noEmit` (which resolves the aliased `typescript-native` compiler
+explicitly via `scripts/tsc-native.mjs`, sidestepping this exact ambiguity)
+ran clean.
+
+## Flagged for owner decision (unchanged from pass 3)
+
+### EV-23 — P2 — series RSVP never shows the training phase-gate warning it claims to have already confirmed — OPEN, re-verified unregressed
+
+No code change since pass 3; see pass 3's write-up above for the full
+scenario and recommendation. `docs/KNOWN_LIMITATIONS.md`'s existing EV-23
+entry still applies unchanged.
+
+## New, cross-cutting (not an Events & Requests finding — flagged for the
+
+## owner / a dedicated pass, not fixed here)
+
+### `frontend/package.json`'s `typescript` declaration no longer matches CLAUDE.md's documented arrangement
+
+**What:** CLAUDE.md's "Two TypeScript installs" section requires the plain
+`typescript` dependency to stay at `5.9.3` (what `typescript-eslint` can
+actually type-check against) with `typescript-native` carrying the newer
+compiler under an alias, and states that arrangement is what keeps the
+lockfile regenerable. `frontend/package.json` (current `main`, `26613a59`)
+instead declares `"typescript": "7.0.2"` directly — the same version that
+section's own account says broke this arrangement on 2026-08-17 — and
+`package-lock.json`'s workspace entry for `frontend` agrees (`"typescript":
+"7.0.2"`, matching `package.json` exactly, so the two are not out of sync
+with each other). The `5.9.3` that `typescript-eslint` actually runs
+against is real and present in the lockfile
+(`frontend/node_modules/typescript` nests `7.0.2` for frontend's own
+declared need; the top-level `node_modules/typescript` resolves `5.9.3`
+marked `"peer": true`) — but that `5.9.3` is there only because npm
+auto-installed it to satisfy `typescript-eslint`'s `<6.1.0` peer range,
+not because any manifest asks for it by name. That is the exact shape
+CLAUDE.md's account of the prior break describes.
+
+**Where:** `frontend/package.json:77` (declaration);
+`package-lock.json:11029` and `:211` (the two resulting resolutions).
+
+**Not confirmed broken today, and not necessarily a regression at all** — a
+fresh `npm install` from this exact `package.json`/`package-lock.json` pair
+was not attempted (see the completion-gate note above for why), so whether
+it would reproduce the 2026-08-17 ERESOLVE failure, or successfully nest the
+same way the current lockfile already does, is unverified either way. CI's
+`npm ci` against the committed lockfile is green. It is possible this is a
+deliberate, working step toward eventually dropping the alias (both
+`typescript` and `typescript-native` now request the same `7.0.2`) rather
+than an accidental drift — but if so, CLAUDE.md's documented table and its
+"the plain `typescript` moves only when the linter's cap does" rule are now
+describing an arrangement the manifest no longer follows, which is itself
+worth reconciling one way or the other.
+
+**Not an Events & Requests defect** — cross-cutting frontend tooling, and CI
+is currently green on `main` (a fresh `npm ci` there does not (yet)
+reproduce the local symptom this pass hit), so this is not blocking. But it
+is exactly the regression CLAUDE.md predicts one Dependabot bump away from
+recurring, and a `package.json`/`package-lock.json` pair in this state is
+one `npm install`/lockfile regeneration away from becoming un-regenerable.
+**Flagged, not fixed here** — out of scope for a single-feature
+security-review PR, and the correct fix (pin `typescript` back to `5.9.3`
+in `package.json`, per CLAUDE.md's own rule "the plain `typescript` moves
+only when the linter's cap does") touches shared tooling config, not this
+feature's code. Mirrored in `docs/KNOWN_LIMITATIONS.md`.
+
+---
+
 ## Pass 3 (2026-09-04) — Codex follow-up, two rounds: 4 fixes (3 P1), 2 flagged, 1 scope correction
 
 **PR:** [#2213](https://github.com/thegspiro/the-logbook/pull/2213) merged
