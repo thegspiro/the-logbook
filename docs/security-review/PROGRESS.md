@@ -81,7 +81,25 @@ sub-paths were excluded, by a trailing-slash prefix), and returns
 `config.additional_headers`, which can carry an integration auth token;
 an existing test asserted the gap (`isCacheable() === true`) rather than
 merely missing coverage of it — dropped the trailing slash so the shorter
-prefix covers the bare list too, and corrected that test. Full write-up:
+prefix covers the bare list too, and corrected that test. **A fifth Codex
+review round found the same underlying-read gap TRX4-2 already fixed once,
+this time on `GET /multi-agency` (TRX4-4's own route) — making a route
+uncacheable stops stale retention, not the unauthorized first read.**
+**TRX4-6** (MEDIUM, real fix) — gated with the same
+`require_permission("training.view_all", "training.manage")` OR-gate as
+TRX4-2; its only frontend consumer is reachable only through the
+`training.manage`-gated `/training/admin` route. Guard test
+(`test_multi_agency_endpoint_permissions.py`, 6 tests). **TRX4-7**
+(MEDIUM, real fix, same round) — TRX4-5 stopped the provider _list_ from
+being cached, but every route serializing `ExternalTrainingProviderResponse`
+still returned `config.additional_headers` verbatim — a response-shape
+gap, not a caching one. Added a `field_validator` to the response schema
+only (write schemas unaffected) that redacts every header value while
+keeping keys visible. Guard test
+(`test_external_provider_header_redaction.py`, 4 tests, including one
+asserting the raw secret string never appears in the serialized JSON).
+Two real fixes total across this round (TRX4-6, TRX4-7); full backend
+suite re-run clean after both. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).

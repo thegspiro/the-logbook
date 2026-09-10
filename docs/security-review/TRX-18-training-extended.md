@@ -1043,6 +1043,53 @@ bare-prefix pattern already used for `/training/waivers`, `/messages`,
 list. Updated the pre-existing test to assert `false` instead of `true`,
 and added a sub-path case alongside it.
 
+### TRX4-6 — MEDIUM (XC-2) — `GET /multi-agency` had no permission gate at all
+
+**Caught by a Codex review round on this pass's own PR**, verifying
+TRX4-4's own fix: making the route uncacheable stops stale browser
+retention, not the initial unauthorized read. `get_multi_agency_exercises`
+(`training_enhancements.py:445-459`) depended only on `get_current_user`,
+while its sibling POST/PATCH routes on the same resource already require
+`training.manage`. The response carries exactly the contact-PII/member-id/
+free-text shape TRX4-4 documents. Its only frontend consumer
+(`MultiAgencySection`, `TrainingEnhancementsTab.tsx`) is reachable only
+through the `training.manage`-gated `/training/admin` route — confirmed by
+reading the frontend call graph, not assumed. Same class as TRX4-2 and
+TRX4-6's own POST/PATCH siblings.
+
+**Fix:** gated with `Depends(require_permission("training.view_all", "training.manage"))`,
+matching the OR-gate TRX4-2 already established in this same file. Guard
+test added: `test_multi_agency_endpoint_permissions.py` (6 tests, same
+`_permission_set`/`PermissionChecker.__call__` pattern as TRX4-2's).
+
+### TRX4-7 — MEDIUM (data exposure) — `additional_headers` values were returned verbatim on every provider response
+
+**Also caught by a Codex review round on this pass's own PR**, in the same
+verification pass as TRX4-6: TRX4-5 made the provider _list_ uncacheable,
+but every route serializing `ExternalTrainingProviderResponse`
+(`GET /providers`, `GET /providers/{id}`, and the create/update responses)
+still returned `config.additional_headers` — an admin-defined, arbitrary-
+keyed header map — verbatim. The schema's own comment already states
+"api_key, api_secret, client_secret are never returned for security"; that
+convention only covered the fixed credential fields, not this open-ended
+dict, even though its stated purpose (a custom header some LMS
+integrations require outside the dedicated `api_key`/`api_secret` fields)
+makes a stored credential a plausible value. Traced whether anything
+internal currently reads this field for outbound requests — nothing does
+(`grep -rn additional_headers app/` outside the schema itself returns
+nothing) — so this is a defense-in-depth fix for what an admin could type
+into the field today, not a fix for an active internal consumer.
+
+**Fix:** added a `field_validator("config", mode="after")` to
+`ExternalTrainingProviderResponse` (only — `ExternalProviderConfig` itself,
+shared with the Create/Update schemas, is untouched, so real values still
+round-trip for storage) that replaces every `additional_headers` value with
+a fixed `••••••••` marker while keeping the keys, so the admin UI can still
+show which headers are configured. Guard tests added:
+`test_external_provider_header_redaction.py` (4 tests, including one
+asserting the raw secret string never appears in the model's serialized
+JSON).
+
 ### Verified good ✅ (pass 4, not previously stated this way)
 
 - **No new endpoint, model, or migration touches any training-extended
@@ -1053,15 +1100,17 @@ and added a sub-path case alongside it.
 
 ## Completion gate (pass 4)
 
-| Check                                                                                                             | Result                                                         |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/` (feature scope + new test file)                                                     | ✅ 0 violations                                                |
-| `black --check` (feature scope + new test file)                                                                   | ✅ clean                                                       |
-| `isort --check-only` (feature scope + new test file)                                                              | ✅ clean                                                       |
-| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)               |
-| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                                     |
-| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ passed, including the new permission-guard tests            |
-| `pytest tests/` (full backend suite)                                                                              | ✅ 12294 passed, 21 skipped (pre-existing), 0 failed           |
-| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                    |
-| `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                    |
-| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test) |
+| Check                                                                                                             | Result                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (feature scope + new test files)                                                    | ✅ 0 violations                                                                                                                                                                |
+| `black --check` (feature scope + new test files)                                                                  | ✅ clean                                                                                                                                                                       |
+| `isort --check-only` (feature scope + new test files)                                                             | ✅ clean                                                                                                                                                                       |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)                                                                                                                               |
+| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                                                                                                                                                     |
+| `pytest tests/test_multi_agency_endpoint_permissions.py -v`                                                       | ✅ 6 passed (new, TRX4-6)                                                                                                                                                      |
+| `pytest tests/test_external_provider_header_redaction.py -v`                                                      | ✅ 4 passed (new, TRX4-7)                                                                                                                                                      |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1094 passed, 1 skipped (pre-existing), including all new guard tests                                                                                                        |
+| `pytest tests/` (full backend suite)                                                                              | ✅ re-run locally after TRX4-6/TRX4-7 (previous full run: 12294 passed, 21 skipped, 0 failed); CI's own Backend Unit/Integration jobs are the authoritative gate for this push |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                                                                                                                                    |
+| `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                                                                                                                                    |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test)                                                                                                                 |

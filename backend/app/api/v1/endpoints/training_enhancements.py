@@ -449,7 +449,7 @@ async def get_multi_agency_exercises(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("training.view_all", "training.manage")),
 ):
     """Get multi-agency training exercises"""
     service = MultiAgencyService(db)
