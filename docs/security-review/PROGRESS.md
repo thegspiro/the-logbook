@@ -16,6 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2473](https://github.com/thegspiro/the-logbook/pull/2473)
+(Feature 19, Skills testing, pass 4) merged clean via squash, merge commit
+`4c4253cc0`, all 17 CI checks green, both Codex reviews (Code Review,
+Security Review) resolved with no outstanding findings on the final
+commit, `mergeable_state: "clean"`. Merged directly by a 30-minute
+watchdog check (fully green, Codex-clean, idle since the last push).
+Rotation row 19 is now `✅`. Next: Feature 20 (Compliance).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 4, PR #2473, before the merge), preserved for history</summary>
+
 **Feature 19 (Skills testing), pass 4** — PR
 [#2473](https://github.com/thegspiro/the-logbook/pull/2473), branch
 `claude/friendly-babbage-pud8rg` (this watchdog session's designated
@@ -194,6 +205,8 @@ skipped (pre-existing) — up from 405 before round 4's guard tests; frontend
 `typecheck`/`lint` both clean and unaffected (no frontend file touched any
 round). Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473
 until merged, then Feature 20 (Compliance).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, now merged), preserved for history</summary>
@@ -12966,7 +12979,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
