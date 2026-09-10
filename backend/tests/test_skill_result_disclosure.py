@@ -113,6 +113,34 @@ class TestPolicyResolution:
         )
         assert (disclosure, release) == ("scores", "on_release")
 
+    def test_a_stored_unrecognised_disclosure_fails_closed(self):
+        """SKT4-5 follow-up: the write-time schema validators stop a *new* bad
+        value, but cannot fix a row written before they existed. Without this,
+        redact_test_for_view's fall-through treats anything that is not
+        literally "pending"/"scores" as full disclosure — fail open on
+        corrupted data. The safe default is the most restrictive tier."""
+        disclosure, _ = resolve_disclosure_policy(
+            _test(result_disclosure="Full"), None, None
+        )
+        assert disclosure == ResultDisclosure.NONE.value
+
+    def test_a_stored_unrecognised_release_fails_closed(self):
+        """An unrecognised release value must not behave as immediate release
+        — the safe default requires an explicit release action instead."""
+        _, release = resolve_disclosure_policy(
+            _test(result_release="on-release"), None, None
+        )
+        assert release == ResultRelease.ON_RELEASE.value
+
+    def test_an_unrecognised_value_from_any_source_fails_closed(self):
+        """The corrupted value can come from the test, the template, or the
+        organization default — the fail-closed check must not only guard the
+        test's own override."""
+        disclosure, _ = resolve_disclosure_policy(
+            _test(), _template(result_disclosure="fulll"), None
+        )
+        assert disclosure == ResultDisclosure.NONE.value
+
 
 class TestWhoCanSee:
     def test_officer_always_sees_everything(self):
@@ -423,3 +451,39 @@ class TestVoidedBeforeValidation:
         test = self._voided(validated_at=None)
         assert _view(test, user_id=EXAMINER) == ResultDisclosure.FULL.value
         assert _view(test, is_officer=True) == ResultDisclosure.FULL.value
+
+    def test_redaction_hides_the_void_trail_too_not_just_the_score(self):
+        """The view alone is not the whole fix: `redact_test_for_view`'s
+        pending branch has to actually scrub the withdrawal, or a candidate
+        reading "pending" still sees status="voided" plus the officer's
+        reason and name — exactly the disclosure resolve_result_view exists
+        to prevent for this case."""
+        payload = {
+            "status": "voided",
+            "result": "pass",
+            "overall_score": 91.0,
+            "notes": "solid run",
+            "section_results": [{"section_id": "section-0"}],
+            "score_breakdown": {"percentage": 91.0},
+            "void_reason": "Candidate self-scored — result cannot stand",
+            "voided_at": "2026-09-10T00:00:00Z",
+            "voided_by": "user-officer",
+            "voided_by_name": "Dana Ruiz",
+        }
+
+        redacted = redact_test_for_view(payload, RESULT_VIEW_PENDING)
+
+        assert redacted["status"] != "voided"
+        assert redacted["void_reason"] is None
+        assert redacted["voided_at"] is None
+        assert redacted["voided_by"] is None
+        assert redacted["voided_by_name"] is None
+        # And the ordinary pending redaction still applies alongside it.
+        assert redacted["overall_score"] is None
+        assert redacted["result"] == "incomplete"
+
+    def test_redaction_leaves_the_void_trail_alone_for_a_full_view(self):
+        """A previously-validated void is disclosable, and full view must
+        change nothing — this guard is specific to the pending branch."""
+        payload = {"status": "voided", "void_reason": "Equipment failure"}
+        assert redact_test_for_view(payload, "full") == payload

@@ -904,6 +904,23 @@ def resolve_disclosure_policy(
         )
         or ResultRelease.ON_COMPLETION.value
     )
+
+    # SKT4-5 follow-up: the write-time validators in app/schemas/skills_testing.py
+    # stop a *new* bad value from being saved, but cannot retroactively fix a
+    # row written before they existed (a pre-fix bug, a direct DB edit, a
+    # migration mistake). Without this, a stored value outside the known enum
+    # reaches redact_test_for_view's fall-through, which treats anything that
+    # isn't literally "pending"/"scores" as full disclosure, and reaches the
+    # release check below, which treats anything that isn't literally
+    # "on_release" as immediate release — both fail open. Fail closed here
+    # instead: an unrecognised disclosure reads as the most restrictive tier,
+    # an unrecognised release mode reads as the one that requires an explicit
+    # release rather than exposing immediately.
+    if disclosure not in {e.value for e in ResultDisclosure}:
+        disclosure = ResultDisclosure.NONE.value
+    if release not in {e.value for e in ResultRelease}:
+        release = ResultRelease.ON_RELEASE.value
+
     return disclosure, release
 
 
@@ -1030,7 +1047,11 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
     Mutates nothing the caller passed in: section results are rebuilt rather
     than edited, so the ORM's loaded JSON is never touched (Pitfall #12).
     """
-    from app.models.skills_testing import ResultDisclosure, SkillTestResult
+    from app.models.skills_testing import (
+        ResultDisclosure,
+        SkillTestResult,
+        SkillTestStatus,
+    )
 
     if view == RESULT_VIEW_PENDING:
         withheld = dict(payload)
@@ -1053,6 +1074,20 @@ def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
         # what a test that was never returned carries — so a returned one is
         # indistinguishable from a clean one, which is the point.
         withheld["return_count"] = 0
+        # SKT4-6 follow-up: an unvalidated void reaches this branch too (see
+        # resolve_result_view), but voiding is the one transition among the
+        # pending-reachable ones that both changes ``status`` to a value a
+        # withheld reader must not see and stamps a reason/officer name none
+        # of the fields above touch. Reads as an ordinary awaiting-validation
+        # submission instead — exactly what notify_candidate_result_voided
+        # already treats this state as (it does not even notify), so the read
+        # path stops contradicting it.
+        if withheld.get("status") == SkillTestStatus.VOIDED.value:
+            withheld["status"] = SkillTestStatus.COMPLETED.value
+            withheld["void_reason"] = None
+            withheld["voided_at"] = None
+            withheld["voided_by"] = None
+            withheld["voided_by_name"] = None
         return withheld
 
     if view != ResultDisclosure.SCORES.value:

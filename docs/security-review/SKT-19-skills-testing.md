@@ -745,8 +745,14 @@ main."
 
 **Prefix:** `SKT4` · **PR:** [#2473](https://github.com/thegspiro/the-logbook/pull/2473)
 
-**Scope check:** diffed the current tree against `d5b716ff8` (the pass-3
-merge commit for PR #2230). **Backend: one line changed, in one file.**
+**Scope check (pre-review snapshot — see "round 4" below for what this pass's
+own fixes then added):** diffed the current tree against `d5b716ff8` (the
+pass-3 merge commit for PR #2230), **before this pass made any fix of its
+own.** Everything in this subsection describes that starting point, not the
+merged state of this PR — round 4 below adds real diffs to
+`app/schemas/skills_testing.py` and `app/services/skills_testing_service.py`
+that this snapshot predates. **Backend: one line changed, in one file,** at
+the time this pass started.
 `app/api/v1/endpoints/skills_testing.py` gained the `SEC4-1` fix from
 Feature 00's own pass 4 (`c91060f7a`, "security(cross-cutting): 3 fixes, 0
 flagged") — `email_test_results`'s bare `except Exception as e: ... detail=
@@ -1047,6 +1053,21 @@ rejected on all four schemas, and that the schema's whitelist stays
 identical to the enum (so the two cannot drift apart the way this bug's
 absence let them).
 
+**Round 5 follow-up — write-time validation alone was not the whole fix.**
+Codex correctly pointed out that the four new `field_validator`s only stop a
+_new_ bad value from being saved; they do nothing for a row already written
+before the validators existed (a pre-fix bug, a direct DB edit, a migration
+mistake), and `resolve_disclosure_policy` still read such a value verbatim.
+**Fixed** by failing closed at resolution time too: `resolve_disclosure_policy`
+now checks its resolved `disclosure`/`release` against the same enum
+membership and substitutes the most restrictive safe default —
+`ResultDisclosure.NONE.value` for an unrecognised disclosure,
+`ResultRelease.ON_RELEASE.value` (requires an explicit release rather than
+exposing immediately) for an unrecognised release — regardless of which of
+the three sources (test, template, org config) the bad value came from. Three
+new guard tests in `TestPolicyResolution` cover a corrupted test-level
+disclosure, a corrupted release value, and a corrupted template-level value.
+
 ### SKT4-6 — MED — voiding an unvalidated test disclosed it in full to the candidate — ✅ FIXED
 
 `void_test` overwrites `test.status` to `SkillTestStatus.VOIDED.value`
@@ -1072,6 +1093,26 @@ nobody ever accepted is protected. Five guard tests added to
 `test_skill_result_disclosure.py`'s new `TestVoidedBeforeValidation` class,
 covering the candidate, a named viewer, the previously-validated
 counter-case, and that the examiner/officer are unaffected.
+
+**Round 5 follow-up — the view alone was not the whole fix.** Codex correctly
+pointed out that `_build_test_response` populates `status`, `void_reason`,
+`voided_at`, `voided_by`, and `voided_by_name` from the raw test row
+unconditionally, and `redact_test_for_view`'s `pending` branch — the one this
+fix routes an unvalidated void through — clears `result`/`overall_score`/
+`section_results`/`notes`/etc. but never touched any of those five fields. A
+candidate reading the pending view of a voided-unvalidated test would still
+see `status="voided"` plus the officer's reason and name, which is exactly
+what this finding exists to prevent and exactly what `notify_candidate_result_voided`
+already refuses to disclose. **Fixed** by extending `redact_test_for_view`'s
+`pending` branch: when the withheld payload's `status` is `voided`, it is
+rewritten to `completed` (an ordinary awaiting-validation submission, not a
+tell) and the four void-specific fields are cleared, same as the ordinary
+pending fields already were. Scoped to the `pending` branch only — a
+previously-validated void reaching `full` view is unaffected, since that
+withdrawal is legitimately disclosable. Two new tests: one drives a full
+voided payload through `redact_test_for_view` directly and asserts every
+void field is scrubbed alongside the ordinary pending redaction, one asserts
+a `full`-view payload is untouched.
 
 ### SKT4-7 — MED — `PUT /tests/{id}` lets a member-examiner set `status`/`result`/`overall_score` directly, bypassing `complete_test` — OPEN / FLAGGED
 
@@ -1120,7 +1161,19 @@ outright — **SKT4-2** (`PUT /tests/{id}`'s result arrays, member-reachable,
 same shape as SKT4-1) and **SKT4-3** (`GET /summary`'s small-cohort
 disclosure) — plus a scope gap in **SKT3-2** (below), which covered only
 `GET /tests` when `GET /tests/export/csv` shares the identical unbounded-query
-root cause.
+root cause. Round 4: three real code bugs (SKT4-4, SKT4-5, SKT4-6, all fixed
+— see each finding's own section), plus SKT4-1/SKT4-2/SKT3-2 all widened
+again (`checklist_items`, `result_viewer_positions` and its create route,
+`GET /templates`), and one more flagged finding (SKT4-7). Round 5: SKT4-5's
+and SKT4-6's round-4 fixes were each real but incomplete — SKT4-5 validated
+new writes but left a stored legacy value fail-open, SKT4-6 hid the score
+but left the void's own status/reason/officer-name visible — both closed
+with a second, narrower fix (see each finding's "Round 5 follow-up"). Also
+round 5: this section's own "Backend: one line changed" scope-check claim
+was, without qualification, read as describing the merged state rather than
+the pre-review starting point — annotated in place rather than reworded,
+since it is an accurate description of that starting point and the
+qualification is what was missing, not the claim itself.
 
 ### SKT3-2 — LOW/MED — `GET /tests`, `GET /tests/export/csv`, and `GET /templates` have no pagination or result cap — still OPEN / FLAGGED
 
@@ -1188,6 +1241,19 @@ with its own guard tests:
   `RESULT_VIEW_PENDING` for an unvalidated void, a previously-validated void
   still discloses normally, and the examiner/officer are unaffected (SKT4-6).
 
+Round 5 found each of SKT4-5 and SKT4-6's first fixes was incomplete, not
+wrong — both closed with a second, narrower fix and two more guard tests
+apiece:
+
+- `test_skill_result_disclosure.py`'s `TestPolicyResolution` — three new
+  tests: a corrupted test-level disclosure, a corrupted release value, and a
+  corrupted template-level disclosure all fail closed through
+  `resolve_disclosure_policy` (SKT4-5 follow-up).
+- `test_skill_result_disclosure.py`'s `TestVoidedBeforeValidation` — two new
+  tests: `redact_test_for_view` scrubs `status`/`void_reason`/`voided_at`/
+  `voided_by`/`voided_by_name` for a voided payload in the `pending` view,
+  and leaves them alone in `full` view (SKT4-6 follow-up).
+
 The six pre-existing guard test files from passes 1–3 were re-run, not
 re-written.
 
@@ -1199,7 +1265,7 @@ re-written.
 | `black --check app/ tests/ alembic/`              | ✅ 1578 files unchanged (`black==26.5.1`, CI's pin — installed explicitly; a stale `26.3.1` shadowed it on `PATH` via `~/.local/bin`, invoked `/usr/local/bin/black` directly to get the pinned version) |
 | `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==9.0.1`, CI's current pin)                                                                                                                                                              |
 | `python3 scripts/validate_migrations.py --strict` | ✅ 443 revisions, single head `0533644945cd` — no new migration (Pydantic-level validation only, no column/schema change)                                                                                |
-| `pytest tests/ -q -k "skill"`                     | ✅ 428 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 23 new guard tests above                                                                                  |
+| `pytest tests/ -q -k "skill"`                     | ✅ 433 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 28 new guard tests above                                                                                  |
 | `cd frontend && npm run typecheck`                | ✅ 0 errors (unaffected — no frontend file touched this pass)                                                                                                                                            |
 | `cd frontend && npm run lint`                     | ✅ 0 errors, 0 warnings (unaffected — no frontend file touched this pass)                                                                                                                                |
 
@@ -1210,21 +1276,24 @@ consumer outside `app/api/v1/endpoints/skills_testing.py` itself (checked via
 full surface these fixes could affect.
 
 **Final disposition: 3 real code fixes (SKT4-4, SKT4-5, SKT4-6, all MED or
-MED/HIGH), 4 findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing
-finding's scope extended three times over (SKT3-2), across four Codex review
-rounds.** All six pass 1–3 fixes re-verified intact by direct code read. None
-of this pass's "clean"/"no finding" first-draft language survived review
-unchanged — every one of rounds 1 through 4 found something the previous
-draft had gotten wrong or missed outright, including, in round 4, three
-genuine security bugs this and all three prior passes had read past: an
-officer could email a candidate a result the read endpoints were still
-withholding (SKT4-4), a typo in a disclosure-policy field silently granted
-full disclosure instead of being rejected (SKT4-5), and voiding an
-unvalidated submission disclosed it in full rather than staying undisclosed
-like the notification path already assumed (SKT4-6). This pass's actual
-value was almost entirely produced by the review process rather than by the
-original re-verification work — the backend surface itself had exactly one
-line of unrelated change across three prior passes and roughly two weeks,
-and needed four rounds of adversarial review on a "nothing to see here" docs
-PR to surface three real, fixable defects and four more that need a
+MED/HIGH — two of them closed in two steps apiece after round 5 found the
+first fix incomplete), 4 findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1
+existing finding's scope extended three times over (SKT3-2), across five
+Codex review rounds.** All six pass 1–3 fixes re-verified intact by direct
+code read. None of this pass's "clean"/"no finding" first-draft language
+survived review unchanged — every one of rounds 1 through 5 found something
+the previous draft had gotten wrong, missed outright, or (rounds 4→5) fixed
+only halfway: an officer could email a candidate a result the read endpoints
+were still withholding (SKT4-4), a typo in a disclosure-policy field silently
+granted full disclosure instead of being rejected — including one already
+sitting in the database, which round 5 caught the first fix had no answer
+for (SKT4-5) — and voiding an unvalidated submission disclosed it in full
+rather than staying undisclosed like the notification path already assumed,
+where round 5 caught that the first fix hid the score but not the withdrawal
+notice itself (SKT4-6). This pass's actual value was almost entirely produced
+by the review process rather than by the original re-verification work — the
+backend surface itself had exactly one line of unrelated change across three
+prior passes and roughly two weeks, and needed five rounds of adversarial
+review on a "nothing to see here" docs PR to surface three real defects, get
+each genuinely fixed rather than half-fixed, and flag four more that need a
 product/content decision this rotation correctly declined to guess at.

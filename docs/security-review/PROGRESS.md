@@ -134,13 +134,38 @@ three files (one new: `test_skill_result_disclosure_validation.py`). All
 mirrored into `KNOWN_LIMITATIONS.md`; replied to and resolved all seven
 round-4 review threads.
 
-**Final disposition: 3 real code fixes (SKT4-4/5/6), 4 findings flagged
-(SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope extended three
-times over (SKT3-2), across four Codex review rounds.**
+**Round 5 of Codex review found round 4's own two fixes were each real but
+incomplete, not wrong.** **SKT4-5 follow-up (FIXED)** — the four
+`field_validator`s only stop a _new_ bad value from being saved; a row
+written before they existed would still read verbatim through
+`resolve_disclosure_policy` and fail open. Fixed by making
+`resolve_disclosure_policy` itself fail closed: an unrecognised disclosure
+now resolves to `none`, an unrecognised release to `on_release` (requires an
+explicit release rather than exposing immediately), regardless of whether
+the bad value came from the test, the template, or the org default. **SKT4-6
+follow-up (FIXED)** — `_build_test_response` populates `status`/
+`void_reason`/`voided_at`/`voided_by`/`voided_by_name` from the raw row
+unconditionally, and `redact_test_for_view`'s `pending` branch never touched
+any of them, so a candidate reading the pending view of a voided-unvalidated
+test still saw `status="voided"` plus the officer's own reason and name —
+exactly the disclosure the fix was meant to close, and exactly what
+`notify_candidate_result_voided` already refuses to send. Fixed by extending
+that same `pending` branch to rewrite `status` back to `completed` and clear
+the four void-specific fields, scoped to the `pending` branch only (a
+previously-validated void is unaffected). Also, a doc-scope note: the
+findings doc's "Backend: one line changed" scope-check description was
+correct as the pre-review starting point but read, without qualification, as
+describing the merged state — annotated in place. 5 new guard tests. All
+threads replied to and resolved.
+
+**Final disposition: 3 real code fixes (SKT4-4/5/6 — SKT4-5 and SKT4-6 each
+closed in two steps after round 5 caught the first as incomplete), 4 findings
+flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope extended
+three times over (SKT3-2), across five Codex review rounds.**
 
 Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
 `app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
-revisions, single head, no new migration); `pytest -k skill` 428 passed, 1
+revisions, single head, no new migration); `pytest -k skill` 433 passed, 1
 skipped (pre-existing) — up from 405 before round 4's guard tests; frontend
 `typecheck`/`lint` both clean and unaffected (no frontend file touched any
 round). Rotation row 19 → `⏳`. Subscribed to PR activity. Next: tend #2473
@@ -12941,7 +12966,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 
 ## Log
 
-### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across four Codex review rounds
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 3 fixed (SKT4-4/5/6, two closed in two steps), 4 flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), SKT3-2 scope widened three times, across five Codex review rounds
 
 **Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
 Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
@@ -13049,11 +13074,26 @@ routes), and SKT3-2 (`GET /templates`) again, and flagged one new finding,
 new guard tests across three files. All mirrored into `KNOWN_LIMITATIONS.md`;
 replied to and resolved all seven round-4 threads.
 
+**Round 5 found SKT4-5 and SKT4-6's round-4 fixes each real but incomplete.**
+SKT4-5's `field_validator`s only guard new writes — a row written before
+they existed still read through `resolve_disclosure_policy` unchecked, so it
+now also fails closed there (unrecognised disclosure → `none`, unrecognised
+release → `on_release`), regardless of which of the three sources (test,
+template, org default) the bad value came from. SKT4-6's fix hid the score
+but not the withdrawal itself: `_build_test_response` sets `status`/
+`void_reason`/`voided_at`/`voided_by`/`voided_by_name` unconditionally, and
+the `pending` redaction branch never touched them, so a candidate could still
+see `status="voided"` plus the officer's reason and name — now cleared too,
+scoped to that branch only (a previously-validated void is unaffected). Also
+annotated the findings doc's scope-check section as describing the pre-review
+starting point, not the merged state, after Codex flagged it as ambiguous
+post-fix. 5 new guard tests. All threads replied to and resolved.
+
 Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
 (26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,
 invoked `/usr/local/bin/black` directly), `isort --check-only` (9.0.1), all
 clean, all CI's exact pins. `validate_migrations.py --strict`: 443
-revisions, single head, no new migration. `pytest tests/ -q -k skill`: 428
+revisions, single head, no new migration. `pytest tests/ -q -k skill`: 433
 passed, 1 skipped (pre-existing) — up from 405 before round 4's guard tests.
 `npm run typecheck` / `npm run lint`: both 0 errors/warnings, unaffected (no
 frontend file touched any round). Full write-up:
