@@ -142,10 +142,18 @@ REGEX_KEYWORD = re.compile(
 
 
 def _starts_regex(tail: str) -> bool:
-    """True when the `/` about to be read opens a regex rather than divides."""
+    """True when the `/` about to be read opens a regex rather than divides.
+
+    Looks at the preceding *token*, not just the preceding character. `n++ / x`
+    ends in `+`, which is otherwise an operator and so would open a regex — and
+    guessing that way round is the costly one: it blanks real code until the next
+    `/`, which is a blind spot rather than a miss.
+    """
     stripped = tail.rstrip()
     if not stripped:
         return True
+    if stripped.endswith("++") or stripped.endswith("--"):
+        return False  # a postfix or prefix update yields a value
     if stripped[-1] in REGEX_OPENERS:
         return True
     return REGEX_KEYWORD.search(stripped) is not None
@@ -257,9 +265,19 @@ def scan_source(text: str) -> tuple[str, str]:
             continue
 
         if state in ("single", "double", "template", "regex"):
-            if char == "\\" and i + 1 < n and text[i + 1] != "\n":
-                code.append(text[i : i + 2])
-                mask.append("  ")
+            if char == "\\" and i + 1 < n:
+                # A backslash-newline continuation keeps the string open, so the
+                # escape has to be consumed here rather than falling through to
+                # the newline branch below — otherwise a `/*` on the continued
+                # line is read as a comment opener and blanks the rest of the
+                # file. The newline is still emitted, to keep both views aligned
+                # with the original.
+                if text[i + 1] == "\n":
+                    code.append("\\\n")
+                    mask.append(" \n")
+                else:
+                    code.append(text[i : i + 2])
+                    mask.append("  ")
                 i += 2
                 continue
             if char == "\n":
@@ -355,7 +373,13 @@ def normalize_value(value: str) -> str:
     as returning `""` — the caller cannot tell it from a real read — so they are
     compared as one value.
     """
-    return re.sub(r"(['\"`])\s*\1", r"\1\1", value.strip()).strip()
+    text = re.sub(r"(['\"`])\s*\1", r"\1\1", value.strip()).strip()
+    # `void 0` and `void(0)` evaluate to `undefined`, so they are the same
+    # swallow as writing it out. Only the `0` form — `void doWork()` runs the
+    # call, which is a recovery path and must stay unclassified.
+    if re.fullmatch(r"void\s*\(?\s*0\s*\)?", text):
+        return "undefined"
+    return text
 
 
 def is_false_fallback(argument: str) -> bool:
@@ -430,7 +454,106 @@ def catch_argument(mask: str, open_paren: int) -> str:
         elif mask[i] == ")":
             depth -= 1
         i += 1
-    return mask[open_paren + 1 : i - 1]
+    return first_argument(mask[open_paren + 1 : i - 1])
+
+
+# A handler that only writes the failure somewhere and falls through returns
+# `undefined` implicitly, which is a swallow. A handler that does anything else
+# without returning may be recovering, so it is left unclassified.
+LOG_CALL = re.compile(
+    r"^(?:await\s+)?(?:(?:console|logger|log)\s*\.\s*\w+"
+    r"|log|warn|error|debug|info|trace)\s*\("
+)
+
+
+def split_at_depth(text: str, separator: str) -> tuple[str, str] | None:
+    """Split at the first `separator` that is not inside brackets."""
+    depth = 0
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif depth == 0 and text.startswith(separator, i):
+            return text[:i], text[i + len(separator) :]
+        i += 1
+    return None
+
+
+def first_argument(text: str) -> str:
+    """The first argument of a call, from the text between its parentheses.
+
+    JavaScript allows a trailing comma after the last argument, and Prettier
+    writes one whenever it breaks a call across lines. Without this,
+    `.catch(() => null,)` yields `() => null,` and the comma alone made the
+    fallback match nothing.
+    """
+    split = split_at_depth(text, ",")
+    return split[0] if split else text
+
+
+def split_arrow(argument: str) -> tuple[str, str] | None:
+    """(parameters, body) split at the arrow, or None if this is not an arrow.
+
+    The parameter list is balanced rather than matched against a character class.
+    `({ message }) => null` and `(error = undefined) => null` are ordinary
+    handlers whose parameters contain braces and an `=`, and restricting them
+    to word characters, whitespace and commas rejected both before their
+    fallback was ever examined.
+    """
+    body = argument.strip()
+    body = re.sub(r"^async\s+", "", body)
+    split = split_at_depth(body, "=>")
+    if not split:
+        return None
+    params, rest = split[0].strip(), split[1].strip()
+    if params.startswith("(") and params.endswith(")"):
+        return params, rest
+    if re.fullmatch(r"\w*", params):
+        return params, rest
+    return None
+
+
+def returned_expression(block: str) -> str | None:
+    """What a block hands back, or None if it returns nothing.
+
+    The expression is balanced to its terminating `;`. Excluding `}` instead —
+    which is what this did — meant `return {};` stopped at the object's own brace
+    and matched nothing, so the block spelling of a listed swallow value was
+    invisible.
+    """
+    depth = 0
+    found: int | None = None
+    for match in re.finditer(r"\breturn\b|[([{)\]}]", block):
+        token = match.group(0)
+        if token in "([{":
+            depth += 1
+        elif token in ")]}":
+            depth -= 1
+        elif depth == 0:
+            found = match.end()
+    if found is None:
+        return None
+    rest = block[found:]
+    split = split_at_depth(rest, ";")
+    return (split[0] if split else rest).strip()
+
+
+def is_log_only(block: str) -> bool:
+    """True when every statement in the block merely records the failure."""
+    statements = []
+    rest = block
+    while True:
+        split = split_at_depth(rest, ";")
+        if not split:
+            statements.append(rest)
+            break
+        statements.append(split[0])
+        rest = split[1]
+    live = [s.strip() for s in statements if s.strip()]
+    return bool(live) and all(LOG_CALL.match(s) for s in live)
 
 
 def is_swallow(argument: str) -> bool:
@@ -441,11 +564,10 @@ def is_swallow(argument: str) -> bool:
     review rather than guessed at, and one whose body does real work — throws,
     calls something, assigns — is a recovery path.
     """
-    body = argument.strip()
-    match = re.match(r"^(?:async\s+)?\(?[\w\s,]*\)?\s*=>\s*(.*)$", body, re.S)
-    if not match:
+    arrow = split_arrow(argument)
+    if not arrow:
         return False
-    rhs = unwrap_parens(match.group(1))
+    rhs = unwrap_parens(arrow[1])
     if rhs.startswith("{"):
         inner = (rhs[1:-1] if rhs.endswith("}") else rhs[1:]).strip()
         if not inner:
@@ -454,13 +576,17 @@ def is_swallow(argument: str) -> bool:
         # cannot pass for a rethrow and exempt the swallow underneath.
         if re.search(r"\bthrow\b", inner):
             return False  # re-raises: the failure still reaches the caller
+        returned = returned_expression(inner)
+        if returned is None:
+            # No `return` means an implicit `undefined`. That is a swallow when
+            # the block only logs, and unclassified otherwise — `async () => {
+            # await fallback(); }` reaches no return either and is a recovery
+            # path, so this cannot key on the missing return alone.
+            return is_log_only(inner)
         # Any block that ends by handing back a bare value is a swallow, even if
         # it logs on the way. Logging is not reporting: the caller still receives
         # a value indistinguishable from success, which is the whole defect.
-        returned = re.search(r"return\s*([^;}]*)\s*;?\s*$", inner, re.S)
-        if not returned:
-            return False
-        return normalize_value(unwrap_parens(returned.group(1))) in SWALLOW_VALUES
+        return normalize_value(unwrap_parens(returned)) in SWALLOW_VALUES
     return normalize_value(rhs.rstrip(";")) in SWALLOW_VALUES
 
 
@@ -920,6 +1046,96 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
             ]
         )
         assert caught(source) == [2]
+
+    def test_a_postfix_update_is_not_a_regex_opener(self):
+        """`n++ / x` divides. Reading it as a regex blanks code until the next `/`.
+
+        This is the costly direction of the regex guess: a missed swallow is a
+        miss, but code blanked as regex contents is a blind spot — every catch in
+        the window disappears and the gate still reports clean.
+        """
+        source = "\n".join(
+            [
+                "let n = 0;",
+                "const r = n++ / action.catch(() => null) / total;",
+            ]
+        )
+        assert caught(source) == [2]
+        assert not _starts_regex("n++")
+        assert not _starts_regex("i--")
+        assert _starts_regex("const x = ")
+        assert not _starts_regex("total")
+
+    def test_a_backslash_newline_keeps_a_string_open(self):
+        """A line continuation is still inside the string.
+
+        Resetting to code at that newline let the continued line's `/*` open a
+        block comment, which blanked every catch after it — the same EOF blind
+        spot the template-literal fix closed, reached through a different escape.
+        """
+        source = "\n".join(
+            [
+                'const s = "start\\',
+                '  **/api/v1/** tail";',
+                "await one().catch(() => null);",
+                "await two().catch(() => null);",
+            ]
+        )
+        assert caught(source) == [3, 4]
+
+    def test_destructured_and_defaulted_parameters_are_parsed(self):
+        """A parameter list is balanced, not matched against a character class.
+
+        `({ message }) => null` is an ordinary handler; a class of `[\\w\\s,]`
+        rejected it before its fallback was ever looked at.
+        """
+        assert is_swallow("({ message }) => null")
+        assert is_swallow("(error = undefined) => null")
+        assert is_swallow("([first]) => null")
+        assert caught("await x.catch(({ message }) => null);") == [1]
+        # Not an arrow at all: still left to review rather than guessed at.
+        assert not is_swallow("handleIt")
+        assert not is_swallow("thing.handle")
+
+    def test_void_zero_is_undefined(self):
+        """`void 0` yields `undefined`, so it is the same swallow."""
+        assert is_swallow("() => void 0")
+        assert is_swallow("() => void(0)")
+        assert caught("await x.catch(() => void 0);") == [1]
+        # `void doWork()` runs the call — a recovery path, left unclassified.
+        assert not is_swallow("() => void doWork()")
+
+    def test_a_block_returning_an_object_literal_is_caught(self):
+        """`return {};` — the returned expression is balanced, not brace-excluded.
+
+        Excluding `}` meant the expression stopped at the object's own brace, so
+        the block spelling of a value already in SWALLOW_VALUES was invisible.
+        """
+        assert is_swallow("() => { return {}; }")
+        assert is_swallow("() => { log(e); return {}; }")
+        assert is_swallow("() => { return ({}); }")
+        assert caught("await x.catch(() => { return {}; });") == [1]
+
+    def test_a_log_only_block_is_a_swallow(self):
+        """No `return` is an implicit `undefined`, and logging is not reporting.
+
+        It cannot key on the missing return alone: `async () => { await
+        fallback(); }` also reaches no return and is a recovery path. The
+        distinction is whether the block does anything but record the failure.
+        """
+        assert is_swallow("(e) => { console.warn(e); }")
+        assert is_swallow("(e) => { logger.error(e); }")
+        assert caught("await x.catch((e) => { console.warn(e); });") == [1]
+        assert not is_swallow("async () => { await fallback(); }")
+        assert not is_swallow("(e) => { process.exit(1); }")
+
+    def test_a_trailing_comma_after_the_handler_is_ignored(self):
+        """JavaScript allows it, and Prettier writes one when it breaks a call."""
+        assert caught("await x.catch(() => null,);") == [1]
+        assert caught("await x.catch(\n  () => null,\n);") == [1]
+        # A second argument must not be read as part of the first.
+        assert first_argument("() => null, other") == "() => null"
+        assert first_argument("(a, b) => null") == "(a, b) => null"
 
     def test_the_sweep_detects_a_reintroduced_swallow(self):
         """The shape removed from `pageText`, driven through the real path."""
