@@ -87,6 +87,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -135,25 +136,53 @@ PROBE = re.compile(OBSERVATION + r"(?:\s*\.then\(\s*\(\)\s*=>\s*true\s*\))?\s*\.
 # this lists the positions where a regex is certain and treats everything else
 # as division.
 REGEX_OPENERS = set("(,=:[!&|?{};+-*%~^<>")
+
+# A `{` either opens an object literal / class body — whose `}` therefore ends a
+# *value*, so a following `/` divides — or opens a block, after which a `/`
+# starts a regex. `class {} / total` and `if (a) {} /re/.test(s)` differ only in
+# that, so the two cannot be told apart from the `}` alone.
+VALUE_BRACE_KEYWORD = re.compile(
+    r"\b(?:return|typeof|case|in|of|yield|await|new|delete|void|instanceof"
+    r"|class)$|\bextends\s+[\w.$]*$"
+)
 REGEX_KEYWORD = re.compile(
     r"\b(?:return|typeof|case|in|of|delete|void|instanceof|new|do|else|yield"
     r"|await)$"
 )
 
 
-def _starts_regex(tail: str) -> bool:
+def _opens_value_brace(tail: str) -> bool:
+    """True when the `{` about to be read opens an object literal or class body.
+
+    `=>` is checked before `=`: `() => {}` is a function body, a block, while
+    `x = {}` and `f({})` and `return {}` are values.
+    """
+    stripped = tail.rstrip()
+    if stripped.endswith("=>"):
+        return False
+    if stripped and stripped[-1] in set("=(,:[?"):
+        return True
+    return VALUE_BRACE_KEYWORD.search(stripped) is not None
+
+
+def _starts_regex(tail: str, after_value_brace: bool) -> bool:
     """True when the `/` about to be read opens a regex rather than divides.
 
     Looks at the preceding *token*, not just the preceding character. `n++ / x`
     ends in `+`, which is otherwise an operator and so would open a regex — and
     guessing that way round is the costly one: it blanks real code until the next
     `/`, which is a blind spot rather than a miss.
+
+    A trailing `}` is decided by what that brace opened, tracked as the scanner
+    goes: `class {} / total` divides, `if (a) {} /re/.test(s)` does not.
     """
     stripped = tail.rstrip()
     if not stripped:
         return True
     if stripped.endswith("++") or stripped.endswith("--"):
         return False  # a postfix or prefix update yields a value
+    if stripped.endswith("}"):
+        return not after_value_brace
     if stripped[-1] in REGEX_OPENERS:
         return True
     return REGEX_KEYWORD.search(stripped) is not None
@@ -187,6 +216,8 @@ def scan_source(text: str) -> tuple[str, str]:
     depth = 0
     in_class = False
     tail = ""
+    brace_values: list[bool] = []
+    after_value_brace = False
     i, n = 0, len(text)
     while i < n:
         char = text[i]
@@ -217,7 +248,7 @@ def scan_source(text: str) -> tuple[str, str]:
                 mask.append(char)
                 i += 1
                 continue
-            if char == "/" and _starts_regex(tail):
+            if char == "/" and _starts_regex(tail, after_value_brace):
                 state = "regex"
                 in_class = False
                 code.append(char)
@@ -226,7 +257,9 @@ def scan_source(text: str) -> tuple[str, str]:
                 continue
             if char == "{":
                 depth += 1
+                brace_values.append(_opens_value_brace(tail))
             elif char == "}":
+                after_value_brace = brace_values.pop() if brace_values else False
                 if frames and depth == 0:
                     depth = frames.pop()
                     state = "template"
@@ -379,6 +412,36 @@ def normalize_value(value: str) -> str:
     # call, which is a recovery path and must stay unclassified.
     if re.fullmatch(r"void\s*\(?\s*0\s*\)?", text):
         return "undefined"
+    # Any numeric literal, not just `0` and `-1`. `() => 42` is exactly as
+    # uninformative: the caller cannot tell it from a real read, which is the
+    # defect, and enumerating two spellings left every other number through.
+    if re.fullmatch(r"[+-]?(?:\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?n?)", text):
+        return "0"
+    return text
+
+
+def yielded_value(expression: str) -> str:
+    """What an expression hands back, resolving a logging sequence expression.
+
+    `(console.warn(e), null)` yields `null` — the comma operator evaluates every
+    operand and returns the last — so it is the concise spelling of the block that
+    logs and then returns a constant. Only resolved when the discarded operands
+    merely log; `(doWork(), null)` keeps its work and is left unclassified.
+    """
+    text = unwrap_parens(expression)
+    operands: list[str] = []
+    rest = text
+    while True:
+        split = split_at_depth(rest, ",")
+        if not split:
+            operands.append(rest)
+            break
+        operands.append(split[0])
+        rest = split[1]
+    if len(operands) < 2:
+        return text
+    if all(LOG_CALL.match(part.strip()) for part in operands[:-1]):
+        return unwrap_parens(operands[-1])
     return text
 
 
@@ -482,6 +545,24 @@ def split_at_depth(text: str, separator: str) -> tuple[str, str] | None:
     return None
 
 
+def after_matching_paren(text: str, open_paren: int) -> str:
+    """Everything after the `)` that closes the `(` at `open_paren`.
+
+    Not `split_at_depth`: that consumes a bracket as depth before testing it as a
+    separator, so it can never split on `)` itself.
+    """
+    depth, i = 0, open_paren
+    while i < len(text):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[i + 1 :]
+        i += 1
+    return ""
+
+
 def first_argument(text: str) -> str:
     """The first argument of a call, from the text between its parentheses.
 
@@ -511,7 +592,7 @@ def split_arrow(argument: str) -> tuple[str, str] | None:
     params, rest = split[0].strip(), split[1].strip()
     if params.startswith("(") and params.endswith(")"):
         return params, rest
-    if re.fullmatch(r"\w*", params):
+    if re.fullmatch(r"[\w$]*", params):
         return params, rest
     return None
 
@@ -545,7 +626,12 @@ def returned_expressions(block: str) -> list[str]:
 
 
 def is_log_only(block: str) -> bool:
-    """True when every statement in the block merely records the failure."""
+    """True when every statement in the block merely records the failure.
+
+    A guard around the logging does not change that — `if (DEBUG) console.warn(e)`
+    recovers from nothing on either path — so a leading conditional is unwrapped
+    and its body examined, recursing through a braced body.
+    """
     statements = []
     rest = block
     while True:
@@ -556,7 +642,27 @@ def is_log_only(block: str) -> bool:
         statements.append(split[0])
         rest = split[1]
     live = [s.strip() for s in statements if s.strip()]
-    return bool(live) and all(LOG_CALL.match(s) for s in live)
+    return bool(live) and all(_logs_only(s) for s in live)
+
+
+def _logs_only(statement: str) -> bool:
+    """One statement, with any guarding conditional or block peeled away."""
+    text = statement.strip()
+    for _ in range(4):  # nesting deeper than this is left to review
+        if LOG_CALL.match(text):
+            return True
+        guard = re.match(r"^(?:else\s+)?if\s*\(", text)
+        if guard:
+            text = after_matching_paren(text, guard.end() - 1).strip()
+            continue
+        if text.startswith("else"):
+            text = text[len("else") :].strip()
+            continue
+        if text.startswith("{"):
+            inner = text[1:-1] if text.endswith("}") else text[1:]
+            return is_log_only(inner)
+        return False
+    return False
 
 
 def is_swallow(argument: str) -> bool:
@@ -575,26 +681,28 @@ def is_swallow(argument: str) -> bool:
         inner = (rhs[1:-1] if rhs.endswith("}") else rhs[1:]).strip()
         if not inner:
             return True  # `() => {}`
+        # Returns are judged BEFORE the rethrow check, because a `throw` on one
+        # branch does not make the others safe: `if (e.fatal) throw e; return
+        # null;` still turns every non-fatal rejection into `null`. Exempting any
+        # block that merely contained `throw` covered exactly that case.
+        returned = returned_expressions(inner)
+        if any(
+            normalize_value(yielded_value(value)) in SWALLOW_VALUES
+            for value in returned
+        ):
+            return True
         # `\bthrow\b` on the masked body, so a `warn("throw failed")` inside it
         # cannot pass for a rethrow and exempt the swallow underneath.
         if re.search(r"\bthrow\b", inner):
             return False  # re-raises: the failure still reaches the caller
-        returned = returned_expressions(inner)
         if not returned:
             # No `return` means an implicit `undefined`. That is a swallow when
             # the block only logs, and unclassified otherwise — `async () => {
             # await fallback(); }` reaches no return either and is a recovery
             # path, so this cannot key on the missing return alone.
             return is_log_only(inner)
-        # Any block that can hand back a bare value is a swallow, even if it logs
-        # on the way or recovers on another branch. Logging is not reporting: on
-        # that path the caller still receives a value indistinguishable from
-        # success, which is the whole defect.
-        return any(
-            normalize_value(unwrap_parens(value)) in SWALLOW_VALUES
-            for value in returned
-        )
-    return normalize_value(rhs.rstrip(";")) in SWALLOW_VALUES
+        return False
+    return normalize_value(yielded_value(rhs.rstrip(";"))) in SWALLOW_VALUES
 
 
 def context_for(lines: list[str], index: int, shot_indent: int | None) -> str:
@@ -664,8 +772,13 @@ def sites_in(name: str, text: str) -> list[tuple[str, int, str, str]]:
 def swallowing_sites() -> list[tuple[str, int, str, str]]:
     """Every swallowing `.catch` across `scripts/screenshots/`."""
     found: list[tuple[str, int, str, str]] = []
-    for path in sorted(SCREENSHOTS.glob("*.mjs")):
-        found.extend(sites_in(path.name, path.read_text()))
+    # Recursive, so a module factored into `screenshots/lib/` is still scanned.
+    # Named by its path relative to the directory, which is the bare filename for
+    # the three modules that exist today — so no frozen signature moves — and
+    # distinguishes two files that share a basename in different subdirectories.
+    for path in sorted(SCREENSHOTS.rglob("*.mjs")):
+        name = path.relative_to(SCREENSHOTS).as_posix()
+        found.extend(sites_in(name, path.read_text()))
     return found
 
 
@@ -1068,10 +1181,13 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
             ]
         )
         assert caught(source) == [2]
-        assert not _starts_regex("n++")
-        assert not _starts_regex("i--")
-        assert _starts_regex("const x = ")
-        assert not _starts_regex("total")
+        assert not _starts_regex("n++", False)
+        assert not _starts_regex("i--", False)
+        assert _starts_regex("const x = ", False)
+        assert not _starts_regex("total", False)
+        # A `}` depends on what the brace opened, which the scanner tracks.
+        assert _starts_regex("if (a) {}", False), "after a block, `/` is a regex"
+        assert not _starts_regex("class {}", True), "after a value, `/` divides"
 
     def test_a_backslash_newline_keeps_a_string_open(self):
         """A line continuation is still inside the string.
@@ -1170,6 +1286,94 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
         _, mask = scan_source(source)
         assert "oops" not in mask, mask
         assert caught(source) == [1]
+
+    def test_a_value_closing_brace_is_not_a_regex_opener(self):
+        """`class {} / total` divides; `if (a) {} /re/` does not.
+
+        A `}` alone cannot tell the two apart, so the scanner records what each
+        `{` opened. Reading a value-closing brace as a block blanks code to the
+        next `/`, which is a blind spot rather than a miss.
+        """
+        assert caught("const r = class {} / action.catch(() => null) / total;") == [1]
+        # And the other direction must keep working: a regex after a real block,
+        # holding a quote that would open a phantom string if scanned as code.
+        assert caught(
+            "\n".join(
+                [
+                    "if (a) {}",
+                    'const ok = /x["y]/.test(s);',
+                    "await one().catch(() => null);",
+                ]
+            )
+        ) == [3]
+
+    def test_any_numeric_literal_is_a_swallow(self):
+        """`0` and `-1` were two spellings of a structural property."""
+        for value in ("() => 42", "() => 1.5", "() => -7", "() => 1_000", "() => 0"):
+            assert is_swallow(value), value
+        assert caught("await readCount().catch(() => 42);") == [1]
+        assert not is_swallow("() => count()")
+
+    def test_a_conditional_rethrow_does_not_exempt_the_other_branches(self):
+        """`if (e.fatal) throw e; return null;` still swallows the non-fatal case.
+
+        Returns are judged before the rethrow check for exactly this reason;
+        exempting any block that merely contained `throw` covered it up.
+        """
+        assert is_swallow("(e) => { if (e.fatal) throw e; return null; }")
+        assert caught(
+            "await x.catch(e => { if (e.fatal) throw e; return null; });"
+        ) == [1]
+        # An unconditional rethrow is still a recovery path.
+        assert not is_swallow("(e) => { throw e; }")
+        assert not is_swallow("(e) => { if (e.fatal) throw e; return recover(e); }")
+
+    def test_a_dollar_prefixed_parameter_is_a_parameter(self):
+        """JavaScript identifiers may start with `$`; Python's `\\w` does not."""
+        assert is_swallow("$error => null")
+        assert is_swallow("_e => null")
+        assert caught("await x.catch($error => null);") == [1]
+
+    def test_guarded_logging_is_still_logging(self):
+        """`if (DEBUG) console.warn(e)` recovers from nothing on either path."""
+        assert is_swallow("(e) => { if (DEBUG) console.warn(e); }")
+        assert is_swallow("(e) => { if (DEBUG) { console.warn(e); } }")
+        assert caught("await x.catch(e => { if (DEBUG) console.warn(e); });") == [1]
+        # A guarded recovery is not logging.
+        assert not is_swallow("(e) => { if (DEBUG) retry(e); }")
+
+    def test_a_logging_sequence_expression_yields_its_last_operand(self):
+        """`(console.warn(e), null)` is the concise form of log-then-return-null."""
+        assert is_swallow("(e) => (console.warn(e), null)")
+        assert caught("await x.catch(e => (console.warn(e), null));") == [1]
+        # Work in the discarded operands is not logging, so it stays unclassified.
+        assert not is_swallow("(e) => (retry(e), null)")
+
+    def test_nested_modules_are_scanned(self):
+        """A module factored into `screenshots/lib/` joins the same pipeline.
+
+        Driven through `swallowing_sites` against a temporary tree, because the
+        first version of this test called `sites_in` directly and so never
+        exercised the glob it was meant to pin — it passed with the
+        non-recursive glob restored, which is the defect this whole file exists
+        to prevent.
+
+        Modules are named by their path relative to the directory, so the three
+        that exist today keep their bare-filename signatures and no frozen entry
+        moves.
+        """
+        saved = globals()["SCREENSHOTS"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "top.mjs").write_text("await a().catch(() => null);\n")
+            (root / "lib").mkdir()
+            (root / "lib" / "read.mjs").write_text("await b().catch(() => null);\n")
+            globals()["SCREENSHOTS"] = root
+            try:
+                names = sorted(name for name, _, _, _ in swallowing_sites())
+            finally:
+                globals()["SCREENSHOTS"] = saved
+        assert names == ["lib/read.mjs", "top.mjs"], names
 
     def test_the_sweep_detects_a_reintroduced_swallow(self):
         """The shape removed from `pageText`, driven through the real path."""
