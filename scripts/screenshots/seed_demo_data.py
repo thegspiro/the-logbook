@@ -1098,7 +1098,18 @@ class Seeder:
                 # the code belongs; bring those in line rather than leaving the
                 # roster in the settings page's mismatch warning.
                 current = by_username[username]
-                if pick(current, "rank") != rank and pick(current, "id"):
+                # Never for an administrative member, whose rank is correctly
+                # blank. MEMBERS lists a rank for every name because that is
+                # what they hold at creation, and the membership-type move
+                # below then clears it -- so on the SECOND run this repair saw
+                # a blank rank, called it drift, and patched it back onto a
+                # member the API refuses to give one ("Administrative members
+                # do not hold an operational rank"), failing the whole step.
+                if (
+                    username not in ADMINISTRATIVE_USERNAMES
+                    and pick(current, "rank") != rank
+                    and pick(current, "id")
+                ):
                     self.api.patch(
                         f"/users/{pick(current, 'id')}/profile", {"rank": rank}
                     )
@@ -3898,6 +3909,19 @@ class Seeder:
             ("advanced_cleaning", 95, "Advanced cleaning after a working fire.", 85.00),
             ("repair", 40, "Replaced a torn wristlet and re-taped the seam.", 140.00),
         ]
+        # `passed` belongs to inspections and to nothing else:
+        # MaintenanceRecordCreate rejects it on any other type ("Pass/fail
+        # result is only allowed for inspections") and requires it on a
+        # completed inspection. Sending it on all three 422'd the cleaning
+        # record, which aborted the step -- so only the very first item's
+        # inspection was ever written and the guide's maintenance timeline
+        # had one entry to picture instead of three.
+        inspection_types = {
+            "inspection",
+            "routine_inspection",
+            "advanced_inspection",
+            "independent_inspection",
+        }
         for item in items(self.api.get("/inventory/items?limit=500"), "items"):
             item_id = pick(item, "id")
             if not item_id or pick(item, "category_id", "categoryId") not in tracked:
@@ -3916,9 +3940,10 @@ class Seeder:
                     "next_due_date": str(completed + timedelta(days=365)),
                     "description": description,
                     "condition_after": "good",
-                    "passed": True,
                     "is_completed": True,
                 }
+                if kind in inspection_types:
+                    payload["passed"] = True
                 if cost is not None:
                     payload["cost"] = cost
                 if performer:
@@ -8484,14 +8509,14 @@ class Seeder:
             course = by_name.get(name)
             return course.get("id") if course else None
 
-        self._seed_recertification_pathways()
+        self._seed_recertification_pathways(course_id)
         self._seed_competency_matrices()
         self._seed_instructor_qualifications(members, course_id)
         self._seed_effectiveness_evaluations(members, course_id)
         self._seed_multi_agency_exercises()
         self._seed_compliance_attestations()
 
-    def _seed_recertification_pathways(self) -> None:
+    def _seed_recertification_pathways(self, course_id) -> None:
         existing = {
             p.get("name")
             for p in items(self.api.get("/training/recertification/pathways"))
@@ -8530,7 +8555,12 @@ class Seeder:
                     "expired D/O comes off the driver list the same day."
                 ),
                 "renewal_type": "courses",
-                "required_courses": ["Pump Operations"],
+                # Ids, not names. `required_courses` is a JSON array of catalog
+                # ids that RecertificationService checks with assert_all_in_org
+                # before storing (the XC-1 rule), so a course *name* is simply
+                # an id that belongs to no organization and the create 400s with
+                # "Invalid required course".
+                "required_courses": [course_id("Pump Operations")],
                 "renewal_window_days": 60,
                 "grace_period_days": 0,
                 "new_expiration_months": 36,
@@ -8538,6 +8568,16 @@ class Seeder:
         ]
         for pathway in blueprint:
             if pathway["name"] in existing:
+                continue
+            # A pathway whose courses did not resolve would post `[None]` and
+            # fail the same validation from the other direction. Skipping keeps
+            # the two pathways that need no catalog lookup.
+            required = pathway.get("required_courses")
+            if required is not None and not all(required):
+                self.blocked.append(
+                    f"recertification pathway {pathway['name']}: "
+                    "a required course is missing from the catalog"
+                )
                 continue
             self.api.post("/training/recertification/pathways", pathway)
 
