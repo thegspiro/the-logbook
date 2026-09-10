@@ -5507,14 +5507,28 @@ class Seeder:
             for item in items(compartment, "items"):
                 if pick(item, "check_type", "checkType") in ("header", "text"):
                     continue
+                # The count has to satisfy the item's own target, not a
+                # hardcoded 1. For a quantity item the server derives
+                # `observation_passes = quantity_found >= target` and refuses a
+                # "pass" that the count refutes ("Status 'pass' contradicts the
+                # authoritative quantity observation") — so a medic position
+                # carrying 24 boxes rejected the whole submission, which is
+                # what left the sealed-compartment fixture unbuilt and
+                # /last-seals answering `{}` for the seal-panel capture.
+                # Engine items target 1, so this changes nothing for them.
+                target = (
+                    pick(item, "required_quantity", "requiredQuantity")
+                    or pick(item, "expected_quantity", "expectedQuantity")
+                    or 1
+                )
                 rows.append(
                     {
                         "template_item_id": pick(item, "id"),
                         "compartment_name": pick(compartment, "name"),
                         "item_name": pick(item, "name"),
                         "status": "pass",
-                        "quantity_found": 1,
-                        "required_quantity": 1,
+                        "quantity_found": target,
+                        "required_quantity": target,
                     }
                 )
         return rows
