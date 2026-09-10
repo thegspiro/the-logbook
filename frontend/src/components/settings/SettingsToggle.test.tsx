@@ -40,9 +40,11 @@ describe('SettingsToggle', () => {
     const onChange = vi.fn();
     render(<SettingsToggle label="Show Phone Numbers" checked={false} onChange={onChange} />);
 
-    void (await userEvent.click(screen.getByRole('switch', { name: 'Show Phone Numbers' })));
+    await userEvent.click(screen.getByRole('switch', { name: 'Show Phone Numbers' }));
 
-    return vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(true));
+    // The value being switched *to*, not the one it had — a handler that reads
+    // its own state instead still works, which is why this is worth pinning.
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 
   it('does not fire while disabled', async () => {
