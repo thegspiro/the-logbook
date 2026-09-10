@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from app.models.event_request import EventRequest
+from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.forms import IntegrationType
 from app.schemas.event_request import EventRequestCreate, EventRequestSchedule
 from app.services.event_request_service import parse_audience_size
@@ -656,3 +656,208 @@ class TestBackfillExcludesAuthenticatedOnlyForms:
         """NULL is falsy in Python, so the endpoint does not require auth —
         the SQL has to say the same thing rather than dropping the row."""
         assert "f.require_authentication IS NULL" in TestBackfillSelection._sql()
+
+
+# ============================================
+# Round 4 — findings on the round-3 fixes
+# ============================================
+
+
+class TestMappedTextIsClampedToTheColumns:
+    """The generated form leaves its text fields at `MAX_TEXT_LENGTH` (5000)
+    while the columns are much narrower, so an over-long value was a DataError
+    at flush — after the daily allowance had been spent."""
+
+    def test_each_field_is_trimmed_to_its_column_width(self):
+        from app.services.event_request_service import (
+            TEXT_FIELD_LIMITS,
+            clamp_text_fields,
+        )
+
+        oversized = {field: "x" * 6000 for field in TEXT_FIELD_LIMITS}
+        clamped = clamp_text_fields(oversized)
+        for field, limit in TEXT_FIELD_LIMITS.items():
+            assert len(clamped[field]) == limit, field
+
+    def test_values_within_the_limit_are_untouched(self):
+        from app.services.event_request_service import clamp_text_fields
+
+        assert clamp_text_fields({"contact_name": "Dana Reyes"})["contact_name"] == (
+            "Dana Reyes"
+        )
+
+    def test_non_strings_and_absent_keys_are_left_alone(self):
+        from app.services.event_request_service import clamp_text_fields
+
+        assert clamp_text_fields({"contact_phone": None}) == {"contact_phone": None}
+        assert clamp_text_fields({}) == {}
+
+    @pytest.mark.asyncio
+    async def test_an_overlong_name_does_not_spend_the_quota_and_still_stores(self):
+        org = SimpleNamespace(
+            id=ORG_ID,
+            name="Oakville",
+            active=True,
+            timezone="UTC",
+            settings={"events": {"request_pipeline": {"accept_public_requests": True}}},
+        )
+        service, db = _service(org)
+        submission = SimpleNamespace(
+            id=SUBMISSION_ID,
+            organization_id=ORG_ID,
+            data={
+                "f_name": "D" * 400,
+                "f_email": "dana@example.org",
+                "f_type": "station_tour",
+                "f_desc": "Station tour for a scout troop.",
+            },
+            ip_address="203.0.113.9",
+        )
+        integration = SimpleNamespace(
+            integration_type=IntegrationType.EVENT_REQUEST,
+            is_active=True,
+            field_mappings={
+                "f_name": "contact_name",
+                "f_email": "contact_email",
+                "f_type": "outreach_type",
+                "f_desc": "description",
+            },
+        )
+
+        with (
+            patch(
+                "app.services.event_request_service.send_request_notification",
+                AsyncMock(),
+            ),
+            patch(
+                "app.services.forms_service.daily_cap_exceeded",
+                AsyncMock(return_value=False),
+            ) as cap,
+        ):
+            result = await service._process_event_request(
+                submission, integration=integration, form=None, is_public=True
+            )
+
+        assert result["success"] is True
+        added = [
+            c.args[0]
+            for c in db.add.call_args_list
+            if isinstance(c.args[0], EventRequest)
+        ]
+        assert len(added[0].contact_name) == 255
+        assert cap.await_count == 1
+
+
+class TestNormalizedDatesAreAssignedNotJustCompared:
+    """Normalising only the comparison left a naive value on the model, so the
+    `TypeError` moved one layer down into `EventCreate.validate_dates` — still
+    an uncaught 500, just from a different validator."""
+
+    def test_the_schedule_schema_stores_aware_values(self):
+        model = EventRequestSchedule(
+            event_date="2026-10-01T10:00:00",
+            event_end_date="2026-10-01T12:00:00Z",
+        )
+        assert model.event_date.tzinfo is not None
+        assert model.event_end_date.tzinfo is not None
+        # The comparison EventCreate makes must now be safe.
+        assert model.event_end_date > model.event_date
+
+    def test_the_intake_schema_stores_aware_values(self):
+        model = EventRequestCreate(
+            contact_name="Dana Reyes",
+            contact_email="dana@example.org",
+            outreach_type="station_tour",
+            description="Station tour for a scout troop of about twenty.",
+            preferred_date_start="2026-10-01T10:00:00",
+            preferred_date_end="2026-10-02T10:00:00Z",
+        )
+        assert model.preferred_date_start.tzinfo is not None
+        assert model.preferred_date_end.tzinfo is not None
+
+
+class TestRequesterCancellationAfterTheEventStarted:
+    """This path is reached with a status token and no session, and
+    `cancel_event` refuses only an attendance-finalized event — so an outreach
+    event that had already happened was still cancellable from a link."""
+
+    @staticmethod
+    async def _cancel(started: bool):
+        from app.api.v1.endpoints.event_requests import public_cancel_request
+        from app.models.event_request import EventRequestStatus
+        from app.schemas.event_request import EventRequestPublicCancel
+
+        now = datetime.now(timezone.utc)
+        event_request = SimpleNamespace(
+            id="req-1",
+            organization_id=ORG_ID,
+            status=EventRequestStatus.SCHEDULED,
+            event_id="ev-1",
+            staffing_shift_id=None,
+        )
+        org = SimpleNamespace(id=ORG_ID, name="Oakville", settings={"events": {}})
+        linked = SimpleNamespace(
+            id="ev-1",
+            organization_id=ORG_ID,
+            is_cancelled=False,
+            start_datetime=(
+                now - timedelta(hours=2) if started else now + timedelta(days=7)
+            ),
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: event_request),
+            SimpleNamespace(scalar_one_or_none=lambda: org),
+        ]
+        db.scalar.return_value = linked
+        cancelled = AsyncMock()
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests.check_ip_rate_limit",
+                AsyncMock(return_value=(True, 1, 10)),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_staffing_shift_cancelled",
+                AsyncMock(),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_calendar_event_cancelled",
+                cancelled,
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests._send_request_notification",
+                AsyncMock(),
+            ),
+        ):
+            await public_cancel_request(
+                token="a-status-token",
+                data=EventRequestPublicCancel(reason="School closed"),
+                request=SimpleNamespace(
+                    headers={},
+                    client=SimpleNamespace(host="203.0.113.4"),
+                    state=SimpleNamespace(),
+                ),
+                db=db,
+            )
+        return event_request, db, cancelled
+
+    @pytest.mark.asyncio
+    async def test_a_future_event_is_still_stood_down(self):
+        _, _, cancelled = await self._cancel(started=False)
+        cancelled.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_an_event_that_already_started_is_left_alone(self):
+        event_request, db, cancelled = await self._cancel(started=True)
+        cancelled.assert_not_awaited()
+        # The withdrawal is still recorded, and so is the decision not to touch
+        # the calendar — an officer needs to see both.
+        actions = [
+            c.args[0].action
+            for c in db.add.call_args_list
+            if isinstance(c.args[0], EventRequestActivity)
+        ]
+        assert "cancelled_by_requester" in actions
+        assert "calendar_event_kept" in actions

@@ -2536,6 +2536,7 @@ class FormsService:
         )
         from app.services.event_request_service import (
             apply_default_assignee,
+            clamp_text_fields,
             get_pipeline_settings,
             lead_time_error,
             normalize_request_preferences,
@@ -2560,6 +2561,11 @@ class FormsService:
             mapped_data = self._apply_label_fallback(
                 IntegrationType.EVENT_REQUEST, mapped_data, sub_data, form
             )
+
+        # Trimmed to the column widths here, above the daily-allowance INCR
+        # below: an over-long value is a DataError at flush, and the allowance
+        # would already be spent (same shape as the audience-size parse).
+        mapped_data = clamp_text_fields(mapped_data)
 
         contact_name = mapped_data.get("contact_name", "")
         contact_email = mapped_data.get("contact_email", "")

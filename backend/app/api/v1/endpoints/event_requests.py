@@ -91,6 +91,16 @@ from app.utils.org_scoping import assert_in_org
 router = APIRouter(prefix="/event-requests", tags=["event-requests"])
 
 
+def _as_aware(value: datetime) -> datetime:
+    """Read a stored datetime as UTC when it carries no offset.
+
+    MySQL hands back naive datetimes for `DateTime(timezone=True)` columns, so
+    comparing one against an aware `now()` raises `TypeError`. Everything in
+    this system is stored as UTC (see CLAUDE.md).
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
 async def _get_location_name(
     db: AsyncSession, location_id: str, organization_id: str
 ) -> str | None:
@@ -537,12 +547,44 @@ async def public_cancel_request(
         actor_id=None,
         reason="The requester cancelled this outreach event.",
     )
-    await sync_calendar_event_cancelled(
-        db,
-        event_request,
-        actor_id=None,
-        reason="The requester cancelled this outreach event.",
+    # The calendar entry is stood down only if the event has not started.
+    #
+    # This path is reached with a status token and no session, and
+    # `EventService.cancel_event` refuses only an event whose attendance is
+    # already finalized. An outreach event that has happened but not yet been
+    # closed out is therefore still cancellable from a link — which would take
+    # it off members' calendars after the fact, tell anyone who RSVPed it was
+    # cancelled, and revoke attendance credit if it had been reopened.
+    #
+    # Withdrawing before the day is the case this cascade exists for. Afterwards
+    # the request is still marked cancelled and the withdrawal still recorded in
+    # the activity log, but the record of an event that took place is left
+    # alone — correcting that is an officer's decision, made while signed in.
+    linked_event = await get_linked_calendar_event(db, event_request)
+    event_has_started = (
+        linked_event is not None
+        and linked_event.start_datetime is not None
+        and _as_aware(linked_event.start_datetime) <= datetime.now(timezone.utc)
     )
+    if event_has_started:
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="calendar_event_kept",
+                notes=(
+                    "The requester cancelled after the event start time; the "
+                    "calendar entry was left in place for an officer to review."
+                ),
+                details={"event_id": str(event_request.event_id)},
+            )
+        )
+    else:
+        await sync_calendar_event_cancelled(
+            db,
+            event_request,
+            actor_id=None,
+            reason="The requester cancelled this outreach event.",
+        )
 
     await db.commit()
 

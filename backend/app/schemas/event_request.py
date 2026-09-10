@@ -88,11 +88,21 @@ class EventRequestCreate(BaseModel):
         ``EventRequestSchedule`` has refused a reversed window since the room
         double-booking check was added; intake did not, so a requester could
         store one and the coordinator's board rendered "March 20 – March 3".
+
+        The normalised values are **assigned back**, not just compared. Fixing
+        only the comparison leaves a naive datetime on the model, and every
+        reader downstream — the lead-time gate, the stored column, the
+        coordinator's board — then has the same mixed-awareness problem this
+        validator was added to stop.
         """
+        if self.preferred_date_start:
+            self.preferred_date_start = _as_utc(self.preferred_date_start)
+        if self.preferred_date_end:
+            self.preferred_date_end = _as_utc(self.preferred_date_end)
         if (
             self.preferred_date_start
             and self.preferred_date_end
-            and _as_utc(self.preferred_date_end) < _as_utc(self.preferred_date_start)
+            and self.preferred_date_end < self.preferred_date_start
         ):
             raise ValueError(
                 "preferred_date_end must not be before preferred_date_start"
@@ -141,11 +151,18 @@ class EventRequestSchedule(BaseModel):
         The double-booking check compares the requested window against existing
         events, so a reversed window overlaps nothing and the conflict guard
         silently passes.
+
+        Assigned back rather than only compared: `schedule_request` hands these
+        straight to `EventCreate`, whose own `validate_dates` compares them
+        again. Normalising a copy left the naive value on the model and moved
+        the `TypeError` one layer down — still an uncaught 500, just from a
+        different validator.
         """
-        if self.event_end_date and _as_utc(self.event_end_date) < _as_utc(
-            self.event_date
-        ):
-            raise ValueError("event_end_date must not be before event_date")
+        self.event_date = _as_utc(self.event_date)
+        if self.event_end_date:
+            self.event_end_date = _as_utc(self.event_end_date)
+            if self.event_end_date < self.event_date:
+                raise ValueError("event_end_date must not be before event_date")
         return self
 
 

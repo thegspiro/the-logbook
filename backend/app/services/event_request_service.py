@@ -176,6 +176,43 @@ AUDIENCE_SIZE_MIN = 1
 AUDIENCE_SIZE_MAX = 10000
 
 
+# Column widths on app/models/event_request.EventRequest. The forms path maps
+# free text straight onto these, and the generated form leaves its text fields
+# at FormsService.MAX_TEXT_LENGTH (5000), so nothing between a member of the
+# public and MySQL enforces them.
+TEXT_FIELD_LIMITS = {
+    "contact_name": 255,
+    "contact_email": 255,
+    "contact_phone": 50,
+    "organization_name": 255,
+    "outreach_type": OUTREACH_TYPE_MAX_LENGTH,
+    "age_group": 100,
+    "preferred_timeframe": 500,
+}
+
+
+def clamp_text_fields(data: dict) -> dict:
+    """Trim mapped free text to what the columns can hold.
+
+    An over-long value is a `DataError` at flush time, which the forms path
+    reports as a failed integration — *after* the daily-allowance INCR has been
+    spent. One 256-character `contact_name` submitted repeatedly could exhaust
+    a department's whole day without storing a single request, which is the
+    same defect the audience-size parse had and the same reason it moved above
+    the counter.
+
+    Truncating rather than refusing keeps the enquiry: a name that is too long
+    for the column is still a name, and the coordinator can read the rest of
+    the request. Only the mapped keys present are touched.
+    """
+    clamped = dict(data)
+    for field, limit in TEXT_FIELD_LIMITS.items():
+        value = clamped.get(field)
+        if isinstance(value, str) and len(value) > limit:
+            clamped[field] = value[:limit]
+    return clamped
+
+
 def parse_audience_size(value: Any) -> Optional[int]:
     """Read a requester's attendance estimate, or None when it is not a number.
 
