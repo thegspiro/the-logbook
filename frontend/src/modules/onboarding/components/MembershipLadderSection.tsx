@@ -137,7 +137,12 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
       ) : (
         <>
           {editor.refreshFailed && (
-            <TierRefreshAlert unconfirmedSave={editor.unconfirmedSave} dirty={editor.dirty} onRefresh={editor.retry} />
+            <TierRefreshAlert
+              unconfirmedSave={editor.unconfirmedSave}
+              dirty={editor.dirty}
+              loading={editor.loading}
+              onRefresh={editor.retry}
+            />
           )}
           <MembershipTiersSection
             tiers={editor.tiers}

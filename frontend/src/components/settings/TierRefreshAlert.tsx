@@ -21,36 +21,54 @@ interface TierRefreshAlertProps {
   unconfirmedSave: boolean;
   /** True when the editor holds edits a refresh would overwrite. */
   dirty: boolean;
+  /** True while a read is in flight, including one this button started. */
+  loading: boolean;
   onRefresh: () => void;
 }
 
-const TierRefreshAlert: React.FC<TierRefreshAlertProps> = ({ unconfirmedSave, dirty, onRefresh }) => (
-  <div className="alert-warning mb-4" role="status">
-    <p className="text-theme-text-primary text-sm font-medium">
-      {unconfirmedSave
-        ? 'Your tiers were saved, but this page could not be refreshed afterwards.'
-        : 'This page could not be refreshed.'}
-    </p>
-    <p className="text-theme-text-muted mt-1 text-sm">
-      {unconfirmedSave
-        ? 'The ladder below is what was stored. Member counts, and any adjustment the server made when it saved, are not shown yet.'
-        : 'The ladder below is the one last read from the server. Member counts may be out of date.'}
-    </p>
-    {/* Refresh replaces the whole configuration with the server's, so offering
-        it beside unsaved edits would discard them without asking — the hazard
-        Reset exists to make deliberate. Save first, then refresh. */}
-    <button
-      type="button"
-      className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
-      onClick={onRefresh}
-      disabled={dirty}
-    >
-      Refresh
-    </button>
-    {dirty && (
-      <p className="text-theme-text-muted mt-2 text-sm">Save your changes first — refreshing would discard them.</p>
-    )}
-  </div>
-);
+const TierRefreshAlert: React.FC<TierRefreshAlertProps> = ({ unconfirmedSave, dirty, loading, onRefresh }) => {
+  // The editor stays live under this warning, so the ladder can have moved on
+  // from what was stored. Saying "the ladder below is what was stored" then
+  // describes a screen that also holds unsaved edits — and if the next save is
+  // refused, that claim stays on screen over a draft nothing has accepted.
+  const heading = unconfirmedSave
+    ? dirty
+      ? 'Your last save was stored, but this page could not be refreshed afterwards.'
+      : 'Your tiers were saved, but this page could not be refreshed afterwards.'
+    : 'This page could not be refreshed.';
+
+  const detail = unconfirmedSave
+    ? dirty
+      ? 'The ladder below has changes you have not saved yet. Member counts, and any adjustment the server made when it saved, are not shown.'
+      : 'The ladder below is what was stored. Member counts, and any adjustment the server made when it saved, are not shown yet.'
+    : dirty
+      ? 'The ladder below has changes you have not saved yet, over the one last read from the server. Member counts may be out of date.'
+      : 'The ladder below is the one last read from the server. Member counts may be out of date.';
+
+  return (
+    <div className="alert-warning mb-4" role="status">
+      <p className="text-theme-text-primary text-sm font-medium">{heading}</p>
+      <p className="text-theme-text-muted mt-1 text-sm">{detail}</p>
+      {/* Refresh replaces the whole configuration with the server's, so offering
+          it beside unsaved edits would discard them without asking — the hazard
+          Reset exists to make deliberate. It is also withheld while a read is
+          already running: this alert stays mounted for the whole of one, so a
+          second click would start a second GET through the same attempt effect,
+          and a late failure landing after a newer success would report a
+          confirmed read as failed. */}
+      <button
+        type="button"
+        className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
+        onClick={onRefresh}
+        disabled={dirty || loading}
+      >
+        {loading ? 'Refreshing…' : 'Refresh'}
+      </button>
+      {dirty && (
+        <p className="text-theme-text-muted mt-2 text-sm">Save your changes first — refreshing would discard them.</p>
+      )}
+    </div>
+  );
+};
 
 export default TierRefreshAlert;

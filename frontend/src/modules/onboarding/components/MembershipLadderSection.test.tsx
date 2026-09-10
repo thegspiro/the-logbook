@@ -9,7 +9,7 @@
  * the screen rather than in documentation.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const getTierConfig = vi.fn();
@@ -232,6 +232,26 @@ describe('the Refresh button beside the warning', () => {
     expect(screen.getByRole('button', { name: /^Refresh$/ })).toBeEnabled();
   });
 
+  it('is withheld while a read it started is still running', async () => {
+    // This alert stays mounted for the whole of a refresh, so a second click
+    // starts a second GET through the same attempt effect — and a late failure
+    // landing after a newer success would report a confirmed read as failed.
+    const user = userEvent.setup();
+    render(<MembershipLadderSection />);
+    await saveThenFailTheRefresh(user);
+
+    let settle!: (config: unknown) => void;
+    getTierConfig.mockImplementationOnce(() => new Promise((resolve) => (settle = resolve)));
+    await user.click(screen.getByRole('button', { name: /^Refresh$/ }));
+
+    const running = await screen.findByRole('button', { name: /refreshing/i });
+    expect(running).toBeDisabled();
+
+    await act(async () => {
+      settle({ auto_advance: true, tiers: [], member_counts: {}, is_saved: true });
+    });
+  });
+
   it('is withheld once there are edits it would discard', async () => {
     // The warning leaves the editor live, which is the point — but Refresh
     // replaces the whole configuration with the server's, so offering it beside
@@ -247,6 +267,60 @@ describe('the Refresh button beside the warning', () => {
 
     expect(screen.getByRole('button', { name: /^Refresh$/ })).toBeDisabled();
     expect(screen.getByText(/refreshing would discard them/i)).toBeInTheDocument();
+  });
+});
+
+describe('what the warning claims once the ladder has moved on', () => {
+  beforeEach(installDefaults);
+
+  it('stops saying the ladder below is what was stored', async () => {
+    // The editor stays live under the warning, deliberately. An edit made there
+    // is not in the ladder that was stored, and if the next save is refused the
+    // claim would sit on screen over a draft nothing has accepted.
+    const user = userEvent.setup();
+    render(<MembershipLadderSection />);
+    const years = await screen.findByLabelText('Years of service', { selector: '#years-active' });
+    await user.clear(years);
+    await user.type(years, '3');
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+    await user.click(screen.getByRole('button', { name: /save tiers/i }));
+    expect(await screen.findByText(/is what was stored/i)).toBeInTheDocument();
+
+    const field = screen.getByLabelText('Years of service', { selector: '#years-active' });
+    await user.clear(field);
+    await user.type(field, '7');
+
+    expect(screen.queryByText(/is what was stored/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/changes you have not saved yet/i)).toBeInTheDocument();
+    // Still says the earlier write landed — that part remains true.
+    expect(screen.getByText(/your last save was stored/i)).toBeInTheDocument();
+  });
+});
+
+describe('editing while a save is in flight', () => {
+  beforeEach(installDefaults);
+
+  it('is sealed, so the write cannot mark a newer draft clean', async () => {
+    // The endpoint takes the whole ladder in one PUT, so an edit made after
+    // Save is pressed is not in what was sent — and the hook clears `dirty`
+    // when that write returns, which marked the newer draft clean and let the
+    // read-back overwrite it.
+    const user = userEvent.setup();
+    let completeSave!: (value: unknown) => void;
+    updateTierConfig.mockImplementationOnce(() => new Promise((resolve) => (completeSave = resolve)));
+    render(<MembershipLadderSection />);
+    const years = await screen.findByLabelText('Years of service', { selector: '#years-active' });
+
+    await user.clear(years);
+    await user.type(years, '3');
+    await user.click(screen.getByRole('button', { name: /save tiers/i }));
+
+    expect(screen.getByLabelText('Years of service', { selector: '#years-active' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /discard changes/i })).toBeDisabled();
+
+    await act(async () => {
+      completeSave({});
+    });
   });
 });
 

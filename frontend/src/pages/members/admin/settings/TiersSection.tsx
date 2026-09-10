@@ -59,7 +59,12 @@ const TiersSection: React.FC = () => {
               `failed` at first, which left a save whose read-back failed
               showing stale member counts behind a success toast. */}
           {editor.refreshFailed && (
-            <TierRefreshAlert unconfirmedSave={editor.unconfirmedSave} dirty={editor.dirty} onRefresh={editor.retry} />
+            <TierRefreshAlert
+              unconfirmedSave={editor.unconfirmedSave}
+              dirty={editor.dirty}
+              loading={editor.loading}
+              onRefresh={editor.retry}
+            />
           )}
           <MembershipTiersSection
             tiers={editor.tiers}
