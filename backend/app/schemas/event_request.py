@@ -6,12 +6,26 @@ Supports flexible date preferences, configurable pipeline tasks, comments,
 assignment, scheduling with room booking, and postponement.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Read a datetime as UTC when it carries no offset of its own.
+
+    A JSON body can mix the two — ``"2026-10-01T10:00:00"`` parses naive,
+    ``"2026-10-02T10:00:00Z"`` parses aware — and comparing them raises
+    ``TypeError``. Pydantic v2 converts only ``ValueError`` and
+    ``AssertionError`` into validation errors, so a ``TypeError`` raised inside
+    a validator escapes as a 500 rather than the 422 the caller should get.
+    Every datetime in this system is UTC (see CLAUDE.md), so a value that
+    omitted its offset is read as the UTC it was always meant to be.
+    """
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 class EventRequestCreate(BaseModel):
@@ -78,7 +92,7 @@ class EventRequestCreate(BaseModel):
         if (
             self.preferred_date_start
             and self.preferred_date_end
-            and self.preferred_date_end < self.preferred_date_start
+            and _as_utc(self.preferred_date_end) < _as_utc(self.preferred_date_start)
         ):
             raise ValueError(
                 "preferred_date_end must not be before preferred_date_start"
@@ -128,7 +142,9 @@ class EventRequestSchedule(BaseModel):
         events, so a reversed window overlaps nothing and the conflict guard
         silently passes.
         """
-        if self.event_end_date and self.event_end_date < self.event_date:
+        if self.event_end_date and _as_utc(self.event_end_date) < _as_utc(
+            self.event_date
+        ):
             raise ValueError("event_end_date must not be before event_date")
         return self
 

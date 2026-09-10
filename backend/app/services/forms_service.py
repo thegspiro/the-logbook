@@ -2481,6 +2481,7 @@ class FormsService:
             get_pipeline_settings,
             lead_time_error,
             normalize_request_preferences,
+            parse_audience_size,
             send_request_notification,
         )
 
@@ -2586,6 +2587,19 @@ class FormsService:
         )
         date_flexibility = settled["date_flexibility"]
 
+        # Parsed here, above the daily-cap INCR below, and leniently.
+        #
+        # The generated form asks for "Expected Audience Size" as a TEXT field,
+        # so "about twenty" is a perfectly ordinary answer from a member of the
+        # public. Calling int() on it inside the write block raised, the outer
+        # handler turned that into a failed integration — and the allowance slot
+        # had already been spent, so repeating one unparseable answer could
+        # exhaust the department's whole day of requests without storing a
+        # single one. Both halves are fixed: nothing fallible is left below the
+        # counter, and an answer that is not a number costs the field rather
+        # than the enquiry (same contract as `_parse_request_date` above).
+        audience_size = parse_audience_size(mapped_data.get("audience_size"))
+
         # The department's minimum notice applies to every intake path, but a
         # form submission has already been accepted by the time we get here —
         # dropping the request would lose a community enquiry behind a success
@@ -2627,11 +2641,7 @@ class FormsService:
                     mapped_data.get("preferred_date_end")
                 ),
                 preferred_time_of_day=settled["preferred_time_of_day"],
-                audience_size=(
-                    int(mapped_data["audience_size"])
-                    if mapped_data.get("audience_size")
-                    else None
-                ),
+                audience_size=audience_size,
                 age_group=mapped_data.get("age_group"),
                 venue_preference=settled["venue_preference"],
                 venue_address=mapped_data.get("venue_address"),

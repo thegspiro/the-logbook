@@ -25,6 +25,19 @@ such form are left untouched and keep the shipped default.
 Idempotent: an organization already carrying ``true`` is skipped, so a re-run
 writes nothing.
 
+**Irreversible, and the downgrade is a deliberate no-op.** Nothing records
+which of the selected organizations already carried ``true`` before this ran,
+so "remove the key wherever it is true" is not the inverse of this migration —
+it is a strictly larger deletion. The code being reverted to still reads this
+flag on ``POST /api/v1/event-requests/public``, so that deletion would silently
+close the anonymous JSON intake of any department that had deliberately turned
+it on, which is information the upgrade never touched and must not destroy.
+
+Leaving the flag set is the safe direction: every organization it was set on
+has a published, public request form and is therefore already taking public
+event requests through it, so the reverted code reading ``true`` describes what
+that department is actually doing.
+
 Guarded on both tables existing. Fresh installs come up through
 ``create_all`` + stamp-head rather than by replaying this chain (CLAUDE.md
 pitfall #26), and CI runs ``alembic upgrade head`` against an empty database.
@@ -60,16 +73,44 @@ depends_on: Union[str, Sequence[str], None] = None
 # A form only takes submissions from the public when it is published *and*
 # flagged public; a draft or archived one is not accepting anything, so its
 # organization is not currently relying on the behaviour this preserves.
+#
+# The two OR arms mirror `FormsService._process_integrations` exactly, because
+# the question this migration asks is "does a submission to this form create an
+# event request *today*", not "does this form look like a request form":
+#
+#   * an ACTIVE `event_request` row — the legacy path processes it, and it also
+#     supplies the mappings the direct path prefers; or
+#   * the form-level marker with NO `event_request` row at all — the direct
+#     path runs on label-based mapping.
+#
+# The case deliberately excluded is the marker plus rows an administrator has
+# DEACTIVATED. `_process_integrations` computes
+# `disabled = bool(same_type_rows) and integration is None` and skips the
+# integration entirely, so that department is not receiving pipeline requests
+# through this form. Selecting it would not preserve its behaviour: it would
+# newly open the separate anonymous JSON endpoint for a department that had
+# deliberately switched its intake off.
 _ORG_IDS_WITH_PUBLISHED_REQUEST_FORM = sa.text("""
     SELECT DISTINCT f.organization_id
     FROM forms f
-    LEFT JOIN form_integrations fi
-        ON fi.form_id = f.id
-       AND fi.integration_type = 'event_request'
-       AND fi.is_active = 1
     WHERE f.status = 'published'
       AND f.is_public = 1
-      AND (f.integration_type = 'event_request' OR fi.id IS NOT NULL)
+      AND (
+        EXISTS (
+            SELECT 1 FROM form_integrations fi
+            WHERE fi.form_id = f.id
+              AND fi.integration_type = 'event_request'
+              AND fi.is_active = 1
+        )
+        OR (
+            f.integration_type = 'event_request'
+            AND NOT EXISTS (
+                SELECT 1 FROM form_integrations fi2
+                WHERE fi2.form_id = f.id
+                  AND fi2.integration_type = 'event_request'
+            )
+        )
+      )
     """)
 
 
@@ -100,8 +141,8 @@ def _target_org_ids(bind) -> list[str]:
     return [str(row[0]) for row in bind.execute(_ORG_IDS_WITH_PUBLISHED_REQUEST_FORM)]
 
 
-def _rewrite_flag(bind, org_ids: list[str], value: bool | None) -> None:
-    """Set ``accept_public_requests`` to *value*, or drop the key when None."""
+def _enable_flag(bind, org_ids: list[str]) -> None:
+    """Set ``accept_public_requests`` to true, skipping rows already carrying it."""
     for org_id in org_ids:
         row = bind.execute(
             sa.text("SELECT settings FROM organizations WHERE id = :id"),
@@ -113,23 +154,14 @@ def _rewrite_flag(bind, org_ids: list[str], value: bool | None) -> None:
         settings = _load_settings(row[0])
         events = settings.get("events")
         if not isinstance(events, dict):
-            if value is None:
-                continue
             events = {}
         pipeline = events.get("request_pipeline")
         if not isinstance(pipeline, dict):
-            if value is None:
-                continue
             pipeline = {}
 
-        if value is None:
-            if pipeline.get("accept_public_requests") is not True:
-                continue
-            pipeline.pop("accept_public_requests", None)
-        else:
-            if pipeline.get("accept_public_requests") is value:
-                continue
-            pipeline["accept_public_requests"] = value
+        if pipeline.get("accept_public_requests") is True:
+            continue
+        pipeline["accept_public_requests"] = True
 
         events["request_pipeline"] = pipeline
         settings["events"] = events
@@ -145,24 +177,8 @@ def upgrade() -> None:
     if not _has_table("form_integrations"):
         return
     bind = op.get_bind()
-    _rewrite_flag(bind, _target_org_ids(bind), True)
+    _enable_flag(bind, _target_org_ids(bind))
 
 
 def downgrade() -> None:
-    """Remove the flag from the organizations this migration selected.
-
-    The exact inverse is not recoverable — nothing recorded which of the
-    selected organizations already carried ``true`` — so this reverses the
-    selection rather than the individual writes: the key is dropped wherever it
-    is ``true`` on an organization with a published request form, returning it
-    to "never configured". For an organization that had deliberately turned it
-    on, that is still the right end state on a downgrade: the code being
-    reverted to does not read the flag on the Forms path at all, so its stored
-    value changes nothing there.
-    """
-    if not (_has_table("organizations") and _has_table("forms")):
-        return
-    if not _has_table("form_integrations"):
-        return
-    bind = op.get_bind()
-    _rewrite_flag(bind, _target_org_ids(bind), None)
+    """No-op — see "Irreversible" in the module docstring."""

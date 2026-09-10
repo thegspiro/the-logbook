@@ -1024,6 +1024,40 @@ async def schedule_request(
     # calendar, so a link to a stood-down event is never handed out.
     event_id = existing_event.id if existing_event is not None else None
 
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+
+    # Resolve the confirmed end once, here, and store it on the request.
+    #
+    # An end at or before the start is refused by both EventCreate and
+    # EventUpdate, so `data.event_end_date or data.event_date` raised an
+    # uncaught ValidationError — a 500 — every time a coordinator scheduled a
+    # request without filling in the optional end time. It also meant the room
+    # double-booking check below measured a zero-length window, which overlaps
+    # nothing and therefore always passed.
+    #
+    # Deriving it is not enough on its own: `open_staffing_shift` and
+    # `sync_staffing_shift_date` fall back to `start + 2 hours` when the request
+    # carries no end, so a derived-but-unstored end would put the calendar entry
+    # and the volunteer signup sheet on different clocks for the same outreach
+    # event. Writing it back makes the request the single authority every
+    # surface already reads (CLAUDE.md pitfall #29).
+    #
+    # A moved entry keeps the length the coordinator already gave it; a new one
+    # takes the department's default event length.
+    if data.event_end_date:
+        end_datetime = data.event_end_date
+    elif existing_event is not None:
+        span = existing_event.end_datetime - existing_event.start_datetime
+        if span <= timedelta(0):
+            span = timedelta(minutes=event_duration_minutes(org))
+        end_datetime = data.event_date + span
+    else:
+        end_datetime = data.event_date + timedelta(minutes=event_duration_minutes(org))
+    event_request.event_end_date = end_datetime
+
     # Optionally create a calendar event
     if data.create_calendar_event:
         from app.services.event_service import EventService
@@ -1031,10 +1065,6 @@ async def schedule_request(
         event_service = EventService(db)
 
         # Get outreach type label for event title
-        org_result = await db.execute(
-            select(Organization).where(Organization.id == current_user.organization_id)
-        )
-        org = org_result.scalar_one_or_none()
         outreach_types = get_outreach_types(org) if org else []
         type_label = event_request.outreach_type.replace("_", " ").title()
         for t in outreach_types:
@@ -1045,27 +1075,6 @@ async def schedule_request(
         title = f"{type_label} — {event_request.contact_name}"
         if event_request.organization_name:
             title = f"{type_label} — {event_request.organization_name}"
-
-        # An end at or before the start is refused by both EventCreate and
-        # EventUpdate, so `data.event_end_date or data.event_date` raised an
-        # uncaught ValidationError — a 500 — every time a coordinator scheduled
-        # a request without filling in the optional end time. It also meant the
-        # room double-booking check below measured a zero-length window, which
-        # overlaps nothing and therefore always passed.
-        #
-        # A moved entry keeps the length the coordinator already gave it; a new
-        # one takes the department's default event length.
-        if data.event_end_date:
-            end_datetime = data.event_end_date
-        elif existing_event is not None:
-            span = existing_event.end_datetime - existing_event.start_datetime
-            if span <= timedelta(0):
-                span = timedelta(minutes=event_duration_minutes(org))
-            end_datetime = data.event_date + span
-        else:
-            end_datetime = data.event_date + timedelta(
-                minutes=event_duration_minutes(org)
-            )
 
         # Check for room double-booking if location specified
         if data.location_id:
@@ -1146,12 +1155,7 @@ async def schedule_request(
     # opened the first time round; move it rather than stranding the crew on
     # the old date.
     if event_request.staffing_shift_id:
-        org_for_shift = await db.scalar(
-            select(Organization).where(Organization.id == current_user.organization_id)
-        )
-        await sync_staffing_shift_date(
-            db, event_request, org_for_shift, current_user.id
-        )
+        await sync_staffing_shift_date(db, event_request, org, current_user.id)
 
     activity = EventRequestActivity(
         request_id=event_request.id,

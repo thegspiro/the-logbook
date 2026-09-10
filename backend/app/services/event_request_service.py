@@ -148,6 +148,38 @@ TIMES_OF_DAY = ("morning", "afternoon", "evening", "flexible")
 OUTREACH_TYPE_MAX_LENGTH = 100
 
 
+# EventRequestCreate bounds audience_size at 1..10000; the forms path maps a
+# free-text answer straight onto the column, so it needs the same bounds to
+# store the same shape.
+AUDIENCE_SIZE_MIN = 1
+AUDIENCE_SIZE_MAX = 10000
+
+
+def parse_audience_size(value: Any) -> Optional[int]:
+    """Read a requester's attendance estimate, or None when it is not a number.
+
+    The generated public form asks this as a TEXT field, so the answer is
+    whatever somebody typed. An unparseable one costs this field and nothing
+    else: the coordinator still gets the request, and the requester's own words
+    survive in ``description``.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        size = int(text)
+    except ValueError:
+        try:
+            size = int(float(text))
+        except ValueError:
+            return None
+    if size < AUDIENCE_SIZE_MIN:
+        return None
+    return min(size, AUDIENCE_SIZE_MAX)
+
+
 def _clamp_choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
     """Settle a preference field onto one of its known values."""
     text = str(value).strip().lower() if value is not None else ""
