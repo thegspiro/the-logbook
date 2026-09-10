@@ -145,7 +145,6 @@ Response: {
 1. **Basic Information** (required):
    - Organization Name
    - URL Slug (auto-generated)
-   - Description (optional)
    - Organization Type: `fire_department`, `ems_only`, `fire_ems_combined`
    - Timezone
 
@@ -180,7 +179,6 @@ Response: {
 6. **Additional Information**:
    - County/Jurisdiction
    - Year Founded
-   - Tax ID (EIN)
 
 7. **Organization Logo**:
    - Drag-and-drop upload
@@ -422,7 +420,7 @@ after that.
 **API Call** (test connection):
 
 ```
-POST /api/v1/onboarding/test-email
+POST /api/v1/onboarding/test/email
 Body: {
   platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
   config: { ...platform-specific fields... }
@@ -432,7 +430,7 @@ Body: {
 **API Call** (save config):
 
 ```
-POST /api/v1/onboarding/save-email-config
+POST /api/v1/onboarding/session/email
 Body: {
   platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
   config: { ...platform-specific fields... }
@@ -1044,7 +1042,7 @@ to document an organization body the route had stopped accepting.
 | `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`, `authenticated`. Also sets the auth cookies; `authenticated` is the signal the frontend uses to set its `has_session` hint, since the cookies themselves are httpOnly and invisible to it |
 | `POST /onboarding/modules`                                               | `{ message, modules }` — every accepted id, not only the enabled ones. The boolean is the **stored** value only for the ids the wizard asks about; for settings-only and legacy ids it echoes the request, so `finance: true` can come back with the setting untouched (see Configure Modules)         |
 | `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                                                                                                                                              |
-| `POST /onboarding/reset`                                                 | `{ success, message }` — **destructive**: empties the user, organization, role, facility and onboarding tables. Refused after completion, and restricted to the System Owner once one exists (see Reset Onboarding)                                                                                    |
+| `POST /onboarding/reset`                                                 | `{ success, message, next_step }` — **destructive**: empties the user, organization, role, facility and onboarding tables. Refused after completion, and restricted to the System Owner once one exists (see Reset Onboarding)                                                                         |
 | `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
 | `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
 | `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                                                                                                                                               |
@@ -1445,7 +1443,10 @@ Use the admin panel to manage settings.` So it is a bootstrap-only escape
   `System-owner role is missing; onboarding cannot be reset safely.` — failing
   closed on the one operation where failing open would be unrecoverable.
 
-Returns `{ success, message }`. Rate-limited on its own scope, like
+Returns `{ success, message, next_step }`, where `next_step` is
+`"Navigate to /onboarding/start to begin again"` — the only pointer a caller
+gets back after an operation that has just deleted the users, organization
+and session it was working with. Rate-limited on its own scope, like
 `/test/email`.
 
 ### Complete Onboarding
@@ -1474,13 +1475,20 @@ Marks onboarding as finished, and does three further things worth knowing:
   so the department block stays session-only and disappears with it.
 
 - **Seeds default data**: `_seed_default_data()` creates the standard admin
-  hours categories and event mappings against the first organization and admin
-  user, so hour tracking works immediately after setup. It is **best-effort** —
-  the whole body is wrapped in `try/except` and a failure is logged as
-  `Non-critical: failed to seed admin hours defaults` while completion
-  continues. So an installation can complete successfully and still lack these
-  defaults, and the only trace is that warning. Worth knowing before concluding
-  the categories were deleted.
+  hours categories and event mappings so hour tracking works immediately after
+  setup. It attributes them to the oldest organization and to **whichever user
+  the database returns first** — the query is `select(User).limit(1)` with no
+  `order_by`, so `created_by` is not guaranteed to be the System Owner. When
+  onboarding also created IT-team accounts, one of those ordinary members can
+  be recorded as the creator. Treat `created_by` on a seeded category as
+  unspecified rather than meaningful.
+
+  It is also **best-effort** — the whole body is wrapped in `try/except` and a
+  failure is logged as `Non-critical: failed to seed admin hours defaults`
+  while completion continues. So an installation can complete successfully and
+  still lack these defaults, and the only trace is that warning. Worth knowing
+  before concluding the categories were deleted.
+
 - **Writes an audit entry** — `onboarding.completed`, recording the
   organization name, admin username and enabled modules.
 
