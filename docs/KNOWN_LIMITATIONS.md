@@ -1761,41 +1761,34 @@ doc, not here.
 **✅ The original finding is resolved (2026-09-10)** — PR
 [#2452](https://github.com/thegspiro/the-logbook/pull/2452) re-pinned
 `typescript` to `5.9.3` in `frontend/package.json`, matching CLAUDE.md's
-documented arrangement again. Verified: `npm ci` (fresh), `npx eslint .`
-(0 problems), and `tsc-native.mjs --noEmit` (0 errors) all clean, and bare
-`tsc` run from the repo root now resolves the `5.9.3` the linter type-checks
-against (see CLAUDE.md's correction on that point too — bare `tsc` run from
-inside `frontend/` still resolves the nested `7.0.2`, unrelated to this fix).
+documented arrangement again. `npm ci`, `eslint`, and `tsc-native.mjs
+--noEmit` are all verified clean against the committed lockfile.
 
-**⚠️ Still open, escalated rather than fixed — needs an owner decision:**
-fixing the pin surfaced a second, distinct problem the pin alone doesn't
-close. `npm ls typescript` reports `frontend/node_modules/typescript@7.0.2
-invalid` against the `5.9.3` requirement — reproducible even from a
-from-scratch `rm package-lock.json && npm install`, so this is not the
-stale-lockfile artifact the original finding described; it is npm's
-resolver choosing this layout every time, an apparent inherent consequence
-of `typescript-native: npm:typescript@7.0.2` sharing its real package name
-with the direct `typescript` dependency. `npm dedupe` doesn't clear it
-either — at the time this was tried it also failed outright on a second,
-genuinely unrelated `@vitest/ui`/`vitest` peer conflict (`@vitest/ui` was
-declared at `^5.0.0` against `vitest@^4.1.10`, and — unlike this
-typescript/alias case — that one _was_ a plain stale declaration, not an
-inherent npm-resolver choice: fixed the same day by pinning `@vitest/ui`
-to `^4.1.10` and removing the lockfile's stale nested
-`frontend/node_modules/@vitest/ui@5.0.0` entry by hand, which brought
-`npm ls` fully clean for that package and un-broke `npm run test:ui`,
-which had been crashing with `ERR_MODULE_NOT_FOUND`). `npm dedupe` still
-doesn't help the typescript case specifically, now confirmed on a
-tree with no other peer conflict left to blame.
-`npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
-clean under it, so nothing in the actual build/lint/test path is broken —
-but `npm ls typescript`'s own `ELSPROBLEMS` is a real, standing failure of
-that specific check, not a cosmetic one, and closing it looks like it needs
-restructuring how `typescript-native` is aliased: a larger, architectural
-change nobody has taken on, genuinely past what a manifest/lockfile-text
-fix can resolve. See CLAUDE.md's "Two TypeScript installs" section (updated
-the same day) for the current accurate description of the tree; update
-both there and here once the alias is restructured.
+**⚠️ Still open, escalated rather than fixed:** fixing the pin surfaced a
+second, distinct problem the pin alone doesn't close. `npm ls typescript`
+reports `frontend/node_modules/typescript@7.0.2 invalid` against the
+`5.9.3` requirement, and bare `tsc` run from `frontend/` resolves `7.0.2`,
+not `5.9.3` — both confirmed twice, independently, via a fresh `npm ci`
+directly against `origin/main` with no local edits (a note briefly stood
+here claiming this was clean, based on testing a lockfile that had been
+hand-merged across branches with `git merge` — not a reliable way to
+verify a generated lockfile; that claim was wrong and is retracted). This
+looks like an inherent consequence of `typescript-native:
+npm:typescript@7.0.2` sharing its real package name with the direct
+`typescript` dependency. `npm ci`, `eslint`, and `tsc-native.mjs --noEmit`
+are all still verified clean under it (and CI's own "Frontend Lint,
+Typecheck & Build" job has been green across every PR touching this tree),
+so nothing in the actual build/lint/test path is failing — but `npm ls
+typescript`'s own `ELSPROBLEMS` is a real, standing dependency-check
+failure, not a cosmetic one. Closing it needs a restructure of how
+`typescript-native` is aliased, which is beyond a manifest-text fix and
+hasn't been done. See CLAUDE.md's "Two TypeScript installs" section for
+the current, verified-accurate description, including why a full `rm
+package-lock.json && npm install` regeneration is separately unreliable
+for this tree (it has produced this same invalid entry, silently shifted
+the root `typescript` to an undeclared version, and crashed npm outright,
+on different attempts from the same starting state) and should never be
+used to diagnose or "clean up" this dependency graph.
 
 <details>
 <summary>Original entry (superseded by the above), preserved for history</summary>
@@ -1837,6 +1830,32 @@ version to match. Cross-cutting frontend tooling, not any one feature's
 code, so it is flagged here rather than fixed inside a single-feature PR.
 
 </details>
+
+## Frontend — `npm run test:ui` crashed on a `@vitest/ui`/`vitest` version mismatch (2026-09-10)
+
+**✅ Resolved.** `frontend/package.json` declared `@vitest/ui: ^5.0.0`
+against `vitest: ^4.1.10` (and `@vitest/coverage-v8: ^4.1.10`) — a real
+version mismatch, not merely a lint-tool quirk: `npm run test:ui`
+(`vitest --ui`) crashed outright with `Error [ERR_MODULE_NOT_FOUND]:
+Cannot find package '@vitest/ui'`, because the hoisted `vitest@4.1.11`
+could not import the incompatible `@vitest/ui@5.0.0` nested under
+`frontend/`. Found incidentally while investigating an unrelated
+`typescript` finding (`npm dedupe` failing on this same peer conflict was
+the first symptom). Fixed by pinning `@vitest/ui` to `^4.1.10` and
+removing the lockfile's stale nested `frontend/node_modules/@vitest/ui`
+entry (a targeted fix, not a full `rm package-lock.json && npm install` —
+see CLAUDE.md's "Two TypeScript installs" section for why a full
+regeneration is unreliable for this tree and should be avoided).
+
+Verified via a fresh `npm ci`: `npm ls vitest @vitest/ui` reports no
+invalid nodes, `npx vitest --ui --run` starts cleanly (no longer crashes),
+a scoped subset (36 files, 817 tests) passes cleanly, and a full-suite run
+completed all 6,982 individual tests successfully (one test _file_'s
+worker process crashed mid-run with "Worker exited unexpectedly" — an
+environment artifact of this same investigation session disrupting
+`node_modules` mid-run, not a test failure; every test that did run
+passed). CI's own frontend test job is the authoritative full-suite
+signal regardless.
 
 ## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
 

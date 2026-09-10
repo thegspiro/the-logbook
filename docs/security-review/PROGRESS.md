@@ -51,14 +51,36 @@ fix went out separately:
 [#2452](https://github.com/thegspiro/the-logbook/pull/2452), pinning
 `typescript` back to `5.9.3`. That PR's own Codex review then caught a
 second-order effect the pin alone doesn't clear — `npm ls typescript`
-still reports `frontend/node_modules/typescript@7.0.2` as `invalid`,
-reproducible even from a from-scratch lockfile regeneration, evidently an
-inherent consequence of the `typescript-native: npm:typescript@7.0.2`
-alias sharing its real package name with the direct dependency. `npm ci`,
-`eslint`, and `tsc-native.mjs --noEmit` are all still verified clean under
-it. Kept out of this feature's own rotation entry either way — cross-cutting
-frontend tooling, not Events & Requests code. See PR #2452 for the full
-investigation.
+reports `frontend/node_modules/typescript` as `invalid`, and bare `tsc`
+from `frontend/` resolves `7.0.2`, not `5.9.3`. Confirmed twice,
+independently, via a fresh `npm ci` directly against `origin/main` with no
+local edits — an intermediate re-investigation briefly concluded this was
+clean, based on testing a lockfile that had been hand-merged across
+branches with `git merge` (not a reliable way to verify a generated
+lockfile); that conclusion was wrong and is retracted. `npm ci`, `eslint`,
+and `tsc-native.mjs --noEmit` are all still verified clean regardless, and
+CI's own "Frontend Lint" job stays green across every PR touching this
+tree — so nothing in the actual build/lint/test path is broken, but `npm
+ls typescript` itself is a real, standing failure, escalated (not
+resolved) in `docs/KNOWN_LIMITATIONS.md`. Separately confirmed: a full,
+lockfile-free `rm package-lock.json && npm install` is unreliable for this
+tree on top of that — across attempts it has reproduced the same invalid
+entry, silently shifted the root `typescript` to an undeclared `6.0.3`,
+and crashed npm outright (`Cannot read properties of null (reading
+'edgesOut')`) — so it should never be used to diagnose or "clean up" this
+tree; only a targeted `npm install <pkg>@<version>` against a lockfile
+freshly checked out from the base branch, verified with `npm ci`
+afterward, is reliable. Corrected CLAUDE.md's "Two TypeScript installs"
+section accordingly. Kept out of this feature's own rotation entry either
+way — cross-cutting frontend tooling, not Events & Requests code.
+
+A second, genuinely separate and real issue surfaced during this same
+investigation: `frontend/package.json` declared `@vitest/ui: ^5.0.0`
+against `vitest: ^4.1.10`, a real version mismatch that crashed `npm run
+test:ui` outright (`ERR_MODULE_NOT_FOUND`). Fixed by pinning `@vitest/ui`
+to `^4.1.10` — verified via fresh `npm ci`, `npm ls` clean, and the script
+no longer crashing. See `docs/KNOWN_LIMITATIONS.md`'s own entry for
+detail.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 4, PR #2451, before the Codex-review tiebreaker fix and the typescript follow-up), preserved for history</summary>
@@ -12611,16 +12633,35 @@ CLAUDE.md's own rule ("the plain `typescript` moves only when the linter's
 cap does"): PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452).
 
 **PR #2452's own Codex review** then caught a second-order effect the pin
-alone doesn't clear: `npm ls typescript` still reports
-`frontend/node_modules/typescript@7.0.2 invalid`, reproducible even from a
-from-scratch lockfile regeneration — an inherent consequence of the
-`typescript-native: npm:typescript@7.0.2` alias sharing its real package
-name with the direct dependency, not a stale artifact. `npm ci`, `eslint`,
-and `tsc-native.mjs --noEmit` all verified clean regardless. Corrected
-CLAUDE.md's "Two TypeScript installs" section, which had claimed nothing
-nests under `frontend/node_modules/` — no longer accurate — and added a
-`docs/KNOWN_LIMITATIONS.md` entry. PR #2452 kept the `5.9.3` pin regardless
-(still strictly more correct than `7.0.2`) and merged.
+alone doesn't clear: `npm ls typescript` reports
+`frontend/node_modules/typescript@7.0.2 invalid`, and bare `tsc` from
+`frontend/` resolves `7.0.2` not `5.9.3` — confirmed twice, independently,
+via a fresh `npm ci` directly against `origin/main` with no local edits.
+(A mid-investigation detour briefly concluded this was clean, based on
+testing a lockfile that had been hand-merged across branches with `git
+merge` rather than freshly checked out — not a reliable way to verify a
+generated lockfile. That conclusion was wrong and is retracted; this Log
+entry states the corrected, twice-confirmed finding.) `npm ci`, `eslint`,
+and `tsc-native.mjs --noEmit` are all still verified clean regardless, so
+nothing in the build/lint/test path is broken, but `npm ls typescript`
+itself is a real, standing failure — escalated in
+`docs/KNOWN_LIMITATIONS.md`, not resolved. Separately confirmed: `rm
+package-lock.json && npm install` (full, lockfile-free re-resolution) is
+unreliable for this tree on its own terms — across attempts it has
+reproduced this same invalid entry, silently shifted the root `typescript`
+to an undeclared `6.0.3`, and crashed npm outright with an internal error
+— so it should never be used to diagnose or "clean up" this dependency
+tree; only a targeted `npm install <pkg>@<version>` against a freshly
+checked-out lockfile, verified with `npm ci` afterward, is reliable.
+Corrected CLAUDE.md's "Two TypeScript installs" section and the
+`docs/KNOWN_LIMITATIONS.md` entry to say so accurately. Separately, and
+genuinely: found and fixed a real
+`@vitest/ui@^5.0.0` vs `vitest@^4.1.10` version mismatch that crashed
+`npm run test:ui` outright — pinned `@vitest/ui` to `^4.1.10`, verified
+clean. PR #2452 kept the `5.9.3` `typescript` pin (still strictly more
+correct than `7.0.2`) and merged; the `@vitest/ui` fix and the doc
+corrections landed on this bookkeeping PR (#2454) instead, since #2452 was
+already merged by the time they were found.
 
 Both #2451 and #2452 merged clean, all CI green, Codex review threads
 resolved. Rotation row 16 → `✅` in both the prose note and the Rotation

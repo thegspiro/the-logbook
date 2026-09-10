@@ -216,29 +216,50 @@ neither depends on npm choosing to auto-install anything.
 | `node_modules/typescript`        | 5.9.3   | The frontend's own declaration, hoisted |
 | `node_modules/typescript-native` | 7.0.2   | The aliased compiler, hoisted           |
 
-**Correction (2026-09-10):** the claim that nothing nests under
-`frontend/node_modules/` does not hold. `frontend/node_modules/typescript`
-resolves to `7.0.2` — reproducibly, including from a from-scratch
-`rm package-lock.json && npm install` — while the hoisted root
-`node_modules/typescript` is `5.9.3`, so `npm ls typescript` reports the
-nested one `invalid` (`ELSPROBLEMS`). This appears to be an inherent
-consequence of `typescript-native: npm:typescript@7.0.2` sharing its real
-package name with the direct `typescript` dependency, not a stale lockfile
-artifact — npm's resolver chooses this layout on every attempt, not just
-the one committed. `npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
-clean against it (see PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452)),
-so nothing in the actual build/lint/test path is failing — but `npm ls
-typescript` itself is a real, standing dependency-check failure
-(`ELSPROBLEMS`), not merely a cosmetic one, and per this file's own "Fix
-All Errors" policy that is not something to leave silently unaddressed.
-Closing it needs a restructure of how `typescript-native` is aliased,
-which is beyond a manifest-text fix and hasn't been done — **this is
-escalated, not resolved:** see `docs/KNOWN_LIMITATIONS.md`'s "Frontend —
-`typescript`'s declared version has drifted..." entry for the open item
-awaiting that decision. Don't re-attempt a lockfile regeneration or `npm
-dedupe` expecting a different outcome (both were tried; see that entry)
-without a real change to the alias structure itself, and update this
-paragraph for real once one lands.
+**Correction (2026-09-10), re-confirmed against the actual committed
+lockfile:** the claim that nothing nests under `frontend/node_modules/`
+does not hold. `frontend/node_modules/typescript` resolves to `7.0.2`
+while the hoisted root `node_modules/typescript` is `5.9.3`, so `npm ls
+typescript` reports the nested one `invalid` (`ELSPROBLEMS`), and a bare
+`tsc` run from inside `frontend/` resolves `7.0.2`, not `5.9.3` — verified
+via a fresh `npm ci` (exactly what CI and the Docker build run) directly
+against `origin/main`, with no local edits. (An intermediate version of
+this note briefly claimed the opposite — "verified clean" — based on
+testing against a lockfile that had been hand-merged with an unrelated
+branch's changes via `git merge`, which is not a reliable way to test a
+generated lockfile; that claim was wrong and has been reverted. The
+finding below is the one confirmed twice, independently, against a clean
+`npm ci`.)
+
+This appears to be an inherent consequence of `typescript-native:
+npm:typescript@7.0.2` sharing its real package name with the direct
+`typescript` dependency, not a stale artifact fixable by regenerating —
+`npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
+clean under it (CI's own "Frontend Lint, Typecheck & Build" job has been
+green across every PR touching this tree), so nothing in the actual
+build/test path is failing, but `npm ls typescript`'s own `ELSPROBLEMS` is
+a real, standing dependency-check failure. Closing it needs a restructure
+of how `typescript-native` is aliased, which is beyond a manifest-text fix
+and hasn't been done — **this is escalated, not resolved:** see
+`docs/KNOWN_LIMITATIONS.md`'s "Frontend — `typescript`'s declared version
+has drifted..." entry for the open item awaiting that decision.
+
+**Separately: this lockfile is not safely regenerable from scratch either.**
+`rm package-lock.json && npm install` — a full, lockfile-free
+re-resolution — is unreliable for this tree: across repeated attempts it
+has produced a spurious invalid `typescript` entry, silently shifted the
+_root_ `typescript` to an unrelated, undeclared `6.0.3` (which broke
+type-aware lint locally), and crashed npm outright with an internal error
+(`Cannot read properties of null (reading 'edgesOut')`, npm 10.9.7) — three
+different failure modes from the same starting state on different
+attempts. Never run `rm package-lock.json && npm install` to "clean up" or
+diagnose this tree, and never hand-merge a generated lockfile across
+branches with `git merge` — regenerate a _specific_ package's resolution
+with a targeted `npm install <pkg>@<version>` against a lockfile freshly
+checked out from the base branch, and verify with `npm ci` afterward
+(never `npm install`, which re-resolves from the manifest rather than
+trusting the lockfile), the way #2452 and the `@vitest/ui` fix below both
+did.
 
 **typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
@@ -258,15 +279,14 @@ Consequences worth knowing:
 - `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
   which resolves the aliased compiler explicitly. Keep it that way — the
   wrapper is what makes "which compiler ran" a fact rather than a hoisting
-  outcome. **Bare `tsc` resolves to whichever bin sits closest to the
-  current directory, not any fixed version:** `frontend/node_modules/.bin/tsc`
-  (the nested `typescript@7.0.2` the "Correction" above documents) shadows
-  the root's `node_modules/.bin/tsc` (`5.9.3`) whenever the command runs
-  from inside `frontend/` — confirmed via `npx --no-install tsc --version`
-  there, which prints `7.0.2`. Never trust a bare `tsc` invocation's version
-  from either directory; use `tsc-native.mjs` (or, to deliberately run the
-  5.9.3 the linter uses, `node_modules/typescript/bin/tsc` from the repo
-  root).
+  outcome. **Bare `tsc` resolves differently depending on the current
+  directory, against the committed lockfile:** `5.9.3` from the repo root,
+  but `7.0.2` from `frontend/` — the nested `frontend/node_modules/.bin/tsc`
+  the "Correction" above documents shadows the root's own bin. Verified via
+  `npx --no-install tsc --version` in both directories, after a fresh
+  `npm ci`. Never trust a bare `tsc` invocation's version from either
+  directory; use `tsc-native.mjs` (or, to deliberately run the `5.9.3` the
+  linter uses, `node_modules/typescript/bin/tsc` from the repo root).
 - **Point your editor at the aliased compiler.** In VS Code, set this in your
   local `.vscode/settings.json` (the directory is gitignored, so this cannot
   be committed for you):
