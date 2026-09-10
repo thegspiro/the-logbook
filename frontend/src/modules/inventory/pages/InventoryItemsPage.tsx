@@ -80,6 +80,18 @@ import { Breadcrumbs } from '../../../components/ux';
 const PAGE_SIZE = 50;
 
 /**
+ * Consecutive pages the list may fetch on its own to refill a table that a
+ * collapsed group emptied.
+ *
+ * Three, so a group spanning a page boundary or two still resolves without a
+ * tap, while collapsing a category of several hundred cannot walk the whole
+ * catalogue. On the fourth the member gets the Load More button back and
+ * decides for themselves — the point is that the automatic path is a
+ * convenience, and a convenience that issues eight requests is not one.
+ */
+const MAX_AUTO_TOP_UPS = 3;
+
+/**
  * Delay before a filter change is sent, applied to every control alike.
  *
  * Search needs it — a request per keystroke otherwise — and giving the
@@ -213,12 +225,23 @@ function variantClusters(entries: { item: InventoryItem }[]): {
   return { leads, followerOf };
 }
 
-/** The one value every member shares, or null when they differ. */
-function sharedValue<T>(members: InventoryItem[], read: (item: InventoryItem) => T): T | null {
+/**
+ * The one value every member shares, or `{shared: false}` when they differ.
+ *
+ * A tagged result rather than `T | null`, because for a nullable column the two
+ * answers collide: every member of an uncategorised product agrees, and their
+ * shared value IS null. Returning null for both made the row read "Mixed" —
+ * telling a quartermaster a product spans several categories when it belongs
+ * to none.
+ */
+function sharedValue<T>(
+  members: InventoryItem[],
+  read: (item: InventoryItem) => T
+): { shared: true; value: T } | { shared: false } {
   const first = members[0];
-  if (!first) return null;
+  if (!first) return { shared: false };
   const value = read(first);
-  return members.every((m) => read(m) === value) ? value : null;
+  return members.every((m) => read(m) === value) ? { shared: true, value } : { shared: false };
 }
 
 /**
@@ -344,11 +367,11 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
         </button>
       </td>
       <td data-label="Status" className={`px-3 py-3 ${showStatus ? '' : 'md:hidden'}`}>
-        {status ? (
+        {status.shared ? (
           <span
-            className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(status)}`}
+            className={`inline-flex rounded-sm border px-2 py-0.5 text-[11px] font-semibold ${getStatusStyle(status.value)}`}
           >
-            {status.replace(/_/g, ' ').toUpperCase()}
+            {status.value.replace(/_/g, ' ').toUpperCase()}
           </span>
         ) : (
           mixed
@@ -356,7 +379,7 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
       </td>
       {showCategory && (
         <td data-label="Category" className="text-theme-text-muted px-3 py-3">
-          {categoryId === null ? mixed : (categories.find((c) => c.id === categoryId)?.name ?? '')}
+          {!categoryId.shared ? mixed : (categories.find((c) => c.id === categoryId.value)?.name ?? '')}
         </td>
       )}
       <td data-label="Variant" className="text-theme-text-muted px-3 py-3 text-xs">
@@ -373,22 +396,24 @@ const VariantProductRow: React.FC<VariantProductRowProps> = ({
         {onHand === null ? '--' : onHand}
       </td>
       {showCondition && (
-        <td data-label="Condition" className={`px-3 py-3 capitalize ${condition ? getConditionColor(condition) : ''}`}>
-          {condition ? condition.replace(/_/g, ' ') : mixed}
+        <td
+          data-label="Condition"
+          className={`px-3 py-3 capitalize ${condition.shared ? getConditionColor(condition.value) : ''}`}
+        >
+          {condition.shared ? condition.value.replace(/_/g, ' ') : mixed}
         </td>
       )}
       {showLocation && (
         <td data-label="Location" className="text-theme-text-muted max-w-[160px] truncate px-3 py-3">
-          {location === null ? mixed : location || '-'}
+          {!location.shared ? mixed : location.value || '-'}
         </td>
       )}
-      {/* Mobile-only detail cells, empty here: they describe one physical item
-          (serial, asset tag, barcode) and a product row is not one. */}
-      <td data-label="Manufacturer" className="hidden" />
-      <td data-label="Serial #" className="hidden" />
-      <td data-label="Asset Tag" className="hidden" />
-      <td data-label="Barcode" className="hidden" />
-      <td data-label="Cost" className="hidden" />
+      {/* No mobile-only detail cells here. They describe one physical item
+          (serial, asset tag, barcode) and a product row is not one -- and below
+          768px `.rwd-table tbody td` is display:flex with only the cells
+          carrying NO data-label hidden, so rendering them empty put five blank
+          labelled rows in every folded card. They are `hidden` on desktop, so
+          leaving them out costs no column there. */}
       <td className="px-3 py-3" />
       {canManage && <td data-label="" className="hidden" />}
     </tr>
@@ -1219,20 +1244,35 @@ const InventoryItemsPage: React.FC = () => {
   }, [loadItems, loadSummary]);
   useInventoryWebSocket({ onEvent: onWs });
 
-  /* ---- pagination ---- */
-  const handleMore = async () => {
+  /* ---- pagination ----
+     Returns whether the page actually arrived, because the automatic top-up
+     below has to stop on a failure rather than treat it as "try again". */
+  const loadMorePage = async (): Promise<boolean> => {
     const ns = skip + PAGE_SIZE;
-    setSkip(ns);
     setLoadingMore(true);
     try {
       const res = await inventoryService.getItems({ ...filterParams(), skip: ns, limit: PAGE_SIZE });
       setItems((prev) => [...prev, ...asArray(res.items)]);
       setTotal(res.total ?? 0);
+      // Advanced only on success. Moving it before the request meant a failed
+      // page still consumed its offset, so the next attempt asked for the one
+      // after it and the rows in between were never fetched.
+      setSkip(ns);
+      return true;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load more'));
+      return false;
     } finally {
       setLoadingMore(false);
     }
+  };
+
+  const handleMore = async () => {
+    // A manual press is the member asking again, so it clears whatever stopped
+    // the automatic top-up.
+    autoTopUpsRef.current = 0;
+    topUpHaltedRef.current = false;
+    await loadMorePage();
   };
 
   /* ---- sorting ---- */
@@ -1507,12 +1547,27 @@ const InventoryItemsPage: React.FC = () => {
      sections, fetch the next page until something is visible or the set runs
      out.
 
-     Zero, not "fewer than a full page", deliberately: topping up to a full
-     page means collapsing one 400-row category pulls most of the catalogue in
-     a burst of requests. Pinned rows are excluded because they are never
-     grouped — counting them would suppress the top-up permanently for anyone
-     who keeps a shortlist, which is exactly the member most likely to
-     collapse a group. */
+     Zero, not "fewer than a full page": topping up to a full page means
+     collapsing one 400-row category pulls most of the catalogue. Pinned rows
+     are excluded because they are never grouped — counting them would suppress
+     the top-up permanently for anyone who keeps a shortlist, which is exactly
+     the member most likely to collapse a group.
+
+     Zero-visible is NOT self-limiting on its own, which an earlier version of
+     this comment claimed. The backend orders by group key and then applies
+     offset/limit (`_run_items_page`); nothing keeps a group inside one page. A
+     collapsed group larger than PAGE_SIZE therefore yields page after page of
+     entirely hidden rows, and "keep going until something is visible" walks
+     the whole group — the very burst the paragraph above rules out. A failed
+     request is worse: it leaves the visible count at zero with `hasMore` still
+     true, so the effect fires again immediately, forever, one toast per turn.
+
+     So the top-up is bounded twice over: at most MAX_AUTO_TOP_UPS consecutive
+     pages, and it halts outright on the first failure. Both counters reset
+     when the member presses Load More or changes what is on screen, because
+     either is them asking again. */
+  const autoTopUpsRef = useRef(0);
+  const topUpHaltedRef = useRef(false);
   const visibleGroupedRows = useMemo(() => {
     if (!loadedGroupBy) return availableItems.length + unavailableItems.length;
     const shown = (section: string, list: InventoryItem[]) =>
@@ -1520,14 +1575,24 @@ const InventoryItemsPage: React.FC = () => {
     return shown('Available', availableItems) + shown('Unavailable', unavailableItems);
   }, [loadedGroupBy, availableItems, unavailableItems, collapsed]);
 
+  // Anything the member does to change what is on screen is them asking again.
+  useEffect(() => {
+    autoTopUpsRef.current = 0;
+    topUpHaltedRef.current = false;
+  }, [collapsed, loadedGroupBy]);
+
   useEffect(() => {
     if (loading || loadingMore || !hasMore) return;
     if (visibleGroupedRows > 0) return;
-    void handleMore();
-    // `handleMore` is omitted on purpose: it is redefined on every render, so
-    // listing it re-runs this effect continuously. The guards above are what
-    // terminate the loop — each call raises `items.length` toward `total`, and
-    // `hasMore` goes false when the set is exhausted.
+    if (topUpHaltedRef.current || autoTopUpsRef.current >= MAX_AUTO_TOP_UPS) return;
+    autoTopUpsRef.current += 1;
+    void loadMorePage().then((ok) => {
+      if (!ok) topUpHaltedRef.current = true;
+    });
+    // `loadMorePage` is omitted on purpose: it is redefined on every render, so
+    // listing it re-runs this effect continuously. The refs above are what
+    // terminate the loop, and they do it without depending on the response —
+    // `hasMore` alone does not, because a rejected request leaves it true.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleGroupedRows, hasMore, loading, loadingMore]);
 
