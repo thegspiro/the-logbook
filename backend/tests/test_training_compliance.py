@@ -12,6 +12,7 @@ All tests run without a database by using mock requirement/record objects.
 from datetime import date
 from types import SimpleNamespace
 
+from app.services.training_compliance import requirement_applies_to_member
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
     WaiverPeriod,
@@ -49,6 +50,7 @@ def _make_requirement(**kwargs):
         "category_ids": None,
         "applies_to_all": True,
         "required_roles": None,
+        "required_membership_types": None,
         "required_positions": None,
         "start_date": None,
         "due_date": None,
@@ -87,6 +89,82 @@ def _make_record(**kwargs):
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
+
+
+# =====================================================
+# 0. requirement_applies_to_member tests
+# =====================================================
+#
+# This precedence (applies_to_all > required_membership_types >
+# required_roles) was independently reimplemented, incompletely, at four
+# call sites before being extracted here (Codex reviews of PR #2455, TR-17
+# pass 4). Testing the shared helper directly is cheaper than re-deriving
+# these cases at each caller and is what keeps a fifth reimplementation
+# from drifting the same way.
+
+
+class TestRequirementAppliesToMember:
+    def test_applies_to_all_wins_over_a_stale_membership_type_list(self):
+        """The two fields are independent and unvalidated — a requirement
+        created as "applies to all" and later scoped down without also
+        clearing applies_to_all is a reachable state, not a hypothetical
+        one. applies_to_all must still win."""
+        req = _make_requirement(
+            applies_to_all=True, required_membership_types=["reserve"]
+        )
+        assert requirement_applies_to_member(req, "active") is True
+
+    def test_membership_type_match_applies(self):
+        req = _make_requirement(
+            applies_to_all=False, required_membership_types=["active", "reserve"]
+        )
+        assert requirement_applies_to_member(req, "active") is True
+
+    def test_membership_type_mismatch_does_not_apply(self):
+        req = _make_requirement(
+            applies_to_all=False, required_membership_types=["reserve"]
+        )
+        assert requirement_applies_to_member(req, "active") is False
+
+    def test_membership_type_scoped_with_no_role_fallback_still_applies(self):
+        """A requirement scoped ONLY by membership type (applies_to_all
+        False, no required_roles) must still apply on a match. An earlier
+        version of this check at one call site (get_compliance_summary)
+        required falling through to an applies_to_all or required_roles
+        branch to be *included*, which silently dropped this exact shape —
+        the ordinary case of a requirement scoped only by membership type
+        — for every matching member, not merely the mismatched case
+        another finding on this same PR was about."""
+        req = _make_requirement(
+            applies_to_all=False,
+            required_membership_types=["active"],
+            required_roles=None,
+        )
+        assert requirement_applies_to_member(req, "active") is True
+
+    def test_role_match_applies_when_no_membership_restriction(self):
+        req = _make_requirement(
+            applies_to_all=False,
+            required_membership_types=None,
+            required_roles=["role-1", "role-2"],
+        )
+        assert requirement_applies_to_member(req, "active", ["role-2"]) is True
+
+    def test_role_mismatch_does_not_apply(self):
+        req = _make_requirement(
+            applies_to_all=False,
+            required_membership_types=None,
+            required_roles=["role-1"],
+        )
+        assert requirement_applies_to_member(req, "active", ["role-2"]) is False
+
+    def test_no_criteria_at_all_applies_to_nobody(self):
+        req = _make_requirement(
+            applies_to_all=False,
+            required_membership_types=None,
+            required_roles=None,
+        )
+        assert requirement_applies_to_member(req, "active", ["role-1"]) is False
 
 
 # =====================================================

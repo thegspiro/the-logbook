@@ -16,13 +16,81 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 17 (Training core), pass 4** — PR
+[#2455](https://github.com/thegspiro/the-logbook/pull/2455), branch
+`claude/security-review-training-core-pass4`. 1 fix (3 rounds), 3 flagged.
+This pass's own first draft claimed 0 fixes/0 flags after diffing the seven
+declared files against the pass-3 merge (`0d1f92c41`) and reading the only
+two real changes (`training.py`, `training_compliance.py`, both from one
+non-security-review feature branch — "Redesign the compliance matrix as a
+triage queue") — **three rounds of Codex review on the PR caught real gaps
+that draft, and then this pass's own first two fixes, missed**, all
+corrected on the same PR rather than left standing:
+
+**TR4-1** (fixed, 3 rounds) — round 1: `compute_org_compliance_pct` graded
+a member against a requirement scoped to a `required_membership_types`
+list they don't belong to, something `get_compliance_matrix` already
+excludes per-member; a membership-scoped requirement could fail a member
+on the dashboard percentage while the matrix correctly never showed it to
+them. Round 2 (a second Codex review of that same fix): the round-1 fix
+ignored `applies_to_all`, which takes precedence over
+`required_membership_types` in the canonical member-facing applicability
+check (`TrainingService.get_applicable_requirements`) — and
+`get_compliance_matrix`'s own pre-existing filter had the identical gap,
+so round 1 was matching a filter that was itself already wrong. Round 3 (a
+third Codex review): a third call site, `get_compliance_summary` (the
+profile-card endpoint), still checked `required_membership_types` before
+`applies_to_all` — plus a second, independently-discovered bug in the same
+block (a requirement scoped only by membership type was silently excluded
+for every member, matching or not). Grepping the file for the same shape
+found two more reimplementations missing `applies_to_all` entirely
+(`get_training_dashboard_summary`, `get_member_period_status`). Fixed by
+extracting one shared helper, `requirement_applies_to_member()`
+(`training_compliance.py`), and switching all five call sites to use it.
+12 guard tests total across 4 files (a new `TestRequirementAppliesToMember`
+testing the helper directly, plus fixture fixes in two existing test files
+that had hardcoded `applies_to_all=True`/omitted it entirely — data no
+real model state or UI flow produces), several confirmed failing pre-fix
+at each round.
+
+**TR4-2** (flagged) — the matrix endpoint has its own unbounded
+`TrainingRecord` scan, distinct from TR2-4's dashboard-summary finding
+(no shared code path; fixing one would not fix the other).
+
+**TR4-3** (flagged) — a third endpoint, `get_training_dashboard_summary`,
+uses a third, independent definition of "compliant" (ignores compliance
+profiles and thresholds entirely), so the "Department Compliance" card it
+backs can disagree with both the matrix and the dashboard percentage; a
+product decision, not a drive-by fix.
+
+**TR4-4** (flagged) — a member with zero applicable requirements counts as
+"compliant" in `compute_org_compliance_pct`'s numerator without being
+excluded from its denominator, inflating the org percentage; the same
+pre-existing zero-denominator convention this file already deliberately
+tests as correct for the profile `required_requirement_ids=[]` case, so
+changing it is a population-definition product decision, not a drive-by.
+
+Full completion gate green: flake8/black/isort clean; migrations validated
+(no schema change); training/compliance-scoped (1130) and full backend
+suites (12077) pass, 0 failed. Full write-up:
+`docs/security-review/TR-17-training-core.md` → Pass 4 (corrected, round
+3). Next: tend #2455 to green, then Feature 18 (Training extended).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2451's merge, Feature 16 pass 4), preserved for history</summary>
+
 **None.** PR [#2451](https://github.com/thegspiro/the-logbook/pull/2451)
 (Feature 16, Events & requests, pass 4) merged clean via squash, merge
 commit `32763dd`, all 17 CI checks green including Playwright E2E, two
 rounds of Codex review both resolved with no unaddressed findings.
 Rotation row 16 is now `✅`. Next: Feature 17.
 
-A Codex review of the open PR caught one real gap this pass's own
+</details>
+
+<details>
+<summary>Superseded — Feature 16 pass 4 (PR #2451) Codex-review follow-up detail: EV-24 tiebreaker fix, typescript/vitest-ui investigation, preserved for history</summary>
+
+A Codex review of the open PR (#2451) caught one real gap this pass's own
 completion gate missed: the EV-24 fix's admissibility check compared
 `responded_at` with a bare `<`, so two waitlisted RSVPs tied to the same
 second (routine under MySQL's second-precision `DATETIME`) had no
@@ -83,6 +151,8 @@ test:ui` outright (`ERR_MODULE_NOT_FOUND`). Fixed by pinning `@vitest/ui`
 to `^4.1.10` — verified via fresh `npm ci`, `npm ls` clean, and the script
 no longer crashing. See `docs/KNOWN_LIMITATIONS.md`'s own entry for
 detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 4, PR #2451, before the Codex-review tiebreaker fix and the typescript follow-up), preserved for history</summary>
@@ -12571,7 +12641,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
