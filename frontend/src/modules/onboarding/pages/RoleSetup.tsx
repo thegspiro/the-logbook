@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
@@ -192,6 +192,25 @@ const satisfiedMarkers = (recorded: readonly string[]): Set<string> => {
   return satisfied;
 };
 
+/**
+ * Recorded once a restored draft has been raised to the all-positions baseline.
+ *
+ * Unticking a position deletes it, so the set left ticked *is* the department's
+ * structure — and a draft persisted by the build before that change carries the
+ * six positions that build preselected. Restoring one verbatim and submitting it
+ * deletes the other twenty-three seeded rows, which is precisely the defect the
+ * all-position initialisation exists to prevent, reached through localStorage
+ * instead of through a fresh mount.
+ *
+ * It has to be a marker rather than an inference from the draft's contents: a
+ * six-position draft written by the old build and one an administrator narrowed
+ * to six on purpose are the same object. The marker says which.
+ *
+ * Not in `STALE_SEEDED_MARKERS` because that map is keyed by slug — "this slug's
+ * seeded grants moved" — and this is a property of the whole draft.
+ */
+const ALL_POSITIONS_BASELINE_MARKER = '@all-positions-baseline';
+
 const RETIRED_STANDING_SLUGS = new Set([
   'probationary_member',
   'junior_member',
@@ -268,6 +287,18 @@ const PositionSetup: React.FC = () => {
     ];
   }
   const slugsToReconcile = slugsToReconcileRef.current;
+
+  // Whether this mount raises a restored draft to the all-positions baseline.
+  // Latched on first render for the same reason as the slug list above: the
+  // effect that records the marker runs after, and recomputing would decide the
+  // work was already done while this mount is still using the answer it began
+  // with.
+  const needsBaselineTopUpRef = useRef<boolean | null>(null);
+  if (needsBaselineTopUpRef.current === null) {
+    needsBaselineTopUpRef.current =
+      !!savedPositionsConfig && !satisfiedMarkers(reconciledSeededSlugs).has(ALL_POSITIONS_BASELINE_MARKER);
+  }
+  const needsBaselineTopUp = needsBaselineTopUpRef.current;
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
@@ -351,6 +382,26 @@ const PositionSetup: React.FC = () => {
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
+
+      // 4. A draft written before unticking meant deletion. It holds the six
+      //    positions that build preselected, and submitting it now would delete
+      //    the twenty-three it does not name. Every agency template missing from
+      //    it is added back, once, so the resumed session starts from the same
+      //    baseline a fresh one does.
+      //
+      //    Additive on purpose: an administrator's edits to the six that *are*
+      //    in the draft are kept, and their custom positions with them. The
+      //    cost of being wrong in this direction is a department seeing a
+      //    position it has to untick again; in the other, it is a silent
+      //    deletion nobody asked for.
+      if (needsBaselineTopUp) {
+        for (const [posId, template] of templatesById) {
+          if (!(posId in restored) && !RETIRED_STANDING_SLUGS.has(posId)) {
+            restored[posId] = { ...template };
+          }
+        }
+      }
+
       return restored;
     }
 
@@ -402,7 +453,7 @@ const PositionSetup: React.FC = () => {
   // definition, so there is nothing to reconcile in it, and recording the whole
   // set here says exactly that.
   useEffect(() => {
-    markSeededSlugsReconciled(Object.keys(STALE_SEEDED_MARKERS));
+    markSeededSlugsReconciled([...Object.keys(STALE_SEEDED_MARKERS), ALL_POSITIONS_BASELINE_MARKER]);
   }, [markSeededSlugsReconciled]);
 
   // Expanded categories
@@ -423,6 +474,30 @@ const PositionSetup: React.FC = () => {
   // has to refuse to leave with them pending rather than navigate away and
   // report success for the half of the step that did save.
   const [ladderDirty, setLadderDirty] = useState(false);
+  // Why it is dirty, which decides what the refusal can honestly tell them to
+  // do. A ladder the backend synthesized is dirty from the moment it loads and
+  // reloading re-proposes it, so "or discard" is a way out that does not exist.
+  const [ladderNeverSaved, setLadderNeverSaved] = useState(false);
+  // Stable, because the section reports through an effect keyed on this
+  // identity — a fresh arrow each render would re-run it on every render of
+  // this step.
+  const handleLadderDirtyChange = useCallback((dirty: boolean, neverSaved: boolean) => {
+    setLadderDirty(dirty);
+    setLadderNeverSaved(neverSaved);
+  }, []);
+  // `ladderDirty` is false for the whole of the tier config read, including for
+  // an organization with no stored `membership_tiers` — the editor opens dirty
+  // only once the response says `is_saved: false`. Leaving during that window
+  // is the same loss as leaving with edits pending, so the step waits for the
+  // read to settle before it will believe the ladder is clean.
+  const [ladderLoading, setLadderLoading] = useState(true);
+  // The rank editor's Add/Edit form is the same hazard in the other section:
+  // typed, not yet written, and discarded when Continue unmounts it.
+  const [rankFormPending, setRankFormPending] = useState(false);
+  // And the tier editor's Add a tier field is the third: its value lives inside
+  // `MembershipTiersSection`, so a half-typed tier is in neither `dirty` nor
+  // the config a Save would write.
+  const [tierNamePending, setTierNamePending] = useState(false);
   const [customPositionName, setCustomPositionName] = useState('');
   const [customPositionDescription, setCustomPositionDescription] = useState('');
 
@@ -540,8 +615,27 @@ const PositionSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    if (ladderLoading) {
+      toast.error('Your membership tiers are still loading — give it a moment before continuing');
+      return;
+    }
+
     if (ladderDirty) {
-      toast.error('Save or discard your membership tier changes before continuing');
+      toast.error(
+        ladderNeverSaved
+          ? 'Save your membership tiers before continuing — they have not been stored yet'
+          : 'Save or discard your membership tier changes before continuing'
+      );
+      return;
+    }
+
+    if (rankFormPending) {
+      toast.error('Save or cancel the rank you are editing before continuing');
+      return;
+    }
+
+    if (tierNamePending) {
+      toast.error('Add or clear the tier you are typing before continuing');
       return;
     }
 
@@ -632,9 +726,13 @@ const PositionSetup: React.FC = () => {
             </p>
           </div>
 
-          <MembershipLadderSection onDirtyChange={setLadderDirty} />
+          <MembershipLadderSection
+            onDirtyChange={handleLadderDirtyChange}
+            onLoadingChange={setLadderLoading}
+            onPendingTierChange={setTierNamePending}
+          />
 
-          <RankLadderSection />
+          <RankLadderSection onPendingChange={setRankFormPending} />
 
           {/* Info Banners */}
           <div className="mb-6 space-y-4">

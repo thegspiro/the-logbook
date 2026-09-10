@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { Layers } from 'lucide-react';
 import MembershipTiersSection from '../../../components/settings/MembershipTiersSection';
+import TierRefreshAlert from '../../../components/settings/TierRefreshAlert';
 import { useTierEditor } from '../../../hooks/useTierEditor';
+import { useAuthStore } from '../../../stores/authStore';
 
 /**
  * The department's membership ladder, stated during setup.
@@ -34,15 +36,51 @@ interface MembershipLadderSectionProps {
    * behind a "Positions configured successfully!" toast. The step guards its
    * Continue on this.
    */
-  onDirtyChange?: (dirty: boolean) => void;
+  onDirtyChange?: (dirty: boolean, neverSaved: boolean) => void;
+  /**
+   * Told while the ladder is still being read.
+   *
+   * `dirty` cannot answer for this window. The editor opens dirty only once the
+   * GET resolves and reports `is_saved: false`, so for the whole of a slow
+   * request it reads clean — and a Continue pressed in that window walks past
+   * the guard above for precisely the organization the guard exists for: one
+   * with no stored `membership_tiers`, whose synthesized ladder is then never
+   * written and honoured by no backend reader.
+   *
+   * A failed load reports `false` here, deliberately. That path tells the
+   * administrator to carry on and set the tiers up later, and a guard that
+   * refused to let them would strand them on the step with a retry that may
+   * keep failing.
+   */
+  onLoadingChange?: (loading: boolean) => void;
+  /**
+   * Told while a tier name has been typed into Add a tier but not added.
+   *
+   * The same hazard as the rank form, in the section next door: the field lives
+   * inside `MembershipTiersSection`, so a half-typed tier is in neither `dirty`
+   * nor the config, and Continue unmounts it without a word.
+   */
+  onPendingTierChange?: ((pending: boolean) => void) | undefined;
 }
 
-const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDirtyChange }) => {
+const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
+  onDirtyChange,
+  onLoadingChange,
+  onPendingTierChange,
+}) => {
   const editor = useTierEditor();
 
+  // Which rung the signed-in System Owner is standing on, if it is one of these.
+  const ownMembershipType = useAuthStore((state) => state.user?.membership_type ?? null);
+  const ownTier = ownMembershipType ? editor.tiers.find((tier) => tier.id === ownMembershipType) : undefined;
+
   useEffect(() => {
-    onDirtyChange?.(editor.dirty);
-  }, [editor.dirty, onDirtyChange]);
+    onDirtyChange?.(editor.dirty, editor.neverSaved);
+  }, [editor.dirty, editor.neverSaved, onDirtyChange]);
+
+  useEffect(() => {
+    onLoadingChange?.(editor.loading);
+  }, [editor.loading, onLoadingChange]);
 
   return (
     <div className="card mb-6 p-6">
@@ -58,6 +96,28 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
           </p>
         </div>
       </div>
+
+      {/* The System Owner's account exists by this step and
+          `register_user` leaves it on the column default
+          `membership_type='active'`, so the matching rung reports one holder
+          and its remove button is disabled — with no control on this step for
+          moving them. Renaming it *is* allowed: the backend's occupied-tier
+          guard compares tier ids, and the editor's rename changes the display
+          name only. Saying which is which turns a dead button into a route.
+
+          The rung is matched by the signed-in member's own `membership_type`
+          rather than named by position. It is the second rung in the ladder we
+          ship, but this editor reorders tiers and a department that had already
+          configured one may not have `active` at all — and pointing at the
+          wrong rung is worse than saying nothing, because it marks a removable
+          one as locked while the occupied one sits elsewhere. */}
+      {ownTier && (
+        <p className="alert-info mb-4 text-sm">
+          Your own account is on <strong>{ownTier.name}</strong>, so that rung can be renamed to whatever your bylaws
+          call it but not removed while you are on it. A department that has no such stage can remove it later, from
+          Members → Settings → Membership Tiers, once the roster is loaded and you have moved yourself.
+        </p>
+      )}
 
       {editor.failed && !editor.loading ? (
         <div className="alert-danger" role="alert">
@@ -75,26 +135,38 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
           </button>
         </div>
       ) : (
-        <MembershipTiersSection
-          tiers={editor.tiers}
-          autoAdvance={editor.autoAdvance}
-          loading={editor.loading}
-          saving={editor.saving}
-          dirty={editor.dirty}
-          memberCount={editor.memberCount}
-          onSetAutoAdvance={editor.setAutoAdvance}
-          onUpdateTier={editor.updateTier}
-          onUpdateBenefits={editor.updateBenefits}
-          onAddTier={editor.addTier}
-          onRemoveTier={editor.removeTier}
-          onMoveTier={editor.moveTier}
-          onSave={() => {
-            void editor.save();
-          }}
-          onReset={() => {
-            void editor.reload();
-          }}
-        />
+        <>
+          {editor.refreshFailed && (
+            <TierRefreshAlert
+              unconfirmedSave={editor.unconfirmedSave}
+              dirty={editor.dirty}
+              loading={editor.loading}
+              onRefresh={editor.retry}
+            />
+          )}
+          <MembershipTiersSection
+            tiers={editor.tiers}
+            autoAdvance={editor.autoAdvance}
+            loading={editor.loading}
+            saving={editor.saving}
+            dirty={editor.dirty}
+            memberCount={editor.memberCount}
+            onSetAutoAdvance={editor.setAutoAdvance}
+            onUpdateTier={editor.updateTier}
+            onUpdateBenefits={editor.updateBenefits}
+            onAddTier={editor.addTier}
+            onRemoveTier={editor.removeTier}
+            onMoveTier={editor.moveTier}
+            onPendingTierChange={onPendingTierChange}
+            nothingStored={editor.neverSaved}
+            onSave={() => {
+              void editor.save();
+            }}
+            onReset={() => {
+              void editor.reload();
+            }}
+          />
+        </>
       )}
     </div>
   );

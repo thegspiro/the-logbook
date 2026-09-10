@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { memberStatusService } from '../services/api';
 import type { MembershipTier, MembershipTierBenefits, MembershipTierConfig } from '../types/user';
@@ -35,28 +35,66 @@ export function useTierEditor() {
   const [config, setConfig] = useState<MembershipTierConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // Distinct from `failed`, and deliberately so. `failed` means the ladder on
+  // screen cannot be trusted, and the section replaces the editor with a panel.
+  // This one means the write landed but the read back did not, so the ladder is
+  // right and the member counts beside it may not be — a warning to show above
+  // a working editor, never a reason to take the editor away or to block the
+  // step.
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  // Whether a PUT has been accepted since the last read that confirmed it. It
+  // is what lets the warning say "your tiers were saved" only when they were —
+  // a re-read that fails for any other reason gets the plainer wording.
+  const [unconfirmedSave, setUnconfirmedSave] = useState(false);
+  // `fetchConfig` is deliberately identity-stable (it is a mount-effect
+  // dependency), so it cannot close over `config`. This is how its catch knows
+  // whether there is already a ladder worth keeping on screen.
+  const configRef = useRef<MembershipTierConfig | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
-  const fetchConfig = useCallback(async () => {
+  /** Resolves true when the ladder was read, false when the read failed. */
+  const fetchConfig = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     try {
       const data = await memberStatusService.getTierConfig();
       // A ladder is only meaningful in order, and `sort_order` is what the
       // backend advances along — not array position.
-      setConfig({
+      const loaded = {
         ...data,
         tiers: [...(data.tiers ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-      });
+      };
+      configRef.current = loaded;
+      setConfig(loaded);
       setFailed(false);
-      setDirty(false);
+      setRefreshFailed(false);
+      setUnconfirmedSave(false);
+      // A ladder the backend synthesized rather than read is *proposed*, not in
+      // effect: `MembershipTierService._load_tiers` still sees nothing stored,
+      // so advancement does not run and no benefit applies. Opening dirty is
+      // what makes Save the obvious next action instead of leaving a department
+      // looking at settings no reader honours.
+      setDirty(data.is_saved === false);
+      return true;
     } catch {
       // A failed load is not an empty ladder. Rendering "no tiers configured"
       // would tell a department it has no membership structure because a
       // request failed, and inviting them to build one from scratch here would
       // then remove the rungs their members are standing on.
-      setFailed(true);
+      //
+      // But that panel replaces the editor and says nothing has changed, which
+      // is only true when there is nothing on screen to lose. Once a ladder has
+      // been read — or stored by a save whose read-back failed — a later failed
+      // read is a stale screen, not an absent one, and taking the ladder away
+      // to say so is the worse of the two reports. Every retry after a failed
+      // post-save refresh lands here.
+      if (configRef.current) {
+        setRefreshFailed(true);
+      } else {
+        setFailed(true);
+      }
+      return false;
     } finally {
       setLoading(false);
     }
@@ -67,6 +105,14 @@ export function useTierEditor() {
   }, [fetchConfig, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+
+  // The ladder on screen is one the backend synthesized, not one it stored:
+  // `MembershipTierService._load_tiers` still reads nothing, so nothing
+  // advances and no benefit applies. It is why the editor opens dirty — and
+  // why Discard cannot resolve that: reloading re-proposes the same defaults
+  // and sets `dirty` straight back, so a step guarding on `dirty` would name an
+  // action that provably does not satisfy it. Only Save does.
+  const neverSaved = config?.is_saved === false;
 
   const memberCount = useCallback((tierId: string) => config?.member_counts?.[tierId] ?? 0, [config]);
 
@@ -173,10 +219,30 @@ export function useTierEditor() {
     if (!config) return;
     setSaving(true);
     try {
-      const { member_counts: _counts, ...payload } = config;
+      // Both are reports about the roster and about storage, not config.
+      const { member_counts: _counts, is_saved: _isSaved, ...payload } = config;
       await memberStatusService.updateTierConfig(payload);
+      // Cleared here rather than left to the refresh below. `fetchConfig`
+      // swallows its own failure, so a read that fails after an accepted PUT
+      // leaves `dirty` true — and the section has by then swapped its Save
+      // button for the failure panel, so the step's Continue guard goes on
+      // refusing an edit the administrator has no control left to save. The
+      // write was accepted; the ladder on screen is the stored one.
+      setDirty(false);
+      // Recorded before the refresh is attempted, so a read that fails knows a
+      // write was accepted and the warning can say so.
+      configRef.current = { ...config, is_saved: true };
+      setUnconfirmedSave(true);
       toast.success('Membership tiers saved');
-      await fetchConfig();
+      if (!(await fetchConfig())) {
+        // Reported as its own state rather than through `failed`. That panel
+        // says "could not be loaded — nothing has changed", which after an
+        // accepted PUT is untrue and takes away the editor showing the ladder
+        // that was just stored. Discarding the error instead would be worse
+        // again: the member counts on screen and any server-side normalisation
+        // are unconfirmed, and only the success toast would say anything.
+        setConfig((prev) => (prev ? { ...prev, is_saved: true } : prev));
+      }
     } catch (err: unknown) {
       // The backend names the tier and how many members hold it when it
       // refuses a removal. A generic message would leave an officer with no
@@ -194,6 +260,9 @@ export function useTierEditor() {
     autoAdvance: config?.auto_advance ?? true,
     loading,
     failed,
+    refreshFailed,
+    unconfirmedSave,
+    neverSaved,
     retry,
     saving,
     dirty,

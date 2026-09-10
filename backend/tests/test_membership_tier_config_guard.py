@@ -488,6 +488,44 @@ class TestWhatTheScreenIsShownWhenNothingWasConfigured:
             t.id for t in MembershipTierSettings().tiers
         ]
 
+    async def test_a_synthesized_ladder_is_reported_as_unsaved(
+        self, db_session: AsyncSession
+    ):
+        """Proposed, not in effect.
+
+        ``MembershipTierService._load_tiers`` reads the stored section, so a
+        ladder this endpoint synthesized advances nobody and confers nothing
+        until it is saved. An editor told the response was clean would show a
+        department settings no reader honours — the same false report the
+        fallback exists to fix, moved one step along.
+        """
+        org = await _org(db_session)  # settings == {}
+
+        result = await get_membership_tier_config(db_session, _caller(org))
+
+        assert result["is_saved"] is False
+
+    async def test_a_stored_ladder_is_reported_as_saved(self, db_session: AsyncSession):
+        org = await _org(db_session, tiers=[_tier("active", "Active")])
+
+        result = await get_membership_tier_config(db_session, _caller(org))
+
+        assert result["is_saved"] is True
+
+    async def test_the_saved_flag_is_not_stored_back(self, db_session: AsyncSession):
+        # It is a statement about whether the section exists; persisting it
+        # would be storing an answer about the storage.
+        org = await _org(db_session)
+
+        await update_membership_tier_config(
+            {**_config(_tier("active", "Active")), "is_saved": False},
+            db_session,
+            _caller(org),
+        )
+
+        await db_session.refresh(org)
+        assert "is_saved" not in org.settings["membership_tiers"]
+
     async def test_a_deliberately_empty_ladder_is_left_empty(
         self, db_session: AsyncSession
     ):

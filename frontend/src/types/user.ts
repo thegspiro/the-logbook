@@ -269,6 +269,16 @@ export interface MembershipTierConfig {
   auto_advance: boolean;
   tiers: MembershipTier[];
   /**
+   * Whether the ladder above is stored, or synthesized from the shipped
+   * defaults because this organization has no `membership_tiers` section.
+   *
+   * Read-only, and stripped on save like `member_counts`. A synthesized ladder
+   * is proposed rather than in effect — `_load_tiers` reads the stored section,
+   * so nothing advances and no benefit applies until it is saved — which is why
+   * the editor opens dirty when this is `false`.
+   */
+  is_saved?: boolean;
+  /**
    * How many members hold each stored `membership_type`, reported by the GET.
    *
    * Read-only: it is a count of the roster, not configuration, and the endpoint
