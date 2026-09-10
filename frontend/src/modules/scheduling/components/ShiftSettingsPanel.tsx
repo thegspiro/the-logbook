@@ -196,16 +196,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   return (
     <div className="space-y-6">
       {/* SettingsLayout renders the page's <h1> and nothing else, so a body that
-          opens on a card's <h3> leaves the document going h1 → h3. axe reported
-          that on five of the six sections the first time this screen was
-          audited; it had been there all along, behind the crash and the tap
-          budget that were failing first.
+          opens on a card's <h3> leaves the document going h1 → h3, which is a
+          heading level skipped for anyone navigating by headings.
 
           The h2 is what every other settings screen puts here — SettingsPage and
           ElectionsSettingsPage both open each panel with this same component —
           and it is not a duplicate of the shell's subtitle, which is the fixed
-          "Department-wide scheduling defaults". Shift Reports gains a heading it
-          simply never had. */}
+          "Department-wide scheduling defaults". */}
       {section && <SettingsPanelHead title={section.label} description={section.description} />}
 
       {/* ─── General Tab ─── */}
@@ -230,8 +227,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                   is not announced as off — it is announced with no state at all,
                   while the track beside it paints a confident "off" from the same
                   undefined. Coercing makes what a screen reader hears and what
-                  the pixels say come from one truthiness test. axe caught three
-                  of these the first time this screen was audited. */}
+                  the pixels say come from one truthiness test. */}
               <button
                 type="button"
                 role="switch"
