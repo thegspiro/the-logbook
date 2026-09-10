@@ -1227,4 +1227,182 @@ describe('InventoryItemsPage — CSV export', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: /Export/ })).toBeDisabled());
     });
   });
+
+  describe('collapsing groups and folding variants', () => {
+    // Two independent folds share one `Set` each, and both are keyed per
+    // SECTION -- Available and Unavailable are different populations that
+    // happen to share a heading.
+    const shirt = (id: string, size: string, over: Partial<InventoryItem> = {}) =>
+      makeItem({
+        id,
+        name: `Duty Shirt \u2014 ${size}`,
+        variant_group_id: 'vg-1',
+        standard_size: size.toLowerCase(),
+        tracking_type: 'pool',
+        quantity: 4,
+        group_key: 'Uniforms',
+        ...over,
+      });
+
+    beforeEach(() => {
+      // This block installs its own getItems per test; state the default it
+      // returns to so a queued `...Once` cannot leak forward (pitfall #28).
+      mockGetItems.mockReset();
+      mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    });
+
+    /** The table row carrying a folded product's control. */
+    const productRow = (name: RegExp): HTMLElement => {
+      const row = screen.getAllByRole('row').find((r) => within(r).queryByRole('button', { name }) !== null);
+      if (!row) throw new Error(`no product row matching ${String(name)}`);
+      return row;
+    };
+
+    const groupBy = async (dimension: string) => {
+      const select = await screen.findByLabelText('Group by:');
+      await userEvent.selectOptions(select, dimension);
+    };
+
+    it('folds adjacent variants of one product into a single row', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [shirt('v-s', 'S'), shirt('v-m', 'M'), shirt('v-l', 'L')],
+        total: 3,
+      });
+      renderWithRouter(<InventoryItemsPage />);
+
+      // One product row, not three item rows.
+      expect(await screen.findByRole('button', { name: /Duty Shirt/ })).toBeInTheDocument();
+      expect(screen.getByText('3 loaded')).toBeInTheDocument();
+      // The individual sizes are not on screen until it is opened.
+      expect(screen.queryByRole('link', { name: 'S' })).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Duty Shirt/ }));
+      expect(screen.getByRole('link', { name: 'S' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'M' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'L' })).toBeInTheDocument();
+    });
+
+    it('leaves non-adjacent variants as separate rows', async () => {
+      // Adjacency is the contract: under a sort that scatters a product's
+      // variants the fold must not fire, rather than reordering rows away
+      // from the sort the member picked.
+      mockGetItems.mockResolvedValue({
+        items: [shirt('v-s', 'S'), makeItem({ id: 'other', name: 'Halligan Bar' }), shirt('v-m', 'M')],
+        total: 3,
+      });
+      renderWithRouter(<InventoryItemsPage />);
+
+      // Two rows named for the same product, each its own row: the fold did
+      // not fire, which is the point. (Two, not one, so `findAll`.)
+      expect((await screen.findAllByRole('link', { name: 'Duty Shirt' })).length).toBe(2);
+      expect(screen.queryByText('2 loaded')).not.toBeInTheDocument();
+    });
+
+    it('sums on-hand across the folded variants', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [shirt('v-s', 'S', { quantity: 4 }), shirt('v-m', 'M', { quantity: 6 })],
+        total: 2,
+      });
+      renderWithRouter(<InventoryItemsPage />);
+
+      await screen.findByRole('button', { name: /Duty Shirt/ });
+      expect(within(productRow(/Duty Shirt/)).getByText('10')).toBeInTheDocument();
+    });
+
+    it("says Mixed rather than picking one variant's value", async () => {
+      // Reporting the lead's location as the product's would send a
+      // quartermaster to the wrong shelf.
+      mockGetItems.mockResolvedValue({
+        items: [shirt('v-s', 'S', { storage_location: 'Bay 1' }), shirt('v-m', 'M', { storage_location: 'Bay 2' })],
+        total: 2,
+      });
+      renderWithRouter(<InventoryItemsPage />);
+
+      await screen.findByRole('button', { name: /Duty Shirt/ });
+      const row = productRow(/Duty Shirt/);
+      expect(within(row).getAllByText('Mixed').length).toBeGreaterThan(0);
+      expect(within(row).queryByText('Bay 1')).not.toBeInTheDocument();
+    });
+
+    it('collapsing a group under Available leaves Unavailable expanded', async () => {
+      mockGetItems.mockResolvedValue({
+        items: [
+          makeItem({ id: 'a-1', name: 'Ready Helmet', status: 'available', group_key: 'PPE' }),
+          makeItem({ id: 'u-1', name: 'Broken Helmet', status: 'damaged', group_key: 'PPE' }),
+        ],
+        total: 2,
+        groups: [{ key: 'PPE', label: 'PPE', count: 2 }],
+      });
+      renderWithRouter(<InventoryItemsPage />);
+      await groupBy('category');
+      // The group HEADER, not a row name: the row is on screen ungrouped too,
+      // so awaiting it proves nothing about the debounced regrouped reload.
+      await screen.findAllByRole('button', { name: /PPE/ });
+
+      const available = screen.getByRole('table', { name: 'Available' });
+      await userEvent.click(within(available).getByRole('button', { name: /PPE/ }));
+
+      expect(screen.queryByText('Ready Helmet')).not.toBeInTheDocument();
+      // The other section's identically-named group is untouched.
+      expect(screen.getByText('Broken Helmet')).toBeInTheDocument();
+    });
+
+    it('loads the next page when a collapse leaves nothing visible', async () => {
+      // Paging is by item row, so a collapsed group's rows still consume the
+      // page. A page that is entirely hidden must refill itself rather than
+      // leaving headings over an empty table.
+      // Keyed on `skip`, not queued with `...Once`: the page loads once
+      // ungrouped and again when the grouping is chosen, so a queued value is
+      // spent before the assertion ever gets to it.
+      const groups = [
+        { key: 'PPE', label: 'PPE', count: 1 },
+        { key: 'Tools', label: 'Tools', count: 1 },
+      ];
+      mockGetItems.mockImplementation((params: unknown) =>
+        Promise.resolve(
+          ((params as { skip?: number } | undefined)?.skip ?? 0) === 0
+            ? {
+                items: [makeItem({ id: 'p1', name: 'Hidden Helmet', group_key: 'PPE' })],
+                total: 2,
+                groups,
+              }
+            : {
+                items: [makeItem({ id: 'p2', name: 'Second Page Axe', group_key: 'Tools' })],
+                total: 2,
+                groups,
+              }
+        )
+      );
+      renderWithRouter(<InventoryItemsPage />);
+      await groupBy('category');
+      await screen.findAllByRole('button', { name: /PPE/ });
+
+      const available = screen.getByRole('table', { name: 'Available' });
+      await userEvent.click(within(available).getByRole('button', { name: /PPE/ }));
+
+      // The top-up fetched the next page rather than leaving the table empty.
+      expect(await screen.findByText('Second Page Axe')).toBeInTheDocument();
+    });
+
+    it('stops topping up once the whole set is loaded', async () => {
+      // The guard that terminates the loop is `hasMore`. With every row
+      // loaded and every one hidden, the page must settle rather than
+      // fetching forever.
+      mockGetItems.mockResolvedValue({
+        items: [makeItem({ id: 'p1', name: 'Hidden Helmet', group_key: 'PPE' })],
+        total: 1,
+        groups: [{ key: 'PPE', label: 'PPE', count: 1 }],
+      });
+      renderWithRouter(<InventoryItemsPage />);
+      await groupBy('category');
+      await screen.findAllByRole('button', { name: /PPE/ });
+      const before = mockGetItems.mock.calls.length;
+
+      const available = screen.getByRole('table', { name: 'Available' });
+      await userEvent.click(within(available).getByRole('button', { name: /PPE/ }));
+
+      await waitFor(() => expect(screen.queryByText('Hidden Helmet')).not.toBeInTheDocument());
+      expect(mockGetItems.mock.calls.length).toBe(before);
+    });
+  });
 });

@@ -195,7 +195,7 @@ describe('PipelineKanban applicants with no stage', () => {
 
     expect(mockAdvance).not.toHaveBeenCalled();
     expect(mockRegress).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('not on a stage of this pipeline'));
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('open them to place them on one'));
   });
 });
 

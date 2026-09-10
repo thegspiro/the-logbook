@@ -133,11 +133,10 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
     // the guard above and do nothing at all — the card simply sprang back with
     // no explanation, which reads as a broken board rather than a refusal.
     if (currentStageIndex < 0) {
-      // No instruction to follow it, deliberately: there is no control that
-      // assigns a stage. Advance, Back and Skip all need a current one, and
-      // current_step_id is protected from the generic update. Saying "open
-      // them to set one" sent coordinators to a dead end.
-      toast.error(`${draggedApplicant.first_name} is not on a stage of this pipeline, so they cannot be moved.`);
+      // Dragging cannot place them — there is no stage to move *from*, so
+      // neither advance nor regress applies — but the drawer now has a control
+      // that can, so the refusal points at it instead of ending there.
+      toast.error(`${draggedApplicant.first_name} is not on a stage yet — open them to place them on one.`);
       setDraggedApplicant(null);
       return;
     }
@@ -288,7 +287,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                   <HelpCircle className="text-theme-text-muted h-4 w-4" />
                   <h3
                     className="text-theme-text-primary truncate text-sm font-medium"
-                    title="These applicants are not on any stage of this pipeline, so they cannot be advanced. They can still be put on hold, withdrawn or rejected."
+                    title="These applicants are not on any stage of this pipeline, so they cannot be advanced. Open one to place them on a stage."
                   >
                     Unassigned
                   </h3>

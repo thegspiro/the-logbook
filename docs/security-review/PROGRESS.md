@@ -16,6 +16,131 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2460](https://github.com/thegspiro/the-logbook/pull/2460)
+(Feature 18, Training extended, pass 4) merged clean via squash, merge
+commit `21470e693e2f`, all CI checks green including CI Success and
+Playwright E2E, nine rounds of Codex review all resolved with no
+outstanding findings on the final commit. Merged directly by a 30-minute
+watchdog check (fully green, mergeable_state clean, idle ~30 minutes since
+the last push). Rotation row 18 is now `✅`. Next: Feature 19 (Skills
+testing).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, before the merge), preserved for history</summary>
+
+**Feature 18 (Training extended), pass 4** — PR
+[#2460](https://github.com/thegspiro/the-logbook/pull/2460), branch
+`claude/friendly-babbage-0mo420` (this watchdog session's designated
+branch, not a fresh `claude/security-review-<feature>` branch — the
+rotation had gone quiet for ~4h19m since PR #2455's merge with no new
+branch for Feature 18, so a watchdog iteration started the pass directly,
+the same "Step 0 went quiet" pattern Feature 16's own pass 4 and the
+2026-09-09 watchdog pass both document below). Zero-diff scope check
+against pass 3's merge (`7455d6708`): only `frontend/src/utils/apiCache.ts`
+changed among this feature's fifteen declared backend/schema artifacts,
+and that change was made by an unrelated pass. **Three Codex review rounds
+on the PR caught five real gaps, all corrected on the same PR:** round 1 —
+(1) the first draft's scope check dropped pass 2/3's ten established
+frontend files and `apiCache.test.ts` — corrected by diffing all eleven
+directly; seven changed (a cross-cutting breadcrumb/accessibility/contrast
+sweep, confirmed non-security-relevant by reading each diff), no finding
+resulted. (2) TRX4-1's first draft misstated the `/instructors/validate`
+endpoint's response shape as carrying extra qualification detail; reading
+the handler directly shows it returns only the echoed `user_id`/
+`course_id` plus one boolean — corrected to the accurate rationale (a
+named member paired with a verdict is the sensitive part, independent of
+payload size). Round 2, surfaced while verifying round 1's fixes — (3)
+**TRX4-2 (MEDIUM, real code fix):** all three GET
+`/instructors/qualifications`(`/validate`) routes had **no** permission
+dependency at all — any authenticated member could read every instructor's
+certification detail org-wide, bypassing the `training.manage`-gated
+frontend entirely. Fixed by gating all three with
+`Depends(require_permission("training.manage"))`. (4) **TRX4-3 (doc
+correction):** this pass's first draft claimed `KNOWN_LIMITATIONS.md`'s
+"Outbound Integration Requests" entry needed no correction;
+`documenso_service.py` was missing from its six-site list the whole time
+(no `assert_outbound_url_safe` call anywhere in the file, unlike its
+`calcom_service.py` sibling) — corrected the count to seven and named the
+mechanism, without attempting the actual fix (explicitly out of this
+feature-scoped pass's bounds per the note's own standing guidance). Round
+3 — (5) TRX4-2's `training.manage`-only gate silently dropped read-only
+`training.view_all` officer access that `training_programs.py`'s own
+`get_program_enrollments` already grants for the equivalent org-wide
+enrollment read; corrected all three routes to
+`require_permission("training.view_all", "training.manage")`, matching
+that sibling's exact OR-gate. Guard test
+(`test_instructor_qualification_endpoint_permissions.py`, 14 tests) now
+also drives the real `PermissionChecker.__call__` against a
+`training.view_all`-only user, a `training.manage`-only user, and a user
+with neither, not only asserting the configured permission set. One doc
+correction (TRX4-1, retiring a stale pass-2 "verified good" claim); one
+real fix (TRX4-2, corrected once more on review); one doc correction
+(TRX4-3); all ten pass-1 and one pass-2 finding re-verified intact. **A
+fourth Codex review round caught two more real gaps, both corrected:** (6)
+this section's own "zero backend changes" scope-check claim, left
+unqualified, read as still true after TRX4-2 changed
+`training_enhancements.py` — qualified it as the pre-TRX4-2 starting
+point, not this PR's net diff. (7) TRX4-3's own heading read "six, not
+seven" — backwards from its body, which correctly says the count is
+seven — reworded. Two further findings from the same round: **TRX4-4**
+(doc correction) — pass 2 called `GET /training/multi-agency`
+roster-free; it actually carries `contact_name`/`contact_email` per
+participating organization, `ics_position_assignments` (user ids),
+`created_by`, and free-text after-action fields — added to
+`UNCACHEABLE_PREFIXES`. **TRX4-5** (LOW/MED, real fix) — the bare
+`GET /training/external/providers` list was cacheable (only its
+sub-paths were excluded, by a trailing-slash prefix), and returns
+`config.additional_headers`, which can carry an integration auth token;
+an existing test asserted the gap (`isCacheable() === true`) rather than
+merely missing coverage of it — dropped the trailing slash so the shorter
+prefix covers the bare list too, and corrected that test. **A fifth Codex
+review round found the same underlying-read gap TRX4-2 already fixed once,
+this time on `GET /multi-agency` (TRX4-4's own route) — making a route
+uncacheable stops stale retention, not the unauthorized first read.**
+**TRX4-6** (MEDIUM, real fix) — gated with the same
+`require_permission("training.view_all", "training.manage")` OR-gate as
+TRX4-2; its only frontend consumer is reachable only through the
+`training.manage`-gated `/training/admin` route. Guard test
+(`test_multi_agency_endpoint_permissions.py`, 6 tests). **TRX4-7**
+(MEDIUM, real fix, same round) — TRX4-5 stopped the provider _list_ from
+being cached, but every route serializing `ExternalTrainingProviderResponse`
+still returned `config.additional_headers` verbatim — a response-shape
+gap, not a caching one. Added a `field_validator` to the response schema
+only (write schemas unaffected) that redacts every header value while
+keeping keys visible. Guard test
+(`test_external_provider_header_redaction.py`, 4 tests, including one
+asserting the raw secret string never appears in the serialized JSON).
+Two real fixes total across this round (TRX4-6, TRX4-7); full backend
+suite re-run clean after both (12313 passed, 21 skipped pre-existing, 0
+failed). **A sixth Codex review round, reviewing TRX4-7 itself, found the
+fix had a real bug: TRX4-8 (HIGH, data integrity)** — `update_provider`
+replaced the whole stored `config` with whatever a client submitted, so a
+load→edit→save form round-tripping TRX4-7's own redaction marker for an
+untouched header silently overwrote the real stored value with the
+literal `••••••••` string, destroying it. Fixed the same way
+`OrganizationService.update_settings` already handles the identical shape
+for email/file-storage/auth secrets: a submitted value equal to the
+shared `REDACTED_SECRET` constant is replaced with the row's existing
+value for that key before the write, rather than persisted verbatim.
+Guard tests added covering both a mixed untouched/edited submission and a
+brand-new row with nothing to preserve; full backend suite re-run clean
+after this fix too (12315 passed, 21 skipped pre-existing, 0 failed).
+**As of 2026-09-10T17:47 UTC: PR #2460 is fully green** — 17/17 CI checks
+pass (including CI Success), `mergeable_state: clean`, all 13 review
+threads resolved, no Codex findings on the latest commit (`037d04a41`).
+Nine Codex review rounds total across this pass, eight real findings
+(TRX4-2, TRX4-3, TRX4-4, TRX4-5, TRX4-6, TRX4-7, TRX4-8, plus the scope-
+check/heading doc corrections), every one fixed and verified. Awaiting
+owner merge. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
+18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
+Feature 19 (Skills testing).
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455), preserved for history</summary>
+
 **None.** PR [#2455](https://github.com/thegspiro/the-logbook/pull/2455)
 (Feature 17, Training core, pass 4) merged clean via squash, merge commit
 `569348ef`, all 17 CI checks green including Playwright E2E and CI
@@ -85,6 +210,8 @@ Full completion gate green: flake8/black/isort clean; migrations validated
 suites (12077) pass, 0 failed. Full write-up:
 `docs/security-review/TR-17-training-core.md` → Pass 4 (corrected, round
 3).
+
+</details>
 
 </details>
 
@@ -12654,7 +12781,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |

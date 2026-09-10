@@ -1009,19 +1009,33 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 md:flex-row">
-      {/* Mobile: horizontal scrollable tabs */}
-      <nav
-        className="border-theme-surface-border -mx-4 border-b px-4 md:hidden"
-        aria-label="Shift report settings sections"
-      >
-        <div className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2">
+      {/* Mobile: horizontal scrollable tabs.
+          Eight sections do not fit 375px and are not meant to — the strip
+          scrolls. `data-mobile-scroll-region` declares that intent to the mobile
+          presentation pass, which otherwise reads the last button sitting past
+          the viewport edge as the page overflowing. The marker comes with a
+          contract, and the keyboard half of it is the part worth naming: the
+          sections past the fold have to be reachable without a pointer.
+
+          They already are, and that is why there is no `tabIndex` here. Tabbing
+          to the last button scrolls it into view, so the strip satisfies WCAG
+          2.1.1 through its children; making the container focusable as well
+          would only add a stop that lands on nothing. The container takes
+          `tabIndex={0}` in the other case — a wide table or a chart, where there
+          is nothing inside to tab to at all. */}
+      <nav className="border-theme-surface-border -mx-4 border-b px-4 md:hidden">
+        <div
+          className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2"
+          aria-label="Shift report settings sections"
+          data-mobile-scroll-region
+        >
           {SECTIONS.map(({ key, label, icon: Icon }) => {
             const isActive = activeSection === key;
             return (
               <button
                 key={key}
                 onClick={() => setActiveSection(key)}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`mobile-touch-target gap-2 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors ${
                   isActive
                     ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
                     : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'

@@ -2319,6 +2319,102 @@ class MembershipPipelineService:
             skip_requirements=True,
         )
 
+    async def assign_stage(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        step_id: str,
+        assigned_by: str,
+        notes: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Put an applicant who is on no stage back onto one.
+
+        Recovery, not movement. ``current_step_id`` is nullable and gets nulled
+        for real: ``delete_step`` moves stranded prospects to the next stage, or
+        the previous one when the deleted stage was last, and sets
+        ``fallback_step = None`` when neither exists — so deleting a pipeline's
+        last stage leaves every prospect on it with no stage at all. Nothing
+        could then put them back. Advance, Back and Skip all need a current
+        stage to work from, and ``current_step_id`` is in
+        ``_PROSPECT_PROTECTED_FIELDS`` so the generic update cannot set one
+        either. The board showed these applicants and offered nothing to do
+        about them.
+
+        Deliberately refuses an applicant who already has a stage. Every other
+        way of moving one runs a gate — the meeting-attendance check, the
+        required-stage rule, one stage at a time — and a general "set them to
+        any stage" action would be a way around all three. This one only fills
+        a hole; it cannot move anybody along.
+        """
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
+        if not prospect:
+            return None
+
+        # Status first, so a rejected or withdrawn applicant is told that
+        # rather than something about stages: being stopped is the reason they
+        # cannot be placed, and it is the thing the coordinator has to undo.
+        _assert_movable(prospect, "placed on a stage")
+
+        if prospect.current_step_id:
+            raise ValueError(
+                "This applicant is already on a stage. Use Advance or Back to "
+                "move them."
+            )
+        if not prospect.pipeline:
+            raise ValueError("This applicant is not on a pipeline.")
+
+        # Resolving against the prospect's own pipeline is the scoping too:
+        # get_prospect is already organization-scoped, so a stage id belonging
+        # to another department — or to another of this department's pipelines
+        # — matches nothing here and is refused.
+        step = next(
+            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)),
+            None,
+        )
+        if step is None:
+            raise ValueError("That stage is not part of this applicant's pipeline.")
+
+        prospect.current_step_id = step.id
+
+        # The stage they land on has to read as the one they are working.
+        # Without this an applicant placed on a stage that had been completed
+        # earlier would sit on it wearing a green tick, which is the same
+        # disagreement between the progress track and the Current Stage panel
+        # that delete_step's fallback and regress_prospect both correct.
+        progress = next(
+            (p for p in prospect.step_progress if str(p.step_id) == str(step.id)),
+            None,
+        )
+        if progress is None:
+            self.db.add(
+                ProspectStepProgress(
+                    id=generate_uuid(),
+                    prospect_id=prospect.id,
+                    step_id=step.id,
+                    status=StepProgressStatus.IN_PROGRESS,
+                )
+            )
+        else:
+            progress.status = StepProgressStatus.IN_PROGRESS
+            progress.completed_at = None
+            progress.completed_by = None
+
+        await self._log_activity(
+            prospect_id=prospect.id,
+            action="stage_assigned",
+            details={
+                "step_id": str(step.id),
+                "step_name": step.name,
+                "notes": notes,
+            },
+            performed_by=assigned_by,
+        )
+
+        await self.db.commit()
+        return await self.get_prospect(prospect_id, organization_id)
+
     async def complete_current_step_for_integration_event(
         self,
         organization_id: str,

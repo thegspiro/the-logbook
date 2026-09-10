@@ -49,6 +49,7 @@ from app.schemas.training import (
 from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
+from app.utils.email_providers import REDACTED_SECRET
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.url_validator import validate_integration_url
@@ -257,11 +258,30 @@ async def update_provider(
 
     # Handle config separately
     if "config" in update_data and update_data["config"]:
-        update_data["config"] = (
+        new_config = (
             update_data["config"].model_dump()
             if hasattr(update_data["config"], "model_dump")
             else update_data["config"]
         )
+        # SEC: GET responses redact every additional_headers value to
+        # REDACTED_SECRET (schemas/training.py ExternalTrainingProviderResponse),
+        # so a load-edit-save UI round-trips the marker for any header the
+        # caller didn't touch. Without this, that PATCH would overwrite the
+        # real stored header value with the literal marker string, silently
+        # destroying it — the same shape OrganizationService.update_settings
+        # already guards for email/file-storage/auth secrets.
+        new_headers = new_config.get("additional_headers")
+        if isinstance(new_headers, dict):
+            existing_config = provider.config or {}
+            existing_headers = (
+                existing_config.get("additional_headers", {})
+                if isinstance(existing_config, dict)
+                else {}
+            )
+            for key, val in new_headers.items():
+                if val == REDACTED_SECRET:
+                    new_headers[key] = existing_headers.get(key)
+        update_data["config"] = new_config
 
     # Handle UUID conversion
     if "default_category_id" in update_data:

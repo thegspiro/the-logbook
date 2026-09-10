@@ -56,6 +56,7 @@ from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     AdvanceProspectRequest,
     AssignPackageToElectionRequest,
+    AssignStageRequest,
     BulkActionItemResult,
     BulkActionResponse,
     BulkAdvanceRequest,
@@ -1289,6 +1290,56 @@ async def advance_prospect(
         event_category="membership",
         severity="info",
         event_data={"prospect_id": str(prospect_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return prospect
+
+
+@router.post("/prospects/{prospect_id}/assign-stage", response_model=ProspectResponse)
+async def assign_prospect_stage(
+    prospect_id: UUID,
+    data: AssignStageRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+):
+    """
+    Place a prospect who is on no stage onto one.
+
+    Recovery only: refused when the applicant already has a current stage, so
+    this is not a way past the stage completion gates. Deleting a pipeline's
+    last stage is what leaves an applicant with none.
+
+    **Requires permission: members.manage or prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        prospect = await service.assign_stage(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            step_id=data.step_id,
+            assigned_by=current_user.id,
+            notes=data.notes,
+        )
+    except ValueError as e:
+        # 409 like advance: the request is well formed, the applicant is just
+        # in the wrong state for it (already on a stage, stopped, or the stage
+        # named is not theirs).
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_stage_assigned",
+        event_category="membership",
+        severity="info",
+        event_data={"prospect_id": str(prospect_id), "step_id": data.step_id},
         user_id=str(current_user.id),
         username=current_user.username,
     )

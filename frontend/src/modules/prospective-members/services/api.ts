@@ -841,6 +841,21 @@ export const applicantService = {
   },
 
   /**
+   * Put an applicant who is on no stage back onto one.
+   *
+   * Recovery rather than movement: the server refuses an applicant who already
+   * has a stage, so this is not a way past a stage's completion gate. Deleting
+   * a pipeline's last stage is what leaves an applicant with none.
+   */
+  async assignStage(applicantId: string, stageId: string, notes?: string): Promise<Applicant> {
+    const response = await api.post<BackendProspectResponse>(
+      `/prospective-members/prospects/${applicantId}/assign-stage`,
+      { step_id: stageId, notes: notes?.trim() || undefined }
+    );
+    return mapProspectToApplicant(response.data);
+  },
+
+  /**
    * Change one applicant's status, recording `reason` in their activity log.
    *
    * These used to go through the update endpoint as `{ status, notes: reason }`,

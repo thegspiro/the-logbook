@@ -797,3 +797,173 @@ class TestTheDatabaseEnforcesStageOrder:
         by_order = sorted(pipeline.steps, key=lambda s: s.sort_order)
         assert len({s.sort_order for s in by_order}) == 3
         assert [s.name for s in by_order] == ["First", "Second", "Third"]
+
+
+class TestPlacingAStrandedApplicant:
+    """`current_step_id` is nullable and really does get nulled.
+
+    `delete_step` moves stranded prospects to the next stage, or the previous
+    one when the deleted stage was last, and to nothing at all when neither
+    exists — so deleting a pipeline's last stage leaves every prospect on it
+    with no stage. Advance, Back and Skip all need a current stage to work
+    from, and `current_step_id` is protected from the generic update, so
+    nothing could put them back. The board showed them and offered nothing.
+    """
+
+    async def test_a_stranded_applicant_can_be_placed_on_a_stage(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        prospect.current_step_id = None
+        await db_session.commit()
+
+        placed = await svc.assign_stage(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=steps[1].id,
+            assigned_by=admin_id,
+        )
+
+        assert str(placed.current_step_id) == str(steps[1].id)
+
+    async def test_the_stage_they_land_on_reads_as_the_one_they_are_working(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """Landing on a stage still stamped completed would put a green tick on
+        the stage the applicant is sitting in — the same disagreement between
+        the progress track and the Current Stage panel that delete_step's
+        fallback and regress_prospect both correct."""
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        # Complete the first stage, then strand them.
+        await svc.complete_step(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=steps[0].id,
+            completed_by=admin_id,
+        )
+        refreshed = await svc.get_prospect(prospect.id, org_id)
+        refreshed.current_step_id = None
+        await db_session.commit()
+
+        await svc.assign_stage(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=steps[0].id,
+            assigned_by=admin_id,
+        )
+
+        placed = await svc.get_prospect(prospect.id, org_id)
+        progress = next(
+            p for p in placed.step_progress if str(p.step_id) == str(steps[0].id)
+        )
+        assert progress.status == StepProgressStatus.IN_PROGRESS
+        assert progress.completed_at is None
+        assert progress.completed_by is None
+
+    async def test_an_applicant_already_on_a_stage_is_refused(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        """Recovery, not movement. Advance, Back and Skip each run a gate; a
+        general set-them-to-any-stage action would be a way around all of
+        them."""
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        with pytest.raises(ValueError, match="already on a stage"):
+            await svc.assign_stage(
+                prospect_id=prospect.id,
+                organization_id=org_id,
+                step_id=steps[2].id,
+                assigned_by=admin_id,
+            )
+
+    async def test_a_stage_from_another_pipeline_is_refused(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, _ = await _pipeline_with_steps(svc, org_id, 3)
+        other_pipeline, other_steps = await _pipeline_with_steps(svc, org_id, 2)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        prospect.current_step_id = None
+        await db_session.commit()
+
+        with pytest.raises(ValueError, match="not part of this applicant's pipeline"):
+            await svc.assign_stage(
+                prospect_id=prospect.id,
+                organization_id=org_id,
+                step_id=other_steps[0].id,
+                assigned_by=admin_id,
+            )
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            ProspectStatus.ON_HOLD,
+            ProspectStatus.REJECTED,
+            ProspectStatus.WITHDRAWN,
+        ],
+    )
+    async def test_a_stopped_applicant_is_refused_and_told_why(
+        self, db_session: AsyncSession, setup_org_and_admin, status
+    ):
+        """The status is the reason they cannot be placed, and it is the thing
+        the coordinator has to undo — so it is what the refusal names, rather
+        than anything about stages."""
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        prospect.current_step_id = None
+        prospect.status = status
+        await db_session.commit()
+
+        with pytest.raises(ValueError, match="cannot be placed on a stage"):
+            await svc.assign_stage(
+                prospect_id=prospect.id,
+                organization_id=org_id,
+                step_id=steps[0].id,
+                assigned_by=admin_id,
+            )
+
+    async def test_placing_an_applicant_is_recorded_in_their_activity(
+        self, db_session: AsyncSession, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = MembershipPipelineService(db_session)
+        pipeline, steps = await _pipeline_with_steps(svc, org_id, 3)
+        prospect = await _prospect(svc, org_id, admin_id, pipeline)
+
+        prospect.current_step_id = None
+        await db_session.commit()
+
+        await svc.assign_stage(
+            prospect_id=prospect.id,
+            organization_id=org_id,
+            step_id=steps[1].id,
+            assigned_by=admin_id,
+        )
+
+        rows = (
+            await db_session.execute(
+                text(
+                    "SELECT action, details FROM prospect_activity_log "
+                    "WHERE prospect_id = :pid AND action = 'stage_assigned'"
+                ),
+                {"pid": prospect.id},
+            )
+        ).all()
+        assert len(rows) == 1
+        assert steps[1].name in str(rows[0].details)
