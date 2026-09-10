@@ -83,7 +83,7 @@ cd backend  && black --check app/ tests/ alembic/
 cd backend  && isort --check-only app/ tests/ alembic/
 cd backend  && python3 scripts/validate_migrations.py --strict
 cd backend  && python3 -m pytest tests/ -q -k "<what you touched>"
-cd frontend && npx tsc --noEmit
+cd frontend && npm run typecheck
 cd frontend && npx eslint .
 ```
 

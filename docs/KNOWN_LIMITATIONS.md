@@ -1577,6 +1577,19 @@ are adding a reader, take the derived value.
 
 ## Frontend — ESLint And `tsc` Run Different TypeScript Versions (2026-08-10)
 
+**Superseded in part (2026-09-10)** — `typescript-eslint` has since moved to
+`^8.69.0` (still `<6.1.0`-capped, same constraint) and, contrary to what
+this entry says below, an explicit `typescript: 5.9.3` pin in
+`frontend/package.json` is **not** refused — PR
+[#2452](https://github.com/thegspiro/the-logbook/pull/2452) pinned it
+successfully. What was actually wrong at the time (2026-08-10) isn't
+established from here; either the constraint genuinely eased since, or this
+entry's own diagnosis was incomplete. **The mechanism explained in the two
+bullets below is still accurate and is exactly what caused the newer,
+still-open finding** — see "Frontend — `typescript`'s declared version has
+drifted..." further down this file, and CLAUDE.md's "Two TypeScript
+installs" section for the current, correct description of the tree.
+
 `typescript-eslint` is held at `^8.65.0` rather than the dependabot group's
 `^8.66.0`. Bumping it forces npm to re-resolve the package, and **no
 `typescript-eslint` release accepts the TypeScript 7.0.2 this repo pins** —
