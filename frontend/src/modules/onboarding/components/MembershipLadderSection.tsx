@@ -122,26 +122,53 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
           </button>
         </div>
       ) : (
-        <MembershipTiersSection
-          tiers={editor.tiers}
-          autoAdvance={editor.autoAdvance}
-          loading={editor.loading}
-          saving={editor.saving}
-          dirty={editor.dirty}
-          memberCount={editor.memberCount}
-          onSetAutoAdvance={editor.setAutoAdvance}
-          onUpdateTier={editor.updateTier}
-          onUpdateBenefits={editor.updateBenefits}
-          onAddTier={editor.addTier}
-          onRemoveTier={editor.removeTier}
-          onMoveTier={editor.moveTier}
-          onSave={() => {
-            void editor.save();
-          }}
-          onReset={() => {
-            void editor.reload();
-          }}
-        />
+        <>
+          {/* The write landed and the read back did not, so the ladder below is
+              the stored one and the member counts beside it are from before the
+              save. Shown as a warning over a working editor rather than through
+              the failure panel above, which would take the editor away and
+              claim nothing had changed — and rather than not at all, which
+              would leave the success toast as the only account of a request
+              that failed. */}
+          {editor.refreshFailed && (
+            <div className="alert-warning mb-4" role="status">
+              <p className="text-theme-text-primary text-sm font-medium">
+                Your tiers were saved, but this page could not be refreshed afterwards.
+              </p>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                The ladder below is what was stored. Member counts, and any adjustment the server made when it saved,
+                are not shown yet.
+              </p>
+              <button
+                type="button"
+                className="btn-secondary mobile-touch-target mt-3 px-4 text-sm font-medium"
+                onClick={editor.retry}
+              >
+                Refresh
+              </button>
+            </div>
+          )}
+          <MembershipTiersSection
+            tiers={editor.tiers}
+            autoAdvance={editor.autoAdvance}
+            loading={editor.loading}
+            saving={editor.saving}
+            dirty={editor.dirty}
+            memberCount={editor.memberCount}
+            onSetAutoAdvance={editor.setAutoAdvance}
+            onUpdateTier={editor.updateTier}
+            onUpdateBenefits={editor.updateBenefits}
+            onAddTier={editor.addTier}
+            onRemoveTier={editor.removeTier}
+            onMoveTier={editor.moveTier}
+            onSave={() => {
+              void editor.save();
+            }}
+            onReset={() => {
+              void editor.reload();
+            }}
+          />
+        </>
       )}
     </div>
   );

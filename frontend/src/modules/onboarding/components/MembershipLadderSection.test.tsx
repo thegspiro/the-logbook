@@ -180,3 +180,28 @@ describe('what the step is told while the ladder is still being read', () => {
     expect(onLoadingChange).toHaveBeenLastCalledWith(false);
   });
 });
+
+describe('a save whose refresh did not come back', () => {
+  beforeEach(installDefaults);
+
+  it('says so over a working editor, rather than hiding it or taking the editor away', async () => {
+    // Three states are distinct here and were collapsed twice in review. The
+    // write landed, so the load-failure panel ("nothing has changed") is untrue
+    // and would remove the ladder just stored; saying nothing at all would
+    // leave the success toast as the only account of a request that failed,
+    // while stale member counts sit on screen looking authoritative.
+    const user = userEvent.setup();
+    render(<MembershipLadderSection />);
+    const years = await screen.findByLabelText('Years of service', { selector: '#years-active' });
+
+    await user.clear(years);
+    await user.type(years, '3');
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+    await user.click(screen.getByRole('button', { name: /save tiers/i }));
+
+    expect(await screen.findByText(/could not be refreshed afterwards/i)).toBeInTheDocument();
+    // The editor is still there, and the load-failure panel is not.
+    expect(screen.getByDisplayValue('Active Member')).toBeInTheDocument();
+    expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
+  });
+});

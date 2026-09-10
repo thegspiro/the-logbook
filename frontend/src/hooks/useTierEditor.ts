@@ -35,6 +35,13 @@ export function useTierEditor() {
   const [config, setConfig] = useState<MembershipTierConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // Distinct from `failed`, and deliberately so. `failed` means the ladder on
+  // screen cannot be trusted, and the section replaces the editor with a panel.
+  // This one means the write landed but the read back did not, so the ladder is
+  // right and the member counts beside it may not be — a warning to show above
+  // a working editor, never a reason to take the editor away or to block the
+  // step.
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -51,6 +58,7 @@ export function useTierEditor() {
         tiers: [...(data.tiers ?? [])].sort((a, b) => a.sort_order - b.sort_order),
       });
       setFailed(false);
+      setRefreshFailed(false);
       // A ladder the backend synthesized rather than read is *proposed*, not in
       // effect: `MembershipTierService._load_tiers` still sees nothing stored,
       // so advancement does not run and no benefit applies. Opening dirty is
@@ -193,11 +201,14 @@ export function useTierEditor() {
       setDirty(false);
       toast.success('Membership tiers saved');
       if (!(await fetchConfig())) {
-        // The refresh only picks up member counts and any server-side
-        // normalisation. Reporting its failure as "could not be loaded,
-        // nothing has changed" would contradict the success toast raised a
-        // line earlier and hide the ladder that was just stored.
+        // Reported as its own state rather than through `failed`. That panel
+        // says "could not be loaded — nothing has changed", which after an
+        // accepted PUT is untrue and takes away the editor showing the ladder
+        // that was just stored. Discarding the error instead would be worse
+        // again: the member counts on screen and any server-side normalisation
+        // are unconfirmed, and only the success toast would say anything.
         setFailed(false);
+        setRefreshFailed(true);
         setConfig((prev) => (prev ? { ...prev, is_saved: true } : prev));
       }
     } catch (err: unknown) {
@@ -217,6 +228,7 @@ export function useTierEditor() {
     autoAdvance: config?.auto_advance ?? true,
     loading,
     failed,
+    refreshFailed,
     retry,
     saving,
     dirty,

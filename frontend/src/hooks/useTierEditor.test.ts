@@ -256,6 +256,40 @@ describe('a save the refresh could not confirm', () => {
     expect(result.current.config?.is_saved).toBe(true);
   });
 
+  it('still says the refresh failed, rather than leaving the toast as the only account of it', async () => {
+    // Keeping the editor on screen must not become discarding the error. The
+    // member counts beside the ladder are from before the save and the server
+    // may have normalised what it stored, so a screen that says nothing is
+    // reporting a confidence it does not have.
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.save();
+    });
+
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.failed).toBe(false);
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it('clears the refresh warning once a read succeeds', async () => {
+    const result = await loaded();
+    act(() => result.current.setAutoAdvance(false));
+    getTierConfig.mockRejectedValueOnce(new Error('network'));
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(result.current.refreshFailed).toBe(true);
+
+    await act(async () => {
+      await result.current.reload();
+    });
+
+    expect(result.current.refreshFailed).toBe(false);
+  });
+
   it('still reports a failed load that was not preceded by a save', async () => {
     // The narrowing is to the post-save refresh only. An ordinary read failure
     // must still reach the panel, or a department is told it has no ladder.
