@@ -225,13 +225,20 @@ nested one `invalid` (`ELSPROBLEMS`). This appears to be an inherent
 consequence of `typescript-native: npm:typescript@7.0.2` sharing its real
 package name with the direct `typescript` dependency, not a stale lockfile
 artifact — npm's resolver chooses this layout on every attempt, not just
-the one committed. It does not affect `npm ci`, `eslint`, or
-`tsc-native.mjs --noEmit`, all still verified clean against it (see PR
-[#2452](https://github.com/thegspiro/the-logbook/pull/2452)); closing it
-fully looks like it would need a restructure of how `typescript-native` is
-aliased, which nobody has done. Treat `npm ls typescript` reporting this
-one node as a known, harmless quirk, not a regression to chase — and
-correct this paragraph for real if the alias is ever restructured.
+the one committed. `npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
+clean against it (see PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452)),
+so nothing in the actual build/lint/test path is failing — but `npm ls
+typescript` itself is a real, standing dependency-check failure
+(`ELSPROBLEMS`), not merely a cosmetic one, and per this file's own "Fix
+All Errors" policy that is not something to leave silently unaddressed.
+Closing it needs a restructure of how `typescript-native` is aliased,
+which is beyond a manifest-text fix and hasn't been done — **this is
+escalated, not resolved:** see `docs/KNOWN_LIMITATIONS.md`'s "Frontend —
+`typescript`'s declared version has drifted..." entry for the open item
+awaiting that decision. Don't re-attempt a lockfile regeneration or `npm
+dedupe` expecting a different outcome (both were tried; see that entry)
+without a real change to the alias structure itself, and update this
+paragraph for real once one lands.
 
 **typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and
@@ -251,8 +258,15 @@ Consequences worth knowing:
 - `npm run typecheck` / `npm run build` go through `frontend/scripts/tsc-native.mjs`,
   which resolves the aliased compiler explicitly. Keep it that way — the
   wrapper is what makes "which compiler ran" a fact rather than a hoisting
-  outcome. Bare `tsc` resolves to 5.9.3, because both installs ship a `tsc`
-  bin and npm links only one into `node_modules/.bin`.
+  outcome. **Bare `tsc` resolves to whichever bin sits closest to the
+  current directory, not any fixed version:** `frontend/node_modules/.bin/tsc`
+  (the nested `typescript@7.0.2` the "Correction" above documents) shadows
+  the root's `node_modules/.bin/tsc` (`5.9.3`) whenever the command runs
+  from inside `frontend/` — confirmed via `npx --no-install tsc --version`
+  there, which prints `7.0.2`. Never trust a bare `tsc` invocation's version
+  from either directory; use `tsc-native.mjs` (or, to deliberately run the
+  5.9.3 the linter uses, `node_modules/typescript/bin/tsc` from the repo
+  root).
 - **Point your editor at the aliased compiler.** In VS Code, set this in your
   local `.vscode/settings.json` (the directory is gitignored, so this cannot
   be committed for you):

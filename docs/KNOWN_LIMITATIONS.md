@@ -1745,24 +1745,35 @@ doc, not here.
 
 ## Frontend — `typescript`'s declared version has drifted from the documented alias arrangement (2026-09-10, security review EV-16 pass 4)
 
-**✅ Resolved (2026-09-10) — PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452)
-re-pinned `typescript` to `5.9.3` in `frontend/package.json`, matching
-CLAUDE.md's documented arrangement again.** Verified: `npm ci` (fresh),
-`npx eslint .` (0 problems), and `tsc-native.mjs --noEmit` (0 errors) all
-clean. **One residual, investigated and accepted as a known quirk rather
-than fixed:** `npm ls typescript` still reports
-`frontend/node_modules/typescript@7.0.2 invalid` against the `5.9.3`
-requirement — reproducible even from a from-scratch `rm package-lock.json
-&& npm install`, so it is not the stale-lockfile artifact this entry
-originally described. It appears to be an inherent consequence of
-`typescript-native: npm:typescript@7.0.2` sharing its real package name
-with the direct dependency; `npm dedupe` doesn't clear it either (fails on
-an unrelated, pre-existing `@vitest/ui`/`vitest` peer conflict). Since the
-paths that matter (`npm ci`, `eslint`, `tsc-native.mjs`) are all clean,
-this is left as a documented `npm ls`-only quirk — see CLAUDE.md's "Two
-TypeScript installs" section (updated the same day) for the current
-accurate description. Closing it for real would need restructuring the
-alias, which is a larger change nobody has taken on.
+**✅ The original finding is resolved (2026-09-10)** — PR
+[#2452](https://github.com/thegspiro/the-logbook/pull/2452) re-pinned
+`typescript` to `5.9.3` in `frontend/package.json`, matching CLAUDE.md's
+documented arrangement again. Verified: `npm ci` (fresh), `npx eslint .`
+(0 problems), and `tsc-native.mjs --noEmit` (0 errors) all clean, and bare
+`tsc` run from the repo root now resolves the `5.9.3` the linter type-checks
+against (see CLAUDE.md's correction on that point too — bare `tsc` run from
+inside `frontend/` still resolves the nested `7.0.2`, unrelated to this fix).
+
+**⚠️ Still open, escalated rather than fixed — needs an owner decision:**
+fixing the pin surfaced a second, distinct problem the pin alone doesn't
+close. `npm ls typescript` reports `frontend/node_modules/typescript@7.0.2
+invalid` against the `5.9.3` requirement — reproducible even from a
+from-scratch `rm package-lock.json && npm install`, so this is not the
+stale-lockfile artifact the original finding described; it is npm's
+resolver choosing this layout every time, an apparent inherent consequence
+of `typescript-native: npm:typescript@7.0.2` sharing its real package name
+with the direct `typescript` dependency. `npm dedupe` doesn't clear it
+either — it fails outright on an unrelated, pre-existing `@vitest/ui`/
+`vitest` peer conflict, so that isn't a path to a fix here regardless.
+`npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
+clean under it, so nothing in the actual build/lint/test path is broken —
+but `npm ls typescript`'s own `ELSPROBLEMS` is a real, standing failure of
+that specific check, not a cosmetic one, and closing it looks like it needs
+restructuring how `typescript-native` is aliased: a larger, architectural
+change nobody has taken on, genuinely past what a manifest/lockfile-text
+fix can resolve. See CLAUDE.md's "Two TypeScript installs" section (updated
+the same day) for the current accurate description of the tree; update
+both there and here once the alias is restructured.
 
 <details>
 <summary>Original entry (superseded by the above), preserved for history</summary>
