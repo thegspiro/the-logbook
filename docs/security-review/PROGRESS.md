@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 19 (Skills testing), pass 4** — PR TBD, branch
+`claude/friendly-babbage-pud8rg` (this watchdog session's designated
+branch, not a fresh `claude/security-review-<feature>` branch — the
+rotation had gone quiet: PR #2467 recorded PR #2460's merge and closed out
+Feature 18 at 2026-09-10T19:12 UTC, and by 20:47 UTC — over 90 minutes and
+several unrelated sessions' PRs later (#2462, #2470, #2471) — no branch or
+PR for Feature 19 existed, so a watchdog iteration started the pass
+directly, per that "Step 0 went quiet" pattern (same precedent as Feature
+18's own pass 4 and the 2026-09-09 watchdog pass, both documented below).
+
+Step 0 re-confirmed clean: `PROGRESS.md`'s Open PR row still read "None",
+and `list_pull_requests` (state=open) showed only #2471, #2470, #2462 —
+none security-review-shaped.
+
+**Scope check:** diffed against `d5b716ff8` (pass-3 merge, PR #2230) —
+backend surface is a single already-fixed line
+(`app/api/v1/endpoints/skills_testing.py:3157`, Feature 00's own SEC4-1),
+service/schema/model files byte-identical; seven frontend files changed,
+all confirmed cosmetic (contrast-shade bumps, a `Breadcrumbs` rollout, a
+`<main>`→`<div data-page-main>` landmark fix) by reading each diff
+directly. Re-verified all six pass 1–3 fixes (SKT-1 through SKT-4, SKT2-1,
+SKT3-1) intact by direct code read, re-enumerated all 29 routes via a
+fresh AST walk (unchanged), and re-verified SKT3-2 (unbounded `GET /tests`)
+still open/unchanged. Three new checks this pass — `GET /summary`'s
+aggregate-only claim, this file's own audit-log PII payloads against
+SEC-00's own stated criterion (SEC-00 explicitly scopes its sweep away
+from feature-owned files), and the uncapped `sections`/`criteria` JSON
+body against the global request-size middleware — all came back clean, no
+finding. **0 new code fixes, 0 new findings.** Full write-up:
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 4**.
+
+Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,
+`app/ tests/ alembic/`) clean; `validate_migrations.py --strict` clean (443
+revisions, single head); `pytest -k skill` 405 passed, 1 skipped
+(pre-existing); frontend `typecheck` and `lint` both clean. Rotation row 19
+→ `⏳`. Opening PR next.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, now merged), preserved for history</summary>
+
 **None.** PR [#2460](https://github.com/thegspiro/the-logbook/pull/2460)
 (Feature 18, Training extended, pass 4) merged clean via squash, merge
 commit `21470e693e2f`, all CI checks green including CI Success and
@@ -24,6 +64,8 @@ outstanding findings on the final commit. Merged directly by a 30-minute
 watchdog check (fully green, mergeable_state clean, idle ~30 minutes since
 the last push). Rotation row 18 is now `✅`. Next: Feature 19 (Skills
 testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, before the merge), preserved for history</summary>
@@ -12782,7 +12824,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
@@ -12805,6 +12847,65 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-10 — Feature 19 (Skills testing, pass 4) — 0 fixed, 0 new findings, 1 re-verified open (SKT3-2)
+
+**Step 0 (watchdog):** PR #2467 recorded PR #2460's merge and closed out
+Feature 18 at 19:12 UTC. By 20:47 UTC — over 90 minutes later, with three
+unrelated sessions' PRs (#2462, #2470, #2471) landing on the repo in that
+window — no branch or PR existed for Feature 19 despite `PROGRESS.md`
+already naming it "Next." Re-checked `PROGRESS.md`'s Open PR row (still
+"None") and live GitHub open PRs (`list_pull_requests`, state=open — only
+#2471/#2470/#2462, none security-review-shaped) before starting, per Step
+0's own rule. Confirmed clear; started Feature 19 directly, on this
+watchdog session's own designated branch
+(`claude/friendly-babbage-pud8rg`) rather than a fresh
+`claude/security-review-<feature>` branch — the same precedent Feature
+18's own pass 4 and the 2026-09-09 watchdog pass both used and documented.
+
+**Prior art loaded first:** `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+and this feature's own `SKT-19-skills-testing.md` (three prior passes,
+PRs #1901/#2017/#2230) — re-verified its open finding (SKT3-2) and its six
+fixed findings (SKT-1..4, SKT2-1, SKT3-1) rather than re-deriving any of
+them.
+
+**Scope check:** diffed the current tree against `d5b716ff8` (pass-3's
+merge commit). Backend: one line changed
+(`skills_testing.py:3157`, Feature 00's own `SEC4-1` fix to
+`email_test_results`'s error handling — already fixed, already covered by
+that pass's own gate); service/schema/model files byte-identical. Frontend:
+seven files changed, all read directly and confirmed cosmetic (contrast-shade
+bumps matching CLAUDE.md's AAA-contrast convention, a `Breadcrumbs` rollout,
+a `<main>`→`<div data-page-main>` landmark fix) — no new API call, input, or
+data-exposure surface.
+
+**Re-verified by direct code read** (not by trusting the diff alone): all six
+pass 1–3 fixes intact with current line numbers; all 29 routes' auth
+dependencies re-enumerated via a fresh `ast` walk (unchanged); SKT3-2
+(`GET /tests` has no pagination/cap) re-read end to end and confirmed still
+open, unregressed, its `KNOWN_LIMITATIONS.md` entry unchanged.
+
+**Three new checks, all clean, no finding:** `GET /summary`'s "aggregate
+only, no per-row exposure" claim verified by reading all six of its queries
+directly (every one a bare `func.count`/`func.avg` on `organization_id`,
+the one member-facing count gated on `_can_manage_tests`); this file's own
+8 `log_audit_event` calls carrying `candidate_name`/`examiner_name` checked
+against SEC-00 pass 4's own stated criterion for the pattern ("the
+identifier is the subject of the audited event") — SEC-00 explicitly
+scoped its own sweep away from feature-owned code, so this file's payloads
+had never actually been checked against that standard until now, and they
+pass it; the uncapped `sections`/`criteria` JSON body checked against the
+global `RequestSizeLimitMiddleware` plus the `training.manage` gate,
+matching the "bounded by construction" shape SEC-00 accepts elsewhere.
+
+Completion gate: `flake8 app/ tests/ alembic/` (7.3.0), `black --check`
+(26.5.1 — a stale 26.3.1 shadowed the pin on `PATH` via `~/.local/bin`,
+invoked `/usr/local/bin/black` directly), `isort --check-only` (9.0.1), all
+clean, all CI's exact pins. `validate_migrations.py --strict`: 443
+revisions, single head. `pytest tests/ -q -k skill`: 405 passed, 1 skipped
+(pre-existing). `npm run typecheck` / `npm run lint`: both 0
+errors/warnings. Full write-up: `docs/security-review/SKT-19-skills-testing.md`
+→ **Pass 4**. Rotation row 19 → `⏳`.
 
 ### 2026-09-10 — Feature 16 (Events & requests, pass 4) — 1 fixed (EV-24, P2), 1 re-verified open (EV-23), corrected on two Codex review rounds
 

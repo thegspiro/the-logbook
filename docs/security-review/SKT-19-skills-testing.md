@@ -738,3 +738,180 @@ been a clean baseline per pass 2's own gate a week prior, then confirmed via
 it; the real numbers are recorded in the table above. Noted here so a future
 pass with a similarly bare worktree doesn't misreport a phantom "CI is red on
 main."
+
+---
+
+## Pass 4 (2026-09-10)
+
+**Prefix:** `SKT4` · **PR:** TBD
+
+**Scope check:** diffed the current tree against `d5b716ff8` (the pass-3
+merge commit for PR #2230). **Backend: one line changed, in one file.**
+`app/api/v1/endpoints/skills_testing.py:3157` gained the `SEC4-1` fix from
+Feature 00's own pass 4 (`c91060f7a`, "security(cross-cutting): 3 fixes, 0
+flagged") — `email_test_results`'s bare `except Exception as e: ... detail=
+f"Failed to send email: {str(e)}"` now reads `detail=safe_error_detail(e,
+fallback="Failed to send email")`, closing an SMTP-host/credential-error
+disclosure that was this feature's own code but was found and fixed by the
+cross-cutting sweep rather than this rotation. `app/services/
+skills_testing_service.py`, `app/schemas/skills_testing.py`, and
+`app/models/skills_testing.py` are all **byte-identical** to pass 3
+(`git diff d5b716ff8 HEAD -- <each path>` empty). No new migration touches a
+skills-testing table.
+
+**Frontend: seven files changed, all cosmetic.** Read each diff directly
+rather than trusting the diffstat: `SkillTestOfficerActions.tsx`,
+`ActiveSkillTestPage.tsx`, `SkillsTestingTestRecordsTab.tsx` (green-600→700 /
+amber-600→700 / yellow-500→700 shade bumps, the same AAA-contrast sweep
+CLAUDE.md documents for `btn-success`/`btn-warning` and TRX4's sibling pass
+found on its own frontend files the same day); `MySkillTestResultPage.tsx` and
+`SkillsTestingPage.tsx` (a `<Breadcrumbs>` rollout); `SkillTemplateBuilderPage.tsx`
+and `StartSkillTestPage.tsx` (`<main>` → `<div data-page-main>`, a
+landmark-uniqueness fix). None adds a new API call, new user input, or touches
+org-scoping/permission/data-exposure surface.
+
+### Re-verification of pass 1–3 fixes
+
+Read the current code directly for each (not re-cited from any prior write-up):
+
+- **SKT-1** — `update_template` still routes through `apply_updates` inside a
+  `try/except ValueError` (`skills_testing.py:678-680`).
+- **SKT-2** — `void_test` still calls `assert_different_person(current_user.id,
+str(test.candidate_id), action="void", ...)` immediately after the
+  "already voided" guard and before any mutation (`skills_testing.py:2698-2706`).
+- **SKT-3** — `return_test_for_correction` still calls the identical guard
+  before the status mutation begins (`skills_testing.py:2863-2872`).
+- **SKT-4** — `lock_attempt_capacity` (`skills_testing_service.py:576-609`)
+  still locks `TrainingRequirement` with `.with_for_update()`; the `spent`
+  count in `assert_attempts_remaining` still carries
+  `.with_for_update(of=SkillTest)` (`:715`); `validate_test` still acquires
+  the capacity lock via a non-locking peek at `requirement_id` before
+  `_lock_test_for_transition` locks the specific test row.
+- **SKT2-1** — all ten `SkillTest.is_practice` comparisons are still
+  `.is_(False)`/`.is_(True)`; zero `# noqa: E712` in the file (`grep -c`
+  confirms).
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  (`str(viewer.id) == str(test.examiner_id)`, `skills_testing.py:2428-2432`),
+  immediately after the pre-existing candidate check, both before the
+  existing-grant lookup.
+
+All six guard test files (`test_skill_template_update_guard.py`,
+`test_skills_test_void.py`, `test_skill_test_return.py`,
+`test_skill_test_attempt_limit.py`, `test_skill_test_validate_locking.py`,
+`test_skill_test_viewers.py`) are present and pass (see completion gate).
+
+**Route auth coverage re-enumerated from scratch**, via a fresh Python `ast`
+walk over every `@router.<verb>` decorator and its function's `Depends(...)`
+defaults (not a re-read of any prior table): **29/29 routes**, same paths,
+same methods, same `get_current_user` / `require_permission(...)` gate as
+pass 1–3's table. The file's route surface has not moved since pass 1.
+
+### New checks this pass
+
+**`GET /summary`'s "no per-row exposure" claim re-verified by reading the
+handler, not by trusting the label.** `get_testing_summary`
+(`skills_testing.py:3532-3658`) issues six queries, every one a bare
+`func.count`/`func.avg` filtered on `organization_id` (plus
+`is_practice`/`status`/`validated_at`/`result` predicates) — no query selects
+a `User` or a per-test row, and `pending_validation_count` is gated to
+`_can_manage_tests(current_user)` before it is even computed, with an in-code
+comment explaining why a member should not learn the org's outstanding review
+queue depth. Confirmed clean; the claim holds.
+
+**Template visibility fail-direction checked, not assumed.** `list_templates`
+and `get_template` both treat `visibility="assigned_only"` identically to
+`"officers_only"` for a non-officer caller (`skills_testing.py:348-353`,
+`:610-615`) — there is no code path anywhere in this file that resolves an
+"assignment" and grants a non-officer access to an `assigned_only` template.
+This is a functional gap (the visibility tier does nothing beyond what
+`officers_only` already does), not a security one: the fail direction is
+**more** restrictive than the label implies, never less, so no member sees a
+template the officer who set `assigned_only` did not intend for them. Not
+reported as a finding since nothing here can leak; noted so a future pass
+implementing per-assignment visibility does not have to re-discover that the
+non-officer branch currently no-ops on this value.
+
+**Audit-log PII payloads checked against SEC-00's own precedent, not
+re-derived from scratch.** `SEC-00-cross-cutting-baseline.md`'s pass 4 swept
+`log_audit_event` payloads app-wide for PII-shaped keys but explicitly scoped
+itself away from "the module-level code each rotation feature owns" — so its
+"13 calls, all justified" count does not cover this file's own 8 call sites
+that carry `candidate_name`/`examiner_name` alongside the id
+(`void_test:2763`, `cancel_test:2633`, `delete_test:1899`, `complete_test:
+2100-2102`, `return_test_for_correction`, `add_test_viewer:2462-2475`,
+`email_test_results`'s summary line). Checked each against SEC-00's own
+stated criterion for the pattern being acceptable ("the identifier is the
+subject of the audited event... none incidental") rather than assuming it
+transfers: every one of these events is specifically about an action taken on
+or by the named candidate/examiner — a void, a cancellation, a deletion, a
+return, a viewer grant — the same shape as `deleted_full_name` on a user
+deletion. No finding; recorded so this file's own audit payloads are
+confirmed against the standard rather than left unverified because SEC-00's
+sweep skipped feature-owned files by design.
+
+**JSON body size (`sections`, `criteria`) has no per-template cap** —
+`SkillTemplateCreate.sections: List[SkillTemplateSectionSchema] =
+Field(..., min_length=1)` and `SkillTemplateSectionSchema.criteria` both lack
+a `max_length`. Checked whether this is a live abuse-resistance gap: the
+route is `training.manage`-gated (an admitted-officer surface, not public or
+even open-to-all-members), and the global `RequestSizeLimitMiddleware`
+(`MAX_REQUEST_BODY_SIZE`, verified present and enforced in SEC-00 pass 4's own
+upload sweep) caps the total request body regardless of how many sections it
+is spent on. Not reported as a finding — the existing global cap plus the
+officer-only gate is the same "bounded by construction, not by a per-field
+cap" shape SEC-00 accepts for several of its own tracked resources.
+
+### Corrections to prior write-ups
+
+None. Pass 1–3's findings, fixes, and "Verified good" claims are all
+re-confirmed above; nothing in this pass contradicts anything recorded
+earlier.
+
+### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — still OPEN / FLAGGED
+
+Re-verified, not re-derived: read `list_tests` (`skills_testing.py:978-1198`)
+directly end to end this pass. No `.limit()`/`.offset()` anywhere in the
+function; the batch `User` and `SkillTemplate` fetches and the per-row
+`resolve_result_view()` loop are unchanged from pass 3's description.
+`skillsTestingService.getTests()` (frontend) still accepts no paging
+parameter, and `SkillsTestingTestRecordsTab.tsx`'s default "All" filter still
+calls `GET /tests` with zero query params. No code or scope change since
+pass 3 — the finding, its severity, and its `docs/KNOWN_LIMITATIONS.md` entry
+("`GET /training/skills-testing/tests` has no pagination or result cap") all
+stand unchanged. Left open for the same reason pass 3 gave: closing it needs a
+paging contract, a chosen default/cap, and a coordinated frontend change — a
+product decision, not a same-commit fix.
+
+## Guard tests added
+
+None this pass — no code fix was needed (the one backend change since pass 3
+was already fixed, and already has its own coverage, under Feature 00's own
+pass). The six existing guard test files listed above were re-run, not
+re-written.
+
+## Completion gate (pass 4)
+
+| Check                                             | Result                                                                                                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations (`flake8==7.3.0`, CI's pin)                                                                                                                                                              |
+| `black --check app/ tests/ alembic/`              | ✅ 1577 files unchanged (`black==26.5.1`, CI's pin — installed explicitly; a stale `26.3.1` shadowed it on `PATH` via `~/.local/bin`, invoked `/usr/local/bin/black` directly to get the pinned version) |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==9.0.1`, CI's current pin)                                                                                                                                                              |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 443 revisions, single head `0533644945cd`                                                                                                                                                             |
+| `pytest tests/ -q -k "skill"`                     | ✅ 405 passed, 1 skipped (pre-existing optional-dependency skip)                                                                                                                                         |
+| `cd frontend && npm run typecheck`                | ✅ 0 errors (the aliased TS 7.0.2 compiler, via `scripts/tsc-native.mjs`)                                                                                                                                |
+| `cd frontend && npm run lint`                     | ✅ 0 errors, 0 warnings                                                                                                                                                                                  |
+
+Full backend suite not re-run this pass beyond the `-k skill` scope: backend
+diff against pass 3 is a single already-reviewed, already-fixed line
+(`SEC4-1`, covered by Feature 00's own completion gate), so the skill-scoped
+run above is the one surface this pass's own re-verification work could
+plausibly affect.
+
+**Disposition: 0 new code fixes, 0 new findings.** All six pass 1–3 fixes
+re-verified intact by direct code read; the one open finding (SKT3-2) is
+re-verified still open and unchanged; three new checks this pass (summary
+aggregate-only, audit-payload PII against SEC-00's own criterion,
+JSON-body size bounding) all came back clean. This pass's value is the
+re-verification and the three checks above, not a new defect — the backend
+surface has had a total of one line change (already fixed elsewhere) across
+three passes and roughly two weeks.
