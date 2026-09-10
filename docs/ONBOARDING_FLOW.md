@@ -745,6 +745,20 @@ Body: {
 }
 ```
 
+`POST /api/v1/onboarding/session/positions` is the same submission under the
+name the wizard actually uses, and its body is keyed `positions` rather than
+`roles`:
+
+```
+POST /api/v1/onboarding/session/positions
+Body: {
+  positions: [{ ...same item shape as above }]
+}
+```
+
+Copying the `roles` body to the `positions` route returns a 422:
+`PositionsSetupRequest` requires the `positions` key.
+
 > **Unticking a position removes it** _(2026-09-09)_: `save_session_roles`
 > used to delete only `is_system=False` rows, so an unticked seeded position
 > survived setup and went on appearing in every picker. It is now deleted,
@@ -931,23 +945,23 @@ defines them, rather than copied out as JSON: a model name stays true when a
 field is added, and a hand-copied example does not — which is how the wiki came
 to document an organization body the route had stopped accepting.
 
-| Endpoint                                                                 | Response                                                                                                                                                                            |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /onboarding/status`                                                 | `OnboardingStatusResponse` — `needs_onboarding`, `is_completed`, `current_step`, `total_steps`, `steps_completed`, `organization_name`                                              |
-| `POST /onboarding/start`                                                 | `StartSessionResponse` — `session_id`, `expires_at`, `csrf_token`, `message`, `current_step`, `steps`. A client cannot proceed without the first three                              |
-| `GET /onboarding/system-info`                                            | `SystemInfoResponse` — `app_name`, `version`, `environment`, `database`, `security`, `features`                                                                                     |
-| `GET /onboarding/security-check`                                         | `SecurityCheckResponse` — `passed`, `issues`, `warnings`, `total_issues`, `total_warnings`                                                                                          |
-| `GET /onboarding/database-check`                                         | `DatabaseCheckResponse` — `connected`, `database`, `host`, `port`, `server_time?`, `organizations_count?`, `error?`                                                                 |
-| `POST /onboarding/organization`, `POST /onboarding/session/organization` | `OrganizationSetupResponse` — `id`, `name`, `slug`, `organization_type`, `timezone`, `active`, `created_at`                                                                         |
-| `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`. Also sets the auth cookies, so the caller is signed in when it returns |
-| `POST /onboarding/modules`                                               | `{ message, modules }` — every module with its resulting boolean, not only the enabled ones                                                                                         |
-| `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                           |
-| `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                   |
-| `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                |
-| `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                            |
-| every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                |
-| `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                             |
-| `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                        |
+| Endpoint                                                                 | Response                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /onboarding/status`                                                 | `OnboardingStatusResponse` — `needs_onboarding`, `is_completed`, `current_step`, `total_steps`, `steps_completed`, `organization_name`                                                                                                                                                                 |
+| `POST /onboarding/start`                                                 | `StartSessionResponse` — `session_id`, `expires_at`, `csrf_token`, `message`, `current_step`, `steps`. A client cannot proceed without the first three                                                                                                                                                 |
+| `GET /onboarding/system-info`                                            | `SystemInfoResponse` — `app_name`, `version`, `environment`, `database`, `security`, `features`                                                                                                                                                                                                        |
+| `GET /onboarding/security-check`                                         | `SecurityCheckResponse` — `passed`, `issues`, `warnings`, `total_issues`, `total_warnings`                                                                                                                                                                                                             |
+| `GET /onboarding/database-check`                                         | `DatabaseCheckResponse` — `connected`, `database`, `host`, `port`, `server_time?`, `organizations_count?`, `error?`                                                                                                                                                                                    |
+| `POST /onboarding/organization`, `POST /onboarding/session/organization` | `OrganizationSetupResponse` — `id`, `name`, `slug`, `organization_type`, `timezone`, `active`, `created_at`                                                                                                                                                                                            |
+| `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`, `authenticated`. Also sets the auth cookies; `authenticated` is the signal the frontend uses to set its `has_session` hint, since the cookies themselves are httpOnly and invisible to it |
+| `POST /onboarding/modules`                                               | `{ message, modules }` — every module with its resulting boolean, not only the enabled ones                                                                                                                                                                                                            |
+| `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                                                                                                                                              |
+| `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
+| `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
+| `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                                                                                                                                               |
+| every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                                                                                                                                   |
+| `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                                                                                                                                                |
+| `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                                                                                                                                           |
 
 ### Onboarding Status
 
@@ -1040,8 +1054,12 @@ the name — from `DEFAULT_POSITIONS` in `permissions.py`, narrowed to what the
 agency type actually has: an EMS-only service gets no Firefighter, and its chief
 is a Chief rather than a Fire Chief. `it_manager` (priority 100, all
 permissions) is the System Owner's position. This runs once per install, and
-the Positions step later lets the department keep, rename or drop what was
-seeded.
+the Positions step later lets the department keep or drop what was seeded, and
+add positions of its own. It does **not** rename a seeded one:
+`save_session_roles` updates an existing position's permissions, priority and
+description, and never assigns the submitted `name`, so a renamed seeded
+position comes back in the `updated` list with its stored name unchanged. The
+wizard exposes no rename control for them either.
 
 > The wiki described this as "creates 6 default roles: Super Admin, Admin,
 > Chief, Officer, Member, Probationary" until 2026-09-10. That list was stale in
@@ -1112,7 +1130,7 @@ Only the ids the wizard asks about are applied to the organization —
 `ONBOARDING_CORE_MODULES` (`members`, `events`, `documents`, `forms`) and
 `ONBOARDING_OFFERED_MODULES` (`training`, `inventory`, `medical_supplies`,
 `scheduling`, `apparatus`, `facilities`, `storefront`, `elections`, `minutes`,
-`reports`). Two other groups are accepted by validation and go nowhere:
+`reports`, `notifications`, `mobile`, `integrations`, `prospective_members`). Two other groups are accepted by validation and go nowhere:
 
 - **Settings-only** (`communications`, `finance`, `grants`, `hr_payroll`,
   `incidents`, `medical_screening`, `public_info`, `testing`) — real
@@ -1184,8 +1202,13 @@ stored disabled and no mail is sent. Custom SMTP goes under `selfhosted`.
 
 `fromEmail` is required for every enabled configuration — it doubles as the SMTP
 login, so a malformed one fails authentication rather than merely delivery. The
-provider password field is required on `gmail`, `selfhosted` and `other`; all
-three Microsoft OAuth fields are required together.
+provider password field is required on `gmail`; all three Microsoft OAuth fields
+are required together.
+
+On `selfhosted` only `smtpHost` and `fromEmail` are required. `smtpUsername` and
+`smtpPassword` are a pair: an anonymous relay with neither is a complete
+configuration, but a username without a password is rejected — that combination
+means a credential was not restored rather than one that was never needed.
 
 Note the asymmetry: these are the wire names, while `missing_for_enabled()`
 reports a missing field by its **stored** snake_case name (`from_email`,
