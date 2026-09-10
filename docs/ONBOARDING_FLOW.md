@@ -1106,13 +1106,28 @@ Body: {
 The non-session counterpart. It validates the onboarding session and refuses
 once onboarding is complete, so a still-valid session cannot be replayed to
 change module settings after setup. The response reports every module with its
-resulting boolean, not only the ones enabled.
+resulting boolean, not only the ones enabled — with the caveat below.
 
-Use ids that are fields on `ModuleSettings`. The six in
-`ONBOARDING_LEGACY_MODULES` — `compliance`, `meetings`, `fundraising`,
-`equipment`, `vehicles`, `budget` — are accepted so an older saved session still
-loads, but they are not `ModuleSettings` fields: they are recorded on
-`OnboardingStatus` and go no further, so enabling one turns nothing on.
+Only the ids the wizard asks about are applied to the organization —
+`ONBOARDING_CORE_MODULES` (`members`, `events`, `documents`, `forms`) and
+`ONBOARDING_OFFERED_MODULES` (`training`, `inventory`, `medical_supplies`,
+`scheduling`, `apparatus`, `facilities`, `storefront`, `elections`, `minutes`,
+`reports`). Two other groups are accepted by validation and go nowhere:
+
+- **Settings-only** (`communications`, `finance`, `grants`, `hr_payroll`,
+  `incidents`, `medical_screening`, `public_info`, `testing`) — real
+  `ModuleSettings` fields, but `configure_modules` writes
+  `key in normalized if key in asked_about else <default>`, so these keep their
+  default. **The response disagrees with what is stored**: it is built as
+  `{module: module in final_modules}` over every accepted id, so submitting
+  `finance` returns `finance: true` while `settings.modules.finance` stays at
+  its default. Turn these on from Settings → Modules after setup.
+- **Legacy** (`compliance`, `meetings`, `fundraising`, `equipment`, `vehicles`,
+  `budget`) — accepted so an older saved session still loads, but not
+  `ModuleSettings` fields at all: recorded on `OnboardingStatus` and no further.
+
+So the response reports the resulting boolean **for the asked-about ids only**;
+for the other two groups it echoes the request.
 
 ### Configure Roles
 
@@ -1148,13 +1163,24 @@ anything it does not recognise — a snake_case guess, say — is dropped silent
 and `missing_for_enabled()` then rejects the write for a field the caller
 believes it sent.
 
-| Platform              | Keys                                                                                                                                          |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| all                   | `enabled`, `platform`, `fromEmail`, `fromName`                                                                                                |
-| `gmail`               | `googleAppPassword`                                                                                                                           |
-| `microsoft`           | `microsoftAuthMethod`, and for OAuth `microsoftTenantId`, `microsoftClientId`, `microsoftClientSecret`; for basic auth `microsoftAppPassword` |
-| `selfhosted`, `other` | `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword`, `smtpEncryption`                                                                      |
-| `cloudflare`          | `cloudflareAccountId`, `cloudflareApiToken`                                                                                                   |
+| Platform     | Keys                                                                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| all          | `fromEmail`, `fromName`                                                                                                                       |
+| `gmail`      | `googleAppPassword`                                                                                                                           |
+| `microsoft`  | `microsoftAuthMethod`, and for OAuth `microsoftTenantId`, `microsoftClientId`, `microsoftClientSecret`; for basic auth `microsoftAppPassword` |
+| `selfhosted` | `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword`, `smtpEncryption`                                                                      |
+| `other`      | none — see below                                                                                                                              |
+| `cloudflare` | `cloudflareAccountId`, `cloudflareApiToken`                                                                                                   |
+
+Do **not** put `enabled` or `platform` inside `config`. The mapper never reads
+them: `platform` is the top-level field, and enablement is derived as
+`platform != "other" and bool(config)`. A caller who sets `config.enabled: false`
+alongside valid credentials gets a success response and a configuration stored
+**enabled**.
+
+`other` is the configure-later choice, not a custom-SMTP one: it forces
+`enabled` to false whatever `config` holds, so SMTP fields sent with it are
+stored disabled and no mail is sent. Custom SMTP goes under `selfhosted`.
 
 `fromEmail` is required for every enabled configuration — it doubles as the SMTP
 login, so a malformed one fails authentication rather than merely delivery. The
