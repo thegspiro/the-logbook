@@ -1822,10 +1822,15 @@ class TestTheBackfillChecksTheFormActuallyWorks:
             if "form_integrations" in sql:
                 rows = [(json.dumps(m),) for m in self._mappings]
             else:
-                rows = [
-                    (f"f{i}", label, ftype)
-                    for i, (label, ftype) in enumerate(self._fields)
-                ]
+                # (id, label, field_type, condition_field_id, condition_operator).
+                # A field may be given as a 2-tuple (unconditional) or a
+                # 4-tuple naming the parent it is gated on.
+                rows = []
+                for i, field in enumerate(self._fields):
+                    label, ftype = field[0], field[1]
+                    parent = field[2] if len(field) > 2 else None
+                    operator = field[3] if len(field) > 3 else None
+                    rows.append((f"f{i}", label, ftype, parent, operator))
             return SimpleNamespace(fetchall=lambda: rows)
 
     def _can(self, mappings, fields):
@@ -2175,3 +2180,86 @@ class TestTheConfiguredEventDurationIsBounded:
             ).default_duration_minutes
             == MAX_EVENT_DURATION_MINUTES
         )
+
+
+class TestAConditionalContactFieldDoesNotQualify:
+    """`PublicFormPage.isFieldVisible` hides a field until its parent answer
+    matches, so two contact fields with mutually exclusive conditions can never
+    both be submitted. Rather than model that reachability, a field carrying a
+    condition is excluded outright — the safe direction, and free in the case
+    this backfill exists for, since the generated request form sets no
+    conditions on any field."""
+
+    def _can(self, mappings, fields):
+        module = TestQualificationFollowsRuntimePrecedence._module()
+        bind = TestTheBackfillChecksTheFormActuallyWorks._Bind(mappings, fields)
+        return module._form_can_produce_a_request(bind, "form-1")
+
+    def test_mutually_exclusive_contacts_do_not_qualify(self):
+        """The reported case: `Name` only when the selector is `school`, `Email`
+        only when it is `business`."""
+        assert not self._can(
+            [],
+            [
+                ("Requester Type", "select"),
+                ("Name", "text", "f0", "equals"),
+                ("Email", "email", "f0", "equals"),
+            ],
+        )
+
+    def test_one_conditional_contact_is_enough_to_disqualify(self):
+        assert not self._can(
+            [],
+            [
+                ("Requester Type", "select"),
+                ("Name", "text", "f0", "equals"),
+                ("Email", "email"),
+            ],
+        )
+
+    def test_unconditional_contacts_still_qualify(self):
+        assert self._can([], [("Name", "text"), ("Email", "email")])
+
+    def test_a_conditional_field_elsewhere_is_harmless(self):
+        """Only the fields supplying the two contacts have to be certain."""
+        assert self._can(
+            [],
+            [
+                ("Name", "text"),
+                ("Email", "email"),
+                ("Requester Type", "select"),
+                ("School Name", "text", "f2", "equals"),
+            ],
+        )
+
+    def test_a_mapping_onto_a_conditional_field_is_inert_too(self):
+        """Same mechanism as the section-header case: the mapping credit is
+        checked against the fields that survived the exclusion."""
+        assert not self._can(
+            [{"f1": "contact_name", "f2": "contact_email"}],
+            [
+                ("Requester Type", "select"),
+                ("Who are you", "text", "f0", "equals"),
+                ("Reach you at", "text", "f0", "equals"),
+            ],
+        )
+
+    def test_a_half_declared_condition_is_not_a_condition(self):
+        """`isFieldVisible` returns true unless *both* the parent and the
+        operator are set, so a row carrying only one is unconditional."""
+        assert self._can([], [("Name", "text", "f9", None), ("Email", "email")])
+
+    def test_the_generated_request_form_sets_no_conditions(self):
+        """Pins why excluding conditional fields is free: if the generator ever
+        started gating a contact field, this backfill would stop selecting the
+        very forms it exists for, and this fails rather than going quiet."""
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "api"
+            / "v1"
+            / "endpoints"
+            / "event_requests.py"
+        ).read_text()
+        generator = source[source.index("Generate a public event request form") :]
+        assert "condition_field_id" not in generator

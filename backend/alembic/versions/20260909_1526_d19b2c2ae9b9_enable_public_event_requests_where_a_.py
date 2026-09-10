@@ -295,18 +295,47 @@ def _form_can_produce_a_request(bind, form_id: str) -> bool:
     """
     targets: set = set()
 
-    # Input fields only, keyed by id so a stored mapping can be checked against
-    # them: a mapping naming `contact_name` on a section header is as inert as
-    # the label would be, because the runtime mapping loop reads only the ids
-    # the submission actually carries.
+    # Fields an anonymous requester is certain to be able to answer, keyed by id
+    # so a stored mapping can be checked against them: a mapping naming
+    # `contact_name` on a field the requester never sees is as inert as the
+    # label would be, because the runtime mapping loop reads only the ids the
+    # submission actually carries.
+    #
+    # **A field carrying a visibility condition is excluded outright**, rather
+    # than having its condition evaluated. `PublicFormPage`'s `isFieldVisible`
+    # treats a field as conditional when it has both a `condition_field_id` and
+    # a `condition_operator`, and hides it until the parent answer matches — so
+    # "can this form supply both contacts?" becomes "is there an answer to the
+    # parent questions that reveals both at once?", which is a satisfiability
+    # question over a chain this migration would have to model and then keep
+    # modelling correctly forever. Two conditional contact fields with mutually
+    # exclusive conditions can never both be submitted, and that is the case
+    # worth refusing.
+    #
+    # Excluding them costs nothing in the case this backfill exists for: the
+    # form produced by "Generate Event Request Form" sets no conditions on any
+    # field. A department that hand-built a conditional contact field turns the
+    # toggle on itself, which is the coupling already in
+    # docs/KNOWN_LIMITATIONS.md — the same price the other exclusions charge,
+    # and the same direction: never open a public endpoint on an inference.
     inputs: dict = {}
-    for field_id, label, field_type in bind.execute(
+    for (
+        field_id,
+        label,
+        field_type,
+        condition_field_id,
+        condition_operator,
+    ) in bind.execute(
         sa.text(
-            "SELECT id, label, field_type FROM form_fields WHERE form_id = :form_id"
+            "SELECT id, label, field_type, condition_field_id,"
+            " condition_operator"
+            " FROM form_fields WHERE form_id = :form_id"
         ),
         {"form_id": form_id},
     ).fetchall():
         if str(field_type or "").strip().lower() in _NON_INPUT_FIELD_TYPES:
+            continue
+        if condition_field_id and condition_operator:
             continue
         inputs[str(field_id)] = (label, field_type)
 
