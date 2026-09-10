@@ -76,9 +76,21 @@ number of screens a user sees depends on the services they select.
 
 - Select file storage: Local, Amazon S3, Google Drive, OneDrive / SharePoint, or Other
 
+> **The choice is recorded but not yet acted on** (2026-09-10). Uploads write to
+> the server's own filesystem whatever is selected here — no code outside the
+> settings screen reads the stored credentials. A department that picks S3 or
+> Drive so its files sit somewhere the server is not should treat that as still
+> to do after setup, not done by it.
+
 #### Step 7: Authentication Choice
 
 - Select authentication method: Local passwords, Google, Microsoft, or Authentik
+
+> **Do not choose Authentik yet** (2026-09-10). It is accepted and stored, but
+> no Authentik sign-in flow exists — the login page offers Google and Microsoft
+> only. Because the setting also switches the organization off local password
+> resets, choosing it leaves no way in and no way to recover. Local, Google and
+> Microsoft all work.
 
 #### Step 8: System Owner Creation
 

@@ -94,12 +94,19 @@ and module steps all run against a signed-in session.
 - Enter the platform's credentials on the following screen. Skipping stores the
   choice without credentials rather than discarding the step
 
+> **The choice is recorded but not yet acted on** (2026-09-10): uploads write to
+> the server's own filesystem whatever is selected here — no code outside the
+> settings screen reads the stored credentials. A department that picks S3 or
+> Drive so its files sit somewhere the server is not should treat that as still
+> to do after setup, not done by it.
+
 #### Step 8: Authentication Platform
 
 - Choose how users will authenticate:
   - **Google OAuth** - Sign in with Google accounts (recommended for Google Workspace users)
   - **Microsoft Azure AD** - Sign in with Microsoft accounts (recommended for Microsoft 365 users)
-  - **Authentik SSO** - Self-hosted authentication platform (for complete control)
+  - **Authentik SSO** - Self-hosted authentication platform (for complete control).
+    **Not usable yet — see the warning below**
   - **Local Passwords** - Secure password-based authentication with Argon2id hashing (no external services required)
 
 > **OAuth sign-in (2026-05-29):** "Sign in with Google" and "Sign in with
@@ -108,6 +115,12 @@ and module steps all run against a signed-in session.
 > user; OAuth never auto-creates accounts. Configure via the `GOOGLE_*` /
 > `AZURE_AD_*` environment variables and optionally restrict by email domain.
 > See [Authentication > OAuth](Security-Authentication#oauth).
+
+> **Do not choose Authentik yet (2026-09-10):** unlike the two above, it has no
+> sign-in flow — there is no Authentik authorization or callback route, and the
+> login page renders Google and Microsoft only. Selecting it also switches the
+> organization off local password resets, so it leaves no way in and no way to
+> recover. Local, Google and Microsoft all work.
 
 #### Step 9: System Owner
 

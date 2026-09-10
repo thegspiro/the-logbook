@@ -452,12 +452,28 @@ Body: {
 
 **Purpose**: Choose file storage backend
 
-**Options**:
+**Options**, as the screen offers them and `save_file_storage_config` accepts
+them:
 
-- Local Storage (server filesystem)
-- AWS S3
-- Azure Blob Storage
-- Google Cloud Storage
+- `local` — Local Storage (server filesystem)
+- `googledrive` — Google Drive
+- `onedrive` — OneDrive / SharePoint
+- `s3` — Amazon S3, or any S3-compatible endpoint
+- `other` — decide later
+
+Azure Blob Storage and Google Cloud Storage are **not** options and never were;
+`azure` and `gcs` return a 400.
+
+> **Stored, but nothing reads it** _(2026-09-10)_: whichever platform is chosen,
+> uploads do not use it. `documents.py` writes to a fixed
+> `UPLOAD_DIR = "/app/uploads/documents"` and event attachments to their own
+> fixed directory; no code outside the settings schema and the onboarding
+> writer reads `s3_bucket_name`, `google_drive_client_id` or any other
+> `FileStorageSettings` field. So a correctly keyed S3 or Drive configuration
+> saves green and every file still lands on local disk — which matters most to
+> a department that chose cloud storage precisely so its files would be backed
+> up somewhere the server is not. This is CLAUDE.md pitfall 19, a setting whose
+> only effect is being stored.
 
 **Navigation**:
 
@@ -466,7 +482,7 @@ Body: {
 
 **Data Storage**: Zustand store (persisted to localStorage)
 
-- `fileStoragePlatform` = "local" | "s3" | "azure" | "gcs"
+- `fileStoragePlatform` = "local" | "googledrive" | "onedrive" | "s3" | "other"
 
 ---
 
@@ -508,7 +524,13 @@ drops every key it does not recognise. A caller using the snake_case spellings
 therefore gets a success response, has its credentials encrypted into the
 session, and ends up with an organization storing the platform choice and
 nothing else. There is no equivalent of email's `missing_for_enabled()` here, so
-no error is raised at any point; the first symptom is uploads failing.
+no error is raised at any point.
+
+And no error is raised later either, because **nothing reads these settings**
+— see the note under step 8. Uploads go to fixed local directories whatever is
+stored here, so a dropped credential has no symptom at all: it is not that the
+department finds out late, it is that the correctly keyed configuration behaves
+the same way as the broken one.
 
 **Navigation**:
 
@@ -528,11 +550,25 @@ no error is raised at any point; the first symptom is uploads failing.
 - `google` — Google OAuth. **Link-existing only** (see "OAuth Sign-In Buttons"
   below); OAuth never creates new accounts
 - `microsoft` — Microsoft Azure AD, on the same link-existing terms
-- `authentik` — self-hosted Authentik SSO
+- `authentik` — self-hosted Authentik SSO. **Accepted and persisted, but there
+  is no sign-in flow behind it** — see the warning below
 
 Those four strings are the contract. SAML and LDAP are **not** among them and
 are not implemented (`LDAP_ENABLED` exists in config and gates nothing); a
-caller sending `saml`, `ldap` or `oauth` gets a 400 naming the four that work.
+caller sending `saml`, `ldap` or `oauth` gets a 400 naming the four the
+endpoint accepts.
+
+> **Choosing `authentik` leaves nobody able to sign in** _(2026-09-10)_: it is
+> accepted here and completion writes it to `settings.auth.provider`, and
+> `AuthSettings` even carries `authentik_url` / `authentik_client_id` /
+> `authentik_client_secret` — but there is no authorization or callback route
+> for it. `auth.py` implements `/oauth/google` and `/oauth/microsoft` only,
+> `GET /auth/oauth-config` reports just `googleEnabled` and `microsoftEnabled`,
+> and the login page renders those two buttons. Worse, the choice is not
+> merely inert: `forgot-password` refuses a local reset for any non-local
+> provider, so an organization set to `authentik` has no SSO to sign in with
+> **and** no password recovery. Use `local`, `google` or `microsoft` until the
+> flow exists.
 
 **API Call**:
 
@@ -1206,6 +1242,20 @@ Only the ids the wizard asks about are applied to the organization —
 
 So the response reports the resulting boolean **for the asked-about ids only**;
 for the other two groups it echoes the request.
+
+**The wizard's own path does not behave this way.** The screens call
+`POST /onboarding/session/modules`, and completion rebuilds the whole map as
+`{k: k in normalized for k in ModuleSettings.model_fields}` — with no
+`else <default>` branch. Every settings-only module is therefore written
+`false` by finishing setup, rather than keeping its default. Exactly one is
+affected today, and it is a live regression rather than a hypothetical:
+`public_info` defaults to **true** and the wizard never offers it, so
+completing onboarding turns the Public Information module off. The other seven
+default to false, so the two paths agree on them by coincidence.
+
+Both halves of this are worth knowing before relying on either route: the
+direct route preserves defaults and misreports the result, the session route
+reports nothing per-module and silently overwrites defaults.
 
 ### Configure Roles
 
