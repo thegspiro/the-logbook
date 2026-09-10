@@ -1605,8 +1605,29 @@ class StorefrontService:
                     requested_per_variant.get(variant_key, 0) + quantity
                 )
 
+        # One query for the whole cart, not one per line. Everything from the
+        # organisation lock above to the insert is a critical section that now
+        # spans the whole organisation rather than a single window, and the
+        # request schema bounds only the *minimum* line count
+        # (`items: List[StoreOrderItemInput] = Field(..., min_length=1)`) — so a
+        # per-line round trip lets one large cart hold every other member's
+        # checkout in the department behind it. Same predicate `_lock_products`
+        # already uses: org-scoped, ids lowercased, so this resolves exactly the
+        # rows that were just locked. Raised as a security finding on PR #2470.
+        product_result = await self.db.execute(
+            select(StoreProduct)
+            .options(selectinload(StoreProduct.variants))
+            .where(
+                StoreProduct.id.in_({product_id for product_id, _v, _t in merged}),
+                StoreProduct.organization_id == str(organization_id),
+            )
+        )
+        products_by_id = {
+            product.id.lower(): product for product in product_result.scalars().all()
+        }
+
         for (product_id, variant_id, personalization), quantity in merged.items():
-            product = await self.get_product(product_id, organization_id)
+            product = products_by_id.get(product_id)
             if product is None or product.status != StoreProductStatus.ACTIVE:
                 raise ValueError("One of the items is no longer available")
 

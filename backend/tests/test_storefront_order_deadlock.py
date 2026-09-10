@@ -43,7 +43,7 @@ import asyncio
 import uuid
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.core.database import database_manager
 
@@ -282,19 +282,184 @@ class TestConcurrentDisjointCarts:
         finally:
             await _cleanup(engine, org)
 
-    async def test_the_service_locks_the_org_before_the_window_and_tallies(self):
-        """A source guard, so the DB-backed tests cannot be defeated by quietly
-        dropping or reordering the locks they depend on."""
+    def test_the_service_takes_all_three_locks_in_order(self):
+        """A source guard on `_price_lines`, checking two separate things.
+
+        The DB-backed tests above drive `_LOCK_ORG` / `_LOCK_WINDOW` / `_TALLY`
+        as raw SQL rather than calling the service, deliberately — it is the
+        lock *protocol* they pin, without settings, pricing and notification
+        machinery in the way. The cost of that choice is that they cannot
+        notice the service drifting away from the protocol they model, so this
+        guard has to cover the whole of it:
+
+        * each of the three reads is still a **locking** read, and
+        * they still happen in the order organisation -> window -> tallies.
+
+        Checking only the order is not enough, and that gap was real rather
+        than theoretical: strip `.with_for_update()` off the org `SELECT` and
+        the ordering assertion still passes, the raw-SQL tests still pass
+        (they issue their own `FOR UPDATE`), and the cross-window deadlock is
+        back with nothing red. Reported by review on PR #2470.
+        """
+        import ast
         import inspect
+        import textwrap
 
         from app.services.storefront_service import StorefrontService
 
-        source = inspect.getsource(StorefrontService._price_lines)
-        org_at = source.index("StoreSettings.organization_id == str(organization_id)")
-        window_at = source.index("StoreOrderWindow.id == window.id")
-        tally_at = source.index("_ordered_quantities")
-        assert org_at < window_at < tally_at, (
-            "lock order must be organisation -> window -> tallies. The org lock "
-            "after the tallies cannot stop two transactions holding the same "
-            "org-scoped gap concurrently, which is the cross-window case."
+        source = textwrap.dedent(inspect.getsource(StorefrontService._price_lines))
+        tree = ast.parse(source)
+
+        locking_reads = [
+            (node.lineno, ast.get_source_segment(source, node) or "")
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "with_for_update"
+        ]
+
+        def line_of(fragment: str) -> int:
+            matches = [line for line, text in locking_reads if fragment in text]
+            assert len(matches) == 1, (
+                f"expected exactly one locking read containing {fragment!r} in "
+                f"_price_lines, found {len(matches)}. A read that lost its "
+                "`.with_for_update()` still satisfies an ordering-only check, "
+                "and the raw-SQL tests in this module issue their own FOR "
+                "UPDATE, so nothing else here would go red."
+            )
+            return matches[0]
+
+        org_line = line_of("StoreSettings.organization_id")
+        window_line = line_of("StoreOrderWindow.id == window.id")
+
+        tally_calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "_ordered_quantities"
+        ]
+        assert len(tally_calls) == 2, (
+            "_price_lines should tally twice — the window total and the "
+            f"member's own — found {len(tally_calls)}."
+        )
+        for call in tally_calls:
+            assert any(
+                keyword.arg == "for_update"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in call.keywords
+            ), (
+                "both tallies in the order-placing path must pass "
+                "for_update=True; a plain tally answers from a snapshot the "
+                "row lock does not refresh (CLAUDE.md pitfall #27)."
+            )
+
+        assert org_line < window_line < min(call.lineno for call in tally_calls), (
+            "lock order must be organisation -> window -> tallies. An org lock "
+            "taken after the tallies cannot stop two transactions holding the "
+            "same org-scoped gap concurrently, which is the cross-window case."
+        )
+
+
+class TestOrgCriticalSectionIsBounded:
+    """The work between the organisation lock and the insert must not scale
+    with the size of the cart.
+
+    Everything from that lock to the insert now serializes the whole
+    department rather than one window, and the request schema bounds only the
+    *minimum* line count — `items: List[StoreOrderItemInput] = Field(...,
+    min_length=1)` in `schemas/storefront.py`. A per-line query inside that
+    section therefore lets one large cart hold every other member's checkout
+    behind it for as long as it takes to run. Raised as a security finding on
+    PR #2470.
+
+    Asserting the query *count* rather than a duration is what makes this
+    stable in CI: it fails on the shape of the defect (work proportional to
+    the cart) instead of on how loaded the runner happened to be.
+    """
+
+    async def _seed_in_session(self, db_session, org, window, products):
+        """Seed inside the test's own transaction — never committed.
+
+        Deliberately not the module-level `_seed`, which commits on its own
+        connection: a run killed mid-test would leave those rows behind for
+        every later test to trip over.
+        """
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id,name,organization_type,slug,"
+                "timezone,active) VALUES (:i,'Bounded FD','fire_department',"
+                ":s,'UTC',1)"
+            ),
+            {"i": org, "s": f"bounded-{org[:8]}"},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO store_settings (id,organization_id,is_enabled,"
+                "store_name,currency,tax_rate) VALUES (:i,:o,1,'Store','USD',0)"
+            ),
+            {"i": str(uuid.uuid4()), "o": org},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO store_order_windows (id,organization_id,name,"
+                "status,include_all_products) VALUES (:i,:o,'W','open',1)"
+            ),
+            {"i": window, "o": org},
+        )
+        for index, product in enumerate(products):
+            await db_session.execute(
+                text(
+                    "INSERT INTO store_products (id,organization_id,name,"
+                    "price,status) VALUES (:i,:o,:n,10,'active')"
+                ),
+                {"i": product, "o": org, "n": f"Item {index}"},
+            )
+        await db_session.flush()
+
+    async def test_query_count_does_not_grow_with_the_cart(self, db_session):
+        from app.models.storefront import StoreOrderWindow
+        from app.services.storefront_service import StorefrontService
+
+        org, window_id = str(uuid.uuid4()), str(uuid.uuid4())
+        products = [str(uuid.uuid4()) for _ in range(8)]
+        await self._seed_in_session(db_session, org, window_id, products)
+
+        window = (
+            await db_session.execute(
+                select(StoreOrderWindow).where(StoreOrderWindow.id == window_id)
+            )
+        ).scalar_one()
+
+        service = StorefrontService(db_session)
+        real_execute = db_session.execute
+        counter = {"n": 0}
+
+        async def counting_execute(*args, **kwargs):
+            counter["n"] += 1
+            return await real_execute(*args, **kwargs)
+
+        async def price(line_count):
+            items = [
+                {"product_id": product, "quantity": 1}
+                for product in products[:line_count]
+            ]
+            counter["n"] = 0
+            db_session.execute = counting_execute
+            try:
+                await service._price_lines(org, window, items, str(uuid.uuid4()))
+            finally:
+                db_session.execute = real_execute
+            return counter["n"]
+
+        small = await price(2)
+        large = await price(8)
+
+        assert small == large, (
+            "the organisation-wide critical section issues more queries for a "
+            f"bigger cart ({small} for 2 lines, {large} for 8) — that work is "
+            "proportional to attacker-chosen input while every other member's "
+            "checkout in the department waits behind it. Fetch the cart's "
+            "products in one query rather than one per line."
         )
