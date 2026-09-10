@@ -696,6 +696,40 @@ def _find_matching_profile(
     return None
 
 
+def requirement_applies_to_member(
+    req,
+    membership_type: str,
+    role_ids: Optional[List[str]] = None,
+) -> bool:
+    """Whether a requirement applies to a member.
+
+    Matches ``TrainingService.get_applicable_requirements`` (the
+    member-facing ``/my-training`` path) precedence exactly:
+    ``applies_to_all`` wins outright; otherwise ``required_membership_types``
+    is checked; otherwise ``required_roles``. A requirement naming none of
+    the three applies to nobody.
+
+    Extracted after this exact precedence check was independently
+    reimplemented, incompletely, at four call sites
+    (``get_compliance_matrix``, ``compute_org_compliance_pct``,
+    ``get_member_period_status``, ``get_compliance_summary``) — three of
+    which never considered ``applies_to_all`` at all, so a requirement
+    created as "applies to all" and later scoped down without also
+    clearing ``applies_to_all`` (a reachable state: the two fields are
+    independent and unvalidated) silently stopped applying to anyone,
+    contradicting what ``/my-training`` told that same member. One
+    definition, called from everywhere that needs it, is what keeps a
+    fifth reimplementation from drifting the same way.
+    """
+    if req.applies_to_all:
+        return True
+    if req.required_membership_types:
+        return membership_type in req.required_membership_types
+    if req.required_roles and role_ids:
+        return any(rid in role_ids for rid in req.required_roles)
+    return False
+
+
 def classify_standing(
     completed_count: int,
     total_count: int,
@@ -924,34 +958,21 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
                 if profile.at_risk_threshold_override is not None:
                     member_at_risk_threshold = profile.at_risk_threshold_override
 
-        # A requirement restricted to another membership type is not in this
-        # member's denominator. get_compliance_matrix (training.py) already
-        # applies this same exclusion per-member; without it here, a member
-        # holding a membership-scoped requirement they don't belong to was
-        # graded against it anyway — evaluate_member_requirement almost always
-        # reports "not_started" for a requirement that was never meant to
-        # apply, so this dashboard percentage could disagree with the matrix
-        # for the exact member/requirement pair it's supposed to describe the
-        # same way.
-        #
-        # `applies_to_all` takes precedence over `required_membership_types`,
-        # matching TrainingService.get_applicable_requirements — the
-        # member-facing /my-training path. Both fields are independent,
-        # unvalidated booleans/lists on the same row (no schema cross-field
-        # check clears one when the other is set), so a requirement created
-        # as "applies to all" and later scoped down without also flipping
-        # `applies_to_all` off is a reachable, stale-config state, not a
-        # hypothetical one. Excluding it here anyway (as a first draft of
-        # this fix did) would open a *new* matrix/dashboard disagreement in
-        # the opposite direction the moment training.py's own filter below
-        # is corrected to match.
+        # A requirement that doesn't apply to this member is not in their
+        # denominator. get_compliance_matrix (training.py) already applies
+        # this same exclusion per-member; without it here, a member holding
+        # a requirement that was never meant to apply to them was graded
+        # against it anyway — evaluate_member_requirement almost always
+        # reports "not_started" for such a requirement, so this dashboard
+        # percentage could disagree with the matrix for the exact
+        # member/requirement pair it's supposed to describe the same way.
+        # See requirement_applies_to_member's own docstring for why this is
+        # a shared helper rather than a fourth ad-hoc reimplementation.
         member_membership_type = member.membership_type or "active"
         member_reqs = [
             req
             for req in member_reqs
-            if req.applies_to_all
-            or not req.required_membership_types
-            or member_membership_type in req.required_membership_types
+            if requirement_applies_to_member(req, member_membership_type)
         ]
 
         status, _ = _evaluate_member_compliance(

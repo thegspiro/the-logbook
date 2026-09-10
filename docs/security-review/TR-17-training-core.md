@@ -1162,7 +1162,7 @@ training.py`, so the one write path that could otherwise fan out an
 
 ---
 
-## Pass 4 (2026-09-10) — 1 fix (2 rounds), 3 flagged; re-verification + review of the compliance-matrix redesign
+## Pass 4 (2026-09-10) — 1 fix (3 rounds), 3 flagged; re-verification + review of the compliance-matrix redesign
 
 > **Correction (Codex review of PR #2455).** This section's first draft
 > claimed "0 fixes, 0 new flags" and described the matrix and the dashboard
@@ -1369,6 +1369,51 @@ requirement_is_out_of_the_percentage` test from an earlier pass, all
 > membership-type list, proving the requirement still counts. Both new
 > tests confirmed failing against the round-1 fix.
 
+> **Round 3 — a third Codex review found the round-2 fix left a third,
+> untouched call site disagreeing with the two it fixed.**
+> `get_compliance_summary` (`training.py`, the `/training/compliance-
+summary/{id}` profile-card endpoint) has its own applicability filter
+> that checks `required_membership_types` **before** `applies_to_all` — the
+> wrong order, unaffected by round 2 since that round only touched
+> `get_compliance_matrix` and `compute_org_compliance_pct`. Investigating
+> this surfaced a **second, independent bug in the same block**, not
+> reported by Codex but caught by inspection while fixing the reported one
+> (CLAUDE.md's "no acceptable pre-existing errors" rule): the function's
+> `if req.applies_to_all: ... elif req.required_roles and ...:` chain never
+> re-checked a membership-type _match_ as its own inclusion path, so a
+> requirement scoped **only** by `required_membership_types`
+> (`applies_to_all=False`, no `required_roles` — the ordinary shape of a
+> membership-scoped requirement) was silently excluded from this endpoint
+> for every member, matching or not. Grepping the rest of the file for the
+> same shape found two more independent reimplementations, both missing
+> `applies_to_all` entirely: `get_training_dashboard_summary`'s per-member
+> `applicable` filter (used by the "Department Compliance" card; TR4-3
+> already flags this endpoint's separate profile/threshold gap, but this is
+> a different bug in the same function) and `get_member_period_status`'s
+> own `applicable` filter (the month-at-a-glance member-status endpoint).
+> Five independent reimplementations of one applicability rule, three of
+> them wrong in one direction or another, is exactly how this class of
+> cross-screen disagreement keeps recurring.
+>
+> Fixed by extracting `requirement_applies_to_member(req, membership_type,
+role_ids=None)` into `training_compliance.py` — the exact precedence
+> chain `TrainingService.get_applicable_requirements` already established
+> (`applies_to_all` → `required_membership_types` → `required_roles`) — and
+> switching all five call sites (`get_compliance_matrix`,
+> `compute_org_compliance_pct`, `get_compliance_summary`,
+> `get_training_dashboard_summary`, `get_member_period_status`) to call it
+> instead of hand-rolling the check. Guard tests: a new
+> `TestRequirementAppliesToMember` in `test_training_compliance.py` (7
+> cases against the helper directly, including the applies_to_all-wins-
+> over-stale-list case and the membership-scoped-with-no-role-fallback
+> case that reproduces `get_compliance_summary`'s second bug). Fixing
+> `get_member_period_status` required updating its own test file's mock
+> requirement builder (`test_member_period_status.py`'s `_req()`), which —
+> like the round-1 fixture bug — built a bare `SimpleNamespace` missing
+> `applies_to_all`/`required_roles` entirely; 2 of its 4 tests failed with
+> `AttributeError` until fixed, confirming the helper's stricter contract
+> rather than a false positive.
+
 ### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — 🚩 FLAGGED
 
 **Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix`
@@ -1460,15 +1505,17 @@ percentage rather than exposing data or bypassing a control.
 
 | Check                                               | Result                                               |
 | --------------------------------------------------- | ---------------------------------------------------- |
-| `flake8` (all 4 changed files)                      | ✅ 0 violations (round 2 fixed one F841)             |
+| `flake8` (all 6 changed files)                      | ✅ 0 violations (round 2 fixed one F841)             |
 | `black --check` (same files)                        | ✅ clean                                             |
 | `isort --check-only` (same files)                   | ✅ clean                                             |
 | `python3 scripts/validate_migrations.py --strict`   | ✅ 441 revisions, single head (no schema change)     |
-| `pytest tests/ -q -k "training or compliance"`      | ✅ 1123 passed, 1 skipped (pre-existing)             |
-| `pytest tests/ -q` (full backend suite)             | ✅ 12070 passed, 21 skipped (pre-existing), 0 failed |
+| `pytest tests/ -q -k "training or compliance"`      | ✅ 1130 passed, 1 skipped (pre-existing)             |
+| `pytest tests/ -q` (full backend suite)             | ✅ 12077 passed, 21 skipped (pre-existing), 0 failed |
 | `cd frontend && npm run typecheck` / `npm run lint` | n/a — no frontend file touched this pass             |
 
 Changed files: `backend/app/services/training_compliance.py`,
 `backend/app/api/v1/endpoints/training.py`,
 `backend/tests/test_compute_org_compliance_pct_profile_overrides.py`,
-`backend/tests/test_compliance_matrix_endpoint.py`.
+`backend/tests/test_compliance_matrix_endpoint.py`,
+`backend/tests/test_training_compliance.py`,
+`backend/tests/test_member_period_status.py`.

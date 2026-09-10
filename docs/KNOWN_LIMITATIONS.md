@@ -3166,6 +3166,23 @@ wrong. Fixed both call sites to check `applies_to_all` first. Guard tests:
 TestMembershipTypeExclusion` and
 `tests/test_compliance_matrix_endpoint.py::TestApplicableRequirementDenominator::test_applies_to_all_overrides_a_stale_membership_type_list`.
 
+**Correction (a third Codex review found a third, untouched call site):**
+`get_compliance_summary` (the profile-card endpoint) checked
+`required_membership_types` before `applies_to_all` — round 2 only fixed
+the matrix and the dashboard percentage. Investigating surfaced a second,
+independent bug in the same block, not reported by Codex: the function
+never re-checked a membership-type match as its own inclusion path, so a
+requirement scoped **only** by membership type (the ordinary shape) was
+silently excluded for every member, not just a mismatched one. Grepping
+for the same pattern found two more reimplementations missing
+`applies_to_all` entirely, in `get_training_dashboard_summary` and
+`get_member_period_status`. Fixed by extracting one shared helper,
+`requirement_applies_to_member()` (`training_compliance.py`), matching
+`get_applicable_requirements`'s exact precedence, and switching all five
+call sites to use it instead of hand-rolling the check. Guard tests: a new
+`TestRequirementAppliesToMember` (7 cases) in `test_training_compliance.py`
+testing the helper directly.
+
 **Not fixed:** making `get_training_dashboard_summary` profile/threshold-aware
 is a larger, product-level question — which of the three currently-different
 definitions the "Department Compliance" card should actually use — not a

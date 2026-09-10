@@ -53,8 +53,15 @@ def _record(uid, when, hours):
     )
 
 
-def _req(rid):
-    return SimpleNamespace(id=rid, required_membership_types=None)
+def _req(rid, **overrides):
+    defaults = {
+        "id": rid,
+        "applies_to_all": True,
+        "required_membership_types": None,
+        "required_roles": None,
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
 
 
 async def _call(monkeypatch, members, requirements, records, evaluate):

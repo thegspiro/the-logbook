@@ -18,16 +18,16 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 17 (Training core), pass 4** — PR
 [#2455](https://github.com/thegspiro/the-logbook/pull/2455), branch
-`claude/security-review-training-core-pass4`. 1 fix (2 rounds), 3 flagged.
+`claude/security-review-training-core-pass4`. 1 fix (3 rounds), 3 flagged.
 This pass's own first draft claimed 0 fixes/0 flags after diffing the seven
 declared files against the pass-3 merge (`0d1f92c41`) and reading the only
 two real changes (`training.py`, `training_compliance.py`, both from one
 non-security-review feature branch — "Redesign the compliance matrix as a
-triage queue") — **two rounds of Codex review on the PR caught real gaps
-that draft, and then this pass's own first fix, missed**, all corrected
-on the same PR rather than left standing:
+triage queue") — **three rounds of Codex review on the PR caught real gaps
+that draft, and then this pass's own first two fixes, missed**, all
+corrected on the same PR rather than left standing:
 
-**TR4-1** (fixed, 2 rounds) — round 1: `compute_org_compliance_pct` graded
+**TR4-1** (fixed, 3 rounds) — round 1: `compute_org_compliance_pct` graded
 a member against a requirement scoped to a `required_membership_types`
 list they don't belong to, something `get_compliance_matrix` already
 excludes per-member; a membership-scoped requirement could fail a member
@@ -37,11 +37,21 @@ ignored `applies_to_all`, which takes precedence over
 `required_membership_types` in the canonical member-facing applicability
 check (`TrainingService.get_applicable_requirements`) — and
 `get_compliance_matrix`'s own pre-existing filter had the identical gap,
-so round 1 was matching a filter that was itself already wrong. Fixed
-both call sites to check `applies_to_all` first; fixed both test files'
-fixtures, which had hardcoded `applies_to_all=True` regardless of a
-membership-type list (data no real UI flow produces). 5 guard tests total
-across both files, 3 confirmed failing pre-fix.
+so round 1 was matching a filter that was itself already wrong. Round 3 (a
+third Codex review): a third call site, `get_compliance_summary` (the
+profile-card endpoint), still checked `required_membership_types` before
+`applies_to_all` — plus a second, independently-discovered bug in the same
+block (a requirement scoped only by membership type was silently excluded
+for every member, matching or not). Grepping the file for the same shape
+found two more reimplementations missing `applies_to_all` entirely
+(`get_training_dashboard_summary`, `get_member_period_status`). Fixed by
+extracting one shared helper, `requirement_applies_to_member()`
+(`training_compliance.py`), and switching all five call sites to use it.
+12 guard tests total across 4 files (a new `TestRequirementAppliesToMember`
+testing the helper directly, plus fixture fixes in two existing test files
+that had hardcoded `applies_to_all=True`/omitted it entirely — data no
+real model state or UI flow produces), several confirmed failing pre-fix
+at each round.
 
 **TR4-2** (flagged) — the matrix endpoint has its own unbounded
 `TrainingRecord` scan, distinct from TR2-4's dashboard-summary finding
@@ -60,11 +70,11 @@ pre-existing zero-denominator convention this file already deliberately
 tests as correct for the profile `required_requirement_ids=[]` case, so
 changing it is a population-definition product decision, not a drive-by.
 
-Full completion gate green: flake8/black/isort clean (round 2 fixed one
-F841); migrations validated (no schema change); training/compliance-scoped
-(1123) and full backend suites (12070) pass, 0 failed. Full write-up:
+Full completion gate green: flake8/black/isort clean; migrations validated
+(no schema change); training/compliance-scoped (1130) and full backend
+suites (12077) pass, 0 failed. Full write-up:
 `docs/security-review/TR-17-training-core.md` → Pass 4 (corrected, round
-2). Next: tend #2455 to green, then Feature 18 (Training extended).
+3). Next: tend #2455 to green, then Feature 18 (Training extended).
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2451's merge, Feature 16 pass 4), preserved for history</summary>
