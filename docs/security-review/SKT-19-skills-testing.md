@@ -1068,6 +1068,34 @@ the three sources (test, template, org config) the bad value came from. Three
 new guard tests in `TestPolicyResolution` cover a corrupted test-level
 disclosure, a corrupted release value, and a corrupted template-level value.
 
+**Round 6 follow-up — the round-4 fix introduced its own new gap.** Codex
+review on the same commit pointed out that `_validate_result_disclosure_value`/
+`_validate_result_release_value` embed the rejected value verbatim in their
+`ValueError` message, matching this file's own pre-existing `type`/
+`score_mode` validator style — but unlike `type` (`Field("pass_fail",
+max_length=50)`), `result_disclosure`/`result_release` had no `max_length`
+before round 4's fix added the validators, so nothing capped how large that
+embedded value could be. The global 422 handler (`main.py`) routes a custom
+validator's `ValueError` through `sanitize_error_message`, which scans the
+message against `_UNSAFE_PATTERNS` — including `\bSELECT\b.*\bFROM\b` — and
+only checks its own 300-character cap _after_ that scan. A long adversarial
+string containing repeated `"SELECT "` with no `"FROM"` makes that pattern's
+backtracking superlinear in the input length: Codex measured 6.43 seconds for
+a 64 KB payload, on an endpoint (`POST /tests`) open to every member, not
+just officers. This is a regression introduced by round 4's own fix, not a
+pre-existing gap — before that fix these fields accepted anything, so no
+`ValueError` (and therefore no call into `sanitize_error_message`) was ever
+reachable through them. **Fixed** by adding `max_length=50` to
+`result_disclosure`/`result_release` on all four write schemas — ample for
+the real enum values (`on_completion` is the longest, at 13 characters), far
+too short for the regex behind this pattern to matter. Pydantic enforces
+`max_length` before a field's `@field_validator` runs, so an overlong value
+now fails with a `string_too_long` error, which the 422 handler maps to a
+fixed constant message (`"Value is too long."`) — never reaching
+`sanitize_error_message` at all. One new guard test asserts the failure type
+is `string_too_long`, not the custom validator's `value_error`, on all four
+schemas.
+
 ### SKT4-6 — MED — voiding an unvalidated test disclosed it in full to the candidate — ✅ FIXED
 
 `void_test` overwrites `test.status` to `SkillTestStatus.VOIDED.value`
@@ -1173,7 +1201,13 @@ round 5: this section's own "Backend: one line changed" scope-check claim
 was, without qualification, read as describing the merged state rather than
 the pre-review starting point — annotated in place rather than reworded,
 since it is an accurate description of that starting point and the
-qualification is what was missing, not the claim itself.
+qualification is what was missing, not the claim itself. Round 6: round 4's
+own fix to SKT4-5 had introduced a new gap rather than left one open — the
+validators it added embedded the rejected value verbatim in a `ValueError`
+with no `max_length` capping how large that value could be, and the global
+422 handler's sanitizer scans such messages with a regex vulnerable to
+superlinear backtracking on adversarial input before it enforces its own
+length cap (see SKT4-5's "Round 6 follow-up").
 
 ### SKT3-2 — LOW/MED — `GET /tests`, `GET /tests/export/csv`, and `GET /templates` have no pagination or result cap — still OPEN / FLAGGED
 
@@ -1254,6 +1288,14 @@ apiece:
   `voided_by`/`voided_by_name` for a voided payload in the `pending` view,
   and leaves them alone in `full` view (SKT4-6 follow-up).
 
+Round 6 found round 4's own SKT4-5 fix had opened a new gap, not left one
+incompletely closed:
+
+- `test_skill_result_disclosure_validation.py` — one new test: an overlong
+  `result_disclosure` fails with Pydantic's `string_too_long` (a fixed,
+  constant-message error type) on all four write schemas, not the custom
+  validator's value-embedding `value_error` (SKT4-5 round-6 follow-up).
+
 The six pre-existing guard test files from passes 1–3 were re-run, not
 re-written.
 
@@ -1265,7 +1307,7 @@ re-written.
 | `black --check app/ tests/ alembic/`              | ✅ 1578 files unchanged (`black==26.5.1`, CI's pin — installed explicitly; a stale `26.3.1` shadowed it on `PATH` via `~/.local/bin`, invoked `/usr/local/bin/black` directly to get the pinned version) |
 | `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==9.0.1`, CI's current pin)                                                                                                                                                              |
 | `python3 scripts/validate_migrations.py --strict` | ✅ 443 revisions, single head `0533644945cd` — no new migration (Pydantic-level validation only, no column/schema change)                                                                                |
-| `pytest tests/ -q -k "skill"`                     | ✅ 433 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 28 new guard tests above                                                                                  |
+| `pytest tests/ -q -k "skill"`                     | ✅ 434 passed, 1 skipped (pre-existing optional-dependency skip) — up from 405 at round 3, the 29 new guard tests above                                                                                  |
 | `cd frontend && npm run typecheck`                | ✅ 0 errors (unaffected — no frontend file touched this pass)                                                                                                                                            |
 | `cd frontend && npm run lint`                     | ✅ 0 errors, 0 warnings (unaffected — no frontend file touched this pass)                                                                                                                                |
 
@@ -1276,24 +1318,28 @@ consumer outside `app/api/v1/endpoints/skills_testing.py` itself (checked via
 full surface these fixes could affect.
 
 **Final disposition: 3 real code fixes (SKT4-4, SKT4-5, SKT4-6, all MED or
-MED/HIGH — two of them closed in two steps apiece after round 5 found the
-first fix incomplete), 4 findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1
-existing finding's scope extended three times over (SKT3-2), across five
-Codex review rounds.** All six pass 1–3 fixes re-verified intact by direct
-code read. None of this pass's "clean"/"no finding" first-draft language
-survived review unchanged — every one of rounds 1 through 5 found something
-the previous draft had gotten wrong, missed outright, or (rounds 4→5) fixed
-only halfway: an officer could email a candidate a result the read endpoints
-were still withholding (SKT4-4), a typo in a disclosure-policy field silently
-granted full disclosure instead of being rejected — including one already
-sitting in the database, which round 5 caught the first fix had no answer
-for (SKT4-5) — and voiding an unvalidated submission disclosed it in full
-rather than staying undisclosed like the notification path already assumed,
-where round 5 caught that the first fix hid the score but not the withdrawal
-notice itself (SKT4-6). This pass's actual value was almost entirely produced
-by the review process rather than by the original re-verification work — the
-backend surface itself had exactly one line of unrelated change across three
-prior passes and roughly two weeks, and needed five rounds of adversarial
-review on a "nothing to see here" docs PR to surface three real defects, get
-each genuinely fixed rather than half-fixed, and flag four more that need a
+MED/HIGH — SKT4-5 closed in three steps and SKT4-6 in two, after later
+rounds found each prior fix incomplete or newly-introducing a gap), 4
+findings flagged (SKT4-1, SKT4-2, SKT4-3, SKT4-7), 1 existing finding's scope
+extended three times over (SKT3-2), across six Codex review rounds.** All
+six pass 1–3 fixes re-verified intact by direct code read. None of this
+pass's "clean"/"no finding" first-draft language survived review unchanged —
+every one of rounds 1 through 6 found something the previous draft had
+gotten wrong, missed outright, fixed only halfway, or (round 4→6) broke while
+fixing something else: an officer could email a candidate a result the read
+endpoints were still withholding (SKT4-4); a typo in a disclosure-policy
+field silently granted full disclosure instead of being rejected — including
+one already sitting in the database, which round 5 caught the first fix had
+no answer for, and the fix for _that_ introduced an unbounded field a
+regex-based error sanitizer could be made to backtrack superlinearly against,
+which round 6 caught (SKT4-5); and voiding an unvalidated submission
+disclosed it in full rather than staying undisclosed like the notification
+path already assumed, where round 5 caught that the first fix hid the score
+but not the withdrawal notice itself (SKT4-6). This pass's actual value was
+almost entirely produced by the review process rather than by the original
+re-verification work — the backend surface itself had exactly one line of
+unrelated change across three prior passes and roughly two weeks, and needed
+six rounds of adversarial review on a "nothing to see here" docs PR to
+surface three real defects, get each genuinely and completely fixed rather
+than half-fixed or newly-broken, and flag four more that need a
 product/content decision this rotation correctly declined to guess at.

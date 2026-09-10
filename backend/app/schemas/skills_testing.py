@@ -163,8 +163,8 @@ class SkillTemplateCreate(BaseModel):
     requirement_id: Optional[UUID] = None
     # Result disclosure — omit to inherit the organization default. See
     # ResultDisclosure / ResultRelease.
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     # Corporate position slugs whose holders may view results of these tests.
     result_viewer_positions: Optional[List[str]] = None
 
@@ -218,8 +218,8 @@ class SkillTemplateUpdate(BaseModel):
     requirement_id: Optional[UUID] = None
     # Result disclosure — omit to inherit the organization default. See
     # ResultDisclosure / ResultRelease.
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     # Corporate position slugs whose holders may view results of these tests.
     result_viewer_positions: Optional[List[str]] = None
 
@@ -326,8 +326,8 @@ class SkillTestCreate(BaseModel):
     # template's requirement when omitted.
     requirement_id: Optional[UUID] = None
     # Per-test disclosure overrides; omit to inherit the template's.
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     result_viewer_positions: Optional[List[str]] = None
 
     @field_validator("result_disclosure")
@@ -351,8 +351,8 @@ class SkillTestUpdate(BaseModel):
     notes: Optional[str] = None
     result: Optional[str] = None
     requirement_id: Optional[UUID] = None
-    result_disclosure: Optional[str] = None
-    result_release: Optional[str] = None
+    result_disclosure: Optional[str] = Field(None, max_length=50)
+    result_release: Optional[str] = Field(None, max_length=50)
     result_viewer_positions: Optional[List[str]] = None
 
     @field_validator("result_disclosure")

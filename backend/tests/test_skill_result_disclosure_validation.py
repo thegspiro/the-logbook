@@ -96,6 +96,34 @@ def test_unknown_release_value_is_rejected_on_every_write_schema(bad_value):
         assert "Unknown result release mode" in str(exc.value)
 
 
+def test_an_overlong_value_is_rejected_before_reaching_the_custom_validator():
+    """SKT4-5 round-6 follow-up: the validators above embed the rejected
+    value verbatim in their error message (matching this file's existing
+    `type`/`score_mode` pattern), and the global 422 handler runs that
+    message through a regex-based sanitizer before it enforces its own
+    300-character cap. An unbounded `result_disclosure`/`result_release`
+    let an attacker submit a long adversarial string (e.g. repeated
+    "SELECT " with no "FROM") that made one of the sanitizer's own
+    SQL-detection patterns backtrack superlinearly. `max_length=50` caps
+    the field before the custom validator ever runs, so no value long
+    enough to matter for that regex ever reaches it: this asserts the
+    failure is Pydantic's own `string_too_long` (a fixed, constant-message
+    error type in the global handler), not the custom validator's
+    value-embedding `value_error`."""
+    long_value = "SELECT " * 20  # well past max_length=50, short of a real attack size
+    for factory in (
+        lambda: SkillTemplateCreate(**_template_kwargs(result_disclosure=long_value)),
+        lambda: SkillTemplateUpdate(result_disclosure=long_value),
+        lambda: SkillTestCreate(**_test_create_kwargs(result_disclosure=long_value)),
+        lambda: SkillTestUpdate(result_disclosure=long_value),
+    ):
+        with pytest.raises(ValidationError) as exc:
+            factory()
+        errors = exc.value.errors()
+        assert any(e["type"] == "string_too_long" for e in errors)
+        assert not any(e["type"] == "value_error" for e in errors)
+
+
 def test_whitelists_match_the_enums_the_resolver_reads():
     """The two lists drifting is how this class of bug survives: the schema
     would accept a value the resolver does not recognise, and nothing would
