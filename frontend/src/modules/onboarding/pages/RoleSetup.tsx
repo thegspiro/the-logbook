@@ -474,6 +474,12 @@ const PositionSetup: React.FC = () => {
   // has to refuse to leave with them pending rather than navigate away and
   // report success for the half of the step that did save.
   const [ladderDirty, setLadderDirty] = useState(false);
+  // `ladderDirty` is false for the whole of the tier config read, including for
+  // an organization with no stored `membership_tiers` — the editor opens dirty
+  // only once the response says `is_saved: false`. Leaving during that window
+  // is the same loss as leaving with edits pending, so the step waits for the
+  // read to settle before it will believe the ladder is clean.
+  const [ladderLoading, setLadderLoading] = useState(true);
   // The rank editor's Add/Edit form is the same hazard in the other section:
   // typed, not yet written, and discarded when Continue unmounts it.
   const [rankFormPending, setRankFormPending] = useState(false);
@@ -594,6 +600,11 @@ const PositionSetup: React.FC = () => {
   };
 
   const handleContinue = async () => {
+    if (ladderLoading) {
+      toast.error('Your membership tiers are still loading — give it a moment before continuing');
+      return;
+    }
+
     if (ladderDirty) {
       toast.error('Save or discard your membership tier changes before continuing');
       return;
@@ -691,7 +702,7 @@ const PositionSetup: React.FC = () => {
             </p>
           </div>
 
-          <MembershipLadderSection onDirtyChange={setLadderDirty} />
+          <MembershipLadderSection onDirtyChange={setLadderDirty} onLoadingChange={setLadderLoading} />
 
           <RankLadderSection onPendingChange={setRankFormPending} />
 

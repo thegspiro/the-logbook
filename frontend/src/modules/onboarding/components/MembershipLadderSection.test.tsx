@@ -145,3 +145,38 @@ describe('the rung the System Owner is already on', () => {
     expect(screen.queryByText(/can be renamed to whatever your bylaws call it/i)).not.toBeInTheDocument();
   });
 });
+
+describe('what the step is told while the ladder is still being read', () => {
+  beforeEach(installDefaults);
+
+  it('reports loading, so Continue does not read the not-yet-dirty ladder as clean', async () => {
+    // The editor opens dirty only once the response says `is_saved: false`.
+    // Until then `onDirtyChange` reports false, which is indistinguishable from
+    // a stored ladder with nothing pending — and the step would let an
+    // administrator leave without ever writing the synthesized one.
+    let resolveConfig!: (config: unknown) => void;
+    getTierConfig.mockImplementation(() => new Promise((resolve) => (resolveConfig = resolve)));
+    const onLoadingChange = vi.fn();
+
+    render(<MembershipLadderSection onLoadingChange={onLoadingChange} />);
+
+    await waitFor(() => expect(onLoadingChange).toHaveBeenCalledWith(true));
+    expect(onLoadingChange).not.toHaveBeenCalledWith(false);
+
+    resolveConfig({ auto_advance: true, tiers: [], member_counts: {}, is_saved: false });
+    await waitFor(() => expect(onLoadingChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it('reports settled when the read fails, so the step is not a dead end', async () => {
+    // The failure panel tells the administrator to carry on and set the tiers
+    // up later. A step that refused to continue would contradict its own
+    // instruction, behind a retry that may keep failing.
+    getTierConfig.mockRejectedValue(new Error('network'));
+    const onLoadingChange = vi.fn();
+
+    render(<MembershipLadderSection onLoadingChange={onLoadingChange} />);
+
+    await screen.findByText(/could not be loaded/i);
+    expect(onLoadingChange).toHaveBeenLastCalledWith(false);
+  });
+});

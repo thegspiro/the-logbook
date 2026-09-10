@@ -36,9 +36,25 @@ interface MembershipLadderSectionProps {
    * Continue on this.
    */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Told while the ladder is still being read.
+   *
+   * `dirty` cannot answer for this window. The editor opens dirty only once the
+   * GET resolves and reports `is_saved: false`, so for the whole of a slow
+   * request it reads clean — and a Continue pressed in that window walks past
+   * the guard above for precisely the organization the guard exists for: one
+   * with no stored `membership_tiers`, whose synthesized ladder is then never
+   * written and honoured by no backend reader.
+   *
+   * A failed load reports `false` here, deliberately. That path tells the
+   * administrator to carry on and set the tiers up later, and a guard that
+   * refused to let them would strand them on the step with a retry that may
+   * keep failing.
+   */
+  onLoadingChange?: (loading: boolean) => void;
 }
 
-const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDirtyChange }) => {
+const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDirtyChange, onLoadingChange }) => {
   const editor = useTierEditor();
 
   // Which rung the signed-in System Owner is standing on, if it is one of these.
@@ -48,6 +64,10 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
   useEffect(() => {
     onDirtyChange?.(editor.dirty);
   }, [editor.dirty, onDirtyChange]);
+
+  useEffect(() => {
+    onLoadingChange?.(editor.loading);
+  }, [editor.loading, onLoadingChange]);
 
   return (
     <div className="card mb-6 p-6">

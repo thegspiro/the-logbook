@@ -33,6 +33,7 @@ vi.mock('react-hot-toast', () => ({
 // The two ladders each own an API of their own; this file is about the step's
 // Continue, so they are stubbed down to what it needs to know.
 let ladderDirty = false;
+let ladderLoading = false;
 let rankFormPending = false;
 vi.mock('../components', async () => {
   const actual = await vi.importActual<typeof import('../components')>('../components');
@@ -43,8 +44,15 @@ vi.mock('../components', async () => {
       React.useEffect(() => onPendingChange?.(rankFormPending), [onPendingChange]);
       return null;
     },
-    MembershipLadderSection: ({ onDirtyChange }: { onDirtyChange?: (d: boolean) => void }) => {
+    MembershipLadderSection: ({
+      onDirtyChange,
+      onLoadingChange,
+    }: {
+      onDirtyChange?: (d: boolean) => void;
+      onLoadingChange?: (l: boolean) => void;
+    }) => {
       React.useEffect(() => onDirtyChange?.(ladderDirty), [onDirtyChange]);
+      React.useEffect(() => onLoadingChange?.(ladderLoading), [onLoadingChange]);
       return null;
     },
   };
@@ -66,6 +74,7 @@ const renderStep = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   ladderDirty = false;
+  ladderLoading = false;
   rankFormPending = false;
   savePositionsConfig.mockResolvedValue({ data: { created: [], updated: [], removed: [] } });
   useOnboardingStore.setState({
@@ -119,6 +128,39 @@ describe('unsaved membership ladder edits', () => {
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('membership tier changes'));
+  });
+});
+
+describe('a membership ladder that has not finished loading', () => {
+  it('refuses to continue, because clean is not yet an answer', async () => {
+    // `dirty` is false for the whole of the tier config read. An organization
+    // with no stored `membership_tiers` gets `is_saved: false` and the editor
+    // opens dirty — but only once the response lands, so a Continue pressed
+    // before then walks straight past the guard, for exactly the organization
+    // the guard exists for. The ladder is then never written and no backend
+    // reader honours it.
+    ladderLoading = true;
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    expect(savePositionsConfig).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('still loading'));
+  });
+
+  it('lets a failed load through, because that step says to carry on', async () => {
+    // `useTierEditor` leaves `loading` false when the read fails, and the
+    // section's own message tells the administrator to set the tiers up later
+    // under Members → Settings. Refusing Continue here would strand them on the
+    // step behind a retry that may keep failing.
+    ladderLoading = false;
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    await waitFor(() => expect(savePositionsConfig).toHaveBeenCalled());
   });
 });
 
