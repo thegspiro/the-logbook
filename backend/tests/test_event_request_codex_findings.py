@@ -310,3 +310,203 @@ async def test_an_unparseable_audience_size_neither_fails_nor_spends_the_quota()
     assert added[0].audience_size is None
     # The allowance was spent exactly once, on a submission that was stored.
     assert cap.await_count == 1
+
+
+# ============================================
+# Round 2 — findings on the fixes themselves
+# ============================================
+
+
+@pytest.mark.asyncio
+async def test_a_signed_in_member_is_not_subject_to_the_public_gates():
+    """`/f/<slug>` also serves forms that require authentication.
+
+    `submit_public_form` hardcoded `is_public=True`, so a signed-in member
+    submitting an authentication-required request form was blocked by
+    `accept_public_requests` and spent the anonymous quota — the exact internal
+    submission the flag exists to exempt.
+    """
+    service = FormsService(AsyncMock())
+    service._create_public_submission = AsyncMock(
+        return_value=(SimpleNamespace(id="sub-1"), SimpleNamespace(id="form-1"), None)
+    )
+    service._process_integrations = AsyncMock()
+
+    await service.submit_public_form(
+        slug="abcd1234",
+        data={},
+        submitted_by="user-1",
+    )
+
+    assert service._process_integrations.await_args.kwargs["is_public"] is False
+
+
+@pytest.mark.asyncio
+async def test_an_anonymous_submission_is_still_public():
+    service = FormsService(AsyncMock())
+    service._create_public_submission = AsyncMock(
+        return_value=(SimpleNamespace(id="sub-1"), SimpleNamespace(id="form-1"), None)
+    )
+    service._process_integrations = AsyncMock()
+
+    await service.submit_public_form(slug="abcd1234", data={}, submitted_by=None)
+
+    assert service._process_integrations.await_args.kwargs["is_public"] is True
+
+
+class TestResolveConfirmedEnd:
+    """One answer for four surfaces (calendar, signup sheet, emails, status)."""
+
+    START = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+
+    def _org(self, minutes=None):
+        defaults = {"default_duration_minutes": minutes} if minutes else {}
+        return SimpleNamespace(settings={"events": {"defaults": defaults}})
+
+    def _event(self, hours=3, cancelled=False):
+        return SimpleNamespace(
+            start_datetime=self.START - timedelta(days=14),
+            end_datetime=self.START - timedelta(days=14) + timedelta(hours=hours),
+            is_cancelled=cancelled,
+        )
+
+    def test_an_explicit_end_wins(self):
+        from app.services.event_request_service import resolve_confirmed_end
+
+        explicit = self.START + timedelta(hours=5)
+        assert (
+            resolve_confirmed_end(self.START, explicit, self._event(), self._org())
+            == explicit
+        )
+
+    def test_an_existing_entry_keeps_its_length(self):
+        from app.services.event_request_service import resolve_confirmed_end
+
+        assert resolve_confirmed_end(
+            self.START, None, self._event(hours=3), self._org()
+        ) == self.START + timedelta(hours=3)
+
+    def test_a_cancelled_entry_does_not_lend_its_length(self):
+        from app.services.event_request_service import resolve_confirmed_end
+
+        assert resolve_confirmed_end(
+            self.START, None, self._event(hours=3, cancelled=True), self._org()
+        ) == self.START + timedelta(minutes=60)
+
+    def test_no_entry_takes_the_department_default(self):
+        from app.services.event_request_service import resolve_confirmed_end
+
+        assert resolve_confirmed_end(
+            self.START, None, None, self._org(minutes=90)
+        ) == self.START + timedelta(minutes=90)
+
+    def test_a_degenerate_stored_window_falls_back(self):
+        from app.services.event_request_service import resolve_confirmed_end
+
+        assert resolve_confirmed_end(
+            self.START, None, self._event(hours=0), self._org()
+        ) == self.START + timedelta(minutes=60)
+
+
+@pytest.mark.asyncio
+async def test_postponing_to_a_new_date_stores_a_resolved_end():
+    """The staffing helper assumes two hours and the calendar helper preserves
+    the entry's own span, so a postponement that named no end left them
+    disagreeing about the same event."""
+    from app.api.v1.endpoints.event_requests import postpone_request
+    from app.models.event_request import EventRequestStatus
+    from app.schemas.event_request import EventRequestPostpone
+
+    start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+    org = SimpleNamespace(
+        id=ORG_ID, name="Oakville", active=True, timezone="UTC", settings={"events": {}}
+    )
+    event_request = SimpleNamespace(
+        id="req-1",
+        organization_id=ORG_ID,
+        status=EventRequestStatus.SCHEDULED,
+        event_id="ev-1",
+        event_date=None,
+        event_end_date=None,
+        staffing_shift_id=None,
+    )
+    linked = SimpleNamespace(
+        id="ev-1",
+        organization_id=ORG_ID,
+        is_cancelled=False,
+        start_datetime=start - timedelta(days=7),
+        end_datetime=start - timedelta(days=7) + timedelta(hours=3),
+    )
+    db = AsyncMock()
+    db.add = MagicMock()
+    db.execute.side_effect = [
+        SimpleNamespace(scalar_one_or_none=lambda: event_request),
+        SimpleNamespace(scalar_one_or_none=lambda: org),
+    ]
+    db.scalar.return_value = linked
+
+    with (
+        patch(
+            "app.api.v1.endpoints.event_requests.sync_staffing_shift_date", AsyncMock()
+        ),
+        patch(
+            "app.api.v1.endpoints.event_requests.sync_calendar_event_date", AsyncMock()
+        ),
+        patch(
+            "app.api.v1.endpoints.event_requests._send_request_notification",
+            AsyncMock(),
+        ),
+    ):
+        await postpone_request(
+            request_id="req-1",
+            data=EventRequestPostpone(new_event_date=start),
+            db=db,
+            current_user=SimpleNamespace(id="user-1", organization_id=ORG_ID),
+        )
+
+    # The linked entry's own 3-hour length, not the staffing helper's 2 hours.
+    assert event_request.event_end_date == start + timedelta(hours=3)
+
+
+class TestPreferenceBackfill:
+    """The write-side normalizer only settles future writes; rows stored before
+    the upgrade keep the off-list values that motivated it (pitfall #20)."""
+
+    BACKFILL = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "20260910_0223_0533644945cd_settle_off_list_event_request_.py"
+    )
+
+    def test_the_backfill_exists_and_is_guarded_on_the_table(self):
+        text = self.BACKFILL.read_text()
+        # event_requests is create_all-only, so an unguarded reflect kills the
+        # whole upgrade on a fresh database (pitfall #26).
+        assert '_has_table("event_requests")' in text
+
+    def test_it_covers_the_three_fixed_vocabularies(self):
+        from app.services.event_request_service import (
+            DATE_FLEXIBILITIES,
+            TIMES_OF_DAY,
+            VENUE_PREFERENCES,
+        )
+
+        text = self.BACKFILL.read_text()
+        for column in (
+            "date_flexibility",
+            "venue_preference",
+            "preferred_time_of_day",
+        ):
+            assert column in text
+        # The migration's vocabularies must not drift from the service's.
+        for value in (*DATE_FLEXIBILITIES, *VENUE_PREFERENCES, *TIMES_OF_DAY):
+            assert f'"{value}"' in text, value
+
+    def test_it_leaves_outreach_type_alone(self):
+        """Per-organization configurable: an off-list value may be a type the
+        department retired, and rewriting it would destroy that."""
+        assert "outreach_type" not in self.BACKFILL.read_text().split('"""')[2]
+
+    def test_nulls_are_preserved(self):
+        assert "IS NOT NULL" in self.BACKFILL.read_text()

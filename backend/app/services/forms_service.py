@@ -1012,7 +1012,18 @@ class FormsService:
             # surfaces as an ordinary error instead of re-running intake
             # against a submission that already exists (Codex, pass-3
             # follow-up).
-            await self._process_integrations(submission, form, is_public=True)
+            # Anonymity, not the URL, is what "public" means to a module's
+            # public-intake gates. A form that sets `require_authentication`
+            # (or forbids repeat submissions, which implies it) is still served
+            # from `/f/<slug>`, and the endpoint above refuses it without a
+            # session — so a signed-in member submitting one arrives here with
+            # `submitted_by` set. Hardcoding True blocked exactly the internal
+            # submission the `is_public` distinction exists to exempt, and made
+            # an authentication-required request form stop creating pipeline
+            # requests whenever public intake was switched off.
+            await self._process_integrations(
+                submission, form, is_public=submitted_by is None
+            )
 
             return submission, None
         except Exception as e:
@@ -1458,8 +1469,9 @@ class FormsService:
     ) -> None:
         """Process integrations after a form submission.
 
-        ``is_public`` marks traffic that arrived at ``/f/<slug>`` from the open
-        internet, as opposed to a signed-in member submitting the same form or a
+        ``is_public`` marks genuinely anonymous traffic, as opposed to a
+        signed-in member submitting the same form — through the app or through
+        ``/f/<slug>``, which authenticated forms are also served from — or a
         coordinator reprocessing a stored submission. Only the public case is
         subject to a module's own public-intake gates: refusing an internal
         submission because a public toggle is off would surprise a member using

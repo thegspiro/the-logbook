@@ -13,7 +13,7 @@ their workflow.
 
 import copy
 import html as _html
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -63,7 +63,6 @@ from app.schemas.forms import FormResponse, FormsListResponse
 from app.services.event_request_service import (
     apply_default_assignee,
     configured_task_ids,
-    event_duration_minutes,
     get_linked_calendar_event,
     get_outreach_roles,
     get_outreach_types,
@@ -74,6 +73,7 @@ from app.services.event_request_service import (
     normalize_request_preferences,
     open_staffing_shift,
     render_request_template,
+    resolve_confirmed_end,
 )
 from app.services.event_request_service import (
     send_request_notification as _send_request_notification,
@@ -1038,24 +1038,13 @@ async def schedule_request(
     # double-booking check below measured a zero-length window, which overlaps
     # nothing and therefore always passed.
     #
-    # Deriving it is not enough on its own: `open_staffing_shift` and
-    # `sync_staffing_shift_date` fall back to `start + 2 hours` when the request
-    # carries no end, so a derived-but-unstored end would put the calendar entry
-    # and the volunteer signup sheet on different clocks for the same outreach
-    # event. Writing it back makes the request the single authority every
-    # surface already reads (CLAUDE.md pitfall #29).
-    #
-    # A moved entry keeps the length the coordinator already gave it; a new one
-    # takes the department's default event length.
-    if data.event_end_date:
-        end_datetime = data.event_end_date
-    elif existing_event is not None:
-        span = existing_event.end_datetime - existing_event.start_datetime
-        if span <= timedelta(0):
-            span = timedelta(minutes=event_duration_minutes(org))
-        end_datetime = data.event_date + span
-    else:
-        end_datetime = data.event_date + timedelta(minutes=event_duration_minutes(org))
+    # Storing it is the other half: the staffing helpers fall back to two hours
+    # when the request carries no end, so a derived-but-unstored end would put
+    # the calendar entry and the signup sheet on different clocks for the same
+    # outreach event.
+    end_datetime = resolve_confirmed_end(
+        data.event_date, data.event_end_date, existing_event, org
+    )
     event_request.event_end_date = end_datetime
 
     # Optionally create a calendar event
@@ -1227,9 +1216,25 @@ async def postpone_request(
     old_status = event_request.status.value
     event_request.status = EventRequestStatus.POSTPONED
 
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = org_result.scalar_one_or_none()
+
     if data.new_event_date:
         event_request.event_date = data.new_event_date
-        event_request.event_end_date = data.new_event_end_date
+        # Resolved and stored for the same reason `schedule_request` does it: a
+        # postponement that names a new date but no new end left the request
+        # carrying None, and the two sync helpers below then disagreed —
+        # `sync_staffing_shift_date` assuming two hours while
+        # `sync_calendar_event_date` preserved the linked entry's own span. Both
+        # now read one answer off the request.
+        event_request.event_end_date = resolve_confirmed_end(
+            data.new_event_date,
+            data.new_event_end_date,
+            await get_linked_calendar_event(db, event_request),
+            org,
+        )
     else:
         # Clear the date — it's TBD
         event_request.event_date = None
@@ -1256,11 +1261,6 @@ async def postpone_request(
         performed_by=current_user.id,
     )
     db.add(activity)
-
-    org_result = await db.execute(
-        select(Organization).where(Organization.id == current_user.organization_id)
-    )
-    org = org_result.scalar_one_or_none()
 
     # Keep the signup sheet honest about the postponement. A new date moves the
     # shift and keeps the crew who already volunteered; no date means there is

@@ -351,11 +351,13 @@ async def test_a_moved_entry_keeps_the_length_the_coordinator_gave_it():
 # ============================================
 
 
-def _pipeline_db(event_request, org):
+def _pipeline_db(event_request, org, linked_event=None):
+    """`db.scalar` answers `get_linked_calendar_event`, not the organization —
+    the org is loaded with `db.execute` on every one of these paths."""
     db = AsyncMock()
     db.add = MagicMock()
     db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: event_request)
-    db.scalar.return_value = org
+    db.scalar.return_value = linked_event
     return db
 
 
@@ -464,7 +466,7 @@ async def test_postponing_moves_or_stands_down_the_entry(new_date, moved, stood_
 
     event_request = _scheduled_request()
     event_request.status = EventRequestStatus.SCHEDULED
-    db = _pipeline_db(event_request, _org())
+    db = _pipeline_db(event_request, _org(), linked_event=_event())
     move = AsyncMock()
     cancel = AsyncMock()
 

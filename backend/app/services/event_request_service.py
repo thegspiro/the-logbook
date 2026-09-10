@@ -1263,6 +1263,37 @@ async def get_linked_calendar_event(
     )
 
 
+def resolve_confirmed_end(
+    start: datetime,
+    explicit_end: Optional[datetime],
+    existing_event: Optional[Any],
+    org: Optional[Organization],
+) -> datetime:
+    """The confirmed end for a date the coordinator just set.
+
+    Four surfaces read a request's end — the calendar entry, the volunteer
+    signup sheet, the reminder emails and the public status page — and three of
+    them have their own fallback when the request carries none:
+    ``open_staffing_shift`` and ``sync_staffing_shift_date`` assume two hours,
+    ``sync_calendar_event_date`` preserves the linked event's own span. Left to
+    themselves they answer differently for the same outreach event, so every
+    path that sets a confirmed date resolves the end **here** and stores it,
+    making the request the one authority (CLAUDE.md pitfall #29).
+
+    Precedence: what the coordinator typed, then the length the linked calendar
+    entry already had, then the department's default event length.
+    """
+    if explicit_end:
+        return explicit_end
+    if existing_event is not None and not getattr(
+        existing_event, "is_cancelled", False
+    ):
+        span = existing_event.end_datetime - existing_event.start_datetime
+        if span > timedelta(0):
+            return start + span
+    return start + timedelta(minutes=event_duration_minutes(org))
+
+
 async def sync_calendar_event_date(
     db: AsyncSession,
     event_request: EventRequest,
