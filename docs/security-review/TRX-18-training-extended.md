@@ -906,30 +906,52 @@ already require `training.manage`:
 
 The frontend route hosting all three (`/training/admin`, gated
 `requiredPermission="training.manage"` in `modules/training/routes.tsx`)
-and `docs/training/02-training.md` ("Navigate to Training Admin > Advanced
+and `docs/training/02-training.md` ("Navigate to Training Admin, Advanced,
+Instructors to manage instructor qualifications") both describe this as
+training-officer-only data. The backend GET routes let any authenticated
+member reach the same data directly, bypassing the frontend gate entirely
+— confirmed by reading the routes, the response schema, and the one
+frontend consumer (`TrainingEnhancementsTab.tsx`, the only file in the
+codebase that calls any of the three) rather than assuming from the route
+path alone.
 
-> Instructors to manage instructor qualifications") both describe this as
-> training-officer-only data. The backend GET routes let any authenticated
-> member reach the same data directly, bypassing the frontend gate entirely
-> — confirmed by reading the routes, the response schema, and the one
-> frontend consumer (`TrainingEnhancementsTab.tsx`, the only file in the
-> codebase that calls any of the three) rather than assuming from the route
-> path alone.
-
-**Fix:** all three routes now depend on
+**Fix (round 1):** all three routes depend on
 `Depends(require_permission("training.manage"))`, matching the file's own
 write-side convention. No self-scoped exception is needed (unlike TRX-3's
 effectiveness-evaluations fix) — nothing in the frontend or docs describes
 an ordinary member's own use case for these three reads, so admin-only is
 the correct shape, not admin-plus-self.
 
+**Correction, caught by a second Codex review round on the same PR:**
+gating to `training.manage` alone silently dropped read-only officer
+access. `training.view_all` is this codebase's established read-only
+officer tier for training data — `training_programs.py`'s own
+`get_program_enrollments` already gates the equivalent org-wide enrollment
+read with `require_permission("training.view_all", "training.manage")`,
+and this file's own `can_view_officer_training_data` helper treats the two
+permissions as equally sufficient everywhere else it gates a read (the
+exact TRX-3 precedent this entry's first draft cited as "not needed" for
+the self-scoping question, missing that it still applied to the
+officer-tier question). Verified the sibling pattern by reading
+`get_program_enrollments` directly rather than assuming Codex's claim.
+**Fix (round 2):** all three routes now use
+`Depends(require_permission("training.view_all", "training.manage"))`,
+matching `get_program_enrollments`'s own OR-gate exactly. The write-side
+POST/PATCH routes are unchanged — creating or editing a qualification
+stays `training.manage`-only.
+
 Guard test added:
-`test_instructor_qualification_endpoint_permissions.py` — introspects
-`router.routes` for the `PermissionChecker.required_permissions` each route
-now carries (the same pattern `test_equipment_check_endpoint_permissions.py`
-established), asserting all three GET routes require `training.manage` and
-the two existing POST/PATCH routes still do (so a future "fix" cannot
-loosen the write side while re-opening the read side).
+`test_instructor_qualification_endpoint_permissions.py` (14 tests) —
+introspects `router.routes` for the `PermissionChecker.required_permissions`
+each route now carries (the same pattern
+`test_equipment_check_endpoint_permissions.py` established) to assert the
+configured permission set, and separately drives the real
+`PermissionChecker.__call__` against a `training.view_all`-only user, a
+`training.manage`-only user, and a user with neither, to prove the OR-gate
+actually authorizes and actually rejects rather than only asserting its
+configuration. The two existing POST/PATCH routes are asserted unchanged
+(`training.manage` only), so a future "fix" cannot loosen the write side
+while adjusting the read side.
 
 ### TRX4-3 — Corrects this pass's own first-draft claim — `docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" count was six, not seven
 
@@ -978,7 +1000,7 @@ named the mechanism and the missing call, and corrected this pass's own
 | `black --check` (feature scope + new test file)                                                                   | ✅ clean                                            |
 | `isort --check-only` (feature scope + new test file)                                                              | ✅ clean                                            |
 | `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)    |
-| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 5 passed (new, TRX4-2)                           |
+| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 14 passed (new, TRX4-2)                          |
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ passed, including the new permission-guard tests |
 | `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors (no frontend file changed this pass)    |
 | `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                         |
