@@ -269,6 +269,7 @@ The surface, so it is visible at a glance:
 | Email configuration              | `POST /api/v1/onboarding/session/email`                            |
 | Record that email was configured | `POST /api/v1/onboarding/notifications`                            |
 | Finish onboarding                | `POST /api/v1/onboarding/complete`                                 |
+| Reset — **destructive**          | `POST /api/v1/onboarding/reset`                                    |
 | Post-setup checklist             | `GET /api/v1/organization/setup-checklist`                         |
 | Acknowledge a checklist item     | `POST /api/v1/organization/setup-checklist/{item_key}/acknowledge` |
 

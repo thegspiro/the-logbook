@@ -1033,6 +1033,7 @@ to document an organization body the route had stopped accepting.
 | `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`, `authenticated`. Also sets the auth cookies; `authenticated` is the signal the frontend uses to set its `has_session` hint, since the cookies themselves are httpOnly and invisible to it |
 | `POST /onboarding/modules`                                               | `{ message, modules }` — every accepted id, not only the enabled ones. The boolean is the **stored** value only for the ids the wizard asks about; for settings-only and legacy ids it echoes the request, so `finance: true` can come back with the setting untouched (see Configure Modules)         |
 | `POST /onboarding/notifications`                                         | `{ message, email_enabled, sms_enabled }` — the two booleans it was given                                                                                                                                                                                                                              |
+| `POST /onboarding/reset`                                                 | `{ success, message }` — **destructive**: empties the user, organization, role, facility and onboarding tables. Refused after completion, and restricted to the System Owner once one exists (see Reset Onboarding)                                                                                    |
 | `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
 | `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
 | `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                                                                                                                                               |
@@ -1245,8 +1246,25 @@ Only the ids the wizard asks about are applied to the organization —
   `budget`) — accepted so an older saved session still loads, but not
   `ModuleSettings` fields at all: recorded on `OnboardingStatus` and no further.
 
+**A sixth spelling group: hyphenated aliases.** `ONBOARDING_ACCEPTED_MODULE_IDS`
+runs every id through `_with_hyphenated()`, so wherever an underscored id is
+accepted its hyphenated twin is too — `medical-supplies`,
+`prospective-members`, `hr-payroll`, `medical-screening` and `public-info`.
+They exist because saved sessions carry both spellings and the wizard's own
+config routes were hyphenated.
+
+Persistence normalizes them (`mid.replace("-", "_")`), so submitting
+`medical-supplies` correctly stores `medical_supplies: true`. **The response
+does not normalize.** It is keyed off `available_modules`, which holds both
+spellings, and tested against `final_modules`, which holds the literal id you
+sent — so the same response carries `"medical-supplies": true` _and_
+`"medical_supplies": false`, describing one module twice with opposite answers.
+The underscored key is the one that is wrong. Prefer the underscored spelling
+on the way in and the stored settings on the way out.
+
 So the response reports the resulting boolean **for the asked-about ids only**;
-for the other two groups it echoes the request.
+for the other two groups it echoes the request, and for a hyphenated alias it
+answers under a key nothing reads.
 
 **The wizard's own path does not behave this way.** The screens call
 `POST /onboarding/session/modules`, and completion rebuilds the whole map as
@@ -1378,6 +1396,37 @@ body — the SMTP host, user and from-address, the Twilio SID and number — is
 discarded. A caller that sends credentials here gets a success response and has
 configured nothing; **Save Email Configuration** above is the endpoint that
 stores them.
+
+### Reset Onboarding
+
+```
+POST /api/v1/onboarding/reset
+Body: none
+```
+
+**Destructive and irreversible.** It empties the tables outright —
+`OnboardingSession`, `OnboardingStatus`, `Location`, `Facility`, `User`, `Role`
+and `Organization` among them — rather than deleting a single organization's
+rows. There is no undo and no confirmation beyond the two guards below. The
+wizard reaches it from `ResetProgressButton`.
+
+Two guards, and the second is the one an API caller will not expect:
+
+- **Refused after completion** — `Cannot reset after onboarding is completed.
+Use the admin panel to manage settings.` So it is a bootstrap-only escape
+  hatch, not a factory reset.
+- **Once a System Owner exists, only that user may call it.** The owner is
+  identified by the wildcard position `create_system_owner` grants, and the
+  caller must be authenticated as them; anyone else gets
+  `System-owner authentication is required to reset onboarding.` Before a
+  System Owner exists the call is unauthenticated, which is what makes an
+  abandoned half-finished setup recoverable. If the system-owner position is
+  missing entirely the reset is refused rather than allowed —
+  `System-owner role is missing; onboarding cannot be reset safely.` — failing
+  closed on the one operation where failing open would be unrecoverable.
+
+Returns `{ success, message }`. Rate-limited on its own scope, like
+`/test/email`.
 
 ### Complete Onboarding
 
