@@ -8,7 +8,16 @@ fields, submissions, public forms, integrations, and reporting.
 import html as html_lib
 import re
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+)
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -67,6 +76,19 @@ class FormsService:
     MAX_NAME_LENGTH = 255
     MAX_EMAIL_LENGTH = 254
     PUBLIC_DAILY_CAP_ERROR = "This form is not accepting further submissions today."
+
+    # Refusal reasons for a public submission the pipeline is not taking. Kept
+    # as constants because the coordinator reads them off the stored submission
+    # and the tests assert on them.
+    EVENT_REQUEST_CLOSED_ERROR = (
+        "This department is not accepting public event requests. "
+        "Turn on Events \u2192 Request pipeline \u2192 accept public requests, "
+        "or unpublish this form."
+    )
+    EVENT_REQUEST_DAILY_CAP_ERROR = (
+        "This department's daily ceiling for public event requests is spent. "
+        "The submission was stored but no request was created."
+    )
 
     # ------------------------------------------------------------------
     # Required target fields and label-based fallback maps per
@@ -167,6 +189,9 @@ class FormsService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Side effects that must not outrun the commit — see
+        # `_defer_until_committed`. Per-request, like the service itself.
+        self._post_commit: List[Callable[[], Awaitable[Any]]] = []
 
     # ============================================
     # Input Sanitization & Validation
@@ -999,7 +1024,18 @@ class FormsService:
             # surfaces as an ordinary error instead of re-running intake
             # against a submission that already exists (Codex, pass-3
             # follow-up).
-            await self._process_integrations(submission, form)
+            # Anonymity, not the URL, is what "public" means to a module's
+            # public-intake gates. A form that sets `require_authentication`
+            # (or forbids repeat submissions, which implies it) is still served
+            # from `/f/<slug>`, and the endpoint above refuses it without a
+            # session — so a signed-in member submitting one arrives here with
+            # `submitted_by` set. Hardcoding True blocked exactly the internal
+            # submission the `is_public` distinction exists to exempt, and made
+            # an authentication-required request form stop creating pipeline
+            # requests whenever public intake was switched off.
+            await self._process_integrations(
+                submission, form, is_public=submitted_by is None
+            )
 
             return submission, None
         except Exception as e:
@@ -1440,10 +1476,51 @@ class FormsService:
             await self.db.rollback()
             return False, safe_error_detail(e)
 
+    def _defer_until_committed(self, send: Callable[[], Awaitable[Any]]) -> None:
+        """Hold a side effect until the row it announces is durable.
+
+        An integration's writes are only flushed while it runs; the commit
+        happens in ``_process_integrations`` once every integration has
+        returned. Anything that reaches outside the transaction — an email, a
+        webhook — cannot be taken back if that commit then fails, so it waits
+        here and is drained afterwards. The service is built per request, so
+        this list never outlives one submission.
+
+        Takes a **callable**, not a coroutine. A coroutine object is live from
+        the moment it is created: a queue that is never drained leaves it to be
+        garbage-collected with a "never awaited" warning, and the work it
+        describes is decided before the commit it is supposed to follow.
+        """
+        self._post_commit.append(send)
+
+    async def _run_post_commit(self) -> None:
+        """Drain the deferred side effects. Never raises into the caller.
+
+        The submission and its integrations are already durable by the time
+        this runs, so a failed email is worth a log line, not an exception that
+        would report an intake as failed after it succeeded.
+        """
+        pending, self._post_commit = self._post_commit, []
+        for send in pending:
+            try:
+                await send()
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning("Deferred post-commit side effect failed: {}", e)
+
     async def _process_integrations(
-        self, submission: FormSubmission, form: Form
+        self, submission: FormSubmission, form: Form, is_public: bool = False
     ) -> None:
         """Process integrations after a form submission.
+
+        ``is_public`` marks genuinely anonymous traffic, as opposed to a
+        signed-in member submitting the same form — through the app or through
+        ``/f/<slug>``, which authenticated forms are also served from — or a
+        coordinator reprocessing a stored submission. Only the public case is
+        subject to a module's own public-intake gates: refusing an internal
+        submission because a public toggle is off would surprise a member using
+        the department's own tool, and refusing a reprocess would make an
+        already-stored submission permanently unrecoverable the moment a
+        department turns that toggle off.
 
         Two paths are supported:
 
@@ -1503,7 +1580,10 @@ class FormsService:
                         results["event_registration"] = result
                     elif int_type == IntegrationType.EVENT_REQUEST:
                         result = await self._process_event_request(
-                            submission, integration=integration, form=form
+                            submission,
+                            integration=integration,
+                            form=form,
+                            is_public=is_public,
                         )
                         results["event_request"] = result
                 except Exception as e:
@@ -1547,7 +1627,7 @@ class FormsService:
                     results["event_registration"] = result
                 elif it == IntegrationType.EVENT_REQUEST:
                     result = await self._process_event_request(
-                        submission, integration, form=form
+                        submission, integration, form=form, is_public=is_public
                     )
                     results["event_request"] = result
             except Exception as e:
@@ -1560,6 +1640,9 @@ class FormsService:
             submission.integration_processed = True
             submission.integration_result = results
             await self.db.commit()
+
+        # Only now is the request the emails announce actually durable.
+        await self._run_post_commit()
 
         # Auto-advance pipeline steps linked to this form
         await self._auto_advance_pipeline_step(form, submission)
@@ -1654,6 +1737,55 @@ class FormsService:
                         )
         except Exception as e:
             logger.error(f"Pipeline auto-advance check failed: {e}")
+
+    def _mapped_field_options(
+        self,
+        integration_type: str,
+        target_field: str,
+        integration: Optional[FormIntegration],
+        form: Optional[Form],
+    ) -> set:
+        """The values a form's own choice field offers for one mapped target.
+
+        A published form keeps the ``<select>`` options it was generated with,
+        so its vocabulary can outlive the organization setting it was built
+        from. ``submit_form`` validates a select/radio answer against exactly
+        these options, which is what makes them safe to treat as bounded —
+        a free-text field contributes nothing, because its answer is whatever
+        somebody typed.
+        """
+        form_fields = getattr(form, "fields", None)
+        if not form_fields:
+            return set()
+
+        field_ids = set()
+        mappings = (integration.field_mappings or {}) if integration else {}
+        for field_id, mapped_target in mappings.items():
+            if mapped_target == target_field:
+                field_ids.add(str(field_id))
+
+        label_map = self._LABEL_MAPS.get(integration_type) or {}
+        for field_def in form_fields:
+            label = (getattr(field_def, "label", "") or "").strip().lower()
+            if label_map.get(label) == target_field:
+                field_ids.add(str(field_def.id))
+
+        choice_types = {FieldType.SELECT.value, FieldType.RADIO.value}
+        values = set()
+        for field_def in form_fields:
+            if str(field_def.id) not in field_ids:
+                continue
+            field_type = getattr(field_def, "field_type", None)
+            field_type = getattr(field_type, "value", field_type)
+            if field_type not in choice_types:
+                continue
+            for opt in field_def.options or []:
+                value = (
+                    opt.value if hasattr(opt, "value") else (opt or {}).get("value", "")
+                )
+                if value:
+                    values.add(str(value))
+        return values
 
     def _apply_label_fallback(
         self,
@@ -2440,6 +2572,7 @@ class FormsService:
         submission: FormSubmission,
         integration: Optional[FormIntegration] = None,
         form: Optional[Form] = None,
+        is_public: bool = False,
     ) -> Dict[str, Any]:
         """
         Process an event request form submission.
@@ -2452,8 +2585,12 @@ class FormsService:
         )
         from app.services.event_request_service import (
             apply_default_assignee,
+            clamp_text_fields,
             get_pipeline_settings,
             lead_time_error,
+            normalize_request_preferences,
+            parse_audience_size,
+            public_daily_limit,
             send_request_notification,
         )
 
@@ -2475,6 +2612,11 @@ class FormsService:
                 IntegrationType.EVENT_REQUEST, mapped_data, sub_data, form
             )
 
+        # Trimmed to the column widths here, above the daily-allowance INCR
+        # below: an over-long value is a DataError at flush, and the allowance
+        # would already be spent (same shape as the audience-size parse).
+        mapped_data = clamp_text_fields(mapped_data)
+
         contact_name = mapped_data.get("contact_name", "")
         contact_email = mapped_data.get("contact_email", "")
         if not contact_name or not contact_email:
@@ -2494,6 +2636,20 @@ class FormsService:
             )
         )
         pipeline = get_pipeline_settings(org)
+
+        # Public intake is opt-in, and it is opt-in on every path. The toggle
+        # shipped read by the JSON endpoint alone, so a department that turned
+        # it off kept receiving requests through the form its own settings
+        # screen generated — the switch said one thing and the pipeline did
+        # another (CLAUDE.md pitfall #19).
+        #
+        # The submission itself is already stored and stays stored: it arrived
+        # before this decision and a member of the public wrote it. What the
+        # refusal withholds is the pipeline row, the auto-assignment and the
+        # acknowledgement email. The reason lands on `integration_result`, which
+        # the Forms submission detail shows the coordinator.
+        if is_public and not pipeline.get("accept_public_requests", False):
+            return {"success": False, "error": self.EVENT_REQUEST_CLOSED_ERROR}
 
         # A date picker submits a calendar date ("2026-09-10") with no time.
         # Stamping it midnight UTC turns it into the previous evening for
@@ -2521,8 +2677,65 @@ class FormsService:
                 parsed = parsed.replace(tzinfo=request_tz)
             return parsed
 
-        date_flexibility = mapped_data.get("date_flexibility", "flexible")
         preferred_start = _parse_request_date(mapped_data.get("preferred_date_start"))
+        # Parsed here rather than at the model build below: the normalizer and
+        # the lead-time gate both need it, and a latest-only range is still a
+        # named date.
+        preferred_end = _parse_request_date(mapped_data.get("preferred_date_end"))
+
+        # A department may rename its own form's <select> options, so what
+        # arrives here is not guaranteed to be one of the values every reader is
+        # written against. The same write-side authority the JSON endpoint uses
+        # settles them (CLAUDE.md pitfall #20) — clamping rather than refusing,
+        # because a stored public enquiry is not worth losing over a preference
+        # field the requester never sees again.
+        # Unescaped before it is compared with either vocabulary.
+        # `_sanitize_submission_data` HTML-escapes every submitted value to stop
+        # stored XSS, so a configured type like `fire_&_life_safety` arrives as
+        # `fire_&amp;_life_safety` while the organization setting and the form's
+        # own `<select>` options are both still raw — the selection matches
+        # neither and is silently rewritten to `other`, losing which event the
+        # requester actually picked. `submit_form`'s own option validation
+        # already unescapes for exactly this comparison; this is the same
+        # decode at the same boundary. Only the choice value is decoded: the
+        # free-text fields keep the escaping that protects the coordinator's
+        # screen.
+        outreach_type_value = mapped_data.get("outreach_type", "other")
+        if isinstance(outreach_type_value, str):
+            outreach_type_value = html_lib.unescape(outreach_type_value)
+
+        settled = normalize_request_preferences(
+            org,
+            {
+                "outreach_type": outreach_type_value,
+                "date_flexibility": mapped_data.get("date_flexibility", "flexible"),
+                "venue_preference": mapped_data.get(
+                    "venue_preference", "their_location"
+                ),
+                "preferred_time_of_day": mapped_data.get(
+                    "preferred_time_of_day", "flexible"
+                ),
+                "preferred_date_start": preferred_start,
+                "preferred_date_end": preferred_end,
+            },
+            form_outreach_types=self._mapped_field_options(
+                IntegrationType.EVENT_REQUEST, "outreach_type", integration, form
+            ),
+        )
+        date_flexibility = settled["date_flexibility"]
+
+        # Parsed here, above the daily-cap INCR below, and leniently.
+        #
+        # The generated form asks for "Expected Audience Size" as a TEXT field,
+        # so "about twenty" is a perfectly ordinary answer from a member of the
+        # public. Calling int() on it inside the write block raised, the outer
+        # handler turned that into a failed integration — and the allowance slot
+        # had already been spent, so repeating one unparseable answer could
+        # exhaust the department's whole day of requests without storing a
+        # single one. Both halves are fixed: nothing fallible is left below the
+        # counter, and an answer that is not a number costs the field rather
+        # than the enquiry (same contract as `_parse_request_date` above).
+        audience_size = parse_audience_size(mapped_data.get("audience_size"))
 
         # The department's minimum notice applies to every intake path, but a
         # form submission has already been accepted by the time we get here —
@@ -2531,7 +2744,28 @@ class FormsService:
         # of refused, which is the difference between this path and the JSON
         # endpoint, where the submitter is still there to be told and can pick
         # another date.
-        lead_warning = lead_time_error(pipeline, date_flexibility, preferred_start)
+        lead_warning = lead_time_error(
+            pipeline,
+            date_flexibility,
+            preferred_start,
+            preferred_date_end=preferred_end,
+        )
+
+        # The department's daily ceiling for public event requests, applied here
+        # for the same reason the JSON endpoint applies it: without it the
+        # pipeline's own limit was enforced on one intake path and not the other,
+        # so a published form was the way around it.
+        #
+        # Placed below every rejection above and immediately before the write,
+        # because `daily_cap_exceeded` is an atomic Redis INCR — asking the
+        # question spends an allowance slot. A rejection that ran after it would
+        # let refused traffic burn the ceiling that exists to protect legitimate
+        # submitters (the EV-19 ordering, same shape).
+        if is_public and await daily_cap_exceeded(
+            f"pub_event_request:{submission.organization_id}",
+            public_daily_limit(pipeline),
+        ):
+            return {"success": False, "error": self.EVENT_REQUEST_DAILY_CAP_ERROR}
 
         try:
             event_request = EventRequest(
@@ -2540,24 +2774,16 @@ class FormsService:
                 contact_email=contact_email,
                 contact_phone=mapped_data.get("contact_phone"),
                 organization_name=mapped_data.get("organization_name"),
-                outreach_type=mapped_data.get("outreach_type", "other"),
+                outreach_type=settled["outreach_type"],
                 description=mapped_data.get("description", "Submitted via form"),
                 date_flexibility=date_flexibility,
                 preferred_timeframe=mapped_data.get("preferred_timeframe"),
                 preferred_date_start=preferred_start,
-                preferred_date_end=_parse_request_date(
-                    mapped_data.get("preferred_date_end")
-                ),
-                preferred_time_of_day=mapped_data.get(
-                    "preferred_time_of_day", "flexible"
-                ),
-                audience_size=(
-                    int(mapped_data["audience_size"])
-                    if mapped_data.get("audience_size")
-                    else None
-                ),
+                preferred_date_end=preferred_end,
+                preferred_time_of_day=settled["preferred_time_of_day"],
+                audience_size=audience_size,
                 age_group=mapped_data.get("age_group"),
-                venue_preference=mapped_data.get("venue_preference", "their_location"),
+                venue_preference=settled["venue_preference"],
                 venue_address=mapped_data.get("venue_address"),
                 special_requests=mapped_data.get("special_requests"),
                 status=EventRequestStatus.SUBMITTED,
@@ -2599,8 +2825,18 @@ class FormsService:
             await apply_default_assignee(self.db, event_request, pipeline)
             await self.db.flush()
             if org is not None:
-                await send_request_notification(
-                    self.db, event_request, "on_submitted", org
+                # Queued, not sent. The request is only flushed at this point —
+                # `_process_integrations` commits after this returns, and
+                # `submit_public_form` rolls back if that fails. Sending here
+                # meant a deadlock on that commit (which the caller's own
+                # comment says can happen, and is why integration processing
+                # sits outside its retry loop) left the requester holding "we
+                # have received your request" for a row that no longer exists,
+                # and the coordinator an assignment for nothing.
+                self._defer_until_committed(
+                    lambda: send_request_notification(
+                        self.db, event_request, "on_submitted", org
+                    )
                 )
 
             return {

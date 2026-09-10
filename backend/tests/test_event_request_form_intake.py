@@ -132,14 +132,23 @@ async def test_a_form_request_is_assigned_to_the_default_coordinator():
 
 
 @pytest.mark.asyncio
-async def test_a_form_request_sends_the_submission_notification():
+async def test_a_form_request_queues_the_submission_notification():
+    """Queued, not sent: the request is only flushed when the integration
+    returns, and `_process_integrations` commits afterwards. Draining the queue
+    is what actually sends it — see `_run_post_commit`."""
     org = _org({"default_assignee_id": COORDINATOR_ID})
     service, _ = _service(org)
 
     _, notify = await _process(service, _submission(_data()), _integration(_mappings()))
 
+    assert notify.await_count == 0
+    assert len(service._post_commit) == 1
+
+    await service._run_post_commit()
+
     assert notify.await_count == 1
     assert notify.await_args.args[2] == "on_submitted"
+    assert service._post_commit == []
 
 
 @pytest.mark.asyncio

@@ -108,6 +108,15 @@ class RequestPipelineUpdate(BaseModel):
     email_triggers: Optional[Dict[str, EmailTriggerConfig]] = None
 
 
+# An event's default length, bounded at 30 days. The upper bound is not
+# cosmetic: `event_duration_minutes` feeds this straight into
+# `timedelta(minutes=...)` in `resolve_confirmed_end`, and a large enough value
+# raises OverflowError there — a 500 on every attempt to schedule or postpone a
+# request without an explicit end time. 30 days clears any real event (a
+# multi-day fair included) by a wide margin, so nothing legitimate is refused.
+MAX_EVENT_DURATION_MINUTES = 30 * 24 * 60
+
+
 class EventDefaultsUpdate(BaseModel):
     """Default settings for new events."""
 
@@ -138,7 +147,9 @@ class EventDefaultsUpdate(BaseModel):
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
     default_reminder_time: Optional[str] = Field(None, max_length=10)
-    default_duration_minutes: Optional[int] = Field(None, ge=1)
+    default_duration_minutes: Optional[int] = Field(
+        None, ge=1, le=MAX_EVENT_DURATION_MINUTES
+    )
 
 
 class OutreachEventType(BaseModel):

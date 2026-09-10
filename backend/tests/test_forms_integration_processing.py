@@ -61,7 +61,7 @@ class TestDirectPathUsesExplicitMappings:
         await service._process_integrations(submission, form)
 
         service._process_event_request.assert_awaited_once_with(
-            submission, integration=row, form=form
+            submission, integration=row, form=form, is_public=False
         )
 
     async def test_without_a_row_the_direct_path_still_runs(self):
@@ -72,7 +72,7 @@ class TestDirectPathUsesExplicitMappings:
         await service._process_integrations(submission, form)
 
         service._process_event_request.assert_awaited_once_with(
-            submission, integration=None, form=form
+            submission, integration=None, form=form, is_public=False
         )
 
     async def test_auto_advance_receives_the_specific_submission(self):
@@ -103,7 +103,7 @@ class TestDirectPathUsesExplicitMappings:
 
         # The unrelated row neither supplies mappings nor disables the path.
         service._process_event_request.assert_awaited_once_with(
-            submission, integration=None, form=form
+            submission, integration=None, form=form, is_public=False
         )
 
 

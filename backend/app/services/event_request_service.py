@@ -14,7 +14,7 @@ nobody — requester or coordinator — was told a request had arrived.
 
 import html as _html
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from loguru import logger
 from sqlalchemy import func, select
@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event_request import EventRequest, EventRequestActivity
 from app.models.user import Organization, User
+from app.schemas.event import MAX_EVENT_DURATION_MINUTES
 from app.utils.outreach_roles import (
     MAX_TOTAL_SEATS,
     normalize_staffing_roles,
@@ -93,13 +94,94 @@ def get_pipeline_settings(org: Optional[Organization]) -> dict:
     return merged
 
 
+def event_duration_minutes(org: Optional[Organization]) -> int:
+    """The department's default event length, for a date given without an end.
+
+    ``events.defaults.default_duration_minutes`` is the setting the events
+    module already owns for exactly this question, so the request pipeline
+    reads it rather than inventing a second answer (CLAUDE.md pitfall #29).
+
+    Read defensively: the settings blob is free-form JSON, and a bad value here
+    would otherwise take down every attempt to schedule a request rather than
+    the one setting somebody typed wrong.
+    """
+    fallback = int(_event_settings_defaults()["defaults"]["default_duration_minutes"])
+    if org is None:
+        return fallback
+    stored = ((org.settings or {}).get("events", {}) or {}).get("defaults", {})
+    if not isinstance(stored, dict):
+        return fallback
+    try:
+        minutes = int(stored.get("default_duration_minutes", fallback))
+    except (TypeError, ValueError):
+        return fallback
+    # Bounded above as well as below. `resolve_confirmed_end` feeds this into
+    # `timedelta(minutes=...)`, which raises OverflowError for a large enough
+    # value — a 500 on every attempt to schedule or postpone a request with no
+    # explicit end time. `EventDefaultsUpdate` now refuses such a value at the
+    # boundary, but this reader still has to cope with one an older build
+    # already stored, which is the same reason the rest of this function reads
+    # defensively.
+    if minutes <= 0 or minutes > MAX_EVENT_DURATION_MINUTES:
+        return fallback
+    return minutes
+
+
+def public_daily_limit(pipeline: dict) -> int:
+    """The department's ceiling for public event requests in a day.
+
+    Read defensively for the same reason `get_outreach_types` is:
+    ``RequestPipelineUpdate.public_daily_limit`` is ``Optional[int]`` and
+    ``update_event_settings`` dumps with ``exclude_unset``, so an explicit
+    ``null`` in a PATCH body is persisted and ``pipeline.get(key, 50)`` hands
+    that ``None`` straight back. ``int(None)`` then raises inside the cap check
+    — a 500 on the JSON endpoint, and on the forms path a submission that looks
+    accepted while no request is created.
+
+    A value that is not a usable positive integer means "nothing sensible is
+    configured", which is what the shipped default is for.
+    """
+    default = int(_event_settings_defaults()["request_pipeline"]["public_daily_limit"])
+    try:
+        limit = int(pipeline.get("public_daily_limit", default))
+    except (TypeError, ValueError):
+        return default
+    return limit if limit > 0 else default
+
+
 def get_outreach_types(org: Optional[Organization]) -> list[dict[str, str]]:
-    """Read outreach event types from an organization, falling back to defaults."""
+    """Read outreach event types from an organization, falling back to defaults.
+
+    Read defensively, because the stored value is free-form JSON that an
+    administrator can shape (pitfall #19). ``EventSettingsUpdate`` declares
+    ``outreach_event_types`` optional and ``update_event_settings`` dumps with
+    ``exclude_unset``, so an explicit ``null`` in the PATCH body is written
+    through as ``None`` — and ``settings.get(key, defaults)`` hands that ``None``
+    back, because the key is present. Every caller then iterates it: the
+    intake normalizer, the label lookup, the public ``/types/labels`` endpoint
+    and ``schedule_request``'s title builder would all raise ``TypeError``,
+    which is a 500 on two public surfaces.
+
+    A non-list stored value means "nothing usable is configured", which is what
+    the defaults are for. Entries that are not ``{"value": ..., "label": ...}``
+    dicts are dropped rather than allowed to break the caller that reads them.
+    """
     defaults = _event_settings_defaults()["outreach_event_types"]
     if org is None:
         return list(defaults)
     settings = (org.settings or {}).get("events", {})
-    return settings.get("outreach_event_types", defaults)
+    if not isinstance(settings, dict):
+        return list(defaults)
+    stored = settings.get("outreach_event_types", defaults)
+    if not isinstance(stored, list):
+        return list(defaults)
+    # An explicitly empty list is a configuration, not an absence: the
+    # department offers no outreach types, and the settings screen says so.
+    # Substituting the defaults here would make `/types/labels`, intake
+    # normalization and the form generator all behave as though five types
+    # were configured while the screen showed none. Only a *malformed* value
+    # falls back.
+    return [t for t in stored if isinstance(t, dict) and t.get("value")]
 
 
 def configured_task_ids(org: Optional[Organization]) -> set[str]:
@@ -108,11 +190,184 @@ def configured_task_ids(org: Optional[Organization]) -> set[str]:
     return {str(t.get("id")) for t in tasks if isinstance(t, dict) and t.get("id")}
 
 
+# The fixed vocabularies the requester's preference fields may hold. Unlike
+# ``outreach_event_types`` and ``outreach_roles`` these are NOT per-department
+# configurable: the model's comments, the generated form's <select> options and
+# every reader in the admin board and the public status page are all written
+# against these exact values, so a value outside them renders as a raw slug the
+# coordinator has to decode.
+DATE_FLEXIBILITIES = ("specific_dates", "general_timeframe", "flexible")
+VENUE_PREFERENCES = ("their_location", "our_station", "either")
+TIMES_OF_DAY = ("morning", "afternoon", "evening", "flexible")
+
+# app/models/event_request.EventRequest.outreach_type is String(100). A longer
+# value reaches MySQL as a DataError and surfaces to a member of the public as
+# a 500 on a form they filled in correctly.
+OUTREACH_TYPE_MAX_LENGTH = 100
+
+
+# EventRequestCreate bounds audience_size at 1..10000; the forms path maps a
+# free-text answer straight onto the column, so it needs the same bounds to
+# store the same shape.
+AUDIENCE_SIZE_MIN = 1
+AUDIENCE_SIZE_MAX = 10000
+
+
+# Column widths on app/models/event_request.EventRequest. The forms path maps
+# free text straight onto these, and the generated form leaves its text fields
+# at FormsService.MAX_TEXT_LENGTH (5000), so nothing between a member of the
+# public and MySQL enforces them.
+TEXT_FIELD_LIMITS = {
+    "contact_name": 255,
+    "contact_email": 255,
+    "contact_phone": 50,
+    "organization_name": 255,
+    "outreach_type": OUTREACH_TYPE_MAX_LENGTH,
+    "age_group": 100,
+    "preferred_timeframe": 500,
+}
+
+
+def clamp_text_fields(data: dict) -> dict:
+    """Trim mapped free text to what the columns can hold.
+
+    An over-long value is a `DataError` at flush time, which the forms path
+    reports as a failed integration — *after* the daily-allowance INCR has been
+    spent. One 256-character `contact_name` submitted repeatedly could exhaust
+    a department's whole day without storing a single request, which is the
+    same defect the audience-size parse had and the same reason it moved above
+    the counter.
+
+    Truncating rather than refusing keeps the enquiry: a name that is too long
+    for the column is still a name, and the coordinator can read the rest of
+    the request. Only the mapped keys present are touched.
+    """
+    clamped = dict(data)
+    for field, limit in TEXT_FIELD_LIMITS.items():
+        value = clamped.get(field)
+        if isinstance(value, str) and len(value) > limit:
+            clamped[field] = value[:limit]
+    return clamped
+
+
+def parse_audience_size(value: Any) -> Optional[int]:
+    """Read a requester's attendance estimate, or None when it is not a number.
+
+    The generated public form asks this as a TEXT field, so the answer is
+    whatever somebody typed. An unparseable one costs this field and nothing
+    else: the coordinator still gets the request, and the requester's own words
+    survive in ``description``.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        size = int(text)
+    except ValueError:
+        try:
+            size = int(float(text))
+        except (ValueError, OverflowError):
+            # OverflowError as well as ValueError: "1e309", "inf" and
+            # "Infinity" are all things a member of the public can type into a
+            # text box, and `float()` accepts every one of them before
+            # `int(inf)` raises — with a different exception type. Uncaught it
+            # escaped this parser's lenient contract and failed the whole
+            # integration, losing the enquiry over the one field this is
+            # supposed to be able to give up on. (`float("nan")` raises
+            # ValueError from `int()`, so it was already covered.)
+            return None
+    if size < AUDIENCE_SIZE_MIN:
+        return None
+    return min(size, AUDIENCE_SIZE_MAX)
+
+
+def _clamp_choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
+    """Settle a preference field onto one of its known values."""
+    text = str(value).strip().lower() if value is not None else ""
+    return text if text in allowed else default
+
+
+def normalize_request_preferences(
+    org: Optional[Organization],
+    data: dict,
+    form_outreach_types: Optional[Iterable[str]] = None,
+) -> dict:
+    """Settle a requester's answers onto the pipeline's canonical shapes.
+
+    Applied on **every** write path (CLAUDE.md pitfall #20): the JSON endpoint
+    validates against ``EventRequestCreate``, but the forms path maps whatever
+    a department typed into its own form options straight onto the model, so
+    without a shared write-side authority the two intakes store different
+    vocabularies for the same four questions and every reader has to tell them
+    apart.
+
+    Returns a new dict with ``outreach_type``, ``date_flexibility``,
+    ``venue_preference`` and ``preferred_time_of_day`` settled. Nothing is
+    dropped and nothing raises — a public submission is never worth losing over
+    a preference field, and the description the requester actually wrote is the
+    part the coordinator reads.
+    """
+    settled = dict(data)
+
+    outreach_type = str(settled.get("outreach_type") or "").strip()
+    configured = {t["value"] for t in get_outreach_types(org)}
+    # A published form keeps the options it was generated with, so a department
+    # that retires or renames a type leaves a live form still offering the old
+    # value — and a requester who picks it has answered the question the
+    # department asked. `form_outreach_types` is that form's own `<select>`
+    # vocabulary, which `submit_form` has already validated the answer against,
+    # so it is bounded rather than free text. Preserving it matches the
+    # accompanying migration, which leaves historical `outreach_type` values
+    # alone for this same retired-type case; rewriting it here would tell the
+    # coordinator "Other" about a request that named a real event.
+    if form_outreach_types:
+        configured |= {str(v) for v in form_outreach_types if v}
+    if outreach_type not in configured:
+        # Falling back rather than storing the unknown value keeps the board's
+        # type filter and the acknowledgement email's subject meaningful. The
+        # requester's own words survive in `description`.
+        outreach_type = "other"
+    settled["outreach_type"] = outreach_type[:OUTREACH_TYPE_MAX_LENGTH]
+
+    flexibility = _clamp_choice(
+        settled.get("date_flexibility"), DATE_FLEXIBILITIES, "flexible"
+    )
+    # "I have specific dates" with no date is not a specific request, and
+    # calling it one defeats `lead_time_error`, which only measures a request
+    # that names a date: claiming specific_dates and omitting the date walked
+    # straight past the department's minimum notice. Downgrading rather than
+    # refusing keeps a real enquiry — a requester who picked the option and
+    # then left the picker alone is asking the department to suggest a date,
+    # which is exactly what general_timeframe means.
+    # Either bound counts as a named date. The generated form asks for
+    # "Earliest Date" and "Latest Date" and requires neither, so a requester who
+    # fills only the latter has still named a date the department has to work
+    # to — downgrading that to general_timeframe both contradicts the
+    # `preferred_date_end` the row keeps and skips the lead-time gate, which
+    # `lead_time_error` only applies to a specific_dates request.
+    if flexibility == "specific_dates" and not (
+        settled.get("preferred_date_start") or settled.get("preferred_date_end")
+    ):
+        flexibility = "general_timeframe"
+    settled["date_flexibility"] = flexibility
+
+    settled["venue_preference"] = _clamp_choice(
+        settled.get("venue_preference"), VENUE_PREFERENCES, "their_location"
+    )
+    settled["preferred_time_of_day"] = _clamp_choice(
+        settled.get("preferred_time_of_day"), TIMES_OF_DAY, "flexible"
+    )
+    return settled
+
+
 def lead_time_error(
     pipeline: dict,
     date_flexibility: Optional[str],
     preferred_date_start: Optional[datetime],
     now: Optional[datetime] = None,
+    preferred_date_end: Optional[datetime] = None,
 ) -> Optional[str]:
     """Reject a request whose earliest requested date is inside the lead time.
 
@@ -132,11 +387,15 @@ def lead_time_error(
         return None
     if min_days <= 0:
         return None
-    if date_flexibility != "specific_dates" or preferred_date_start is None:
+    # The earliest date the requester named. A latest-only range is still a
+    # named date — "it has to happen by Friday" is a harder constraint than an
+    # earliest date of Friday, not a softer one — and measuring only the start
+    # let a latest acceptable date of tomorrow walk past a two-week minimum.
+    requested = preferred_date_start or preferred_date_end
+    if date_flexibility != "specific_dates" or requested is None:
         return None
 
     reference = now or datetime.now(timezone.utc)
-    requested = preferred_date_start
     if requested.tzinfo is None:
         requested = requested.replace(tzinfo=timezone.utc)
     if requested >= reference + timedelta(days=min_days):
@@ -631,7 +890,7 @@ async def get_staffing_state(
     org: Optional[Organization] = None,
 ) -> dict[str, Any]:
     """Who has signed up to cover this request, and which roles are still open."""
-    from app.models.training import AssignmentStatus, Shift, ShiftAssignment
+    from app.models.training import AssignmentStatus, ShiftAssignment
 
     empty = {
         "shift_id": None,
@@ -645,15 +904,18 @@ async def get_staffing_state(
     if not event_request.staffing_shift_id:
         return empty
 
-    shift = await db.scalar(
-        select(Shift).where(
-            Shift.id == event_request.staffing_shift_id,
-            Shift.organization_id == str(event_request.organization_id),
-        )
-    )
+    # A cancelled sheet is reported as absent, the same rule
+    # `open_request_staffing` and `sync_staffing_shift_date` apply. The read has
+    # to agree with them or the write is unreachable: `EventRequestsTab` offers
+    # "Open Signups" only while `shift_id` is null and otherwise renders the
+    # sheet, so a non-null id for a cancelled shift left the coordinator looking
+    # at a stood-down sheet with no way to open a replacement.
+    #
+    # A deleted shift answers "no sheet" for the same reason — the FK is SET
+    # NULL so it is only reachable in-flight, but answering beats raising at the
+    # coordinator.
+    shift = await get_live_staffing_shift(db, event_request)
     if shift is None:
-        # The shift was deleted; the FK is SET NULL so this is only reachable
-        # in-flight, but answering "no sheet" beats raising at the coordinator.
         return empty
 
     rows = await db.execute(
@@ -1044,6 +1306,35 @@ async def sync_staffing_shift_cancelled(
         )
 
 
+async def get_live_staffing_shift(
+    db: AsyncSession, event_request: EventRequest
+) -> Optional[Any]:
+    """The signup sheet this request is linked to, when it is still standing.
+
+    A **cancelled** sheet is reported as absent, for the same reason
+    ``schedule_request`` treats a cancelled calendar entry as absent: its
+    assignments were cancelled and the crew told, and members can no longer see
+    or join it. Reporting it as present is what tied a rescheduled request to a
+    sheet nobody could sign up for — ``sync_staffing_shift_date`` moved the
+    cancelled shift's dates without restoring its status, and
+    ``open_request_staffing`` then refused to open a replacement because the
+    link was non-null.
+    """
+    if not event_request.staffing_shift_id:
+        return None
+    from app.models.training import Shift, ShiftStatus
+
+    shift = await db.scalar(
+        select(Shift).where(
+            Shift.id == event_request.staffing_shift_id,
+            Shift.organization_id == str(event_request.organization_id),
+        )
+    )
+    if shift is None or shift.status == ShiftStatus.CANCELLED:
+        return None
+    return shift
+
+
 async def sync_staffing_shift_date(
     db: AsyncSession,
     event_request: EventRequest,
@@ -1055,18 +1346,16 @@ async def sync_staffing_shift_date(
     A postponed-and-rescheduled request whose shift stayed put is worse than no
     sheet at all: the crew that signed up is booked for the old time and the new
     one has nobody. Members keep their seats — the event moved, not the roster.
+
+    A sheet that was stood down is left alone: moving a cancelled shift's dates
+    would not bring it or its assignments back, and the coordinator opens a
+    fresh one instead.
     """
     if not event_request.staffing_shift_id or not event_request.event_date:
         return
-    from app.models.training import Shift
 
     try:
-        shift = await db.scalar(
-            select(Shift).where(
-                Shift.id == event_request.staffing_shift_id,
-                Shift.organization_id == str(event_request.organization_id),
-            )
-        )
+        shift = await get_live_staffing_shift(db, event_request)
         if shift is None or shift.is_finalized:
             return
 
@@ -1100,6 +1389,257 @@ async def sync_staffing_shift_date(
         logger.warning(
             "Could not move staffing shift {} for request {}: {}",
             event_request.staffing_shift_id,
+            event_request.id,
+            e,
+        )
+
+
+# ============================================
+# Calendar event — the tie-in to the events module
+# ============================================
+
+
+async def get_linked_calendar_event(
+    db: AsyncSession, event_request: EventRequest
+) -> Optional[Any]:
+    """The calendar Event this request is linked to, if there is one.
+
+    Returned whatever its state; a caller that needs a *live* entry checks
+    ``is_cancelled`` itself, because "there is no entry" and "the entry was
+    stood down" lead to different decisions at every call site.
+
+    Org-scoped even though the id was stored by this pipeline: a request row
+    edited by any other path must not be able to reach another department's
+    event through the link (CLAUDE.md pitfall #14a).
+    """
+    if not event_request.event_id:
+        return None
+    from app.models.event import Event
+
+    return await db.scalar(
+        select(Event).where(
+            Event.id == str(event_request.event_id),
+            Event.organization_id == str(event_request.organization_id),
+        )
+    )
+
+
+def resolve_confirmed_end(
+    start: datetime,
+    explicit_end: Optional[datetime],
+    existing_event: Optional[Any],
+    org: Optional[Organization],
+) -> datetime:
+    """The confirmed end for a date the coordinator just set.
+
+    Four surfaces read a request's end — the calendar entry, the volunteer
+    signup sheet, the reminder emails and the public status page — and three of
+    them have their own fallback when the request carries none:
+    ``open_staffing_shift`` and ``sync_staffing_shift_date`` assume two hours,
+    ``sync_calendar_event_date`` preserves the linked event's own span. Left to
+    themselves they answer differently for the same outreach event, so every
+    path that sets a confirmed date resolves the end **here** and stores it,
+    making the request the one authority (CLAUDE.md pitfall #29).
+
+    Precedence: what the coordinator typed, then the length the linked calendar
+    entry already had, then the department's default event length.
+    """
+    if explicit_end:
+        return explicit_end
+    if existing_event is not None and not getattr(
+        existing_event, "is_cancelled", False
+    ):
+        span = existing_event.end_datetime - existing_event.start_datetime
+        if span > timedelta(0):
+            return start + span
+    return start + timedelta(minutes=event_duration_minutes(org))
+
+
+async def sync_calendar_event_date(
+    db: AsyncSession,
+    event_request: EventRequest,
+    actor_id: Optional[str],
+    location_id: Optional[str] = None,
+) -> Optional[str]:
+    """Move the calendar event when its request's confirmed date changes.
+
+    ``schedule_request`` puts the outreach event on the department calendar and
+    nothing moved it afterwards, so a request postponed and rescheduled left the
+    crew reading the old date off the calendar while the pipeline, the requester's
+    email and the staffing shift all carried the new one. The calendar is the
+    surface most members actually look at, which makes it the worst of the four
+    to leave stale.
+
+    Never raises into the caller, for the same reason ``sync_staffing_shift_date``
+    does not: the request has already been rescheduled, and failing that write to
+    report a calendar problem leaves the pipeline in a worse state than the stale
+    entry does.
+
+    **Returns a reason string when the move was refused for a reason the
+    coordinator can act on**, and ``None`` when it moved or there was nothing to
+    move. ``EventService.update_event`` raises ``ValueError`` for a room
+    double-booking and for a finalized event — decisions, not faults — and
+    swallowing those as a log line is what let a postponement commit a new date,
+    move the signup sheet, and report success while the calendar stayed where it
+    was. An infrastructure failure is still only logged; a caller that can turn a
+    refusal into a 409 should.
+    """
+    if not event_request.event_id or not event_request.event_date:
+        return None
+    from uuid import UUID
+
+    from app.schemas.event import EventUpdate
+    from app.services.event_service import EventService
+
+    try:
+        event = await get_linked_calendar_event(db, event_request)
+        if event is None or event.is_cancelled:
+            return None
+
+        start = event_request.event_date
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        end = event_request.event_end_date
+        if end is None:
+            # The coordinator set this entry's length once; moving it to another
+            # date is not a reason to change it. `EventUpdate` refuses an end at
+            # or before the start, so a degenerate stored window (which the
+            # pre-2026-09-09 create path could produce) falls back to the
+            # shipped default length rather than failing the move — the
+            # organization is not loaded on this path, and a fallback for a
+            # window that should not exist does not justify a query for it.
+            span = event.end_datetime - event.start_datetime
+            if span <= timedelta(0):
+                span = timedelta(minutes=event_duration_minutes(None))
+            end = start + span
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+
+        # A room the coordinator picked on this save counts as a change even
+        # when the times did not move: `schedule_request` stores the new
+        # `event_location_id` on the request before reaching here, so returning
+        # early would leave the request and its activity row naming one room
+        # and the calendar entry still sitting in the old one.
+        room_move = bool(location_id) and str(
+            getattr(event, "location_id", None) or ""
+        ) != str(location_id)
+        if (
+            event.start_datetime == start
+            and event.end_datetime == end
+            and not room_move
+        ):
+            return None
+
+        # Built before the try below, not inside it: argument evaluation
+        # counts as being in the block, so a malformed id would raise the same
+        # ValueError the room-conflict handler is looking for and be reported
+        # to the coordinator as a conflict they could act on.
+        event_uuid = UUID(str(event_request.event_id))
+        org_uuid = UUID(str(event_request.organization_id))
+        actor_uuid = UUID(actor_id) if actor_id else None
+        update_fields: dict = {"start_datetime": start, "end_datetime": end}
+        # Omitted rather than sent as None when the caller named no room: an
+        # update payload's absent key means "leave this alone" (CLAUDE.md
+        # pitfall #1), and a postponement must not clear the room the entry
+        # already had.
+        if location_id:
+            update_fields["location_id"] = str(location_id)
+        try:
+            await EventService(db).update_event(
+                event_id=event_uuid,
+                organization_id=org_uuid,
+                event_data=EventUpdate(**update_fields),
+                updated_by=actor_uuid,
+            )
+        except ValueError as refusal:
+            # Scoped to this call on purpose. A blanket `except ValueError`
+            # around the whole body would also catch, say, a malformed id from
+            # `UUID(...)` and report an internal fault to the coordinator as a
+            # room conflict they could act on.
+            logger.info(
+                "Calendar event {} refused the move for request {}: {}",
+                event_request.event_id,
+                event_request.id,
+                refusal,
+            )
+            return str(refusal)
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="calendar_event_rescheduled",
+                notes=(
+                    "Moved the calendar event to the new room"
+                    if room_move and event.start_datetime == start
+                    else "Moved the calendar event to the new date"
+                ),
+                details={
+                    "event_id": str(event_request.event_id),
+                    "start_datetime": start.isoformat(),
+                    "location_id": str(location_id) if location_id else None,
+                },
+                performed_by=actor_id,
+            )
+        )
+        return None
+    except Exception as e:
+        logger.warning(
+            "Could not move calendar event {} for request {}: {}",
+            event_request.event_id,
+            event_request.id,
+            e,
+        )
+        return None
+
+
+async def sync_calendar_event_cancelled(
+    db: AsyncSession,
+    event_request: EventRequest,
+    actor_id: Optional[str],
+    reason: Optional[str] = None,
+) -> None:
+    """Cancel the calendar event when its request is called off or loses its date.
+
+    Declining, cancelling, or postponing to a date TBD already stands the
+    staffing shift down; the calendar entry stayed, so the department kept an
+    outreach event on its schedule for something nobody was running. The link is
+    deliberately left in place afterwards — a coordinator asking "what happened
+    to that school visit" is served by the cancelled event and its reason, not by
+    a dangling reference to nothing.
+
+    Never raises into the caller, matching ``sync_staffing_shift_cancelled``.
+    """
+    if not event_request.event_id:
+        return
+    from uuid import UUID
+
+    from app.services.event_service import EventService
+
+    try:
+        event = await get_linked_calendar_event(db, event_request)
+        if event is None or event.is_cancelled:
+            return
+
+        await EventService(db).cancel_event(
+            event_id=UUID(str(event_request.event_id)),
+            organization_id=UUID(str(event_request.organization_id)),
+            reason=reason or "The outreach event this covered was cancelled.",
+            send_notifications=True,
+        )
+        db.add(
+            EventRequestActivity(
+                request_id=event_request.id,
+                action="calendar_event_cancelled",
+                notes="Cancelled the calendar event",
+                details={"event_id": str(event_request.event_id)},
+                performed_by=actor_id,
+            )
+        )
+    except Exception as e:
+        # An event whose attendance is already finalized refuses cancellation —
+        # it happened and credited hours. Leaving it standing is correct there.
+        logger.warning(
+            "Could not cancel calendar event {} for request {}: {}",
+            event_request.event_id,
             event_request.id,
             e,
         )

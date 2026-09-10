@@ -479,9 +479,20 @@ class TestScheduling:
                 event_date=start, event_end_date=start - timedelta(hours=2)
             )
 
-    def test_an_equal_end_is_allowed(self):
+    def test_an_equal_end_is_rejected(self):
+        """Deliberate change of behaviour (2026-09-10).
+
+        This asserted the opposite, and the opposite was a defect: a
+        zero-length window is refused by `EventCreate` and `EventUpdate` alike,
+        and `schedule_request` builds `EventCreate` outside an exception
+        handler — so what this test called "allowed" reached the coordinator as
+        a 500. It also overlaps nothing, so the room double-booking check
+        waved it through on the way there. Refusing it here makes it a 422 at
+        the boundary, and matches `EventRequestPostpone`.
+        """
         start = datetime.now(timezone.utc) + timedelta(days=30)
-        assert EventRequestSchedule(event_date=start, event_end_date=start)
+        with pytest.raises(ValidationError):
+            EventRequestSchedule(event_date=start, event_end_date=start)
 
 
 class TestStaffing:
@@ -541,9 +552,15 @@ def _rows_result(rows):
     return SimpleNamespace(all=lambda: list(rows))
 
 
-def _shift(positions=None):
+def _shift(positions=None, status=None):
+    from app.models.training import ShiftStatus
+
     return SimpleNamespace(
         id="shift-9",
+        # A real shift always carries one, and the staffing read now consults it
+        # — a cancelled sheet reports as no sheet.
+        status=status or ShiftStatus.SCHEDULED,
+        is_finalized=False,
         start_time=datetime.now(timezone.utc),
         positions=(
             positions
@@ -1266,12 +1283,15 @@ class TestStaffingLifecycle:
 
     @pytest.mark.asyncio
     async def test_a_new_date_moves_the_sheet_and_keeps_the_crew(self):
+        from app.models.training import ShiftStatus
+
         request = _request_row(
             staffing_shift_id="shift-9",
             event_date=datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc),
         )
         shift = SimpleNamespace(
             id="shift-9",
+            status=ShiftStatus.SCHEDULED,
             is_finalized=False,
             shift_date=date(2026, 9, 12),
             start_time=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
@@ -1289,12 +1309,15 @@ class TestStaffingLifecycle:
     @pytest.mark.asyncio
     async def test_a_finalized_sheet_is_left_alone(self):
         """Its data is locked for hours and training credit."""
+        from app.models.training import ShiftStatus
+
         request = _request_row(
             staffing_shift_id="shift-9",
             event_date=datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc),
         )
         shift = SimpleNamespace(
             id="shift-9",
+            status=ShiftStatus.SCHEDULED,
             is_finalized=True,
             shift_date=date(2026, 9, 12),
             start_time=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
