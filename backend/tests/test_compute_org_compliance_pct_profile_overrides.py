@@ -85,7 +85,9 @@ async def _active_member(db_session, org) -> User:
     return user
 
 
-async def _annual_hours_requirement(db_session, org) -> TrainingRequirement:
+async def _annual_hours_requirement(
+    db_session, org, **overrides
+) -> TrainingRequirement:
     """An HOURS requirement with no records filed against it anywhere —
     a member graded against it is 0% complete."""
     req = TrainingRequirement(
@@ -98,6 +100,7 @@ async def _annual_hours_requirement(db_session, org) -> TrainingRequirement:
         due_date_type=DueDateType.CALENDAR_PERIOD,
         applies_to_all=True,
         active=True,
+        **overrides,
     )
     db_session.add(req)
     await db_session.flush()
@@ -221,3 +224,55 @@ class TestThresholdOverrideAppliesRegardlessOfRequiredList:
         # 0% complete against the org's one requirement, but the profile's
         # 0% compliant-threshold override means even 0% passes.
         assert pct == 100.0
+
+
+class TestMembershipTypeExclusion:
+    """get_compliance_matrix (training.py) drops a requirement from a
+    member's denominator whenever `required_membership_types` is set and the
+    member's own type isn't in it. `compute_org_compliance_pct` — which feeds
+    the dashboard percentage the matrix links from — evaluated every
+    profile-selected requirement regardless, so a membership-scoped
+    requirement the matrix correctly excludes could still fail the member
+    here: the two screens describing the same member disagreeing, the exact
+    shape CLAUDE.md Pitfall #29 exists to prevent. Caught by a Codex review
+    of TR-17 pass 4 (PR #2455) after that pass's own findings file first
+    (wrongly) reported this as a shared definition with no remaining drift.
+    """
+
+    async def test_requirement_restricted_to_another_membership_type_is_excluded(
+        self, db_session
+    ):
+        """An `active` member is not graded against a requirement scoped to
+        `reserve` only — without the fix this unmet requirement drags the
+        member to 0%, even though the matrix would never show it to them."""
+        org = await _org(db_session)
+        member = await _active_member(db_session, org)
+        assert member.organization_id == org.id
+        await _annual_hours_requirement(
+            db_session, org, required_membership_types=["reserve"]
+        )  # scoped away from `member`; unmet if it counted
+
+        pct = await compute_org_compliance_pct(db_session, org.id)
+
+        # The requirement never applies to this member, so their denominator
+        # is empty and they are trivially fully compliant — matching
+        # get_compliance_matrix's own `continue` for the same case.
+        assert pct == 100.0
+
+    async def test_requirement_restricted_to_the_members_own_type_still_counts(
+        self, db_session
+    ):
+        """The other direction, so the test above cannot pass by excluding
+        every requirement regardless of type: a requirement scoped to the
+        member's own membership type is still graded (and, being unmet,
+        still fails them)."""
+        org = await _org(db_session)
+        member = await _active_member(db_session, org)
+        assert member.organization_id == org.id
+        await _annual_hours_requirement(
+            db_session, org, required_membership_types=["active"]
+        )  # scoped to `member`'s own type; unmet
+
+        pct = await compute_org_compliance_pct(db_session, org.id)
+
+        assert pct == 0.0

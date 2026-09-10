@@ -1162,7 +1162,16 @@ training.py`, so the one write path that could otherwise fan out an
 
 ---
 
-## Pass 4 (2026-09-10) — 0 fixes, 0 new flags; re-verification + review of the compliance-matrix redesign
+## Pass 4 (2026-09-10) — 1 fix, 2 flagged; re-verification + review of the compliance-matrix redesign
+
+> **Correction (Codex review of PR #2455).** This section's first draft
+> claimed "0 fixes, 0 new flags" and described the matrix and the dashboard
+> percentage as sharing "one definition" with no remaining drift. Both
+> claims were wrong. Codex found a genuine, still-live cross-screen
+> disagreement the draft's own review missed, plus a second, distinct
+> abuse-resistance gap in the same endpoint TR2-4 does not cover. The
+> section below is the corrected one; see TR4-1/TR4-2/TR4-3 for the three
+> findings this correction adds.
 
 **Scope check:** diffed the seven declared files against `0d1f92c41` (the
 pass-3/round-6 merge, PR #2222). Five are byte-for-byte unchanged:
@@ -1253,26 +1262,125 @@ of both changed files, not just the description:
   frontend pattern** (`window.confirm`/`alert`/`prompt`,
   `dangerouslySetInnerHTML`) in `ComplianceMatrixTab.tsx` or
   `complianceMatrixModel.ts`.
-- **Abuse resistance unchanged from pass 1-3's own review of this
-  function's shape**: still an org-wide, unpaginated scan of active
-  members/requirements/records, same class already covered by TR2-4's flag
-  against the sibling dashboard-summary endpoint (bounded by department
-  size, not by member training history — the distinction pass 2's own
-  "Verified good" section already draws). Not a new finding; this pass did
-  not re-flag it separately since it is the same pre-existing shape, not a
-  behavior this diff changed.
+- **Abuse resistance — wrong the first time this section was written.** The
+  first draft called `get_compliance_matrix`'s unpaginated scan "bounded by
+  department size, not by member training history," reusing pass 2's
+  reasoning for a _different_ endpoint's _configuration-data_ queries
+  (courses/categories/requirements). That reasoning does not transfer: this
+  endpoint's own `TrainingRecord` query (`training.py:2789-2796`) has no
+  date or row bound and grows with the org's complete training history, the
+  same shape TR2-4 already names for the sibling dashboard-summary endpoint
+  — a distinct, separately-callable scan TR2-4 does not cover. See TR4-2.
+- **The "share one definition" claim was also wrong.** `classify_standing`
+  unifies the compliant/at-risk/non-compliant _threshold_ logic, but not
+  _which requirements count_ — `get_compliance_matrix` excludes a
+  requirement scoped to a `required_membership_types` list the member
+  doesn't belong to, per-member, inside its own loop; `compute_org_
+compliance_pct` did not apply that same exclusion to the requirement list
+  it hands to `_evaluate_member_compliance`. See TR4-1 (fixed) and TR4-3
+  (the third, still-diverging endpoint, flagged).
 
-**No findings this pass.** The redesign's own three Codex review rounds
-already caught and fixed the two real bugs above before this pass read the
-code; nothing further surfaced against any of the seven checklist
-dimensions.
+## Findings (pass 4)
+
+### TR4-1 — LOW/MED (data correctness, Pitfall #29) — `compute_org_compliance_pct` graded a member against a requirement scoped to another membership type — ✅ FIXED
+
+**Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix`
+excludes a requirement from a member's denominator whenever
+`req.required_membership_types` is set and the member's own
+`membership_type` isn't in it (`training.py:2863-2867`, unchanged since
+before this rotation). `compute_org_compliance_pct` — which feeds the
+dashboard percentage the matrix links from — passed its profile-selected
+`member_reqs` straight to `_evaluate_member_compliance` with no equivalent
+filter, so a membership-scoped requirement the matrix correctly hides from
+a member could still be evaluated (and, having no applicable records,
+typically reported `not_started`) against that same member on the
+dashboard.
+
+**Where:** `app/services/training_compliance.py` —
+`compute_org_compliance_pct`'s per-member loop, before the call to
+`_evaluate_member_compliance`.
+
+**Failure scenario:** an org configures a requirement restricted to
+`required_membership_types=["reserve"]`. An `active`-type member is shown
+100% on the compliance matrix for that requirement's absence from their row
+(correct — it was never asked of them) while the dashboard's org-wide
+compliance percentage counts them as failing it — the exact "two screens
+disagreeing about the same member" shape Pitfall #29 exists to name. This
+predates the compliance-matrix redesign entirely (`compute_org_compliance_
+pct`'s member loop was untouched by that diff — confirmed via `git diff
+0d1f92c41 HEAD`) and was never caught by pass 1-3, which reviewed the
+matrix and the dashboard percentage's threshold/profile logic but not
+whether their requirement _selection_ actually agreed.
+
+**Impact:** LOW/MED. Not a tenant-isolation or auth defect, and not a
+crash — a same-org, membership-type-scoped correctness gap that
+understates a department's real compliance percentage whenever any
+requirement is membership-restricted, which the "Verified good" precedent
+this same file's CMP2-3 fix established as a real, previously-exploited
+configuration shape.
+
+**Fix:** filters `member_reqs` by the same `required_membership_types`
+check as `get_compliance_matrix`, applied after profile-narrowing (matching
+the matrix's own ordering) and before the compliance evaluation call.
+Guard tests: `tests/test_compute_org_compliance_pct_profile_overrides.py::
+TestMembershipTypeExclusion` (2 tests — a requirement restricted to another
+membership type is excluded; one restricted to the member's own type still
+counts, so the fix cannot pass by excluding everything). The first test
+confirmed failing (`0.0` instead of `100.0`) against the pre-fix code via
+`git stash` on `training_compliance.py` alone.
+
+### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — 🚩 FLAGGED
+
+**Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix`
+loads every active member, requirement, and `TrainingRecord` for the org
+with no date or row bound (`training.py:2789-2796`) — the identical shape
+TR2-4 already flags for `get_training_dashboard_summary`, but a separately
+callable endpoint sharing no code path with it. Bounding TR2-4's endpoint
+would leave this one exactly as unbounded as before.
+
+**Not fixed:** same reasoning as TR2-4 — needs the query itself bounded to
+what each requirement's date window actually uses, or a set-based/aggregate
+redesign entangled with `evaluate_member_requirement_detail`'s per-
+requirement window correctness, not a safe drive-by alongside this pass's
+own doc-only diff. Mirrored into `docs/KNOWN_LIMITATIONS.md` as its own
+entry (not folded into TR2-4's, since fixing TR2-4 would not fix this).
+
+**Impact:** LOW — same-org, `training.manage`-gated, and bounded by
+department size on the member/requirement axes even though the record axis
+is not; same abuse-resistance class as TR2-2/TR2-4/TR3-2.
+
+### TR4-3 — LOW/MED (Pitfall #29) — Three endpoints, three different definitions of "compliant" — 🚩 FLAGGED
+
+**Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix` and
+`compute_org_compliance_pct` (after TR4-1's fix) now agree on both which
+requirements count and how the threshold is applied. `get_training_
+dashboard_summary` — which backs the "Department Compliance" card that
+links directly into the matrix — is a third, independent implementation
+that ignores compliance profiles and configured thresholds entirely: every
+membership-applicable requirement counts, and 100% of them must be met,
+with no percentage tier and no at-risk state (`training.py:168-193`,
+`if not unmet: compliant += 1`). An org running any compliance profile with
+a narrowed requirement list, a non-100% compliant threshold, or an at-risk
+tier will see this card disagree with both the matrix and the dashboard
+percentage.
+
+**Not fixed:** this is pre-existing (outside this pass's diff entirely) and
+larger than a drive-by — it is a product decision about which of three
+currently-different definitions the summary card should adopt, not a bug
+with one obviously-correct fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Impact:** LOW/MED — same-org, `training.manage`-gated; a correctness/
+trust gap (a chief-facing summary card that can read differently from the
+detail screen it links to) rather than a security boundary.
 
 ## Completion gate (pass 4)
 
-Documentation-only change (this pass added no code, only this findings file
-and `PROGRESS.md`) — per CLAUDE.md's "Match the Verification to the Change,"
-no local suite re-run was required. Confirmed instead by direct inspection
-that the diffed code exists as described and that flake8/black/isort/tsc/
-eslint all remain the responsibility of the (already-merged, already-CI-
-green) compliance-matrix commits reviewed above, not of this pass's own
-(zero-line) code diff.
+| Check                                                                                                   | Result                                               |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/services/training_compliance.py tests/test_compute_org_compliance_pct_profile_overrides.py` | ✅ 0 violations                                      |
+| `black --check` (same files)                                                                            | ✅ clean (one file reformatted, then re-verified)    |
+| `isort --check-only` (same files)                                                                       | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 441 revisions, single head (no schema change)     |
+| `pytest tests/ -q -k "training or compliance"`                                                          | ✅ 1121 passed, 1 skipped (pre-existing)             |
+| `pytest tests/ -q` (full backend suite)                                                                 | ✅ 12068 passed, 21 skipped (pre-existing), 0 failed |
+| `cd frontend && npm run typecheck` / `npm run lint`                                                     | n/a — no frontend file touched this pass             |

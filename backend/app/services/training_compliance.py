@@ -924,6 +924,23 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
                 if profile.at_risk_threshold_override is not None:
                     member_at_risk_threshold = profile.at_risk_threshold_override
 
+        # A requirement restricted to another membership type is not in this
+        # member's denominator. get_compliance_matrix (training.py) already
+        # applies this same exclusion per-member; without it here, a member
+        # holding a membership-scoped requirement they don't belong to was
+        # graded against it anyway — evaluate_member_requirement almost always
+        # reports "not_started" for a requirement that was never meant to
+        # apply, so this dashboard percentage could disagree with the matrix
+        # for the exact member/requirement pair it's supposed to describe the
+        # same way.
+        member_membership_type = member.membership_type or "active"
+        member_reqs = [
+            req
+            for req in member_reqs
+            if not req.required_membership_types
+            or member_membership_type in req.required_membership_types
+        ]
+
         status, _ = _evaluate_member_compliance(
             member_reqs,
             member_records,

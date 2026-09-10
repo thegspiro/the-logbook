@@ -18,18 +18,31 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 17 (Training core), pass 4** — PR
 [#2455](https://github.com/thegspiro/the-logbook/pull/2455), branch
-`claude/security-review-training-core-pass4`. 0 fixes,
-0 new flags: diffed the seven declared files against the pass-3 merge
-(`0d1f92c41`) and found only two changed (`training.py`,
-`training_compliance.py`), both from one non-security-review feature branch
-("Redesign the compliance matrix as a triage queue," already through three
-rounds of its own Codex review). Read that diff in full against all seven
-checklist dimensions — org scoping, permission gate, and abuse-resistance
-shape are all unchanged from pass 1-3's own review of this endpoint; the
-two real bugs the redesign fixed along the way (a broken `role_id`/`id`
-profile-matching lookup, and a `MissingGreenlet` crash from an un-eager-
-loaded `positions` relationship) were pre-existing, not introduced by it.
-Full write-up: `docs/security-review/TR-17-training-core.md` → Pass 4. Next:
+`claude/security-review-training-core-pass4`. 1 fix, 2 flagged. This
+pass's own first draft claimed 0 fixes/0 flags after diffing the seven
+declared files against the pass-3 merge (`0d1f92c41`) and reading the only
+two real changes (`training.py`, `training_compliance.py`, both from one
+non-security-review feature branch — "Redesign the compliance matrix as a
+triage queue") — **a Codex review of the PR caught two real gaps that
+draft missed**, both corrected on the same PR rather than left standing:
+**TR4-1** (fixed) — `compute_org_compliance_pct` graded a member against a
+requirement scoped to a `required_membership_types` list they don't belong
+to, something `get_compliance_matrix` already excludes per-member; a
+membership-scoped requirement could fail a member on the dashboard
+percentage while the matrix correctly never showed it to them. Fixed by
+applying the same exclusion to `compute_org_compliance_pct`'s per-member
+requirement list, with 2 new guard tests (one confirmed failing pre-fix).
+**TR4-2** (flagged) — the matrix endpoint has its own unbounded
+`TrainingRecord` scan, distinct from TR2-4's dashboard-summary finding
+(no shared code path; fixing one would not fix the other). **TR4-3**
+(flagged) — a third endpoint, `get_training_dashboard_summary`, uses a
+third, independent definition of "compliant" (ignores compliance profiles
+and thresholds entirely), so the "Department Compliance" card it backs can
+disagree with both the matrix and the dashboard percentage; a product
+decision, not a drive-by fix. Full completion gate green: flake8/black/
+isort clean; migrations validated (no schema change); training/compliance-
+scoped and full backend suites pass. Full write-up:
+`docs/security-review/TR-17-training-core.md` → Pass 4 (corrected). Next:
 tend #2455 to green, then Feature 18 (Training extended).
 
 <details>

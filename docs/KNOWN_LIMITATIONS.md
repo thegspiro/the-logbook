@@ -3105,6 +3105,63 @@ scan, so the ceiling is one member's training history rather than the whole
 department's. (Security review TR-17 pass 3,
 `docs/security-review/TR-17-training-core.md`, TR3-2.)
 
+## Training — The Compliance Matrix Has Its Own Unbounded Record Scan (2026-09-10)
+
+`get_compliance_matrix` (`app/api/v1/endpoints/training.py`) loads every
+active `User`, every active `TrainingRequirement`, and every `TrainingRecord`
+belonging to those users for the org, with no date bound or row limit — the
+same shape as `get_training_dashboard_summary`, but a separately callable
+endpoint. TR2-4 (above) documents only the dashboard-summary endpoint;
+bounding that one would leave this matrix scan untouched, since the two
+share no code path. First reported by a Codex review of TR-17 pass 4
+(`docs/security-review/TR-17-training-core.md`, PR #2455), whose own initial
+draft had incorrectly described this endpoint as bounded by department size
+rather than by the department's complete training-record history.
+
+Not fixed here: same reasoning as TR2-4 — closing it needs the query itself
+bounded to what each requirement's date window actually needs, or a move to
+set-based/aggregate evaluation, entangled with `evaluate_member_requirement_
+detail`'s per-requirement window correctness rather than a safe drive-by
+change alongside a documentation-only pass. (Security review TR-17 pass 4,
+TR4-2.)
+
+## Training — The Compliance Matrix, Dashboard Percentage, and Dashboard Summary Use Three Different Definitions of "Compliant" (2026-09-10)
+
+Three endpoints each compute a member's training-compliance standing, and as
+of this writing they can disagree about the same member:
+
+- `get_compliance_matrix` and `compute_org_compliance_pct`
+  (`training_compliance.py`) share `classify_standing` and both honor a
+  compliance profile's `required_requirement_ids`/threshold overrides — but
+  see the fix below, this pair still needed a second, independent
+  correction to actually agree.
+- `get_training_dashboard_summary` — which backs the "Department Compliance"
+  card that links directly into the matrix — ignores compliance profiles and
+  configured thresholds entirely: it always grades a member against every
+  membership-applicable requirement, and always requires 100% of them met
+  (`if not unmet: compliant += 1`, no percentage/at-risk tier at all). An org
+  that configures a compliance profile with a narrowed requirement list, a
+  non-100% compliant threshold, or an `at_risk` tier sees the summary card
+  disagree with both the matrix and the dashboard percentage it feeds.
+
+Also found and fixed in the same pass: `compute_org_compliance_pct` graded a
+member against every profile-selected requirement without excluding one
+scoped to a `required_membership_types` list the member doesn't belong to —
+`get_compliance_matrix` already excludes these — so a membership-scoped
+requirement could fail a member on the dashboard percentage while the
+matrix correctly never showed it to them at all. Fixed by applying the same
+`required_membership_types` filter to `compute_org_compliance_pct`'s
+per-member requirement list, mirroring the matrix's own `continue`. Guard
+tests: `tests/test_compute_org_compliance_pct_profile_overrides.py::
+TestMembershipTypeExclusion`.
+
+**Not fixed:** making `get_training_dashboard_summary` profile/threshold-aware
+is a larger, product-level question — which of the three currently-different
+definitions the "Department Compliance" card should actually use — not a
+safe drive-by alongside the membership-type fix above. First reported by a
+Codex review of TR-17 pass 4 (`docs/security-review/TR-17-training-core.md`,
+PR #2455). (Security review TR-17 pass 4, TR4-3.)
+
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
 `POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and
