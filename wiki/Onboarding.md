@@ -264,6 +264,7 @@ The surface, so it is visible at a glance:
 | Security preconditions           | `GET /api/v1/onboarding/security-check`                            |
 | Database reachability            | `GET /api/v1/onboarding/database-check`                            |
 | Create the organization          | `POST /api/v1/onboarding/session/organization`                     |
+| Read back a resumable session    | `GET /api/v1/onboarding/session/data`                              |
 | Create the System Owner          | `POST /api/v1/onboarding/system-owner`                             |
 | Enable modules                   | `POST /api/v1/onboarding/modules`                                  |
 | Email configuration              | `POST /api/v1/onboarding/session/email`                            |

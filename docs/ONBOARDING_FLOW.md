@@ -1071,6 +1071,7 @@ to document an organization body the route had stopped accepting.
 | `POST /onboarding/complete`                                              | `{ message, organization, admin_user, completed_at, next_steps }`                                                                                                                                                                                                                                      |
 | `POST /onboarding/session/roles`                                         | `RolesSetupResponse`                                                                                                                                                                                                                                                                                   |
 | `POST /onboarding/session/positions`                                     | `PositionsSetupResponse`                                                                                                                                                                                                                                                                               |
+| `GET /onboarding/session/data`                                           | `{ session_id, expires_at, data }` — no response model; `data` is a **sanitised** subset (see Read Session Data). Unusually for a read, it requires the `X-CSRF-Token` header as well as `X-Session-ID`                                                                                                |
 | `POST /onboarding/test/email`                                            | `EmailTestResponse` — `success`, `message`, `details?`. Tests the connection without saving anything, and is rate-limited on its own scope so a department retrying it while fixing an SMTP typo cannot lock itself out of `/system-owner`                                                             |
 | every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                                                                                                                                   |
 | `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                                                                                                                                                |
@@ -1091,6 +1092,65 @@ POST /api/v1/onboarding/start
 ```
 
 Initializes onboarding tracking.
+
+### Read Session Data
+
+```
+GET /api/v1/onboarding/session/data
+```
+
+Returns what a resumable session already holds. It is the router's only GET over
+session state — the other four read system, security and database status.
+
+**Nothing in the frontend calls it.** A repo-wide search of
+`frontend/src/modules/onboarding/` finds no reference to the path and no
+`getSessionData` on the API client; the wizard restores a refreshed step from its
+persisted Zustand store instead. So this route exists for API consumers, and its
+behaviour is not exercised by the screens.
+
+**It requires `X-CSRF-Token` as well as `X-Session-ID`**, which is unusual for a
+GET and easy to miss: `get_session_data` calls `validate_session(request, db)`
+without overriding `require_csrf`, whose default is `True`. A caller who sends
+only the session id gets a 403 (`AUTH_CSRF_INVALID`), not a 401, so the error
+does not point at the missing header.
+
+There is no response model. The shape is:
+
+```json
+{
+  "session_id": "...",
+  "expires_at": "2026-09-10T19:30:00+00:00",
+  "data": {
+    "department": {
+      "name": "...",
+      "logo": "...",
+      "navigation_layout": "...",
+      "saved_at": "..."
+    },
+    "email": { "platform": "gmail", "configured": true },
+    "file_storage": { "platform": "s3", "configured": true },
+    "auth": { "platform": "local", "saved_at": "..." },
+    "it_team": { "members_count": 2, "has_backup_access": true },
+    "modules": { "...": true }
+  }
+}
+```
+
+Every key inside `data` is omitted when the corresponding step has not been
+saved, so an early-stage session returns `"data": {}`.
+
+**`data` is sanitised, but not uniformly — each section is treated differently.** For
+`email` and `file_storage` only the platform name is returned, plus a
+`configured: true` that reports the section's _presence_ rather than its
+validity — a skipped file-storage step stores `{}` and still comes back
+`configured: true`. `auth` and `modules` are returned in full; that is safe
+because `save_auth_config` stores only `{platform, saved_at}` and never the
+Authentik or OAuth secrets. `department`, including the base64 logo, is returned
+in full. The IT team is reduced to a count and a boolean, so the contact details
+`/complete` later persists are never readable back.
+
+It reads `session.data` and nothing else, so what it reports is the session blob,
+not the state of any row a step may also have written.
 
 ### System Information
 
@@ -1424,10 +1484,15 @@ alongside valid credentials gets a success response and a configuration stored
 `enabled` to false whatever `config` holds, so SMTP fields sent with it are
 stored disabled and no mail is sent. Custom SMTP goes under `selfhosted`.
 
-`fromEmail` is required on `gmail`, `microsoft` and `selfhosted` — it doubles
-as the SMTP login, so a malformed one fails authentication rather than merely delivery. The
-provider password field is required on `gmail`; all three Microsoft OAuth fields
-are required together. **`cloudflare` is checked for none of this** —
+`fromEmail` is required on `gmail`, `microsoft` and `selfhosted`. On the two
+presets it doubles as the SMTP login — `resolve_smtp_settings()` returns
+`user: from_email` for them, because an App Password is issued per account, so
+the account that logs in is the account the mail is sent from and one field
+covers both; a malformed address there fails authentication rather than merely
+delivery. **On `selfhosted` it does not**: that branch returns
+`user: smtp_user`, so the sending address and the login are independent fields
+and `fromEmail` alone authenticates nothing. The provider password field is
+required on `gmail`; all three Microsoft OAuth fields are required together. **`cloudflare` is checked for none of this** —
 `missing_for_enabled()` handles the two presets and `selfhosted` and falls
 through for it — so a Cloudflare payload with no `fromEmail` is accepted and
 stored enabled. Sending then depends on a global SMTP sender being configured;
@@ -1438,7 +1503,12 @@ On `selfhosted` **the backend** requires only `smtpHost` and `fromEmail`.
 `smtpUsername` and `smtpPassword` are a pair there: an anonymous relay with
 neither is a complete configuration, while a username without a password is
 rejected — that combination means a credential was not restored rather than one
-that was never needed.
+that was never needed. Because the sending address is not the login on this
+platform, omitting both leaves the connection unauthenticated: that is correct
+for an internal relay that authorises by network, and silently wrong for any
+server that expects credentials, where the write succeeds and delivery fails
+later. Send `smtpUsername` and `smtpPassword` unless the relay genuinely takes
+neither.
 
 **The wizard is stricter, so an anonymous relay is an API-only configuration.**
 `EmailConfiguration.tsx` adds Server Address, Port, Username _and_ Password to
