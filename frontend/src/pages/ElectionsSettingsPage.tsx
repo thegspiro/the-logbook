@@ -329,8 +329,11 @@ export const ElectionsSettingsPage: React.FC = () => {
             />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className={labelClass}>Default Voting Method</label>
+                <label className={labelClass} htmlFor="default-voting-method">
+                  Default Voting Method
+                </label>
                 <select
+                  id="default-voting-method"
                   className={selectClass}
                   value={settings.default_voting_method ?? VM.SIMPLE_MAJORITY}
                   onChange={(e) =>
@@ -346,8 +349,11 @@ export const ElectionsSettingsPage: React.FC = () => {
               </div>
 
               <div>
-                <label className={labelClass}>Default Victory Condition</label>
+                <label className={labelClass} htmlFor="default-victory-condition">
+                  Default Victory Condition
+                </label>
                 <select
+                  id="default-victory-condition"
                   className={selectClass}
                   value={settings.default_victory_condition ?? VC.MOST_VOTES}
                   onChange={(e) =>
@@ -385,8 +391,11 @@ export const ElectionsSettingsPage: React.FC = () => {
               )}
 
               <div>
-                <label className={labelClass}>Default Quorum Type</label>
+                <label className={labelClass} htmlFor="default-quorum-type">
+                  Default Quorum Type
+                </label>
                 <select
+                  id="default-quorum-type"
                   className={selectClass}
                   value={settings.default_quorum_type ?? 'none'}
                   onChange={(e) => updateField('default_quorum_type', e.target.value)}
@@ -433,6 +442,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                   </p>
                 </div>
                 <Toggle
+                  label="Anonymous voting by default"
                   checked={settings.default_anonymous_voting ?? true}
                   onChange={(next) => updateField('default_anonymous_voting', next)}
                 />
@@ -446,6 +456,7 @@ export const ElectionsSettingsPage: React.FC = () => {
                   </p>
                 </div>
                 <Toggle
+                  label="Allow write-in candidates by default"
                   checked={settings.default_allow_write_ins ?? false}
                   onChange={(next) => updateField('default_allow_write_ins', next)}
                 />

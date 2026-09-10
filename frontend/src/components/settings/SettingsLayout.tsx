@@ -144,7 +144,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
         {showBreadcrumbs ? <Breadcrumbs className="mb-0" /> : null}
 
         {/* Wraps rather than squeezing: a title, a subtitle and a status pill
-            (or a breadcrumb trail, on Email Templates) do not fit one row on a
+            do not fit one row on a
             small phone, and a non-shrinking aside beside a shrinking title
             crushes the title first. Below sm the aside drops to its own line. */}
         <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
