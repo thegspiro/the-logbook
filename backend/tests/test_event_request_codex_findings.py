@@ -942,3 +942,51 @@ class TestDailyLimitIsReadDefensively:
 
         assert result["success"] is True
         assert cap.await_args.args == (f"pub_event_request:{ORG_ID}", 50)
+
+
+class TestPostponeWindowIsValidated:
+    """`EventRequestSchedule` refuses a reversed window; the postpone path,
+    which also sets a confirmed date, did not.
+
+    Left unvalidated, `resolve_confirmed_end` returns an explicit end
+    unchanged, the request stores the reversed interval,
+    `sync_staffing_shift_date` moves the sheet to a zero-or-negative window,
+    and `sync_calendar_event_date` swallows the calendar service's rejection by
+    design — so the endpoint reports success while three surfaces disagree.
+    """
+
+    def test_an_ordered_window_is_accepted_and_normalised(self):
+        from app.schemas.event_request import EventRequestPostpone
+
+        model = EventRequestPostpone(
+            new_event_date="2026-10-01T10:00:00",
+            new_event_end_date="2026-10-01T12:00:00Z",
+        )
+        assert model.new_event_date.tzinfo is not None
+        assert model.new_event_end_date > model.new_event_date
+
+    @pytest.mark.parametrize(
+        "end",
+        ["2026-10-01T09:00:00Z", "2026-10-01T10:00:00"],
+        ids=["before", "equal"],
+    )
+    def test_a_reversed_or_zero_length_window_is_refused(self, end):
+        from app.schemas.event_request import EventRequestPostpone
+
+        with pytest.raises(ValidationError):
+            EventRequestPostpone(
+                new_event_date="2026-10-01T10:00:00", new_event_end_date=end
+            )
+
+    def test_an_end_with_no_start_is_refused_rather_than_ignored(self):
+        """`postpone_request` only reads the end when a new date is given, so
+        accepting it silently would discard what the caller asked for."""
+        from app.schemas.event_request import EventRequestPostpone
+
+        with pytest.raises(ValidationError):
+            EventRequestPostpone(new_event_end_date="2026-10-01T10:00:00")
+
+    def test_postponing_to_a_date_tbd_is_still_allowed(self):
+        from app.schemas.event_request import EventRequestPostpone
+
+        assert EventRequestPostpone(reason="TBD").new_event_date is None

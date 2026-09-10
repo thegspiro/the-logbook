@@ -257,6 +257,33 @@ class EventRequestPostpone(BaseModel):
     new_event_date: Optional[datetime] = Field(None, description="Optional new date")
     new_event_end_date: Optional[datetime] = None
 
+    @model_validator(mode="after")
+    def _new_window_ordered(self) -> "EventRequestPostpone":
+        """The same rule ``EventRequestSchedule`` enforces, on the other path
+        that sets a confirmed date.
+
+        Without it an end at or before the start is taken at face value:
+        ``resolve_confirmed_end`` returns an explicit end unchanged, the request
+        stores the reversed interval, ``sync_staffing_shift_date`` moves the
+        signup sheet to a zero-or-negative window, and
+        ``sync_calendar_event_date`` swallows the calendar service's rejection
+        by design — so the endpoint reports success while the request, the sheet
+        and the calendar disagree about when the event is.
+
+        An end with no start is meaningless here too: `postpone_request` only
+        reads the end when a new date is given, so silently ignoring it would
+        discard something the caller asked for.
+        """
+        if self.new_event_end_date and not self.new_event_date:
+            raise ValueError("new_event_end_date requires new_event_date")
+        if self.new_event_date:
+            self.new_event_date = _as_utc(self.new_event_date)
+        if self.new_event_end_date:
+            self.new_event_end_date = _as_utc(self.new_event_end_date)
+            if self.new_event_end_date <= self.new_event_date:
+                raise ValueError("new_event_end_date must be after new_event_date")
+        return self
+
 
 class EventRequestComment(BaseModel):
     """Schema for adding a comment to the request thread."""
