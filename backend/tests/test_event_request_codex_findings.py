@@ -1807,7 +1807,11 @@ class TestTheBackfillChecksTheFormActuallyWorks:
         return module
 
     class _Bind:
-        """Answers the two queries `_form_can_produce_a_request` issues."""
+        """Answers the two queries `_form_can_produce_a_request` issues.
+
+        Fields come back as ``(id, label, field_type)`` with ids ``f0``, ``f1``,
+        … so a test's `field_mappings` can name the field it means.
+        """
 
         def __init__(self, mappings, fields):
             self._mappings = mappings
@@ -1815,11 +1819,13 @@ class TestTheBackfillChecksTheFormActuallyWorks:
 
         def execute(self, statement, params=None):
             sql = str(statement)
-            rows = (
-                [(json.dumps(m),) for m in self._mappings]
-                if "form_integrations" in sql
-                else list(self._fields)
-            )
+            if "form_integrations" in sql:
+                rows = [(json.dumps(m),) for m in self._mappings]
+            else:
+                rows = [
+                    (f"f{i}", label, ftype)
+                    for i, (label, ftype) in enumerate(self._fields)
+                ]
             return SimpleNamespace(fetchall=lambda: rows)
 
     def _can(self, mappings, fields):
@@ -1830,7 +1836,7 @@ class TestTheBackfillChecksTheFormActuallyWorks:
 
     def test_a_working_form_still_qualifies(self):
         assert self._can(
-            [{"f1": "contact_name", "f2": "contact_email"}],
+            [{"f0": "contact_name", "f1": "contact_email"}],
             [("Name", "text"), ("Email", "email")],
         )
 
@@ -1848,17 +1854,17 @@ class TestTheBackfillChecksTheFormActuallyWorks:
         assert not self._can([{}], [("Who are you", "text"), ("Reach you at", "text")])
 
     def test_a_deleted_name_field_no_longer_qualifies(self):
-        assert not self._can([{"f2": "contact_email"}], [("Email", "email")])
+        assert not self._can([{"f0": "contact_email"}], [("Email", "email")])
 
     def test_a_deleted_email_field_no_longer_qualifies(self):
-        assert not self._can([{"f1": "contact_name"}], [("Contact Name", "text")])
+        assert not self._can([{"f0": "contact_name"}], [("Contact Name", "text")])
 
     def test_hand_written_mappings_qualify_over_unmatched_labels(self):
         """`update_integration` lets an administrator map arbitrary fields, and
         `_validate_field_mappings` requires the required targets — so stored
         mappings are authoritative even when no label would resolve."""
         assert self._can(
-            [{"f1": "contact_name", "f2": "contact_email"}],
+            [{"f0": "contact_name", "f1": "contact_email"}],
             [("Who are you", "text"), ("Reach you at", "text")],
         )
 
@@ -1995,3 +2001,101 @@ class TestASanitizedOutreachChoiceIsDecoded:
         ).read_text()
         assert "outreach_type_value = mapped_data.get" in source
         assert "html_lib.unescape(outreach_type_value)" in source
+
+
+# ============================================
+# Round 11 — findings on the round-10 fixes
+# ============================================
+
+
+class TestDisplayOnlyFieldsCannotQualifyAForm:
+    """A `section_header` renders as a heading and posts no value, so it can
+    never supply a target however it is labelled — `_apply_label_fallback`
+    iterates the *submitted* data, and a stored mapping pointing at one is
+    equally inert because the mapping loop reads only ids that data carries."""
+
+    @staticmethod
+    def _module():
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("_backfill_inputs", MIGRATION)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def _can(self, mappings, fields):
+        module = self._module()
+        bind = TestTheBackfillChecksTheFormActuallyWorks._Bind(mappings, fields)
+        return module._form_can_produce_a_request(bind, "form-1")
+
+    def test_a_section_header_does_not_supply_its_label_target(self):
+        assert not self._can([], [("Name", "section_header"), ("Email", "email")])
+
+    def test_a_mapping_onto_a_section_header_is_inert(self):
+        """`_refresh_integration_mappings` maps by label without checking the
+        type, so such a mapping really can be stored — it just never yields a
+        value at submission time."""
+        assert not self._can(
+            [{"f0": "contact_name", "f1": "contact_email"}],
+            [("Name", "section_header"), ("Email", "email")],
+        )
+
+    def test_real_input_fields_still_qualify(self):
+        assert self._can([], [("Name", "text"), ("Email", "email")])
+
+    def test_a_section_header_alongside_real_fields_is_harmless(self):
+        assert self._can(
+            [],
+            [
+                ("Contact Details", "section_header"),
+                ("Name", "text"),
+                ("Email", "email"),
+            ],
+        )
+
+    def test_section_header_is_the_only_display_only_type(self):
+        module = self._module()
+        assert module._NON_INPUT_FIELD_TYPES == ("section_header",)
+
+
+class TestTheStaffingReadAgreesWithTheWrite:
+    """`EventRequestsTab` offers "Open Signups" only while `shift_id` is null.
+    Reporting a cancelled shift's id left the coordinator looking at a
+    stood-down sheet with no way to open a replacement, so the permissive POST
+    was unreachable through the product."""
+
+    @staticmethod
+    def _request():
+        return SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            staffing_shift_id=SHIFT_UUID,
+            volunteer_call_sent_at=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_cancelled_sheet_reports_no_sheet(self):
+        from app.services.event_request_service import get_staffing_state
+
+        db = AsyncMock()
+        with patch(
+            "app.services.event_request_service.get_live_staffing_shift",
+            AsyncMock(return_value=None),
+        ):
+            state = await get_staffing_state(db, self._request())
+
+        assert state["shift_id"] is None
+        assert state["slots_total"] == 0
+        assert state["volunteers"] == []
+
+    @pytest.mark.asyncio
+    async def test_a_request_with_no_sheet_is_unchanged(self):
+        from app.services.event_request_service import get_staffing_state
+
+        request = self._request()
+        request.staffing_shift_id = None
+
+        state = await get_staffing_state(AsyncMock(), request)
+
+        assert state["shift_id"] is None

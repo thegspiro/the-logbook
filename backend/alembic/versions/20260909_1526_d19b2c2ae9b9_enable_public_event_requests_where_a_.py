@@ -226,6 +226,16 @@ _LABEL_TARGETS = {
     "special needs": "special_requests",
 }
 
+# Display-only field types, which never appear in a submission and so can
+# never supply a target however they are labelled. `PublicFormPage` renders a
+# `section_header` as a heading and returns before the input branch, so no
+# value is posted for it — `_apply_label_fallback` iterates the *submitted*
+# data and never sees the field, and a stored mapping pointing at it is equally
+# inert because the mapping loop only reads ids present in that data. It is the
+# only such type today: every other `FieldType` reaches an input in
+# `FieldRenderer`.
+_NON_INPUT_FIELD_TYPES = ("section_header",)
+
 _FIELD_TYPE_TARGETS = {
     "email": "contact_email",
     "phone": "contact_phone",
@@ -273,6 +283,21 @@ def _form_can_produce_a_request(bind, form_id: str) -> bool:
     """
     targets: set = set()
 
+    # Input fields only, keyed by id so a stored mapping can be checked against
+    # them: a mapping naming `contact_name` on a section header is as inert as
+    # the label would be, because the runtime mapping loop reads only the ids
+    # the submission actually carries.
+    inputs: dict = {}
+    for field_id, label, field_type in bind.execute(
+        sa.text(
+            "SELECT id, label, field_type FROM form_fields WHERE form_id = :form_id"
+        ),
+        {"form_id": form_id},
+    ).fetchall():
+        if str(field_type or "").strip().lower() in _NON_INPUT_FIELD_TYPES:
+            continue
+        inputs[str(field_id)] = (label, field_type)
+
     rows = bind.execute(
         sa.text(
             "SELECT field_mappings FROM form_integrations"
@@ -284,13 +309,11 @@ def _form_can_produce_a_request(bind, form_id: str) -> bool:
     ).fetchall()
     for row in rows:
         mappings = _load_settings(row[0])
-        targets.update(str(v) for v in mappings.values())
+        for field_id, target in mappings.items():
+            if str(field_id) in inputs:
+                targets.add(str(target))
 
-    fields = bind.execute(
-        sa.text("SELECT label, field_type FROM form_fields WHERE form_id = :form_id"),
-        {"form_id": form_id},
-    ).fetchall()
-    for label, field_type in fields:
+    for label, field_type in inputs.values():
         # `.strip().lower()`, matching the service, and compared in Python so
         # the columns' accent-insensitive utf8mb4_unicode_ci collation cannot
         # equate a label the service would not have matched.

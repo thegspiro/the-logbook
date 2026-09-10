@@ -867,7 +867,7 @@ async def get_staffing_state(
     org: Optional[Organization] = None,
 ) -> dict[str, Any]:
     """Who has signed up to cover this request, and which roles are still open."""
-    from app.models.training import AssignmentStatus, Shift, ShiftAssignment
+    from app.models.training import AssignmentStatus, ShiftAssignment
 
     empty = {
         "shift_id": None,
@@ -881,15 +881,18 @@ async def get_staffing_state(
     if not event_request.staffing_shift_id:
         return empty
 
-    shift = await db.scalar(
-        select(Shift).where(
-            Shift.id == event_request.staffing_shift_id,
-            Shift.organization_id == str(event_request.organization_id),
-        )
-    )
+    # A cancelled sheet is reported as absent, the same rule
+    # `open_request_staffing` and `sync_staffing_shift_date` apply. The read has
+    # to agree with them or the write is unreachable: `EventRequestsTab` offers
+    # "Open Signups" only while `shift_id` is null and otherwise renders the
+    # sheet, so a non-null id for a cancelled shift left the coordinator looking
+    # at a stood-down sheet with no way to open a replacement.
+    #
+    # A deleted shift answers "no sheet" for the same reason — the FK is SET
+    # NULL so it is only reachable in-flight, but answering beats raising at the
+    # coordinator.
+    shift = await get_live_staffing_shift(db, event_request)
     if shift is None:
-        # The shift was deleted; the FK is SET NULL so this is only reachable
-        # in-flight, but answering "no sheet" beats raising at the coordinator.
         return empty
 
     rows = await db.execute(

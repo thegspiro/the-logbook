@@ -552,9 +552,15 @@ def _rows_result(rows):
     return SimpleNamespace(all=lambda: list(rows))
 
 
-def _shift(positions=None):
+def _shift(positions=None, status=None):
+    from app.models.training import ShiftStatus
+
     return SimpleNamespace(
         id="shift-9",
+        # A real shift always carries one, and the staffing read now consults it
+        # — a cancelled sheet reports as no sheet.
+        status=status or ShiftStatus.SCHEDULED,
+        is_finalized=False,
         start_time=datetime.now(timezone.utc),
         positions=(
             positions
