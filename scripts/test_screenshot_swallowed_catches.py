@@ -516,29 +516,32 @@ def split_arrow(argument: str) -> tuple[str, str] | None:
     return None
 
 
-def returned_expression(block: str) -> str | None:
-    """What a block hands back, or None if it returns nothing.
+def returned_expressions(block: str) -> list[str]:
+    """Everything a block can hand back, innermost branches included.
 
-    The expression is balanced to its terminating `;`. Excluding `}` instead —
+    Every `return`, not only the last one at the top level. A handler that
+    recovers on one branch and yields a bare value on another still converts a
+    failure into a plausible value on that branch, which is the defect — and
+    reading only the final top-level return classified
+    `if (e.retry) { return null; } return retry();` as a recovery path.
+
+    Each expression is balanced to its terminating `;`. Excluding `}` instead —
     which is what this did — meant `return {};` stopped at the object's own brace
     and matched nothing, so the block spelling of a listed swallow value was
     invisible.
+
+    A `return` inside a function *declared* in the handler is counted too, which
+    could flag a handler that defines a helper returning a constant and then
+    genuinely recovers. No such handler exists in these three files, and for a
+    ratchet the cost of that is one `FROZEN` line with a comment, against a
+    silent miss the other way.
     """
-    depth = 0
-    found: int | None = None
-    for match in re.finditer(r"\breturn\b|[([{)\]}]", block):
-        token = match.group(0)
-        if token in "([{":
-            depth += 1
-        elif token in ")]}":
-            depth -= 1
-        elif depth == 0:
-            found = match.end()
-    if found is None:
-        return None
-    rest = block[found:]
-    split = split_at_depth(rest, ";")
-    return (split[0] if split else rest).strip()
+    found: list[str] = []
+    for match in re.finditer(r"\breturn\b", block):
+        rest = block[match.end() :]
+        split = split_at_depth(rest, ";")
+        found.append((split[0] if split else rest).strip())
+    return found
 
 
 def is_log_only(block: str) -> bool:
@@ -576,17 +579,21 @@ def is_swallow(argument: str) -> bool:
         # cannot pass for a rethrow and exempt the swallow underneath.
         if re.search(r"\bthrow\b", inner):
             return False  # re-raises: the failure still reaches the caller
-        returned = returned_expression(inner)
-        if returned is None:
+        returned = returned_expressions(inner)
+        if not returned:
             # No `return` means an implicit `undefined`. That is a swallow when
             # the block only logs, and unclassified otherwise — `async () => {
             # await fallback(); }` reaches no return either and is a recovery
             # path, so this cannot key on the missing return alone.
             return is_log_only(inner)
-        # Any block that ends by handing back a bare value is a swallow, even if
-        # it logs on the way. Logging is not reporting: the caller still receives
-        # a value indistinguishable from success, which is the whole defect.
-        return normalize_value(unwrap_parens(returned)) in SWALLOW_VALUES
+        # Any block that can hand back a bare value is a swallow, even if it logs
+        # on the way or recovers on another branch. Logging is not reporting: on
+        # that path the caller still receives a value indistinguishable from
+        # success, which is the whole defect.
+        return any(
+            normalize_value(unwrap_parens(value)) in SWALLOW_VALUES
+            for value in returned
+        )
     return normalize_value(rhs.rstrip(";")) in SWALLOW_VALUES
 
 
@@ -1136,6 +1143,33 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
         # A second argument must not be read as part of the first.
         assert first_argument("() => null, other") == "() => null"
         assert first_argument("(a, b) => null") == "(a, b) => null"
+
+    def test_a_swallow_on_any_branch_is_a_swallow(self):
+        """A handler can swallow on one branch and recover on another.
+
+        Reading only the last top-level `return` classified
+        `if (e.retry) { return null; } return retry();` as recovery, though on the
+        retry branch the rejection still becomes `null`. Found by checking a claim
+        I had made about the classifier rather than by a review.
+        """
+        assert is_swallow("(e) => { if (e.retry) { return null; } return retry(); }")
+        assert is_swallow("(e) => { if (e.retry) { return retry(); } return null; }")
+        # Both branches doing work is still a recovery path.
+        assert not is_swallow(
+            "(e) => { if (e.retry) { return retry(); } return recover(); }"
+        )
+
+    def test_brackets_inside_a_literal_cannot_mis_split_the_handler(self):
+        """`split_at_depth` counts brackets, and a string could hold unbalanced ones.
+
+        It is safe because it only ever runs on the masked view, where a literal's
+        contents are spaces — but that is worth proving rather than assuming,
+        since the whole classifier now rests on it.
+        """
+        source = 'await x.catch(() => { warn("}) => oops {("); return null; });'
+        _, mask = scan_source(source)
+        assert "oops" not in mask, mask
+        assert caught(source) == [1]
 
     def test_the_sweep_detects_a_reintroduced_swallow(self):
         """The shape removed from `pageText`, driven through the real path."""
