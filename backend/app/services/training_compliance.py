@@ -933,11 +933,24 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
         # apply, so this dashboard percentage could disagree with the matrix
         # for the exact member/requirement pair it's supposed to describe the
         # same way.
+        #
+        # `applies_to_all` takes precedence over `required_membership_types`,
+        # matching TrainingService.get_applicable_requirements — the
+        # member-facing /my-training path. Both fields are independent,
+        # unvalidated booleans/lists on the same row (no schema cross-field
+        # check clears one when the other is set), so a requirement created
+        # as "applies to all" and later scoped down without also flipping
+        # `applies_to_all` off is a reachable, stale-config state, not a
+        # hypothetical one. Excluding it here anyway (as a first draft of
+        # this fix did) would open a *new* matrix/dashboard disagreement in
+        # the opposite direction the moment training.py's own filter below
+        # is corrected to match.
         member_membership_type = member.membership_type or "active"
         member_reqs = [
             req
             for req in member_reqs
-            if not req.required_membership_types
+            if req.applies_to_all
+            or not req.required_membership_types
             or member_membership_type in req.required_membership_types
         ]
 

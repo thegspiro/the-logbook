@@ -90,6 +90,7 @@ async def _annual_hours_requirement(
 ) -> TrainingRequirement:
     """An HOURS requirement with no records filed against it anywhere —
     a member graded against it is 0% complete."""
+    overrides.setdefault("applies_to_all", True)
     req = TrainingRequirement(
         id=str(uuid.uuid4()),
         organization_id=org.id,
@@ -98,7 +99,6 @@ async def _annual_hours_requirement(
         required_hours=24.0,
         frequency=RequirementFrequency.ANNUAL,
         due_date_type=DueDateType.CALENDAR_PERIOD,
-        applies_to_all=True,
         active=True,
         **overrides,
     )
@@ -248,8 +248,17 @@ class TestMembershipTypeExclusion:
         org = await _org(db_session)
         member = await _active_member(db_session, org)
         assert member.organization_id == org.id
+        # applies_to_all=False is required here, not incidental:
+        # RequirementModal.tsx only allows setting required_membership_types
+        # with "Applies to All" unchecked, and applies_to_all takes
+        # precedence wherever this list is read (TR4-1's own fix included).
+        # A row claiming both would apply to everyone regardless of the
+        # list, which is the opposite of what this test needs to exercise.
         await _annual_hours_requirement(
-            db_session, org, required_membership_types=["reserve"]
+            db_session,
+            org,
+            required_membership_types=["reserve"],
+            applies_to_all=False,
         )  # scoped away from `member`; unmet if it counted
 
         pct = await compute_org_compliance_pct(db_session, org.id)
@@ -270,8 +279,37 @@ class TestMembershipTypeExclusion:
         member = await _active_member(db_session, org)
         assert member.organization_id == org.id
         await _annual_hours_requirement(
-            db_session, org, required_membership_types=["active"]
+            db_session,
+            org,
+            required_membership_types=["active"],
+            applies_to_all=False,
         )  # scoped to `member`'s own type; unmet
+
+        pct = await compute_org_compliance_pct(db_session, org.id)
+
+        assert pct == 0.0
+
+    async def test_applies_to_all_overrides_a_stale_membership_type_list(
+        self, db_session
+    ):
+        """`applies_to_all` and `required_membership_types` are independent,
+        unvalidated fields on the same row — a requirement created as
+        "applies to all" and later scoped down without also clearing
+        applies_to_all is a reachable state, not a hypothetical one
+        (Codex review of PR #2455). TrainingService.get_applicable_
+        requirements (the member-facing /my-training path) gives
+        applies_to_all precedence; this must too, or the dashboard
+        percentage disagrees with what the member's own view says applies
+        to them."""
+        org = await _org(db_session)
+        member = await _active_member(db_session, org)
+        assert member.organization_id == org.id
+        await _annual_hours_requirement(
+            db_session,
+            org,
+            required_membership_types=["reserve"],  # stale; member is "active"
+            applies_to_all=True,
+        )  # unmet — must still count, since applies_to_all wins
 
         pct = await compute_org_compliance_pct(db_session, org.id)
 

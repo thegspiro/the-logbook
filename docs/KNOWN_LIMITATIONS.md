@@ -3151,9 +3151,20 @@ scoped to a `required_membership_types` list the member doesn't belong to —
 requirement could fail a member on the dashboard percentage while the
 matrix correctly never showed it to them at all. Fixed by applying the same
 `required_membership_types` filter to `compute_org_compliance_pct`'s
-per-member requirement list, mirroring the matrix's own `continue`. Guard
-tests: `tests/test_compute_org_compliance_pct_profile_overrides.py::
-TestMembershipTypeExclusion`.
+per-member requirement list, mirroring the matrix's own `continue`.
+
+**Correction (a second Codex review of the same fix):** the first version
+of that fix ignored `applies_to_all`, which takes precedence over
+`required_membership_types` in the canonical, member-facing applicability
+check (`TrainingService.get_applicable_requirements`). Since the two
+fields are independent and unvalidated, a requirement created as "applies
+to all" and later scoped down without clearing `applies_to_all` is a
+reachable state — and `get_compliance_matrix`'s own pre-existing filter had
+the identical gap, so the first fix was matching a filter that was itself
+wrong. Fixed both call sites to check `applies_to_all` first. Guard tests:
+`tests/test_compute_org_compliance_pct_profile_overrides.py::
+TestMembershipTypeExclusion` and
+`tests/test_compliance_matrix_endpoint.py::TestApplicableRequirementDenominator::test_applies_to_all_overrides_a_stale_membership_type_list`.
 
 **Not fixed:** making `get_training_dashboard_summary` profile/threshold-aware
 is a larger, product-level question — which of the three currently-different
@@ -3161,6 +3172,38 @@ definitions the "Department Compliance" card should actually use — not a
 safe drive-by alongside the membership-type fix above. First reported by a
 Codex review of TR-17 pass 4 (`docs/security-review/TR-17-training-core.md`,
 PR #2455). (Security review TR-17 pass 4, TR4-3.)
+
+## Training — A Member With No Applicable Requirements Counts As "Compliant" (2026-09-10)
+
+`classify_standing` (`training_compliance.py`) returns `("compliant",
+100.0)` whenever a member's requirement list is empty — a convention
+predating the compliance-matrix redesign, applied consistently by both
+`get_compliance_matrix` and `compute_org_compliance_pct`. The fix above
+(TR4-1) makes this reachable one more way than before: a member matching
+none of an org's membership-scoped requirements now also gets an empty
+list, not only the pre-existing profile `required_requirement_ids=[]` case.
+`compute_org_compliance_pct` counts such a member toward its compliant
+numerator without excluding them from the denominator (`len(members)`),
+inflating the org-wide percentage with members the calculation isn't
+actually measuring anything for — the "a denominator of nothing rendered as
+success" shape CLAUDE.md's Pitfall #29 corollary names.
+
+**Not fixed:** this is the same zero-denominator convention this file
+already deliberately tests as correct for the profile case
+(`TestEmptyRequiredRequirementIds::test_explicit_empty_list_means_nothing_required`).
+Changing it means deciding whether such a member should be excluded from
+the percentage's population entirely or reported as a separate "N/A" state
+— a product decision spanning every caller of `classify_standing`, not a
+drive-by alongside TR4-1. Notably, the frontend's own
+`complianceMatrixModel.ts` already treats this as a real distinction:
+`evaluateMember`'s member-level percentage uses this same "0 total is
+100%" convention, while `rollUpRequirements`'s per-requirement percentage
+deliberately returns `null` ("not applicable") instead — proof the two
+conventions already coexist by design in this codebase, and a precedent for
+how to fix this rather than evidence the member-level side is already
+right. First reported by a Codex review of TR-17 pass 4
+(`docs/security-review/TR-17-training-core.md`, PR #2455). (Security review
+TR-17 pass 4, TR4-4.)
 
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 

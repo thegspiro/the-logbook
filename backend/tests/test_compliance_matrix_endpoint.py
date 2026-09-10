@@ -76,6 +76,7 @@ async def _insert_hours_req(
     name: str,
     required_hours: float = 24.0,
     membership_types: list[str] | None = None,
+    applies_to_all: bool | None = None,
 ) -> str:
     req_id = _uid()
     await db_session.execute(
@@ -86,7 +87,7 @@ async def _insert_hours_req(
             "period_start_day, required_membership_types, applies_to_all, "
             "active, created_at, updated_at) "
             "VALUES (:id, :org, :name, 'hours', 'department', :hours, "
-            "'annual', 'calendar_period', 1, 1, :mt, 1, 1, :now, :now)"
+            "'annual', 'calendar_period', 1, 1, :mt, :applies_all, 1, :now, :now)"
         ),
         {
             "id": req_id,
@@ -94,6 +95,22 @@ async def _insert_hours_req(
             "name": name,
             "hours": required_hours,
             "mt": json.dumps(membership_types) if membership_types else None,
+            # A real membership-scoped requirement has applies_to_all=False —
+            # RequirementModal.tsx only lets an officer set
+            # required_membership_types with the "Applies to All" checkbox
+            # unchecked, and re-checking it clears the list. applies_to_all
+            # takes precedence over required_membership_types wherever either
+            # is read (TrainingService.get_applicable_requirements,
+            # get_compliance_matrix, compute_org_compliance_pct), so a row
+            # claiming both would apply to everyone regardless of the list —
+            # the opposite of what `membership_types` here is meant to test.
+            # A caller can still force the stale-config combination via the
+            # explicit `applies_to_all` override, to test that precedence.
+            "applies_all": (
+                (1 if applies_to_all else 0)
+                if applies_to_all is not None
+                else (0 if membership_types else 1)
+            ),
             "now": _NOW,
         },
     )
@@ -246,6 +263,37 @@ class TestApplicableRequirementDenominator:
         assert member["requirements_met"] == 1
         assert member["completion_pct"] == 100.0
         assert member["standing"] == "compliant"
+
+    async def test_applies_to_all_overrides_a_stale_membership_type_list(
+        self, db_session: AsyncSession
+    ):
+        """applies_to_all and required_membership_types are independent,
+        unvalidated fields on the same row — a requirement created as
+        "applies to all" and later scoped down without also clearing
+        applies_to_all is a reachable state, not a hypothetical one (Codex
+        review of PR #2455). TrainingService.get_applicable_requirements
+        (the member-facing /my-training path) gives applies_to_all
+        precedence; this endpoint must too, or the matrix disagrees with
+        what the member's own view says applies to them."""
+        org_id = await _insert_org(db_session)
+        await _insert_member(
+            db_session, org_id, last_name="Reyes", membership_type="active"
+        )
+        await _insert_hours_req(
+            db_session,
+            org_id,
+            name="Stale-Scoped Hours",
+            membership_types=["reserve"],  # stale; member is "active"
+            applies_to_all=True,
+        )
+
+        payload = await _call(db_session, org_id)
+
+        member = payload["members"][0]
+        # applies_to_all wins, so the requirement still counts against this
+        # member despite the leftover membership-type list.
+        assert len(member["requirements"]) == 1
+        assert member["requirements_total"] == 1
 
     async def test_standing_reflects_the_shortfall(self, db_session: AsyncSession):
         org_id = await _insert_org(db_session)

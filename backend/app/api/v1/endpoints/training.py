@@ -2861,10 +2861,23 @@ async def get_compliance_matrix(
                     member_at_risk_threshold = profile.at_risk_threshold_override
 
         for req in member_requirements:
-            # Skip requirements not applicable to this member's membership type
-            if req.required_membership_types:
-                if member_membership_type not in req.required_membership_types:
-                    continue
+            # Skip requirements not applicable to this member's membership
+            # type — unless applies_to_all overrides it. That precedence
+            # matches TrainingService.get_applicable_requirements (the
+            # member-facing /my-training path): the two fields are
+            # independent and unvalidated, so a requirement created as
+            # "applies to all" and later scoped down without also clearing
+            # applies_to_all is a reachable stale-config state, not a
+            # hypothetical one. Also mirrored in
+            # training_compliance.py's compute_org_compliance_pct — both
+            # must apply the same precedence or the matrix and the
+            # dashboard percentage disagree about this exact requirement.
+            if (
+                not req.applies_to_all
+                and req.required_membership_types
+                and member_membership_type not in req.required_membership_types
+            ):
+                continue
 
             ev = evaluate_member_requirement_detail(
                 req,

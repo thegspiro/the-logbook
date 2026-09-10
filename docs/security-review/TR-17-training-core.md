@@ -1162,7 +1162,7 @@ training.py`, so the one write path that could otherwise fan out an
 
 ---
 
-## Pass 4 (2026-09-10) — 1 fix, 2 flagged; re-verification + review of the compliance-matrix redesign
+## Pass 4 (2026-09-10) — 1 fix (2 rounds), 3 flagged; re-verification + review of the compliance-matrix redesign
 
 > **Correction (Codex review of PR #2455).** This section's first draft
 > claimed "0 fixes, 0 new flags" and described the matrix and the dashboard
@@ -1329,6 +1329,46 @@ counts, so the fix cannot pass by excluding everything). The first test
 confirmed failing (`0.0` instead of `100.0`) against the pre-fix code via
 `git stash` on `training_compliance.py` alone.
 
+> **Round 2 — a second Codex review of this same PR caught the first
+> draft of this fix reintroducing the class of bug it was meant to close.**
+> The initial fix checked only `required_membership_types`, ignoring
+> `applies_to_all` — but `TrainingService.get_applicable_requirements` (the
+> member-facing `/my-training` path, `training_service.py:1471-1477`) gives
+> `applies_to_all` precedence over `required_membership_types` whenever
+> both are set. Both fields are independent, unvalidated columns on the
+> same row (no schema cross-field validator clears one when the other
+> changes), so a requirement created as "applies to all" and later scoped
+> down without also clearing `applies_to_all` is a reachable state, not a
+> hypothetical one — `RequirementModal.tsx` only exposes the membership-
+> type checklist while "Applies to All" is unchecked and clears the list
+> when it's re-checked, but nothing stops a raw API write (an import, a
+> script) from setting both. Excluding such a requirement from a member's
+> denominator (the first draft's behavior) directly contradicts what
+> `/my-training` tells that same member applies to them — a fresh
+> cross-screen disagreement in the opposite direction, opened by this
+> pass's own fix, inside the pass whose entire point is closing that class.
+>
+> Worse: `get_compliance_matrix`'s own **pre-existing** filter has the
+> identical gap (it never considered `applies_to_all` either), so simply
+> matching the matrix — this fix's original approach — was matching a
+> filter that was itself already wrong. Fixed both call sites together:
+> `compute_org_compliance_pct` and `get_compliance_matrix` each now check
+> `applies_to_all` first, falling through to the `required_membership_types`
+> check only when it's false — matching `get_applicable_requirements`'s
+> precedence exactly. Discovering this also surfaced that this pass's own
+> first-draft guard tests, and the pre-existing `test_compliance_matrix_
+endpoint.py::TestApplicableRequirementDenominator::test_inapplicable_
+requirement_is_out_of_the_percentage` test from an earlier pass, all
+> exercised a membership-scoped requirement via a fixture that hardcoded
+> `applies_to_all=True` regardless of whether a membership-type list was
+> given — data no real UI flow produces, since the modal only allows
+> setting the list with the checkbox unchecked. Fixed the fixtures in both
+> test files to set `applies_to_all=False` when a membership-type list is
+> supplied (matching real UI-created data), and added a new guard test at
+> each call site with `applies_to_all=True` forced alongside a non-matching
+> membership-type list, proving the requirement still counts. Both new
+> tests confirmed failing against the round-1 fix.
+
 ### TR4-2 — LOW (abuse resistance) — `get_compliance_matrix` has its own unbounded record scan, distinct from TR2-4 — 🚩 FLAGGED
 
 **Reported by Codex on PR #2455; confirmed.** `get_compliance_matrix`
@@ -1373,14 +1413,62 @@ with one obviously-correct fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 trust gap (a chief-facing summary card that can read differently from the
 detail screen it links to) rather than a security boundary.
 
+### TR4-4 — LOW (Pitfall #29 corollary) — A member with zero applicable requirements counts as "compliant," inflating the org percentage — 🚩 FLAGGED
+
+**Reported by Codex on PR #2455; confirmed, and pre-existing.**
+`classify_standing` returns `("compliant", 100.0)` whenever `total_count
+<= 0` — this exactly preserves `_evaluate_member_compliance`'s guard from
+before this rotation's own compliance-matrix redesign (`if not member_reqs:
+return "compliant", 100.0`; confirmed via `git show 0d1f92c41:.../
+training_compliance.py`) and is deliberately, consistently applied by both
+`get_compliance_matrix` and `compute_org_compliance_pct` — not a
+regression, and not the inconsistency TR4-1 fixed. TR4-1's own new
+membership-type exclusion makes this reachable in one more way than
+before (a member matching none of an org's membership-scoped
+requirements now also gets an empty `member_reqs`, not only the
+pre-existing profile `required_requirement_ids=[]` case), and Codex's
+point stands independent of TR4-1: counting "nothing was asked of this
+member" as a compliant hit inflates `compute_org_compliance_pct`'s
+numerator without excluding the member from its denominator (`len(members)`
+still counts them), which reads as real compliance on a chief-facing
+percentage that isn't measuring anything for that member at all — the
+same "a denominator of nothing rendered as success" shape CLAUDE.md's
+Pitfall #29 corollary names.
+
+**Not fixed:** this is the same zero-denominator convention this file
+already established and deliberately tests as correct for the profile
+case (`TestEmptyRequiredRequirementIds::test_explicit_empty_list_means_
+nothing_required`, asserting `100.0`, predates this pass). Changing it
+now would mean redefining `compute_org_compliance_pct`'s population (does
+a member with nothing applicable count in `len(members)` at all, or
+should the percentage exclude them and report a separate "N/A" count?) —
+a product decision spanning every existing caller of `classify_standing`,
+not a drive-by alongside TR4-1's narrower membership-type fix. Notably,
+the frontend's own `complianceMatrixModel.ts` already treats this
+distinction as real: `evaluateMember`'s member-level `pct` matches this
+same "compliant when total is 0" convention, but `rollUpRequirements`'s
+per-requirement `pct` deliberately returns `null` ("not applicable")
+instead — proving the two conventions coexist by design elsewhere in this
+codebase, which is precedent for _how_ to fix this, not evidence that the
+member-level side is already correct. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+**Impact:** LOW — same-org, `training.manage`-gated; inflates a reported
+percentage rather than exposing data or bypassing a control.
+
 ## Completion gate (pass 4)
 
-| Check                                                                                                   | Result                                               |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `flake8 app/services/training_compliance.py tests/test_compute_org_compliance_pct_profile_overrides.py` | ✅ 0 violations                                      |
-| `black --check` (same files)                                                                            | ✅ clean (one file reformatted, then re-verified)    |
-| `isort --check-only` (same files)                                                                       | ✅ clean                                             |
-| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 441 revisions, single head (no schema change)     |
-| `pytest tests/ -q -k "training or compliance"`                                                          | ✅ 1121 passed, 1 skipped (pre-existing)             |
-| `pytest tests/ -q` (full backend suite)                                                                 | ✅ 12068 passed, 21 skipped (pre-existing), 0 failed |
-| `cd frontend && npm run typecheck` / `npm run lint`                                                     | n/a — no frontend file touched this pass             |
+| Check                                               | Result                                               |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| `flake8` (all 4 changed files)                      | ✅ 0 violations (round 2 fixed one F841)             |
+| `black --check` (same files)                        | ✅ clean                                             |
+| `isort --check-only` (same files)                   | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`   | ✅ 441 revisions, single head (no schema change)     |
+| `pytest tests/ -q -k "training or compliance"`      | ✅ 1123 passed, 1 skipped (pre-existing)             |
+| `pytest tests/ -q` (full backend suite)             | ✅ 12070 passed, 21 skipped (pre-existing), 0 failed |
+| `cd frontend && npm run typecheck` / `npm run lint` | n/a — no frontend file touched this pass             |
+
+Changed files: `backend/app/services/training_compliance.py`,
+`backend/app/api/v1/endpoints/training.py`,
+`backend/tests/test_compute_org_compliance_pct_profile_overrides.py`,
+`backend/tests/test_compliance_matrix_endpoint.py`.
