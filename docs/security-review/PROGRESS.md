@@ -25,10 +25,21 @@ branch for Feature 18, so a watchdog iteration started the pass directly,
 the same "Step 0 went quiet" pattern Feature 16's own pass 4 and the
 2026-09-09 watchdog pass both document below). Zero-diff scope check
 against pass 3's merge (`7455d6708`): only `frontend/src/utils/apiCache.ts`
-changed among this feature's fifteen declared artifacts, and that change
-was made by an unrelated pass. One doc correction (TRX4-1, retiring a
-stale pass-2 "verified good" claim); all ten pass-1 and one pass-2 finding
-re-verified intact. Full write-up:
+changed among this feature's fifteen declared backend/schema artifacts,
+and that change was made by an unrelated pass. **Two Codex review rounds
+on the PR caught two real gaps, both corrected on the same PR:** (1) the
+first draft's scope check dropped pass 2/3's ten established frontend
+files and `apiCache.test.ts` — corrected by diffing all eleven directly;
+seven changed (a cross-cutting breadcrumb/accessibility/contrast sweep,
+confirmed non-security-relevant by reading each diff), no finding
+resulted. (2) TRX4-1's first draft misstated the `/instructors/validate`
+endpoint's response shape as carrying extra qualification detail; reading
+the handler directly shows it returns only the echoed `user_id`/
+`course_id` plus one boolean — corrected to the accurate rationale (a
+named member paired with a verdict is the sensitive part, independent of
+payload size). One doc correction (TRX4-1, retiring a stale pass-2
+"verified good" claim); all ten pass-1 and one pass-2 finding re-verified
+intact. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).

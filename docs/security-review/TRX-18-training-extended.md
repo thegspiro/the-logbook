@@ -777,11 +777,11 @@ submissions`/`training_waivers`/`training_enhancements`/
 **Prefix:** `TRX4`
 
 **Scope check:** diffed the current tree against `7455d6708` (the pass-3
-merge commit for PR #2223) across all fifteen declared artifacts (the
-twelve feature files, `training_program_service.py`, `schemas/training.py`,
-and `frontend/src/utils/apiCache.ts`) — **zero** backend changes; the only
-touch is 37 added lines in `apiCache.ts`. A broader glob
-(`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
+merge commit for PR #2223) across all fifteen declared backend/schema
+artifacts (the twelve feature files, `training_program_service.py`,
+`schemas/training.py`, and `frontend/src/utils/apiCache.ts`) — **zero**
+backend changes; the only touch is 37 added lines in `apiCache.ts`. A
+broader glob (`api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
 `services/*training*`, `services/course_*`, `schemas/*training*`, wider
 than this feature's own file list, to catch anything a stale declared list
 would miss) additionally returns `api/v1/endpoints/training.py` and
@@ -790,6 +790,35 @@ files, matched only because the glob is name-based, and already reviewed
 by that feature's own pass 4 (PR #2455, TR4-1..TR4-4, merged
 2026-09-10T11:28:16Z). Confirmed by name against this feature's twelve-file
 list: neither matches.
+
+**Correction, caught by a Codex review round on this pass's own PR:** the
+scope check above, as first drafted, omitted the ten established frontend
+files pass 2/3 both carry in their own scope (`CohortWizard.tsx`,
+`CourseSyllabusBuilder.tsx`, `ExternalTrainingPage.tsx`,
+`ReviewSubmissionsPage.tsx`, `SubmitTrainingPage.tsx`,
+`TrainingEnhancementsTab.tsx`, `TrainingWaiversTab.tsx`,
+`WaiverManagementPage.tsx`, `pages/training/CohortDetailPage.tsx`,
+`pages/training/CohortsPage.tsx`) and `apiCache.test.ts`, so "zero backend
+changes" did not cover the feature's actual current surface. Diffed all
+eleven against `7455d6708`: **seven** changed —
+`CourseSyllabusBuilder.tsx` (1 line), `ReviewSubmissionsPage.tsx` (8),
+`SubmitTrainingPage.tsx` (43), `TrainingEnhancementsTab.tsx` (5),
+`WaiverManagementPage.tsx` (3), `CohortDetailPage.tsx` (23), and
+`CohortsPage.tsx` (11); `CohortWizard.tsx`, `ExternalTrainingPage.tsx`, and
+`TrainingWaiversTab.tsx` are unchanged. Read all seven diffs directly
+rather than trusting the diffstat: every one is a cross-cutting,
+non-training-specific sweep already landed and reviewed elsewhere —
+`Breadcrumbs` added to five pages/components (a navigation-trail rollout),
+an `EmptyState` `headingLevel={4}` accessibility prop added at four call
+sites, a `<main>` → `<div data-page-main>` landmark-uniqueness swap on two
+pages, and two `bg-green-600`/`bg-orange-600` → `-700` contrast-shade bumps
+on `ReviewSubmissionsPage.tsx` matching the AAA-contrast convention
+CLAUDE.md documents. None adds a new API call, new user input, or touches
+any org-scoping/permission/data-exposure surface. `apiCache.test.ts`'s
+44-line diff is entirely new `/admin-hours/`- and `/inventory/`-prefix
+coverage (unrelated features) — no training-extended-specific test line
+in it. This correction changes no finding: the feature's frontend surface
+is confirmed clean, not merely unexamined.
 
 ### Re-verification of pass 1-3 fixes
 
@@ -830,15 +859,26 @@ cacheable. That premise no longer holds as a reason to leave it cacheable:
 `'/training/instructors/validate/'` with the comment "a named member's
 qualification verdict" — added by an unrelated, later pass
 (`ae423afa3`, "Fix two data-leakage findings: separation reports, response
-cache", 2026-09-07), not by this feature's own rotation. Read the response
-shape directly (`InstructorQualificationService.validate_instructor` /
-its schema) to confirm the addition is correct rather than assuming it:
-the response is not a bare boolean — it carries the instructor's
-qualification detail keyed to the named `user_id` in the URL, which is the
-same per-member PII shape `/training/instructors/qualifications` (already
-excluded, one line above) exists for. This pass's own re-check of every
-GET route in the feature's fifteen artifacts against the current
-`UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` list found no further gap.
+cache", 2026-09-07), not by this feature's own rotation.
+
+**Correction, caught by a Codex review round on this pass's own PR:** an
+earlier draft of this entry claimed the response "carries the instructor's
+qualification detail" beyond a boolean, matching
+`/training/instructors/qualifications`'s shape. Read the endpoint directly
+(`training_enhancements.py:352-364`, `validate_instructor`) to check that
+claim rather than repeat it: the handler returns exactly
+`{"user_id": user_id, "course_id": course_id, "is_qualified": is_qualified}`
+— the echoed path parameters plus the one boolean
+`validate_instructor_for_session` itself returns. Pass 2's original
+premise ("echoes back only a boolean") was accurate about the payload
+shape; what it missed is that the shape doesn't need to carry extra detail
+to be sensitive — pairing a specific member's identity with a verdict
+_about_ them is itself the PII, the same reasoning the commit's own
+comment states ("a named member's qualification verdict"), independent of
+how much is in the payload beyond that pairing. This pass's own re-check of
+every GET route in the feature's fifteen backend/schema artifacts against
+the current `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` list found no
+further gap.
 
 **Disposition:** documentation-only correction — the code was already
 fixed, by a different security-review pass, outside this feature's own
