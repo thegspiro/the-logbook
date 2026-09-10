@@ -858,6 +858,14 @@ Body: {
 Copying the `roles` body to the `positions` route returns a 422:
 `PositionsSetupRequest` requires the `positions` key.
 
+**Neither list may be empty.** Both `RolesSetupRequest.roles` and
+`PositionsSetupRequest.positions` declare `min_length=1` (and `max_length=200`),
+so `{positions: []}` — the natural way to ask for "none of these" — is refused
+by Pydantic before the handler runs, and none of the retention logic below is
+reached. Unticking every configurable position is expressed by submitting the
+ones that remain, not by submitting nothing; the System Owner and Member
+positions are protected by the handler rather than by an empty request.
+
 > **Unticking a position removes it** _(2026-09-09)_: `save_session_roles`
 > used to delete only `is_system=False` rows, so an unticked seeded position
 > survived setup and went on appearing in every picker. It is now deleted,
@@ -1124,6 +1132,19 @@ and nothing else, so after the direct route they answer
 organization row exists and is otherwise complete. A caller who takes the
 direct route gets an organization it cannot then attach stations or apparatus
 to, and no error names the reason.
+
+**The wizard loses the same id at step 6, and this one is reachable from the
+UI.** `save_department_info` replaces `session.data["department"]` wholesale —
+`{name, logo, navigation_layout, saved_at}` — and `organization_id` is not
+among the keys it writes back. Navigation Choice is step 6, straight after
+Stations (4) and Apparatus (5), so the normal forward path stores the id at
+step 3, uses it twice, then drops it. Every later save to `/session/stations`
+or `/session/apparatus` answers
+`400 Organization must be created before adding stations`, and the wizard has
+Back buttons that lead there. Re-saving Organization Setup restores the id,
+because `save_session_organization` writes the block again — but nothing tells
+an installer that, and the error points at the organization rather than at the
+step that erased the reference to it.
 
 ```
 POST /api/v1/onboarding/session/organization
@@ -1548,8 +1569,8 @@ Marks onboarding as finished, and does three further things worth knowing:
   So every finished installation keeps its onboarding session indefinitely,
   holding the encrypted email and file-storage credentials plus, as plain JSON
   rather than encrypted: the IT-team members and backup-access contact details,
-  the department name and navigation choice, the created facility and apparatus
-  ids, and the id, name and priority of every position the department
+  the department name, its uploaded logo (base64 or a URL, as validated at
+  save time) and the navigation choice, the created facility and apparatus ids, and the id, name and priority of every position the department
   configured. Position descriptions and permission lists are **not** among them
   — those live on the `Role` rows. `/complete` clears only the browser-side
   identifiers.
