@@ -16,13 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Feature 17 (Training core), pass 4** — branch
+`claude/security-review-training-core-pass4`, PR pending push. 0 fixes,
+0 new flags: diffed the seven declared files against the pass-3 merge
+(`0d1f92c41`) and found only two changed (`training.py`,
+`training_compliance.py`), both from one non-security-review feature branch
+("Redesign the compliance matrix as a triage queue," already through three
+rounds of its own Codex review). Read that diff in full against all seven
+checklist dimensions — org scoping, permission gate, and abuse-resistance
+shape are all unchanged from pass 1-3's own review of this endpoint; the
+two real bugs the redesign fixed along the way (a broken `role_id`/`id`
+profile-matching lookup, and a `MissingGreenlet` crash from an un-eager-
+loaded `positions` relationship) were pre-existing, not introduced by it.
+Full write-up: `docs/security-review/TR-17-training-core.md` → Pass 4. Next:
+push, open the PR, tend it to green, then Feature 18 (Training extended).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2451's merge, Feature 16 pass 4), preserved for history</summary>
+
 **None.** PR [#2451](https://github.com/thegspiro/the-logbook/pull/2451)
 (Feature 16, Events & requests, pass 4) merged clean via squash, merge
 commit `32763dd`, all 17 CI checks green including Playwright E2E, two
 rounds of Codex review both resolved with no unaddressed findings.
 Rotation row 16 is now `✅`. Next: Feature 17.
 
-A Codex review of the open PR caught one real gap this pass's own
+</details>
+
+<details>
+<summary>Superseded — Feature 16 pass 4 (PR #2451) Codex-review follow-up detail: EV-24 tiebreaker fix, typescript/vitest-ui investigation, preserved for history</summary>
+
+A Codex review of the open PR (#2451) caught one real gap this pass's own
 completion gate missed: the EV-24 fix's admissibility check compared
 `responded_at` with a bare `<`, so two waitlisted RSVPs tied to the same
 second (routine under MySQL's second-precision `DATETIME`) had no
@@ -83,6 +106,8 @@ test:ui` outright (`ERR_MODULE_NOT_FOUND`). Fixed by pinning `@vitest/ui`
 to `^4.1.10` — verified via fresh `npm ci`, `npm ls` clean, and the script
 no longer crashing. See `docs/KNOWN_LIMITATIONS.md`'s own entry for
 detail.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 4, PR #2451, before the Codex-review tiebreaker fix and the typescript follow-up), preserved for history</summary>
@@ -12571,7 +12596,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |

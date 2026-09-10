@@ -1159,3 +1159,120 @@ training.py`, so the one write path that could otherwise fan out an
 | `cd frontend && npx tsc --noEmit`                          | ✅ 0 errors                                                              |
 | `cd frontend && npx eslint .`                              | ✅ 0 errors, 10 pre-existing warnings (none in touched files)            |
 | `cd frontend && npx vitest run src/utils/apiCache.test.ts` | ✅ 85 passed (4 new assertions total: TR2-1 + TR2-3)                     |
+
+---
+
+## Pass 4 (2026-09-10) — 0 fixes, 0 new flags; re-verification + review of the compliance-matrix redesign
+
+**Scope check:** diffed the seven declared files against `0d1f92c41` (the
+pass-3/round-6 merge, PR #2222). Five are byte-for-byte unchanged:
+`training_programs.py`, `training_sessions.py`, `training_service.py`,
+`training_program_service.py`, `training_session_service.py`. Two changed:
+`training.py` (+187/-11, confined to `get_compliance_matrix` and its response
+models) and `training_compliance.py` (+207/-49). Both changes are one
+feature — "Redesign the compliance matrix as a triage queue" and its two
+Codex-review follow-ups (not a security-review PR; a regular feature branch,
+merged 2026-09-05/06) — not organic growth across the rest of the file.
+Also checked: `models/training.py`'s only diff since pass 3 is Scheduling's
+shift-signup change (unrelated, same pattern pass 3 already noted for this
+file); the training-configure migration's only diff is a comment correcting
+a stale Pitfall #26 claim, no behavior change; `app/mcp/tools/training.py`
+and every other call site instantiating `TrainingService`/
+`TrainingProgramService`/`TrainingSessionService` app-wide — no new file
+found, no scope addition needed this pass.
+
+**Re-verification of pass 1-3 fixes:** TR-11, TR-12, TR-13 all confirmed
+present at their pass-2-cited line numbers, unaffected by this pass's diff
+(both changed files touch only `get_compliance_matrix`/its evaluator helper;
+`create_record`, `create_records_bulk`, `confirm_historical_import`,
+`get_all_requirements_progress`, `generate_training_report`,
+`_resolve_or_create_requirement` are all outside the diff). TR3-1's
+due-date-normalization fix (`create_requirement`/`update_requirement`,
+`training.py` lines 1288/1341) is likewise outside the diff and unchanged.
+All five flagged-not-fixed items (TR2-2, TR2-4, TR3-2, the bulk/historical-
+import enum-validation gap, `enroll_member`'s duplicate-active-enrollment
+race) sit in code this pass's diff never touches, and their
+`docs/KNOWN_LIMITATIONS.md` mirrors still describe the current code
+accurately — none has been fixed or has regressed further.
+
+### Review of the compliance-matrix redesign (new since pass 3)
+
+`get_compliance_matrix` was rebuilt from a plain met/not-met grid into a
+triage view backed by a new `RequirementEvaluation` dataclass
+(`training_compliance.py`'s `evaluate_member_requirement_detail`, wrapped by
+the pre-existing `evaluate_member_requirement` so its four other call sites
+and their test suite are unaffected) and a new `classify_standing` helper
+lifted out of `_evaluate_member_compliance` so the matrix and the dashboard
+percentage (`compute_org_compliance_pct`) share one definition of
+compliant/at-risk/non-compliant. This is exactly the discipline CLAUDE.md's
+Pitfall #29 (written from an earlier incident on this same screen) asks
+for, and the commit messages cite that lineage directly. Read the full diff
+of both changed files, not just the description:
+
+- **Org/tenant scoping unaffected.** `get_compliance_matrix`'s `members`,
+  `requirements`, and `records` queries are the same three org-scoped
+  queries pass 1 reviewed (`organization_id` filter on all three, plus a
+  `user_id.in_(...)` restricted to the already-org-scoped `members` list on
+  the records query) — untouched by this diff; only the per-cell response
+  shape changed.
+- **Permission gate unchanged** — `require_permission("training.manage")`,
+  matching TR2-1's finding that this endpoint carries per-member PII and
+  needs it.
+- **Two real, pre-existing bugs fixed as part of this redesign, not
+  introduced by it:** `_find_matching_profile` was reading a `role_id`
+  attribute `Position` does not have (it has `id`) — every role-scoped
+  compliance profile silently matched nobody and fell back to org-wide
+  grading since the code predating this refactor; and
+  `compute_org_compliance_pct` (the dashboard-percentage function) read
+  `member.positions` without eager-loading it, which raises
+  `MissingGreenlet` on an `AsyncSession` for every member but the caller —
+  i.e., on every real request from an org using compliance profiles at all.
+  Both are load-bearing for the profile-matching feature these same commits
+  extended into the matrix, and both are fixed at the same two call sites
+  (`get_compliance_matrix` gained the identical `selectinload(User.positions)`
+  eager-load `compute_org_compliance_pct` needed).
+- **The "empty denominator" pattern Pitfall #29 warns about is present but
+  deliberate and consistent, not a regression.** `classify_standing`
+  returns `("compliant", 100.0)` when `total_count <= 0`
+  (`training_compliance.py:717`) — this exactly preserves
+  `_evaluate_member_compliance`'s pre-existing `if not member_reqs: return
+"compliant", 100.0` guard (present before this refactor; confirmed via
+  `git show 0d1f92c41:.../training_compliance.py`), now shared by both the
+  matrix and the dashboard percentage instead of being duplicated. The new
+  frontend model (`complianceMatrixModel.ts`) applies the _same_ member-level
+  convention (`pct: total === 0 ? 100 : ...` in `evaluateMember`) but
+  deliberately diverges for the **per-requirement** rollup
+  (`rollUpRequirements`'s `pct: total === 0 ? null : ...`), with a comment
+  citing the exact "empty denominator is not success" reasoning — a
+  requirement nobody is graded against reads "not applicable" rather than a
+  misleading "100% met" in green. Two different conventions for two
+  different questions ("has this member met everything asked of them" vs.
+  "is this requirement actually being satisfied"), applied consistently
+  across both new files. Not a finding.
+- **No new client-supplied FK, no new route, no schema change, no banned
+  frontend pattern** (`window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`) in `ComplianceMatrixTab.tsx` or
+  `complianceMatrixModel.ts`.
+- **Abuse resistance unchanged from pass 1-3's own review of this
+  function's shape**: still an org-wide, unpaginated scan of active
+  members/requirements/records, same class already covered by TR2-4's flag
+  against the sibling dashboard-summary endpoint (bounded by department
+  size, not by member training history — the distinction pass 2's own
+  "Verified good" section already draws). Not a new finding; this pass did
+  not re-flag it separately since it is the same pre-existing shape, not a
+  behavior this diff changed.
+
+**No findings this pass.** The redesign's own three Codex review rounds
+already caught and fixed the two real bugs above before this pass read the
+code; nothing further surfaced against any of the seven checklist
+dimensions.
+
+## Completion gate (pass 4)
+
+Documentation-only change (this pass added no code, only this findings file
+and `PROGRESS.md`) — per CLAUDE.md's "Match the Verification to the Change,"
+no local suite re-run was required. Confirmed instead by direct inspection
+that the diffed code exists as described and that flake8/black/isort/tsc/
+eslint all remain the responsibility of the (already-merged, already-CI-
+green) compliance-matrix commits reviewed above, not of this pass's own
+(zero-line) code diff.
