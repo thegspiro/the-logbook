@@ -131,6 +131,7 @@ interface ProspectiveMembersState {
   isHolding: boolean;
   isResuming: boolean;
   isWithdrawing: boolean;
+  isAssigningStage: boolean;
   isReactivating: boolean;
   isPurging: boolean;
   error: string | null;
@@ -156,6 +157,7 @@ interface ProspectiveMembersState {
   holdApplicant: (id: string, reason?: string) => Promise<void>;
   resumeApplicant: (id: string) => Promise<void>;
   withdrawApplicant: (id: string, reason?: string) => Promise<void>;
+  assignApplicantStage: (id: string, stageId: string, notes?: string) => Promise<void>;
 
   // Inactivity actions
   reactivateApplicant: (id: string, notes?: string) => Promise<void>;
@@ -281,6 +283,7 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   isHolding: false,
   isResuming: false,
   isWithdrawing: false,
+  isAssigningStage: false,
   isReactivating: false,
   isPurging: false,
   error: null,
@@ -521,6 +524,25 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       set({
         error: handleStoreError(error, 'Failed to move applicant back'),
         isRegressing: false,
+      });
+      throw error;
+    }
+  },
+
+  assignApplicantStage: async (id: string, stageId: string, notes?: string) => {
+    set({ isAssigningStage: true, error: null });
+    try {
+      await applicantService.assignStage(id, stageId, notes);
+      await get().fetchApplicants();
+      const currentApplicant = get().currentApplicant;
+      if (currentApplicant?.id === id) {
+        await get().fetchApplicant(id);
+      }
+      set({ isAssigningStage: false });
+    } catch (error) {
+      set({
+        error: handleStoreError(error, 'Failed to place applicant on a stage'),
+        isAssigningStage: false,
       });
       throw error;
     }

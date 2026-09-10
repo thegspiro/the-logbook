@@ -109,7 +109,21 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
     isResuming,
     isWithdrawing,
     isReactivating,
+    assignApplicantStage,
+    isAssigningStage,
+    currentPipeline,
   } = useProspectiveMembersStore();
+
+  const [stageToPlace, setStageToPlace] = useState('');
+
+  // Only when the applicant is on no stage, and only offering stages from
+  // their own pipeline — currentPipeline is whichever board is open, which is
+  // not necessarily theirs.
+  const placeableStages =
+    currentPipeline && currentPipeline.id === applicant.pipeline_id
+      ? [...currentPipeline.stages].sort((a, b) => a.sort_order - b.sort_order)
+      : [];
+  const canPlaceOnStage = !applicant.current_stage_id && placeableStages.length > 0;
 
   const [actionNotes, setActionNotes] = useState('');
   const [showNotesInput, setShowNotesInput] = useState(false);
@@ -160,6 +174,22 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       toast.error(getErrorMessage(error, 'Failed to skip stage'));
     } finally {
       setIsSkipping(false);
+    }
+  };
+
+  const handleAssignStage = async () => {
+    const stage = placeableStages.find((s) => s.id === stageToPlace);
+    if (!stage) return;
+    try {
+      await assignApplicantStage(applicant.id, stage.id, actionNotes || undefined);
+      toast.success(`Placed on ${stage.name}`);
+      setStageToPlace('');
+      setActionNotes('');
+    } catch (error: unknown) {
+      // The server's own refusal ("This applicant is already on a stage") is
+      // what tells the coordinator what happened; a fixed string would throw
+      // it away.
+      toast.error(getErrorMessage(error, 'Failed to place applicant on a stage'));
     }
   };
 
@@ -223,6 +253,51 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
       {/* Active Status Actions */}
       {applicant.status === ApplicantStatus.ACTIVE && (
         <div className="border-theme-surface-border space-y-3 border-t p-4">
+          {/*
+            An applicant can end up on no stage at all: deleting a pipeline's
+            last stage nulls current_step_id for everyone on it. Advance, Back
+            and Skip all need a stage to work from, so without this the only
+            things left to do with them were closing the application. The
+            stages offered come from the pipeline the applicant actually
+            belongs to, not whichever board happens to be open.
+          */}
+          {canPlaceOnStage && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Not on a stage</p>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                This applicant is not on any stage of their pipeline, so they cannot be advanced. Place them on the
+                stage they should be working.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <label htmlFor="place-on-stage" className="sr-only">
+                  Stage to place this applicant on
+                </label>
+                <select
+                  id="place-on-stage"
+                  value={stageToPlace}
+                  onChange={(e) => setStageToPlace(e.target.value)}
+                  className="form-input flex-1 px-3 text-sm"
+                >
+                  <option value="">Choose a stage…</option>
+                  {placeableStages.map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    void handleAssignStage();
+                  }}
+                  disabled={!stageToPlace || isAssigningStage}
+                  className="flex items-center gap-1 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
+                >
+                  {isAssigningStage && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Place
+                </button>
+              </div>
+            </div>
+          )}
           {stageRequirementHint && !isLastStage && (
             <div className="border-theme-surface-border bg-theme-surface-hover rounded-lg border p-3">
               <p className="text-theme-text-secondary text-xs font-medium">Before advancing</p>
