@@ -64,6 +64,7 @@ from app.services.event_request_service import (
     apply_default_assignee,
     configured_task_ids,
     get_linked_calendar_event,
+    get_live_staffing_shift,
     get_outreach_roles,
     get_outreach_types,
     get_pipeline_settings,
@@ -1063,6 +1064,14 @@ async def schedule_request(
     existing_event = await get_linked_calendar_event(db, event_request)
     if existing_event is not None and existing_event.is_cancelled:
         existing_event = None
+        # Drop the stored link as well as the local value. A cancelled entry
+        # cannot be moved to the new date, and the create branch below writes
+        # the replacement's id over this — but when the caller asks for no
+        # calendar entry, nothing else clears it, and the request stays
+        # scheduled while pointing at an event that is not happening. This
+        # call's own response then reports no event while the next
+        # request-detail response hands back the cancelled one.
+        event_request.event_id = None
     # The id the caller gets back names the entry that is actually on the
     # calendar, so a link to a stood-down event is never handed out.
     event_id = existing_event.id if existing_event is not None else None
@@ -1604,7 +1613,11 @@ async def open_request_staffing(
                 )
             ),
         )
-    if event_request.staffing_shift_id:
+    # A link alone is not an open sheet. A postponement to a date TBD cancels
+    # the shift and tells the crew but leaves the link set, so refusing on the
+    # link left a rescheduled request permanently tied to a sheet members
+    # cannot see or join. A cancelled sheet is replaced; a live one is not.
+    if await get_live_staffing_shift(db, event_request) is not None:
         raise HTTPException(
             status_code=409,
             detail="Volunteer signups are already open for this request.",

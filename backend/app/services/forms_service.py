@@ -1738,6 +1738,55 @@ class FormsService:
         except Exception as e:
             logger.error(f"Pipeline auto-advance check failed: {e}")
 
+    def _mapped_field_options(
+        self,
+        integration_type: str,
+        target_field: str,
+        integration: Optional[FormIntegration],
+        form: Optional[Form],
+    ) -> set:
+        """The values a form's own choice field offers for one mapped target.
+
+        A published form keeps the ``<select>`` options it was generated with,
+        so its vocabulary can outlive the organization setting it was built
+        from. ``submit_form`` validates a select/radio answer against exactly
+        these options, which is what makes them safe to treat as bounded —
+        a free-text field contributes nothing, because its answer is whatever
+        somebody typed.
+        """
+        form_fields = getattr(form, "fields", None)
+        if not form_fields:
+            return set()
+
+        field_ids = set()
+        mappings = (integration.field_mappings or {}) if integration else {}
+        for field_id, mapped_target in mappings.items():
+            if mapped_target == target_field:
+                field_ids.add(str(field_id))
+
+        label_map = self._LABEL_MAPS.get(integration_type) or {}
+        for field_def in form_fields:
+            label = (getattr(field_def, "label", "") or "").strip().lower()
+            if label_map.get(label) == target_field:
+                field_ids.add(str(field_def.id))
+
+        choice_types = {FieldType.SELECT.value, FieldType.RADIO.value}
+        values = set()
+        for field_def in form_fields:
+            if str(field_def.id) not in field_ids:
+                continue
+            field_type = getattr(field_def, "field_type", None)
+            field_type = getattr(field_type, "value", field_type)
+            if field_type not in choice_types:
+                continue
+            for opt in field_def.options or []:
+                value = (
+                    opt.value if hasattr(opt, "value") else (opt or {}).get("value", "")
+                )
+                if value:
+                    values.add(str(value))
+        return values
+
     def _apply_label_fallback(
         self,
         integration_type: str,
@@ -2649,6 +2698,9 @@ class FormsService:
                 ),
                 "preferred_date_start": preferred_start,
             },
+            form_outreach_types=self._mapped_field_options(
+                IntegrationType.EVENT_REQUEST, "outreach_type", integration, form
+            ),
         )
         date_flexibility = settled["date_flexibility"]
 

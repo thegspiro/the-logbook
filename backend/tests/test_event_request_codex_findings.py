@@ -997,6 +997,7 @@ class TestPostponeWindowIsValidated:
 EVENT_UUID = "00000000-0000-0000-0000-0000000000ee"
 REQUEST_UUID = "00000000-0000-0000-0000-0000000000ff"
 USER_UUID = "00000000-0000-0000-0000-0000000000a1"
+SHIFT_UUID = "00000000-0000-0000-0000-0000000000b2"
 
 
 class TestCalendarRefusalsReachTheCoordinator:
@@ -1146,3 +1147,414 @@ class TestAnEmptyOutreachTypeListIsPreserved:
             },
         )
         assert settled["outreach_type"] == "other"
+
+
+# ============================================
+# Round 7 — findings on the round-6 fixes
+# ============================================
+
+
+class TestACancelledSignupSheetIsReplaceable:
+    """A postponement to a date TBD cancels the shift and tells the crew, but
+    leaves `staffing_shift_id` set. Rescheduling then moved that cancelled
+    sheet's dates without restoring its status or its assignments, while
+    `open_request_staffing` refused to open a replacement because the link was
+    non-null — the request was permanently tied to a sheet nobody could join."""
+
+    @staticmethod
+    def _shift(status, *, finalized=False):
+        from app.models.training import ShiftStatus
+
+        return SimpleNamespace(
+            id=SHIFT_UUID,
+            organization_id=ORG_ID,
+            status=status,
+            is_finalized=finalized,
+            shift_date=None,
+            start_time=None,
+            end_time=None,
+            _cancelled=status == ShiftStatus.CANCELLED,
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_cancelled_sheet_reads_as_absent(self):
+        from app.models.training import ShiftStatus
+        from app.services.event_request_service import get_live_staffing_shift
+
+        db = AsyncMock()
+        db.scalar.return_value = self._shift(ShiftStatus.CANCELLED)
+        request = SimpleNamespace(organization_id=ORG_ID, staffing_shift_id=SHIFT_UUID)
+
+        assert await get_live_staffing_shift(db, request) is None
+
+    @pytest.mark.asyncio
+    async def test_a_live_sheet_still_reads_as_present(self):
+        from app.models.training import ShiftStatus
+        from app.services.event_request_service import get_live_staffing_shift
+
+        db = AsyncMock()
+        shift = self._shift(ShiftStatus.SCHEDULED)
+        db.scalar.return_value = shift
+        request = SimpleNamespace(organization_id=ORG_ID, staffing_shift_id=SHIFT_UUID)
+
+        assert await get_live_staffing_shift(db, request) is shift
+
+    @pytest.mark.asyncio
+    async def test_rescheduling_does_not_move_a_cancelled_sheet(self):
+        from app.models.training import ShiftStatus
+        from app.services.event_request_service import sync_staffing_shift_date
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        shift = self._shift(ShiftStatus.CANCELLED)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = shift
+        request = SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            staffing_shift_id=SHIFT_UUID,
+            event_date=start,
+            event_end_date=start + timedelta(hours=2),
+        )
+
+        await sync_staffing_shift_date(db, request, None, USER_UUID)
+
+        # The cancelled sheet keeps its dates, and no activity row claims a
+        # move that would not have brought the crew back.
+        assert shift.start_time is None
+        assert db.add.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_rescheduling_still_moves_a_live_sheet(self):
+        from app.models.training import ShiftStatus
+        from app.services.event_request_service import sync_staffing_shift_date
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        shift = self._shift(ShiftStatus.SCHEDULED)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.scalar.return_value = shift
+        request = SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            staffing_shift_id=SHIFT_UUID,
+            event_date=start,
+            event_end_date=start + timedelta(hours=2),
+        )
+
+        await sync_staffing_shift_date(db, request, None, USER_UUID)
+
+        assert shift.start_time == start
+        assert db.add.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_signups_can_be_opened_again_after_a_cancellation(self):
+        from app.api.v1.endpoints.event_requests import open_request_staffing
+        from app.models.event_request import EventRequestStatus
+        from app.schemas.event_request import (
+            EventRequestStaffingCreate,
+            StaffingRoleNeed,
+        )
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        event_request = SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            status=EventRequestStatus.SCHEDULED,
+            staffing_shift_id=SHIFT_UUID,
+            event_date=start,
+            event_end_date=start + timedelta(hours=2),
+        )
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value = SimpleNamespace(
+            scalar_one_or_none=lambda: SimpleNamespace(
+                id=ORG_ID, name="Oakville", timezone="UTC", settings={}
+            )
+        )
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests._load_request_for_staffing",
+                AsyncMock(return_value=event_request),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.get_live_staffing_shift",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.open_staffing_shift",
+                AsyncMock(return_value=(SimpleNamespace(id=SHIFT_UUID), None)),
+            ) as opened,
+            patch(
+                "app.api.v1.endpoints.event_requests.get_staffing_state",
+                AsyncMock(
+                    return_value={
+                        "shift_id": SHIFT_UUID,
+                        "shift_date": None,
+                        "slots_total": 1,
+                        "slots_filled": 0,
+                        "roles": [],
+                        "volunteers": [],
+                        "volunteer_call_sent_at": None,
+                    }
+                ),
+            ),
+        ):
+            await open_request_staffing(
+                request_id=REQUEST_UUID,
+                data=EventRequestStaffingCreate(
+                    roles=[StaffingRoleNeed(role="volunteer", count=1)]
+                ),
+                db=db,
+                current_user=SimpleNamespace(id=USER_UUID, organization_id=ORG_ID),
+            )
+
+        opened.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_live_sheet_is_still_refused(self):
+        from app.api.v1.endpoints.event_requests import open_request_staffing
+        from app.models.event_request import EventRequestStatus
+        from app.schemas.event_request import (
+            EventRequestStaffingCreate,
+            StaffingRoleNeed,
+        )
+
+        event_request = SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            status=EventRequestStatus.SCHEDULED,
+            staffing_shift_id=SHIFT_UUID,
+        )
+        db = AsyncMock()
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests._load_request_for_staffing",
+                AsyncMock(return_value=event_request),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.get_live_staffing_shift",
+                AsyncMock(return_value=SimpleNamespace(id=SHIFT_UUID)),
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await open_request_staffing(
+                request_id=REQUEST_UUID,
+                data=EventRequestStaffingCreate(
+                    roles=[StaffingRoleNeed(role="volunteer", count=1)]
+                ),
+                db=db,
+                current_user=SimpleNamespace(id=USER_UUID, organization_id=ORG_ID),
+            )
+
+        assert exc.value.status_code == 409
+
+
+class TestACancelledCalendarLinkIsCleared:
+    """A postponement to a date TBD stands the calendar entry down but leaves
+    `event_id` set. Rescheduling with `create_calendar_event=false` dropped only
+    the local value, so the PATCH reported no event while the next
+    request-detail response handed back the cancelled one."""
+
+    @staticmethod
+    def _db(event_request, org):
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: event_request),
+            SimpleNamespace(scalar_one_or_none=lambda: org),
+            SimpleNamespace(scalar_one_or_none=lambda: org),
+        ]
+        return db
+
+    @pytest.mark.asyncio
+    async def test_scheduling_without_a_calendar_entry_clears_the_stale_link(self):
+        from app.api.v1.endpoints.event_requests import schedule_request
+        from app.models.event_request import EventRequestStatus
+
+        start = datetime(2026, 11, 4, 14, 0, tzinfo=timezone.utc)
+        event_request = SimpleNamespace(
+            id=REQUEST_UUID,
+            organization_id=ORG_ID,
+            status=EventRequestStatus.POSTPONED,
+            event_id=EVENT_UUID,
+            event_date=None,
+            event_end_date=None,
+            event_location_id=None,
+            staffing_shift_id=None,
+            activity_log=[],
+            contact_name="Pat Kelly",
+            organization_name=None,
+            outreach_type="station_tour",
+            description="Career day",
+        )
+        org = SimpleNamespace(
+            id=ORG_ID, name="Oakville", timezone="UTC", settings={"events": {}}
+        )
+        db = self._db(event_request, org)
+
+        cancelled = SimpleNamespace(
+            id=EVENT_UUID,
+            organization_id=ORG_ID,
+            is_cancelled=True,
+            start_datetime=start - timedelta(days=7),
+            end_datetime=start - timedelta(days=7) + timedelta(hours=2),
+        )
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests.get_linked_calendar_event",
+                AsyncMock(return_value=cancelled),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.sync_calendar_event_date",
+                AsyncMock(return_value=None),
+            ) as moved,
+            patch(
+                "app.api.v1.endpoints.event_requests._send_request_notification",
+                AsyncMock(),
+            ),
+        ):
+            result = await schedule_request(
+                request_id=REQUEST_UUID,
+                data=EventRequestSchedule(
+                    event_date=start, create_calendar_event=False
+                ),
+                db=db,
+                current_user=SimpleNamespace(id=USER_UUID, organization_id=ORG_ID),
+            )
+
+        assert result["event_id"] is None
+        # The persisted link is cleared too, so the detail response cannot hand
+        # back an event that is not happening.
+        assert event_request.event_id is None
+        # A cancelled entry refuses edits by design; nothing tried to move it.
+        moved.assert_not_awaited()
+
+
+class TestARetiredOutreachTypeOfferedByTheFormSurvives:
+    """A published form keeps the `<select>` options it was generated with, so
+    a department that retires a type leaves a live form still offering it.
+    `submit_form` validates the answer against exactly those options, which is
+    what makes the form's vocabulary bounded rather than free text."""
+
+    @staticmethod
+    def _org():
+        return SimpleNamespace(
+            id=ORG_ID,
+            settings={
+                "events": {
+                    "outreach_event_types": [
+                        {"value": "station_tour", "label": "Station Tour"},
+                        {"value": "other", "label": "Other"},
+                    ]
+                }
+            },
+        )
+
+    def _settle(self, value, form_types=None):
+        from app.services.event_request_service import normalize_request_preferences
+
+        return normalize_request_preferences(
+            self._org(),
+            {
+                "outreach_type": value,
+                "date_flexibility": "flexible",
+                "venue_preference": "either",
+                "preferred_time_of_day": "morning",
+                "preferred_date_start": None,
+            },
+            form_outreach_types=form_types,
+        )["outreach_type"]
+
+    def test_a_retired_type_the_form_offers_is_preserved(self):
+        assert self._settle("smoke_trailer", ["smoke_trailer"]) == "smoke_trailer"
+
+    def test_a_value_no_vocabulary_knows_still_settles_to_other(self):
+        assert self._settle("smoke_trailer") == "other"
+        assert self._settle("<script>", ["station_tour"]) == "other"
+
+    def test_a_configured_type_is_unaffected(self):
+        assert self._settle("station_tour", ["smoke_trailer"]) == "station_tour"
+
+    def test_the_form_vocabulary_is_still_length_bounded(self):
+        from app.services.event_request_service import OUTREACH_TYPE_MAX_LENGTH
+
+        long_value = "x" * (OUTREACH_TYPE_MAX_LENGTH + 50)
+        assert len(self._settle(long_value, [long_value])) == OUTREACH_TYPE_MAX_LENGTH
+
+    def test_only_choice_fields_contribute_a_vocabulary(self):
+        from app.models.forms import FieldType
+
+        service = FormsService(AsyncMock())
+        select_field = SimpleNamespace(
+            id="f1",
+            label="Outreach Type",
+            field_type=FieldType.SELECT.value,
+            options=[{"value": "smoke_trailer", "label": "Smoke Trailer"}],
+        )
+        text_field = SimpleNamespace(
+            id="f2",
+            label="Type",
+            field_type=FieldType.TEXT.value,
+            options=[{"value": "anything", "label": "Anything"}],
+        )
+        form = SimpleNamespace(fields=[select_field, text_field])
+
+        values = service._mapped_field_options(
+            IntegrationType.EVENT_REQUEST, "outreach_type", None, form
+        )
+
+        # A free-text field's answer is whatever somebody typed, so it is not a
+        # vocabulary and contributes nothing.
+        assert values == {"smoke_trailer"}
+
+    def test_an_explicit_field_mapping_is_honoured(self):
+        from app.models.forms import FieldType
+
+        service = FormsService(AsyncMock())
+        field = SimpleNamespace(
+            id="f9",
+            label="What are you after?",
+            field_type=FieldType.RADIO.value,
+            options=[{"value": "smoke_trailer", "label": "Smoke Trailer"}],
+        )
+        form = SimpleNamespace(fields=[field])
+        integration = SimpleNamespace(field_mappings={"f9": "outreach_type"})
+
+        values = service._mapped_field_options(
+            IntegrationType.EVENT_REQUEST, "outreach_type", integration, form
+        )
+
+        assert values == {"smoke_trailer"}
+
+    def test_no_form_means_no_vocabulary(self):
+        service = FormsService(AsyncMock())
+
+        assert (
+            service._mapped_field_options(
+                IntegrationType.EVENT_REQUEST, "outreach_type", None, None
+            )
+            == set()
+        )
+
+
+class TestTheBackfillComparesAccentSensitively:
+    """`utf8mb4_unicode_ci` is accent-insensitive as well as case-insensitive,
+    so an off-list "mörning" compared *equal* to "morning" under the column's
+    own collation: it took the preserving branch and stayed stored off-list,
+    which is what this migration exists to end."""
+
+    BACKFILL = TestPreferenceBackfill.BACKFILL
+
+    def test_both_sides_of_the_comparison_are_cast_to_binary(self):
+        text = self.BACKFILL.read_text()
+        assert "CAST(LOWER(TRIM({column})) AS BINARY)" in text
+        assert "CAST(:v{i} AS BINARY)" in text
+
+    def test_the_preserving_branch_still_writes_the_normalized_value(self):
+        # Bytes decide *whether* to preserve; what gets stored is still the
+        # LOWER(TRIM(...)) form, so " Morning" lands as "morning".
+        assert "THEN LOWER(TRIM({column}))" in self.BACKFILL.read_text()

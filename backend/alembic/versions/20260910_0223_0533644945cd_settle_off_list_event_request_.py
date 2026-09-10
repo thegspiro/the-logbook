@@ -95,7 +95,7 @@ def upgrade() -> None:
 
     bind = op.get_bind()
     for column, allowed, fallback in _VOCABULARIES:
-        placeholders = ", ".join(f":v{i}" for i in range(len(allowed)))
+        placeholders = ", ".join(f"CAST(:v{i} AS BINARY)" for i in range(len(allowed)))
         params = {f"v{i}": value for i, value in enumerate(allowed)}
         params["fallback"] = fallback
         # LOWER(TRIM(...)) first, matching the runtime normalizer's
@@ -110,6 +110,16 @@ def upgrade() -> None:
         # `NOT IN` would leave it stored with its capital, still off-canonical
         # and still unmatched by any reader doing an exact comparison.
         #
+        # Both sides of the IN are cast to BINARY for the same collation
+        # reason, in the other direction. utf8mb4_unicode_ci is accent-
+        # insensitive as well as case-insensitive, so an off-list "morning"
+        # written with an umlaut compares *equal* to "morning" under the
+        # column's own collation: it would take the preserving branch and stay
+        # stored as the off-list value, which is precisely what this migration
+        # exists to end. A byte comparison recognises only the canonical
+        # spellings, so anything else reaches the fallback. LOWER() has already
+        # settled case, so nothing legitimate is lost by comparing bytes.
+        #
         # Applied to every non-NULL row rather than only the ones that differ:
         # the CASE is a no-op for an already-canonical value, which keeps the
         # statement idempotent without needing a collation-aware inequality.
@@ -119,7 +129,8 @@ def upgrade() -> None:
         bind.execute(
             sa.text(
                 f"UPDATE event_requests SET {column} = CASE"
-                f" WHEN LOWER(TRIM({column})) IN ({placeholders})"
+                f" WHEN CAST(LOWER(TRIM({column})) AS BINARY)"
+                f" IN ({placeholders})"
                 f" THEN LOWER(TRIM({column}))"
                 f" ELSE :fallback END"
                 f" WHERE {column} IS NOT NULL"

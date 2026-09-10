@@ -14,7 +14,7 @@ nobody — requester or coordinator — was told a request had arrived.
 
 import html as _html
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from loguru import logger
 from sqlalchemy import func, select
@@ -271,7 +271,11 @@ def _clamp_choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
     return text if text in allowed else default
 
 
-def normalize_request_preferences(org: Optional[Organization], data: dict) -> dict:
+def normalize_request_preferences(
+    org: Optional[Organization],
+    data: dict,
+    form_outreach_types: Optional[Iterable[str]] = None,
+) -> dict:
     """Settle a requester's answers onto the pipeline's canonical shapes.
 
     Applied on **every** write path (CLAUDE.md pitfall #20): the JSON endpoint
@@ -291,6 +295,17 @@ def normalize_request_preferences(org: Optional[Organization], data: dict) -> di
 
     outreach_type = str(settled.get("outreach_type") or "").strip()
     configured = {t["value"] for t in get_outreach_types(org)}
+    # A published form keeps the options it was generated with, so a department
+    # that retires or renames a type leaves a live form still offering the old
+    # value — and a requester who picks it has answered the question the
+    # department asked. `form_outreach_types` is that form's own `<select>`
+    # vocabulary, which `submit_form` has already validated the answer against,
+    # so it is bounded rather than free text. Preserving it matches the
+    # accompanying migration, which leaves historical `outreach_type` values
+    # alone for this same retired-type case; rewriting it here would tell the
+    # coordinator "Other" about a request that named a real event.
+    if form_outreach_types:
+        configured |= {str(v) for v in form_outreach_types if v}
     if outreach_type not in configured:
         # Falling back rather than storing the unknown value keeps the board's
         # type filter and the acknowledgement email's subject meaningful. The
@@ -1257,6 +1272,35 @@ async def sync_staffing_shift_cancelled(
         )
 
 
+async def get_live_staffing_shift(
+    db: AsyncSession, event_request: EventRequest
+) -> Optional[Any]:
+    """The signup sheet this request is linked to, when it is still standing.
+
+    A **cancelled** sheet is reported as absent, for the same reason
+    ``schedule_request`` treats a cancelled calendar entry as absent: its
+    assignments were cancelled and the crew told, and members can no longer see
+    or join it. Reporting it as present is what tied a rescheduled request to a
+    sheet nobody could sign up for — ``sync_staffing_shift_date`` moved the
+    cancelled shift's dates without restoring its status, and
+    ``open_request_staffing`` then refused to open a replacement because the
+    link was non-null.
+    """
+    if not event_request.staffing_shift_id:
+        return None
+    from app.models.training import Shift, ShiftStatus
+
+    shift = await db.scalar(
+        select(Shift).where(
+            Shift.id == event_request.staffing_shift_id,
+            Shift.organization_id == str(event_request.organization_id),
+        )
+    )
+    if shift is None or shift.status == ShiftStatus.CANCELLED:
+        return None
+    return shift
+
+
 async def sync_staffing_shift_date(
     db: AsyncSession,
     event_request: EventRequest,
@@ -1268,18 +1312,16 @@ async def sync_staffing_shift_date(
     A postponed-and-rescheduled request whose shift stayed put is worse than no
     sheet at all: the crew that signed up is booked for the old time and the new
     one has nobody. Members keep their seats — the event moved, not the roster.
+
+    A sheet that was stood down is left alone: moving a cancelled shift's dates
+    would not bring it or its assignments back, and the coordinator opens a
+    fresh one instead.
     """
     if not event_request.staffing_shift_id or not event_request.event_date:
         return
-    from app.models.training import Shift
 
     try:
-        shift = await db.scalar(
-            select(Shift).where(
-                Shift.id == event_request.staffing_shift_id,
-                Shift.organization_id == str(event_request.organization_id),
-            )
-        )
+        shift = await get_live_staffing_shift(db, event_request)
         if shift is None or shift.is_finalized:
             return
 

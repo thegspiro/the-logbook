@@ -1266,12 +1266,15 @@ class TestStaffingLifecycle:
 
     @pytest.mark.asyncio
     async def test_a_new_date_moves_the_sheet_and_keeps_the_crew(self):
+        from app.models.training import ShiftStatus
+
         request = _request_row(
             staffing_shift_id="shift-9",
             event_date=datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc),
         )
         shift = SimpleNamespace(
             id="shift-9",
+            status=ShiftStatus.SCHEDULED,
             is_finalized=False,
             shift_date=date(2026, 9, 12),
             start_time=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
@@ -1289,12 +1292,15 @@ class TestStaffingLifecycle:
     @pytest.mark.asyncio
     async def test_a_finalized_sheet_is_left_alone(self):
         """Its data is locked for hours and training credit."""
+        from app.models.training import ShiftStatus
+
         request = _request_row(
             staffing_shift_id="shift-9",
             event_date=datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc),
         )
         shift = SimpleNamespace(
             id="shift-9",
+            status=ShiftStatus.SCHEDULED,
             is_finalized=True,
             shift_date=date(2026, 9, 12),
             start_time=datetime(2026, 9, 12, 14, 0, tzinfo=timezone.utc),
