@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Bookkeeping PR** [#2468](https://github.com/thegspiro/the-logbook/pull/2468)
+— docs-only, recording PR #2460's merge (below) and closing out Feature 18
+in this file. No code change; nothing to tend beyond CI/Codex on the doc
+edit itself. Next: once #2468 merges, start Feature 19 (Skills testing).
+
+<details>
+<summary>Superseded — prior Open PR note ("None" after PR #2460's merge, Feature 18 pass 4), preserved for history</summary>
+
 **None.** PR [#2460](https://github.com/thegspiro/the-logbook/pull/2460)
 (Feature 18, Training extended, pass 4) merged clean, merge commit
 `21470e693`, all CI checks green, nine rounds of Codex review across the
@@ -24,6 +32,8 @@ TRX4-7, TRX4-8 as code/config fixes; TRX4-1 and TRX4-3 as doc corrections)
 plus a scope-check qualification and a reversed-heading fix, all resolved
 (13 review threads, 0 unaddressed). Rotation row 18 is now `✅`. Next:
 Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 4, PR #2460, before the merge), preserved for history</summary>
