@@ -25,6 +25,27 @@ existed when this was written, so the sweep reports new ones without demanding
 that a backlog in per-shot `prepare` steps be cleared first. A green run means
 "no new ones", not "none". Clearing a frozen entry means removing its `.catch`
 and deleting its line here.
+
+**A gate that cannot be bypassed is the only kind worth having**, and the first
+cut of this file could be, four ways — every one found in review, and every one
+would have left the sweep green while the defect shipped:
+
+  `.catch(() => undefined)`      six literal spellings were matched; this is not
+                                 one of them, nor is `async () => null`, nor a
+                                 block that returns a constant. Classified by
+                                 what the handler *yields* now, failing closed:
+                                 anything that is not demonstrably a recovery
+                                 path (it throws, or does real work) is a
+                                 swallow.
+  `.isVisible().catch(() => [])` exempted as a "probe" though `[]` is truthy and
+                                 takes the present branch on failure. The
+                                 exemption now needs the probe directly attached
+                                 AND a `false` fallback.
+  a statement merely *mentioning* a probe was exempt wholesale, so a swallowed
+                                 action beside one was skipped.
+  an identical statement in a different shot inherited its exemption, because a
+                                 signature was only (file, statement). It now
+                                 carries the enclosing shot id or declaration.
 """
 
 from __future__ import annotations
@@ -38,22 +59,52 @@ SCREENSHOTS = Path(__file__).resolve().parent / "screenshots"
 
 CATCH = re.compile(r"\.catch\(")
 
-# The value a swallowing handler hands back in place of the failure. A handler
-# with real statements in it is a recovery path and is not this pattern.
-SWALLOW_ARG = re.compile(
-    r"^\.catch\(\(\)\s*=>\s*(\{\}|''|\"\"|``|null|false|\[\])\s*\)"
+# A value that carries no information about the failure. `.catch(() => false)`
+# and `.catch(() => undefined)` are the same defect wearing different clothes,
+# which is why this is a value set rather than a handful of literal spellings:
+# the first cut of this file matched six exact strings, so `() => undefined`,
+# `async () => null` and `() => { return null; }` all walked through the gate.
+SWALLOW_VALUES = {
+    "",
+    "{}",
+    "[]",
+    "''",
+    '""',
+    "``",
+    "null",
+    "undefined",
+    "false",
+    "true",
+    "0",
+    "-1",
+}
+
+# Probes, and the only fallback that makes one a question rather than a swallow.
+# `.isVisible().catch(() => [])` is NOT a probe: `[]` is truthy, so a failure
+# takes the *present* branch. Matched as a direct attachment — `probe().catch(`
+# — because searching the whole statement for `.isVisible()` exempted any
+# compound statement that merely mentioned one.
+PROBE = re.compile(
+    r"\.(?:isVisible|isChecked|isEnabled|isHidden)\(\s*\)\s*\.?$|"
+    r"\.then\(\s*\(\)\s*=>\s*true\s*\)\s*\.?$"
 )
 
-# Asking a question, where "it is not there" is a real answer rather than a
-# hidden failure. `isVisible` on a control that may not exist is the whole
-# point of calling it, and every call site guards on the result.
-#
-# Deliberately keyed on the predicate, not on the receiver: `innerText()` is a
-# candidate scan in the manifest and the input to three checks in `capture.mjs`,
-# so "which method was called" cannot tell the two apart. A `.then(() => true)`
-# immediately before the catch is the other unambiguous probe shape.
-PROBE_RECEIVERS = ("isVisible", "isChecked", "isEnabled", "isHidden")
-PROBE_THEN = re.compile(r"\.then\(\(\)\s*=>\s*true\)\s*\.catch\(")
+
+def is_false_fallback(argument: str) -> bool:
+    """`() => false` exactly — the only fallback that keeps a probe a question."""
+    return (
+        re.fullmatch(r"(?:async\s+)?\(\s*\)\s*=>\s*false", argument.strip()) is not None
+    )
+
+
+# A function declaration or a shot's `id:`, for naming the site a frozen
+# signature belongs to.
+CONTEXT = re.compile(
+    r"""^\s*id:\s*["']([^"']+)["']|"""
+    r"^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)|"
+    r"^\s*(?:export\s+)?const\s+(\w+)\s*="
+)
+
 
 # Statement starters, for walking back from a `.catch` to the head of its chain.
 STATEMENT_START = re.compile(
@@ -69,18 +120,22 @@ def strip_comments(lines: list[str]) -> list[str]:
     raw text reported those quotations as live code, which is how the first run
     of this sweep "found" a defect inside its own docstring.
 
-    String-aware, and that is not theoretical tidiness: `capture.mjs:36` and
-    `inventory-setup.mjs:53` both hold `"http://localhost:..."`, and a stripper
-    that treats the `//` in a URL as a line comment truncates the rest of that
-    line. No `.catch` shares a line with either today, so nothing was missed —
-    but a `await page.goto("http://x").catch(() => {})` would have gone
-    unreported, and a guard that silently sees nothing is the failure this file
-    exists to prevent.
+    String-aware, and not as tidiness. Two real cases, one found by proving the
+    doubt and one by review:
+
+      capture.mjs:36          "http://localhost:3000"   the `//` ended the line
+      inventory-setup.mjs:444 "**/api/v1/**"            the `/*` opened a block
+
+    The second is worse: with no `*/` on that line the block ran on for 35 lines,
+    so any swallow in that window was invisible. Nothing was actually hidden —
+    the only `.catch` past it is a recovery handler — but a guard with a silent
+    blind spot is the failure this file exists to prevent.
 
     Quote state resets per line. A template literal spanning lines is therefore
     scanned as if each line opened fresh; none of the three files has one, and
-    the alternative (carrying state across lines) mis-reads a stray backtick in
-    prose far more often than it helps.
+    carrying state across lines mis-reads a stray backtick in prose far more
+    often than it helps. Regex literals are not tracked either: none in these
+    files contains `//` or `/*`, and a `/` is too ambiguous to guess at.
     """
     out: list[str] = []
     in_block = False
@@ -139,16 +194,71 @@ def statement_for(lines: list[str], index: int) -> str:
     return re.sub(r"\s+", " ", " ".join(lines[start : index + 1])).strip()
 
 
-def signature(name: str, statement: str, occurrence: int = 1) -> str:
-    """`file:hash` for a statement, plus `#n` when a file repeats it verbatim.
+def catch_argument(lines: list[str], index: int, column: int) -> str:
+    """The text inside `.catch(...)`, paren-balanced, across lines if need be.
 
-    The occurrence suffix matters: four statements appear twice in the manifest
-    (two day-cell scans, two `scrollIntoViewIfNeeded` helpers), and without it
-    one set entry would cover both — so removing one would leave the sweep
-    silent about the other still being there.
+    Taken by balancing rather than by regex so a block body and a multi-line
+    handler are both readable — the two forms the first version could not see.
     """
-    digest = hashlib.sha1(statement.encode()).hexdigest()[:12]
-    return f"{name}:{digest}" + (f"#{occurrence}" if occurrence > 1 else "")
+    text = "\n".join(lines[index : index + 6])
+    start = text.index(".catch(", column) + len(".catch(")
+    depth, i = 1, start
+    while i < len(text) and depth:
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+        i += 1
+    return text[start : i - 1]
+
+
+def is_swallow(argument: str) -> bool:
+    """True when the handler discards the failure and yields a bare value.
+
+    Fails closed on the arrow forms and open on everything else: a handler that
+    is not a simple arrow (a named function, a `.catch(handleIt)`) is left to
+    review rather than guessed at, and one whose body does real work — throws,
+    calls something, assigns — is a recovery path.
+    """
+    body = argument.strip()
+    match = re.match(r"^(?:async\s+)?\(?[\w\s,]*\)?\s*=>\s*(.*)$", body, re.S)
+    if not match:
+        return False
+    rhs = match.group(1).strip()
+    if rhs.startswith("{"):
+        inner = (rhs[1:-1] if rhs.endswith("}") else rhs[1:]).strip()
+        if not inner:
+            return True  # `() => {}`
+        if re.search(r"\bthrow\b", inner):
+            return False  # re-raises: the failure still reaches the caller
+        # Any block that ends by handing back a bare value is a swallow, even if
+        # it logs on the way. Logging is not reporting: the caller still receives
+        # a value indistinguishable from success, which is the whole defect.
+        returned = re.search(r"return\s*([^;}]*)\s*;?\s*$", inner, re.S)
+        return bool(returned) and returned.group(1).strip() in SWALLOW_VALUES
+    return rhs.rstrip(";").strip() in SWALLOW_VALUES
+
+
+def context_for(lines: list[str], index: int) -> str:
+    """The nearest enclosing shot id or declaration name above `index`.
+
+    Without this a signature is (file, statement), so deleting a frozen catch
+    and adding the identical statement to a different shot in the same file
+    keeps the signature and silently inherits the exemption — and the manifest
+    has four statements that already appear twice, which is exactly where that
+    would happen.
+    """
+    for back in range(index, -1, -1):
+        found = CONTEXT.match(lines[back])
+        if found:
+            return next(g for g in found.groups() if g)
+    return "?"
+
+
+def signature(name: str, context: str, statement: str, occurrence: int = 1) -> str:
+    digest = hashlib.sha1(f"{context}|{statement}".encode()).hexdigest()[:12]
+    suffix = f"#{occurrence}" if occurrence > 1 else ""
+    return f"{name}:{context}:{digest}{suffix}"
 
 
 def swallowing_sites() -> list[tuple[str, int, str, str]]:
@@ -159,21 +269,28 @@ def swallowing_sites() -> list[tuple[str, int, str, str]]:
         seen: dict[str, int] = {}
         for i, line in enumerate(lines):
             for match in CATCH.finditer(line):
-                tail = line[match.start() :]
-                if not SWALLOW_ARG.match(tail):
-                    continue  # a recovery handler, or a multi-line body
+                argument = catch_argument(lines, i, match.start())
+                if not is_swallow(argument):
+                    continue
                 statement = statement_for(lines, i)
-                if any(f".{probe}()" in statement for probe in PROBE_RECEIVERS):
+                # Directly attached, judged on the normalized statement rather
+                # than on this line: a probe chain is usually broken over four
+                # lines, so the text before `.catch(` on its own line is just
+                # whitespace. Searching the *whole* statement would be the other
+                # error — it exempts any compound statement that merely mentions
+                # a probe — so the prefix up to this catch must END with one.
+                prefix = re.sub(r"\s+", " ", statement[: statement.rfind(".catch(")])
+                if PROBE.search(prefix) and is_false_fallback(argument):
                     continue
-                if PROBE_THEN.search(statement):
-                    continue
-                seen[statement] = seen.get(statement, 0) + 1
+                context = context_for(lines, i)
+                key = f"{context}|{statement}"
+                seen[key] = seen.get(key, 0) + 1
                 found.append(
                     (
                         path.name,
                         i + 1,
                         statement,
-                        signature(path.name, statement, seen[statement]),
+                        signature(path.name, context, statement, seen[key]),
                     )
                 )
     return found
@@ -189,66 +306,66 @@ def swallowing_sites() -> list[tuple[str, int, str, str]]:
 # browser), and a wrong guess turns a working shot red. See the pull request for
 # the annotated inventory.
 FROZEN = {
-    # capture.mjs — all three load-bearing, verified rather than assumed.
+    # capture.mjs — all three load-bearing, verified not assumed.
     #   117  networkidle never settles on a page that polls; a 700ms wait and a
     #        spinner wait sit behind it.
     #   130  the spinner wait's own comment: "a page that legitimately spins
     #        forever should still produce an image to look at".
-    #   536  runs while the page is still about:blank, where touching
+    #   538  runs while the page is still about:blank, where touching
     #        localStorage throws SecurityError. Removing this catch breaks the
     #        first shot of every auth mode.
-    "capture.mjs:26ac4221c48e",  # :117 other — await page.waitForLoadState("networkidle").catch(() => {});
-    "capture.mjs:3348621a68b3",  # :130 other — await page .waitForFunction( () => document.querySelectorAll("
-    "capture.mjs:284b3168c192",  # :536 framing — await page .evaluate(() => localStorage.removeItem("navigation
+    "capture.mjs:settle:c86bb2d6fa11",  # :117 other
+    "capture.mjs:settle:16041cdf492c",  # :130 other
+    "capture.mjs:page:ab5c6e059388",  # :538 framing
     # inventory-setup.mjs — optional work, both correct.
     #   50   pngquant is an optimisation; an unoptimised PNG is still the image.
     #   443  unrouteAll teardown, on a context that may define no routes.
-    "inventory-setup.mjs:ef35bc7e79c4",  # :50 other — await run("pngquant", [ "--quality=70-92", "--speed", "1", "--
-    "inventory-setup.mjs:78507bc8be00",  # :443 other — await context.unrouteAll?.().catch(() => {});
+    "inventory-setup.mjs:optimize:b4e03584a18b",  # :50 other
+    "inventory-setup.mjs:installRoutes:506ee5ec7058",  # :443 other
     # manifest.mjs — 39 per-shot `prepare` steps, grouped by what the catch
     # hides. `framing` and `action` are where the #2433 defect lives: a scroll
-    # that is the last thing the step does, or a click/fill/check the caption
-    # depends on. Each needs the pipeline run against the seeded demo database
-    # to judge, so none is changed here.
-    "manifest.mjs:3fb92721c482",  # :131 framing — await control.scrollIntoViewIfNeeded({ timeout: 10_000 }).catc
-    "manifest.mjs:b1364c01dcfe",  # :209 framing — await header.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch
-    "manifest.mjs:770a61e00c81",  # :234 framing — await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch
-    "manifest.mjs:9483c17a54e3",  # :1158 read — const text = (await cell.innerText().catch(() => "")) ?? "";
-    "manifest.mjs:d9b8c624b32e",  # :1160 action — await cell.click({ timeout: 5_000 }).catch(() => {});
-    "manifest.mjs:9483c17a54e3#2",  # :1168 read — const text = (await cell.innerText().catch(() => "")) ?? "";
-    "manifest.mjs:d9b8c624b32e#2",  # :1170 action — await cell.click({ timeout: 5_000 }).catch(() => {});
-    "manifest.mjs:24796621747b",  # :1300 action — await days .nth(i) .click({ timeout: 5_000 }) .catch(() => {})
-    "manifest.mjs:8f4f2e2b8a72",  # :2535 action — await dialog .getByPlaceholder(/e\.g\.|name/i) .first() .fill(
-    "manifest.mjs:989eec230cff",  # :2580 framing — await toggles .first() .scrollIntoViewIfNeeded({ timeout: 10_0
-    "manifest.mjs:a1c05b257eee",  # :2662 action — await page .getByRole("button", { name: size, exact: true }) .
-    "manifest.mjs:fa8fc4cae78e",  # :2669 action — await page .getByRole("button", { name: style, exact: true })
-    "manifest.mjs:f53834541c01",  # :3022 framing — await picker.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch
-    "manifest.mjs:4c12d07e8041",  # :3065 action — await page .getByRole("button", { name: /^All Time$/ }) .click
-    "manifest.mjs:770a61e00c81#2",  # :3068 framing — await button.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch
-    "manifest.mjs:e13fc4d5a2c6",  # :3337 action — await dialog .getByText(/#0\d\d/) .nth(index) .click() .catch(
-    "manifest.mjs:6f634384404c",  # :3598 action — await page .getByText(/^Structure Fire$|^EMS$/) .first() .clic
-    "manifest.mjs:10ba3baf1dea",  # :3610 action — await page .locator("button", { hasText: /@/ }) .first() .clic
-    "manifest.mjs:5dd155665adf",  # :3860 framing — await page .locator("main, [role='main']") .first() .evaluate(
-    "manifest.mjs:71899c8aa0ce",  # :3904 framing — await panel.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(
-    "manifest.mjs:379ee3960d1c",  # :4014 framing — await page .locator("button:visible") .filter({ hasText: /\d+(
-    "manifest.mjs:ca8f11408727",  # :4087 action — await page .locator('input[type="password"]') .nth(1) .fill("O
-    "manifest.mjs:d8254ba50452",  # :4148 action — await page .getByRole("button", { name: new RegExp(`^${group}$
-    "manifest.mjs:fcad5d9e0900",  # :4172 action — await page .getByRole("button", { name: /^Members$/ }) .last()
-    "manifest.mjs:50b460f3ad6a",  # :4180 framing — await page .locator("nav") .first() .evaluate((el) => { el.scr
-    "manifest.mjs:faff0d9cd178",  # :4289 action — await page .getByRole("button", { name: /select all/i }) .firs
-    "manifest.mjs:7f16d8786245",  # :4309 framing — await card.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch((
-    "manifest.mjs:3221094dc6bb",  # :4996 framing — await page .getByText("Stage Type *", { exact: true }) .scroll
-    "manifest.mjs:2216cbc32c1e",  # :5043 framing — await page .getByText("Email Subject", { exact: false }) .firs
-    "manifest.mjs:2a5b663d561a",  # :5759 framing — await body.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch((
-    "manifest.mjs:8a23c84cd6d7",  # :5797 framing — await page .getByRole("button", { name: /Send Test to Me/i })
-    "manifest.mjs:981ccc2defc2",  # :5950 framing — await select.scrollIntoViewIfNeeded().catch(() => {});
-    "manifest.mjs:dc2c5f347033",  # :5994 framing — await page .getByText(/automated message from|Sent by/i) .firs
-    "manifest.mjs:a148a9549951",  # :7651 toast — await page .getByText(/display style updated/i) .first() .wait
-    "manifest.mjs:7f16d8786245#2",  # :7854 framing — await card.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch((
-    "manifest.mjs:c60a5a5c042d",  # :8289 action — await page .getByRole("checkbox") .first() .check({ timeout: 1
-    "manifest.mjs:ec2a5d98f6cd",  # :9354 action — await page .getByRole("button", { name: /expand details/i }) .
-    "manifest.mjs:90f0ef8678d9",  # :10060 toast — await page .getByText(/Ballots sent to \d+ voter/) .waitFor({
-    "manifest.mjs:d14d95138791",  # :10789 read — const value = await select .locator("option") .nth(1) .getAttr
+    # that is the last thing a step does, or a click/fill/check the caption
+    # depends on. Judging one needs the pipeline run against the seeded demo
+    # database and a browser, so none is changed here.
+    "manifest.mjs:control:bdf8c5426fbe",  # :131 framing
+    "manifest.mjs:header:8fd3973404b2",  # :209 framing
+    "manifest.mjs:button:bd468a1f0431",  # :234 framing
+    "manifest.mjs:text:661040eb2ac0",  # :1158 read
+    "manifest.mjs:text:8f97a7480c45",  # :1160 action
+    "manifest.mjs:text:661040eb2ac0#2",  # :1168 read
+    "manifest.mjs:text:8f97a7480c45#2",  # :1170 action
+    "manifest.mjs:total:5562d3e147cc",  # :1300 action
+    "manifest.mjs:dialog:ea1a89b29f1e",  # :2535 action
+    "manifest.mjs:count:06d770d3e588",  # :2580 framing
+    "manifest.mjs:options:3d4c4b666086",  # :2662 action
+    "manifest.mjs:options:272bb5c889a0",  # :2669 action
+    "manifest.mjs:picker:e622cca48045",  # :3022 framing
+    "manifest.mjs:withFile:7788c5b6e608",  # :3065 action
+    "manifest.mjs:button:bd468a1f0431#2",  # :3068 framing
+    "manifest.mjs:dialog:c84a4901557e",  # :3337 action
+    "manifest.mjs:next:282f04691771",  # :3598 action
+    "manifest.mjs:search:1b2583065287",  # :3610 action
+    "manifest.mjs:05-59-impact-planner-results:8d062bf3a840",  # :3860 framing
+    "manifest.mjs:panel:2595e8bf27ba",  # :3904 framing
+    "manifest.mjs:03-49-report-card-names:af27e4619669",  # :4014 framing
+    "manifest.mjs:00-19-change-password:33a5b3b98233",  # :4087 action
+    "manifest.mjs:00-15-sidebar-member:48dc35beca5f",  # :4148 action
+    "manifest.mjs:00-16-sidebar-admin:00d4a3e50d9a",  # :4172 action
+    "manifest.mjs:00-16-sidebar-admin:311c65b0f5be",  # :4180 framing
+    "manifest.mjs:row:d735ecaf519e",  # :4289 action
+    "manifest.mjs:card:c7e06061204b",  # :4309 framing
+    "manifest.mjs:add:fd29a77a32d1",  # :4996 framing
+    "manifest.mjs:add:0e31a84966ce",  # :5043 framing
+    "manifest.mjs:body:b21093097440",  # :5759 framing
+    "manifest.mjs:08-58-template-send-test:e8a025c27831",  # :5797 framing
+    "manifest.mjs:select:b6a5f4395f70",  # :5950 framing
+    "manifest.mjs:08-67-email-preview-design:12fc434515ee",  # :5994 framing
+    "manifest.mjs:03-37-settings-rating-scale:c07e519d612b",  # :7651 toast
+    "manifest.mjs:card:c7e06061204b#2",  # :7854 framing
+    "manifest.mjs:02-30-shift-reports:26793f8cac6f",  # :8289 action
+    "manifest.mjs:01-08-member-audit-history:c3b00dcab664",  # :9354 action
+    "manifest.mjs:banner:17977b4ca06d",  # :10060 toast
+    "manifest.mjs:value:50ec95f10a7c",  # :10789 read
 }
 
 
@@ -270,45 +387,67 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
         )
 
     def test_frozen_entries_all_still_exist(self):
-        """A frozen entry whose site is gone is stale and should be deleted.
-
-        Without this the allowlist silently accumulates signatures for code that
-        no longer exists, and the next reader cannot tell which entries are real.
-        """
+        """A frozen entry whose site is gone is stale and should be deleted."""
         live = {sig for _, _, _, sig in swallowing_sites()}
         stale = sorted(FROZEN - live)
         assert (
             not stale
         ), f"FROZEN names sites that no longer exist -- delete these: {stale}"
 
-    def test_the_sweep_detects_a_reintroduced_swallow(self):
-        """The sweep is worthless if it cannot see the defect it exists to catch.
+    # --- the gate must not be bypassable: one case per review finding ---
 
-        The shape is the one removed from `pageText`, which cleared the crash,
-        page-error and empty-state checks at once. Driven through the real
-        `statement_for`/`signature` path rather than asserting on the regex
-        alone, so a change that broke statement extraction would fail here.
+    def test_equivalent_swallows_are_all_caught(self):
+        """Six literal spellings was the first cut, and three forms walked past it.
+
+        `() => undefined`, `async () => null` and a block returning a constant
+        are the same defect as `() => {}`; a gate that takes only the spellings
+        it has seen before is a gate that reports nothing and looks clean.
         """
-        lines = [
-            "async function pageText(page) {",
-            '  return page.locator("main, body").first().innerText().catch(() => "");',
-            "}",
-        ]
-        statement = statement_for(lines, 1)
-        assert SWALLOW_ARG.match(lines[1][lines[1].index(".catch(") :])
-        assert "innerText" in statement, statement
-        assert signature("capture.mjs", statement) not in FROZEN
+        for argument in (
+            "() => {}",
+            "() => undefined",
+            "async () => null",
+            "() => { return null; }",
+            "() => { return undefined }",
+            "(e) => null",
+            "() => []",
+            "() => 0",
+            '() => ""',
+            "() => { log(e); return null; }",
+        ):
+            assert is_swallow(argument), argument
 
-    def test_a_probe_is_not_reported(self):
-        """`isVisible()` answering false is the call's purpose, not a swallow."""
-        statement = statement_for(
-            ["      if (await pause.isVisible().catch(() => false)) {"], 0
-        )
-        assert any(f".{probe}()" in statement for probe in PROBE_RECEIVERS)
+    def test_a_handler_that_does_work_is_not_a_swallow(self):
+        """Re-raising or recovering keeps the failure reachable."""
+        for argument in (
+            "(err) => { throw err; }",
+            "async () => { await fallback(); }",
+            "handleIt",
+        ):
+            assert not is_swallow(argument), argument
 
-    def test_a_then_true_probe_is_not_reported(self):
-        """`.then(() => true).catch(() => false)` is a visibility question."""
-        statement = statement_for(
+    def test_a_probe_exemption_requires_a_false_fallback(self):
+        """`.isVisible().catch(() => [])` is not a probe: `[]` is truthy.
+
+        The exemption used to fire on any statement that merely mentioned a
+        probe, so a truthy fallback took the *present* branch on failure and a
+        swallowed action in a compound statement was skipped outright.
+        """
+        assert is_false_fallback("() => false")
+        assert not is_false_fallback("() => []")
+        assert not is_false_fallback("() => null")
+        assert not is_false_fallback("() => true")
+
+    def test_probe_must_be_directly_attached(self):
+        """The chain up to the catch has to END with the probe.
+
+        Judged on the normalized statement, not the catch's own line: a probe
+        chain is usually broken over four lines, so the line-local text before
+        `.catch(` is just whitespace and three real probes were reported.
+        """
+        attached = "if (await pause.isVisible().catch(() => false)) {"
+        assert PROBE.search(attached[: attached.rfind(".catch(")])
+        multiline = statement_for(
             [
                 "        const shown = await url",
                 '          .waitFor({ state: "visible", timeout: 2_000 })',
@@ -317,19 +456,28 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
             ],
             3,
         )
-        assert PROBE_THEN.search(statement), statement
+        assert PROBE.search(multiline[: multiline.rfind(".catch(")])
+        # A compound statement that merely mentions a probe is not exempt.
+        unrelated = "await thing.isVisible(); await other.click().catch(() => {});"
+        assert not PROBE.search(unrelated[: unrelated.rfind(".catch(")])
 
-    def test_a_recovery_handler_is_not_reported(self):
-        """A `.catch` with a real body is a fallback path, not a swallow."""
-        assert SWALLOW_ARG.match(".catch(async () => {") is None
-        assert SWALLOW_ARG.match(".catch((err) => { throw err; })") is None
+    def test_a_signature_is_bound_to_its_site(self):
+        """Identical statements in different shots must not share an exemption.
+
+        Without the enclosing context a frozen catch could be deleted and the
+        same statement added to a different shot, silently inheriting the
+        exemption -- and four statements already appear twice in the manifest.
+        """
+        statement = (
+            "await card.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});"
+        )
+        first = signature("manifest.mjs", "04-34-applicant-drawer", statement)
+        second = signature("manifest.mjs", "19-07-prospect-detail", statement)
+        assert first != second, "same statement in two shots must differ"
+        assert signature("manifest.mjs", "x", statement, 2).endswith("#2")
 
     def test_comments_are_not_scanned_as_code(self):
-        """This file and `capture.mjs` both quote the banned pattern in prose.
-
-        Scanning raw text reported those quotations as live swallows -- which is
-        how the first run of this sweep "found" a defect inside its own comment.
-        """
+        """This file and `capture.mjs` both quote the banned pattern in prose."""
         stripped = strip_comments(
             [
                 "// a comment mentioning .catch(() => {}) in prose",
@@ -342,21 +490,30 @@ class TestNoNewSwallowedCatches(unittest.TestCase):
         assert ".catch(() => {})" in stripped[2], stripped[2]
         assert len(stripped) == 3, "line numbering must survive stripping"
 
-    def test_a_url_in_a_string_is_not_read_as_a_comment(self):
-        """`//` inside a string literal must not truncate the line.
+    def test_a_string_is_not_read_as_a_comment(self):
+        """Both real cases: a `//` in a URL and a `/*` in a route glob.
 
-        Both `capture.mjs` and `inventory-setup.mjs` hold a `http://localhost`
-        default, so a stripper that misses this goes blind to any `.catch` that
-        shares a line with a URL — reporting nothing, which is indistinguishable
-        from a clean sweep.
+        The glob is the worse of the two — with no `*/` on the line the block
+        ran on for 35 lines of `inventory-setup.mjs`, so any swallow in that
+        window was invisible to the gate.
         """
-        line = 'await page.goto("http://localhost:3000").catch(() => {});'
-        assert ".catch(() => {})" in strip_comments([line])[0]
-        # And the real files' URL lines survive intact.
-        kept = strip_comments(
-            ['const BASE_URL = process.env.X || "http://localhost:3000";']
-        )[0]
-        assert kept.endswith(";"), kept
+        url = 'await page.goto("http://localhost:3000").catch(() => {});'
+        assert ".catch(() => {})" in strip_comments([url])[0]
+        glob = 'await context.route("**/api/v1/**", handler);'
+        assert strip_comments([glob])[0].rstrip().endswith(";"), "glob truncated"
+        # And the block state must not leak into the next line.
+        assert strip_comments([glob, "const x = y().catch(() => {});"])[1].strip()
+
+    def test_the_sweep_detects_a_reintroduced_swallow(self):
+        """The shape removed from `pageText`, driven through the real path."""
+        lines = [
+            "async function pageText(page) {",
+            '  return page.locator("main, body").first().innerText().catch(() => "");',
+            "}",
+        ]
+        statement = statement_for(lines, 1)
+        assert is_swallow(catch_argument(lines, 1, lines[1].index(".catch(")))
+        assert signature("capture.mjs", context_for(lines, 1), statement) not in FROZEN
 
 
 if __name__ == "__main__":
