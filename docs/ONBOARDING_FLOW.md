@@ -935,9 +935,9 @@ to document an organization body the route had stopped accepting.
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /onboarding/status`                                                 | `OnboardingStatusResponse` — `needs_onboarding`, `is_completed`, `current_step`, `total_steps`, `steps_completed`, `organization_name`                                              |
 | `POST /onboarding/start`                                                 | `StartSessionResponse` — `session_id`, `expires_at`, `csrf_token`, `message`, `current_step`, `steps`. A client cannot proceed without the first three                              |
-| `GET /onboarding/system-info`                                            | Unmodelled dict from `OnboardingService.get_system_info()`                                                                                                                          |
-| `GET /onboarding/security-check`                                         | Unmodelled dict from `OnboardingService.verify_security_configuration()`                                                                                                            |
-| `GET /onboarding/database-check`                                         | Unmodelled dict from `OnboardingService.verify_database_connection()`                                                                                                               |
+| `GET /onboarding/system-info`                                            | `SystemInfoResponse` — `app_name`, `version`, `environment`, `database`, `security`, `features`                                                                                     |
+| `GET /onboarding/security-check`                                         | `SecurityCheckResponse` — `passed`, `issues`, `warnings`, `total_issues`, `total_warnings`                                                                                          |
+| `GET /onboarding/database-check`                                         | `DatabaseCheckResponse` — `connected`, `database`, `host`, `port`, `server_time?`, `organizations_count?`, `error?`                                                                 |
 | `POST /onboarding/organization`, `POST /onboarding/session/organization` | `OrganizationSetupResponse` — `id`, `name`, `slug`, `organization_type`, `timezone`, `active`, `created_at`                                                                         |
 | `POST /onboarding/system-owner`                                          | `SystemOwnerResponse` — `id`, `username`, `email`, `first_name`, `last_name`, `membership_number`, `status`. Also sets the auth cookies, so the caller is signed in when it returns |
 | `POST /onboarding/modules`                                               | `{ message, modules }` — every module with its resulting boolean, not only the enabled ones                                                                                         |
@@ -948,10 +948,6 @@ to document an organization body the route had stopped accepting.
 | every other `POST /onboarding/session/*`, including `/session/email`     | `SessionDataResponse` — `success`, `message`, `step`                                                                                                                                |
 | `GET /organization/setup-checklist`                                      | `SetupChecklistResponse` — `items`, `completed_count`, `total_count`, `enabled_modules`                                                                                             |
 | `POST /organization/setup-checklist/{item_key}/acknowledge`              | `{ item_key, acknowledged }`                                                                                                                                                        |
-
-Three of these are unmodelled on purpose in this table rather than by omission:
-their handlers return whatever the named service method builds, so there is no
-schema to cite and any shape written here would be a snapshot free to go stale.
 
 ### Onboarding Status
 
@@ -1056,6 +1052,22 @@ Body: {
 
 Creates administrator user with Super Admin role.
 
+`password` is checked by `validate_password_strength()`, which every path into
+`AuthService.register_user()` runs. A caller that meets only the length rule
+still receives a 400, so the full contract is:
+
+- at least `PASSWORD_MIN_LENGTH` characters (12 by default) and no more than
+  `PASSWORD_MAX_LENGTH`
+- at least one uppercase letter, one lowercase letter, one number and one
+  special character
+- not a common password, and not built from sequential or repeated characters
+- where the breached-password check is configured, not present in the breach
+  corpus. That check **fails open** — an outage skips it rather than blocking a
+  password change (see the Attack Protection table in CLAUDE.md)
+
+This is the one bootstrap call that creates the administrator, so a rejection
+here has no signed-in user to retry it.
+
 ### Configure Modules
 
 ```
@@ -1111,9 +1123,33 @@ Configures roles with two-tier permissions during onboarding.
 POST /api/v1/onboarding/session/email
 Body: {
   platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
-  config: { ... }   // platform-specific; the schema types this as a free dict
+  config: { ... }   // platform-specific; see the key table below
 }
 ```
+
+`config` is typed as a free dict by the schema, so nothing validates its keys on
+the way in. `_email_settings_from_onboarding()` maps **exact camelCase** names;
+anything it does not recognise — a snake_case guess, say — is dropped silently,
+and `missing_for_enabled()` then rejects the write for a field the caller
+believes it sent.
+
+| Platform              | Keys                                                                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| all                   | `enabled`, `platform`, `fromEmail`, `fromName`                                                                                                |
+| `gmail`               | `googleAppPassword`                                                                                                                           |
+| `microsoft`           | `microsoftAuthMethod`, and for OAuth `microsoftTenantId`, `microsoftClientId`, `microsoftClientSecret`; for basic auth `microsoftAppPassword` |
+| `selfhosted`, `other` | `smtpHost`, `smtpPort`, `smtpUsername`, `smtpPassword`, `smtpEncryption`                                                                      |
+| `cloudflare`          | `cloudflareAccountId`, `cloudflareApiToken`                                                                                                   |
+
+`fromEmail` is required for every enabled configuration — it doubles as the SMTP
+login, so a malformed one fails authentication rather than merely delivery. The
+provider password field is required on `gmail`, `selfhosted` and `other`; all
+three Microsoft OAuth fields are required together.
+
+Note the asymmetry: these are the wire names, while `missing_for_enabled()`
+reports a missing field by its **stored** snake_case name (`from_email`,
+`microsoft_tenant_id`, `smtp_host`), so the field named in a 400 is not spelled
+the way the caller sent it.
 
 What actually stores mail settings. Passwords and API keys inside `config` are
 encrypted with AES-256 before they are written; only `platform` is kept in plain
