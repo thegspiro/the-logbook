@@ -111,7 +111,9 @@ for email/file-storage/auth secrets: a submitted value equal to the
 shared `REDACTED_SECRET` constant is replaced with the row's existing
 value for that key before the write, rather than persisted verbatim.
 Guard tests added covering both a mixed untouched/edited submission and a
-brand-new row with nothing to preserve. Full write-up:
+brand-new row with nothing to preserve; full backend suite re-run clean
+after this fix too (12315 passed, 21 skipped pre-existing, 0 failed). Full
+write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).

@@ -1139,7 +1139,7 @@ placeholder string).
 | `pytest tests/test_multi_agency_endpoint_permissions.py -v`                                                       | ✅ 6 passed (new, TRX4-6)                                               |
 | `pytest tests/test_external_provider_header_redaction.py -v`                                                      | ✅ 6 passed (new, TRX4-7/TRX4-8)                                        |
 | `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1096 passed, 1 skipped (pre-existing), including all new guard tests |
-| `pytest tests/` (full backend suite)                                                                              | ✅ re-run after TRX4-8 — see PROGRESS.md for the final count            |
+| `pytest tests/` (full backend suite)                                                                              | ✅ 12315 passed, 21 skipped (pre-existing), 0 failed                    |
 | `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors                                                             |
 | `cd frontend && npx eslint src/utils/apiCache.ts src/utils/apiCache.test.ts`                                      | ✅ 0 errors                                                             |
 | `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 89 passed (TRX4-4, TRX4-5, one corrected pre-existing test)          |
