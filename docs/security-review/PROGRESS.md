@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 18 (Training extended), pass 4** — opened as a pull request from
+**Feature 18 (Training extended), pass 4** — PR
+[#2460](https://github.com/thegspiro/the-logbook/pull/2460), branch
 `claude/friendly-babbage-0mo420` (this watchdog session's designated
 branch, not a fresh `claude/security-review-<feature>` branch — the
 rotation had gone quiet for ~4h19m since PR #2455's merge with no new
@@ -29,7 +30,8 @@ was made by an unrelated pass. One doc correction (TRX4-1, retiring a
 stale pass-2 "verified good" claim); all ten pass-1 and one pass-2 finding
 re-verified intact. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
-18 → `⏳`. PR number to be recorded here once opened.
+18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
+Feature 19 (Skills testing).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455), preserved for history</summary>
