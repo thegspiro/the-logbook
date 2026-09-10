@@ -16,6 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR [#2455](https://github.com/thegspiro/the-logbook/pull/2455)
+(Feature 17, Training core, pass 4) merged clean via squash, merge commit
+`569348ef`, all 17 CI checks green including Playwright E2E and CI
+Success, three rounds of Codex review all resolved (9 review threads,
+0 unaddressed). Rotation row 17 is now `✅`. Next: Feature 18 (Training
+extended).
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 17, Training core, pass 4, PR #2455, before the merge), preserved for history</summary>
+
 **Feature 17 (Training core), pass 4** — PR
 [#2455](https://github.com/thegspiro/the-logbook/pull/2455), branch
 `claude/security-review-training-core-pass4`. 1 fix (3 rounds), 3 flagged.
@@ -74,7 +84,9 @@ Full completion gate green: flake8/black/isort clean; migrations validated
 (no schema change); training/compliance-scoped (1130) and full backend
 suites (12077) pass, 0 failed. Full write-up:
 `docs/security-review/TR-17-training-core.md` → Pass 4 (corrected, round
-3). Next: tend #2455 to green, then Feature 18 (Training extended).
+3).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note ("None" after PR #2451's merge, Feature 16 pass 4), preserved for history</summary>
@@ -12641,7 +12653,7 @@ pass 4 — each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
