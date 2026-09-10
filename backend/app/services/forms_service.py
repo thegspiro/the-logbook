@@ -2685,10 +2685,25 @@ class FormsService:
         # settles them (CLAUDE.md pitfall #20) — clamping rather than refusing,
         # because a stored public enquiry is not worth losing over a preference
         # field the requester never sees again.
+        # Unescaped before it is compared with either vocabulary.
+        # `_sanitize_submission_data` HTML-escapes every submitted value to stop
+        # stored XSS, so a configured type like `fire_&_life_safety` arrives as
+        # `fire_&amp;_life_safety` while the organization setting and the form's
+        # own `<select>` options are both still raw — the selection matches
+        # neither and is silently rewritten to `other`, losing which event the
+        # requester actually picked. `submit_form`'s own option validation
+        # already unescapes for exactly this comparison; this is the same
+        # decode at the same boundary. Only the choice value is decoded: the
+        # free-text fields keep the escaping that protects the coordinator's
+        # screen.
+        outreach_type_value = mapped_data.get("outreach_type", "other")
+        if isinstance(outreach_type_value, str):
+            outreach_type_value = html_lib.unescape(outreach_type_value)
+
         settled = normalize_request_preferences(
             org,
             {
-                "outreach_type": mapped_data.get("outreach_type", "other"),
+                "outreach_type": outreach_type_value,
                 "date_flexibility": mapped_data.get("date_flexibility", "flexible"),
                 "venue_preference": mapped_data.get(
                     "venue_preference", "their_location"

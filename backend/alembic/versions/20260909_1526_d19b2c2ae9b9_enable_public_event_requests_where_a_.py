@@ -166,14 +166,70 @@ _CANDIDATE_REQUEST_FORMS = sa.text("""
 
 # Frozen copies of the label and field-type tables `FormsService` resolves an
 # event-request submission through — `_EVENT_REQUEST_LABEL_MAP` and
-# `_INTEGRATION_FIELD_TYPE_MAP`, narrowed to the two targets that decide
-# whether a submission becomes a request at all. Inlined rather than imported
+# `_INTEGRATION_FIELD_TYPE_MAP["event_request"]`. Inlined rather than imported
 # for the reason CLAUDE.md pitfall #20 gives for the other inlined normalizer:
 # a migration must keep selecting the rows it selected the day it ran, and a
 # helper that is free to change cannot promise that.
-_CONTACT_NAME_LABELS = ("contact name", "name", "full name", "your name")
-_CONTACT_EMAIL_LABELS = ("contact email", "email", "email address")
-_CONTACT_EMAIL_FIELD_TYPES = ("email",)
+# Copied in FULL rather than narrowed to the two targets that matter, because
+# the entries for the *other* targets are what make the resolution correct. A
+# field labelled "Phone" resolves to `contact_phone`, and that is precisely
+# what stops its field type being consulted — narrow the table to the name and
+# email labels and an `email`-typed field called "Phone" wrongly reads as
+# providing `contact_email`.
+_LABEL_TARGETS = {
+    "contact name": "contact_name",
+    "name": "contact_name",
+    "full name": "contact_name",
+    "your name": "contact_name",
+    "contact email": "contact_email",
+    "email": "contact_email",
+    "email address": "contact_email",
+    "phone": "contact_phone",
+    "phone number": "contact_phone",
+    "contact phone": "contact_phone",
+    "telephone": "contact_phone",
+    "organization": "organization_name",
+    "organization name": "organization_name",
+    "org name": "organization_name",
+    "company": "organization_name",
+    "your organization": "organization_name",
+    "outreach type": "outreach_type",
+    "type": "outreach_type",
+    "request type": "outreach_type",
+    "type of event": "outreach_type",
+    "description": "description",
+    "event description": "description",
+    "details": "description",
+    "date flexibility": "date_flexibility",
+    "preferred timeframe": "preferred_timeframe",
+    "timeframe": "preferred_timeframe",
+    "preferred date": "preferred_timeframe",
+    "time of day": "preferred_time_of_day",
+    "preferred time": "preferred_time_of_day",
+    "preferred time of day": "preferred_time_of_day",
+    "earliest date": "preferred_date_start",
+    "latest date": "preferred_date_end",
+    "audience size": "audience_size",
+    "expected attendees": "audience_size",
+    "number of attendees": "audience_size",
+    "attendees": "audience_size",
+    "expected audience size": "audience_size",
+    "age group": "age_group",
+    "age range": "age_group",
+    "venue preference": "venue_preference",
+    "venue": "venue_preference",
+    "venue address": "venue_address",
+    "location": "venue_address",
+    "address": "venue_address",
+    "special requests": "special_requests",
+    "additional notes": "special_requests",
+    "special needs": "special_requests",
+}
+
+_FIELD_TYPE_TARGETS = {
+    "email": "contact_email",
+    "phone": "contact_phone",
+}
 
 
 def _has_table(table: str) -> bool:
@@ -197,10 +253,23 @@ def _form_can_produce_a_request(bind, form_id: str) -> bool:
 
     The runtime order is mirrored: `field_mappings` first, then the label and
     field-type fallback `_apply_label_fallback` applies when a required target
-    is still missing. Availability is computed as a set union rather than
-    runtime's first-wins loop, which is exact for these two targets because no
-    field can satisfy both — the name labels, the email labels and the `email`
-    field type are mutually disjoint.
+    is still missing.
+
+    **Each field resolves to exactly one target, label first.**
+    `_apply_label_fallback` reads `target = label_map.get(label)` and consults
+    the field type only `if not target` — so a label that maps to anything at
+    all settles that field outright. An `email`-typed field labelled "Name"
+    therefore provides `contact_name` and **not** `contact_email`, and one
+    labelled "Phone" provides `contact_phone`. Crediting a field with both its
+    label's target and its type's is how an earlier version of this function
+    qualified forms that produce nothing.
+
+    Order does not matter, and that is a property of the runtime loop rather
+    than an assumption about the labels: the candidate is computed *before* the
+    `target not in used_targets` check, so a field's contribution never changes
+    with position — a duplicate is skipped, never re-resolved down to its field
+    type. The reachable set is therefore the union of one candidate per field,
+    plus whatever the stored mappings already name.
     """
     targets: set = set()
 
@@ -226,12 +295,11 @@ def _form_can_produce_a_request(bind, form_id: str) -> bool:
         # the columns' accent-insensitive utf8mb4_unicode_ci collation cannot
         # equate a label the service would not have matched.
         normalized = str(label or "").strip().lower()
-        if normalized in _CONTACT_NAME_LABELS:
-            targets.add("contact_name")
-        elif normalized in _CONTACT_EMAIL_LABELS:
-            targets.add("contact_email")
-        if str(field_type or "").strip().lower() in _CONTACT_EMAIL_FIELD_TYPES:
-            targets.add("contact_email")
+        target = _LABEL_TARGETS.get(normalized)
+        if not target:
+            target = _FIELD_TYPE_TARGETS.get(str(field_type or "").strip().lower())
+        if target:
+            targets.add(target)
 
     return "contact_name" in targets and "contact_email" in targets
 

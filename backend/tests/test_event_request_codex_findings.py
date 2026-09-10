@@ -1879,3 +1879,119 @@ class TestTheBackfillChecksTheFormActuallyWorks:
 
     def test_form_fields_is_guarded_as_a_table(self):
         assert '_has_table("form_fields")' in MIGRATION.read_text()
+
+
+# ============================================
+# Round 10 — findings on the round-9 fixes
+# ============================================
+
+
+class TestQualificationFollowsRuntimePrecedence:
+    """A field resolves to **one** target, label first. `_apply_label_fallback`
+    reads `target = label_map.get(label)` and consults the field type only
+    `if not target`, so a label that maps to anything settles the field
+    outright. Crediting a field with both its label's target and its type's is
+    how the round-9 version qualified forms that produce nothing."""
+
+    @staticmethod
+    def _module():
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("_backfill_precedence", MIGRATION)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def _can(self, mappings, fields):
+        module = self._module()
+        bind = TestTheBackfillChecksTheFormActuallyWorks._Bind(mappings, fields)
+        return module._form_can_produce_a_request(bind, "form-1")
+
+    def test_an_email_typed_field_labelled_name_provides_only_the_name(self):
+        """The regression: one field cannot be both contacts."""
+        assert not self._can([], [("Name", "email")])
+
+    def test_it_is_still_short_even_with_a_second_unrelated_field(self):
+        assert not self._can([], [("Name", "email"), ("Details", "textarea")])
+
+    def test_an_email_typed_field_labelled_phone_provides_the_phone(self):
+        """`phone` maps to `contact_phone`, and a label that maps at all stops
+        the field type being consulted — narrowing the table to the name and
+        email labels made this read as an email field."""
+        assert not self._can([], [("Contact Name", "text"), ("Phone", "email")])
+
+    def test_two_fields_still_qualify_when_each_carries_one_target(self):
+        assert self._can([], [("Name", "text"), ("Reach you at", "email")])
+
+    def test_the_full_label_table_is_inlined(self):
+        """Narrowing it to the interesting targets is what broke the phone
+        case, so the copy must stay complete."""
+        from app.services.forms_service import FormsService
+
+        module = self._module()
+        assert module._LABEL_TARGETS == dict(FormsService._EVENT_REQUEST_LABEL_MAP)
+        assert module._FIELD_TYPE_TARGETS == dict(
+            FormsService._INTEGRATION_FIELD_TYPE_MAP["event_request"]
+        )
+
+    def test_a_duplicate_label_does_not_fall_through_to_its_field_type(self):
+        """Runtime computes the candidate before the `used_targets` check, so a
+        second field with the same label is skipped, never re-resolved."""
+        assert not self._can([], [("Name", "text"), ("Name", "email")])
+
+
+class TestASanitizedOutreachChoiceIsDecoded:
+    """`_sanitize_submission_data` HTML-escapes every submitted value, so a
+    configured type containing `&` arrives escaped while both vocabularies stay
+    raw — the selection matches neither and is rewritten to `other`."""
+
+    ORG_TYPES = [
+        {"value": "fire_&_life_safety", "label": "Fire & Life Safety"},
+        {"value": "other", "label": "Other"},
+    ]
+
+    def _settle(self, submitted):
+        import html as html_lib
+
+        from app.services.event_request_service import normalize_request_preferences
+
+        org = SimpleNamespace(
+            id=ORG_ID,
+            settings={"events": {"outreach_event_types": self.ORG_TYPES}},
+        )
+        return normalize_request_preferences(
+            org,
+            {
+                "outreach_type": html_lib.unescape(submitted),
+                "date_flexibility": "flexible",
+                "venue_preference": "either",
+                "preferred_time_of_day": "morning",
+                "preferred_date_start": None,
+            },
+        )["outreach_type"]
+
+    def test_the_escaped_form_of_a_configured_type_survives(self):
+        import html as html_lib
+
+        escaped = html_lib.escape("fire_&_life_safety")
+        assert escaped == "fire_&amp;_life_safety"
+        assert self._settle(escaped) == "fire_&_life_safety"
+
+    def test_an_unescaped_value_is_unaffected(self):
+        assert self._settle("fire_&_life_safety") == "fire_&_life_safety"
+
+    def test_an_unknown_type_still_settles_to_other(self):
+        assert self._settle("smoke_trailer") == "other"
+
+    def test_the_integration_decodes_before_normalizing(self):
+        """Pinned at the call site: the decode has to happen where the two
+        vocabularies are compared, not in the normalizer."""
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "app"
+            / "services"
+            / "forms_service.py"
+        ).read_text()
+        assert "outreach_type_value = mapped_data.get" in source
+        assert "html_lib.unescape(outreach_type_value)" in source
