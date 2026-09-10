@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 16 (Events & requests), pass 4** — PR `<pending — see follow-up
-commit>`, branch `claude/security-review-events-requests`. One fix, one
+**Feature 16 (Events & requests), pass 4** — PR
+[#2451](https://github.com/thegspiro/the-logbook/pull/2451), branch
+`claude/security-review-events-requests`. One fix, one
 re-verified-open finding, no regressions in pass 1-3's prior fixes. **EV-24**
 (P2 — resubmitting an already-waitlisted RSVP could promote it ahead of an
 earlier-queued party, since the resubmission path only ever asked "does my
