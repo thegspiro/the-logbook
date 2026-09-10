@@ -25,6 +25,7 @@ vi.mock('../../../services/api', () => ({
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 import MembershipLadderSection from './MembershipLadderSection';
+import { useAuthStore } from '../../../stores/authStore';
 
 const installDefaults = () => {
   getTierConfig.mockReset();
@@ -98,7 +99,10 @@ describe('MembershipLadderSection', () => {
 });
 
 describe('the rung the System Owner is already on', () => {
-  beforeEach(installDefaults);
+  beforeEach(() => {
+    installDefaults();
+    useAuthStore.setState({ user: { membership_type: 'active' } as never });
+  });
 
   it('says it can be renamed but not removed while they hold it', async () => {
     // `register_user` leaves the owner on the column default
@@ -117,5 +121,27 @@ describe('the rung the System Owner is already on', () => {
     render(<MembershipLadderSection />);
 
     expect(await screen.findByText(/Members → Settings → Membership Tiers/i)).toBeInTheDocument();
+  });
+
+  it('names the rung the member actually holds, not a fixed position', async () => {
+    // This editor reorders tiers, and a department that had already configured
+    // a ladder may not have `active` in second place — or at all. Naming a
+    // position would mark a removable rung as locked while the occupied one
+    // sits elsewhere.
+    useAuthStore.setState({ user: { membership_type: 'probationary' } as never });
+    render(<MembershipLadderSection />);
+
+    expect(await screen.findByText('Probationary')).toBeInTheDocument();
+    expect(screen.queryByText(/second rung/i)).not.toBeInTheDocument();
+  });
+
+  it('says nothing when the member is on no rung of this ladder', async () => {
+    // A legacy `membership_type` that is not one of these tiers. Pointing at a
+    // rung would be a guess.
+    useAuthStore.setState({ user: { membership_type: 'honorary' } as never });
+    render(<MembershipLadderSection />);
+
+    await screen.findByText(/This ladder decides who votes/i);
+    expect(screen.queryByText(/can be renamed to whatever your bylaws call it/i)).not.toBeInTheDocument();
   });
 });

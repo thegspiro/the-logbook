@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ranksService } from '../services/api';
 import type { OperationalRankResponse } from '../services/api';
 import { getCachedRanks, setCachedRanks, invalidateRanksCache } from './ranksCache';
+import { getResourcePrefix, invalidateByPrefix } from '../utils/apiCache';
 import type { RanksCacheKey } from './ranksCache';
 import { useAuthStore } from '../stores/authStore';
 
@@ -27,7 +28,15 @@ export function useRanks(activeOnly = true) {
     ranks: initialCachedRanks ?? [],
   }));
   const [loadingState, setLoadingState] = useState({ key: cacheKeyString, loading: initialCachedRanks === null });
-  const [failed, setFailed] = useState(false);
+  // Keyed like `rankState` and `loadingState`, and for the same reason: a
+  // failure belongs to the organization and filter it happened under. Left as a
+  // bare boolean, a hook that failed for one key and then switched to one whose
+  // ranks are already cached took the cache-hit path — which sets ranks and
+  // loading and returns — and never cleared it, so `ITTeamBackupAccess` hid a
+  // perfectly good ladder behind the load-error alert.
+  const [failedState, setFailedState] = useState({ key: cacheKeyString, failed: false });
+  const failed = failedState.key === cacheKeyString && failedState.failed;
+  const setFailed = useCallback((value: boolean) => setFailedState({ key: currentKeyRef.current, failed: value }), []);
 
   // Never expose results belonging to the previous filter or organization,
   // even during the render before the key-change effect runs.
@@ -72,7 +81,7 @@ export function useRanks(activeOnly = true) {
         setLoadingState({ key: cacheKeyString, loading: false });
       }
     }
-  }, [activeOnly, cacheKey, cacheKeyString]);
+  }, [activeOnly, cacheKey, cacheKeyString, setFailed]);
 
   useEffect(() => {
     const cachedRanks = getCachedRanks(cacheKey);
@@ -86,6 +95,13 @@ export function useRanks(activeOnly = true) {
   }, [cacheKey, cacheKeyString, fetchRanks]);
 
   const refetch = useCallback(async () => {
+    // Both caches, not just this hook's. `/operational-ranks` is not in
+    // `UNCACHEABLE_PREFIXES`, so the shared axios interceptor has already
+    // stored the response — and when the failure being retried is an HTTP 200
+    // with a malformed body, that body is what the retry is served for the
+    // 30-second fresh window. "Try again" would be a dead button in exactly the
+    // case the strict read exists to catch.
+    invalidateByPrefix(getResourcePrefix('/operational-ranks'));
     invalidateRanksCache(cacheKey);
     await fetchRanks();
   }, [cacheKey, fetchRanks]);

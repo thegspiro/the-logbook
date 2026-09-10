@@ -2,7 +2,14 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OperationalRankResponse } from '../services/api';
 
-const { mockGetRankLadder } = vi.hoisted(() => ({ mockGetRankLadder: vi.fn() }));
+const { mockGetRankLadder, mockInvalidateByPrefix } = vi.hoisted(() => ({
+  mockGetRankLadder: vi.fn(),
+  mockInvalidateByPrefix: vi.fn(),
+}));
+vi.mock('../utils/apiCache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/apiCache')>();
+  return { ...actual, invalidateByPrefix: (p: string) => mockInvalidateByPrefix(p) as unknown };
+});
 vi.mock('../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>();
   // The hook reads strictly, so a non-array body throws rather than becoming
@@ -145,6 +152,38 @@ describe('useRanks and a response that is not a ladder', () => {
     expect(second.result.current.failed).toBe(false);
   });
 
+  it('does not carry a failure onto a key whose ranks are already cached', async () => {
+    // `failed` is keyed like `rankState` and `loadingState`. Left as a bare
+    // boolean it survived the switch — and the *cache-hit* path is what makes
+    // that visible, because it sets ranks and loading and returns without ever
+    // fetching, so nothing clears the flag. A consumer then hides a perfectly
+    // good ladder behind the load-error alert.
+    //
+    // Warmed first, deliberately: a switch to an uncached key fetches, and a
+    // successful fetch clears the flag on its own, so that path would pass with
+    // or without the fix.
+    mockGetRankLadder.mockResolvedValueOnce([rank('captain', 'org-warm')]);
+    act(() => setOrganization('org-warm'));
+    const warm = renderHook(() => useRanks());
+    await waitFor(() => expect(warm.result.current.ranks).toHaveLength(1));
+    // Unmounted before the next switch, or it competes for the queued mock and
+    // takes the rejection meant for the hook under test.
+    warm.unmount();
+
+    act(() => setOrganization('org-strict'));
+    mockGetRankLadder.mockRejectedValueOnce(new TypeError('nope'));
+    const { result } = renderHook(() => useRanks());
+    await waitFor(() => expect(result.current.failed).toBe(true));
+
+    // org-warm is in the ranks cache, so this switch takes the early-return.
+    mockGetRankLadder.mockClear();
+    act(() => setOrganization('org-warm'));
+
+    await waitFor(() => expect(result.current.ranks).toHaveLength(1));
+    expect(mockGetRankLadder).not.toHaveBeenCalled();
+    expect(result.current.failed).toBe(false);
+  });
+
   it('clears the failure once a read succeeds', async () => {
     mockGetRankLadder.mockRejectedValueOnce(new TypeError('nope'));
     const { result } = renderHook(() => useRanks());
@@ -156,5 +195,32 @@ describe('useRanks and a response that is not a ladder', () => {
     });
 
     expect(result.current.failed).toBe(false);
+  });
+});
+
+describe('useRanks retry and the shared response cache', () => {
+  beforeEach(() => {
+    mockGetRankLadder.mockReset();
+    mockInvalidateByPrefix.mockReset();
+    invalidateRanksCache();
+    setOrganization('org-retry');
+  });
+
+  it('clears the shared axios cache, not only the ranks cache', async () => {
+    // `/operational-ranks` is not in `UNCACHEABLE_PREFIXES`, so the response
+    // interceptor stored the body. When the failure being retried is an HTTP
+    // 200 with a malformed body, that body is exactly what a retry inside the
+    // 30-second fresh window is served — so "Try again" would be a dead button
+    // in the one case the strict read exists to catch.
+    mockGetRankLadder.mockResolvedValue([]);
+    const { result } = renderHook(() => useRanks());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockInvalidateByPrefix.mockClear();
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+
+    expect(mockInvalidateByPrefix).toHaveBeenCalledWith('/operational-ranks');
   });
 });

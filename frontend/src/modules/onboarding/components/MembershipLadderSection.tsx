@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Layers } from 'lucide-react';
 import MembershipTiersSection from '../../../components/settings/MembershipTiersSection';
 import { useTierEditor } from '../../../hooks/useTierEditor';
+import { useAuthStore } from '../../../stores/authStore';
 
 /**
  * The department's membership ladder, stated during setup.
@@ -40,6 +41,10 @@ interface MembershipLadderSectionProps {
 const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDirtyChange }) => {
   const editor = useTierEditor();
 
+  // Which rung the signed-in System Owner is standing on, if it is one of these.
+  const ownMembershipType = useAuthStore((state) => state.user?.membership_type ?? null);
+  const ownTier = ownMembershipType ? editor.tiers.find((tier) => tier.id === ownMembershipType) : undefined;
+
   useEffect(() => {
     onDirtyChange?.(editor.dirty);
   }, [editor.dirty, onDirtyChange]);
@@ -65,12 +70,21 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({ onDir
           and its remove button is disabled — with no control on this step for
           moving them. Renaming it *is* allowed: the backend's occupied-tier
           guard compares tier ids, and the editor's rename changes the display
-          name only. Saying which is which turns a dead button into a route. */}
-      <p className="alert-info mb-4 text-sm">
-        Your own account already sits on the second rung, so that one can be renamed to whatever your bylaws call it but
-        not removed while you are on it. A department that has no such stage can remove it later, from Members →
-        Settings → Membership Tiers, once the roster is loaded and you have moved yourself.
-      </p>
+          name only. Saying which is which turns a dead button into a route.
+
+          The rung is matched by the signed-in member's own `membership_type`
+          rather than named by position. It is the second rung in the ladder we
+          ship, but this editor reorders tiers and a department that had already
+          configured one may not have `active` at all — and pointing at the
+          wrong rung is worse than saying nothing, because it marks a removable
+          one as locked while the occupied one sits elsewhere. */}
+      {ownTier && (
+        <p className="alert-info mb-4 text-sm">
+          Your own account is on <strong>{ownTier.name}</strong>, so that rung can be renamed to whatever your bylaws
+          call it but not removed while you are on it. A department that has no such stage can remove it later, from
+          Members → Settings → Membership Tiers, once the roster is loaded and you have moved yourself.
+        </p>
+      )}
 
       {editor.failed && !editor.loading ? (
         <div className="alert-danger" role="alert">

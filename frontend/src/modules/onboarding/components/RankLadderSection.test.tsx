@@ -227,6 +227,34 @@ describe('an unsaved rank form', () => {
     await waitFor(() => expect(onPendingChange).toHaveBeenLastCalledWith(true));
   });
 
+  it('does not report a freshly opened edit as pending', async () => {
+    // Edit pre-populates the field with the rank's current name, so a
+    // non-empty test reports unsaved work before anything has been changed and
+    // blocks Continue for no reason.
+    const user = userEvent.setup();
+    const onPendingChange = vi.fn();
+    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    await screen.findByText('Captain');
+
+    await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
+
+    expect(onPendingChange).not.toHaveBeenCalledWith(true);
+  });
+
+  it('reports a cleared edit as pending, which is when there is most to lose', async () => {
+    // The mirror image: an emptiness test calls a wiped-out name "nothing
+    // pending" and lets Continue discard it.
+    const user = userEvent.setup();
+    const onPendingChange = vi.fn();
+    render(<RankLadderSection onPendingChange={onPendingChange} />);
+    await screen.findByText('Captain');
+
+    await user.click(screen.getByRole('button', { name: 'Edit Captain' }));
+    await user.clear(screen.getByPlaceholderText('e.g. Captain'));
+
+    await waitFor(() => expect(onPendingChange).toHaveBeenLastCalledWith(true));
+  });
+
   it('does not report an empty form as pending', async () => {
     // Opening Add Rank and thinking better of it is not unsaved work, and a
     // guard nobody can satisfy without noticing the box is open is worse than

@@ -44,12 +44,20 @@ interface RankLadderSectionProps {
 const RankLadderSection: React.FC<RankLadderSectionProps> = ({ onPendingChange }) => {
   const editor = useRankEditor({ allowCodeEdit: false });
 
-  // A form is pending only once something has been typed into it: opening Add
-  // Rank and thinking better of it is not unsaved work, and blocking Continue
-  // on an empty box would be a guard nobody could satisfy without noticing the
-  // box was open at all.
-  const rankFormPending =
-    (editor.addingRank || editor.editingRank !== null) && editor.rankForm.display_name.trim().length > 0;
+  // Pending means "differs from where it started", which is a different test in
+  // each mode and cannot be one expression over emptiness.
+  //
+  // Add Rank starts empty, so anything typed is unsaved work and an empty box is
+  // somebody who opened it and thought better of it — blocking Continue on that
+  // is a guard nobody could satisfy without noticing the box was open at all.
+  //
+  // Edit Rank starts *pre-populated* with the rank's current name, so an
+  // emptiness test is wrong in both directions: it reports pending the instant
+  // Edit opens with nothing changed, and it reports nothing pending when the
+  // name has been cleared — which is precisely when there is an edit to lose.
+  const rankFormPending = editor.addingRank
+    ? editor.rankForm.display_name.trim().length > 0
+    : editor.editingRank !== null && editor.rankForm.display_name.trim() !== editor.editingRank.display_name.trim();
 
   useEffect(() => {
     onPendingChange?.(rankFormPending);
