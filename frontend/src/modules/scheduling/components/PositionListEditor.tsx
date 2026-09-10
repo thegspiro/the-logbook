@@ -189,15 +189,24 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
                 </option>
               ))}
             </select>
-            <button onClick={() => handleRemove(i)} className="rounded-sm p-1 text-red-500 hover:bg-red-500/10">
+            <button
+              onClick={() => handleRemove(i)}
+              className="mobile-touch-target shrink-0 rounded-sm text-red-500 hover:bg-red-500/10"
+              aria-label={`Remove position ${i + 1}`}
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
       </div>
+      {/* Sized to match the structured branch above. This is the branch the
+          apparatus and resource cards use in edit mode, and edit mode is a click
+          the route pass never makes — so the ratchet has never seen either copy
+          of these controls, and fixing only the one I happened to be reading
+          would have left the used path at 22px. */}
       <button
         onClick={handleAdd}
-        className="mt-1.5 flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
+        className="mobile-touch-target mt-1.5 gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
       >
         <Plus className="h-3 w-3" /> {addButtonLabel}
       </button>

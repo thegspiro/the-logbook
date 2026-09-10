@@ -255,8 +255,17 @@ describe('ShiftSettingsPanel switches with the flags absent from the response', 
     'Restrict check-in to assigned members',
   ];
 
+  // `mockReset()` before each default, per CLAUDE.md: an unconsumed
+  // `mockResolvedValueOnce` survives `vi.clearAllMocks()` and is handed out
+  // ahead of a later `mockResolvedValue`, so a block that only sets the fallback
+  // runs on whatever the previous test happened to queue. This block's whole
+  // point is the *shape* of the feature response, which makes it precisely the
+  // block that must not inherit somebody else's — and resetting also stops its
+  // own `{}` leaking forward into a later one.
   beforeEach(() => {
+    mockLoadShiftSettings.mockReset();
     mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+    vi.mocked(schedulingService.getFeatureSettings).mockReset();
     vi.mocked(schedulingService.getFeatureSettings).mockResolvedValue({} as unknown as SchedulingFeatureSettings);
   });
 

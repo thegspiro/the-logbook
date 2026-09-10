@@ -295,15 +295,28 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: SCHEDULING_ADMIN,
     expectText: 'Scheduling Notifications',
   },
-  {
-    path: '/scheduling/admin/settings/shift-reports',
-    maxSmallTargets: 0,
-    maxTinyText: 0,
-    permissions: SCHEDULING_ADMIN,
-    expectText: 'Post-Shift Validation',
-  },
-  // Two remain unlisted, for two different reasons, each measured rather than
-  // assumed:
+  // Three remain unlisted, for three different reasons, each measured rather
+  // than assumed:
+  //
+  // /scheduling/admin/settings/shift-reports was listed here at 0 for a day and
+  // should not have been. Its body is seven subsections behind an in-page tab
+  // strip driven by `useState`, and this pass renders whichever one
+  // `ShiftReportsSettingsPanel` initialises to — so a budget of 0 was a
+  // statement about one seventh of the screen. Clicking through the other six
+  // finds 38, 6, 6, 9 and 9 controls under 44px (Feedback Defaults, Apparatus
+  // Skills, Form Sections, Review Workflow, Rating Scale; Post-Shift Validation
+  // is clean): apparatus-type chips at 32px, a 12x12 icon pair, checkbox labels
+  // at 40px, an "Add level" link at 16px and four Save buttons at 34-36px.
+  //
+  // That is its own sweep, and paying it down is only half the job — the pass
+  // has no way to *reach* those subsections, so fixing them would be asserted
+  // by inspection and never measured. Both halves belong together: teach the
+  // pass to cycle the strip, then sweep what it reports. The route stays exempt
+  // until then rather than carrying a number that means one seventh of what it
+  // appears to.
+  //
+  // The five sections above have no equivalent: each renders its whole body at
+  // its own address.
   //
   // /communications/email-templates is two-thirds done: its four list filters
   // are 44px now and its breadcrumb no longer overflows 320px, both fixed here.
