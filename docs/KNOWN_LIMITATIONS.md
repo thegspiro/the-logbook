@@ -1745,6 +1745,28 @@ doc, not here.
 
 ## Frontend — `typescript`'s declared version has drifted from the documented alias arrangement (2026-09-10, security review EV-16 pass 4)
 
+**✅ Resolved (2026-09-10) — PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452)
+re-pinned `typescript` to `5.9.3` in `frontend/package.json`, matching
+CLAUDE.md's documented arrangement again.** Verified: `npm ci` (fresh),
+`npx eslint .` (0 problems), and `tsc-native.mjs --noEmit` (0 errors) all
+clean. **One residual, investigated and accepted as a known quirk rather
+than fixed:** `npm ls typescript` still reports
+`frontend/node_modules/typescript@7.0.2 invalid` against the `5.9.3`
+requirement — reproducible even from a from-scratch `rm package-lock.json
+&& npm install`, so it is not the stale-lockfile artifact this entry
+originally described. It appears to be an inherent consequence of
+`typescript-native: npm:typescript@7.0.2` sharing its real package name
+with the direct dependency; `npm dedupe` doesn't clear it either (fails on
+an unrelated, pre-existing `@vitest/ui`/`vitest` peer conflict). Since the
+paths that matter (`npm ci`, `eslint`, `tsc-native.mjs`) are all clean,
+this is left as a documented `npm ls`-only quirk — see CLAUDE.md's "Two
+TypeScript installs" section (updated the same day) for the current
+accurate description. Closing it for real would need restructuring the
+alias, which is a larger change nobody has taken on.
+
+<details>
+<summary>Original entry (superseded by the above), preserved for history</summary>
+
 CLAUDE.md's "Two TypeScript installs" section requires the plain
 `typescript` dependency in `frontend/package.json` to stay at `5.9.3` (the
 version `typescript-eslint` can actually type-check against), with
@@ -1780,6 +1802,8 @@ support — regenerate `package-lock.json` and confirm `npm install` still
 succeeds cleanly from a clean slate, and update CLAUDE.md's documented
 version to match. Cross-cutting frontend tooling, not any one feature's
 code, so it is flagged here rather than fixed inside a single-feature PR.
+
+</details>
 
 ## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
 

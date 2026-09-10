@@ -216,8 +216,22 @@ neither depends on npm choosing to auto-install anything.
 | `node_modules/typescript`        | 5.9.3   | The frontend's own declaration, hoisted |
 | `node_modules/typescript-native` | 7.0.2   | The aliased compiler, hoisted           |
 
-Nothing nests under `frontend/node_modules/` any more: with no version
-conflict left to work around, both hoist to the root.
+**Correction (2026-09-10):** the claim that nothing nests under
+`frontend/node_modules/` does not hold. `frontend/node_modules/typescript`
+resolves to `7.0.2` — reproducibly, including from a from-scratch
+`rm package-lock.json && npm install` — while the hoisted root
+`node_modules/typescript` is `5.9.3`, so `npm ls typescript` reports the
+nested one `invalid` (`ELSPROBLEMS`). This appears to be an inherent
+consequence of `typescript-native: npm:typescript@7.0.2` sharing its real
+package name with the direct `typescript` dependency, not a stale lockfile
+artifact — npm's resolver chooses this layout on every attempt, not just
+the one committed. It does not affect `npm ci`, `eslint`, or
+`tsc-native.mjs --noEmit`, all still verified clean against it (see PR
+[#2452](https://github.com/thegspiro/the-logbook/pull/2452)); closing it
+fully looks like it would need a restructure of how `typescript-native` is
+aliased, which nobody has done. Treat `npm ls typescript` reporting this
+one node as a known, harmless quirk, not a regression to chase — and
+correct this paragraph for real if the alias is ever restructured.
 
 **typescript-eslint cannot run on TypeScript 7.** It throws
 `typescript-eslint does not support TS 7.0` from a hard version guard, and

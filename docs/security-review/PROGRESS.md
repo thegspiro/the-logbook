@@ -40,8 +40,10 @@ flagged not fixed" `typescript` manifest note as a P1 — the completion
 gate's own recorded 1,382 ESLint warnings, it argued, should have blocked
 the pass rather than being noted and moved past. Investigated rather than
 either dismissed or blindly "fixed": those warnings do not reproduce
-against the exact committed `main` state (a direct `npx eslint .` there
-exits 0), so this pass's own conclusion — the manifest/lockfile drift
+against the exact committed `main` state — a direct `npx eslint .` there
+prints no output at all and exits 0, i.e. genuinely 0 warnings, not merely
+a count that happens to clear `npm run lint`'s `--max-warnings 10`
+threshold — so this pass's own conclusion — the manifest/lockfile drift
 described in the finding is real but not presently live — holds. Still
 worth correcting on its own terms per CLAUDE.md's own rule ("the plain
 `typescript` moves only when the linter's cap does"), so a small dedicated
@@ -12570,6 +12572,62 @@ re-runs the whole-codebase sweeps against whatever has landed since.
 ---
 
 ## Log
+
+### 2026-09-10 — Feature 16 (Events & requests, pass 4) — 1 fixed (EV-24, P2), 1 re-verified open (EV-23), corrected on two Codex review rounds
+
+**Step 0:** the rotation had gone quiet — no open security-review PR, no
+new branch for Feature 16, over 5 hours since PR #2441's merge despite the
+30-minute cadence. Started the pass directly rather than wait further.
+
+**Pass 4:** re-verified every pass 1-3 fix against the diff since pass 3's
+merge (`7af79795`, PR #2216) — no regressions; the only real change besides
+this pass's own fix is a correctly org-scoped/permission-gated
+event-organizer-name feature. **EV-24** (P2) fixed: resubmitting an
+already-`WAITLISTED` RSVP could be promoted ahead of an earlier-queued,
+ever-admissible party, since the capacity check only ever asked "does my
+own party fit," never "is anyone ahead of me." **EV-23** re-verified still
+open, unregressed. Opened as PR
+[#2451](https://github.com/thegspiro/the-logbook/pull/2451).
+
+**Codex review, round 1:** caught a real gap in the EV-24 fix itself — the
+admissibility check's `responded_at < X` predicate had no tiebreaker, so
+two RSVPs tied to the same second (routine under MySQL's second-precision
+`DATETIME`) had no consistent "who's earlier" answer between the guard,
+`promote_from_waitlist`'s ordering, and the displayed waitlist position.
+Fixed on the same PR by adding `EventRSVP.id` as a second, deterministic
+sort key in all three places. New guard test:
+`test_tied_responded_at_uses_id_as_a_consistent_tiebreaker`, confirmed
+failing pre-fix (once two identity-map/timestamp-precision gotchas in the
+test itself were found and corrected) and passing post-fix.
+
+Round 1 also flagged the pass's own "incidentally found, not fixed"
+`typescript` manifest note as a P1, arguing the completion gate's recorded
+1,382 ESLint warnings should have blocked the pass. Investigated: those
+warnings do not reproduce against the exact committed `main` state (a
+direct `npx eslint .` there prints nothing and exits 0 — genuinely 0
+warnings). The pass's own conclusion held; the manifest/lockfile drift is
+real but not presently live. Opened a small, dedicated fix anyway per
+CLAUDE.md's own rule ("the plain `typescript` moves only when the linter's
+cap does"): PR [#2452](https://github.com/thegspiro/the-logbook/pull/2452).
+
+**PR #2452's own Codex review** then caught a second-order effect the pin
+alone doesn't clear: `npm ls typescript` still reports
+`frontend/node_modules/typescript@7.0.2 invalid`, reproducible even from a
+from-scratch lockfile regeneration — an inherent consequence of the
+`typescript-native: npm:typescript@7.0.2` alias sharing its real package
+name with the direct dependency, not a stale artifact. `npm ci`, `eslint`,
+and `tsc-native.mjs --noEmit` all verified clean regardless. Corrected
+CLAUDE.md's "Two TypeScript installs" section, which had claimed nothing
+nests under `frontend/node_modules/` — no longer accurate — and added a
+`docs/KNOWN_LIMITATIONS.md` entry. PR #2452 kept the `5.9.3` pin regardless
+(still strictly more correct than `7.0.2`) and merged.
+
+Both #2451 and #2452 merged clean, all CI green, Codex review threads
+resolved. Rotation row 16 → `✅` in both the prose note and the Rotation
+table (a third Codex round on this bookkeeping PR caught the table itself
+still reading `⬜` — fixed). Full write-up:
+`docs/security-review/EV-16-events-requests.md` → Pass 4. Next: Feature 17,
+Training core.
 
 ### 2026-09-09 — Watchdog pass — Step 0 bookkeeping only, PR #2441 merged
 
