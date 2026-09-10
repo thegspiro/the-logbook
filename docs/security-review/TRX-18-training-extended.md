@@ -885,29 +885,101 @@ fixed, by a different security-review pass, outside this feature's own
 scope. No further code change needed here; this entry retires pass 2's
 stale "correctly left cacheable" claim for this one route.
 
+### TRX4-2 — MEDIUM (XC-2) — Instructor-qualification reads had no permission gate at all
+
+**Caught by a Codex review round on this pass's own PR**, surfaced while
+verifying TRX4-1's own claim about `validate_instructor`'s response shape:
+that endpoint, plus its two siblings on the same resource, depended only on
+`get_current_user` — no permission dependency, no self-filter — while the
+POST/PATCH routes on the same `InstructorQualificationResponse` resource
+already require `training.manage`:
+
+- `GET /instructors/qualifications` (`training_enhancements.py:266-280`) —
+  with no `user_id`/`course_id` query params, returns every instructor
+  qualification in the org: `certification_number`, `issuing_agency`,
+  `certification_level`, `issued_date`, `expiration_date`, `verified_by`.
+- `GET /instructors/qualifications/{course_id}/qualified` (`:335-349`) —
+  the qualified-instructor roster for any course, org-wide.
+- `GET /instructors/validate/{user_id}/{course_id}` (`:352-364`) — the
+  route TRX4-1 discusses; per TRX4-1's corrected rationale, pairing a named
+  member with a qualification verdict is itself sensitive.
+
+The frontend route hosting all three (`/training/admin`, gated
+`requiredPermission="training.manage"` in `modules/training/routes.tsx`)
+and `docs/training/02-training.md` ("Navigate to Training Admin > Advanced
+
+> Instructors to manage instructor qualifications") both describe this as
+> training-officer-only data. The backend GET routes let any authenticated
+> member reach the same data directly, bypassing the frontend gate entirely
+> — confirmed by reading the routes, the response schema, and the one
+> frontend consumer (`TrainingEnhancementsTab.tsx`, the only file in the
+> codebase that calls any of the three) rather than assuming from the route
+> path alone.
+
+**Fix:** all three routes now depend on
+`Depends(require_permission("training.manage"))`, matching the file's own
+write-side convention. No self-scoped exception is needed (unlike TRX-3's
+effectiveness-evaluations fix) — nothing in the frontend or docs describes
+an ordinary member's own use case for these three reads, so admin-only is
+the correct shape, not admin-plus-self.
+
+Guard test added:
+`test_instructor_qualification_endpoint_permissions.py` — introspects
+`router.routes` for the `PermissionChecker.required_permissions` each route
+now carries (the same pattern `test_equipment_check_endpoint_permissions.py`
+established), asserting all three GET routes require `training.manage` and
+the two existing POST/PATCH routes still do (so a future "fix" cannot
+loosen the write side while re-opening the read side).
+
+### TRX4-3 — Corrects this pass's own first-draft claim — `docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" count was six, not seven
+
+**Also caught by a Codex review round on this pass's own PR.** This pass's
+first draft claimed the entry "is current and needs no correction," on the
+strength of re-reading the two closures (`external_training_service.py`,
+`push_service.py`) pass 3 had already verified — without independently
+checking every site the entry's own six-site list names. It missed one:
+`integration_services/documenso_service.py` was never in that list at all.
+
+Read the file directly: `test_connection` and `create_document` both call
+`create_integration_client().get`/`.post` against the admin-configured
+`api_base_url`, with **no** `assert_outbound_url_safe` call anywhere in the
+file — unlike its closest sibling, `calcom_service.py` (the same
+"self-hosted org points this at its own `https://<host>/api/v1`" shape),
+which does call it before every request (confirmed directly, not assumed
+from the shared shape). Documenso is worse than "narrowed, not closed":
+`DocumensoConfig.api_base_url` does get the generic save-time
+`_validate_urls_in_config`/`validate_integration_url` check every
+integration's URL fields get (`integrations.py`), but nothing re-validates
+it at send time, so its save-to-send window is the entire gap rather than
+the check-then-connect race the other six sites narrow.
+
+**Disposition:** documentation-only correction, same shape as TRX3-1 — the
+underlying fix (adding `assert_outbound_url_safe` to
+`documenso_service.py`, or migrating the whole family onto a pinning
+transport) is explicitly out of this feature-scoped pass's bounds per this
+note's own standing guidance ("needs a dedicated cross-cutting pass... not
+a unilateral fix inside a feature-scoped review"), and `documenso_service.py`
+is not one of this feature's own fifteen artifacts. Corrected the count
+(six → seven) and the affected-site list in `docs/KNOWN_LIMITATIONS.md`,
+named the mechanism and the missing call, and corrected this pass's own
+"Verified good" claim below rather than let it stand.
+
 ### Verified good ✅ (pass 4, not previously stated this way)
 
-- **`docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry is
-  current and needs no correction from this pass.** Re-read in full: it
-  already reflects `external_training_service.py`'s closure (TRX3-1) and
-  `push_service.py`'s independent closure, both re-verified there as of
-  pass 3, and the remaining six-site count matches the file's own content
-  today (five via `create_integration_client`, one — `audit_ship_service.py`
-  — with its own client construction). Nothing in this feature's own file
-  set is on that list.
 - **No new endpoint, model, or migration touches any training-extended
   table since pass 3** — confirmed via the zero-diff scope check above
   rather than inferred from a diff-stat alone.
 
 ## Completion gate (pass 4)
 
-| Check                                                                                                             | Result                                                               |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/` (feature scope)                                                                     | ✅ 0 violations (no Python file changed this pass)                   |
-| `black --check` (feature scope)                                                                                   | ✅ unchanged                                                         |
-| `isort --check-only` (feature scope)                                                                              | ✅ clean                                                             |
-| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head `0533644945cd`                         |
-| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 1086 passed, 1 skipped (pre-existing optional-dependency skip)    |
-| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors (no frontend file changed this pass)                     |
-| `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                                          |
-| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 88 passed (no frontend file changed this pass; re-run to confirm) |
+| Check                                                                                                             | Result                                              |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (feature scope + new test file)                                                     | ✅ 0 violations                                     |
+| `black --check` (feature scope + new test file)                                                                   | ✅ clean                                            |
+| `isort --check-only` (feature scope + new test file)                                                              | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ 443 revisions, single head (no schema change)    |
+| `pytest tests/test_instructor_qualification_endpoint_permissions.py -v`                                           | ✅ 5 passed (new, TRX4-2)                           |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ passed, including the new permission-guard tests |
+| `cd frontend && npm run typecheck`                                                                                | ✅ 0 errors (no frontend file changed this pass)    |
+| `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                         |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts`                                                        | ✅ 88 passed (no frontend file changed this pass)   |

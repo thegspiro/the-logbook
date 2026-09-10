@@ -27,19 +27,34 @@ the same "Step 0 went quiet" pattern Feature 16's own pass 4 and the
 against pass 3's merge (`7455d6708`): only `frontend/src/utils/apiCache.ts`
 changed among this feature's fifteen declared backend/schema artifacts,
 and that change was made by an unrelated pass. **Two Codex review rounds
-on the PR caught two real gaps, both corrected on the same PR:** (1) the
-first draft's scope check dropped pass 2/3's ten established frontend
-files and `apiCache.test.ts` — corrected by diffing all eleven directly;
-seven changed (a cross-cutting breadcrumb/accessibility/contrast sweep,
-confirmed non-security-relevant by reading each diff), no finding
-resulted. (2) TRX4-1's first draft misstated the `/instructors/validate`
-endpoint's response shape as carrying extra qualification detail; reading
-the handler directly shows it returns only the echoed `user_id`/
-`course_id` plus one boolean — corrected to the accurate rationale (a
-named member paired with a verdict is the sensitive part, independent of
-payload size). One doc correction (TRX4-1, retiring a stale pass-2
-"verified good" claim); all ten pass-1 and one pass-2 finding re-verified
-intact. Full write-up:
+on the PR caught four real gaps across two rounds, all corrected on the
+same PR:** round 1 — (1) the first draft's scope check dropped pass 2/3's
+ten established frontend files and `apiCache.test.ts` — corrected by
+diffing all eleven directly; seven changed (a cross-cutting
+breadcrumb/accessibility/contrast sweep, confirmed non-security-relevant by
+reading each diff), no finding resulted. (2) TRX4-1's first draft misstated
+the `/instructors/validate` endpoint's response shape as carrying extra
+qualification detail; reading the handler directly shows it returns only
+the echoed `user_id`/`course_id` plus one boolean — corrected to the
+accurate rationale (a named member paired with a verdict is the sensitive
+part, independent of payload size). Round 2, surfaced while verifying
+round 1's fixes — (3) **TRX4-2 (MEDIUM, real code fix):** all three
+GET `/instructors/qualifications`(`/validate`) routes had **no** permission
+dependency at all — any authenticated member could read every instructor's
+certification detail org-wide, bypassing the `training.manage`-gated
+frontend entirely. Fixed by gating all three with
+`Depends(require_permission("training.manage"))`; guard test added
+(`test_instructor_qualification_endpoint_permissions.py`, 5 tests). (4)
+**TRX4-3 (doc correction):** this pass's first draft claimed
+`KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry needed no
+correction; `documenso_service.py` was missing from its six-site list the
+whole time (no `assert_outbound_url_safe` call anywhere in the file,
+unlike its `calcom_service.py` sibling) — corrected the count to seven and
+named the mechanism, without attempting the actual fix (explicitly out of
+this feature-scoped pass's bounds per the note's own standing guidance).
+One doc correction (TRX4-1, retiring a stale pass-2 "verified good"
+claim); one real fix (TRX4-2); all ten pass-1 and one pass-2 finding
+re-verified intact. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` → Pass 4. Rotation row
 18 → `⏳`. Subscribed to PR activity. Next: tend #2460 until merged, then
 Feature 19 (Skills testing).
@@ -116,6 +131,8 @@ Full completion gate green: flake8/black/isort clean; migrations validated
 suites (12077) pass, 0 failed. Full write-up:
 `docs/security-review/TR-17-training-core.md` → Pass 4 (corrected, round
 3).
+
+</details>
 
 </details>
 
