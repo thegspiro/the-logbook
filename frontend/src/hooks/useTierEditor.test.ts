@@ -217,6 +217,38 @@ describe('useTierEditor saving', () => {
   });
 });
 
+describe('a ladder the backend synthesized rather than stored', () => {
+  beforeEach(installDefaults);
+
+  it('reports that nothing is stored, so the step can say what actually resolves it', async () => {
+    // It opens dirty on purpose — nothing reads the ladder until it is saved.
+    // But Discard reloads, which re-proposes the same defaults and sets dirty
+    // straight back, so a refusal offering "or discard" names a way out that
+    // does not exist.
+    getTierConfig.mockResolvedValue(config({ is_saved: false }));
+    const result = await loaded();
+
+    expect(result.current.dirty).toBe(true);
+    expect(result.current.neverSaved).toBe(true);
+  });
+
+  it('says nothing of the sort once a ladder is stored', async () => {
+    getTierConfig.mockResolvedValue(config({ is_saved: true }));
+    const result = await loaded();
+
+    expect(result.current.neverSaved).toBe(false);
+  });
+
+  it('says nothing of the sort when the backend does not report either way', async () => {
+    // An older backend that predates the flag. Assuming "never saved" there
+    // would badge every organization's stored ladder as pending.
+    getTierConfig.mockResolvedValue(config());
+    const result = await loaded();
+
+    expect(result.current.neverSaved).toBe(false);
+  });
+});
+
 describe('a save the refresh could not confirm', () => {
   beforeEach(installDefaults);
 

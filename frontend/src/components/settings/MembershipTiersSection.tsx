@@ -24,6 +24,14 @@ interface MembershipTiersSectionProps {
    * moment and does not pass one.
    */
   onPendingTierChange?: ((pending: boolean) => void) | undefined;
+  /**
+   * True when the ladder shown has never been stored — the backend synthesized
+   * it, so nothing reads it yet.
+   *
+   * There is nothing to discard back to in that state, and reloading re-proposes
+   * the same defaults, so offering Discard names a way out that does not exist.
+   */
+  nothingStored?: boolean | undefined;
   onSave: () => void;
   onReset: () => void;
 }
@@ -56,6 +64,7 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
   onRemoveTier,
   onMoveTier,
   onPendingTierChange,
+  nothingStored,
   onSave,
   onReset,
 }) => {
@@ -392,15 +401,22 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
       </fieldset>
 
       {dirty && (
-        <div className="action-bar-safe flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="btn-secondary mobile-touch-target px-4 text-sm font-medium"
-            disabled={saving}
-            onClick={onReset}
-          >
-            Discard changes
-          </button>
+        <div className="action-bar-safe flex flex-wrap items-center justify-end gap-2">
+          {nothingStored && (
+            <p className="text-theme-text-muted mr-auto text-sm">
+              These tiers have not been saved yet — nothing reads them until you do.
+            </p>
+          )}
+          {!nothingStored && (
+            <button
+              type="button"
+              className="btn-secondary mobile-touch-target px-4 text-sm font-medium"
+              disabled={saving}
+              onClick={onReset}
+            >
+              Discard changes
+            </button>
+          )}
           <button
             type="button"
             className="btn-primary mobile-touch-target inline-flex items-center gap-1 px-4 text-sm font-medium"

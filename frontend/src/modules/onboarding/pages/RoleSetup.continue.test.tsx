@@ -33,6 +33,7 @@ vi.mock('react-hot-toast', () => ({
 // The two ladders each own an API of their own; this file is about the step's
 // Continue, so they are stubbed down to what it needs to know.
 let ladderDirty = false;
+let ladderNeverSaved = false;
 let ladderLoading = false;
 let tierNamePending = false;
 let rankFormPending = false;
@@ -50,11 +51,11 @@ vi.mock('../components', async () => {
       onLoadingChange,
       onPendingTierChange,
     }: {
-      onDirtyChange?: (d: boolean) => void;
+      onDirtyChange?: (d: boolean, neverSaved: boolean) => void;
       onLoadingChange?: (l: boolean) => void;
       onPendingTierChange?: (p: boolean) => void;
     }) => {
-      React.useEffect(() => onDirtyChange?.(ladderDirty), [onDirtyChange]);
+      React.useEffect(() => onDirtyChange?.(ladderDirty, ladderNeverSaved), [onDirtyChange]);
       React.useEffect(() => onLoadingChange?.(ladderLoading), [onLoadingChange]);
       React.useEffect(() => onPendingTierChange?.(tierNamePending), [onPendingTierChange]);
       return null;
@@ -78,6 +79,7 @@ const renderStep = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   ladderDirty = false;
+  ladderNeverSaved = false;
   ladderLoading = false;
   tierNamePending = false;
   rankFormPending = false;
@@ -133,6 +135,35 @@ describe('unsaved membership ladder edits', () => {
 
     expect(savePositionsConfig).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining('membership tier changes'));
+  });
+});
+
+describe('a ladder the department has never stored', () => {
+  it('tells them to save, not to discard, because discarding cannot clear it', async () => {
+    // The backend synthesized this ladder, so the editor opens dirty and
+    // reloading re-proposes it. Naming Discard here sends an administrator to a
+    // button that puts them back where they started.
+    ladderDirty = true;
+    ladderNeverSaved = true;
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    expect(savePositionsConfig).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('have not been stored yet'));
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringContaining('or discard'));
+  });
+
+  it('still offers discard for an ordinary unsaved edit', async () => {
+    ladderDirty = true;
+    ladderNeverSaved = false;
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(screen.getByRole('button', { name: /continue to modules/i }));
+
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('Save or discard'));
   });
 });
 

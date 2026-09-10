@@ -36,7 +36,7 @@ interface MembershipLadderSectionProps {
    * behind a "Positions configured successfully!" toast. The step guards its
    * Continue on this.
    */
-  onDirtyChange?: (dirty: boolean) => void;
+  onDirtyChange?: (dirty: boolean, neverSaved: boolean) => void;
   /**
    * Told while the ladder is still being read.
    *
@@ -75,8 +75,8 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
   const ownTier = ownMembershipType ? editor.tiers.find((tier) => tier.id === ownMembershipType) : undefined;
 
   useEffect(() => {
-    onDirtyChange?.(editor.dirty);
-  }, [editor.dirty, onDirtyChange]);
+    onDirtyChange?.(editor.dirty, editor.neverSaved);
+  }, [editor.dirty, editor.neverSaved, onDirtyChange]);
 
   useEffect(() => {
     onLoadingChange?.(editor.loading);
@@ -158,6 +158,7 @@ const MembershipLadderSection: React.FC<MembershipLadderSectionProps> = ({
             onRemoveTier={editor.removeTier}
             onMoveTier={editor.moveTier}
             onPendingTierChange={onPendingTierChange}
+            nothingStored={editor.neverSaved}
             onSave={() => {
               void editor.save();
             }}

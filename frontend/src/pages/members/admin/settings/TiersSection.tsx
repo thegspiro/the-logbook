@@ -79,6 +79,7 @@ const TiersSection: React.FC = () => {
             onAddTier={editor.addTier}
             onRemoveTier={editor.removeTier}
             onMoveTier={editor.moveTier}
+            nothingStored={editor.neverSaved}
             onSave={() => {
               void editor.save();
             }}

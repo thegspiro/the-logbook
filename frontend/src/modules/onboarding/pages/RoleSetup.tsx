@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
@@ -474,6 +474,17 @@ const PositionSetup: React.FC = () => {
   // has to refuse to leave with them pending rather than navigate away and
   // report success for the half of the step that did save.
   const [ladderDirty, setLadderDirty] = useState(false);
+  // Why it is dirty, which decides what the refusal can honestly tell them to
+  // do. A ladder the backend synthesized is dirty from the moment it loads and
+  // reloading re-proposes it, so "or discard" is a way out that does not exist.
+  const [ladderNeverSaved, setLadderNeverSaved] = useState(false);
+  // Stable, because the section reports through an effect keyed on this
+  // identity — a fresh arrow each render would re-run it on every render of
+  // this step.
+  const handleLadderDirtyChange = useCallback((dirty: boolean, neverSaved: boolean) => {
+    setLadderDirty(dirty);
+    setLadderNeverSaved(neverSaved);
+  }, []);
   // `ladderDirty` is false for the whole of the tier config read, including for
   // an organization with no stored `membership_tiers` — the editor opens dirty
   // only once the response says `is_saved: false`. Leaving during that window
@@ -610,7 +621,11 @@ const PositionSetup: React.FC = () => {
     }
 
     if (ladderDirty) {
-      toast.error('Save or discard your membership tier changes before continuing');
+      toast.error(
+        ladderNeverSaved
+          ? 'Save your membership tiers before continuing — they have not been stored yet'
+          : 'Save or discard your membership tier changes before continuing'
+      );
       return;
     }
 
@@ -712,7 +727,7 @@ const PositionSetup: React.FC = () => {
           </div>
 
           <MembershipLadderSection
-            onDirtyChange={setLadderDirty}
+            onDirtyChange={handleLadderDirtyChange}
             onLoadingChange={setLadderLoading}
             onPendingTierChange={setTierNamePending}
           />

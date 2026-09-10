@@ -324,6 +324,62 @@ describe('editing while a save is in flight', () => {
   });
 });
 
+describe('a ladder that has never been stored', () => {
+  beforeEach(() => {
+    installDefaults();
+    getTierConfig.mockResolvedValue({
+      auto_advance: true,
+      tiers: [
+        { id: 'probationary', name: 'Probationary', years_required: 0, sort_order: 0, benefits: {} },
+        { id: 'active', name: 'Active Member', years_required: 1, sort_order: 1, benefits: {} },
+      ],
+      member_counts: {},
+      is_saved: false,
+    });
+  });
+
+  it('does not offer Discard, which cannot resolve it', async () => {
+    // Reload re-proposes the same defaults and sets dirty straight back, so the
+    // button is an affordance for something that does not happen.
+    render(<MembershipLadderSection />);
+    await screen.findByDisplayValue('Probationary');
+
+    expect(screen.getByRole('button', { name: /save tiers/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /discard changes/i })).not.toBeInTheDocument();
+  });
+
+  it('says why the Save is waiting', async () => {
+    render(<MembershipLadderSection />);
+
+    expect(await screen.findByText(/nothing reads them until you do/i)).toBeInTheDocument();
+  });
+
+  it('tells the step which kind of pending this is', async () => {
+    const onDirtyChange = vi.fn();
+    render(<MembershipLadderSection onDirtyChange={onDirtyChange} />);
+    await screen.findByDisplayValue('Probationary');
+
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true, true));
+  });
+
+  it('still offers Discard for an ordinary edit to a stored ladder', async () => {
+    const user = userEvent.setup();
+    getTierConfig.mockResolvedValue({
+      auto_advance: true,
+      tiers: [{ id: 'active', name: 'Active Member', years_required: 1, sort_order: 0, benefits: {} }],
+      member_counts: {},
+      is_saved: true,
+    });
+    render(<MembershipLadderSection />);
+    const years = await screen.findByLabelText('Years of service', { selector: '#years-active' });
+
+    await user.clear(years);
+    await user.type(years, '4');
+
+    expect(screen.getByRole('button', { name: /discard changes/i })).toBeInTheDocument();
+  });
+});
+
 describe('a tier name typed but not added', () => {
   beforeEach(installDefaults);
 

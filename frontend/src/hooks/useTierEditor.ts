@@ -106,6 +106,14 @@ export function useTierEditor() {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
+  // The ladder on screen is one the backend synthesized, not one it stored:
+  // `MembershipTierService._load_tiers` still reads nothing, so nothing
+  // advances and no benefit applies. It is why the editor opens dirty — and
+  // why Discard cannot resolve that: reloading re-proposes the same defaults
+  // and sets `dirty` straight back, so a step guarding on `dirty` would name an
+  // action that provably does not satisfy it. Only Save does.
+  const neverSaved = config?.is_saved === false;
+
   const memberCount = useCallback((tierId: string) => config?.member_counts?.[tierId] ?? 0, [config]);
 
   const setAutoAdvance = useCallback((autoAdvance: boolean) => {
@@ -254,6 +262,7 @@ export function useTierEditor() {
     failed,
     refreshFailed,
     unconfirmedSave,
+    neverSaved,
     retry,
     saving,
     dirty,
