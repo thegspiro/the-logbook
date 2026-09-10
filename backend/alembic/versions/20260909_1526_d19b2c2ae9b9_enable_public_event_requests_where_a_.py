@@ -14,13 +14,45 @@ that has a published request form, with the toggle already showing off and no
 error anywhere. That is CLAUDE.md pitfall #19's "absence must mean current
 behaviour, never off", applied on the upgrade path rather than in the resolver.
 
-So: every organization that has a **published, public** form carrying the
-``event_request`` integration is, today, accepting public event requests. This
-migration writes that fact down. It sets the flag unconditionally for those
-organizations rather than only where the key is absent — a stored ``false`` on
-such an organization cannot have meant "do not take requests from my published
-form", because the toggle never controlled that form. Organizations with no
-such form are left untouched and keep the shipped default.
+So: every organization that has a **published, public** form which would
+actually create a request today is, today, accepting public event requests.
+This migration writes that fact down. It sets the flag unconditionally for
+those organizations rather than only where the key is absent — a stored
+``false`` on such an organization cannot have meant "do not take requests from
+my published form", because the toggle never controlled that form.
+Organizations with no such form are left untouched and keep the shipped
+default.
+
+"Would actually create a request" is checked, not assumed, and that is the
+whole difficulty. Neither the form-level marker nor an **active** integration
+row proves a form is feeding the pipeline:
+
+- **The marker plus a deactivated row.** ``_process_integrations`` computes
+  ``disabled = bool(same_type_rows) and integration is None`` and skips the
+  integration outright, so that department is receiving nothing through the
+  form.
+- **An active row whose mappings no longer resolve.**
+  ``_refresh_integration_mappings`` runs on every field add, rename and delete
+  and rebuilds ``field_mappings`` wholesale from the current labels and field
+  types, leaving ``is_active`` untouched. Deleting or renaming a form's contact
+  fields therefore empties the mappings that matter while the row still reads
+  as active, and ``_process_event_request`` answers "missing required
+  mapping(s)" to every submission thereafter.
+
+Both are excluded, for one reason: this backfill's entire justification is
+"preserve current behaviour", and for a department whose form is not reaching
+the pipeline there is no behaviour to preserve. What setting the flag would do
+instead is open the separate anonymous ``POST /api/v1/event-requests/public``
+for a department that has never taken an anonymous request — a widening of a
+public surface, which a preservation backfill must not do. A department in
+either state that later fixes its form must also turn the toggle on, which is
+the coupling already recorded in ``docs/KNOWN_LIMITATIONS.md``.
+
+``_form_can_produce_a_request`` mirrors the runtime resolution order —
+``field_mappings`` first, then the label and field-type fallback
+``_apply_label_fallback`` applies — against frozen copies of the service's own
+label tables, and compares labels in Python so the columns' accent-insensitive
+collation cannot equate a label the service would not have matched.
 
 Idempotent: an organization already carrying ``true`` is skipped, so a re-run
 writes nothing.
@@ -38,11 +70,11 @@ has a published, public request form and is therefore already taking public
 event requests through it, so the reverted code reading ``true`` describes what
 that department is actually doing.
 
-Guarded on both tables existing. Fresh installs come up through
+Guarded on the tables existing. Fresh installs come up through
 ``create_all`` + stamp-head rather than by replaying this chain (CLAUDE.md
 pitfall #26), and CI runs ``alembic upgrade head`` against an empty database.
-``organizations`` and ``forms`` are both migration-built today, so the guard is
-belt-and-braces — but a database with neither table has no rows to backfill
+``organizations``, ``forms``, ``form_fields`` and ``form_integrations`` are all
+migration-built today, so the guard is belt-and-braces — but a database with neither table has no rows to backfill
 either, which makes skipping the correct outcome rather than merely a safe one.
 
 The settings JSON is rebuilt with ``copy.deepcopy`` and written back as a whole
@@ -106,8 +138,8 @@ depends_on: Union[str, Sequence[str], None] = None
 # through this form. Selecting it would not preserve its behaviour: it would
 # newly open the separate anonymous JSON endpoint for a department that had
 # deliberately switched its intake off.
-_ORG_IDS_WITH_PUBLISHED_REQUEST_FORM = sa.text("""
-    SELECT DISTINCT f.organization_id
+_CANDIDATE_REQUEST_FORMS = sa.text("""
+    SELECT f.id, f.organization_id
     FROM forms f
     WHERE f.status = 'published'
       AND f.is_public = 1
@@ -132,8 +164,76 @@ _ORG_IDS_WITH_PUBLISHED_REQUEST_FORM = sa.text("""
     """)
 
 
+# Frozen copies of the label and field-type tables `FormsService` resolves an
+# event-request submission through — `_EVENT_REQUEST_LABEL_MAP` and
+# `_INTEGRATION_FIELD_TYPE_MAP`, narrowed to the two targets that decide
+# whether a submission becomes a request at all. Inlined rather than imported
+# for the reason CLAUDE.md pitfall #20 gives for the other inlined normalizer:
+# a migration must keep selecting the rows it selected the day it ran, and a
+# helper that is free to change cannot promise that.
+_CONTACT_NAME_LABELS = ("contact name", "name", "full name", "your name")
+_CONTACT_EMAIL_LABELS = ("contact email", "email", "email address")
+_CONTACT_EMAIL_FIELD_TYPES = ("email",)
+
+
 def _has_table(table: str) -> bool:
     return table in sa.inspect(op.get_bind()).get_table_names()
+
+
+def _form_can_produce_a_request(bind, form_id: str) -> bool:
+    """Whether this form can actually yield the two fields a request requires.
+
+    An **active** integration row is not proof that a form creates event
+    requests. `_refresh_integration_mappings` runs on every field add, rename
+    and delete and rebuilds `field_mappings` wholesale from the current labels
+    and field types, leaving `is_active` untouched — so deleting or renaming a
+    form's contact fields silently empties the mappings that matter while the
+    row still reads as active. `_process_event_request` then answers
+    "missing required mapping(s)" to every submission, and that department is
+    not feeding the pipeline at all. Selecting it would open the anonymous JSON
+    endpoint for a department whose published form was never reaching the
+    pipeline, which is a widening of a public surface rather than the
+    preservation this backfill exists for.
+
+    The runtime order is mirrored: `field_mappings` first, then the label and
+    field-type fallback `_apply_label_fallback` applies when a required target
+    is still missing. Availability is computed as a set union rather than
+    runtime's first-wins loop, which is exact for these two targets because no
+    field can satisfy both — the name labels, the email labels and the `email`
+    field type are mutually disjoint.
+    """
+    targets: set = set()
+
+    rows = bind.execute(
+        sa.text(
+            "SELECT field_mappings FROM form_integrations"
+            " WHERE form_id = :form_id"
+            "   AND integration_type = 'event_request'"
+            "   AND is_active = 1"
+        ),
+        {"form_id": form_id},
+    ).fetchall()
+    for row in rows:
+        mappings = _load_settings(row[0])
+        targets.update(str(v) for v in mappings.values())
+
+    fields = bind.execute(
+        sa.text("SELECT label, field_type FROM form_fields WHERE form_id = :form_id"),
+        {"form_id": form_id},
+    ).fetchall()
+    for label, field_type in fields:
+        # `.strip().lower()`, matching the service, and compared in Python so
+        # the columns' accent-insensitive utf8mb4_unicode_ci collation cannot
+        # equate a label the service would not have matched.
+        normalized = str(label or "").strip().lower()
+        if normalized in _CONTACT_NAME_LABELS:
+            targets.add("contact_name")
+        elif normalized in _CONTACT_EMAIL_LABELS:
+            targets.add("contact_email")
+        if str(field_type or "").strip().lower() in _CONTACT_EMAIL_FIELD_TYPES:
+            targets.add("contact_email")
+
+    return "contact_name" in targets and "contact_email" in targets
 
 
 def _load_settings(raw) -> dict:
@@ -156,7 +256,17 @@ def _load_settings(raw) -> dict:
 
 
 def _target_org_ids(bind) -> list[str]:
-    return [str(row[0]) for row in bind.execute(_ORG_IDS_WITH_PUBLISHED_REQUEST_FORM)]
+    org_ids: list[str] = []
+    seen: set = set()
+    for form_id, organization_id in bind.execute(_CANDIDATE_REQUEST_FORMS):
+        org_id = str(organization_id)
+        if org_id in seen:
+            continue
+        if not _form_can_produce_a_request(bind, str(form_id)):
+            continue
+        seen.add(org_id)
+        org_ids.append(org_id)
+    return org_ids
 
 
 def _enable_flag(bind, org_ids: list[str]) -> None:
@@ -192,7 +302,7 @@ def _enable_flag(bind, org_ids: list[str]) -> None:
 def upgrade() -> None:
     if not (_has_table("organizations") and _has_table("forms")):
         return
-    if not _has_table("form_integrations"):
+    if not (_has_table("form_integrations") and _has_table("form_fields")):
         return
     bind = op.get_bind()
     _enable_flag(bind, _target_org_ids(bind))

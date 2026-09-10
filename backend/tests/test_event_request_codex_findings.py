@@ -10,6 +10,7 @@ mistake cannot come back:
 * an unparseable audience size spent the department's daily allowance.
 """
 
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -52,7 +53,7 @@ class TestBackfillSelection:
     def _sql() -> str:
         text = MIGRATION.read_text()
         match = re.search(
-            r"_ORG_IDS_WITH_PUBLISHED_REQUEST_FORM = sa\.text\(\s*\"\"\"(.*?)\"\"\"",
+            r"_CANDIDATE_REQUEST_FORMS = sa\.text\(\s*\"\"\"(.*?)\"\"\"",
             text,
             re.S,
         )
@@ -1778,3 +1779,103 @@ class TestANewRoomReachesTheCalendarEntry:
 
         assert refusal == "Location is already booked"
         assert db.add.call_count == 0
+
+
+# ============================================
+# Round 9 — findings on the round-8 fixes
+# ============================================
+
+
+class TestTheBackfillChecksTheFormActuallyWorks:
+    """An **active** integration row is not proof a form feeds the pipeline.
+    `_refresh_integration_mappings` rebuilds `field_mappings` wholesale from the
+    current labels and field types on every field add, rename and delete, and
+    leaves `is_active` untouched — so deleting or renaming a form's contact
+    fields empties the mappings that matter while the row still reads active,
+    and every submission thereafter gets "missing required mapping(s)".
+    Selecting that organization would open the anonymous JSON endpoint for a
+    department whose form was never reaching the pipeline."""
+
+    @staticmethod
+    def _module():
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("_backfill", MIGRATION)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    class _Bind:
+        """Answers the two queries `_form_can_produce_a_request` issues."""
+
+        def __init__(self, mappings, fields):
+            self._mappings = mappings
+            self._fields = fields
+
+        def execute(self, statement, params=None):
+            sql = str(statement)
+            rows = (
+                [(json.dumps(m),) for m in self._mappings]
+                if "form_integrations" in sql
+                else list(self._fields)
+            )
+            return SimpleNamespace(fetchall=lambda: rows)
+
+    def _can(self, mappings, fields):
+        module = self._module()
+        return module._form_can_produce_a_request(
+            self._Bind(mappings, fields), "form-1"
+        )
+
+    def test_a_working_form_still_qualifies(self):
+        assert self._can(
+            [{"f1": "contact_name", "f2": "contact_email"}],
+            [("Name", "text"), ("Email", "email")],
+        )
+
+    def test_labels_alone_qualify_when_there_are_no_mappings(self):
+        """The marker arm carries no integration row, so `_apply_label_fallback`
+        is the only resolution there is."""
+        assert self._can([], [("Your Name", "text"), ("Email Address", "text")])
+
+    def test_an_email_field_type_qualifies_without_a_matching_label(self):
+        """`_INTEGRATION_FIELD_TYPE_MAP` maps the `email` field type to
+        `contact_email` regardless of what the field is called."""
+        assert self._can([], [("Name", "text"), ("Reach you at", "email")])
+
+    def test_renamed_contact_fields_no_longer_qualify(self):
+        assert not self._can([{}], [("Who are you", "text"), ("Reach you at", "text")])
+
+    def test_a_deleted_name_field_no_longer_qualifies(self):
+        assert not self._can([{"f2": "contact_email"}], [("Email", "email")])
+
+    def test_a_deleted_email_field_no_longer_qualifies(self):
+        assert not self._can([{"f1": "contact_name"}], [("Contact Name", "text")])
+
+    def test_hand_written_mappings_qualify_over_unmatched_labels(self):
+        """`update_integration` lets an administrator map arbitrary fields, and
+        `_validate_field_mappings` requires the required targets — so stored
+        mappings are authoritative even when no label would resolve."""
+        assert self._can(
+            [{"f1": "contact_name", "f2": "contact_email"}],
+            [("Who are you", "text"), ("Reach you at", "text")],
+        )
+
+    def test_labels_are_compared_case_and_accent_sensitively(self):
+        """`.strip().lower()` in Python, not an `IN` against a
+        utf8mb4_unicode_ci column, which would equate a label the service never
+        matches."""
+        assert self._can([], [("  NAME  ", "text"), ("Email", "text")])
+        assert not self._can([], [("nàme", "text"), ("Email", "text")])
+
+    def test_the_candidate_query_no_longer_decides_alone(self):
+        """The SQL narrows to published public forms; whether the form works is
+        settled per form in Python."""
+        module = self._module()
+        sql = " ".join(str(module._CANDIDATE_REQUEST_FORMS).split())
+        assert "SELECT f.id, f.organization_id" in sql
+        assert hasattr(module, "_form_can_produce_a_request")
+
+    def test_form_fields_is_guarded_as_a_table(self):
+        assert '_has_table("form_fields")' in MIGRATION.read_text()
