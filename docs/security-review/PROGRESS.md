@@ -44,8 +44,19 @@ still open/unchanged. Three new checks this pass — `GET /summary`'s
 aggregate-only claim, this file's own audit-log PII payloads against
 SEC-00's own stated criterion (SEC-00 explicitly scopes its sweep away
 from feature-owned files), and the uncapped `sections`/`criteria` JSON
-body against the global request-size middleware — all came back clean, no
-finding. **0 new code fixes, 0 new findings.** Full write-up:
+body against the global request-size middleware. **Codex review on the PR
+caught two mis-scoped claims in the first draft, both corrected on this
+same branch before merge:** the audit-log enumeration credited
+`email_test_results` with a `log_audit_event` call it does not have,
+mislabeled two `validate_test` lines as `complete_test`'s, cited
+`add_test_viewer` for a field it does not log, and omitted
+`release_test_results`, which does log `candidate_name` — corrected to the
+actual 7 sites. And the "uncapped JSON body, no finding" call was wrong:
+this repo's own `RankReorderRequest.ranks` caps at 500 items specifically
+because the same request-body byte ceiling can otherwise admit roughly a
+million small items — reclassified as **SKT4-1 (LOW/MED, OPEN/FLAGGED)**
+and mirrored into `KNOWN_LIMITATIONS.md`. **0 new code fixes, 1 new
+finding flagged (SKT4-1).** Full write-up:
 `docs/security-review/SKT-19-skills-testing.md` → **Pass 4**.
 
 Completion gate: `flake8`/`black`/`isort` (CI's pinned versions,

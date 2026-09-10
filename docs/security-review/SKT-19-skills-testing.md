@@ -831,41 +831,71 @@ reported as a finding since nothing here can leak; noted so a future pass
 implementing per-assignment visibility does not have to re-discover that the
 non-officer branch currently no-ops on this value.
 
-**Audit-log PII payloads checked against SEC-00's own precedent, not
-re-derived from scratch.** `SEC-00-cross-cutting-baseline.md`'s pass 4 swept
-`log_audit_event` payloads app-wide for PII-shaped keys but explicitly scoped
-itself away from "the module-level code each rotation feature owns" — so its
-"13 calls, all justified" count does not cover this file's own 8 call sites
-that carry `candidate_name`/`examiner_name` alongside the id
-(`void_test:2763`, `cancel_test:2633`, `delete_test:1899`, `complete_test:
-2100-2102`, `return_test_for_correction`, `add_test_viewer:2462-2475`,
-`email_test_results`'s summary line). Checked each against SEC-00's own
-stated criterion for the pattern being acceptable ("the identifier is the
-subject of the audited event... none incidental") rather than assuming it
-transfers: every one of these events is specifically about an action taken on
-or by the named candidate/examiner — a void, a cancellation, a deletion, a
-return, a viewer grant — the same shape as `deleted_full_name` on a user
-deletion. No finding; recorded so this file's own audit payloads are
-confirmed against the standard rather than left unverified because SEC-00's
-sweep skipped feature-owned files by design.
+**Audit-log PII payloads checked against SEC-00's own precedent — first draft
+mis-enumerated, corrected on Codex review.** `SEC-00-cross-cutting-baseline.md`'s
+pass 4 swept `log_audit_event` payloads app-wide for PII-shaped keys but
+explicitly scoped itself away from "the module-level code each rotation
+feature owns" — so its "13 calls, all justified" count does not cover this
+file's own sites that carry `candidate_name`/`examiner_name` alongside the id.
+This pass's first draft listed 8 sites and got three of them wrong: it credited
+`email_test_results` with an audit-log call it does not have (the function
+never calls `log_audit_event` at all — it only puts the candidate/examiner name
+into the outgoing email body), mislabeled lines 2100-2102 as `complete_test`
+when they belong to `validate_test`, and cited `add_test_viewer` even though
+that call logs `viewer_name`/`candidate_id` — a different viewer, and an id
+rather than a name — not `candidate_name`/`examiner_name`. It also omitted
+`release_test_results`, which does log `candidate_name`. Re-enumerated by
+reading every one of the file's 18 `log_audit_event` call sites directly: the
+actual count carrying `candidate_name` and/or `examiner_name` is **7**:
+`complete_test:1809` (candidate only), `delete_test:1899` (candidate only),
+`validate_test:2100-2102` (candidate + examiner), `release_test_results:2270`
+(candidate only), `cancel_test:2633` (candidate only), `void_test:2763`
+(candidate only), `return_test_for_correction:2915-2917` (candidate +
+examiner). Checked each against SEC-00's own stated criterion for the pattern
+being acceptable ("the identifier is the subject of the audited event... none
+incidental") rather than assuming it transfers: every one of these events is
+specifically about an action taken on or by the named candidate/examiner — a
+completion, a deletion, a validation, a release, a cancellation, a void, a
+return — the same shape as `deleted_full_name` on a user deletion. No finding;
+recorded so this file's own audit payloads are confirmed against the standard
+rather than left unverified because SEC-00's sweep skipped feature-owned files
+by design.
 
-**JSON body size (`sections`, `criteria`) has no per-template cap** —
+### SKT4-1 — LOW/MED — `sections`/`criteria` has no per-template item cap — OPEN / FLAGGED
+
 `SkillTemplateCreate.sections: List[SkillTemplateSectionSchema] =
-Field(..., min_length=1)` and `SkillTemplateSectionSchema.criteria` both lack
-a `max_length`. Checked whether this is a live abuse-resistance gap: the
-route is `training.manage`-gated (an admitted-officer surface, not public or
-even open-to-all-members), and the global `RequestSizeLimitMiddleware`
-(`MAX_REQUEST_BODY_SIZE`, verified present and enforced in SEC-00 pass 4's own
-upload sweep) caps the total request body regardless of how many sections it
-is spent on. Not reported as a finding — the existing global cap plus the
-officer-only gate is the same "bounded by construction, not by a per-field
-cap" shape SEC-00 accepts for several of its own tracked resources.
+Field(..., min_length=1)` and `SkillTemplateSectionSchema.criteria` (default
+empty list) both lack a `max_length`. First draft of this pass called this
+"not a finding" on the reasoning that the route is `training.manage`-gated and
+the global `RequestSizeLimitMiddleware` (`MAX_REQUEST_BODY_SIZE`) caps the
+total request body regardless of section/criterion count — Codex review
+correctly rejected that reasoning by pointing at this repository's own
+precedent for the identical shape: `RankReorderRequest.ranks`
+(`app/schemas/operational_rank.py:108-113`) caps its list at
+`MAX_RANKS_PER_REORDER = 500` specifically _because_ the same request-body
+budget can otherwise admit roughly a million items at ~60 bytes each — the
+schema's own comment there states the byte ceiling is not a sane cardinality
+bound. `SkillTemplateSectionSchema`/`SkillCriterionSchema` are the same shape:
+an officer-gated caller can still submit a template with an unbounded number
+of sections/criteria, each of which Pydantic fully materializes and the
+create/update handlers persist, dump, and — in scoring and the CSV export path
+— iterate. A malicious or merely mistaken officer client can submit a
+several-hundred-thousand-entry template and force full materialization and
+persistence of it. Reclassified from "verified good" to an open finding rather
+than fixed in this pass: choosing `max_length` values for `sections` and
+`criteria` needs a genuine content decision (what does the largest real
+department's evaluation sheet actually look like) that this pass should not
+guess at, matching this rotation's standing preference for flagging over
+guessing on anything that changes accepted-input behavior. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
 
 ### Corrections to prior write-ups
 
-None. Pass 1–3's findings, fixes, and "Verified good" claims are all
-re-confirmed above; nothing in this pass contradicts anything recorded
-earlier.
+None to passes 1-3. Within this pass's own first draft, before this PR merged:
+Codex review caught the two mis-scoped claims above (the audit-log site
+enumeration, and the JSON-body-size "no finding" call) — both corrected in
+place rather than recorded as a separate historical correction, since no
+inaccurate version of this document was ever the merged state.
 
 ### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — still OPEN / FLAGGED
 
@@ -907,11 +937,13 @@ diff against pass 3 is a single already-reviewed, already-fixed line
 run above is the one surface this pass's own re-verification work could
 plausibly affect.
 
-**Disposition: 0 new code fixes, 0 new findings.** All six pass 1–3 fixes
-re-verified intact by direct code read; the one open finding (SKT3-2) is
-re-verified still open and unchanged; three new checks this pass (summary
-aggregate-only, audit-payload PII against SEC-00's own criterion,
-JSON-body size bounding) all came back clean. This pass's value is the
-re-verification and the three checks above, not a new defect — the backend
-surface has had a total of one line change (already fixed elsewhere) across
-three passes and roughly two weeks.
+**Disposition: 0 new code fixes, 1 new finding flagged (SKT4-1, LOW/MED).**
+All six pass 1–3 fixes re-verified intact by direct code read; two open
+findings are now carried (SKT3-2, unchanged, and the newly-flagged SKT4-1);
+the summary aggregate-only check and the audit-payload PII check both came
+back clean, though the latter's own first-draft site enumeration needed
+correcting on Codex review (see "Corrections to prior write-ups" above). This
+pass's value is the re-verification, the corrected audit-log enumeration, and
+the newly-flagged template-size gap — the backend surface itself has had a
+total of one line change (already fixed elsewhere) across three passes and
+roughly two weeks.
