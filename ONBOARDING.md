@@ -76,9 +76,22 @@ number of screens a user sees depends on the services they select.
 
 - Select file storage: Local, Amazon S3, Google Drive, OneDrive / SharePoint, or Other
 
+> **The choice is recorded but not yet acted on** (2026-09-10). Uploads write to
+> the server's own filesystem whatever is selected here — no code outside the
+> settings screen reads the stored credentials. A department that picks S3 or
+> Drive so its files sit somewhere the server is not should treat that as still
+> to do after setup, not done by it.
+
 #### Step 7: Authentication Choice
 
 - Select authentication method: Local passwords, Google, Microsoft, or Authentik
+
+> **Do not choose Authentik yet** (2026-09-10). It is accepted and stored, but
+> no Authentik sign-in flow exists — the login page offers Google and Microsoft
+> only, so the SSO you selected is not there. Passwords still work, but the
+> setting switches the organization off self-service password resets: a member
+> who forgets theirs needs an administrator to reset it. Choose Local unless
+> you are setting up Google or Microsoft.
 
 #### Step 8: System Owner Creation
 
@@ -151,356 +164,52 @@ After completing onboarding, a checklist is automatically created with critical 
 
 - ✅ Review and customize user roles
 - ✅ Configure additional modules
-- ✅ Set up integrations (Microsoft 365, Google Workspace, LDAP)
+- ✅ Set up integrations (Microsoft 365, Google Workspace)
 
 ## API Endpoints
 
-### Check Onboarding Status
+The request bodies, and a table naming the model behind each response, live in
+[`docs/ONBOARDING_FLOW.md`](./docs/ONBOARDING_FLOW.md#backend-api-endpoints),
+which is the reference this document defers to.
 
-```bash
-GET /api/v1/onboarding/status
-```
+They were written out in full here as well until 2026-09-10, in a third copy
+alongside this one and `wiki/Onboarding.md`. That file's header asks anyone
+editing it to change this one first and mirror the result — but nothing
+enforces it: `wiki/setup-wiki.sh` copies `wiki/*.md` verbatim and generates
+only Troubleshooting and Error-Codes from `docs/`, so the two pages are
+independently maintained and a hand-applied "mirror" is the only thing that
+would carry a stale section from here to there. The copies had already drifted:
+this one documented
+`POST /onboarding/organization` with a five-field body, which that route stopped
+accepting when it moved to the full `OrganizationSetupCreate` schema, so a
+caller following it gets a 422.
 
-**Response:**
+The surface, so it is visible at a glance:
 
-```json
-{
-  "needs_onboarding": true,
-  "is_completed": false,
-  "current_step": 0,
-  "total_steps": 10,
-  "steps_completed": {},
-  "organization_name": null
-}
-```
+| Purpose                          | Endpoint                                                           |
+| -------------------------------- | ------------------------------------------------------------------ |
+| Is onboarding needed             | `GET /api/v1/onboarding/status`                                    |
+| Begin a session                  | `POST /api/v1/onboarding/start`                                    |
+| Host and version details         | `GET /api/v1/onboarding/system-info`                               |
+| Security preconditions           | `GET /api/v1/onboarding/security-check`                            |
+| Database reachability            | `GET /api/v1/onboarding/database-check`                            |
+| Create the organization          | `POST /api/v1/onboarding/session/organization`                     |
+| Read back a resumable session    | `GET /api/v1/onboarding/session/data`                              |
+| Create the System Owner          | `POST /api/v1/onboarding/system-owner`                             |
+| Enable modules                   | `POST /api/v1/onboarding/modules`                                  |
+| Email configuration              | `POST /api/v1/onboarding/session/email`                            |
+| Record that email was configured | `POST /api/v1/onboarding/notifications`                            |
+| Finish onboarding                | `POST /api/v1/onboarding/complete`                                 |
+| Reset — **destructive**          | `POST /api/v1/onboarding/reset`                                    |
+| Post-setup checklist             | `GET /api/v1/organization/setup-checklist`                         |
+| Acknowledge a checklist item     | `POST /api/v1/organization/setup-checklist/{item_key}/acknowledge` |
 
-### Start Onboarding
-
-```bash
-POST /api/v1/onboarding/start
-```
-
-**Response:**
-
-```json
-{
-  "message": "Onboarding started successfully",
-  "current_step": 1,
-  "steps": [...]
-}
-```
-
-### Get System Information
-
-```bash
-GET /api/v1/onboarding/system-info
-```
-
-**Response:**
-
-```json
-{
-  "app_name": "The Logbook",
-  "version": "1.0.0",
-  "environment": "development",
-  "database": {
-    "type": "MySQL",
-    "host": "localhost",
-    "port": 3306,
-    "name": "intranet_db"
-  },
-  "security": {
-    "password_min_length": 12,
-    "mfa_available": true,
-    "session_timeout_minutes": 480,
-    "encryption": "AES-256",
-    "password_hashing": "Argon2id"
-  },
-  "features": {
-    "hipaa_security_features": true,
-    "section_508_accessible": true,
-    "tamper_proof_logging": true,
-    "multi_factor_auth": true,
-    "role_based_access": true
-  }
-}
-```
-
-### Verify Security Configuration
-
-```bash
-GET /api/v1/onboarding/security-check
-```
-
-**Response:**
-
-```json
-{
-  "passed": false,
-  "issues": [
-    {
-      "field": "SECRET_KEY",
-      "severity": "critical",
-      "message": "SECRET_KEY is using default value",
-      "fix": "Run: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
-    }
-  ],
-  "warnings": [],
-  "total_issues": 1,
-  "total_warnings": 0
-}
-```
-
-### Check Database Connection
-
-```bash
-GET /api/v1/onboarding/database-check
-```
-
-**Response:**
-
-```json
-{
-  "connected": true,
-  "database": "intranet_db",
-  "host": "mysql",
-  "port": 3306,
-  "server_time": "2026-01-17 15:30:45",
-  "organizations_count": 0
-}
-```
-
-### Create Organization
-
-```bash
-POST /api/v1/onboarding/organization
-Content-Type: application/json
-
-{
-  "name": "Springfield Fire Department",
-  "slug": "springfield-fd",
-  "organization_type": "fire_department",
-  "description": "Volunteer fire department serving Springfield",
-  "timezone": "America/New_York"
-}
-```
-
-**Response:**
-
-```json
-{
-  "id": "uuid-here",
-  "name": "Springfield Fire Department",
-  "slug": "springfield-fd",
-  "type": "fire_department",
-  "description": "Volunteer fire department serving Springfield",
-  "active": true
-}
-```
-
-**Automatic Actions:**
-
-- Creates 6 default roles: Super Admin, Admin, Chief, Officer, Member, Probationary
-- Each role has appropriate permissions pre-configured
-- Organization settings initialized
-
-### Create Admin User
-
-```bash
-POST /api/v1/onboarding/system-owner
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "email": "admin@springfieldfd.org",
-  "password": "SecureP@ssw0rd123!",
-  "password_confirm": "SecureP@ssw0rd123!",
-  "first_name": "John",
-  "last_name": "Doe",
-  "membership_number": "001"
-}
-```
-
-**Password Requirements:**
-
-- Minimum 12 characters
-- At least one uppercase letter
-- At least one lowercase letter
-- At least one number
-- At least one special character
-- Not a common password
-- Passwords must match
-
-**Response:**
-
-```json
-{
-  "id": "uuid-here",
-  "username": "admin",
-  "email": "admin@springfieldfd.org",
-  "first_name": "John",
-  "last_name": "Doe",
-  "membership_number": "001",
-  "status": "active"
-}
-```
-
-**Automatic Actions:**
-
-- Password hashed with Argon2id
-- User assigned Super Admin role
-- Audit log entry created
-- Email verification email sent (if configured)
-
-### Configure Modules
-
-```bash
-POST /api/v1/onboarding/modules
-Content-Type: application/json
-
-{
-  "enabled_modules": [
-    "training",
-    "compliance",
-    "scheduling",
-    "inventory",
-    "incidents"
-  ]
-}
-```
-
-**Response:**
-
-```json
-{
-  "message": "Modules configured successfully",
-  "modules": {
-    "training": true,
-    "compliance": true,
-    "scheduling": true,
-    "inventory": true,
-    "meetings": false,
-    "elections": false,
-    "fundraising": false,
-    "incidents": true,
-    "equipment": false,
-    "vehicles": false,
-    "budget": false
-  }
-}
-```
-
-### Configure Notifications (Optional)
-
-```bash
-POST /api/v1/onboarding/notifications
-Content-Type: application/json
-
-{
-  "email_enabled": true,
-  "smtp_host": "smtp.gmail.com",
-  "smtp_port": 587,
-  "smtp_user": "notifications@springfieldfd.org",
-  "smtp_from_email": "noreply@springfieldfd.org",
-  "sms_enabled": false
-}
-```
-
-**Response:**
-
-```json
-{
-  "message": "Notifications configured successfully",
-  "email_enabled": true,
-  "sms_enabled": false
-}
-```
-
-### Complete Onboarding
-
-```bash
-POST /api/v1/onboarding/complete
-Content-Type: application/json
-
-{
-  "notes": "Initial setup completed for Springfield Fire Department"
-}
-```
-
-**Response:**
-
-```json
-{
-  "message": "Onboarding completed successfully!",
-  "organization": "Springfield Fire Department",
-  "admin_user": "admin",
-  "completed_at": "2026-01-17T15:45:30Z",
-  "next_steps": "Review the post-onboarding checklist for additional configuration"
-}
-```
-
-**Automatic Actions:**
-
-- Onboarding marked as complete
-- Default seed data created for the organization
-- Audit log entry created
-- System now allows normal operation
-
-### Department Setup Checklist
-
-Remaining setup work lives on the department setup checklist, not in the
-onboarding module. It derives completion from live data — member counts,
-apparatus counts, whether anyone has actually signed in — rather than a static
-list seeded at completion, so it stays accurate as the department works
-through it.
-
-```bash
-GET /api/v1/organization/setup-checklist
-```
-
-**Response:**
-
-```json
-{
-  "items": [
-    {
-      "key": "members",
-      "title": "Add Department Members",
-      "description": "Import or manually add your department roster.",
-      "path": "/members/admin",
-      "category": "essential",
-      "is_complete": false,
-      "count": 1,
-      "required": true,
-      "kind": "auto"
-    }
-  ],
-  "completed_count": 0,
-  "total_count": 10,
-  "enabled_modules": ["members", "events", "documents"]
-}
-```
-
-Items are either `kind: "auto"` (completion derived from entity counts) or
-`kind: "review"` (no measurable signal — the admin confirms they looked).
-
-### Acknowledge a Review Item
-
-Only `review` items can be acknowledged; `auto` items are completed by doing
-the work.
-
-```bash
-POST /api/v1/organization/setup-checklist/{item_key}/acknowledge?acknowledged=true
-```
-
-**Response:**
-
-```json
-{
-  "item_key": "org_settings",
-  "acknowledged": true
-}
-```
+The last two rows about mail are not interchangeable. `/session/email` stores
+the encrypted SMTP settings, which `/complete` then persists into the
+organization. `/notifications` sets the `email_configured` flag and marks the
+step done — it returns the `email_enabled` and `sms_enabled` booleans it was
+given and discards everything else, so credentials sent there receive a success
+response and configure nothing.
 
 ## Security Verification Requirements
 
@@ -611,7 +320,7 @@ The onboarding module is designed to be integrated with a frontend wizard:
 
 Frontend onboarding state is stored in a Zustand store persisted to **localStorage** (key: `onboarding-storage`). Sensitive data (session IDs, CSRF tokens) is excluded from persistence.
 
-The API client stores the session identifier separately, in **`sessionStorage`** under `onboarding_session_id` _(moved from `localStorage` on 2026-08-15)_. That identifier is a bearer credential — presented as the `X-Session-ID` header, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs. Its CSRF companion, `onboarding_csrf_token`, is a `SameSite=Strict` cookie. Identifiers left in `localStorage` by an older client are deleted on load.
+The API client stores the session identifier separately, in **`sessionStorage`** under `onboarding_session_id` _(moved from `localStorage` on 2026-08-15)_. That identifier is a bearer credential — presented as the `X-Session-ID` header, it authorizes the setup mutations that create the organization, its stations and apparatus, the IT team, and the first System Owner — so it must not survive a browser restart or be readable from unrelated tabs. Its CSRF companion, `onboarding_csrf_token`, lives in **`sessionStorage`** too and is sent as the `X-CSRF-Token` header — not as a cookie. The backend sets no cookie of that name; the client reads one only to migrate a value an older build left, then deletes it. Identifiers left in `localStorage` by an older client are deleted on load.
 
 **The two stores have different lifetimes, and that is visible to installers.** The wizard's typed answers (`onboarding-storage`) outlive the tab; the session identifier does not. Reopening `/onboarding` after closing the browser therefore repaints the answers already entered while the server session is gone — the failure surfaces at the next mutating step as `401` / `ONBD_SESSION_INVALID`, not at the repaint. **Onboarding should be completed in one tab, in one sitting**; the recovery from an expired run is to restart the wizard, not to re-type into a dead session. A second tab does not inherit the wizard either (a _duplicated_ tab does, because Chrome and Firefox copy `sessionStorage` into duplicates — browser behavior, not a supported resume path).
 
@@ -716,11 +425,28 @@ Stores post-onboarding tasks:
 
 **Solution**: Ensure password has:
 
-- At least 12 characters
+- At least 12 characters, and no more than `PASSWORD_MAX_LENGTH` (128 unless
+  your deployment overrides it)
 - One uppercase letter
 - One lowercase letter
 - One number
 - One special character
+
+Those five are not the whole rule, and the three below are what usually rejects
+a password that appears to satisfy the list. It must also contain:
+
+- no three sequential characters (`123`, `abc`, …) and no character repeated
+  three times in a row
+- no keyboard pattern — `qwerty`, `asdfgh`, `zxcvbn`, `qazwsx`, `qweasd`,
+  `!@#$%^`, `1qaz2wsx`, `1234qwer`, `asdf1234`
+- nothing on the common-password list, which includes fire-service words
+  (`firefighter`, `station`, `medic`, `ambulance`) as well as the usual ones
+
+The response lists every rule the password broke, not just the first — with two
+exceptions: a password over `PASSWORD_MAX_LENGTH` is rejected on length alone,
+and the breached-password check runs only once every rule above passes, so a
+password
+that is both weak and breached reports the weakness first. Full contract: [`docs/ONBOARDING_FLOW.md`](./docs/ONBOARDING_FLOW.md#create-admin-user).
 
 ### Database Connection Failed
 
