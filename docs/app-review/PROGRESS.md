@@ -2118,7 +2118,27 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   `GROUP BY` + `JOIN` aggregate was run against the live DB before the change
   was written. Ratchet extended: `TestStorefrontStockCapacity` asserts the tally
   locks, the order path passes the flag twice, **and the browse path does not** —
-  the third is what stops the next reader collapsing it. **SF-10 (NIT, fixed):**
+  the third is what stops the next reader collapsing it. **The tally lock alone
+  was not the fix, and on its own was worse than the bug** (Codex P2 on PR
+  #2446, corrected in `8499603`): those tallies are range reads over a window
+  that is empty exactly when it opens, so InnoDB gap-locks that empty range —
+  and gap locks do not conflict with each other, so two members ordering
+  **different** products both pass `_lock_products` (disjoint product rows),
+  both take the same gap, and then each one's `INSERT` is blocked by the other's
+  gap lock. InnoDB kills one member's order with a 1213, and different products
+  is the _common_ case when a window opens, so the intermediate version traded a
+  rare same-product oversell for a frequent different-product failure.
+  Reproduced against a real database: **2 deadlocks in 5 rounds** without the
+  remedy, **0** with it. The remedy is the half of Pitfall #27 the intermediate
+  version skipped — **lock the parent row, not the rows being counted**; the
+  parent of a window-scoped tally is the **window**, so `_price_lines` now takes
+  an exclusive lock on the window row before the products and the tallies (lock
+  order window → products → tallies on every path, so they cannot invert).
+  Guarded by `tests/test_storefront_order_deadlock.py`, which drives concurrent
+  disjoint carts against a real database and fails with
+  `outcomes=['ok', 'deadlock', 'ok', 'deadlock', 'ok', 'ok']` if the window lock
+  is removed, plus a source guard that the lock precedes the tallies.
+  **SF-10 (NIT, fixed):**
   dead `exclude_order_id` parameter on the same helper. **SF-9 (MED, flagged):**
   `record_payment` is a read-modify-write on `amount_paid` with no row lock, so
   the webhook's auto-apply landing while a treasurer works the same order loses
@@ -2273,11 +2293,25 @@ false, limit: 10 })`, showing only pending + persistent messages — resolved
   org's email is still processed, so the fix cannot degenerate into filtering
   everything out. **MAIL-21 (LOW, fixed):** `delete_attachment` did blocking
   `os.path.isfile`/`os.remove` on the event loop 60 lines below an upload path
-  that correctly uses `asyncio.to_thread`, **and** removed the file before
-  committing the row delete — so a failed commit left a row pointing at a missing
-  file, and that row is loaded by the send path, breaking the next email that
-  uses the template. Now commits first and unlinks in a thread tolerating
-  `OSError`: the failure mode inverts from a broken send to an orphaned file.
+  that correctly uses `asyncio.to_thread`. The `to_thread` move is the fix that
+  stood; the ordering change shipped alongside it was **reverted** after review
+  (Codex P2 on PR #2446, corrected in `3828a5e`). That change committed the row
+  delete first and swallowed `OSError`, on the reasoning that a failed commit
+  otherwise leaves a row pointing at a missing file and breaks the send path.
+  That reasoning was incomplete and the conclusion inverted once the missing
+  half was supplied: **the row is the only record the file exists** — nothing
+  sweeps `storage/email_attachments` and no orphan-cleanup task exists anywhere
+  (verified by repo-wide search) — so committing first and discarding an unlink
+  error turns a transient `EACCES`/`EIO` into a member-facing attachment that
+  survives forever with nothing pointing at it, while the API answers 204. On a
+  HIPAA-scoped system that is a retention problem, not the "wasted bytes" the
+  first draft called it; meanwhile the broken-send window it was avoiding is
+  **self-healing**, since the retry's unlink raises `FileNotFoundError` and the
+  delete then completes. So the original order was already recoverable in both
+  directions. The handler now unlinks first and lets a genuine `OSError`
+  propagate, leaving the row naming the file so the admin can retry; guarded by
+  `tests/test_email_attachment_delete_order.py` (failed unlink leaves the row
+  and raises, success removes file before row, already-missing file completes).
   **MAIL-22 (LOW, flagged):** `upload_attachment` sniffs the real MIME, uses it
   to accept/reject, then persists the **client's claimed** `content_type` — the
   expensive correct answer is computed and discarded, and extension and content
