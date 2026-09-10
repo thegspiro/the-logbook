@@ -514,7 +514,7 @@ completion maps **exact camelCase** names out of it:
 | `local`       | `localStoragePath`                                                                  |
 | `other`       | none                                                                                |
 
-**Nothing validates these, on either side.** The save endpoint checks only that
+**The backend validates none of these.** The save endpoint checks only that
 `platform` is one of the five, then encrypts whatever `config` holds. At
 completion `_persist_session_data_to_org()` reads the camelCase names above and
 drops every key it does not recognise. A caller using the snake_case spellings
@@ -523,6 +523,19 @@ therefore gets a success response, has its credentials encrypted into the
 session, and ends up with an organization storing the platform choice and
 nothing else. There is no equivalent of email's `missing_for_enabled()` here, so
 no error is raised at any point.
+
+**The wizard does validate, so this is an API-only exposure.**
+`FileStorageConfiguration.tsx` marks `googleDriveClientId` and
+`googleDriveClientSecret`; `oneDriveTenantId`, `oneDriveClientId` and
+`oneDriveClientSecret`; and `s3BucketName`, `s3Region`, `s3AccessKeyId` and
+`s3SecretAccessKey` as **required**, and its `missingRequired` check blocks
+Save & Continue until each is filled, naming the ones outstanding. The rest —
+`googleDriveFolderId`, `sharePointSiteUrl`, `s3EndpointUrl` and
+`localStoragePath` — are optional there. The one route through the screen with
+an empty configuration is the explicit **"I'll add these later"** button, which
+posts `{}` deliberately so the platform choice is recorded and Settings can
+show what is missing. An installer following the wizard therefore cannot save
+half a credential set; a caller posting to the endpoint can.
 
 And no error is raised later either, because **nothing reads these settings**
 — see the note under step 8. Uploads go to fixed local directories whatever is
