@@ -1776,8 +1776,17 @@ stale-lockfile artifact the original finding described; it is npm's
 resolver choosing this layout every time, an apparent inherent consequence
 of `typescript-native: npm:typescript@7.0.2` sharing its real package name
 with the direct `typescript` dependency. `npm dedupe` doesn't clear it
-either — it fails outright on an unrelated, pre-existing `@vitest/ui`/
-`vitest` peer conflict, so that isn't a path to a fix here regardless.
+either — at the time this was tried it also failed outright on a second,
+genuinely unrelated `@vitest/ui`/`vitest` peer conflict (`@vitest/ui` was
+declared at `^5.0.0` against `vitest@^4.1.10`, and — unlike this
+typescript/alias case — that one _was_ a plain stale declaration, not an
+inherent npm-resolver choice: fixed the same day by pinning `@vitest/ui`
+to `^4.1.10` and removing the lockfile's stale nested
+`frontend/node_modules/@vitest/ui@5.0.0` entry by hand, which brought
+`npm ls` fully clean for that package and un-broke `npm run test:ui`,
+which had been crashing with `ERR_MODULE_NOT_FOUND`). `npm dedupe` still
+doesn't help the typescript case specifically, now confirmed on a
+tree with no other peer conflict left to blame.
 `npm ci`, `eslint`, and `tsc-native.mjs --noEmit` are all still verified
 clean under it, so nothing in the actual build/lint/test path is broken —
 but `npm ls typescript`'s own `ELSPROBLEMS` is a real, standing failure of
